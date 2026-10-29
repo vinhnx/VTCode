@@ -329,6 +329,7 @@ mod option_popups;
 mod options_misc;
 mod review_output;
 mod search_config;
+mod secret_store;
 mod service_navigation;
 mod sessions_startup;
 mod slash_options;

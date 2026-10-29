@@ -10,7 +10,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 20 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 21 };
 
 /// A turn was rejected before delivery because a startup interaction is pending.
 pub const STARTUP_INTERACTION_PENDING_ERROR: i32 = -32001;
@@ -187,6 +187,10 @@ pub struct ConfigurationSnapshot {
     /// Non-secret CLI UI preferences available to the native client.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_ui: Option<SharedUiPreferences>,
+    /// In-app secret-form support for the active provider, absent for
+    /// login-flow/local providers and older services.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret_store: Option<SecretStoreInfo>,
     /// Effective options for the next runtime session, absent on older helpers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_options: Option<SessionOptionsSnapshot>,
@@ -1018,6 +1022,9 @@ pub fn error_response(id: Option<RequestId>, code: i32, message: impl Into<Strin
 
 pub mod live_events;
 pub use live_events::{LiveEventReceiver, LiveEventSendError, LiveEventSender, live_event_channel};
+
+pub mod secret;
+pub use secret::{SecretStoreInfo, SecretStoreParams, SecretStoreResult};
 
 #[cfg(test)]
 mod tests;

@@ -47,7 +47,7 @@ use crate::startup::StartupContext;
 mod catalog;
 mod dispatch;
 use dispatch::{
-    dispatch_interaction_response, ensure_no_active_turn, parse_params, protocol_interaction_kind,
+    dispatch_interaction_response, ensure_no_active_turn, handle_request, parse_params, protocol_interaction_kind,
     resolve_review_scope, send_notification, session_summary, shutdown_current_session,
 };
 mod pump;
@@ -61,6 +61,7 @@ mod webmcp;
 use webmcp::install_session_runtime;
 use webmcp::{DesktopWebmcpRuntime, start_session};
 mod restore;
+mod secret_store;
 use catalog::{
     active_agent_config, catalog_models, configuration_snapshot, effective_speed_config, listing_matches_workspace,
     sanitize_public_error, update_status_snapshot, workspace_label,
@@ -99,6 +100,9 @@ struct ServerState {
     /// once an override is active; `OverrideAuth::error` records a failed
     /// resolution so the snapshot reports `authenticated: false`.
     model_override_auth: Option<catalog::OverrideAuth>,
+    /// Credentials saved via `config/secret/store` for the boot provider,
+    /// re-resolved at save time so in-app key saves apply without a restart.
+    secret_store_auth: Option<catalog::StoredSecretAuth>,
     session_options: protocol::SessionOptionsSelectParams,
     permission_before_full_access: Option<protocol::PermissionMode>,
     /// Recent Desktop changes layered over the process-start CLI config until restart.
@@ -281,39 +285,6 @@ where
     }
 }
 
-async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
-    let transition = matches!(
-        request.method.as_str(),
-        protocol::method::SHUTDOWN
-            | protocol::method::CONFIG_SETTINGS_WRITE
-            | protocol::method::CONFIG_SELECT
-            | protocol::method::CONFIG_OPTIONS
-            | protocol::method::CONFIG_THEME
-            | protocol::method::SESSION_CREATE
-            | protocol::method::SESSION_LOAD
-            | protocol::method::SESSION_CLOSE
-    );
-    if !transition {
-        return handle_request_inner(context, request).await;
-    }
-    {
-        let mut state = context.state.lock().await;
-        if state.session_transitioning {
-            bail!("a session change is already in progress");
-        }
-        if request.method != protocol::method::SHUTDOWN && state.active_turn_id.is_some() {
-            bail!("cancel the active turn and wait for cleanup before switching sessions");
-        }
-        if request.method != protocol::method::SHUTDOWN && !state.pending_interactions.is_empty() {
-            bail!("resolve the pending CLI interaction before switching sessions or settings");
-        }
-        state.session_transitioning = true;
-    }
-    let result = handle_request_inner(context, request).await;
-    context.state.lock().await.session_transitioning = false;
-    result
-}
-
 async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
     use protocol::method;
 
@@ -460,6 +431,11 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             let agent = active_agent_config(context).await;
             let snapshot = configuration_snapshot(context, &agent).await?;
             Ok((serde_json::to_value(snapshot)?, false))
+        }
+        method::CONFIG_SECRET_STORE => {
+            let params: protocol::SecretStoreParams = parse_params(&request.params)?;
+            let result = secret_store::store(context, params).await?;
+            Ok((serde_json::to_value(result)?, false))
         }
         method::COMPOSER_RESOURCES => {
             ensure_no_active_turn(context).await?;

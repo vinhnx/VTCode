@@ -18,6 +18,7 @@ In VT Code Desktop, `/config` opens Settings → VT Code. **Browse all settings*
 typed defaults, curated groups, field labels, descriptions, and documented choices; optional documented fields can be
 set before they have an explicit value. Documented choices are validated by both the editor and shared writer.
 Credential-bearing fields remain hidden, and schema templates without a concrete key are read-only references.
+The Provider section offers an in-app API-key form for static-key providers; login-flow providers still authenticate in the Terminal.
 
 The palette's **Reset configuration** action shows the exact target file and requires confirmation. `/config reset`
 opens the same confirmation view. A reset clears only that target layer by replacing its contents with an empty TOML

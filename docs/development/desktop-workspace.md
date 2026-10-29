@@ -439,7 +439,7 @@ Cancelling sends no answer drafts; oversized submissions remain editable instead
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.20` (additive over 1.0–1.19; older fields are serde-defaulted). Incompatible ranges
+server negotiate protocol version `1.21` (additive over 1.0–1.20; older fields are serde-defaulted). Incompatible ranges
 fail explicitly. The protocol crate caps a line at 1 MiB.
 Restored history keeps archive indices for model-only context but marks those rows hidden; desktop paging advances through
 hidden-only pages without displaying them. The CLI resume view uses the same context filter.
@@ -458,6 +458,7 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `config/discover` | Read active provider, model, sandbox label, and context window. |
 | `config/settings/read`, `config/settings/write` | Browse bounded, credential-filtered effective settings and save type-checked edits through the CLI config service. |
 | `config/models`, `config/select` | List the model catalog, or switch provider/model for the next session (requires no active turn). |
+| `config/secret/store` | Store a provider API key from the Settings form in secure storage (requires no active turn); returns the refreshed configuration plus whether the session runtime was reset. The secret travels the local channel only and is never echoed back. |
 | `config/options`, `config/theme` | Read typed idle-session selections (mode, effort, compaction, thinking) for the composer controls, or apply a built-in CLI theme ID. |
 | `workspace/review` | Capture bounded Git changes against HEAD or an unborn branch’s empty tree, with optional untracked text previews. |
 | `session/list`, `session/create`, `session/load`, `session/history`, `session/close` | List up to 200 recent archives for the active workspace, create sessions, restore durable messages, canonical change reviews, activity, and captured output, and page backward through archived conversation messages. |

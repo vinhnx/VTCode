@@ -140,6 +140,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
 
 mod config_auth;
 mod model_review;
+mod secret_store;
 mod session_history;
 mod shutdown_turns;
 mod spooled_scope;

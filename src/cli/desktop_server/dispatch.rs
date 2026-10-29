@@ -1,5 +1,39 @@
 use super::*;
 
+pub(super) async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
+    let transition = matches!(
+        request.method.as_str(),
+        protocol::method::SHUTDOWN
+            | protocol::method::CONFIG_SETTINGS_WRITE
+            | protocol::method::CONFIG_SELECT
+            | protocol::method::CONFIG_OPTIONS
+            | protocol::method::CONFIG_THEME
+            | protocol::method::CONFIG_SECRET_STORE
+            | protocol::method::SESSION_CREATE
+            | protocol::method::SESSION_LOAD
+            | protocol::method::SESSION_CLOSE
+    );
+    if !transition {
+        return handle_request_inner(context, request).await;
+    }
+    {
+        let mut state = context.state.lock().await;
+        if state.session_transitioning {
+            bail!("a session change is already in progress");
+        }
+        if request.method != protocol::method::SHUTDOWN && state.active_turn_id.is_some() {
+            bail!("cancel the active turn and wait for cleanup before switching sessions");
+        }
+        if request.method != protocol::method::SHUTDOWN && !state.pending_interactions.is_empty() {
+            bail!("resolve the pending CLI interaction before switching sessions or settings");
+        }
+        state.session_transitioning = true;
+    }
+    let result = handle_request_inner(context, request).await;
+    context.state.lock().await.session_transitioning = false;
+    result
+}
+
 pub(super) fn dispatch_interaction_response(
     state: &mut ServerState,
     response: &protocol::InteractionResponse,

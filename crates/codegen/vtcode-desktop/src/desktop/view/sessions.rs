@@ -631,6 +631,16 @@ impl DesktopView {
         self.retained_submission = None;
     }
 
+    /// Mirror a service-side session discard (provider switch, credential
+    /// repair): drop the selection and turn state, keep attachments for reuse.
+    pub(super) fn clear_session_after_service_reset(&mut self) {
+        self.selected_session_id = None;
+        let attachments = std::mem::take(&mut self.attachments);
+        self.reset_session_state();
+        self.attachments = attachments;
+        self.record_current_navigation();
+    }
+
     pub(super) fn request(&self, method: &str, params: Value) -> bool {
         self.backend.as_ref().is_some_and(|backend| {
             backend

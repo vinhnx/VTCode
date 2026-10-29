@@ -189,6 +189,7 @@ impl DesktopView {
                     | protocol::method::CONFIG_OPTIONS
                     | protocol::method::CONFIG_THEME
                     | protocol::method::CONFIG_SETTINGS_WRITE
+                    | protocol::method::CONFIG_SECRET_STORE
                     | protocol::method::TURN_SUBMIT
             )
         {
@@ -295,6 +296,12 @@ impl DesktopView {
                         self.config_write_pending = false;
                         self.config_editor_error = Some(error.clone());
                     }
+                    if method == protocol::method::CONFIG_SECRET_STORE {
+                        // Form-scoped: the inline error carries it; the
+                        // generic banner would duplicate it away from the field.
+                        self.handle_secret_store_error(error.clone(), cx);
+                        return;
+                    }
                     if method == protocol::method::UPDATE_STATUS {
                         self.update_request_pending = false;
                     }
@@ -389,6 +396,9 @@ impl DesktopView {
                     protocol::method::CONFIG_SETTINGS_WRITE => {
                         self.handle_cli_config_write_response(result, cx);
                     }
+                    protocol::method::CONFIG_SECRET_STORE => {
+                        self.handle_secret_store_response(result, cx);
+                    }
                     protocol::method::WEBMCP_STATUS | protocol::method::WEBMCP_PAIR | protocol::method::WEBMCP_STOP => {
                         let _handled = self.handle_webmcp_response(&method, result, cx);
                     }
@@ -474,11 +484,7 @@ impl DesktopView {
                         // no selected session; the next prompt starts a fresh
                         // session under it.
                         self.configuration = serde_json::from_value::<ConfigurationSnapshot>(result).ok();
-                        self.selected_session_id = None;
-                        let attachments = std::mem::take(&mut self.attachments);
-                        self.reset_session_state();
-                        self.attachments = attachments;
-                        self.record_current_navigation();
+                        self.clear_session_after_service_reset();
                         self.models.clear();
                         let _ = self.request(protocol::method::CONFIG_MODELS, json!({}));
                         let model = self
@@ -735,6 +741,7 @@ impl DesktopView {
             BackendEvent::Exited { status, authentication_required } => {
                 self.cancel_session_load_task();
                 self.interrupt_cli_config_write();
+                self.interrupt_secret_save();
                 self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                 self.fail_workspace_review("The local service exited before Git review completed.".into());
                 self.clear_pending_interaction();

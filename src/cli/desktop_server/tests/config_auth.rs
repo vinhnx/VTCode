@@ -24,7 +24,7 @@ async fn config_discover_reports_boot_auth_failure_without_disconnecting() {
     let snapshot: ConfigurationSnapshot = serde_json::from_value(result).expect("snapshot");
     assert!(!snapshot.authenticated);
     assert_eq!(snapshot.provider, "gemini");
-    assert_eq!(snapshot.credential_setup_command, "vtcode login gemini");
+    assert_eq!(snapshot.credential_setup_command, "vtcode secret add gemini");
 }
 
 #[tokio::test]
@@ -88,4 +88,48 @@ async fn failed_override_resolution_keeps_selection_but_reports_unauthenticated(
     assert!(agent.api_key.is_empty(), "a failed override must not leak the boot key");
     let snapshot = configuration_snapshot(&context, &agent).await.expect("snapshot");
     assert!(!snapshot.authenticated);
+}
+
+#[tokio::test]
+async fn credential_setup_command_matches_provider_auth_route() {
+    // `vtcode login` only supports openai/openrouter/copilot/codex; every
+    // other key-based provider must point at `vtcode secret add` so desktop
+    // users are not sent to a command that rejects their provider. Local
+    // providers advertise no command, and only secret-add providers offer the
+    // in-app form.
+    for (provider, expected, secret_store) in [
+        ("meta", "vtcode secret add meta", Some(("meta", "META_API_KEY"))),
+        ("gemini", "vtcode secret add gemini", Some(("gemini", "GEMINI_API_KEY"))),
+        ("anthropic", "vtcode secret add anthropic", Some(("anthropic", "ANTHROPIC_API_KEY"))),
+        ("openai", "vtcode login openai", None),
+        ("openrouter", "vtcode login openrouter", None),
+        ("copilot", "vtcode login copilot", None),
+        ("codex", "vtcode login codex", None),
+        ("ollama", "", None),
+        ("", "vtcode auth", None),
+        ("  ", "vtcode auth", None),
+        ("  meta  ", "vtcode secret add meta", Some(("meta", "META_API_KEY"))),
+        ("typo-provider", "vtcode secret add typo-provider", Some(("typo-provider", "TYPO_PROVIDER_API_KEY"))),
+    ] {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = directory.path().to_path_buf();
+        let mut startup = test_startup_context(&workspace);
+        startup.provider_auth_error = Some("missing credentials".to_string());
+        startup.agent_config.provider = provider.to_string();
+        startup.agent_config.api_key.clear();
+        let (context, _) = test_service_context(startup, workspace);
+        context.state.lock().await.initialized = true;
+        let agent = active_agent_config(&context).await;
+        let snapshot = configuration_snapshot(&context, &agent).await.expect("snapshot");
+        assert!(!snapshot.authenticated, "provider {provider:?} stays unauthenticated");
+        assert_eq!(snapshot.credential_setup_command, expected, "provider {provider:?}");
+        assert_eq!(
+            snapshot.secret_store,
+            secret_store.map(|(info_provider, env_var)| protocol::SecretStoreInfo {
+                provider: info_provider.to_string(),
+                env_var: env_var.to_string(),
+            }),
+            "provider {provider:?} form support",
+        );
+    }
 }

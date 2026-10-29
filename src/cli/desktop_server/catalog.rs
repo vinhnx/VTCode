@@ -27,6 +27,25 @@ pub(super) struct OverrideAuth {
     pub(super) error: Option<String>,
 }
 
+/// Credentials saved through `config/secret/store`, re-resolved at save time so
+/// an in-app key save takes effect without a service restart. Applies to the
+/// boot provider only; `config/select` overrides re-resolve on their own.
+#[derive(Debug, Clone)]
+pub(super) struct StoredSecretAuth {
+    pub(super) provider: String,
+    pub(super) auth: OverrideAuth,
+}
+
+/// Credentials from an in-app save that apply to `provider`: a recorded save
+/// for the boot provider whose re-resolution succeeded.
+fn stored_secret_for<'a>(state: &'a ServerState, provider: &str) -> Option<&'a OverrideAuth> {
+    state
+        .secret_store_auth
+        .as_ref()
+        .filter(|stored| stored.auth.error.is_none() && stored.provider.eq_ignore_ascii_case(provider))
+        .map(|stored| &stored.auth)
+}
+
 /// Resolve credentials for a `config/select` provider/model without failing
 /// the selection. Callers report the outcome through `authenticated` so the
 /// desktop can guide recovery instead of disconnecting.
@@ -78,6 +97,11 @@ pub(super) async fn active_agent_config(context: &ServiceContext) -> vtcode_core
             }
             None => {}
         }
+    } else if let Some(auth) = stored_secret_for(&state, &config.provider) {
+        // No override: a key saved in-app for the boot provider takes effect
+        // for sessions started after the save, without a service restart.
+        config.api_key.clone_from(&auth.api_key);
+        config.openai_chatgpt_auth.clone_from(&auth.openai_chatgpt_auth);
     }
     if let Some(effort) = state
         .session_options
@@ -119,17 +143,35 @@ pub(super) async fn configuration_snapshot(
     agent: &vtcode_core::config::types::AgentConfig,
 ) -> Result<ConfigurationSnapshot> {
     // The desktop service boots without credentials so the app stays connected
-    // while unauthenticated. Report the outcome honestly: the boot auth error
-    // when no override is active, otherwise the select-time resolution result.
-    let setup = if agent.provider.trim().is_empty() {
+    // while unauthenticated. Report the outcome honestly: override resolution
+    // when one is active, otherwise an in-app boot-provider save when one
+    // repaired it, else the boot auth error.
+    // `vtcode login` only serves openai/openrouter/copilot/codex. Point every
+    // other key-based provider at `vtcode secret add`, matching the CLI's own
+    // missing-credential guidance, so desktop users are not sent to a command
+    // that rejects their provider. Local providers need no credentials, so
+    // they advertise no setup command at all.
+    let provider = agent.provider.trim();
+    let setup = if provider.is_empty() {
         "vtcode auth".to_string()
+    } else if crate::cli::auth::supports_auth_provider(provider) {
+        format!("vtcode login {provider}")
     } else {
-        format!("vtcode login {}", agent.provider)
+        match crate::cli::secret::secret_target(&context.startup.config, provider, None) {
+            Ok(target) if target.local => String::new(),
+            _ => format!("vtcode secret add {provider}"),
+        }
     };
+    let secret_store = secret_store::snapshot_info(&context.startup.config, &agent.provider);
     let options = context.state.lock().await.session_options.clone();
-    let authenticated = match context.state.lock().await.model_override_auth.as_ref() {
-        Some(auth) => auth.error.is_none(),
-        None => context.startup.provider_auth_error.is_none(),
+    let authenticated = {
+        let state = context.state.lock().await;
+        match state.model_override_auth.as_ref() {
+            Some(auth) => auth.error.is_none(),
+            None => {
+                stored_secret_for(&state, &agent.provider).is_some() || context.startup.provider_auth_error.is_none()
+            }
+        }
     };
     let speed_config = effective_speed_config(context, agent).await;
     let fast_mode_supported = crate::agent::runloop::unified::fast_mode::supports_fast_mode(agent, &speed_config);
@@ -177,6 +219,7 @@ pub(super) async fn configuration_snapshot(
         model: agent.model.clone(),
         authenticated,
         credential_setup_command: setup,
+        secret_store,
         sandbox: Some(
             if options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
                 "Full access"

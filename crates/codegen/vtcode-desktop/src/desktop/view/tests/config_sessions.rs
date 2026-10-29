@@ -818,7 +818,8 @@ fn unauthenticated_discover_keeps_service_connected_with_reload_guidance(cx: &mu
                         "provider": "meta",
                         "model": "muse-spark",
                         "authenticated": false,
-                        "credentialSetupCommand": "vtcode login meta",
+                        "credentialSetupCommand": "vtcode secret add meta",
+                        "secretStore": {"provider": "meta", "envVar": "META_API_KEY"},
                     })),
                     error: None,
                 },
@@ -831,7 +832,7 @@ fn unauthenticated_discover_keeps_service_connected_with_reload_guidance(cx: &mu
                 "the snapshot still lands while unauthenticated"
             );
             let error = view.error.as_deref().expect("auth guidance");
-            assert!(error.contains("vtcode login meta"));
+            assert!(error.contains("vtcode secret add meta"));
             assert!(error.contains("Reload CLI settings"));
             assert!(!error.contains("restart the desktop app"));
             assert!(view.can_reload_cli_settings(), "reload recovers without an app restart");
@@ -857,7 +858,8 @@ fn submit_without_credentials_keeps_draft_and_points_to_reload(cx: &mut TestAppC
                     "provider": "meta",
                     "model": "muse-spark",
                     "authenticated": false,
-                    "credentialSetupCommand": "vtcode login meta",
+                    "credentialSetupCommand": "vtcode secret add meta",
+                    "secretStore": {"provider": "meta", "envVar": "META_API_KEY"},
                 }))
                 .unwrap(),
             );
@@ -870,7 +872,7 @@ fn submit_without_credentials_keeps_draft_and_points_to_reload(cx: &mut TestAppC
             assert!(view.transcript.is_empty());
             assert_eq!(view.composer.read(cx).value(), "Drafted while logged out");
             let error = view.error.as_deref().expect("auth guidance");
-            assert!(error.contains("vtcode login meta"));
+            assert!(error.contains("vtcode secret add meta"));
             assert!(error.contains("Reload CLI settings"));
         });
         window.render_frame(cx);
@@ -892,7 +894,8 @@ fn deferred_submission_rechecks_credentials_before_sending(cx: &mut TestAppConte
                 "provider": "meta",
                 "model": "muse-spark",
                 "authenticated": false,
-                "credentialSetupCommand": "vtcode login meta",
+                "credentialSetupCommand": "vtcode secret add meta",
+                "secretStore": {"provider": "meta", "envVar": "META_API_KEY"},
             }))
             .unwrap(),
         );

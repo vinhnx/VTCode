@@ -13,6 +13,8 @@
 - Primary-agent display notifications are ephemeral and session-scoped; keep configured `sessionOptions.mode` separate.
 - `config/theme` accepts a built-in CLI theme ID. Settings DTOs carry bounded dotted keys and JSON values, never
   config file paths, full TOML, or credentials.
+- `config/secret/store` is the one credential-carrying command: the key travels the local channel only, responses and
+  errors carry provider labels, and `SecretStoreParams` redacts the key in `Debug`.
 - Use `vtcode-exec-events` history types; review/activity snapshots never replay live lifecycle events.
 - Hidden model-only history rows retain archive indices; only system rows may be omitted from the visible transcript.
 - Shared scalar wire values (method names, sentinel ids like `SESSION_START_TURN_ID`) live as `pub const` here so the service and client reference one definition.

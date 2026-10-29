@@ -39,6 +39,9 @@ pub const COMPOSER_RESOURCES: &str = "composer/resources";
 pub const CONFIG_MODELS: &str = "config/models";
 /// Select the provider/model used for the next session.
 pub const CONFIG_SELECT: &str = "config/select";
+/// Store a provider API key from the desktop client in secure storage.
+/// The secret travels the local channel only and is never echoed back.
+pub const CONFIG_SECRET_STORE: &str = "config/secret/store";
 /// Shut down the local service after owned tasks finish.
 pub const SHUTDOWN: &str = "desktop/shutdown";
 /// Stream an authoritative runtime event.

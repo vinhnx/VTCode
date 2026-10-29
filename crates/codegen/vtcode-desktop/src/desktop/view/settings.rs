@@ -757,7 +757,7 @@ impl DesktopView {
         content.into_any_element()
     }
 
-    fn render_provider_settings(&self, cx: &Context<Self>) -> AnyElement {
+    fn render_provider_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let Some(configuration) = self.configuration.as_ref() else {
             return accessible_group_box(
@@ -796,7 +796,14 @@ impl DesktopView {
                             ),
                     ),
             );
-        if !configuration.credential_setup_command.is_empty() {
+        // Owned copies for the Terminal fallback row so the secret form can
+        // borrow `cx` mutably below.
+        let mono_font_family = theme.mono_font_family.clone();
+        let muted_foreground = theme.colors.muted_foreground;
+        if let Some(secret) = configuration.secret_store.as_ref() {
+            group = group.child(self.render_secret_store_form(secret, cx));
+        }
+        if configuration.secret_store.is_none() && !configuration.credential_setup_command.is_empty() {
             let command = configuration.credential_setup_command.clone();
             group = group.child(
                 div()
@@ -809,8 +816,8 @@ impl DesktopView {
                             .flex_1()
                             .min_w_0()
                             .text_xs()
-                            .font_family(theme.mono_font_family.clone())
-                            .text_color(theme.colors.muted_foreground)
+                            .font_family(mono_font_family)
+                            .text_color(muted_foreground)
                             .truncate()
                             .child(command.clone()),
                     )

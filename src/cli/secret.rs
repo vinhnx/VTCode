@@ -16,12 +16,12 @@ use vtcode_core::cli::args::{MigrateArgs, SecretSubcommand};
 use vtcode_core::config::models::Provider;
 
 #[derive(Clone)]
-struct SecretTarget {
-    provider_name: String,
-    label: String,
-    env_key: String,
-    local: bool,
-    managed_auth: bool,
+pub(crate) struct SecretTarget {
+    pub(crate) provider_name: String,
+    pub(crate) label: String,
+    pub(crate) env_key: String,
+    pub(crate) local: bool,
+    pub(crate) managed_auth: bool,
 }
 
 pub async fn handle_secret_command(
@@ -47,7 +47,7 @@ pub async fn handle_secret_command(
     }
 }
 
-fn secret_target(config: &VTCodeConfig, name: &str, key_name: Option<&str>) -> Result<SecretTarget> {
+pub(crate) fn secret_target(config: &VTCodeConfig, name: &str, key_name: Option<&str>) -> Result<SecretTarget> {
     let provider_name = name.trim().to_ascii_lowercase();
     if provider_name.is_empty() {
         anyhow::bail!("Provider name cannot be empty.");

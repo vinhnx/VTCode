@@ -305,6 +305,7 @@ fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> 
     assert_eq!(snapshot.sandbox, None);
     assert_eq!(snapshot.context_window, None);
     assert_eq!(snapshot.shared_ui, None);
+    assert_eq!(snapshot.secret_store, None);
 
     let legacy_options: SessionOptionsSnapshot = serde_json::from_value(serde_json::json!({
         "permissionMode": "ask",
@@ -327,6 +328,7 @@ fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> 
         context_window: Some(131_072),
         shared_ui: None,
         session_options: None,
+        secret_store: None,
     })?;
     assert_eq!(value["sandbox"], "Ask before protected actions");
     assert_eq!(value["contextWindow"], 131_072);
@@ -529,6 +531,45 @@ fn update_status_snapshot_round_trips_and_older_payloads_decode() {
     assert!(legacy.release_url.is_none());
     assert!(legacy.channel.is_none());
     assert!(!legacy.check_due);
+}
+
+#[test]
+fn secret_store_types_round_trip_with_camel_case_and_redacted_debug() {
+    let params = SecretStoreParams {
+        provider: "meta".into(),
+        api_key: "sentinel-key".into(),
+    };
+    let wire = serde_json::to_value(&params).unwrap();
+    assert_eq!(wire["provider"], "meta");
+    assert_eq!(wire["apiKey"], "sentinel-key");
+    let decoded: SecretStoreParams = serde_json::from_value(wire).unwrap();
+    assert_eq!(decoded, params);
+    let rendered = format!("{params:?}");
+    assert!(rendered.contains("meta"), "provider stays visible: {rendered}");
+    assert!(!rendered.contains("sentinel-key"), "key must not leak through Debug: {rendered}");
+
+    let snapshot: ConfigurationSnapshot = serde_json::from_value(serde_json::json!({
+        "provider": "meta",
+        "model": "muse-spark-1.3",
+        "authenticated": false,
+        "credentialSetupCommand": "vtcode secret add meta",
+        "secretStore": {"provider": "meta", "envVar": "META_API_KEY"},
+    }))
+    .unwrap();
+    assert_eq!(
+        snapshot.secret_store,
+        Some(SecretStoreInfo {
+            provider: "meta".into(),
+            env_var: "META_API_KEY".into()
+        })
+    );
+    let result = SecretStoreResult {
+        configuration: snapshot.clone(),
+        session_reset: true,
+    };
+    let decoded: SecretStoreResult = serde_json::from_value(serde_json::to_value(&result).unwrap()).unwrap();
+    assert_eq!(decoded, result);
+    assert_eq!(method::CONFIG_SECRET_STORE, "config/secret/store");
 }
 
 #[tokio::test]
