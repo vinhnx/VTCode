@@ -36,13 +36,16 @@ The optional first argument selects the output `.app` path. The script builds th
 places the service in `Contents/Helpers`, signs both executables before signing the app, and verifies the bundle. The
 default output is `dist/VT Code.app`; the script will not overwrite an existing output. Ad hoc signatures support local
 development only. They do not establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
+Every package writes Gatekeeper first-launch steps next to the bundle (`FIRST-LAUNCH.txt`): right-click the app and
+choose Open, or allow it once in Settings > Privacy & Security.
 The packaged GUI uses only its bundled `Contents/Helpers/vtcode`; if that helper is missing, it asks you to rebuild or
 reinstall instead of starting an unrelated workspace binary. Development runs prefer an adjacent `vtcode` binary, then
 check the workspace `target/release` and `target/debug` outputs.
 
 Launch a packaged build by its exact path with `scripts/open-desktop-macos.sh "dist/VT Code.app"`. The launcher asks
 macOS to open a new instance of that bundle; this avoids selecting a different local copy when several development apps
-share the same display name or bundle identifier.
+share the same display name or bundle identifier. From any terminal, `vtcode desktop [APP_PATH]` opens the GUI the same
+way on macOS: it checks the explicit path, then `VTCODE_DESKTOP_APP`, then `~/Applications` and `/Applications`.
 
 The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.8.0 setup](https://gpui-kit.com/docs/installation/).
 
@@ -147,7 +150,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Sync theme to CLI | Settings → VT Code → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
 | Edit CLI settings | `/config` opens the dedicated configuration page: search the catalog, browse the groups rail, and edit rows in place. Booleans toggle with a switch; strings/numbers use typed editors and arrays/maps use JSON. Choose the User, Workspace, or Project write target; VT Code validates and version-checks the write, then reloads the service and reports higher-precedence overrides on the page. Credential-bearing fields stay excluded and schema templates without concrete values show as read-only references; layer resets stay in the terminal (`vtcode config reset`). Settings → VT Code → CLI configuration keeps the same summary with a Browse entry point into the catalog. |
-| Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings sheet. Appearance contains live theme previews for every built-in CLI theme, typography, and the file open destination; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing and local service status; Notifications contains the turn-completion dropdown, category toggles, and the cached app-update status with a manual refresh. |
+| Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings sheet. Appearance contains live theme previews for every built-in CLI theme, typography, and the file open destination; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing, local service status, and a terminal handoff row that copies `vtcode --resume <id> --all` for the selected session; Notifications contains the turn-completion dropdown, category toggles, and the cached app-update status with a manual refresh. |
 | Choose where files open | Settings → Appearance → Files lists the built-in viewer, the system default, Finder, Terminal, and detected editors; a saved choice stays listed even when its app is missing. Selection opens there directly. |
 | Change interface language | Settings → Appearance offers 20 languages, including Hindi, Ukrainian, and Swedish. Use the searchable language picker by native name or locale code; the selection updates supported labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark controls switch between saved profiles. The selected profile remains visible in the theme swatches. |

@@ -17,8 +17,8 @@ use crate::cli::plugins::dispatch_plugins_command;
 use crate::cli::session_store::handle_session_store_command;
 use crate::cli::webmcp;
 use crate::cli::{
-    analyze, benchmark, check, config, create_project, dependencies, exec, init, init_project, man, notify, revert,
-    review, schedule, schema, secret, skills, snapshots, trajectory, update,
+    analyze, benchmark, check, config, create_project, dependencies, desktop, exec, init, init_project, man, notify,
+    revert, review, schedule, schema, secret, skills, snapshots, trajectory, update,
 };
 
 pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Commands) -> Result<()> {
@@ -55,6 +55,9 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         }
         Commands::DesktopServer => {
             handle_desktop_server_command(startup).await?;
+        }
+        Commands::Desktop { app_path } => {
+            desktop::handle_desktop_command(app_path)?;
         }
         Commands::Models { command } => {
             vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;

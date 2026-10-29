@@ -1713,6 +1713,27 @@ app:
         nl: "Verbindingsgegevens van de lokale service"
         ru: "Сведения о подключении локальной службы"
         id: "Detail koneksi layanan lokal"
+      terminal:
+        en: Continue in terminal
+        sv: "Fortsätt i terminalen"
+        uk: "Продовжити в терміналі"
+        hi: "टर्मिनल में जारी रखें"
+        pl: "Kontynuuj w terminalu"
+        tr: "Terminalde devam et"
+        es: "Continuar en la terminal"
+        fr: "Continuer dans le terminal"
+        ja: "ターミナルで続ける"
+        vi: Tiếp tục trong terminal
+        de: Im Terminal fortfahren
+        it: Continua nel terminale
+        zh-CN: 在终端中继续
+        zh-TW: 在終端機中繼續
+        zh-HK: 在終端機中繼續
+        pt-BR: "Continuar no terminal"
+        ko: "터미널에서 계속하기"
+        nl: "Doorgaan in terminal"
+        ru: "Продолжить в терминале"
+        id: "Lanjutkan di terminal"
   welcome:
     greeting:
       morning:

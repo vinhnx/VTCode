@@ -820,6 +820,17 @@ impl DesktopView {
         )
     }
 
+    /// Terminal command that continues the selected session outside the GUI.
+    /// `--all` lets it run from any directory; without a selection it opens a
+    /// plain terminal session. Session ids are bounded archive tokens, safe to
+    /// interpolate unquoted.
+    pub(super) fn terminal_command_for_session(selected_session_id: Option<&str>) -> String {
+        match selected_session_id {
+            Some(id) => format!("vtcode --resume {id} --all"),
+            None => "vtcode".to_string(),
+        }
+    }
+
     fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         let service_info = self.service_info.as_ref().filter(|_| self.backend.is_some());
         let service_connected = service_info.is_some();
@@ -873,6 +884,29 @@ impl DesktopView {
             .gap_4()
             .child(self.render_webmcp_settings(false, cx))
             .child(self.render_webmcp_settings(true, cx))
+            .child({
+                let group_title = rust_i18n::t!("app.settings.connections.terminal").to_string();
+                let command = Self::terminal_command_for_session(self.selected_session_id.as_deref());
+                accessible_group_box(
+                    "terminal-settings-group",
+                    group_title.clone(),
+                    settings_group_box(group_title, &cx.theme().colors).child(settings_row(
+                        rust_i18n::t!("app.settings.connections.terminal").to_string(),
+                        command.clone(),
+                        desktop_button("copy-terminal-command")
+                            .label(rust_i18n::t!("app.file_preview.copy").to_string())
+                            .ghost()
+                            .small()
+                            .on_click({
+                                move |_, window: &mut Window, cx: &mut App| {
+                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.clone()));
+                                    super::super::notifications::copied_to_clipboard(window, cx);
+                                }
+                            }),
+                        &cx.theme().colors,
+                    )),
+                )
+            })
             .child(accessible_group_box(
                 "local-service-settings-group",
                 rust_i18n::t!("app.settings.connections.local_service").to_string(),

@@ -63,7 +63,33 @@ for size in 16 32 128 256 512; do
     sips -z "${retina_size}" "${retina_size}" "${ROOT_DIR}/resources/icons/vtcode-profile-512.png" \
         --out "${ICONSET}/icon_${size}x${size}@2x.png" >/dev/null
 done
-iconutil -c icns "${ICONSET}" -o "${CONTENTS}/Resources/VTCode.icns"
+# iconutil's icns-write path is broken on some hosts (macOS 27 rejects even
+# previously working iconsets while the read path works). When the artwork is
+# intact but iconutil fails, reuse the icon from the newest prior bundle in
+# the output directory instead of aborting, and say so loudly. Without intact
+# artwork or a fallback icon the build still fails: never ship iconless.
+if ! iconutil -c icns "${ICONSET}" -o "${CONTENTS}/Resources/VTCode.icns" 2>/dev/null; then
+    if [[ "$(find "${ICONSET}" -name '*.png' | wc -l)" -ne 10 ]]; then
+        printf 'Error: icon artwork is incomplete; refusing icon fallback.\n' >&2
+        exit 1
+    fi
+    FALLBACK_ICON=""
+    FALLBACK_MTIME=0
+    for candidate in "${OUTPUT_PARENT}"/*.app/Contents/Resources/VTCode.icns; do
+        [[ -e "${candidate}" ]] || continue
+        mtime="$(stat -f '%m' "${candidate}")"
+        if (( mtime > FALLBACK_MTIME )); then
+            FALLBACK_MTIME="${mtime}"
+            FALLBACK_ICON="${candidate}"
+        fi
+    done
+    if [[ -z "${FALLBACK_ICON}" ]]; then
+        printf 'Error: iconutil failed and no prior-bundle VTCode.icns fallback exists in %s.\n' "${OUTPUT_PARENT}" >&2
+        exit 1
+    fi
+    printf 'Warning: iconutil failed on this host; reusing icon from %s.\n' "${FALLBACK_ICON}" >&2
+    cp "${FALLBACK_ICON}" "${CONTENTS}/Resources/VTCode.icns"
+fi
 
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "${ROOT_DIR}/Cargo.toml" | head -n 1)"
 cat >"${CONTENTS}/Info.plist" <<PLIST
@@ -107,3 +133,26 @@ codesign --verify --deep --strict "${OUTPUT_APP}"
 
 printf 'Packaged locally signed app: %s\n' "${OUTPUT_APP}"
 printf 'Ad hoc signing does not provide Developer ID trust or notarization.\n'
+
+# Ad hoc builds trip Gatekeeper on first launch. Leave the unlock steps next
+# to the bundle (it may be handed off without this terminal output) and print
+# the short version here.
+cat >"${OUTPUT_PARENT}/FIRST-LAUNCH.txt" <<NOTICE
+VT Code Desktop - first launch
+==============================
+This build is signed ad hoc for local development (no Developer ID, no
+notarization), so macOS Gatekeeper may block the first launch with "cannot
+be opened because it is from an unidentified developer".
+
+To open it:
+  1. In Finder, right-click VT Code.app, choose Open, then Open again in
+     the confirmation dialog, or
+  2. After a blocked launch, open Settings > Privacy & Security and click
+     Open Anyway next to the VT Code message.
+
+You only need to do this once; later launches open normally. To
+distribute without this prompt, sign with a Developer ID certificate
+and notarize (see scripts/macos-release-signing.sh).
+NOTICE
+printf 'First launch: right-click the app and choose Open (or allow it in Settings > Privacy & Security).\n'
+printf 'Details written to: %s\n' "${OUTPUT_PARENT}/FIRST-LAUNCH.txt"

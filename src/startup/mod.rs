@@ -126,9 +126,9 @@ impl StartupPolicy {
         } else {
             match args.command.as_ref() {
                 Some(Commands::Ask { .. }) => StartupCommandKind::Ask,
-                Some(Commands::Schema { .. } | Commands::Models { .. } | Commands::Man { .. }) => {
-                    StartupCommandKind::Metadata
-                }
+                Some(
+                    Commands::Schema { .. } | Commands::Models { .. } | Commands::Man { .. } | Commands::Desktop { .. },
+                ) => StartupCommandKind::Metadata,
                 Some(Commands::AppServer { .. }) => StartupCommandKind::AppServer,
                 Some(Commands::DesktopServer) => StartupCommandKind::ToolCapable,
                 Some(

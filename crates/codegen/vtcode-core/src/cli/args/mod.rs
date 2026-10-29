@@ -708,6 +708,17 @@ pub enum Commands {
     #[command(name = "desktop-server")]
     DesktopServer,
 
+    /// Open the VT Code desktop app (macOS).
+    ///
+    /// Locates VT Code.app (explicit path, VTCODE_DESKTOP_APP, then
+    /// ~/Applications and /Applications) and opens a new instance.
+    #[command(name = "desktop")]
+    Desktop {
+        /// Path to VT Code.app when it is outside the standard locations
+        #[arg(value_name = "APP_PATH")]
+        app_path: Option<PathBuf>,
+    },
+
     /// Manage models and providers
     Models {
         #[command(subcommand)]

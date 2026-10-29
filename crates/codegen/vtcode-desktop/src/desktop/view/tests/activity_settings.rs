@@ -797,3 +797,26 @@ fn narrow_composer_wraps_actions_and_bounds_long_model_names(cx: &mut TestAppCon
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn connections_terminal_row_copies_the_resume_command(cx: &mut TestAppContext) {
+    // Pure builder oracles: a selected session yields a directory-independent
+    // resume command, no selection yields a plain terminal session.
+    assert_eq!(DesktopView::terminal_command_for_session(Some("sess-1")), "vtcode --resume sess-1 --all");
+    assert_eq!(DesktopView::terminal_command_for_session(None), "vtcode");
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("sess-1".to_string());
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        select_settings_category(window, 4, cx);
+        window.render_frame(cx);
+        assert!(window.try_find("copy-terminal-command").is_some());
+        window.click("copy-terminal-command", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode --resume sess-1 --all"));
+    })
+    .unwrap();
+}
