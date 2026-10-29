@@ -64,6 +64,19 @@ impl Default for McpOAuthConfig {
     }
 }
 
+/// Allowlist-based endpoint check: only `http(s)` URLs with a host.
+///
+/// Configured OAuth endpoints and the protected resource all pass through
+/// here so a `javascript:`/`data:`/shell-metachar URL fails at prepare time,
+/// never at `webbrowser::open` or `reqwest` time.
+fn validate_endpoint_url(what: &str, provider_name: &str, raw: &str) -> Result<Url> {
+    let parsed = Url::parse(raw).with_context(|| format!("MCP provider '{provider_name}' has an invalid {what}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        bail!("MCP provider '{provider_name}' {what} must be an http(s) URL with a host");
+    }
+    Ok(parsed)
+}
+
 impl McpOAuthConfig {
     fn validate(&self, provider_name: &str) -> Result<()> {
         if self.authorization_url.trim().is_empty() {
@@ -75,6 +88,8 @@ impl McpOAuthConfig {
         if self.client_id.trim().is_empty() {
             bail!("MCP provider '{provider_name}' is missing oauth.client_id");
         }
+        drop(validate_endpoint_url("oauth.authorization_url", provider_name, &self.authorization_url)?);
+        drop(validate_endpoint_url("oauth.token_url", provider_name, &self.token_url)?);
         Ok(())
     }
 
@@ -127,10 +142,7 @@ struct McpOAuthBinding {
 impl McpOAuthBinding {
     fn new(provider: &str, config: &McpOAuthConfig, resource: &str) -> Result<Self> {
         config.validate(provider)?;
-        let resource = Url::parse(resource).context("invalid MCP protected resource URL")?;
-        if !matches!(resource.scheme(), "http" | "https") || resource.host_str().is_none() {
-            bail!("invalid MCP protected resource URL");
-        }
+        let resource = validate_endpoint_url("protected resource URL", provider, resource)?;
         Ok(Self {
             provider: provider.to_owned(),
             authorization_url: config.authorization_url.clone(),
@@ -564,6 +576,37 @@ mod tests {
             extra_auth_params: BTreeMap::from([("prompt".to_string(), "consent".to_string())]),
             extra_token_params: BTreeMap::new(),
         }
+    }
+
+    #[test]
+    fn validate_rejects_dangerous_endpoint_schemes() {
+        let mut config = sample_config();
+        for (field, url) in [
+            ("authorization_url", "javascript:alert(1)"),
+            ("authorization_url", "data:text/html,<script>alert(1)</script>"),
+            ("token_url", "file:///etc/passwd"),
+            ("token_url", "vbscript:msgbox(1)"),
+        ] {
+            let mut bad = config.clone();
+            if field == "authorization_url" {
+                bad.authorization_url = url.to_string();
+            } else {
+                bad.token_url = url.to_string();
+            }
+            let error = bad.validate("demo").expect_err("dangerous scheme must fail validation");
+            assert!(format!("{error:#}").contains("must be an http(s) URL"), "unexpected error for {url}: {error:#}");
+        }
+        config.token_url = "http://127.0.0.1:1/token".to_string();
+        config.validate("demo").expect("loopback http stays allowed");
+    }
+
+    #[test]
+    fn prepare_login_for_resource_rejects_dangerous_resource_scheme() {
+        let service = McpOAuthService::new();
+        let error = service
+            .prepare_login_for_resource("demo", &sample_config(), "javascript:alert(1)")
+            .expect_err("dangerous resource scheme must fail");
+        assert!(format!("{error:#}").contains("must be an http(s) URL"), "unexpected error: {error:#}");
     }
 
     #[test]
