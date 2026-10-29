@@ -196,6 +196,30 @@ fn startup_policy_preserves_app_server_auth_exception_and_runtime_security() {
 }
 
 #[test]
+fn desktop_server_boots_without_credentials_but_still_resolves_auth() {
+    // The desktop service attempts provider auth (resolve_provider_auth) yet
+    // tolerates a missing credential so the app stays connected and guides
+    // recovery; every other tool-capable path still fails fast.
+    let policy = command_startup_policy(&Cli::parse_from(["vtcode", "desktop-server"]));
+    assert_eq!(policy.kind, StartupCommandKind::ToolCapable);
+    assert!(policy.resolve_provider_auth());
+    assert!(policy.allow_missing_provider_auth());
+    assert!(policy.initialize_runtime());
+
+    for args in [
+        vec!["vtcode", "exec", "inspect the workspace"],
+        vec!["vtcode", "ask", "hello"],
+        vec!["vtcode", "--print", "hello"],
+    ] {
+        let policy = command_startup_policy(&Cli::parse_from(args));
+        assert!(
+            !policy.allow_missing_provider_auth(),
+            "tool-capable one-shot paths must fail fast without credentials: {policy:?}"
+        );
+    }
+}
+
+#[test]
 fn startup_policy_keeps_known_command_owned_paths_off_provider_runtime() {
     assert_policy(
         Cli::parse_from(["vtcode", "tool-policy", "status"]),

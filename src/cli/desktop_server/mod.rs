@@ -95,6 +95,10 @@ struct ServerState {
     /// Provider/model override applied to every session started after a
     /// `config/select`; the session restarts so the runtime rebuilds cleanly.
     model_override: Option<ModelSelectParams>,
+    /// Credentials resolved for `model_override` at select time. Always `Some`
+    /// once an override is active; `OverrideAuth::error` records a failed
+    /// resolution so the snapshot reports `authenticated: false`.
+    model_override_auth: Option<catalog::OverrideAuth>,
     session_options: protocol::SessionOptionsSelectParams,
     permission_before_full_access: Option<protocol::PermissionMode>,
     /// Recent Desktop changes layered over the process-start CLI config until restart.
@@ -433,10 +437,24 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                 bail!("unknown provider/model selection");
             }
             shutdown_current_session(context, false).await?;
+            // Re-resolve credentials for the newly selected provider so later
+            // turns authenticate as that provider. A failed resolution keeps
+            // the selection but reports `authenticated: false`; the desktop
+            // guides recovery instead of disconnecting.
+            let api_key_env = if params.provider.eq_ignore_ascii_case(&context.startup.agent_config.provider) {
+                context.startup.agent_config.api_key_env.clone()
+            } else if let Some(custom) = context.startup.config.custom_provider(&params.provider) {
+                custom.resolved_api_key_env()
+            } else {
+                vtcode_config::api_keys::api_key_env_var(&params.provider)
+            };
+            let override_auth =
+                catalog::resolve_override_auth(context, &params.provider, &params.model, &api_key_env).await;
             {
                 let mut state = context.state.lock().await;
                 state.session_id = None;
                 state.model_override = Some(params);
+                state.model_override_auth = Some(override_auth);
                 state.session_options.reasoning_effort = None;
             }
             let agent = active_agent_config(context).await;

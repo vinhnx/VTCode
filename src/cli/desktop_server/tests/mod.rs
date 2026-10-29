@@ -37,6 +37,7 @@ fn test_startup_context(workspace: &Path) -> StartupContext {
             max_conversation_turns: 1000,
             model_behavior: None,
         },
+        provider_auth_error: None,
         skip_confirmations: false,
         full_auto_requested: false,
         automation_prompt: None,
@@ -137,6 +138,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
     }
 }
 
+mod config_auth;
 mod model_review;
 mod session_history;
 mod shutdown_turns;

@@ -380,9 +380,7 @@ impl DesktopView {
                             .as_ref()
                             .is_some_and(|configuration| !configuration.authenticated)
                         {
-                            self.error = Some(
-                                "No provider credentials are configured. In Terminal, run `vtcode auth` or `vtcode login <provider>`, then restart the desktop app.".to_string(),
-                            );
+                            self.error = Some(provider_auth_guidance(self.configuration.as_ref()));
                         }
                     }
                     protocol::method::CONFIG_SETTINGS_READ => {

@@ -47,6 +47,17 @@ impl DesktopView {
             cx.notify();
             return;
         }
+        // Local slash commands above stay available so the provider can be
+        // switched; only turn submission needs credentials.
+        if self
+            .configuration
+            .as_ref()
+            .is_some_and(|configuration| !configuration.authenticated)
+        {
+            self.error = Some(provider_auth_guidance(self.configuration.as_ref()));
+            cx.notify();
+            return;
+        }
         let draft = SubmissionDraft {
             prompt,
             attachments: std::mem::take(&mut self.attachments),
@@ -86,6 +97,17 @@ impl DesktopView {
         let Some(session_id) = self.selected_session_id.clone() else {
             return Err(draft);
         };
+        // A deferred first submission can outlive the configuration it was
+        // written under; re-check so a revoked credential fails with guidance
+        // instead of a doomed turn.
+        if self
+            .configuration
+            .as_ref()
+            .is_some_and(|configuration| !configuration.authenticated)
+        {
+            self.error = Some(provider_auth_guidance(self.configuration.as_ref()));
+            return Err(draft);
+        }
         let params =
             json!({ keys::SESSION_ID: session_id, keys::PROMPT: draft.prompt, keys::ATTACHMENTS: draft.attachments });
         self.clear_error();

@@ -64,6 +64,10 @@ impl DesktopView {
 
     pub(super) fn render_transcript(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_transcript_layout(cx);
+        let empty_conversation = self.transcript.is_empty()
+            && !self.history_has_earlier
+            && !self.history_page_loading
+            && self.history_page_error.is_none();
         let content = if self.pending_blank_transition() {
             let label = rust_i18n::t!("app.session.preparing_new_thread").to_string();
             div()
@@ -78,12 +82,7 @@ impl DesktopView {
                 .text_color(cx.theme().colors.foreground)
                 .child(label)
                 .into_any_element()
-        } else if self.transcript.is_empty()
-            && !self.history_has_earlier
-            && !self.history_page_loading
-            && self.history_page_error.is_none()
-            && !self.zen_mode
-        {
+        } else if empty_conversation && !self.zen_mode {
             let colors = cx.theme().colors;
             let welcome_copy = welcome_copy(self.welcome_copy_index);
             let greeting = welcome_greeting(self.welcome_period);
@@ -187,6 +186,8 @@ impl DesktopView {
                         }),
                 )
                 .into_any_element()
+        } else if empty_conversation {
+            self.render_zen_empty_state(cx)
         } else {
             let remaining_history_capacity = self.transcript.remaining_capacity();
             let mut transcript_content = div().size_full().min_h_0().flex().flex_col();
@@ -249,6 +250,70 @@ impl DesktopView {
             .w_full()
             .overflow_hidden()
             .child(content)
+    }
+
+    /// Minimal centered empty state for Zen mode. The brand mark is the single
+    /// focal point, followed by one greeting line; the workspace name renders
+    /// as plain text because Zen hides the title-bar identity. The workspace
+    /// picker stays reachable through the primary action when none is set.
+    fn render_zen_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let welcome_copy = welcome_copy(self.welcome_copy_index);
+        let greeting = welcome_greeting(self.welcome_period);
+        let workspace_name = self
+            .workspace
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned());
+        let prompt =
+            welcome_prompt(&greeting, &welcome_copy.action, &welcome_copy.workspace_action, workspace_name.as_deref());
+        div()
+            .id("zen-welcome")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("VT Code zen start")
+            .size_full()
+            .child(
+                EmptyState::new()
+                    .header(
+                        EmptyHeader::new()
+                            .max_w(px(self.content_width()))
+                            .gap_4()
+                            .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(40., colors.primary)))
+                            .title(
+                                EmptyTitle::new()
+                                    .text_size(gpui_kit::rems(1.5))
+                                    .font_weight(gpui_kit::FontWeight::NORMAL)
+                                    .text_color(colors.foreground)
+                                    .child(
+                                        div()
+                                            .id("zen-welcome-prompt")
+                                            .test_support()
+                                            .role(gpui_kit::Role::Heading)
+                                            .aria_label(prompt.clone())
+                                            .child(prompt),
+                                    ),
+                            ),
+                    )
+                    .size_full()
+                    .when(self.workspace.is_none(), |welcome| {
+                        welcome.content(
+                            EmptyContent::new().child(
+                                desktop_button("open-first-workspace")
+                                    .label(welcome_copy.call_to_action.clone())
+                                    .accessibility_label(welcome_copy.call_to_action)
+                                    .primary()
+                                    .desktop_disabled(
+                                        self.workspace_picker_open
+                                            || !self.workspace_switch_idle()
+                                            || self.retained_submission.is_some(),
+                                    )
+                                    .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                            ),
+                        )
+                    }),
+            )
+            .into_any_element()
     }
 
     pub(super) fn pending_blank_transition(&self) -> bool {

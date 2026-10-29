@@ -23,7 +23,9 @@ first build of those optimized dependencies can take longer.
 
 Choose a workspace folder in the app. The desktop client starts `vtcode desktop-server` with an absolute workspace path
 and uses the existing VT Code configuration, provider credentials, workspace trust, and sandbox policy. If startup
-reports missing credentials, configure the provider from Terminal with the command shown by the app, then restart it.
+reports missing credentials, the service still boots so the app stays connected: configure the provider from Terminal
+with the command shown by the app (or switch to an authenticated provider), then choose Reload CLI settings in
+Settings → VT Code to reconnect. No app restart is needed.
 Credential entry and OAuth onboarding are not part of this version.
 
 To make a local application bundle on macOS 15 or newer:
@@ -129,7 +131,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Open the command palette | ⌘K searches session commands, view toggles, all loaded sessions (up to 200), and workspace files from the bounded workspace scan (up to 400 entries), opened in the configured file destination. Use Refresh recent threads to sync sessions created by the CLI; the desktop updates the active session from runtime events instead of rescanning archives after every turn. Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
 | Find conversation content | ⌘⇧F or Command Palette → Find in conversation searches loaded user, VT Code, tool-activity text, and the bounded output preview shown in the inspector. Select a message or activity result to reveal it in the virtualized transcript; select an output result to open that capture in the Output inspector. Choose Load earlier messages at the bottom of the search panel to fetch the next bounded archive page and keep searching; search reuses the existing session-history pager and never reads the archive separately. |
 | Expand navigation | Appearance → Layout places navigation on the left or right (right by default), or hides it while keeping New Thread and Utilities in the header. The toolbar toggle or ⌘B shows/hides the rail; hover its project icon for a transient list, and leave navigation or press Escape to dismiss the peek. |
-| Focus the conversation | Zen mode starts active. Use the navigation rail's expand control, View, the command palette, or configurable Ctrl+⌘Z to toggle Zen mode; when navigation is hidden, its expand control is in the header. Zen hides the side panels, thread heading, welcome view, status bar, and auxiliary composer controls while preserving the transcript, message input, and send/cancel action. A faded leaf toggle exits Zen: it floats over the main container when both side panels are collapsed, otherwise it stays fixed in the title bar. The Zen composer is a narrower, tighter card with a small send action on the same centered spine as the transcript. Toggles and returning chrome fade on a short theme transition that renders statically under reduced motion; the native title bar remains available for window controls. |
+| Focus the conversation | Zen mode starts active. Use the navigation rail's expand control, View, the command palette, or configurable Ctrl+⌘Z to toggle Zen mode; when navigation is hidden, its expand control is in the header. Zen hides the side panels, thread heading, full welcome view, status bar, and auxiliary composer controls while preserving the transcript, message input, and send/cancel action. Empty threads show a minimal centered brand mark with one greeting line instead of the full welcome view. A faded leaf toggle exits Zen: it floats over the main container when both side panels are collapsed, otherwise it stays fixed in the title bar. The Zen composer is a narrower bordered card with a visible focus ring, roomier padding, a quiet model/policy context line opposite a small send action, all on the same centered spine as the transcript. Toggles and returning chrome fade on a short theme transition that renders statically under reduced motion; the native title bar remains available for window controls. |
 | Navigate settings | Settings opens in a responsive right-side Kit Sheet and groups Appearance, Accessibility, Shortcuts, VT Code, Connections, and Notifications into tabs. Left/Right moves between categories; Home and End select the first and last. Each category scrolls within the sheet so its title and navigation remain available; Escape, the close button, or an overlay click dismisses it. |
 | Search settings and CLI config | ⌘F or the Settings search control filters settings categories and the loaded, bounded CLI config catalog. Selecting a category opens that page; selecting a config path opens its existing editor. Escape returns to Settings. |
 | Configure shortcuts | Settings → Shortcuts shows current bindings as GPUI Kit `Kbd` badges. Choose Edit shortcuts to change thirty main desktop commands, including navigation, conversation and settings/config search, review navigation, and Zen mode; invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Function keys are available for review navigation. Save/reset applies on restart; Import from CLI reuses the configured interrupt/model bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
@@ -561,7 +563,7 @@ to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
 
 Type scale (all `rem`-based, so UI size changes preserve hierarchy): the welcome
-display stays at 1.75rem regular; group headings are semibold `text_sm` at
+display stays at 1.75rem regular (1.5rem in the quieter Zen empty state); group headings are semibold `text_sm` at
 primary foreground; micro labels are semibold `text_xs` at label-grade contrast;
 settings rows pair a medium `text_sm` title with a regular `text_sm` description
 separated by 1px hairlines. Secondary copy uses a brighter muted ramp targeting
@@ -596,6 +598,7 @@ distinct from VT Code's brand primary. Component surfaces preserve readable text
 | Settings | Centered tabbed overlay with trapped focus, scoped category navigation, and explicit close |
 | Escape from Settings | Returns to previous focus without altering the composer draft |
 | Welcome | Quiet brand mark and one prompt; workspace and model controls remain in the composer |
+| Zen empty state | Centered brand mark with one greeting line; the workspace name renders as plain text and the picker action appears only when no workspace is set |
 
 Navigation retains real kit buttons with left-aligned icon/title content and
 keyboard/disabled behavior. Transcript virtualization and raw-copy behavior retain

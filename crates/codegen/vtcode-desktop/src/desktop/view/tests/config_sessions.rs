@@ -761,3 +761,114 @@ fn command_and_add_context_palettes_follow_the_selected_language(cx: &mut TestAp
     .unwrap();
     crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
 }
+
+#[gpui_kit::test]
+fn unauthenticated_discover_keeps_service_connected_with_reload_guidance(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(std::env::temp_dir());
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_DISCOVER.to_string(),
+                    result: Some(json!({
+                        "provider": "meta",
+                        "model": "muse-spark",
+                        "authenticated": false,
+                        "credentialSetupCommand": "vtcode login meta",
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+            assert!(
+                view.configuration
+                    .as_ref()
+                    .is_some_and(|configuration| !configuration.authenticated),
+                "the snapshot still lands while unauthenticated"
+            );
+            let error = view.error.as_deref().expect("auth guidance");
+            assert!(error.contains("vtcode login meta"));
+            assert!(error.contains("Reload CLI settings"));
+            assert!(!error.contains("restart the desktop app"));
+            assert!(view.can_reload_cli_settings(), "reload recovers without an app restart");
+        });
+        window.render_frame(cx);
+        let error = window.find("composer-error");
+        assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
+        assert!(error.label().unwrap().contains("Reload CLI settings"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn submit_without_credentials_keeps_draft_and_points_to_reload(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.workspace = Some(std::env::temp_dir());
+            view.configuration = Some(
+                serde_json::from_value(json!({
+                    "provider": "meta",
+                    "model": "muse-spark",
+                    "authenticated": false,
+                    "credentialSetupCommand": "vtcode login meta",
+                }))
+                .unwrap(),
+            );
+            view.composer
+                .update(cx, |state, cx| state.set_value("Drafted while logged out", window, cx));
+            view.submit_prompt(window, cx);
+            assert!(!view.running);
+            assert!(view.session_request.is_none(), "no session is created for a doomed turn");
+            assert!(view.first_submission.is_none());
+            assert!(view.transcript.is_empty());
+            assert_eq!(view.composer.read(cx).value(), "Drafted while logged out");
+            let error = view.error.as_deref().expect("auth guidance");
+            assert!(error.contains("vtcode login meta"));
+            assert!(error.contains("Reload CLI settings"));
+        });
+        window.render_frame(cx);
+        assert!(window.find("composer-error").label().unwrap().contains("Reload CLI settings"));
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "no request leaves the client without credentials");
+}
+
+#[gpui_kit::test]
+fn deferred_submission_rechecks_credentials_before_sending(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session".into());
+        view.configuration = Some(
+            serde_json::from_value(json!({
+                "provider": "meta",
+                "model": "muse-spark",
+                "authenticated": false,
+                "credentialSetupCommand": "vtcode login meta",
+            }))
+            .unwrap(),
+        );
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            let draft = super::super::SubmissionDraft {
+                prompt: "Deferred past a credential revocation".into(),
+                attachments: Vec::new(),
+                echo_id: "deferred-echo".into(),
+                delivery_uncertain: false,
+            };
+            assert!(view.enqueue_submission(draft, cx).is_err());
+            assert!(!view.running);
+            assert!(view.transcript.is_empty());
+            assert!(view.error.as_deref().is_some_and(|error| error.contains("Reload CLI settings")));
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err());
+}

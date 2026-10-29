@@ -180,7 +180,27 @@ impl DesktopView {
             .items_center()
             .justify_between()
             .gap_2()
-            .when(self.zen_mode, |buttons| buttons.justify_end())
+            .when(self.zen_mode, |buttons| {
+                // Zen replaces the control cluster with one quiet status line:
+                // the send action keeps the trailing slot, the model/policy
+                // context fills the leading space. Changes stay on the command
+                // palette keyboard path, so this text is descriptive, not a control.
+                let context = format!("{current_model} · {policy_label}");
+                buttons.justify_between().child(
+                    div()
+                        .id("zen-composer-context")
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(context.clone())
+                        .min_w_0()
+                        .flex_1()
+                        .truncate()
+                        .text_left()
+                        .text_xs()
+                        .text_color(themes::muted_text(&colors))
+                        .child(context),
+                )
+            })
             .when(!self.zen_mode, |buttons| {
                 buttons.child(
                     div()
@@ -345,7 +365,7 @@ impl DesktopView {
             }
         }
         // Zen hides this row, except when no workspace is set yet: the picker is
-        // the only visible path to choose one (welcome stays hidden in zen).
+        // the only visible path to choose one (the zen empty state has no workspace link).
         if !self.zen_mode || self.workspace.is_none() {
             panel = panel.child(
                 div()
@@ -380,9 +400,11 @@ impl DesktopView {
                     .child(self.render_mode_button(cx)),
             );
         }
-        // Zen keeps the same card, only smaller and quieter: tighter radius,
-        // narrower column (see content_width), and a small send action.
-        let frame_radius = px(if self.zen_mode { 12. } else { 22. });
+        // Zen restyles the card while the column narrows (see content_width):
+        // a defined input surface with a hairline border, a visible focus
+        // ring, and a small send action. The border lives on the frame only;
+        // the inner group stays borderless so one owner draws the boundary.
+        let frame_radius = px(if self.zen_mode { 16. } else { 22. });
         div().w_full().flex().justify_center().child(
             panel.child(
                 div()
@@ -427,14 +449,16 @@ impl DesktopView {
                             .min_w_0()
                             .rounded(frame_radius)
                             .bg(colors.popover)
+                            .when(self.zen_mode, |frame| frame.border_1().border_color(colors.border))
                             .child(
                                 InputGroup::new("message-composer")
                                     .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
                                     .w_full()
                                     .rounded(frame_radius)
                                     .border_0()
-                                    .focus_ring(false)
+                                    .focus_ring(self.zen_mode)
                                     .p_2()
+                                    .when(self.zen_mode, |group| group.p_3())
                                     .bg(colors.popover)
                                     .input(input)
                                     .addon(

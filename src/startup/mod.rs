@@ -45,6 +45,11 @@ pub(crate) struct StartupContext {
     pub(crate) workspace: PathBuf,
     pub(crate) config: VTCodeConfig,
     pub(crate) agent_config: CoreAgentConfig,
+    /// Provider-auth failure tolerated at startup. Set only when the startup
+    /// policy allows missing auth (interactive shells, ACP, desktop service)
+    /// and credential resolution failed; `agent_config.api_key` is then empty
+    /// and the command resolves or reports auth later.
+    pub(crate) provider_auth_error: Option<String>,
     pub(crate) skip_confirmations: bool,
     pub(crate) full_auto_requested: bool,
     pub(crate) automation_prompt: Option<String>,
@@ -91,11 +96,18 @@ pub(crate) enum StartupCommandKind {
 
 /// Whether provider auth may be missing for this invocation.
 ///
-/// Interactive and ACP sessions resolve auth later. `--print` with empty text
-/// and a TTY stdin cannot call the model (no piped prompt), so auth is
-/// irrelevant and `build_print_prompt` fails with "No prompt provided".
-/// A real `--print` prompt (inline or piped) still requires credentials.
+/// Interactive and ACP sessions resolve auth later. The desktop service also
+/// boots without credentials so the app stays connected and can guide
+/// recovery (Reload CLI settings) or switch to an authenticated provider;
+/// `StartupContext::provider_auth_error` records the tolerated failure.
+/// `--print` with empty text and a TTY stdin cannot call the model (no piped
+/// prompt), so auth is irrelevant and `build_print_prompt` fails with "No
+/// prompt provided". A real `--print` prompt (inline or piped) still requires
+/// credentials.
 fn allow_missing_provider_auth_for(print: Option<&str>, empty_print_on_tty: bool, command: Option<&Commands>) -> bool {
+    if matches!(command, Some(Commands::DesktopServer)) {
+        return true;
+    }
     let no_command = command.is_none() || matches!(command, Some(Commands::AgentClientProtocol { .. }));
     if !no_command {
         return false;
@@ -419,7 +431,7 @@ impl StartupContext {
         };
         let auth_fut = async {
             if skip_auth {
-                return Ok::<_, anyhow::Error>((String::new(), None));
+                return Ok::<_, anyhow::Error>((String::new(), None, None));
             }
             match resolve_runtime_provider_auth(
                 &config,
@@ -430,10 +442,10 @@ impl StartupContext {
             )
             .await
             {
-                Ok(auth) => Ok(auth),
+                Ok((api_key, handle)) => Ok((api_key, handle, None)),
                 Err(err) if startup_policy.allow_missing_provider_auth() => {
                     tracing::warn!("starting VT Code without provider auth: {err}");
-                    Ok((String::new(), None))
+                    Ok((String::new(), None, Some(format!("{err:#}"))))
                 }
                 Err(err) => Err(err),
             }
@@ -464,7 +476,7 @@ impl StartupContext {
             None
         });
 
-        let (api_key, openai_chatgpt_auth) = auth_res?;
+        let (api_key, openai_chatgpt_auth, provider_auth_error) = auth_res?;
         vtcode_commons::startup_trace::record_phase("auth", auth_phase);
         tracing::debug!(
             target = "vtcode.startup",
@@ -505,6 +517,7 @@ impl StartupContext {
             workspace: loaded.workspace,
             config,
             agent_config,
+            provider_auth_error,
             skip_confirmations,
             full_auto_requested: loaded.full_auto_requested,
             automation_prompt: loaded.automation_prompt,
@@ -642,7 +655,7 @@ async fn persist_runtime_selection(
     Ok(())
 }
 
-async fn resolve_runtime_provider_auth(
+pub(crate) async fn resolve_runtime_provider_auth(
     config: &VTCodeConfig,
     workspace: &Path,
     selection: &RuntimeModelSelection,

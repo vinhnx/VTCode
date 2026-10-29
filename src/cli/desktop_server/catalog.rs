@@ -15,6 +15,51 @@ pub(super) fn workspace_label(workspace: &Path) -> String {
         .to_string()
 }
 
+/// Credentials resolved when a `config/select` override was applied. A provider
+/// switch must re-resolve: reusing the boot provider's key would authenticate
+/// every later turn as the wrong provider (or with an empty key when the
+/// service booted without credentials).
+#[derive(Debug, Clone, Default)]
+pub(super) struct OverrideAuth {
+    pub(super) api_key: String,
+    pub(super) openai_chatgpt_auth: Option<vtcode_config::auth::OpenAIChatGptAuthHandle>,
+    /// Resolution failure for the override provider; `None` means authenticated.
+    pub(super) error: Option<String>,
+}
+
+/// Resolve credentials for a `config/select` provider/model without failing
+/// the selection. Callers report the outcome through `authenticated` so the
+/// desktop can guide recovery instead of disconnecting.
+pub(super) async fn resolve_override_auth(
+    context: &ServiceContext,
+    provider: &str,
+    model: &str,
+    api_key_env: &str,
+) -> OverrideAuth {
+    let selection = vtcode_core::core::agent::config::RuntimeModelSelection {
+        model: model.to_string(),
+        provider: provider.to_string(),
+        api_key_env: api_key_env.to_string(),
+        model_source: vtcode_core::config::types::ModelSelectionSource::WorkspaceConfig,
+    };
+    match crate::startup::resolve_runtime_provider_auth(
+        &context.startup.config,
+        &context.workspace,
+        &selection,
+        false,
+        None,
+    )
+    .await
+    {
+        Ok((api_key, handle)) => OverrideAuth { api_key, openai_chatgpt_auth: handle, error: None },
+        Err(error) => OverrideAuth {
+            api_key: String::new(),
+            openai_chatgpt_auth: None,
+            error: Some(format!("{error:#}")),
+        },
+    }
+}
+
 /// The startup agent config with any `config/select` override applied.
 pub(super) async fn active_agent_config(context: &ServiceContext) -> vtcode_core::config::types::AgentConfig {
     let mut config = context.startup.agent_config.clone();
@@ -22,6 +67,17 @@ pub(super) async fn active_agent_config(context: &ServiceContext) -> vtcode_core
     if let Some(selection) = state.model_override.as_ref() {
         config.provider.clone_from(&selection.provider);
         config.model.clone_from(&selection.model);
+        match state.model_override_auth.as_ref() {
+            Some(auth) if auth.error.is_none() => {
+                config.api_key.clone_from(&auth.api_key);
+                config.openai_chatgpt_auth.clone_from(&auth.openai_chatgpt_auth);
+            }
+            Some(_) => {
+                config.api_key.clear();
+                config.openai_chatgpt_auth = None;
+            }
+            None => {}
+        }
     }
     if let Some(effort) = state
         .session_options
@@ -62,15 +118,19 @@ pub(super) async fn configuration_snapshot(
     context: &ServiceContext,
     agent: &vtcode_core::config::types::AgentConfig,
 ) -> Result<ConfigurationSnapshot> {
-    // Tool-capable startup already ran the shared provider-auth preflight.
-    // Reaching the config surface means required credentials are available,
-    // or the selected provider does not require a credential.
+    // The desktop service boots without credentials so the app stays connected
+    // while unauthenticated. Report the outcome honestly: the boot auth error
+    // when no override is active, otherwise the select-time resolution result.
     let setup = if agent.provider.trim().is_empty() {
         "vtcode auth".to_string()
     } else {
         format!("vtcode login {}", agent.provider)
     };
     let options = context.state.lock().await.session_options.clone();
+    let authenticated = match context.state.lock().await.model_override_auth.as_ref() {
+        Some(auth) => auth.error.is_none(),
+        None => context.startup.provider_auth_error.is_none(),
+    };
     let speed_config = effective_speed_config(context, agent).await;
     let fast_mode_supported = crate::agent::runloop::unified::fast_mode::supports_fast_mode(agent, &speed_config);
     let fast_mode_enabled =
@@ -115,7 +175,7 @@ pub(super) async fn configuration_snapshot(
         }),
         provider: agent.provider.clone(),
         model: agent.model.clone(),
-        authenticated: true,
+        authenticated,
         credential_setup_command: setup,
         sandbox: Some(
             if options.permission_mode == Some(protocol::PermissionMode::FullAccess) {

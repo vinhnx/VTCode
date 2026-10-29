@@ -28,3 +28,4 @@
 - `/config` opens the dedicated page (search, groups rail, value-first rows, trailing notes); deep-links resolve
   path → group → search, runtime sections stay CLI. Sheet slide is wall-clock (sheet-click tests need reduce motion); opacity fades stay clickable.
 - Notification decisions needing the window run as pre-handlers in `process_drained_event`; `handle_backend_event` only stores state.
+- Unauthenticated services stay connected: submit is blocked with Reload-CLI-settings guidance while local commands still work. Zen empty threads render `zen-welcome` (centered mark + one greeting line), never the full welcome.

@@ -780,3 +780,100 @@ fn sidebar_service_status_announces_state_changes(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn zen_empty_state_centers_brand_mark_with_greeting(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.zen_mode = true;
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("welcome").is_none());
+        assert_eq!(window.find("zen-welcome").label(), Some("VT Code zen start"));
+        assert!(window.try_find("send-prompt").is_some());
+        let mark = window.find("welcome-brand-mark").bounds();
+        let prompt = window.find("zen-welcome-prompt");
+        assert_eq!(prompt.role(), Some(gpui_kit::Role::Heading));
+        assert_eq!(mark.center().x, prompt.bounds().center().x, "mark and greeting share one centered spine");
+        let name = workspace.path().file_name().unwrap().to_string_lossy().into_owned();
+        assert!(
+            prompt.label().unwrap().contains(&name),
+            "zen names the workspace in plain text: {:?}",
+            prompt.label()
+        );
+        assert!(window.try_find("welcome-workspace").is_none(), "zen keeps no inline workspace link");
+        assert!(window.try_find("open-first-workspace").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_empty_state_offers_workspace_picker_when_workspaceless(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = None;
+        view.zen_mode = true;
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("zen-welcome").is_some());
+        window.within("zen-welcome").click("open-first-workspace", cx);
+        assert!(view.read(cx).workspace_picker_open, "the zen action opens the native workspace picker");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_composer_pairs_context_line_with_send_action(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.zen_mode = true;
+        view.configuration = Some({
+            let mut configuration = runtime_options_config();
+            configuration.provider = "anthropic".into();
+            configuration.model = "claude-sonnet-5".into();
+            configuration
+        });
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("attach-files").is_none());
+        assert!(window.try_find("composer-policy").is_none());
+        assert!(window.try_find("pick-model").is_none());
+        let context = window.find("zen-composer-context");
+        assert_eq!(context.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(context.label(), Some("claude-sonnet-5 · Ask"));
+        let send = window.find("send-prompt").bounds();
+        assert!(
+            context.bounds().right() <= send.left(),
+            "the context line must end before the send action: {:?} vs {send:?}",
+            context.bounds()
+        );
+        assert!(
+            send.top() <= context.bounds().center().y && context.bounds().center().y <= send.bottom(),
+            "the context line shares the send action row: {:?} vs {send:?}",
+            context.bounds()
+        );
+        assert!(
+            window
+                .find("message-composer-frame")
+                .bounds()
+                .contains(&context.bounds().center()),
+            "the context line sits inside the composer card"
+        );
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("zen-composer-context").is_none());
+        assert!(window.try_find("attach-files").is_some());
+    })
+    .unwrap();
+}

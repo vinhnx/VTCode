@@ -181,6 +181,7 @@ mod tests {
             workspace: PathBuf::from("."),
             config: VTCodeConfig::default(),
             agent_config: runtime_config(),
+            provider_auth_error: None,
             skip_confirmations: false,
             full_auto_requested: false,
             automation_prompt: None,

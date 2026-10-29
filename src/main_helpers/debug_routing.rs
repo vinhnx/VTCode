@@ -166,6 +166,7 @@ mod tests {
         let startup = StartupContext {
             workspace: PathBuf::from("."),
             agent_config: startup_agent_config(),
+            provider_auth_error: None,
             config: VTCodeConfig::default(),
             skip_confirmations: false,
             full_auto_requested: false,
@@ -193,6 +194,7 @@ mod tests {
         let startup = StartupContext {
             workspace: PathBuf::from("."),
             agent_config: startup_agent_config(),
+            provider_auth_error: None,
             config: VTCodeConfig::default(),
             skip_confirmations: false,
             full_auto_requested: false,

@@ -220,6 +220,18 @@ fn service_reconnect_guidance(has_retained_submission: bool) -> &'static str {
     }
 }
 
+/// Guidance shown while the service is connected but the active provider has
+/// no credentials. Reload restarts the service in place; no app restart needed.
+fn provider_auth_guidance(configuration: Option<&ConfigurationSnapshot>) -> String {
+    let setup = configuration
+        .map(|snapshot| snapshot.credential_setup_command.trim())
+        .filter(|command| !command.is_empty())
+        .unwrap_or("vtcode auth");
+    format!(
+        "No provider credentials are configured. In Terminal, run `{setup}`, then choose Reload CLI settings in Settings → VT Code to reconnect."
+    )
+}
+
 fn scale_row_height_for_ui_font(row_height: f32, font_size: Pixels) -> f32 {
     row_height * font_size.as_f32() / DEFAULT_UI_FONT_SIZE
 }
