@@ -1,0 +1,23 @@
+name: Benchmark relay
+
+# Uploads the report a pull request's `report` job stored as an artifact. It
+# never checks out or runs pull request code. `workflow_run` always runs this
+# file from the default branch and matches the benchmark workflow by `name:`.
+# Docs: https://hotpath.rs/ci_integration
+
+on:
+  workflow_run:
+    workflows: ["Benchmark"] # the `name:` of hotpath-benchmark.yml
+    types: [completed]
+
+jobs:
+  relay:
+    uses: hotpath-rs/hotpath/.github/workflows/hotpath-relay.yml@f98dee237c49087e20b94b62bcd9becfceeee357 # v0.29.2
+    permissions:
+      actions: read # download the artifact of the benchmark run
+      id-token: write # authenticate the upload
+      pull-requests: read # find the pull request the run belongs to
+    with:
+      benchmark: tui_hotpath
+      artifact_name: hotpath-report
+      report_file: report.json

@@ -926,6 +926,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Zed Agent Client Protocol Integration?", "How does Setup overview
     work?", "How does Build VT Code work?"
 
+- **File**: `docs/guides/deedpage-mcp.md`
+  - **Content**: deed.page MCP
+  - **Topics**: Configure the provider, Verify and use, Troubleshooting and removal
+  - **User Questions**: "What can you tell me about deed.page MCP?", "How does Configure the provider work?", "How does
+    Verify and use work?"
+
 - **File**: `docs/guides/macos-alt-shortcut-troubleshooting.md`
   - **Content**: macOS Alt Shortcut Troubleshooting Guide
   - **Topics**: Overview, Common Symptoms, Root Causes, Solutions, Platform-Specific Guidance

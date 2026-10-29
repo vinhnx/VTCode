@@ -68,6 +68,10 @@ default = []
 # `hotpath/tokio` enables tokio channel/mutex wrappers used by the tui_hotpath
 # channel demo (article: channel throughput + Max queue as OOM early warning).
 profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-alloc", "hotpath/tokio"]
+# hotpath Cloud CI (`.github/workflows/hotpath-benchmark.yml`): report upload
+# metadata and Callgrind instruction counts for the merged `tui_hotpath` run.
+hotpath-cloud = ["profiling", "hotpath/hotpath-cloud"]
+hotpath-callgrind = ["profiling", "hotpath/hotpath-callgrind"]
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard          = { workspace = true }
