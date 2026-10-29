@@ -384,7 +384,7 @@ foreground, accent, danger, and warning; border, muted text, and panel colors ar
 Muted text is binary-searched to the WCAG AA 4.5:1 threshold and filled controls pick white/black text at the
 equal-contrast crossover; both are enforced by tests. The choice persists in preferences.
 Palette changes use the kit's theme update path so Component and Base tokens stay synchronized. Tabs, focus rings,
-and primary controls inherit VT Code's accent; primary hover and pressed states retain readable text.
+primary controls, and the text caret inherit VT Code's accent; primary hover and pressed states retain readable text.
 
 Toolbar and command-palette mode switches share the theme-picker application
 path and persist the selected System Light/Dark theme. They preserve typography

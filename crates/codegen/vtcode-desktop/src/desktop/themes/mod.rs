@@ -61,7 +61,7 @@ pub(super) struct DesktopTheme {
     pub mode: ThemeMode,
     pub background: Hsla,
     pub foreground: Hsla,
-    /// Brand accent used for highlights and primary buttons.
+    /// Brand accent used for highlights, primary buttons, and the text caret.
     pub accent: Hsla,
     /// Quieter companion accent for secondary panels and badges.
     pub secondary: Hsla,
@@ -265,14 +265,17 @@ fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App
         colors.button_primary_foreground = colors.primary_foreground;
         colors.button_primary_hover = colors.primary_hover;
         colors.button_primary_active = colors.primary_active;
-        colors.ring = theme.accent;
         apply_unified_hover_surface(colors, hover_surface(theme.background, theme.foreground));
         colors.ring = accessible_focus_color(theme.accent, colors);
+        // The text caret shares the focus-visibility rule: brand accent when
+        // it holds 3:1 on interactive surfaces, else the foreground.
+        colors.caret = accessible_focus_color(theme.accent, colors);
     });
     theme.mode
 }
 
-/// Keep keyboard focus visible while retaining brand color when it has enough contrast.
+/// Keep keyboard focus and the text caret visible while retaining brand color
+/// when it has enough contrast.
 fn accessible_focus_color(accent: Hsla, colors: &ThemeColor) -> Hsla {
     let surfaces = [colors.background, colors.secondary, colors.popover];
     if surfaces.iter().all(|surface| contrast_ratio(accent, *surface) >= 3.0) {
@@ -294,6 +297,7 @@ fn normalize_system_interaction_colors(cx: &mut App) {
         colors.success_foreground = filled_button_foreground(colors.success);
         colors.danger_foreground = filled_button_foreground(colors.danger);
         colors.ring = accessible_focus_color(colors.primary, colors);
+        colors.caret = accessible_focus_color(colors.primary, colors);
     });
 }
 

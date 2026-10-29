@@ -134,6 +134,87 @@ fn focus_indicators_remain_visible_on_interactive_surfaces(cx: &mut gpui_kit::Te
 }
 
 #[gpui_kit::test]
+fn caret_follows_theme_accent_with_foreground_fallback(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for palette in all_themes() {
+            let _mode = apply_by_id(palette.id, None, cx);
+            let colors = cx.theme().colors;
+            let surfaces = [colors.background, colors.secondary, colors.popover];
+            let accent_readable = surfaces.iter().all(|surface| contrast_ratio(palette.accent, *surface) >= 3.0);
+            if accent_readable {
+                assert_eq!(colors.caret, palette.accent, "{}: caret follows the theme accent", palette.id);
+            } else {
+                assert_eq!(
+                    colors.caret, colors.foreground,
+                    "{}: unreadable accent falls back to the foreground",
+                    palette.id
+                );
+            }
+            if palette.id == DEFAULT_THEME_ID {
+                assert_eq!(colors.caret, palette.accent, "the default theme renders its caret in the brand accent");
+            }
+            for (name, surface) in [
+                ("canvas", colors.background),
+                ("panel", colors.secondary),
+                ("popover", colors.popover),
+            ] {
+                let ratio = contrast_ratio(colors.caret, surface);
+                assert!(ratio >= 3.0, "{}: caret contrast on {name} is {ratio:.2}", palette.id);
+            }
+        }
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID] {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            assert!(
+                colors.caret == colors.primary || colors.caret == colors.foreground,
+                "{id}: system caret derives from the primary accent or the foreground"
+            );
+            for (name, surface) in [
+                ("canvas", colors.background),
+                ("panel", colors.secondary),
+                ("popover", colors.popover),
+            ] {
+                let ratio = contrast_ratio(colors.caret, surface);
+                assert!(ratio >= 3.0, "{id}: caret contrast on {name} is {ratio:.2}",);
+            }
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn caret_falls_back_to_foreground_for_unreadable_accents(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        // Asymmetric fixtures: an accent identical to the canvas is unreadable
+        // in both directions, so the caret must take the foreground instead.
+        let black: Hsla = rgb(0x000000).into();
+        let white: Hsla = rgb(0xFFFFFF).into();
+        for (id, mode, background, foreground) in [
+            ("synthetic-dark", ThemeMode::Dark, black, white),
+            ("synthetic-light", ThemeMode::Light, white, black),
+        ] {
+            let theme = DesktopTheme {
+                id,
+                label: id,
+                mode,
+                background,
+                foreground,
+                accent: background,
+                secondary: foreground,
+                success: foreground,
+                danger: foreground,
+                warning: foreground,
+            };
+            let _mode = apply_palette(&theme, None, cx);
+            let colors = cx.theme().colors;
+            assert_eq!(colors.caret, colors.foreground, "{id}: unreadable accent falls back");
+            assert_ne!(colors.caret, theme.accent, "{id}: fallback leaves the accent behind");
+        }
+    });
+}
+
+#[gpui_kit::test]
 fn diff_colors_and_line_surfaces_are_readable_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
