@@ -399,6 +399,8 @@ const STREAM_OUTPUT_METADATA_FIELDS: &[&str] = &[
     "message",
     "next_action",
     "error_message",
+    MCP_APP_DISCLOSURE_KEY,
+    MCP_APP_SUPPRESSED_KEY,
 ];
 
 fn structured_stream_metadata(output: &Value, additional_excluded_fields: &[&str]) -> Option<String> {
@@ -505,18 +507,40 @@ fn app_previews_from_value(output: &Value) -> Vec<AppPreviewItem> {
         .collect()
 }
 
+/// Map the `off`-tier suppression marker to refused app URIs.
+///
+/// Strict shape: only a string array is accepted, capped to the disclosure
+/// bound; anything else yields no URIs rather than a malformed event.
+fn suppressed_apps_from_value(output: &Value) -> Vec<String> {
+    const MAX_SUPPRESSED_APP_URIS: usize = 4;
+    let Some(uris) = output.get(MCP_APP_SUPPRESSED_KEY).and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    uris.iter()
+        .filter_map(Value::as_str)
+        .take(MAX_SUPPRESSED_APP_URIS)
+        .map(str::to_owned)
+        .collect()
+}
+
 /// Extract a [`ToolOutputPayload`] from a tool result JSON value, preserving
 /// bounded metadata alongside a spool reference and falling back to inline
 /// text aggregation otherwise.
 pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
     let app_previews = app_previews_from_value(output);
+    let suppressed_apps = suppressed_apps_from_value(output);
     if !output.is_object() {
         let aggregated_output = match output {
             Value::Null => String::new(),
             Value::String(text) => text.to_string(),
             _ => serde_json::to_string(output).unwrap_or_default(),
         };
-        return ToolOutputPayload { aggregated_output, spool_path: None, app_previews };
+        return ToolOutputPayload {
+            aggregated_output,
+            spool_path: None,
+            app_previews,
+            suppressed_apps,
+        };
     }
 
     if let Some(spool_path) = output.get("spool_path").and_then(Value::as_str) {
@@ -526,6 +550,7 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
             aggregated_output: parts.join("\n"),
             spool_path: Some(spool_path.to_string()),
             app_previews,
+            suppressed_apps,
         };
     }
 
@@ -537,6 +562,7 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
             aggregated_output: parts.join("\n"),
             spool_path: None,
             app_previews,
+            suppressed_apps,
         };
     }
 
@@ -548,6 +574,7 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
             aggregated_output: primary_text.join("\n"),
             spool_path: None,
             app_previews,
+            suppressed_apps,
         };
     }
 
@@ -569,7 +596,11 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
                 .as_object()
                 .map(|obj| {
                     obj.keys()
-                        .filter(|key| key.as_str() != "success")
+                        .filter(|key| {
+                            key.as_str() != "success"
+                                && key.as_str() != MCP_APP_DISCLOSURE_KEY
+                                && key.as_str() != MCP_APP_SUPPRESSED_KEY
+                        })
                         .take(4)
                         .cloned()
                         .collect::<Vec<_>>()
@@ -598,5 +629,6 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
         aggregated_output: parts.join("\n"),
         spool_path: None,
         app_previews,
+        suppressed_apps,
     }
 }

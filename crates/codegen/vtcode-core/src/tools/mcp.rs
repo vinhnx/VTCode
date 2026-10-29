@@ -9,13 +9,14 @@ use serde_json::{Map, Value};
 
 use crate::config::types::CapabilityLevel;
 use crate::mcp::{
-    MCP_APP_DISCLOSURE_KEY, MCP_UI_RESOURCE_SCHEME, McpClient, McpResourceData, McpToolExecutor, McpToolInfo,
-    disclose_app_resource,
+    MCP_APP_DISCLOSURE_KEY, MCP_APP_SUPPRESSED_KEY, MCP_UI_RESOURCE_SCHEME, McpClient, McpResourceData,
+    McpToolExecutor, McpToolInfo, disclose_app_resource,
 };
 use crate::tool_policy::ToolPolicy;
 use crate::tools::native_cgp_tool_factory;
 use crate::tools::registry::{ToolCatalogSource, ToolRegistration};
 use crate::tools::traits::Tool;
+use vtcode_config::mcp::McpUiAppsTier;
 
 // Re-export from shared utils to break the tool_policy <-> tools cycle.
 pub use crate::utils::tool_name_parsing::{
@@ -149,6 +150,12 @@ struct McpProxyTool {
 impl Tool for McpProxyTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let result = self.client.execute_mcp_tool(&self.remote_name, &args).await?;
+        if self.client.ui_apps_tier() == McpUiAppsTier::Off {
+            // Fail closed: no `ui://` fetch, no disclosure rows. Refused URIs
+            // are marked for the sandbox-denied event; results without app
+            // URIs pass through unchanged.
+            return Ok(mark_suppressed_apps(result));
+        }
         let client = Arc::clone(&self.client);
         let read = move |uri: String| {
             let client = Arc::clone(&client);
@@ -246,13 +253,32 @@ fn scan_app_uris(result: &Value) -> Vec<String> {
     uris
 }
 
+/// Mark app URIs refused by the `off` tier, without any resource fetch.
+///
+/// Same [`scan_app_uris`] bound as disclosure (distinct URIs, first-seen
+/// order, capped count); results without app URIs return byte-identical.
+/// Surfaces sanitize at render, matching the disclosure path.
+fn mark_suppressed_apps(mut result: Value) -> Value {
+    let uris = scan_app_uris(&result);
+    if uris.is_empty() {
+        return result;
+    }
+    if let Some(object) = result.as_object_mut() {
+        let uris = uris.into_iter().map(Value::String).collect();
+        drop(object.insert(MCP_APP_SUPPRESSED_KEY.to_owned(), Value::Array(uris)));
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         attach_app_disclosure, build_mcp_registration, is_legacy_mcp_tool_name, legacy_mcp_tool_name,
-        model_visible_mcp_tool_name, parse_canonical_mcp_tool_name, scan_app_uris,
+        mark_suppressed_apps, model_visible_mcp_tool_name, parse_canonical_mcp_tool_name, scan_app_uris,
     };
-    use crate::mcp::{MCP_APP_DISCLOSURE_KEY, McpClient, McpResourceData, McpToolInfo, McpToolVisibility};
+    use crate::mcp::{
+        MCP_APP_DISCLOSURE_KEY, MCP_APP_SUPPRESSED_KEY, McpClient, McpResourceData, McpToolInfo, McpToolVisibility,
+    };
     use crate::tool_policy::ToolPolicy;
     use crate::tools::CgpRuntimeMode;
     use serde_json::json;
@@ -358,6 +384,44 @@ mod tests {
         assert_eq!(uris.len(), 4);
         assert_eq!(uris[0], "ui://s0/app.html");
         assert_eq!(uris[3], "ui://s3/app.html");
+    }
+
+    #[test]
+    fn mark_suppressed_apps_lists_refused_uris_in_order() {
+        let result = json!({
+            "content": [
+                {"type": "text", "text": "at 10:00"},
+                {"type": "resource", "resource": {"uri": "ui://b/app.html"}},
+                {"type": "resource_link", "uri": "ui://a/app.html"},
+                {"type": "resource", "resource": {"uri": "ui://b/app.html"}},
+            ]
+        });
+
+        let marked = mark_suppressed_apps(result);
+        assert_eq!(
+            marked[MCP_APP_SUPPRESSED_KEY],
+            json!(["ui://b/app.html", "ui://a/app.html"]),
+            "distinct refused URIs in first-seen order"
+        );
+        assert!(marked.get(MCP_APP_DISCLOSURE_KEY).is_none(), "off tier must not disclose");
+        assert_eq!(marked["content"][0]["text"], "at 10:00");
+    }
+
+    #[test]
+    fn mark_suppressed_apps_leaves_result_unchanged_without_app_uris() {
+        let result = json!({"content": [{"type": "text", "text": "plain"}]});
+        assert_eq!(mark_suppressed_apps(result.clone()), result);
+    }
+
+    #[test]
+    fn mark_suppressed_apps_caps_refused_uri_count() {
+        let blocks: Vec<_> = (0..9)
+            .map(|n| json!({"type": "resource_link", "uri": format!("ui://s{n}/app.html")}))
+            .collect();
+        let marked = mark_suppressed_apps(json!({"content": blocks}));
+        let suppressed = marked[MCP_APP_SUPPRESSED_KEY].as_array().unwrap();
+        assert_eq!(suppressed.len(), 4);
+        assert_eq!(suppressed[0], "ui://s0/app.html");
     }
 
     fn stub_data(uri: &str) -> McpResourceData {

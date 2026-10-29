@@ -35,7 +35,7 @@ pub mod planning;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.21.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.22.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -157,6 +157,11 @@ pub enum ThreadEvent {
     /// Indicates that an item reached a terminal state.
     #[serde(rename = "item.completed")]
     ItemCompleted(ItemCompletedEvent),
+    /// Emitted when an MCP server offers app UI that the `off` apps tier
+    /// refuses. No `ui://` resource was fetched and no app rows render; the
+    /// refused URIs are listed so the denial stays visible.
+    #[serde(rename = "app.sandbox_denied")]
+    AppSandboxDenied(Box<AppSandboxDeniedEvent>),
     /// Emitted when a tool requires user permission before execution.
     #[serde(rename = "permission.requested")]
     PermissionRequested(PermissionRequestedEvent),
@@ -529,6 +534,17 @@ pub struct TurnBlockedEvent {
 pub struct ThreadErrorEvent {
     /// Fatal error message associated with the thread.
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct AppSandboxDeniedEvent {
+    /// Tool whose result offered the refused app UI.
+    pub tool: String,
+    /// Apps tier that refused the UI (`off`).
+    pub tier: String,
+    /// Refused `ui://` URIs, in first-seen order (capped at 4).
+    pub uris: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

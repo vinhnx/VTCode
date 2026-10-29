@@ -11,6 +11,8 @@ use crate::core::agent::harness_kernel::{
     FallbackRecommendation, PreparedToolBatch, PreparedToolBatchKind, project_model_tool_result, reduce_tool_result,
 };
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
+use crate::exec::events::AppSandboxDeniedEvent;
+use crate::exec::events::ThreadEvent;
 use crate::exec::events::ToolCallStatus;
 use crate::exec::events::ToolOutcome;
 use crate::exec::events::tool_outcome_from_status;
@@ -111,6 +113,21 @@ fn complete_tool_invocation(
     super::tool_dispatch_common::drain_and_record_runtime_events(runtime, event_recorder);
 }
 
+/// Build the sandbox-denied event for `off`-tier refused app URIs, if any.
+///
+/// Pure constructor so the emission decision stays unit-testable; the caller
+/// owns recorder access.
+fn app_sandbox_denied_event(tool_name: &str, suppressed_apps: &[String]) -> Option<ThreadEvent> {
+    if suppressed_apps.is_empty() {
+        return None;
+    }
+    Some(ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+        tool: tool_name.to_owned(),
+        tier: "off".to_owned(),
+        uris: suppressed_apps.to_vec(),
+    })))
+}
+
 fn record_successful_tool_result(
     event_recorder: &mut ExecEventRecorder,
     call_item_id: &str,
@@ -120,6 +137,9 @@ fn record_successful_tool_result(
     output: &serde_json::Value,
 ) {
     let payload = tool_output_payload_from_value(output);
+    if let Some(denied) = app_sandbox_denied_event(tool_name, &payload.suppressed_apps) {
+        event_recorder.record_thread_event(denied);
+    }
     event_recorder.tool_output_finished(
         call_item_id,
         Some(tool_call_id),
@@ -906,6 +926,52 @@ mod tests {
     use super::*;
     use crate::exec::events::{ThreadEvent, ThreadItemDetails};
     use serde_json::json;
+
+    #[test]
+    fn suppressed_apps_emit_sandbox_denied_event() {
+        let mut recorder = ExecEventRecorder::new("thread-denied", None, None);
+        recorder.take_events();
+        record_successful_tool_result(
+            &mut recorder,
+            "item-1",
+            "call-1",
+            "mcp::demo::get_time",
+            &json!({}),
+            &json!({"output": "12:00", "uiSuppressed": ["ui://demo/app.html", "ui://demo/other.html"]}),
+        );
+
+        let denied = recorder.take_events().into_iter().find_map(|event| match event {
+            ThreadEvent::AppSandboxDenied(denied) => Some(denied),
+            _ => None,
+        });
+        let denied = denied.expect("suppressed apps must emit a sandbox-denied event");
+        assert_eq!(denied.tool, "mcp::demo::get_time");
+        assert_eq!(denied.tier, "off");
+        assert_eq!(denied.uris, ["ui://demo/app.html", "ui://demo/other.html"]);
+    }
+
+    #[test]
+    fn results_without_suppressed_apps_emit_no_denied_event() {
+        assert!(app_sandbox_denied_event("mcp::demo::get_time", &[]).is_none());
+
+        let mut recorder = ExecEventRecorder::new("thread-clean", None, None);
+        recorder.take_events();
+        record_successful_tool_result(
+            &mut recorder,
+            "item-1",
+            "call-1",
+            "mcp::demo::get_time",
+            &json!({}),
+            &json!({"output": "12:00"}),
+        );
+        assert!(
+            recorder
+                .take_events()
+                .iter()
+                .all(|event| !matches!(event, ThreadEvent::AppSandboxDenied(_))),
+            "plain results must stay silent"
+        );
+    }
 
     #[test]
     fn successful_result_records_output_before_file_change() {

@@ -220,6 +220,24 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                     false,
                 )
             }
+            ThreadEvent::AppSandboxDenied(event) => {
+                let body = format!("tool: {}\ntier: {}\nrefused:\n{}", event.tool, event.tier, event.uris.join("\n"));
+                timeline_row(
+                    record.sequence,
+                    TIMELINE_SOURCE_THREAD_EVENTS,
+                    "app.sandbox_denied",
+                    None,
+                    "app",
+                    Some("failed"),
+                    record.turn_id.as_deref(),
+                    record.submission_id.as_ref().map(|value| value.as_str()),
+                    format!("App UI refused for {}", event.tool),
+                    truncate_preview(&body, SUMMARY_PREVIEW_LIMIT),
+                    body,
+                    pretty_json_string(&record.event),
+                    false,
+                )
+            }
             ThreadEvent::ItemStarted(event) => {
                 timeline_row_from_item(record, "item.started", "in_progress", &event.item)
             }

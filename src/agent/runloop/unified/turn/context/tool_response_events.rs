@@ -37,6 +37,7 @@ impl TurnProcessingContext<'_> {
                     aggregated_output: rejection_text.to_owned(),
                     spool_path: None,
                     app_previews: Vec::new(),
+                    suppressed_apps: Vec::new(),
                 },
             },
         );

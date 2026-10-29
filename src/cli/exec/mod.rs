@@ -176,6 +176,36 @@ mod tests {
     }
 
     #[test]
+    fn human_event_line_formats_sandbox_denial() {
+        let line = human_event_line(&ThreadEvent::AppSandboxDenied(Box::new(
+            vtcode_core::exec::events::AppSandboxDeniedEvent {
+                tool: "mcp::demo::get_time".to_string(),
+                tier: "off".to_string(),
+                uris: vec!["ui://demo/app.html".to_string()],
+            },
+        )))
+        .expect("denial event should render");
+        assert!(line.contains("[APP DENIED]"));
+        assert!(line.contains("mcp::demo::get_time"));
+        assert!(line.contains("ui://demo/app.html"));
+    }
+
+    #[test]
+    fn human_event_line_neutralizes_denial_uri_escapes() {
+        let line = human_event_line(&ThreadEvent::AppSandboxDenied(Box::new(
+            vtcode_core::exec::events::AppSandboxDeniedEvent {
+                tool: "mcp::demo::get_time".to_string(),
+                tier: "off".to_string(),
+                uris: vec!["ui://demo/\u{1b}[2Japp.html".to_string()],
+            },
+        )))
+        .expect("denial event should render");
+        // Style codes legitimately contain ESC; the attack sequence (ESC + CSI) must not.
+        assert!(!line.contains("\u{1b}[2J"), "erase-screen sequence must be broken: {line}");
+        assert!(line.contains("ui://demo/"));
+    }
+
+    #[test]
     fn human_event_line_preserves_canonical_updated_diagnostic_details() {
         use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
         let event = ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {

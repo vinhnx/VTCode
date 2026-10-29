@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 use vtcode_commons::fs::{ensure_dir_exists, write_file_with_context};
-use vtcode_config::mcp::{McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig};
+use vtcode_config::mcp::{McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig, McpUiAppsTier};
 
 use super::McpSandboxContext;
 use super::{
@@ -72,6 +72,16 @@ impl McpClient {
     /// Register a handler used to satisfy elicitation requests from providers.
     pub fn set_elicitation_handler(&mut self, handler: Arc<dyn McpElicitationHandler>) {
         self.elicitation_handler = Some(handler);
+    }
+
+    /// MCP Apps presentation tier from `[mcp.ui].apps`.
+    ///
+    /// Execution consults this before enriching results: `Off` refuses app UI
+    /// (marking refused URIs under [`crate::types::MCP_APP_SUPPRESSED_KEY`])
+    /// instead of fetching `ui://` resources.
+    #[must_use]
+    pub fn ui_apps_tier(&self) -> McpUiAppsTier {
+        self.config.ui.apps
     }
 
     /// Establish connections to all configured providers and complete the

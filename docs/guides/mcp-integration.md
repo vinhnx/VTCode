@@ -115,16 +115,20 @@ apps = "off"
 "sequential-thinker" = "sequential-thinking"
 ```
 
-`apps` selects the MCP Apps presentation tier: `"off"` (default) discloses app linkage without rendering, `"static"`
-opts into a sanitized structural preview on surfaces that support it, and `"interactive"` is reserved for a future
-sandboxed webview host and is currently rejected at MCP startup. Only `"interactive"` advertises the
-`io.modelcontextprotocol/ui` extension to servers, since a static preview cannot honor app round-trips.
+`apps` selects the MCP Apps presentation tier: `"off"` (default) refuses app UI without fetching `ui://`
+resources and emits an `app.sandbox_denied` event naming the refused URIs, `"static"` opts into disclosure rows plus
+a sanitized structural preview on surfaces that support it, and `"interactive"` is reserved for a future sandboxed
+webview host and is currently rejected at MCP startup. Only `"interactive"` advertises the
+`io.modelcontextprotocol/ui` extension to servers, since a static preview cannot honor app round-trips. Neither the
+disclosure nor the suppression marker ever enters model context. Explicit `vtcode mcp resources` / `vtcode mcp app`
+reads stay available at every tier since they are direct user requests, not ambient enrichment.
 
-In the terminal, app results render as a disclosure block rather than the app itself: an `[app: <name>] <uri>` row,
-the served MIME type and byte count, the declared permissions and CSP domains when the resource was fetched
-successfully, and a `not rendered` footer naming the clients that can run the app. Fetches are best-effort and
-bounded (four URIs, five seconds total per tool result); when a fetch fails the linkage row stands alone. All
-server-originated strings in the block are control- and bidi-neutralized before display.
+At `static` and above, app results render in the terminal as a disclosure block rather than the app itself: an
+`[app: <name>] <uri>` row, the served MIME type and byte count, the declared permissions and CSP domains when the
+resource was fetched successfully, and a `not rendered` footer naming the clients that can run the app. Fetches are
+best-effort and bounded (four URIs, five seconds total per tool result); when a fetch fails the linkage row stands
+alone. At `off`, no app rows render; the refusal surfaces as an `[APP DENIED]` terminal line (or a desktop notice and
+an ATIF step) instead. All server-originated strings in the block are control- and bidi-neutralized before display.
 
 ### Provider transports
 

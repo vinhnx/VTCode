@@ -648,4 +648,21 @@ mod tests {
         assert!(row.summary.contains("exit 0"));
         assert!(row.body.contains("Finished dev"));
     }
+
+    #[test]
+    fn timeline_renders_sandbox_denial_with_refused_uris() {
+        use vtcode_core::exec::events::AppSandboxDeniedEvent;
+        let event = ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+            tool: "mcp::demo::get_time".into(),
+            tier: "off".into(),
+            uris: vec!["ui://demo/app.html".into(), "ui://demo/other.html".into()],
+        }));
+        let rows = timeline_rows_from_thread_events(&[sample_event_record(7, event)]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status.as_deref(), Some("failed"));
+        assert!(rows[0].summary.contains("mcp::demo::get_time"), "summary: {}", rows[0].summary);
+        assert!(rows[0].body.contains("tier: off"), "body: {}", rows[0].body);
+        assert!(rows[0].body.contains("ui://demo/app.html"));
+        assert!(rows[0].body.contains("ui://demo/other.html"));
+    }
 }

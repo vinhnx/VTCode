@@ -18,6 +18,14 @@ fn base_config() -> McpClientConfig {
 }
 
 #[test]
+fn ui_apps_tier_reports_configured_tier() {
+    assert_eq!(McpClient::new(base_config()).ui_apps_tier(), McpUiAppsTier::Off);
+    let mut config = base_config();
+    config.ui.apps = McpUiAppsTier::Static;
+    assert_eq!(McpClient::new(config).ui_apps_tier(), McpUiAppsTier::Static);
+}
+
+#[test]
 fn requirements_allow_matching_stdio_command() {
     let client = McpClient::new(base_config());
     let provider = McpProviderConfig {

@@ -882,6 +882,19 @@ impl DesktopView {
                     NoticeSeverity::Info,
                 ));
             }
+            ThreadEvent::AppSandboxDenied(event) => {
+                self.transcript.push(TranscriptItem::notice(
+                    format!("app-sandbox-denied-{}", uuid_like_id()),
+                    "App UI refused".into(),
+                    format!(
+                        "{} offered app UI refused by the '{}' tier: {}",
+                        event.tool,
+                        event.tier,
+                        event.uris.join(", "),
+                    ),
+                    NoticeSeverity::Warning,
+                ));
+            }
             _ => {}
         }
         if let Some(turn_id) = terminal_turn_id {

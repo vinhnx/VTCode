@@ -252,8 +252,9 @@ pub struct McpUiConfig {
     #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, McpRendererProfile>"))]
     pub renderers: HashMap<String, McpRendererProfile>,
 
-    /// MCP Apps preview tier for visual surfaces ("off" hides app UI, "static" shows an inert HTML preview,
-    /// "interactive" needs an app engine and is currently rejected). Options: "off", "static", "interactive"
+    /// MCP Apps preview tier ("off" refuses app UI without fetching and emits a sandbox-denied event,
+    /// "static" shows disclosure rows plus an inert HTML preview, "interactive" needs an app engine and is
+    /// currently rejected). Options: "off", "static", "interactive"
     #[serde(default = "default_mcp_ui_apps")]
     pub apps: McpUiAppsTier,
 }
@@ -323,10 +324,11 @@ impl std::fmt::Display for McpUiMode {
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
 pub enum McpUiAppsTier {
-    /// Linkage and disclosure only; never renders app content.
+    /// Refuse app UI: no `ui://` fetch, no disclosure rows. Refused URIs
+    /// surface through a sandbox-denied event instead.
     #[default]
     Off,
-    /// Opt-in static preview of sanitized app structure; no interactivity.
+    /// Disclosure rows plus an opt-in static preview of sanitized app structure; no interactivity.
     Static,
     /// Full interactive app. Rejected until a sandboxed webview host exists.
     Interactive,

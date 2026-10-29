@@ -626,3 +626,47 @@ fn tool_output_payload_without_disclosure_has_no_previews() {
     let payload = tool_output_payload_from_value(&json!({"output": "x", "uiDisclosure": "not-an-object"}));
     assert!(payload.app_previews.is_empty());
 }
+
+#[test]
+fn tool_output_payload_maps_suppression_marker_to_refused_uris() {
+    let payload = tool_output_payload_from_value(&json!({
+        "output": "tool ran",
+        "uiSuppressed": ["ui://b/app.html", "ui://a/app.html"],
+    }));
+
+    assert_eq!(payload.suppressed_apps, ["ui://b/app.html", "ui://a/app.html"]);
+    assert!(payload.app_previews.is_empty(), "suppressed results carry no previews");
+    assert!(
+        !payload.aggregated_output.contains("uiSuppressed"),
+        "marker must not leak into aggregated text: {}",
+        payload.aggregated_output
+    );
+}
+
+#[test]
+fn tool_output_payload_rejects_malformed_suppression_markers() {
+    let cases = [
+        (json!("not-an-array"), Vec::<&str>::new()),
+        (json!({"ui://a/app.html": true}), Vec::<&str>::new()),
+        (json!(["ui://ok/app.html", 42, Value::Null]), vec!["ui://ok/app.html"]),
+        (json!(["u0", "u1", "u2", "u3", "u4", "u5"]), vec!["u0", "u1", "u2", "u3"]),
+    ];
+    for (marker, expected) in cases {
+        let payload = tool_output_payload_from_value(&json!({"output": "x", "uiSuppressed": marker}));
+        assert_eq!(payload.suppressed_apps, expected, "marker {marker} must map strictly");
+    }
+}
+
+#[test]
+fn tool_output_payload_excludes_app_keys_from_structured_metadata() {
+    let payload = tool_output_payload_from_value(&json!({
+        "output": "tool ran",
+        "uiDisclosure": {"ui://demo/app.html": {"uri": "ui://demo/app.html", "bytes": 8, "blocks": 1}},
+    }));
+    assert_eq!(payload.app_previews.len(), 1);
+    assert!(
+        !payload.aggregated_output.contains("uiDisclosure"),
+        "disclosure has first-class previews; raw JSON must not repeat: {}",
+        payload.aggregated_output
+    );
+}

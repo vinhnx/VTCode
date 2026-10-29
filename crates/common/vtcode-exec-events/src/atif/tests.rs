@@ -1,8 +1,8 @@
 use super::*;
 use crate::{
-    AgentMessageItem, CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
-    ThreadCompactBoundaryEvent, ThreadItem, ThreadStartedEvent, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent,
-    TurnStartedEvent, Usage,
+    AgentMessageItem, AppSandboxDeniedEvent, CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind,
+    ItemCompletedEvent, ThreadCompactBoundaryEvent, ThreadItem, ThreadStartedEvent, ToolInvocationItem, ToolOutputItem,
+    TurnCompletedEvent, TurnStartedEvent, Usage,
 };
 
 fn fixed_ts() -> DateTime<Utc> {
@@ -24,6 +24,28 @@ fn terminal_timestamps_survive_export_without_synthetic_steps() {
     assert_eq!(trajectory.steps.len(), 1);
     assert_eq!(trajectory.steps[0].timestamp.as_deref(), Some(timestamp));
     assert_eq!(trajectory.extra.as_ref().unwrap()["completed_at"], timestamp);
+}
+
+#[test]
+fn sandbox_denied_projects_to_system_step_with_refused_uris() {
+    let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
+    builder.process_event_at(
+        &ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+            tool: "mcp::demo::get_time".to_string(),
+            tier: "off".to_string(),
+            uris: vec!["ui://demo/app.html".to_string(), "ui://demo/other.html".to_string()],
+        })),
+        fixed_ts(),
+    );
+    let trajectory = builder.finish(None);
+    assert_eq!(trajectory.steps.len(), 1);
+    let step = &trajectory.steps[0];
+    let message = step.message.as_deref().unwrap_or_default();
+    assert!(message.contains("mcp::demo::get_time"), "step must name the tool: {message}");
+    assert!(message.contains("ui://demo/app.html"), "step must name refused URIs: {message}");
+    let extra = step.extra.as_ref().expect("denial step must carry structured extra");
+    assert_eq!(extra["tier"], "off");
+    assert_eq!(extra["uris"], serde_json::json!(["ui://demo/app.html", "ui://demo/other.html"]));
 }
 
 #[test]

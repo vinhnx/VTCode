@@ -3,7 +3,7 @@ use crate::exec::events::{
     ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutcome,
     ToolOutputItem, tool_outcome_from_status,
 };
-use crate::mcp::{MCP_APP_DISCLOSURE_KEY, McpAppDisclosure};
+use crate::mcp::{MCP_APP_DISCLOSURE_KEY, MCP_APP_SUPPRESSED_KEY, McpAppDisclosure};
 use crate::tools::file_ops::{canonical_diff_previews, diff_preview_user_message};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -55,6 +55,9 @@ pub struct ToolOutputPayload {
     pub spool_path: Option<String>,
     /// MCP Apps referenced by the result, mapped from execution-time disclosure.
     pub app_previews: Vec<AppPreviewItem>,
+    /// App URIs refused by the `off` tier, mapped from the suppression marker.
+    /// The runner emits a sandbox-denied event for these; empty otherwise.
+    pub suppressed_apps: Vec<String>,
 }
 
 /// Attribute only a successful file tool's recorded result, never current Git state.

@@ -64,6 +64,18 @@ impl ResponseBuilder {
                 );
             }
 
+            ThreadEvent::AppSandboxDenied(evt) => {
+                self.emit_custom_event(
+                    emitter,
+                    "vtcode.app_sandbox_denied",
+                    json!({
+                        "tool": evt.tool,
+                        "tier": evt.tier,
+                        "uris": evt.uris,
+                    }),
+                );
+            }
+
             ThreadEvent::ThreadCompleted(evt) => {
                 self.emit_custom_event(
                     emitter,

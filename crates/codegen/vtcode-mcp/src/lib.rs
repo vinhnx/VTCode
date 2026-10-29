@@ -56,11 +56,11 @@ pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
 pub use traits::{McpElicitationHandler, McpToolExecutor};
 pub use trust::{MAX_UNTRUSTED_MCP_DESCRIPTION_BYTES, render_untrusted_mcp_description};
 pub use types::{
-    FileParamSchemaEntry, FileUploadResult, MCP_APP_DISCLOSURE_KEY, MCP_UI_EXTENSION_ID, MCP_UI_RESOURCE_MIME_TYPE,
-    MCP_UI_RESOURCE_SCHEME, McpAppDisclosure, McpClientStatus, McpElicitationRequest, McpElicitationResponse,
-    McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo, McpToolVisibility,
-    McpUiResourceMeta, McpUiToolMeta, OPENAI_FILE_PARAMS_META_KEY, OPENAI_FILE_PARAMS_VALUE, ProvidedFilePayload,
-    disclose_app_resource, parse_ui_resource_meta,
+    FileParamSchemaEntry, FileUploadResult, MCP_APP_DISCLOSURE_KEY, MCP_APP_SUPPRESSED_KEY, MCP_UI_EXTENSION_ID,
+    MCP_UI_RESOURCE_MIME_TYPE, MCP_UI_RESOURCE_SCHEME, McpAppDisclosure, McpClientStatus, McpElicitationRequest,
+    McpElicitationResponse, McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo,
+    McpToolVisibility, McpUiResourceMeta, McpUiToolMeta, OPENAI_FILE_PARAMS_META_KEY, OPENAI_FILE_PARAMS_VALUE,
+    ProvidedFilePayload, disclose_app_resource, parse_ui_resource_meta,
 };
 pub(crate) use utils::{
     LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, TZ_ENV_VAR, apply_ui_extension_gate, build_headers,

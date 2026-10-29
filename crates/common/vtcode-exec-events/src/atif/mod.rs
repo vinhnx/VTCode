@@ -447,6 +447,19 @@ impl AtifTrajectoryBuilder {
             ThreadEvent::ItemCompleted(e) => {
                 self.process_item_completed(&e.item.id, &e.item.details, &ts_str);
             }
+            ThreadEvent::AppSandboxDenied(e) => {
+                let mut step = Step::system(
+                    self.next_step_id,
+                    format!("app_sandbox_denied: {} refused {}", e.tool, e.uris.join(", ")),
+                );
+                step.timestamp = Some(ts_str);
+                step.extra = Some(serde_json::json!({
+                    "tool": e.tool,
+                    "tier": e.tier,
+                    "uris": e.uris,
+                }));
+                self.push_step(step);
+            }
             ThreadEvent::ThreadCompactBoundary(e) => {
                 let msg = format!(
                     "context_compaction: {} messages -> {} messages ({})",

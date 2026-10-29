@@ -137,6 +137,7 @@ pub(crate) fn emit_tool_completion_for_status(
                 aggregated_output: "Tool execution cancelled".to_string(),
                 spool_path: None,
                 app_previews: Vec::new(),
+                suppressed_apps: Vec::new(),
             },
         ),
     };

@@ -134,6 +134,21 @@ fn turn_blocked_event_round_trip() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn app_sandbox_denied_event_round_trip() -> Result<(), Box<dyn Error>> {
+    let event = ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+        tool: "mcp::demo::get_time".to_string(),
+        tier: "off".to_string(),
+        uris: vec!["ui://demo/app.html".to_string()],
+    }));
+
+    let json = serde_json::to_string(&event)?;
+    assert!(json.contains("app.sandbox_denied"));
+    let restored: ThreadEvent = serde_json::from_str(&json)?;
+    assert_eq!(restored, event);
+    Ok(())
+}
+
+#[test]
 fn turn_completed_in_progress_sessions_default_empty_and_omitted() -> Result<(), Box<dyn Error>> {
     // Legacy payload without the new field must deserialize to empty.
     let legacy = serde_json::json!({

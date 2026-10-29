@@ -165,6 +165,14 @@ pub struct FileParamSchemaEntry {
 /// row alone when the key (or an entry) is missing.
 pub const MCP_APP_DISCLOSURE_KEY: &str = "uiDisclosure";
 
+/// Tool-result key listing app URIs refused by the `off` apps tier (`[String]`).
+///
+/// Attached (without any resource fetch) when a result references `ui://`
+/// resources while `mcp.ui.apps` is `off`; absent otherwise. The runner maps
+/// it to a sandbox-denied event. Like [`MCP_APP_DISCLOSURE_KEY`], display-only:
+/// never part of model context.
+pub const MCP_APP_SUPPRESSED_KEY: &str = "uiSuppressed";
+
 /// Compact disclosure facts about an MCP resource for app presentation surfaces.
 ///
 /// Built by [`disclose_app_resource`] from a `resources/read` result. Surfaces

@@ -9,9 +9,13 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
+use vtcode_commons::sanitizer::sanitize_terminal_text;
 use vtcode_core::core::agent::task::TaskResults;
 use vtcode_core::exec::events::{CommandExecutionStatus, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus};
 use vtcode_core::utils::colors::style;
+
+/// Per-URI display bound for denial lines; mirrors the app-row URI bound.
+const MAX_DENIED_URI_CHARS: usize = 160;
 
 pub(super) struct ExecEventProcessor<WStdout, WEvents, WStderr> {
     json: bool,
@@ -365,6 +369,21 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
             blocked.blocked_total
         )),
         ThreadEvent::Error(error) => Some(format!("{} {}", style("[ERROR]").red().bold(), error.message)),
+        ThreadEvent::AppSandboxDenied(denied) => {
+            let uris = denied
+                .uris
+                .iter()
+                .map(|uri| sanitize_terminal_text(uri, MAX_DENIED_URI_CHARS))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!(
+                "{} {} refused app UI (tier {}): {}",
+                style("[APP DENIED]").yellow().bold(),
+                denied.tool,
+                denied.tier,
+                uris,
+            ))
+        }
         _ => None,
     }
 }

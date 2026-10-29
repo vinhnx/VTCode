@@ -319,6 +319,41 @@ fn context_boundary_events_notice_and_reset_stale_usage(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn sandbox_denied_event_pushes_warning_notice(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::{AppSandboxDeniedEvent, ThreadEvent, VersionedThreadEvent};
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _cx| {
+            view.selected_session_id = Some("session".into());
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: None,
+                event: VersionedThreadEvent::new(ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+                    tool: "mcp::demo::get_time".into(),
+                    tier: "off".into(),
+                    uris: vec!["ui://demo/app.html".into(), "ui://demo/other.html".into()],
+                }))),
+            });
+            assert_eq!(view.transcript.len(), 1);
+            let notice = view.transcript.get(0).unwrap();
+            assert_eq!(notice.role, "notice");
+            assert_eq!(notice.title.as_str(), "App UI refused");
+            for expected in [
+                "mcp::demo::get_time",
+                "'off'",
+                "ui://demo/app.html",
+                "ui://demo/other.html",
+            ] {
+                assert!(notice.text.contains(expected), "notice dropped {expected}");
+            }
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn transcript_notices_render_severity_without_message_chrome(cx: &mut TestAppContext) {
     use crate::desktop::transcript::NoticeSeverity;
 
