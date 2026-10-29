@@ -585,9 +585,10 @@ async fn missing_codex_sidecar_falls_back_to_openai_and_persists_selection() {
     config.agent.codex_app_server.command = workspace.join("missing-codex").display().to_string();
     config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
     config.auth.openai.preferred_method = OpenAIPreferredMethod::ApiKey;
-    config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
     save_workspace_config(&workspace, &config);
 
+    // Workspace config cannot set the copilot command; use the env override.
+    env_guard.set_var("VTCODE_COPILOT_COMMAND", workspace.join("missing-copilot").display().to_string());
     env_guard.set_var("OPENAI_API_KEY", "test-openai-key");
     env_guard.remove_var("GITHUB_TOKEN");
     let args = Cli::parse_from(["vtcode", "--workspace", workspace.to_str().expect("workspace path")]);
@@ -628,9 +629,10 @@ async fn missing_codex_sidecar_falls_back_to_copilot_when_openai_is_unavailable(
     config.agent.codex_app_server.command = workspace.join("missing-codex").display().to_string();
     config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
     config.auth.openai.preferred_method = OpenAIPreferredMethod::Chatgpt;
-    config.auth.copilot.command = Some(fake_copilot.display().to_string());
     save_workspace_config(&workspace, &config);
 
+    // Workspace config cannot set the copilot command; use the env override.
+    env_guard.set_var("VTCODE_COPILOT_COMMAND", fake_copilot.display().to_string());
     env_guard.remove_var("OPENAI_API_KEY");
     env_guard.set_var("GITHUB_TOKEN", "test-github-token");
     let args = Cli::parse_from(["vtcode", "--workspace", workspace.to_str().expect("workspace path")]);
@@ -661,9 +663,10 @@ async fn missing_codex_sidecar_without_fallback_reports_actionable_error() {
     config.agent.codex_app_server.command = workspace.join("missing-codex").display().to_string();
     config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
     config.auth.openai.preferred_method = OpenAIPreferredMethod::Chatgpt;
-    config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
     save_workspace_config(&workspace, &config);
 
+    // Workspace config cannot set the copilot command; use the env override.
+    env_guard.set_var("VTCODE_COPILOT_COMMAND", workspace.join("missing-copilot").display().to_string());
     env_guard.remove_var("OPENAI_API_KEY");
     env_guard.remove_var("GITHUB_TOKEN");
     let args = Cli::parse_from(["vtcode", "--workspace", workspace.to_str().expect("workspace path")]);
