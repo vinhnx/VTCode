@@ -6,7 +6,7 @@
 
 /// Token type for syntax highlighting in the input field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum InputTokenKind {
+pub(crate) enum InputTokenKind {
     Normal,
     SlashCommand,
     AgentReference,
@@ -15,16 +15,16 @@ pub(super) enum InputTokenKind {
 }
 
 /// A contiguous range of characters sharing the same token kind.
-pub(super) struct InputToken {
-    pub(super) kind: InputTokenKind,
+pub(crate) struct InputToken {
+    pub(crate) kind: InputTokenKind,
     /// Start char index (inclusive).
-    pub(super) start: usize,
+    pub(crate) start: usize,
     /// End char index (exclusive).
-    pub(super) end: usize,
+    pub(crate) end: usize,
 }
 
 /// Tokenize input text into styled regions for syntax highlighting.
-pub(super) fn tokenize_input(content: &str) -> Vec<InputToken> {
+pub(crate) fn tokenize_input(content: &str) -> Vec<InputToken> {
     let chars: Vec<char> = content.chars().collect();
     let len = chars.len();
     if len == 0 {
