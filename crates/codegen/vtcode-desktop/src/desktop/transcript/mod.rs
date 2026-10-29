@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::ops::Range;
 
 use gpui_kit::SharedString;
+use vtcode_exec_events::AppPreviewItem;
 
 use super::markdown::prepare_markdown;
 
@@ -142,6 +143,8 @@ pub(super) struct TranscriptItem {
     pub diff: Option<DiffCard>,
     /// Raw aggregated command/tool output for the Output inspector tab.
     pub output: Option<SharedString>,
+    /// MCP Apps referenced by this output, for preview cards. Empty for non-app results.
+    pub app_previews: Vec<AppPreviewItem>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -281,6 +284,7 @@ impl TranscriptItem {
             activity_group_summary,
             diff: None,
             output: None,
+            app_previews: Vec::new(),
         }
     }
 
@@ -636,6 +640,16 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 if item.output != output {
                     item.output = output;
+                }
+            }
+        }
+    }
+
+    pub fn set_app_previews(&mut self, id: &str, app_previews: Vec<AppPreviewItem>) {
+        if let Some(index) = self.position_by_id(id) {
+            if let Some(item) = self.items.get_mut(index) {
+                if item.app_previews != app_previews {
+                    item.app_previews = app_previews;
                 }
             }
         }

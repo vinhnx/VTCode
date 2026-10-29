@@ -33,6 +33,7 @@ pub(super) mod keys {
     pub const LIMIT: &str = "limit";
     pub const ITEM_ID: &str = "itemId";
     pub const OFFSET: &str = "offset";
+    pub const URI: &str = "uri";
     pub const STATUS: &str = "status";
     pub const SCOPE: &str = "scope";
     pub const INCLUDE_UNTRACKED: &str = "includeUntracked";

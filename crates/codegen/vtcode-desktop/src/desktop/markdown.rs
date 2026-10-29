@@ -151,8 +151,27 @@ fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
 }
 
 pub(super) fn render_markdown(id: String, source: SharedString, streaming: bool, cx: &gpui_kit::App) -> TextView {
-    let text_view = TextView::markdown(id, source)
-        .style(markdown_style(cx))
+    let text_view = harden_transcript_text_view(TextView::markdown(id, source).style(markdown_style(cx)));
+
+    if streaming {
+        text_view.motion(streaming_motion())
+    } else {
+        text_view
+    }
+}
+
+/// Render server HTML as an inert static preview: no scripts, no fetches.
+///
+/// Shares the transcript hardening (blocked images, web-only links, themed
+/// code blocks) with [`render_markdown`]. The Kit HTML parser keeps
+/// script/style inert; this only ever renders bodies fetched through the
+/// bounded `mcp/app/read` service call.
+pub(super) fn render_html(id: String, source: SharedString, cx: &gpui_kit::App) -> TextView {
+    harden_transcript_text_view(TextView::html(id, source).style(markdown_style(cx)))
+}
+
+fn harden_transcript_text_view(text_view: TextView) -> TextView {
+    text_view
         // WCAG 1.4.8 visual presentation: body copy keeps at least 1.5x
         // leading so transcript paragraphs stay readable at small sizes.
         .line_height(relative(1.5))
@@ -177,13 +196,7 @@ pub(super) fn render_markdown(id: String, source: SharedString, streaming: bool,
                     cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
                     super::notifications::copied_to_clipboard(window, cx);
                 })
-        });
-
-    if streaming {
-        text_view.motion(streaming_motion())
-    } else {
-        text_view
-    }
+        })
 }
 
 fn streaming_motion() -> TextViewMotion {

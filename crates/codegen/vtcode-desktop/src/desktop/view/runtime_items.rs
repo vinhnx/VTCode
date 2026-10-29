@@ -90,15 +90,23 @@ impl DesktopView {
                     ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.as_str().into()),
                     _ => None,
                 };
+                let app_previews = match details {
+                    ThreadItemDetails::ToolOutput(tool_output) => tool_output.app_previews.clone(),
+                    _ => Vec::new(),
+                };
                 if historical {
                     let mut item =
                         TranscriptItem::new(id, TranscriptRole::Tool.as_str().to_string(), title.into(), text);
                     item.output = output;
+                    item.app_previews = app_previews;
                     self.restored_activity.push(item);
                 } else {
                     self.append_or_update_item(id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
                     if output.is_some() {
                         self.transcript.set_output(&id, output);
+                    }
+                    if !app_previews.is_empty() {
+                        self.transcript.set_app_previews(&id, app_previews);
                     }
                 }
             }

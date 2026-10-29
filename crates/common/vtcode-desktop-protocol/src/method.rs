@@ -13,6 +13,8 @@ pub const SESSION_LOAD: &str = "session/load";
 pub const SESSION_HISTORY: &str = "session/history";
 /// Read one bounded page of archived tool output on demand.
 pub const SESSION_OUTPUT_READ: &str = "session/output/read";
+/// Read one bounded MCP app-resource body for static preview.
+pub const MCP_APP_READ: &str = "mcp/app/read";
 /// Close the selected session after cleanup.
 pub const SESSION_CLOSE: &str = "session/close";
 /// Submit a user turn.

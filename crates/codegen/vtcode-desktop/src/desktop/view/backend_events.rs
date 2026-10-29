@@ -640,6 +640,18 @@ impl DesktopView {
                     self.fail_output_page(cx);
                 }
             }
+            BackendEvent::McpAppResponse { request_id, result, error } => {
+                if !self.mcp_app_pending.contains_key(request_id.as_str()) {
+                    return;
+                }
+                if error.is_some() {
+                    self.fail_mcp_app_preview(request_id.as_str(), cx);
+                } else if let Some(result) = result {
+                    self.begin_mcp_app_preview(result, cx);
+                } else {
+                    self.fail_mcp_app_preview(request_id.as_str(), cx);
+                }
+            }
             BackendEvent::ThreadEvent(notification) => {
                 if !self.notification_matches(&notification.session_id, notification.turn_id.as_deref()) {
                     return;

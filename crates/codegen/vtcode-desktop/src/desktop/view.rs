@@ -63,8 +63,8 @@ use tokio::sync::mpsc;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
     ConfigurationSnapshot, InteractionChoice, InteractionRequest, InteractionResponse, InteractionStep,
-    SessionHistoryMessage, SessionHistoryPage, SessionLoadResult, SessionOutputCursor, SessionOutputPage,
-    SessionSummary, ThreadEventNotification,
+    McpAppReadResult, SessionHistoryMessage, SessionHistoryPage, SessionLoadResult, SessionOutputCursor,
+    SessionOutputPage, SessionSummary, ThreadEventNotification,
 };
 
 use super::files::{self, FileEntry, FilePreview};
@@ -96,6 +96,7 @@ mod files_panel;
 mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
+mod mcp_app;
 mod navigation;
 mod navigation_history;
 mod overlays;
@@ -123,6 +124,7 @@ use bootstrap::{init_keybindings, init_native_menus, open_or_activate_main_windo
 use chrome::*;
 use components::*;
 use inspector_changes::*;
+use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
 use runtime_items::*;
 use sessions::*;
@@ -449,6 +451,10 @@ struct DesktopView {
     output_page_pending: Option<PendingOutputPage>,
     output_page_task: Option<Task<()>>,
     output_page_error: Option<(String, String)>,
+    mcp_app_pending: HashMap<String, PendingMcpAppRead>,
+    mcp_app_task: Option<Task<()>>,
+    mcp_app_bodies: HashMap<McpAppBodyKey, McpAppReadResult>,
+    mcp_app_errors: HashMap<McpAppBodyKey, gpui_kit::SharedString>,
     retained_submission: Option<SubmissionDraft>,
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,

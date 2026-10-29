@@ -101,6 +101,31 @@ fn session_output_page_round_trips_bounded_cursor_and_request_identity() {
 }
 
 #[test]
+fn mcp_app_read_round_trips_params_and_bounded_result() {
+    let params = McpAppReadParams {
+        uri: "ui://demo/app.html".into(),
+        request_id: "app-1".into(),
+    };
+    let round_trip: McpAppReadParams = serde_json::from_value(serde_json::to_value(&params).unwrap()).unwrap();
+    assert_eq!(round_trip, params);
+
+    let result = McpAppReadResult {
+        uri: params.uri.clone(),
+        request_id: params.request_id.clone(),
+        mime_type: Some("text/html;profile=mcp-app".into()),
+        body: "<!doctype html>".into(),
+        total_bytes: 15,
+        truncated: false,
+    };
+    let value = serde_json::to_value(&result).unwrap();
+    assert_eq!(value["requestId"], serde_json::json!("app-1"));
+    assert_eq!(value["mimeType"], serde_json::json!("text/html;profile=mcp-app"));
+    assert_eq!(value["totalBytes"], serde_json::json!(15));
+    let round_trip: McpAppReadResult = serde_json::from_value(value).unwrap();
+    assert_eq!(round_trip, result);
+}
+
+#[test]
 fn negotiation_selects_server_version_and_rejects_major_mismatch() {
     let range = ProtocolRange {
         minimum: ProtocolVersion { major: 1, minor: 0 },

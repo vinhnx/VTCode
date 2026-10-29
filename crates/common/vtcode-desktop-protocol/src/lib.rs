@@ -10,7 +10,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 18 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 19 };
 
 /// A turn was rejected before delivery because a startup interaction is pending.
 pub const STARTUP_INTERACTION_PENDING_ERROR: i32 = -32001;
@@ -616,6 +616,34 @@ pub struct SessionOutputPage {
     pub has_more: bool,
 }
 
+/// Request one bounded MCP app-resource body for static preview.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpAppReadParams {
+    /// `ui://` URI to read.
+    pub uri: String,
+    /// Opaque client identity used to reject superseded reads.
+    pub request_id: String,
+}
+
+/// One bounded MCP app-resource body.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpAppReadResult {
+    /// URI that was read.
+    pub uri: String,
+    /// Echoed request identity.
+    pub request_id: String,
+    /// MIME type of the first text block, when the server provides one.
+    pub mime_type: Option<String>,
+    /// Bounded body bytes; empty when the resource has no text block.
+    pub body: String,
+    /// Total body bytes available across text blocks.
+    pub total_bytes: u64,
+    /// Whether the body was truncated to [`MAX_MCP_APP_BODY_BYTES`].
+    pub truncated: bool,
+}
+
 /// Request identity for one bounded read-only Git snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -887,6 +915,9 @@ pub const MAX_SESSION_HISTORY_PAGE_MESSAGES: usize = 160;
 
 /// Maximum captured output returned by one on-demand desktop page.
 pub const MAX_SESSION_OUTPUT_PAGE_BYTES: usize = 32 * 1024;
+
+/// Maximum MCP app-resource body returned by one `mcp/app/read` call.
+pub const MAX_MCP_APP_BODY_BYTES: usize = 64 * 1024;
 
 /// Marker appended while more archived tool output is available.
 pub const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = "\n[Output truncated in restored history.]";

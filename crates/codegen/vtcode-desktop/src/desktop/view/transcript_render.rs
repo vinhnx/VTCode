@@ -604,6 +604,9 @@ impl DesktopView {
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.transcript.toggle_tool(&id);
+                    // The fetch notifies when it queues; this covers the
+                    // tier-off and already-loaded paths too.
+                    this.request_mcp_app_previews(&id, cx);
                     cx.notify();
                 })),
         );
@@ -653,7 +656,8 @@ impl DesktopView {
                             .font_family(cx.theme().mono_font_family.clone())
                             .text_size(cx.theme().mono_font_size)
                             .child(output_excerpt),
-                    ),
+                    )
+                    .child(self.render_mcp_app_previews(item, cx)),
             );
         }
         panel.into_any_element()

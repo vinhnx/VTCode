@@ -1,5 +1,6 @@
 mod composer_resources;
 mod config_settings;
+mod mcp_app;
 mod session_options;
 mod session_preferences;
 mod shared_preferences;
@@ -697,6 +698,11 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                 has_more: text_page.next_offset < text_page.total_bytes,
             };
             Ok((serde_json::to_value(page)?, false))
+        }
+        method::MCP_APP_READ => {
+            let params: protocol::McpAppReadParams = parse_params(&request.params)?;
+            let result = mcp_app::read(context.workspace.clone(), params).await?;
+            Ok((serde_json::to_value(result)?, false))
         }
         method::SESSION_CLOSE => {
             let params: protocol::SessionIdParams = parse_params(&request.params)?;

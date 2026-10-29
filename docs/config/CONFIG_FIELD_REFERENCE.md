@@ -496,6 +496,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
+| `mcp.ui.apps` | `string` | no | `"off"` | MCP Apps preview tier for visual surfaces ("off" hides app UI, "static" shows an inert HTML preview, "interactive" needs an app engine and is currently rejected). Options: "off", "static", "interactive" |
 | `mcp.ui.max_events` | `integer` | no | `50` | Maximum number of MCP events to display |
 | `mcp.ui.mode` | `string` | no | `"compact"` | UI mode for MCP events: "compact" or "full" |
 | `mcp.ui.renderers` | `object` | no | `{}` | Custom renderer profiles for provider-specific output formatting |

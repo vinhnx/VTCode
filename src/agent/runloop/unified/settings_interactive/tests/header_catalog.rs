@@ -119,3 +119,20 @@ fn desktop_config_catalog_reuses_cli_advanced_fields_and_curated_groups() {
             .all(|field| !field.path.contains('[') && !field.path.contains(']'))
     );
 }
+
+#[test]
+fn desktop_config_catalog_exposes_mcp_apps_tier_with_all_options() {
+    let config = VTCodeConfig::default();
+    let fields = desktop_config_catalog(&config).expect("desktop CLI config catalog");
+    let apps = fields
+        .iter()
+        .find(|field| field.path == "mcp.ui.apps")
+        .expect("mcp.ui.apps catalog field");
+    // Options are sorted by extract_options; order here follows that contract.
+    assert_eq!(apps.options, vec!["interactive".to_string(), "off".to_string(), "static".to_string()]);
+    assert!(apps.editable, "tier is selectable from the desktop editor");
+    assert!(
+        apps.description.contains("currently rejected"),
+        "catalog must stay honest that interactive has no engine yet"
+    );
+}
