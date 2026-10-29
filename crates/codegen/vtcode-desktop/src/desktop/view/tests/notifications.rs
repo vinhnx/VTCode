@@ -156,6 +156,43 @@ fn notification_toggles_persist_to_preferences(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn notification_switches_share_one_trailing_spine(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        select_settings_category(window, 5, cx);
+        window.render_frame(cx);
+
+        // The four labels differ in length ("Enable notifications" vs
+        // "Enable permission notifications"), so equal toggle geometry proves
+        // the trailing lane absorbs the difference instead of ragged toggles.
+        let ids = [
+            ("notifications-enabled", "Enable notifications"),
+            ("notifications-permission", "Enable permission notifications"),
+            ("notifications-questions", "Enable question notifications"),
+            ("notifications-updates", "Enable update notifications"),
+        ];
+        let mut bounds = Vec::with_capacity(ids.len());
+        for (id, label) in ids {
+            let snapshot = window.try_find(id);
+            assert!(snapshot.is_some(), "{id} renders");
+            let snapshot = snapshot.unwrap();
+            assert_eq!(snapshot.label(), Some(label), "{id} keeps its accessible name");
+            let found = snapshot.bounds();
+            assert!(found.size.width > px(0.) && found.size.height > px(0.), "{id} renders with size: {found:?}");
+            bounds.push(found);
+        }
+        let first = &bounds[0];
+        for ((id, _), found) in ids.iter().zip(bounds.iter()) {
+            assert_eq!(found.size.width, first.size.width, "{id} toggle width matches");
+            assert_eq!(found.right(), first.right(), "{id} toggle trailing edge aligns");
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn turn_completion_dropdown_persists_the_selected_mode(cx: &mut TestAppContext) {
     use crate::desktop::preferences::TurnCompletionMode;
 

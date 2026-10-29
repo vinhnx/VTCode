@@ -877,3 +877,25 @@ fn zen_composer_pairs_context_line_with_send_action(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn zen_composer_accepts_keyboard_input_without_focus_ring(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+
+        // The card shows no focus ring; the caret still marks the field, so
+        // focusing and typing must work exactly as in the default composer.
+        window.click("message-composer", cx);
+        window.input("Zen draft without ring", cx);
+        window.render_frame(cx);
+
+        let composer_focus = view.read(cx).composer.read(cx).focus_handle(cx).clone();
+        assert!(composer_focus.contains_focused(window, cx));
+        assert_eq!(view.read(cx).composer.read(cx).value(), "Zen draft without ring");
+        assert!(window.find("message-composer-frame").bounds().size.height > px(0.));
+    })
+    .unwrap();
+}

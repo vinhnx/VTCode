@@ -597,12 +597,15 @@ impl DesktopView {
                     .child(settings_row(
                         rust_i18n::t!("app.settings.notifications.enable").to_string(),
                         rust_i18n::t!("app.settings.notifications.enable_description").to_string(),
-                        gpui_kit::component::switch::Switch::new("notifications-enabled")
-                            .label(rust_i18n::t!("app.settings.notifications.enable").to_string())
-                            .checked(notifications.enabled())
-                            .on_click(cx.listener(|view, checked, _, cx| {
+                        settings_switch(
+                            "notifications-enabled",
+                            rust_i18n::t!("app.settings.notifications.enable").to_string(),
+                            notifications.enabled(),
+                            cx.listener(|view, checked, _, cx| {
                                 view.set_notification_enabled(*checked, cx);
-                            })),
+                            }),
+                            &colors,
+                        ),
                         &colors,
                     ))
                     .child(row_divider(&colors))
@@ -622,36 +625,45 @@ impl DesktopView {
                     .child(settings_row(
                         rust_i18n::t!("app.settings.notifications.permission").to_string(),
                         rust_i18n::t!("app.settings.notifications.permission_description").to_string(),
-                        gpui_kit::component::switch::Switch::new("notifications-permission")
-                            .label(rust_i18n::t!("app.settings.notifications.permission").to_string())
-                            .checked(notifications.permission_prompts())
-                            .on_click(cx.listener(|view, checked, _, cx| {
+                        settings_switch(
+                            "notifications-permission",
+                            rust_i18n::t!("app.settings.notifications.permission").to_string(),
+                            notifications.permission_prompts(),
+                            cx.listener(|view, checked, _, cx| {
                                 view.set_notification_permission(*checked, cx);
-                            })),
+                            }),
+                            &colors,
+                        ),
                         &colors,
                     ))
                     .child(row_divider(&colors))
                     .child(settings_row(
                         rust_i18n::t!("app.settings.notifications.questions").to_string(),
                         rust_i18n::t!("app.settings.notifications.questions_description").to_string(),
-                        gpui_kit::component::switch::Switch::new("notifications-questions")
-                            .label(rust_i18n::t!("app.settings.notifications.questions").to_string())
-                            .checked(notifications.questions())
-                            .on_click(cx.listener(|view, checked, _, cx| {
+                        settings_switch(
+                            "notifications-questions",
+                            rust_i18n::t!("app.settings.notifications.questions").to_string(),
+                            notifications.questions(),
+                            cx.listener(|view, checked, _, cx| {
                                 view.set_notification_questions(*checked, cx);
-                            })),
+                            }),
+                            &colors,
+                        ),
                         &colors,
                     ))
                     .child(row_divider(&colors))
                     .child(settings_row(
                         rust_i18n::t!("app.settings.notifications.updates").to_string(),
                         rust_i18n::t!("app.settings.notifications.updates_description").to_string(),
-                        gpui_kit::component::switch::Switch::new("notifications-updates")
-                            .label(rust_i18n::t!("app.settings.notifications.updates").to_string())
-                            .checked(notifications.updates())
-                            .on_click(cx.listener(|view, checked, _, cx| {
+                        settings_switch(
+                            "notifications-updates",
+                            rust_i18n::t!("app.settings.notifications.updates").to_string(),
+                            notifications.updates(),
+                            cx.listener(|view, checked, _, cx| {
                                 view.set_notification_updates(*checked, cx);
-                            })),
+                            }),
+                            &colors,
+                        ),
                         &colors,
                     ))
                     .child(row_divider(&colors))

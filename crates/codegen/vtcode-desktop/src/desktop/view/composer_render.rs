@@ -401,9 +401,11 @@ impl DesktopView {
             );
         }
         // Zen restyles the card while the column narrows (see content_width):
-        // a defined input surface with a hairline border, a visible focus
-        // ring, and a small send action. The border lives on the frame only;
-        // the inner group stays borderless so one owner draws the boundary.
+        // a defined input surface with a hairline border, roomier padding,
+        // and a small send action. The border lives on the frame only; the
+        // inner group stays borderless with no focus ring, so the card never
+        // shifts its boundary when the draft gains focus — the caret marks
+        // the focused field.
         let frame_radius = px(if self.zen_mode { 16. } else { 22. });
         div().w_full().flex().justify_center().child(
             panel.child(
@@ -456,7 +458,7 @@ impl DesktopView {
                                     .w_full()
                                     .rounded(frame_radius)
                                     .border_0()
-                                    .focus_ring(self.zen_mode)
+                                    .focus_ring(false)
                                     .p_2()
                                     .when(self.zen_mode, |group| group.p_3())
                                     .bg(colors.popover)

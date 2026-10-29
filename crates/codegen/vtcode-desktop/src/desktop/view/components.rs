@@ -124,9 +124,50 @@ pub(super) fn row_description(
     div().text_sm().text_color(themes::muted_text(colors)).child(text.into())
 }
 
-/// 1px separator between settings rows on a group-box fill.
+/// 1px separator between settings rows, drawn in the theme border token with
+/// breathing room so it reads as a quiet hairline rather than a rule.
 pub(super) fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
-    div().h(px(1.)).bg(themes::hairline(colors.group_box, colors.foreground))
+    div().w_full().py_1().child(div().h(px(1.)).w_full().bg(colors.border))
+}
+
+/// Trailing settings control pairing a right-aligned label with a switch.
+///
+/// The fixed-width lane keeps every row's toggle on one trailing spine while
+/// the labels right-align against it, so rows with different label lengths
+/// still scan as one column. The lane never exceeds the row width; longer
+/// labels wrap instead of crowding the toggle. The switch keeps its accessible
+/// name and owns activation; the visible label is descriptive text.
+pub(super) fn settings_switch(
+    id: impl Into<gpui_kit::ElementId>,
+    label: impl Into<gpui_kit::SharedString>,
+    checked: bool,
+    on_click: impl Fn(&bool, &mut Window, &mut App) + 'static,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    let label = label.into();
+    div()
+        .w_64()
+        .max_w_full()
+        .flex()
+        .items_center()
+        .justify_end()
+        .gap_2()
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_right()
+                .text_sm()
+                .text_color(colors.foreground)
+                .child(label.clone()),
+        )
+        .child(
+            gpui_kit::component::switch::Switch::new(id)
+                .flex_shrink_0()
+                .checked(checked)
+                .accessibility_label(label)
+                .on_click(on_click),
+        )
 }
 
 /// Quiet full-width break between conversation turns on the canvas. The
