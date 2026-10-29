@@ -8,11 +8,13 @@
 //! hanging the suite.
 
 use super::handlers::{
-    handle_clear_screen, handle_oauth_login, handle_open_donate_links, handle_show_permissions,
-    handle_show_transcript_stats, handle_start_mode_palette,
+    handle_clear_screen, handle_oauth_login, handle_open_donate_links, handle_show_log_viewer,
+    handle_show_memory_config, handle_show_permissions, handle_show_settings_reset, handle_show_transcript_stats,
+    handle_start_mode_palette,
 };
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::model_picker::ModelPickerState;
+use crate::agent::runloop::slash_commands::{LogFormat, LogScope};
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
@@ -186,4 +188,30 @@ async fn headless_transcript_stats_omits_tui_memory_note() {
 async fn headless_donate_lists_both_links_without_a_picker() {
     let mut harness = HeadlessHarness::new().await;
     expect_continue(timeout(HEADLESS_TEST_TIMEOUT, handle_open_donate_links(harness.ctx())).await, "donate").await;
+}
+
+#[tokio::test]
+async fn headless_config_reset_points_to_the_terminal_command() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(timeout(HEADLESS_TEST_TIMEOUT, handle_show_settings_reset(harness.ctx())).await, "reset").await;
+}
+
+#[tokio::test]
+async fn headless_config_memory_renders_lines_without_a_modal() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(timeout(HEADLESS_TEST_TIMEOUT, handle_show_memory_config(harness.ctx())).await, "memory").await;
+}
+
+#[tokio::test]
+async fn headless_config_log_names_the_terminal_alternative() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(
+        timeout(
+            HEADLESS_TEST_TIMEOUT,
+            handle_show_log_viewer(harness.ctx(), LogFormat::Text, LogScope::Thread, false),
+        )
+        .await,
+        "log viewer",
+    )
+    .await;
 }

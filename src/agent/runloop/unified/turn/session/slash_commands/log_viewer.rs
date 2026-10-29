@@ -21,7 +21,10 @@ pub(crate) async fn handle_show_log_viewer(
     save: bool,
 ) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(MessageStyle::Error, "Log viewer requires inline UI mode.")?;
+        ctx.renderer.line(
+            MessageStyle::Error,
+            "Log viewer requires inline UI mode. Run vtcode in a terminal to browse logs.",
+        )?;
         return Ok(SlashCommandControl::Continue);
     }
 

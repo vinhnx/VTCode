@@ -226,10 +226,15 @@ async fn show_settings_at_path_from_context_with_reset(
     }
 
     if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Interactive settings require inline UI; use /config to inspect effective values.",
-        )?;
+        // Reset is destructive and has no text-driven confirm path; the
+        // desktop config page documents the same terminal command instead of
+        // offering the call.
+        let guidance = if reset_confirmation {
+            "Run `vtcode config reset` in a terminal to clear one configuration layer."
+        } else {
+            "Interactive settings need the terminal UI; run vtcode in a terminal to browse and edit them."
+        };
+        ctx.renderer.line(MessageStyle::Info, guidance)?;
         return Ok(SlashCommandControl::Continue);
     }
 

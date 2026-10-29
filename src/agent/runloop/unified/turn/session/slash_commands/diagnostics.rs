@@ -178,10 +178,8 @@ pub(crate) async fn handle_show_splash(ctx: SlashCommandContext<'_>) -> Result<S
 pub(crate) async fn handle_show_memory_config(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         memory::render_memory_config_lines(&mut ctx).await?;
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Use `/config memory` for quick actions or `/config agent.persistent_memory` for the raw section.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Run vtcode in a terminal for memory quick actions.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
