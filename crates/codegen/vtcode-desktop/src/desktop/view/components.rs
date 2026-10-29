@@ -60,7 +60,7 @@ pub(super) fn section_label(
 
 /// Pre-configured fill group box for settings sections. Callers chain
 /// `.child(...)`/`.footer(...)` as before. The local-service group keeps its
-/// bespoke `.outline()` chain, and the Utilities card its shrinkable one.
+/// bespoke `.outline()` chain; it is the only visible variant.
 pub(super) fn settings_group_box(
     title: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,

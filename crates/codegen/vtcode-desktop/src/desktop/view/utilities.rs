@@ -39,9 +39,7 @@ impl DesktopView {
             .child(accessible_group_box(
                 "utilities-workspace-group",
                 workspace.clone(),
-                GroupBox::new()
-                    .fill()
-                    .title(group_box_title(workspace, &colors))
+                settings_group_box(workspace, &colors)
                     .child(
                         desktop_button("utilities-changes")
                             .ghost()
