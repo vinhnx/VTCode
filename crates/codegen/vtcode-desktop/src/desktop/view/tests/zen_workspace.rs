@@ -27,7 +27,7 @@ fn zen_mode_hides_welcome_for_empty_threads(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zen_toggle_renders_identically_with_reduced_motion(cx: &mut TestAppContext) {
+fn zen_toggle_keeps_one_header_slot_with_reduced_motion(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
@@ -39,17 +39,23 @@ fn zen_toggle_renders_identically_with_reduced_motion(cx: &mut TestAppContext) {
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        let entered = window.find("zen-mode-toggle").bounds();
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("zen-mode-float").label(), Some("Exit Zen mode"));
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Exit Zen mode"));
         assert!(window.try_find("welcome").is_none());
         assert!(window.try_find("send-prompt").is_some());
+        let zen = window.find("zen-mode-toggle").bounds();
+        assert_eq!(zen.right(), entered.right(), "one zen slot keeps its trailing edge");
+        assert_eq!(zen.top(), entered.top(), "one zen slot keeps its vertical lane");
+        assert_eq!(zen.size, entered.size, "enter and exit share one frame");
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        assert_eq!(window.find("zen-mode-toggle").bounds().origin, entered.origin);
         assert!(window.try_find("welcome").is_some());
 
         view.update(cx, |view, cx| {
@@ -60,7 +66,7 @@ fn zen_toggle_renders_identically_with_reduced_motion(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zen_mode_hides_navigation_and_keeps_exit_fixed_in_toolbar(cx: &mut TestAppContext) {
+fn zen_mode_hides_navigation_and_keeps_one_toggle_slot(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
@@ -89,16 +95,22 @@ fn zen_mode_hides_navigation_and_keeps_exit_fixed_in_toolbar(cx: &mut TestAppCon
         assert!(window.try_find("project-thread-sidebar").is_some());
         assert!(window.try_find("toggle-inspector").is_some());
         assert!(window.try_find("status-bar").is_some());
-        assert!(window.try_find("zen-mode-toggle").is_some());
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
         assert!(window.try_find("thread-header").is_some());
         assert!(window.try_find("composer-context").is_some());
+        let expanded_panels_slot = window.find("zen-mode-toggle").bounds();
 
         view.update(cx, |view, _| view.preferences.navigation_visible = Some(false));
         window.render_frame(cx);
         assert!(window.try_find("navigation-rail").is_none());
         assert!(window.try_find("top-new-thread").is_some());
         assert!(window.try_find("top-utilities").is_some());
-        assert!(window.try_find("top-zen-mode-toggle").is_some());
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        let collapsed_nav_slot = window.find("zen-mode-toggle").bounds();
+        assert_eq!(
+            collapsed_nav_slot.origin, expanded_panels_slot.origin,
+            "hiding navigation must not move the zen slot"
+        );
         let normal_frame = window.find("message-composer-frame").bounds();
         let normal_send = window.find("send-prompt").bounds();
         assert_eq!(
@@ -109,30 +121,32 @@ fn zen_mode_hides_navigation_and_keeps_exit_fixed_in_toolbar(cx: &mut TestAppCon
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
-        assert!(window.try_find("zen-mode-exit").is_some());
-        assert_eq!(window.find("zen-mode-exit").label(), Some("Exit Zen mode"));
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Exit Zen mode"));
         assert!(window.try_find("navigation-rail").is_none());
         assert!(
             window
                 .find("title-bar")
                 .bounds()
-                .contains(&window.find("zen-mode-exit").bounds().center()),
-            "zen exit stays fixed in the title bar while the workspace zooms"
+                .contains(&window.find("zen-mode-toggle").bounds().center()),
+            "zen toggle stays fixed in the title bar while the workspace zooms"
         );
-        let exit_bounds = window.find("zen-mode-exit").bounds();
+        let zen_slot = window.find("zen-mode-toggle").bounds();
+        assert_eq!(zen_slot.origin, collapsed_nav_slot.origin, "toggling zen must not move its slot");
+        assert_eq!(zen_slot.size, collapsed_nav_slot.size, "enter and exit share one frame");
         assert!(
-            exit_bounds.size.width >= px(24.) && exit_bounds.size.height >= px(24.),
-            "faded zen exit must keep a comfortable pointer target: {exit_bounds:?}"
+            zen_slot.size.width >= px(24.) && zen_slot.size.height >= px(24.),
+            "zen toggle must keep a comfortable pointer target: {zen_slot:?}"
         );
         assert!(window.try_find("nav-home").is_none());
         assert!(window.try_find("nav-new-thread").is_none());
         assert!(window.try_find("nav-utilities").is_none());
-        assert!(window.try_find("zen-mode-toggle").is_none());
-        assert!(window.try_find("top-zen-mode-toggle").is_none());
         assert!(window.try_find("top-new-thread").is_none());
         assert!(window.try_find("top-utilities").is_none());
         assert!(window.try_find("toggle-sidebar").is_none());
-        assert!(window.try_find("header-toolbar").is_none());
+        assert!(window.try_find("search-commands").is_none());
+        assert!(window.try_find("toggle-inspector").is_none());
+        assert!(window.try_find("open-settings").is_none());
+        assert!(window.try_find("header-overflow").is_none());
         assert!(window.try_find("project-thread-sidebar").is_none());
         assert!(window.try_find("inspector-navigation").is_none());
         assert!(window.try_find("status-bar").is_none());
@@ -159,10 +173,14 @@ fn zen_mode_hides_navigation_and_keeps_exit_fixed_in_toolbar(cx: &mut TestAppCon
             "zen column keeps one shared spine"
         );
 
-        window.click("zen-mode-exit", cx);
+        window.click("zen-mode-toggle", cx);
         window.render_frame(cx);
-        assert!(window.try_find("top-zen-mode-toggle").is_some());
-        assert!(window.try_find("zen-mode-toggle").is_none());
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        assert_eq!(
+            window.find("zen-mode-toggle").bounds().origin,
+            collapsed_nav_slot.origin,
+            "exiting zen restores the same slot"
+        );
         assert!(window.try_find("thread-header").is_some());
         assert!(window.try_find("composer-context").is_some());
         assert!(window.try_find("navigation-rail").is_none());
@@ -171,6 +189,43 @@ fn zen_mode_hides_navigation_and_keeps_exit_fixed_in_toolbar(cx: &mut TestAppCon
         assert!(window.try_find("top-utilities").is_some());
         assert!(window.try_find("toggle-inspector").is_some());
         assert!(window.try_find("status-bar").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn header_icon_band_shares_one_frame_and_center_line(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(std::env::temp_dir());
+        view.preferences.navigation_visible = Some(false);
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Leading cluster and trailing toolbar are different owners; the band
+        // they form must still share one frame height and center line.
+        let slots = [
+            "navigate-back",
+            "navigate-forward",
+            "toggle-sidebar",
+            "top-new-thread",
+            "top-utilities",
+            "search-commands",
+            "toggle-inspector",
+            "open-settings",
+            "header-overflow",
+            "zen-mode-toggle",
+        ];
+        let first = window.find(slots[0]).bounds();
+        assert_eq!(first.size.height, px(24.), "the band pins the compact tier");
+        assert_eq!(first.size.width, px(24.), "icon slots stay square");
+        for slot in slots {
+            let bounds = window.find(slot).bounds();
+            assert_eq!(bounds.size.height, first.size.height, "{slot} shares the band frame");
+            assert_eq!(bounds.size.width, first.size.width, "{slot} shares the band frame");
+            assert_eq!(bounds.center().y, first.center().y, "{slot} shares the band center line");
+        }
     })
     .unwrap();
 }

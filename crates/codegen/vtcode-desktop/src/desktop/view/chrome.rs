@@ -410,9 +410,7 @@ impl DesktopView {
             .and_then(|session| session.title.as_deref())
             .unwrap_or(&title_fallback);
         // Centered on the conversation spine: the title shares the transcript
-        // and composer column instead of hugging the workspace edge. When
-        // both side panels are collapsed the floating toggle overlaps the
-        // header row, so the title reserves its corner.
+        // and composer column instead of hugging the workspace edge.
         div().w_full().flex().justify_center().child(
             div()
                 .id("thread-header")
@@ -424,7 +422,6 @@ impl DesktopView {
                 .items_center()
                 .justify_between()
                 .px_4()
-                .when(self.side_panels_collapsed(), |header| header.pr_8())
                 .py_3()
                 .child(
                     div()
@@ -441,64 +438,28 @@ impl DesktopView {
         )
     }
 
-    /// Leaf toggle pinned to the main container's top-trailing corner while
-    /// both side panels are collapsed. It keeps one fixed position in both
-    /// modes and only changes paint: a ghost button to enter Zen, faded text
-    /// to exit.
-    pub(super) fn render_floating_zen_toggle(&self, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let button = if self.zen_mode {
-            let faded = themes::faded_chrome(colors.background, colors.foreground);
-            exit_zen_button(ZEN_FLOAT_TOGGLE_ELEMENT_ID, faded, &self.focus_handle)
-        } else {
-            enter_zen_button(ZEN_FLOAT_TOGGLE_ELEMENT_ID, &self.focus_handle)
-        };
-        // The toggle persists across modes, so the animation id is keyed by
-        // mode: each toggle replays the fade while the button stays fixed.
-        div()
-            .absolute()
-            .top_2()
-            .right_2()
-            .child(button)
-            .with_animation(
-                gpui_kit::ElementId::NamedInteger("zen-toggle-fade".into(), self.zen_mode as u64),
-                zen_fade_animation(cx.theme()),
-                |el, delta| el.opacity(delta),
-            )
-            .into_any_element()
-    }
-
     pub(super) fn render_toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let toolbar_surface =
             themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail;
+        // Both modes share one trailing toolbar container, so the zen toggle
+        // keeps the same slot while the workspace zooms; it only fades and
+        // repaints. The bar persists across modes, so its fade id is keyed by
+        // mode: each toggle crossfades the whole bar between states.
         if self.zen_mode {
-            // The toggle stays fixed in the title bar while the workspace
-            // zooms; it only fades. The text variant paints no background in
-            // any state, so the tooltip and keyboard focus ring identify it.
-            // Padding keeps a comfortable pointer target on the content-sized
-            // button. When both side panels are collapsed, the floating toggle
-            // over the main container is the exit instead.
-            // The bar persists across modes, so its fade id is keyed by mode:
-            // each toggle crossfades the whole bar between states.
-            let bar = TitleBar::new()
+            return TitleBar::new()
                 .w_full()
                 .h(px(48.))
                 .pr_3()
                 .border_b_0()
                 .bg(toolbar_surface)
                 .child(div().flex_1())
+                .child(self.render_header_actions(cx))
                 .with_animation(
                     gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
                     zen_fade_animation(cx.theme()),
                     |el, delta| el.opacity(delta),
-                );
-            if self.side_panels_collapsed() {
-                return bar.into_any_element();
-            }
-            let faded = themes::faded_chrome(theme.colors.background, theme.colors.foreground);
-            return bar
-                .child(exit_zen_button("zen-mode-exit", faded, &self.focus_handle))
+                )
                 .into_any_element();
         }
         let navigation_visible = self.preferences.navigation_visible();
@@ -521,6 +482,8 @@ impl DesktopView {
             .and_then(|path| path.file_name())
             .and_then(|name| name.to_str())
             .unwrap_or("Workspace");
+        // The leading cluster shares the trailing toolbar's compact size, so the
+        // whole title bar is one band: same frame, same center line.
         TitleBar::new()
             .w_full()
             .h(px(48.))
@@ -539,6 +502,7 @@ impl DesktopView {
                             .accessibility_label(if pending_back { "Back (navigating…)" } else { "Back" })
                             .icon(IconName::ArrowLeft)
                             .ghost()
+                            .small()
                             .loading(pending_back)
                             .tooltip_with_action("Back", &NavigateBack, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_navigate_back() && !pending_back)
@@ -553,6 +517,7 @@ impl DesktopView {
                             })
                             .icon(IconName::ArrowRight)
                             .ghost()
+                            .small()
                             .loading(pending_forward)
                             .tooltip_with_action("Forward", &NavigateForward, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_navigate_forward() && !pending_forward)
@@ -564,6 +529,7 @@ impl DesktopView {
                             .toggled(navigation_visible && self.sidebar_open)
                             .icon(navigation_icon)
                             .ghost()
+                            .small()
                             .tooltip_with_action(navigation_label, &ToggleSidebar, Some(key_context::DESKTOP))
                             .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                     )
@@ -578,85 +544,88 @@ impl DesktopView {
                             .child(format!("/ {workspace}")),
                     ),
             )
-            .child(
-                Toolbar::new("header-toolbar").small().child(
-                    ToolbarGroup::new("header-actions-group")
-                        .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
-                        .gap_1()
-                        .when(!navigation_visible, |group| {
-                            group
-                                .child(
-                                    desktop_button("top-new-thread")
-                                        .icon(IconName::Plus)
-                                        .ghost()
-                                        .accessibility_label("New thread")
-                                        .tooltip_with_action("New thread", &NewSession, Some(key_context::DESKTOP))
-                                        .desktop_disabled(!self.session_change_allowed(None))
-                                        .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
-                                )
-                                .child(
-                                    desktop_button("top-utilities")
-                                        .icon(IconName::GitBranch)
-                                        .ghost()
-                                        .accessibility_label("Workspace utilities")
-                                        .tooltip_with_action(
-                                            "Workspace utilities",
-                                            &OpenUtilities,
-                                            Some(key_context::DESKTOP),
-                                        )
-                                        .desktop_disabled(self.workspace.is_none())
-                                        .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
-                                )
-                        })
-                        .when(!navigation_visible && self.inspector_open, |group| {
-                            // When the inspector is closed too, the floating
-                            // toggle over the main container replaces this slot.
-                            group.child(enter_zen_button("top-zen-mode-toggle", &self.focus_handle))
-                        })
-                        .child(
-                            desktop_button("search-commands")
-                                .accessibility_label("Search commands")
-                                .icon(IconName::Search)
-                                .ghost()
-                                .tooltip_with_action("Search commands", &OpenCommandPalette, Some(key_context::DESKTOP))
-                                .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
-                        )
-                        .child(
-                            desktop_button("toggle-inspector")
-                                .icon(IconName::PanelRight)
-                                .accessibility_label(if self.inspector_open {
-                                    "Hide panel"
-                                } else {
-                                    "Show panel"
-                                })
-                                .tooltip_with_action("Toggle inspector", &ToggleInspector, Some(key_context::DESKTOP))
-                                .ghost()
-                                .desktop_disabled(self.workspace.is_none())
-                                .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
-                        )
-                        .child(
-                            desktop_button("open-settings")
-                                .accessibility_label("Settings")
-                                .icon(IconName::Settings2)
-                                .tooltip_with_action("Settings", &OpenSettings, Some(key_context::DESKTOP))
-                                .ghost()
-                                .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
-                        )
-                        .when_some(self.session_options().and_then(|options| options.speed.as_ref()), |group, speed| {
-                            group.content(
-                                Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                                    .small()
-                                    .child(speed.clone()),
-                            )
-                        })
-                        .content(self.render_chrome_menu("header-overflow", "Window actions")),
-                ),
-            )
+            .child(self.render_header_actions(cx))
             .with_animation(
                 gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
                 zen_fade_animation(cx.theme()),
                 |el, delta| el.opacity(delta),
             )
             .into_any_element()
+    }
+
+    /// Trailing header actions shared by both modes. The toolbar container is
+    /// identical in both; only its children differ, and the zen toggle is
+    /// always last, so it keeps one trailing slot while other chrome fades.
+    /// The toolbar forces the compact size on `.child()` controls, while
+    /// `.content()` items carry their own size.
+    fn render_header_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let mut group = ToolbarGroup::new("header-actions-group")
+            .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
+            .gap_1();
+        if !self.zen_mode {
+            if !self.preferences.navigation_visible() {
+                group = group
+                    .child(
+                        desktop_button("top-new-thread")
+                            .icon(IconName::Plus)
+                            .ghost()
+                            .accessibility_label("New thread")
+                            .tooltip_with_action("New thread", &NewSession, Some(key_context::DESKTOP))
+                            .desktop_disabled(!self.session_change_allowed(None))
+                            .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
+                    )
+                    .child(
+                        desktop_button("top-utilities")
+                            .icon(IconName::GitBranch)
+                            .ghost()
+                            .accessibility_label("Workspace utilities")
+                            .tooltip_with_action("Workspace utilities", &OpenUtilities, Some(key_context::DESKTOP))
+                            .desktop_disabled(self.workspace.is_none())
+                            .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
+                    );
+            }
+            group = group
+                .child(
+                    desktop_button("search-commands")
+                        .accessibility_label("Search commands")
+                        .icon(IconName::Search)
+                        .ghost()
+                        .tooltip_with_action("Search commands", &OpenCommandPalette, Some(key_context::DESKTOP))
+                        .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
+                )
+                .child(
+                    desktop_button("toggle-inspector")
+                        .icon(IconName::PanelRight)
+                        .accessibility_label(if self.inspector_open {
+                            "Hide panel"
+                        } else {
+                            "Show panel"
+                        })
+                        .tooltip_with_action("Toggle inspector", &ToggleInspector, Some(key_context::DESKTOP))
+                        .ghost()
+                        .desktop_disabled(self.workspace.is_none())
+                        .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
+                )
+                .child(
+                    desktop_button("open-settings")
+                        .accessibility_label("Settings")
+                        .icon(IconName::Settings2)
+                        .tooltip_with_action("Settings", &OpenSettings, Some(key_context::DESKTOP))
+                        .ghost()
+                        .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
+                );
+            if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
+                group = group.content(
+                    Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                        .small()
+                        .child(speed.clone()),
+                );
+            }
+            group = group.content(self.render_chrome_menu("header-overflow", "Window actions"));
+        }
+        let faded = themes::faded_chrome(theme.colors.background, theme.colors.foreground);
+        group = group.child(zen_mode_toggle(self.zen_mode, faded, &self.focus_handle));
+        Toolbar::new("header-toolbar").small().child(group)
     }
 }

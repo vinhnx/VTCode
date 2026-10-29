@@ -196,7 +196,14 @@ pub(super) fn navigation_label(
         .gap_2()
         .child(Icon::new(icon).size_4().when(selected, |icon| icon.text_color(accent)))
         .child(div().flex_1().min_w_0().truncate().text_left().child(label))
-        .when(selected, |row| row.child(div().size(px(5.)).rounded_full().bg(accent)))
+        // The status lane is always reserved; selection only repaints it, so
+        // the label truncation point never moves between rows.
+        .child(
+            div()
+                .size(px(5.))
+                .rounded_full()
+                .bg(if selected { accent } else { accent.opacity(0.) }),
+        )
 }
 
 /// Embed the shared artwork so packaged applications never depend on checkout paths.
@@ -344,29 +351,22 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer()
 }
 
-/// Ghost leaf button entering zen mode; callers add placement styling.
-pub(super) fn enter_zen_button(id: impl Into<gpui_kit::ElementId>, focus: &FocusHandle) -> Button {
-    desktop_button(id)
-        .icon(IconName::Leaf)
+/// The single zen toggle: one title-bar trailing slot shared by both modes.
+/// Enter and exit share id, size, variant, and position; only the icon paint
+/// and label change, so the button never shifts when toggled.
+pub(super) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &FocusHandle) -> Button {
+    let label = if zen_mode { "Exit Zen mode" } else { "Enter Zen mode" };
+    let icon = if zen_mode {
+        Icon::new(IconName::Leaf).text_color(faded)
+    } else {
+        Icon::new(IconName::Leaf)
+    };
+    desktop_button(ZEN_MODE_TOGGLE_ELEMENT_ID)
+        .icon(icon)
         .ghost()
-        .accessibility_label("Enter Zen mode")
-        .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some(key_context::DESKTOP))
-        .dispatches_desktop_action(ToggleZenMode, focus.clone())
-}
-
-/// Faded leaf button exiting zen mode; the text variant never takes a hover fill.
-pub(super) fn exit_zen_button(
-    id: impl Into<gpui_kit::ElementId>,
-    faded: gpui_kit::Hsla,
-    focus: &FocusHandle,
-) -> Button {
-    desktop_button(id)
-        .icon(Icon::new(IconName::Leaf).text_color(faded))
-        .text()
         .small()
-        .p_2()
-        .accessibility_label("Exit Zen mode")
-        .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some(key_context::DESKTOP))
+        .accessibility_label(label)
+        .tooltip_with_action(label, &ToggleZenMode, Some(key_context::DESKTOP))
         .dispatches_desktop_action(ToggleZenMode, focus.clone())
 }
 

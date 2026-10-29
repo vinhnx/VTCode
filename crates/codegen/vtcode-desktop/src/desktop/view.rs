@@ -152,8 +152,9 @@ const THREAD_UNAVAILABLE_MESSAGE: &str = "This thread is no longer available in 
 const USER_DISPLAY_NAME: &str = "You";
 /// Palette panel id; the focus trap targets the same element.
 const COMMAND_PALETTE_ELEMENT_ID: &str = "command-palette";
-/// Zen toggle slot id shared by the enter/exit buttons across modes.
-const ZEN_FLOAT_TOGGLE_ELEMENT_ID: &str = "zen-mode-float";
+/// The single zen toggle slot: one title-bar trailing id shared by the
+/// enter/exit states across modes, so the button never moves when toggled.
+const ZEN_MODE_TOGGLE_ELEMENT_ID: &str = "zen-mode-toggle";
 
 struct WelcomeCopy {
     action: String,

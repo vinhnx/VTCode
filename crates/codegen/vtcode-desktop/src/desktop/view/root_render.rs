@@ -46,8 +46,7 @@ impl Render for DesktopView {
                         .child(self.render_inspector(cx))
                         .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
                 )
-            })
-            .when(self.side_panels_collapsed(), |workspace| workspace.child(self.render_floating_zen_toggle(cx)));
+            });
         let panes = div()
             .id("pane-root")
             .test_support()

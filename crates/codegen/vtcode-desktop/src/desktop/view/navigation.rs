@@ -52,12 +52,16 @@ impl DesktopView {
                     desktop_button("nav-new-thread")
                         .icon(IconName::Plus)
                         .ghost()
+                        .rounded_lg()
                         .accessibility_label("New thread")
                         .tooltip_with_action("New thread", &NewSession, Some(key_context::DESKTOP))
                         .desktop_disabled(!self.session_change_allowed(None))
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
             })
+            // The sidebar owns New thread while expanded; the empty slot holds
+            // the lane so Utilities never shifts when the rail expands.
+            .when(expanded, |rail| rail.child(div().size_8()))
             .child(
                 desktop_button("nav-utilities")
                     .icon(IconName::GitBranch)
@@ -73,8 +77,6 @@ impl DesktopView {
                     .when(utilities_selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
                     .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
             )
-            .child(div().flex_1())
-            .child(enter_zen_button("zen-mode-toggle", &self.focus_handle).rounded_lg())
             .into_any_element();
         let navigation = div()
             .id("primary-navigation")
@@ -112,7 +114,6 @@ impl DesktopView {
             .icon(IconName::Ellipsis)
             .ghost()
             .small()
-            .rounded_lg()
             .accessibility_label(label)
             .tooltip(label)
             .dropdown_menu(move |menu, _, _| {

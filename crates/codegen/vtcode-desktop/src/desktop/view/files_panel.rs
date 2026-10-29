@@ -401,6 +401,7 @@ impl DesktopView {
                                 desktop_button("copy-preview")
                                     .label(rust_i18n::t!("app.file_preview.copy").to_string())
                                     .ghost()
+                                    .small()
                                     .on_click(move |_, window, app| {
                                         app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
                                         super::super::notifications::copied_to_clipboard(window, app);
@@ -415,6 +416,7 @@ impl DesktopView {
                                     )
                                     .label(rust_i18n::t!("app.file_preview.close").to_string())
                                     .ghost()
+                                    .small()
                                     .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
                             ),
                     )

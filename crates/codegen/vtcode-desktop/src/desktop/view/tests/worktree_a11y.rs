@@ -679,18 +679,22 @@ fn hidden_navigation_moves_its_actions_to_the_header_and_can_be_restored(cx: &mu
         assert!(window.try_find("top-new-thread").is_some());
         assert!(window.try_find("top-utilities").is_some());
         assert_eq!(window.find("toggle-sidebar").label(), Some("Show navigation"));
-        // The inspector is closed too, so the zen toggle floats over the main
-        // container instead of taking a header slot.
-        assert!(window.try_find("top-zen-mode-toggle").is_none());
-        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
+        // The zen toggle keeps its single header slot even while both side
+        // panels are collapsed.
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        let collapsed_slot = window.find("zen-mode-toggle").bounds();
 
         window.click("toggle-sidebar", cx);
         window.render_frame(cx);
         assert!(view.read(cx).preferences.navigation_visible());
         assert!(window.try_find("navigation-rail").is_some());
         assert!(window.try_find("project-thread-sidebar").is_some());
-        assert!(window.try_find("zen-mode-float").is_none());
-        assert!(window.try_find("zen-mode-toggle").is_some());
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        assert_eq!(
+            window.find("zen-mode-toggle").bounds().origin,
+            collapsed_slot.origin,
+            "restoring navigation must not move the zen slot"
+        );
     })
     .unwrap();
 }
@@ -721,16 +725,14 @@ fn zen_mode_is_active_on_fresh_launch(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn floating_toggle_clears_long_thread_titles_in_narrow_windows(cx: &mut TestAppContext) {
+fn long_thread_titles_truncate_within_the_header_in_narrow_windows(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop_sized(cx, 700., 800.);
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
         view.sessions = vec![vtcode_desktop_protocol::SessionSummary {
             session_id: "narrow-thread".into(),
-            title: Some(
-                "A very long thread title that must truncate before reaching the floating toggle corner".into(),
-            ),
+            title: Some("A very long thread title that must truncate within the header row".into()),
             workspace: workspace.path().display().to_string(),
             completed: false,
             resumable: true,
@@ -749,31 +751,31 @@ fn floating_toggle_clears_long_thread_titles_in_narrow_windows(cx: &mut TestAppC
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let title = window.find("thread-title").bounds();
-        let float = window.find("zen-mode-float").bounds();
+        let header = window.find("thread-header").bounds();
         assert!(
-            title.right() <= float.left(),
-            "long titles must truncate clear of the floating toggle: {title:?} vs {float:?}"
+            title.right() <= header.right(),
+            "long titles must truncate inside the header: {title:?} vs {header:?}"
         );
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn collapsed_side_panels_float_zen_toggle_over_main_container(cx: &mut TestAppContext) {
+fn zen_toggle_keeps_one_title_bar_slot_with_collapsed_panels(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
         view.sessions = vec![vtcode_desktop_protocol::SessionSummary {
-            session_id: "float-thread".into(),
-            title: Some("Floating toggle thread".into()),
+            session_id: "collapsed-thread".into(),
+            title: Some("Collapsed panels thread".into()),
             workspace: workspace.path().display().to_string(),
             completed: false,
             resumable: true,
         }];
-        view.selected_session_id = Some("float-thread".into());
+        view.selected_session_id = Some("collapsed-thread".into());
         view.transcript.push(TranscriptItem::new(
-            "float-message".into(),
+            "collapsed-message".into(),
             "assistant".into(),
             "VT Code".into(),
             "Conversation remains visible.".into(),
@@ -785,39 +787,54 @@ fn collapsed_side_panels_float_zen_toggle_over_main_container(cx: &mut TestAppCo
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("navigation-rail").is_none());
-        assert!(window.try_find("zen-mode-toggle").is_none());
-        assert!(window.try_find("top-zen-mode-toggle").is_none());
-        assert!(window.try_find("zen-mode-exit").is_none());
-        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
-        let entered = window.find("zen-mode-float").bounds();
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        let entered = window.find("zen-mode-toggle").bounds();
         assert!(
             entered.size.width >= px(24.) && entered.size.height >= px(24.),
-            "floating toggle must keep a comfortable pointer target: {entered:?}"
+            "zen toggle must keep a comfortable pointer target: {entered:?}"
         );
-        assert!(
-            window.find("workspace-surface").bounds().contains(&entered.center()),
-            "floating toggle sits over the main container"
-        );
+        assert!(window.find("title-bar").bounds().contains(&entered.center()), "zen toggle sits in the title bar");
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("zen-mode-float").label(), Some("Exit Zen mode"));
-        let zen = window.find("zen-mode-float").bounds();
-        assert_eq!(zen.right(), entered.right(), "floating toggle never moves horizontally");
-        assert_eq!(zen.top(), entered.top(), "floating toggle never moves vertically");
-        assert!(window.try_find("zen-mode-exit").is_none());
-        assert!(
-            window.find("workspace-surface").bounds().contains(&zen.center()),
-            "floating exit stays over the main container"
-        );
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Exit Zen mode"));
+        let zen = window.find("zen-mode-toggle").bounds();
+        assert_eq!(zen.right(), entered.right(), "zen toggle never moves horizontally");
+        assert_eq!(zen.top(), entered.top(), "zen toggle never moves vertically");
+        assert_eq!(zen.size, entered.size, "enter and exit share one frame");
+        assert!(window.find("title-bar").bounds().contains(&zen.center()), "zen exit stays in the title bar");
 
-        window.click("zen-mode-float", cx);
+        window.click("zen-mode-toggle", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
-        let restored = window.find("zen-mode-float").bounds();
+        assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        let restored = window.find("zen-mode-toggle").bounds();
         assert_eq!(restored.right(), entered.right());
         assert_eq!(restored.top(), entered.top());
         assert!(window.try_find("thread-header").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn rail_utilities_hold_their_lane_when_the_rail_expands(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(std::env::temp_dir());
+        view.sidebar_open = false;
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("nav-new-thread").is_some());
+        let collapsed = window.find("nav-utilities").bounds();
+
+        view.update(cx, |view, _| view.sidebar_open = true);
+        window.render_frame(cx);
+        assert!(window.try_find("project-thread-sidebar").is_some());
+        assert!(window.try_find("nav-new-thread").is_none());
+        let expanded = window.find("nav-utilities").bounds();
+        assert_eq!(expanded.origin, collapsed.origin, "expanding the rail must not move Utilities");
+        assert_eq!(expanded.size, collapsed.size, "the reserved lane keeps one frame");
     })
     .unwrap();
 }

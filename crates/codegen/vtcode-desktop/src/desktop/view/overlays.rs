@@ -175,14 +175,6 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Both side panels are collapsed by settings, leaving the main container
-    /// full-bleed. The zen toggle then floats over the container instead of
-    /// living in the rail, header, or title bar, so it never moves between
-    /// modes and can never collide with a side panel.
-    pub(super) fn side_panels_collapsed(&self) -> bool {
-        !self.preferences.navigation_visible() && !self.inspector_open
-    }
-
     /// Centered content width for the transcript and composer. Zen mode uses
     /// a narrower column so both stay on one shared spine.
     pub(super) fn content_width(&self) -> f32 {
