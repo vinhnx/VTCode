@@ -11,7 +11,7 @@ use hashbrown::HashMap;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig, McpStdioServerConfig,
-    McpTransportConfig, McpUiConfig, McpUiMode,
+    McpTransportConfig, McpUiAppsTier, McpUiConfig, McpUiMode,
 };
 use vtcode_core::mcp::{McpClient, McpToolExecutor};
 
@@ -140,6 +140,7 @@ max_concurrent_requests = 1
             max_events: 25,
             show_provider_names: false,
             renderers: HashMap::new(),
+            apps: McpUiAppsTier::Off,
         };
 
         let full_ui = McpUiConfig {
@@ -147,6 +148,7 @@ max_concurrent_requests = 1
             max_events: 100,
             show_provider_names: true,
             renderers: HashMap::new(),
+            apps: McpUiAppsTier::Off,
         };
 
         assert_eq!(compact_ui.mode, McpUiMode::Compact);

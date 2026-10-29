@@ -71,7 +71,14 @@ async fn planning_checkpoint_is_durable_before_admission_and_replay_preserves_al
 fn pending_verifier(recorder: &mut ExecEventRecorder, session: &str) -> String {
     let args = serde_json::json!({"cmd":"cargo check --locked"});
     let launch = recorder.tool_started("exec_command", Some(&args), Some(session));
-    recorder.tool_finished(&launch, crate::exec::events::ToolCallStatus::Completed, None, "still running", None);
+    recorder.tool_finished(
+        &launch,
+        crate::exec::events::ToolCallStatus::Completed,
+        None,
+        "still running",
+        None,
+        Vec::new(),
+    );
     recorder.record_exec_session_output(
         &launch.id,
         "exec_command",
@@ -677,4 +684,52 @@ fn thread_backed_recorder_keeps_full_event_history_beyond_thread_buffer() {
             .count(),
         2
     );
+}
+
+#[test]
+fn tool_output_finished_forwards_app_previews_to_recorded_item() {
+    use super::*;
+    use crate::exec::events::{AppUiPosture, ToolCallStatus};
+
+    let mut recorder = ExecEventRecorder::new("thread-app-preview", None, None);
+    recorder.tool_output_finished(
+        "call_1",
+        Some("tool_call_0"),
+        ToolCallStatus::Completed,
+        Some(0),
+        "done",
+        None,
+        vec![AppPreviewItem {
+            uri: "ui://demo/app.html".to_string(),
+            mime_type: Some("text/html;profile=mcp-app".to_string()),
+            bytes: 4312,
+            blocks: 1,
+            ui: Some(AppUiPosture {
+                connect_domains: vec!["https://api.example.com".to_string()],
+                ..AppUiPosture::default()
+            }),
+        }],
+    );
+    // Failure-path completions carry no previews; the field must stay empty, not absent.
+    recorder.tool_output_finished("call_2", None, ToolCallStatus::Failed, None, "boom", None, Vec::new());
+
+    let outputs: Vec<_> = recorder
+        .take_events()
+        .into_iter()
+        .filter_map(|event| {
+            let ThreadEvent::ItemCompleted(completed) = event else {
+                return None;
+            };
+            let ThreadItemDetails::ToolOutput(output) = completed.item.details else {
+                return None;
+            };
+            Some(output)
+        })
+        .collect();
+
+    assert_eq!(outputs.len(), 2);
+    assert_eq!(outputs[0].app_previews.len(), 1);
+    assert_eq!(outputs[0].app_previews[0].uri, "ui://demo/app.html");
+    assert_eq!(outputs[0].app_previews[0].bytes, 4312);
+    assert!(outputs[1].app_previews.is_empty());
 }

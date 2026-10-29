@@ -152,6 +152,7 @@ fn summarize_thread_event_preview_uses_latest_live_updates() {
                     output: "line 1\nFinished `cargo check`".to_string(),
                     exit_code: Some(0),
                     status: ToolCallStatus::Completed,
+                    app_previews: Vec::new(),
                 })),
             },
         }),

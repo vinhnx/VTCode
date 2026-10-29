@@ -2,7 +2,7 @@ use super::McpClient;
 use rustc_hash::FxHashMap;
 use vtcode_config::mcp::{
     McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpRequirementsConfig, McpStdioServerConfig,
-    McpTransportConfig,
+    McpTransportConfig, McpUiAppsTier,
 };
 
 fn base_config() -> McpClientConfig {
@@ -146,6 +146,8 @@ fn record_tool_provider_keeps_first_provider_by_name_regardless_of_connect_order
         provider: provider.to_owned(),
         input_schema: json!({}),
         output_schema: None,
+        ui: None,
+        visibility: crate::types::McpToolVisibility::default(),
     };
 
     for order in [["alpha", "beta"], ["beta", "alpha"]] {
@@ -257,4 +259,57 @@ fn format_tool_result_errors_use_first_nonempty_public_text() {
             format!("MCP tool 'lookup' on provider 'source' reported an error: {expected_message}")
         );
     }
+}
+
+#[test]
+fn build_initialize_params_advertises_ui_extension_only_when_interactive() {
+    for (tier, advertised) in [
+        (McpUiAppsTier::Off, false),
+        (McpUiAppsTier::Static, false),
+        (McpUiAppsTier::Interactive, true),
+    ] {
+        let mut config = base_config();
+        config.ui.apps = tier;
+        let client = McpClient::new(config);
+        let params = client.build_initialize_params();
+        let has_ui = params
+            .capabilities
+            .extensions
+            .as_ref()
+            .is_some_and(|extensions| extensions.contains_key("io.modelcontextprotocol/ui"));
+        assert_eq!(has_ui, advertised, "{tier:?} tier");
+    }
+}
+
+#[tokio::test]
+async fn initialize_rejects_interactive_tier_before_connecting() {
+    let mut config = base_config();
+    config.ui.apps = McpUiAppsTier::Interactive;
+    // Zero providers: the rejection must fire before pool init, not as an
+    // empty-provider warning.
+    let mut client = McpClient::new(config);
+    let err = client.initialize().await.expect_err("interactive tier rejected");
+    assert!(err.to_string().contains("interactive"), "{err:?}");
+}
+
+#[tokio::test]
+async fn initialize_accepts_static_tier_without_providers() {
+    let mut config = base_config();
+    config.ui.apps = McpUiAppsTier::Static;
+    let mut client = McpClient::new(config);
+    client.initialize().await.expect("static tier initializes");
+    assert!(client.list_resources().await.expect("list resources").is_empty());
+}
+
+#[tokio::test]
+async fn connect_server_rejects_interactive_tier_before_lookup() {
+    let mut config = base_config();
+    config.ui.apps = McpUiAppsTier::Interactive;
+    let client = McpClient::new(config);
+    // Unconfigured name: the tier error must win over "not configured".
+    let err = client
+        .connect_server("no-such-server")
+        .await
+        .expect_err("interactive tier rejected");
+    assert!(err.to_string().contains("interactive"), "{err:?}");
 }

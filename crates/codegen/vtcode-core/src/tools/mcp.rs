@@ -1,12 +1,17 @@
 use std::borrow::Cow;
+use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::config::types::CapabilityLevel;
-use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
+use crate::mcp::{
+    MCP_APP_DISCLOSURE_KEY, MCP_UI_RESOURCE_SCHEME, McpClient, McpResourceData, McpToolExecutor, McpToolInfo,
+    disclose_app_resource,
+};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::native_cgp_tool_factory;
 use crate::tools::registry::{ToolCatalogSource, ToolRegistration};
@@ -143,7 +148,13 @@ struct McpProxyTool {
 #[async_trait]
 impl Tool for McpProxyTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        self.client.execute_mcp_tool(&self.remote_name, &args).await
+        let result = self.client.execute_mcp_tool(&self.remote_name, &args).await?;
+        let client = Arc::clone(&self.client);
+        let read = move |uri: String| {
+            let client = Arc::clone(&client);
+            async move { client.read_resource(&uri).await }
+        };
+        Ok(attach_app_disclosure(result, read, APP_DISCLOSURE_TIMEOUT).await)
     }
 
     fn name(&self) -> &str {
@@ -167,18 +178,87 @@ impl Tool for McpProxyTool {
     }
 }
 
+/// Maximum distinct app URIs disclosed per tool result, in first-seen order.
+const MAX_APP_DISCLOSURE_URIS: usize = 4;
+
+/// Total budget for disclosure fetches; tool results never wait longer.
+const APP_DISCLOSURE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Attach per-URI app disclosure to a tool result carrying `ui://` resources.
+///
+/// Best-effort and replay-safe: failed or timed-out reads leave the result
+/// unchanged (surfaces render the linkage row alone), and results without
+/// app URIs return byte-identical.
+async fn attach_app_disclosure<F, Fut>(mut result: Value, read: F, timeout: Duration) -> Value
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = Result<McpResourceData>>,
+{
+    let uris = scan_app_uris(&result);
+    if uris.is_empty() {
+        return result;
+    }
+    let deadline = tokio::time::Instant::now() + timeout;
+    let mut disclosures = Map::new();
+    for uri in uris {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        if let Ok(Ok(data)) = tokio::time::timeout(remaining, read(uri.clone())).await
+            && let Ok(value) = serde_json::to_value(disclose_app_resource(&data))
+        {
+            drop(disclosures.insert(uri, value));
+        }
+    }
+    if disclosures.is_empty() {
+        return result;
+    }
+    if let Some(object) = result.as_object_mut() {
+        drop(object.insert(MCP_APP_DISCLOSURE_KEY.to_owned(), Value::Object(disclosures)));
+    }
+    result
+}
+
+/// Distinct `ui://` resource URIs in a tool result, in first-seen block order.
+fn scan_app_uris(result: &Value) -> Vec<String> {
+    let mut uris = Vec::new();
+    let Some(blocks) = result.get("content").and_then(Value::as_array) else {
+        return uris;
+    };
+    for block in blocks {
+        if uris.len() >= MAX_APP_DISCLOSURE_URIS {
+            break;
+        }
+        let resource = match block.get("type").and_then(Value::as_str) {
+            Some("resource") => block.get("resource").unwrap_or(block),
+            Some("resource_link") => block,
+            _ => continue,
+        };
+        if let Some(uri) = resource.get("uri").and_then(Value::as_str)
+            && uri.len() > MCP_UI_RESOURCE_SCHEME.len()
+            && uri.starts_with(MCP_UI_RESOURCE_SCHEME)
+            && !uris.iter().any(|known: &String| known == uri)
+        {
+            uris.push(uri.to_owned());
+        }
+    }
+    uris
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        build_mcp_registration, is_legacy_mcp_tool_name, legacy_mcp_tool_name, model_visible_mcp_tool_name,
-        parse_canonical_mcp_tool_name,
+        attach_app_disclosure, build_mcp_registration, is_legacy_mcp_tool_name, legacy_mcp_tool_name,
+        model_visible_mcp_tool_name, parse_canonical_mcp_tool_name, scan_app_uris,
     };
-    use crate::mcp::{McpClient, McpToolInfo};
+    use crate::mcp::{MCP_APP_DISCLOSURE_KEY, McpClient, McpResourceData, McpToolInfo, McpToolVisibility};
     use crate::tool_policy::ToolPolicy;
     use crate::tools::CgpRuntimeMode;
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::Duration;
 
     #[test]
     fn model_visible_name_uses_qualified_prefix() {
@@ -220,6 +300,8 @@ mod tests {
                 }
             }),
             output_schema: None,
+            ui: None,
+            visibility: McpToolVisibility::default(),
         };
 
         let registration = build_mcp_registration(client, "context7", &tool, Some("provider hint".to_string()))
@@ -241,5 +323,134 @@ mod tests {
         assert!(description.ends_with("Host tool and permission policy remains authoritative."));
         assert_eq!(wrapped.parameter_schema(), Some(tool.input_schema.clone()));
         assert_eq!(wrapped.default_permission(), ToolPolicy::Prompt);
+    }
+
+    #[test]
+    fn scan_app_uris_collects_distinct_ui_uris_in_order() {
+        let result = json!({
+            "content": [
+                {"type": "text", "text": "fallback"},
+                {"type": "resource", "resource": {"uri": "ui://b/app.html"}},
+                {"type": "resource_link", "uri": "file:///plain.txt"},
+                {"type": "resource_link", "uri": "ui://a/app.html"},
+                {"type": "resource", "resource": {"uri": "ui://b/app.html"}},
+                {"type": "resource", "uri": "ui://legacy/app.html"},
+                {"type": "image", "data": "QUJD"},
+            ]
+        });
+
+        assert_eq!(scan_app_uris(&result), ["ui://b/app.html", "ui://a/app.html", "ui://legacy/app.html"]);
+    }
+
+    #[test]
+    fn scan_app_uris_ignores_non_content_and_caps_count() {
+        assert!(scan_app_uris(&json!({})).is_empty());
+        assert!(scan_app_uris(&json!({"content": "not-an-array"})).is_empty());
+        assert!(scan_app_uris(&json!({"content": [{"type": "text", "text": "x"}]})).is_empty());
+        // A bare scheme with no path is not a fetchable resource.
+        assert!(scan_app_uris(&json!({"content": [{"type": "resource_link", "uri": "ui://"}]})).is_empty());
+        assert!(scan_app_uris(&json!({"content": [{"type": "resource", "resource": {"uri": "ui://"}}]})).is_empty());
+
+        let blocks: Vec<_> = (0..9)
+            .map(|n| json!({"type": "resource_link", "uri": format!("ui://s{n}/app.html")}))
+            .collect();
+        let uris = scan_app_uris(&json!({"content": blocks}));
+        assert_eq!(uris.len(), 4);
+        assert_eq!(uris[0], "ui://s0/app.html");
+        assert_eq!(uris[3], "ui://s3/app.html");
+    }
+
+    fn stub_data(uri: &str) -> McpResourceData {
+        McpResourceData {
+            provider: "demo".to_string(),
+            uri: uri.to_string(),
+            contents: vec![crate::mcp::ResourceContents::TextResourceContents {
+                uri: uri.to_string(),
+                mime_type: Some("text/html;profile=mcp-app".to_string()),
+                text: "<!doctype html>".to_string(),
+                meta: None,
+            }],
+            meta: serde_json::Map::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn attach_app_disclosure_attaches_per_uri_facts() {
+        let result = json!({
+            "content": [
+                {"type": "text", "text": "at 10:00"},
+                {"type": "resource_link", "uri": "ui://demo/app.html", "mimeType": "text/html;profile=mcp-app"},
+            ]
+        });
+
+        let enriched =
+            attach_app_disclosure(result, |uri| async move { Ok(stub_data(&uri)) }, Duration::from_secs(5)).await;
+        let disclosure = &enriched[MCP_APP_DISCLOSURE_KEY]["ui://demo/app.html"];
+        assert_eq!(disclosure["mimeType"], "text/html;profile=mcp-app");
+        assert_eq!(disclosure["bytes"], "<!doctype html>".len());
+        assert_eq!(disclosure["blocks"], 1);
+        // Original payload untouched.
+        assert_eq!(enriched["content"][0]["text"], "at 10:00");
+    }
+
+    #[tokio::test]
+    async fn attach_app_disclosure_leaves_result_unchanged_without_app_uris() {
+        let result = json!({"content": [{"type": "text", "text": "plain"}]});
+        let enriched = attach_app_disclosure(
+            result.clone(),
+            |_| async { anyhow::bail!("must not fetch") },
+            Duration::from_secs(5),
+        )
+        .await;
+        assert_eq!(enriched, result);
+    }
+
+    #[tokio::test]
+    async fn attach_app_disclosure_skips_failed_and_timed_out_reads() {
+        let result = json!({
+            "content": [
+                {"type": "resource_link", "uri": "ui://ok/app.html"},
+                {"type": "resource_link", "uri": "ui://fail/app.html"},
+            ]
+        });
+
+        // Failure on every read: no key attached at all.
+        let enriched =
+            attach_app_disclosure(result.clone(), |_| async { anyhow::bail!("server gone") }, Duration::from_secs(5))
+                .await;
+        assert_eq!(enriched, result);
+
+        // Partial success: only the fetched URI is attached.
+        let enriched = attach_app_disclosure(
+            result,
+            |uri| async move {
+                if uri == "ui://ok/app.html" {
+                    Ok(stub_data(&uri))
+                } else {
+                    anyhow::bail!("server gone")
+                }
+            },
+            Duration::from_secs(5),
+        )
+        .await;
+        assert!(enriched[MCP_APP_DISCLOSURE_KEY].get("ui://ok/app.html").is_some());
+        assert!(enriched[MCP_APP_DISCLOSURE_KEY].get("ui://fail/app.html").is_none());
+    }
+
+    #[tokio::test]
+    async fn attach_app_disclosure_respects_total_budget() {
+        let result = json!({"content": [{"type": "resource_link", "uri": "ui://slow/app.html"}]});
+        let start = tokio::time::Instant::now();
+        let enriched = attach_app_disclosure(
+            result.clone(),
+            |_| async {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                Ok(stub_data("ui://slow/app.html"))
+            },
+            Duration::from_millis(50),
+        )
+        .await;
+        assert_eq!(enriched, result);
+        assert!(start.elapsed() < Duration::from_secs(5));
     }
 }

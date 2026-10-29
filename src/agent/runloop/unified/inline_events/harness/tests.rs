@@ -350,6 +350,7 @@ fn tool_output_completed_event_captures_output() {
         Some(0),
         None,
         "On branch main",
+        Vec::new(),
     );
 
     let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event else {

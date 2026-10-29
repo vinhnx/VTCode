@@ -13,11 +13,11 @@ pub use recorder::{ActiveCommandHandle, ActiveToolHandle, ExecEventRecorder};
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
-    CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, EVENT_SCHEMA_VERSION,
-    HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, ThreadCompactBoundaryEvent,
-    ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
-    ToolOutcome, TurnBlockedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
-    tool_outcome_from_status,
+    AppPreviewItem, CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger,
+    EVENT_SCHEMA_VERSION, HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent,
+    ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem,
+    ThreadItemDetails, ThreadStartedEvent, ToolOutcome, TurnBlockedEvent, TurnCompletedEvent, TurnFailedEvent,
+    TurnStartedEvent, Usage, VersionedThreadEvent, tool_outcome_from_status,
 };
 use anyhow::{Context, Result, anyhow};
 use parking_lot::Mutex;

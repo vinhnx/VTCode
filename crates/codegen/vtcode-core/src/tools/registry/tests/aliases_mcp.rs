@@ -185,6 +185,8 @@ async fn mcp_alias_prevalidation_preserves_canonical_registration_name() -> Resu
         provider: "deepwiki".to_string(),
         input_schema: json!({"type": "object"}),
         output_schema: None,
+        ui: None,
+        visibility: vtcode_mcp::McpToolVisibility::default(),
     };
     let registration = crate::tools::mcp::build_mcp_registration(
         Arc::new(McpClient::new(vtcode_config::mcp::McpClientConfig::default())),
@@ -244,6 +246,8 @@ async fn mcp_proxy_harness_fallback_resolves_single_mcp_tool() -> Result<()> {
         provider: "deepwiki".to_string(),
         input_schema: json!({"type": "object"}),
         output_schema: None,
+        ui: None,
+        visibility: vtcode_mcp::McpToolVisibility::default(),
     };
     let registration = crate::tools::mcp::build_mcp_registration(
         Arc::new(McpClient::new(vtcode_config::mcp::McpClientConfig::default())),
@@ -277,6 +281,8 @@ async fn mcp_proxy_harness_fallback_rejects_ambiguous_mcp_tools() -> Result<()> 
             provider: provider.to_string(),
             input_schema: json!({"type": "object"}),
             output_schema: None,
+            ui: None,
+            visibility: vtcode_mcp::McpToolVisibility::default(),
         };
         let registration = crate::tools::mcp::build_mcp_registration(
             Arc::new(McpClient::new(vtcode_config::mcp::McpClientConfig::default())),
@@ -307,6 +313,8 @@ async fn clear_mcp_client_removes_stale_proxy_tools() -> Result<()> {
         provider: "deepwiki".to_string(),
         input_schema: json!({"type": "object"}),
         output_schema: None,
+        ui: None,
+        visibility: vtcode_mcp::McpToolVisibility::default(),
     };
     let client = Arc::new(McpClient::new(vtcode_config::mcp::McpClientConfig::default()));
     let registration = crate::tools::mcp::build_mcp_registration(Arc::clone(&client), "deepwiki", &tool, None)?;
@@ -355,6 +363,8 @@ async fn set_mcp_client_drops_proxies_bound_to_previous_client() -> Result<()> {
         provider: "deepwiki".to_string(),
         input_schema: json!({"type": "object"}),
         output_schema: None,
+        ui: None,
+        visibility: vtcode_mcp::McpToolVisibility::default(),
     };
     let first = Arc::new(McpClient::new(vtcode_config::mcp::McpClientConfig::default()));
     let registration = crate::tools::mcp::build_mcp_registration(Arc::clone(&first), "deepwiki", &tool, None)?;

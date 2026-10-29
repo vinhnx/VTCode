@@ -185,6 +185,7 @@ fn builder_tool_invocation_with_output() {
                 output: "file contents here".to_string(),
                 exit_code: Some(0),
                 status: ToolCallStatus::Completed,
+                app_previews: Vec::new(),
             })),
         },
     });

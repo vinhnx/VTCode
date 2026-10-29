@@ -44,7 +44,15 @@ def list_tools_result() -> dict[str, Any]:
                     },
                     "required": ["message"],
                 },
-            }
+            },
+            {
+                # App-only tool (SEP-1865): hosts must hide it from the
+                # agent's tool list and reject model-originated calls.
+                "name": "refresh_echo",
+                "description": "Refreshes the echo widget (app only)",
+                "inputSchema": {"type": "object"},
+                "_meta": {"ui": {"visibility": ["app"]}},
+            },
         ]
     }
 
@@ -52,6 +60,10 @@ def list_tools_result() -> dict[str, Any]:
 def call_tool_result(method_params: dict[str, Any]) -> dict[str, Any]:
     tool_name = method_params.get("name")
     arguments = method_params.get("arguments") or {}
+
+    if tool_name == "refresh_echo":
+        # The server would serve this; the host must reject it first.
+        return {"content": [{"type": "text", "text": "refreshed"}]}
 
     if tool_name != "echo":
         return {

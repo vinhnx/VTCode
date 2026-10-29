@@ -4,7 +4,7 @@ use vtcode_core::core::agent::events::{
     ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event, tool_output_completed_event,
     tool_output_payload_from_value, tool_started_event,
 };
-use vtcode_core::exec::events::{ToolCallStatus, tool_outcome_from_status};
+use vtcode_core::exec::events::{AppPreviewItem, ToolCallStatus, tool_outcome_from_status};
 use vtcode_core::tools::registry::ToolExecutionError;
 
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
@@ -70,6 +70,7 @@ pub(super) fn emit_tool_completion_status(
     exit_code: Option<i32>,
     spool_path: Option<&str>,
     aggregated_output: impl Into<String>,
+    app_previews: Vec<AppPreviewItem>,
 ) {
     if !tool_started_emitted {
         return;
@@ -94,6 +95,7 @@ pub(super) fn emit_tool_completion_status(
                 exit_code,
                 spool_path,
                 aggregated_output,
+                app_previews,
             ));
         } else if !aggregated_output.is_empty() {
             let _ = emitter.emit(error_item_completed_event(format!("{tool_item_id}:error"), aggregated_output));
@@ -134,6 +136,7 @@ pub(crate) fn emit_tool_completion_for_status(
             ToolOutputPayload {
                 aggregated_output: "Tool execution cancelled".to_string(),
                 spool_path: None,
+                app_previews: Vec::new(),
             },
         ),
     };
@@ -153,6 +156,7 @@ pub(crate) fn emit_tool_completion_for_status(
         exit_code,
         output_payload.spool_path.as_deref(),
         output_payload.aggregated_output,
+        output_payload.app_previews,
     );
     if tool_execution_started
         && tool_started_emitted

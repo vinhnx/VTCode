@@ -1,16 +1,20 @@
 //! Utility functions for MCP client operations.
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use chrono::Local;
 use hashbrown::HashMap;
 use iana_time_zone::get_timezone;
-use rmcp::model::Implementation;
+use rmcp::model::{ClientCapabilities, Implementation};
 use rmcp_reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 use std::env;
 #[cfg(test)]
 use std::sync::{LazyLock, Mutex};
 use tracing::{debug, warn};
+use vtcode_config::mcp::{McpUiAppsTier, McpUiConfig};
+
+use crate::types::{MCP_UI_EXTENSION_ID, MCP_UI_RESOURCE_MIME_TYPE};
 
 #[cfg(test)]
 static TEST_ENV_OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
@@ -49,6 +53,43 @@ pub(crate) fn clear_test_env_override(key: &str) {
 /// This ensures consistent client identification across all MCP connections.
 pub(crate) fn build_client_implementation() -> Implementation {
     Implementation::new("vtcode", env!("CARGO_PKG_VERSION"))
+}
+
+/// Insert the MCP Apps extension advertisement into client capabilities.
+///
+/// Follows SEP-1865 capability negotiation:
+/// `extensions["io.modelcontextprotocol/ui"] = {"mimeTypes": ["text/html;profile=mcp-app"]}`.
+/// A no-op when `advertise` is false; a pre-existing entry is preserved, never
+/// replaced.
+pub(crate) fn apply_ui_extension_gate(capabilities: &mut ClientCapabilities, advertise: bool) {
+    if !advertise {
+        return;
+    }
+    let _ = capabilities
+        .extensions
+        .get_or_insert_with(BTreeMap::new)
+        .entry(MCP_UI_EXTENSION_ID.to_owned())
+        .or_insert_with(|| {
+            Map::from_iter([(
+                "mimeTypes".to_owned(),
+                Value::Array(vec![Value::String(MCP_UI_RESOURCE_MIME_TYPE.to_owned())]),
+            )])
+        });
+}
+
+/// Reject the interactive MCP Apps tier until a sandboxed webview host exists.
+///
+/// Call at MCP entry points before connecting any provider so the failure is
+/// loud. Per-provider errors are tolerated by the pool, so gating inside
+/// parameter construction would silently degrade to zero providers.
+pub(crate) fn reject_unsupported_ui_apps_tier(ui: &McpUiConfig) -> Result<()> {
+    if ui.apps == McpUiAppsTier::Interactive {
+        bail!(
+            "mcp.ui.apps = \"interactive\" is not supported yet: interactive MCP Apps require a sandboxed webview \
+             host. Use \"off\" (default) or \"static\" until then."
+        );
+    }
+    Ok(())
 }
 
 /// Environment variable for explicit local timezone override.
@@ -212,4 +253,80 @@ pub(crate) fn build_headers(
     }
 
     map
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_ui_extension_gate, reject_unsupported_ui_apps_tier};
+    use rmcp::model::ClientCapabilities;
+    use serde_json::Value;
+    use vtcode_config::mcp::{McpUiAppsTier, McpUiConfig};
+
+    #[test]
+    fn ui_extension_gate_advertises_exact_settings_object() {
+        let mut capabilities = ClientCapabilities::default();
+        apply_ui_extension_gate(&mut capabilities, true);
+
+        let extensions = capabilities.extensions.as_ref().expect("extensions advertised");
+        let settings = extensions.get("io.modelcontextprotocol/ui").expect("ui extension");
+        assert_eq!(
+            settings.get("mimeTypes"),
+            Some(&Value::Array(vec![Value::String("text/html;profile=mcp-app".to_string())]))
+        );
+        assert_eq!(settings.len(), 1);
+
+        // The advertisement survives an initialize-payload round trip.
+        let payload = serde_json::to_value(&capabilities).expect("serialize capabilities");
+        assert_eq!(
+            payload["extensions"]["io.modelcontextprotocol/ui"]["mimeTypes"],
+            serde_json::json!(["text/html;profile=mcp-app"])
+        );
+    }
+
+    #[test]
+    fn ui_extension_gate_is_noop_when_not_advertised() {
+        let mut capabilities = ClientCapabilities::default();
+        apply_ui_extension_gate(&mut capabilities, false);
+        assert_eq!(capabilities.extensions, None);
+
+        // A pre-existing entry is preserved, never removed.
+        let mut capabilities = ClientCapabilities::default();
+        apply_ui_extension_gate(&mut capabilities, true);
+        apply_ui_extension_gate(&mut capabilities, false);
+        assert!(capabilities.extensions.is_some());
+    }
+
+    #[test]
+    fn ui_extension_gate_preserves_preexisting_settings() {
+        use std::collections::BTreeMap;
+
+        let mut capabilities = ClientCapabilities::default();
+        capabilities.extensions = Some(BTreeMap::from([(
+            "io.modelcontextprotocol/ui".to_string(),
+            serde_json::Map::from_iter([
+                ("mimeTypes".to_string(), serde_json::json!(["text/html;profile=mcp-app"])),
+                ("future".to_string(), Value::Bool(true)),
+            ]),
+        )]));
+        apply_ui_extension_gate(&mut capabilities, true);
+
+        let extensions = capabilities.extensions.as_ref().expect("extensions");
+        let settings = extensions.get("io.modelcontextprotocol/ui").expect("ui extension");
+        assert_eq!(settings.get("future"), Some(&Value::Bool(true)));
+        assert_eq!(settings.len(), 2);
+    }
+
+    #[test]
+    fn ui_apps_tier_rejection_fires_only_on_interactive() {
+        for tier in [McpUiAppsTier::Off, McpUiAppsTier::Static] {
+            let ui = McpUiConfig { apps: tier, ..McpUiConfig::default() };
+            reject_unsupported_ui_apps_tier(&ui).expect("supported tier");
+        }
+        let ui = McpUiConfig {
+            apps: McpUiAppsTier::Interactive,
+            ..McpUiConfig::default()
+        };
+        let err = reject_unsupported_ui_apps_tier(&ui).expect_err("interactive rejected");
+        assert!(err.to_string().contains("interactive"), "{err:?}");
+    }
 }

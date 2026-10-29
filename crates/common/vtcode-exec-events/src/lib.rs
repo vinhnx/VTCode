@@ -25,17 +25,17 @@ pub mod diagnostic;
 pub use diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity};
 pub mod items;
 pub use items::{
-    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, DecisionItem, FileChangeItem, FileUpdateChange,
-    McpToolCallItem, McpToolCallStatus, PatchApplyStatus, PatchChangeKind, PlanItem, ReasoningItem, ThreadItem,
-    ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutcome, ToolOutputItem, WebSearchItem,
-    tool_outcome_from_status,
+    AgentMessageItem, AppPreviewItem, AppUiPosture, CommandExecutionItem, CommandExecutionStatus, DecisionItem,
+    FileChangeItem, FileUpdateChange, McpToolCallItem, McpToolCallStatus, PatchApplyStatus, PatchChangeKind, PlanItem,
+    ReasoningItem, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutcome, ToolOutputItem,
+    WebSearchItem, tool_outcome_from_status,
 };
 pub mod matrix;
 pub mod planning;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.20.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.21.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.

@@ -16,6 +16,18 @@ fn humanize_duration_compact_ladder() {
 }
 
 #[test]
+fn format_size_ladder() {
+    assert_eq!(format_size(0), "0B");
+    assert_eq!(format_size(1), "1B");
+    assert_eq!(format_size(1023), "1023B");
+    assert_eq!(format_size(1024), "1.0KB");
+    assert_eq!(format_size(4312), "4.2KB");
+    assert_eq!(format_size(1024 * 1024), "1.0MB");
+    assert_eq!(format_size(5 * 1024 * 1024 + 512 * 1024), "5.5MB");
+    assert_eq!(format_size(3 * 1024 * 1024 * 1024), "3.0GB");
+}
+
+#[test]
 fn format_float_display_collapses_f32_widening() {
     // `0.7f32` widened to `f64` is the exact artifact seen in the settings
     // value column; asymmetric counterpart must keep full precision.

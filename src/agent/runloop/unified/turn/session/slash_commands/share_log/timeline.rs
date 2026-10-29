@@ -272,6 +272,7 @@ mod tests {
                         exit_code,
                         spool_path: None,
                         status: ToolCallStatus::Failed,
+                        app_previews: Vec::new(),
                     })),
                 },
             });

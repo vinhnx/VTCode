@@ -772,8 +772,15 @@ impl<'a> CopilotRuntimeHost<'a> {
             raw_id,
             status.clone(),
         ));
-        let _ =
-            emitter.emit(tool_output_completed_event(item_id, raw_id, status, None, None, output.unwrap_or_default()));
+        let _ = emitter.emit(tool_output_completed_event(
+            item_id,
+            raw_id,
+            status,
+            None,
+            None,
+            output.unwrap_or_default(),
+            Vec::new(),
+        ));
     }
 
     fn emit_tool_output_event(&self, tool_call_id: &str, tool_name: &str, output: &str) {

@@ -189,6 +189,7 @@ pub(super) async fn finalize_turn(
                 None,
                 None,
                 UNDISPATCHED_TOOL_CALL_CLOSURE_TEXT,
+                Vec::new(),
             ));
         }
     }

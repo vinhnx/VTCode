@@ -793,6 +793,7 @@ mod payload_tests {
                 output: "x".repeat(1024 * 1024),
                 exit_code: Some(0),
                 status: ToolCallStatus::Completed,
+                app_previews: Vec::new(),
             })),
             ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: "check".into(),

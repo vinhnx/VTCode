@@ -16,7 +16,8 @@ use vtcode_config::mcp::{McpAllowListConfig, McpClientConfig, McpProviderConfig,
 use super::McpSandboxContext;
 use super::{
     McpClientStatus, McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpProvider, McpResourceData,
-    McpResourceInfo, McpToolExecutor, McpToolInfo, format_tool_markdown, sanitize_filename,
+    McpResourceInfo, McpToolExecutor, McpToolInfo, apply_ui_extension_gate, format_tool_markdown,
+    reject_unsupported_ui_apps_tier, sanitize_filename,
 };
 use crate::connection_pool::McpConnectionPool;
 
@@ -80,6 +81,7 @@ impl McpClient {
             info!("MCP client is disabled in configuration");
             return Ok(());
         }
+        reject_unsupported_ui_apps_tier(&self.config.ui)?;
 
         info!("Initializing MCP client with {} configured providers", self.config.providers.len());
 
@@ -98,6 +100,7 @@ impl McpClient {
                 self.sandbox_context.clone(),
                 tool_timeout,
                 &allowlist_snapshot,
+                self.config.ui.apps.advertises_ui_extension(),
             )
             .await
             .map_err(|e| anyhow::anyhow!("MCP connection pool initialization failed: {e}"))?;
@@ -157,6 +160,17 @@ impl McpClient {
 
         let provider = self.resolve_provider_for_tool(tool_name).await?;
         let allowlist_snapshot = self.state.read().allowlist.clone();
+        // Defense in depth: listing hides app-only tools, but a model could
+        // still name one directly. Unknown names fall through to the
+        // provider's own error below.
+        let tools = provider
+            .cached_tools_or_refresh_shared(&allowlist_snapshot, self.tool_timeout())
+            .await?;
+        if let Some(tool) = tools.iter().find(|tool| tool.name == tool_name)
+            && !tool.visibility.model
+        {
+            bail!("MCP tool '{tool_name}' is not available to the model (app-only visibility)");
+        }
         let result = provider
             .call_tool(tool_name, args, self.tool_timeout(), &allowlist_snapshot)
             .await?;
@@ -205,9 +219,17 @@ impl McpClient {
         self.execute_tool_with_validation(tool_name, args).await
     }
 
-    /// List all tools from all active providers.
+    /// List all model-visible tools from all active providers.
+    ///
+    /// Tools without model visibility (SEP-1865 `visibility: ["app"]`) are
+    /// hidden here; provider caches keep them for future app-side callers.
     pub async fn list_tools(&self) -> Result<Vec<McpToolInfo>> {
-        self.collect_tools(false).await
+        Ok(self
+            .collect_tools(false)
+            .await?
+            .into_iter()
+            .filter(|tool| tool.visibility.model)
+            .collect())
     }
 
     /// List all resources exposed by connected MCP providers.
@@ -624,17 +646,13 @@ impl McpClient {
             provider_config.clone(),
             self.elicitation_handler.clone(),
             self.sandbox_context.clone(),
+            self.config.ui.apps.advertises_ui_extension(),
         )
         .await
         .with_context(|| format!("Failed to connect to MCP provider '{}'", provider_config.name))?;
         let provider_startup_timeout = self.resolve_startup_timeout(provider_config);
         provider
-            .initialize(
-                self.build_initialize_params(&provider),
-                provider_startup_timeout,
-                tool_timeout,
-                allowlist_snapshot,
-            )
+            .initialize(self.build_initialize_params(), provider_startup_timeout, tool_timeout, allowlist_snapshot)
             .await
             .with_context(|| format!("Failed to initialize MCP provider '{}'", provider_config.name))?;
         Ok(provider)
@@ -720,7 +738,7 @@ impl McpClient {
         }
     }
 
-    fn build_initialize_params(&self, _provider: &McpProvider) -> InitializeRequestParams {
+    fn build_initialize_params(&self) -> InitializeRequestParams {
         let mut capabilities = ClientCapabilities::default();
         {
             let mut roots_cap = RootsCapabilities::default();
@@ -735,6 +753,8 @@ impl McpClient {
                     .with_form(rmcp::model::FormElicitationCapability::new().with_schema_validation(true)),
             );
         }
+
+        apply_ui_extension_gate(&mut capabilities, self.config.ui.apps.advertises_ui_extension());
 
         InitializeRequestParams::new(capabilities, super::utils::build_client_implementation())
             .with_protocol_version(super::rmcp_client::latest_protocol_version())
@@ -800,7 +820,7 @@ impl McpToolExecutor for McpClient {
     }
 
     async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
-        self.collect_tools(false).await
+        self.list_tools().await
     }
 
     async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool> {

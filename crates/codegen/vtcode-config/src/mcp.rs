@@ -251,6 +251,11 @@ pub struct McpUiConfig {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, McpRendererProfile>"))]
     pub renderers: HashMap<String, McpRendererProfile>,
+
+    /// MCP Apps preview tier for visual surfaces ("off" hides app UI, "static" shows an inert HTML preview,
+    /// "interactive" needs an app engine and is currently rejected). Options: "off", "static", "interactive"
+    #[serde(default = "default_mcp_ui_apps")]
+    pub apps: McpUiAppsTier,
 }
 
 impl Default for McpUiConfig {
@@ -260,6 +265,7 @@ impl Default for McpUiConfig {
             max_events: default_max_mcp_events(),
             show_provider_names: default_show_provider_names(),
             renderers: HashMap::new(),
+            apps: default_mcp_ui_apps(),
         }
     }
 }
@@ -307,6 +313,42 @@ impl std::fmt::Display for McpUiMode {
         match self {
             McpUiMode::Compact => write!(f, "compact"),
             McpUiMode::Full => write!(f, "full"),
+        }
+    }
+}
+
+/// MCP Apps presentation tier: how a surface may present `ui://` app resources.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum McpUiAppsTier {
+    /// Linkage and disclosure only; never renders app content.
+    #[default]
+    Off,
+    /// Opt-in static preview of sanitized app structure; no interactivity.
+    Static,
+    /// Full interactive app. Rejected until a sandboxed webview host exists.
+    Interactive,
+}
+
+impl McpUiAppsTier {
+    /// Whether this tier may advertise the `io.modelcontextprotocol/ui` extension.
+    ///
+    /// Only `Interactive` can honor app round-trips; a static preview must not
+    /// advertise support it cannot fulfill.
+    #[must_use]
+    pub fn advertises_ui_extension(self) -> bool {
+        matches!(self, McpUiAppsTier::Interactive)
+    }
+}
+
+impl std::fmt::Display for McpUiAppsTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            McpUiAppsTier::Off => write!(f, "off"),
+            McpUiAppsTier::Static => write!(f, "static"),
+            McpUiAppsTier::Interactive => write!(f, "interactive"),
         }
     }
 }
@@ -594,6 +636,10 @@ fn default_show_provider_names() -> bool {
     true
 }
 
+fn default_mcp_ui_apps() -> McpUiAppsTier {
+    McpUiAppsTier::Off
+}
+
 fn default_max_concurrent_connections() -> usize {
     5
 }
@@ -704,6 +750,7 @@ mod tests {
         assert_eq!(config.ui.max_events, 50);
         assert!(config.ui.show_provider_names);
         assert!(config.ui.renderers.is_empty());
+        assert_eq!(config.ui.apps, McpUiAppsTier::Off);
         assert_eq!(config.max_concurrent_connections, 5);
         assert_eq!(config.request_timeout_seconds, 30);
         assert_eq!(config.retry_attempts, 3);
@@ -715,6 +762,32 @@ mod tests {
         assert!(!config.server.enabled);
         assert!(!config.allowlist.enforce);
         assert!(config.allowlist.default.tools.is_none());
+    }
+
+    #[test]
+    fn test_ui_apps_tier_advertises_only_interactive() {
+        assert!(!McpUiAppsTier::Off.advertises_ui_extension());
+        assert!(!McpUiAppsTier::Static.advertises_ui_extension());
+        assert!(McpUiAppsTier::Interactive.advertises_ui_extension());
+    }
+
+    #[test]
+    fn test_ui_apps_tier_serde_names() {
+        for (tier, name) in [
+            (McpUiAppsTier::Off, "off"),
+            (McpUiAppsTier::Static, "static"),
+            (McpUiAppsTier::Interactive, "interactive"),
+        ] {
+            let value = serde_json::to_value(tier).expect("serialize tier");
+            assert_eq!(value, serde_json::Value::String(name.to_string()));
+            let round_trip: McpUiAppsTier = serde_json::from_value(value).expect("deserialize tier");
+            assert_eq!(round_trip, tier);
+            assert_eq!(tier.to_string(), name);
+        }
+        let ui: McpUiConfig = toml::from_str("mode = \"full\"\n").expect("partial ui table");
+        assert_eq!(ui.apps, McpUiAppsTier::Off);
+        let ui: McpUiConfig = toml::from_str("apps = \"static\"\n").expect("apps key");
+        assert_eq!(ui.apps, McpUiAppsTier::Static);
     }
 
     #[test]

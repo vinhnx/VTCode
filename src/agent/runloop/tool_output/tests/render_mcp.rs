@@ -197,6 +197,290 @@ async fn render_tool_output_mcp_media_only_results_take_precedence_over_structur
     }
 }
 #[tokio::test]
+async fn render_tool_output_mcp_ui_scheme_renders_app_linkage_row() {
+    for (content, expected) in [
+        (
+            json!({"type": "resource", "resource": {
+                "uri": "ui://get-time/mcp-app.html", "mimeType": "text/html;profile=mcp-app"}}),
+            "[app: get-time] ui://get-time/mcp-app.html",
+        ),
+        (
+            json!({"type": "resource_link", "uri": "ui://charts/dashboard.html", "name": "Dashboard",
+                "mimeType": "text/html;profile=mcp-app"}),
+            "[app: charts] ui://charts/dashboard.html",
+        ),
+        (
+            json!({"type": "resource_link", "uri": "ui://weather-dashboard"}),
+            "[app: weather-dashboard] ui://weather-dashboard",
+        ),
+        (json!({"type": "resource_link", "uri": "ui:///orphan.html"}), "[app: orphan.html] ui:///orphan.html"),
+    ] {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({"content": [content]});
+
+        render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+            .await
+            .unwrap();
+
+        let output = collect_inline_output(&mut receiver);
+        assert_eq!(output.matches(expected).count(), 1, "{output:?}");
+        assert!(!output.contains("[resource: ui://"), "{output:?}");
+        assert!(
+            output.contains("not rendered: interactive apps require the desktop or browser client"),
+            "{output:?}"
+        );
+    }
+}
+#[tokio::test]
+async fn render_tool_output_mcp_app_and_resource_labels_differ_by_scheme_only() {
+    let payload = json!({"content": [
+        {"type": "resource", "resource": {"uri": "ui://get-time/mcp-app.html"}},
+        {"type": "resource", "resource": {"uri": "https://example.com/mcp-app.html"}},
+    ]});
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("[app: get-time] ui://get-time/mcp-app.html"), "{output:?}");
+    assert!(output.contains("[resource: https://example.com/mcp-app.html]"), "{output:?}");
+}
+#[tokio::test]
+async fn render_tool_output_mcp_app_disclosure_block_shows_sandbox_posture() {
+    let payload = json!({
+        "content": [
+            {"type": "text", "text": "at 10:00"},
+            {"type": "resource_link", "uri": "ui://get-time/mcp-app.html", "name": "Time",
+                "mimeType": "text/html;profile=mcp-app"},
+        ],
+        "uiDisclosure": {
+            "ui://get-time/mcp-app.html": {
+                "uri": "ui://get-time/mcp-app.html",
+                "mimeType": "text/html;profile=mcp-app",
+                "bytes": 4312,
+                "blocks": 1,
+                "ui": {
+                    "connectDomains": ["https://api.example.com", "https://cdn.jsdelivr.net"],
+                    "resourceDomains": [],
+                    "frameDomains": [],
+                    "baseUriDomains": [],
+                    "permissions": ["camera"],
+                    "domain": null,
+                },
+            }
+        },
+    });
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    let mut previous_end = 0;
+    for expected in [
+        "at 10:00",
+        "[app: get-time] ui://get-time/mcp-app.html",
+        "name: Time",
+        "type: text/html;profile=mcp-app (4.2KB)",
+        "sandbox: csp connect=https://api.example.com, https://cdn.jsdelivr.net · permissions=camera",
+        "not rendered: interactive apps require the desktop or browser client",
+    ] {
+        assert_eq!(output.matches(expected).count(), 1, "{output:?}");
+        let position = output.find(expected).unwrap();
+        assert!(position >= previous_end, "out-of-order {expected:?}: {output:?}");
+        previous_end = position + expected.len();
+    }
+}
+#[tokio::test]
+async fn render_tool_output_mcp_app_without_disclosure_omits_sandbox_but_keeps_footer() {
+    let payload = json!({"content": [
+        {"type": "resource", "resource": {
+            "uri": "ui://get-time/mcp-app.html", "mimeType": "text/html;profile=mcp-app", "text": "SHORT_BODY"}},
+    ]});
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("[app: get-time] ui://get-time/mcp-app.html"), "{output:?}");
+    assert!(output.contains("type: text/html;profile=mcp-app (10B)"), "{output:?}");
+    assert!(!output.contains("sandbox:"), "{output:?}");
+    assert!(!output.contains("SHORT_BODY"), "{output:?}");
+    assert!(
+        output.contains("not rendered: interactive apps require the desktop or browser client"),
+        "{output:?}"
+    );
+}
+#[tokio::test]
+async fn render_tool_output_mcp_app_without_mime_shows_unknown_type_with_size() {
+    // Embedded body without any declared MIME type: size still discloses.
+    let payload = json!({"content": [
+        {"type": "resource", "resource": {"uri": "ui://demo/app.html", "text": "0123456789"}},
+    ]});
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("type: unknown (10B)"), "{output:?}");
+
+    // Bare link with no MIME and no body: no type row at all.
+    let payload = json!({"content": [{"type": "resource_link", "uri": "ui://demo/app.html"}]});
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("[app: demo] ui://demo/app.html"), "{output:?}");
+    assert!(!output.contains("type:"), "{output:?}");
+}
+
+#[tokio::test]
+async fn render_tool_output_mcp_app_disclosure_wins_over_block_fields() {
+    let payload = json!({
+        "content": [
+            {"type": "resource", "resource": {
+                "uri": "ui://demo/app.html", "mimeType": "text/plain", "text": "stale"}},
+        ],
+        "uiDisclosure": {
+            "ui://demo/app.html": {
+                "uri": "ui://demo/app.html",
+                "mimeType": "text/html;profile=mcp-app",
+                "bytes": 2048,
+                "blocks": 1,
+                "ui": null,
+            }
+        },
+    });
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("type: text/html;profile=mcp-app (2.0KB)"), "{output:?}");
+    assert!(!output.contains("text/plain"), "{output:?}");
+    assert!(!output.contains("stale"), "{output:?}");
+    // Null posture discloses nothing: no sandbox line.
+    assert!(!output.contains("sandbox:"), "{output:?}");
+}
+#[tokio::test]
+async fn render_tool_output_mcp_app_empty_posture_states_no_external_access() {
+    let payload = json!({
+        "content": [{"type": "resource_link", "uri": "ui://locked/app.html"}],
+        "uiDisclosure": {
+            "ui://locked/app.html": {
+                "uri": "ui://locked/app.html",
+                "mimeType": "text/html;profile=mcp-app",
+                "bytes": 64,
+                "blocks": 1,
+                "ui": {
+                    "connectDomains": [],
+                    "resourceDomains": [],
+                    "frameDomains": [],
+                    "baseUriDomains": [],
+                    "permissions": [],
+                    "domain": null,
+                },
+            }
+        },
+    });
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("sandbox: no external domains or permissions declared"), "{output:?}");
+}
+#[tokio::test]
+async fn render_tool_output_mcp_app_block_neutralizes_untrusted_text() {
+    let payload = json!({
+        "content": [
+            {"type": "resource_link", "uri": "ui://evil/\nINJECTED\x07", "name": "Na`me` $x",
+                "mimeType": "text/html\x1b[31m"},
+        ],
+        "uiDisclosure": {
+            "ui://evil/\nINJECTED\x07": {
+                "uri": "ui://evil/\nINJECTED\x07",
+                "mimeType": "text/html\x1b[31m",
+                "bytes": 8,
+                "blocks": 1,
+                "ui": {
+                    "connectDomains": ["https://a.example\nB", "https://$b.example/`c`"],
+                    "resourceDomains": [],
+                    "frameDomains": [],
+                    "baseUriDomains": [],
+                    "permissions": [],
+                    "domain": null,
+                },
+            }
+        },
+    });
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    // Controls become U+FFFD; no injected row and no bell/escape bytes survive.
+    assert!(output.contains("ui://evil/�INJECTED�"), "{output:?}");
+    assert!(!output.lines().any(|line| line.trim_start().starts_with("INJECTED")), "{output:?}");
+    assert!(!output.contains('\x07'), "{output:?}");
+    assert!(!output.contains('\x1b'), "{output:?}");
+    assert!(output.contains("https://a.example�B"), "{output:?}");
+    // Shell metacharacters are inert in terminal output and preserved.
+    assert!(output.contains("Na`me` $x"), "{output:?}");
+    assert!(output.contains("https://$b.example/`c`"), "{output:?}");
+}
+#[tokio::test]
+async fn render_tool_output_mcp_plain_resource_rows_neutralize_untrusted_text() {
+    let payload = json!({"content": [
+        {"type": "resource_link", "uri": "https://example.com/\nINJECTED\x07", "name": "Na\nme",
+            "mimeType": "text/html\x1b[31m"},
+        {"type": "resource", "resource": {
+            "uri": "file:///ok.txt", "mimeType": "text/plain", "text": "fine"}},
+    ]});
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    render_tool_output(&mut renderer, Some("mcp_example_lookup"), &payload, None)
+        .await
+        .unwrap();
+
+    let output = collect_inline_output(&mut receiver);
+    assert!(output.contains("[resource: https://example.com/�INJECTED�]"), "{output:?}");
+    assert!(output.contains("name: Na�me"), "{output:?}");
+    assert!(output.contains("type: text/html�[31m"), "{output:?}");
+    assert!(!output.lines().any(|line| line.trim_start().starts_with("INJECTED")), "{output:?}");
+    assert!(!output.contains('\x07'), "{output:?}");
+    assert!(!output.contains('\x1b'), "{output:?}");
+    // Clean rows pass through byte-identical.
+    assert!(output.contains("[resource: file:///ok.txt]"), "{output:?}");
+}
+
+#[tokio::test]
 async fn render_tool_output_mcp_resource_text_reuses_json_and_code_formatting() {
     for (text, expected, absent) in [
         (r#"{"count":7}"#, "count: 7", "{\"count\""),

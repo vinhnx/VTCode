@@ -31,7 +31,7 @@ pub(super) fn emit_terminal_finished_event(
         raw_id,
         status.clone(),
     ));
-    let _ = emitter.emit(tool_output_completed_event(item_id, raw_id, status, None, None, output));
+    let _ = emitter.emit(tool_output_completed_event(item_id, raw_id, status, None, None, output, Vec::new()));
 }
 
 pub(super) fn filter_copilot_tools(

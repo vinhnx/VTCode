@@ -675,7 +675,7 @@ pub enum Commands {
         command: crate::cli::tool_policy_commands::ToolPolicyCommands,
     },
 
-    /// Manage Model Context Protocol providers
+    /// Manage Model Context Protocol providers and inspect their resources
     #[command(name = "mcp")]
     Mcp {
         #[command(subcommand)]

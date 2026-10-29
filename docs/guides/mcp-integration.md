@@ -108,11 +108,23 @@ match the canonical variants used in code:
 mode = "compact"
 max_events = 25
 show_provider_names = false
+apps = "off"
 
 [mcp.ui.renderers]
 "context7" = "context7"
 "sequential-thinker" = "sequential-thinking"
 ```
+
+`apps` selects the MCP Apps presentation tier: `"off"` (default) discloses app linkage without rendering, `"static"`
+opts into a sanitized structural preview on surfaces that support it, and `"interactive"` is reserved for a future
+sandboxed webview host and is currently rejected at MCP startup. Only `"interactive"` advertises the
+`io.modelcontextprotocol/ui` extension to servers, since a static preview cannot honor app round-trips.
+
+In the terminal, app results render as a disclosure block rather than the app itself: an `[app: <name>] <uri>` row,
+the served MIME type and byte count, the declared permissions and CSP domains when the resource was fetched
+successfully, and a `not rendered` footer naming the clients that can run the app. Fetches are best-effort and
+bounded (four URIs, five seconds total per tool result); when a fetch fails the linkage row stands alone. All
+server-originated strings in the block are control- and bidi-neutralized before display.
 
 ### Provider transports
 
@@ -333,6 +345,27 @@ In this configuration:
 
 Enable `enforce = true` when you want the rules to be mandatory; leaving it unset keeps legacy behaviour where allowlist
 checks are advisory only.
+
+## Inspecting resources and MCP Apps
+
+Two read-only commands orient you on a live server without starting a session. Both load the workspace-layered
+configuration, so they observe the same providers, allowlists, and timeouts as the agent runtime:
+
+```bash
+vtcode mcp resources                  # table of every exposed resource (URI, provider, type, size)
+vtcode mcp resources --provider docs  # restrict to one provider
+vtcode mcp app 'ui://docs/app.html'   # inspect one resource: MIME, byte count, declared UI posture
+vtcode mcp app 'ui://docs/app.html' --html   # print the raw body (e.g. HTML source) to the pager
+```
+
+`vtcode mcp app` never executes the resource. For `ui://` app resources it additionally reports the declared
+permissions and CSP domains from the resource's `_meta.ui`, and warns when the served MIME type is not
+`text/html;profile=mcp-app`. Both commands accept `--json` for scripting (`--html` and `--json` conflict).
+
+Tools a server marks `_meta.ui.visibility: ["app"]` stay hidden from the agent: they never appear in tool
+listings or the synced `.vtcode/mcp/tools/` discovery files, and a direct model-originated call is rejected
+with an app-only error. Omitted visibility means visible to both model and app; a malformed value hides the
+tool from the model. Enforcement for app-originated calls awaits an interactive app engine.
 
 ## Testing the Integration
 

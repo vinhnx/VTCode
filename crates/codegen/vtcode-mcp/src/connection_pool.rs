@@ -9,7 +9,7 @@ use std::time::Duration;
 use tokio::sync::{RwLock, Semaphore};
 use tracing::{error, info, warn};
 
-use super::{McpElicitationHandler, McpProvider, McpSandboxContext};
+use super::{McpElicitationHandler, McpProvider, McpSandboxContext, apply_ui_extension_gate};
 use rmcp::model::{ClientCapabilities, InitializeRequestParams};
 use vtcode_commons::MultiErrors;
 use vtcode_config::mcp::{McpAllowListConfig, McpProviderConfig};
@@ -44,6 +44,7 @@ impl McpConnectionPool {
         sandbox_context: Option<McpSandboxContext>,
         tool_timeout: Option<Duration>,
         allowlist_snapshot: &McpAllowListConfig,
+        advertise_ui_apps: bool,
     ) -> Result<Vec<(String, Arc<McpProvider>)>, McpPoolError> {
         use futures::future::join_all;
 
@@ -62,6 +63,7 @@ impl McpConnectionPool {
                         sandbox_context,
                         tool_timeout.unwrap_or(Duration::from_secs(30)),
                         allowlist_snapshot,
+                        advertise_ui_apps,
                     )
                     .await
                 }
@@ -96,6 +98,7 @@ impl McpConnectionPool {
         sandbox_context: Option<McpSandboxContext>,
         tool_timeout: Duration,
         allowlist_snapshot: McpAllowListConfig,
+        advertise_ui_apps: bool,
     ) -> Result<(String, Arc<McpProvider>), McpPoolError> {
         // Acquire semaphore permit to limit concurrent connections
         let _permit = self
@@ -109,7 +112,7 @@ impl McpConnectionPool {
         // Connect to provider with timeout
         let provider = tokio::time::timeout(
             self.connection_timeout,
-            McpProvider::connect(config.clone(), elicitation_handler, sandbox_context),
+            McpProvider::connect(config.clone(), elicitation_handler, sandbox_context, advertise_ui_apps),
         )
         .await
         .map_err(|_e| McpPoolError::ConnectionTimeout(config.name.clone()))?
@@ -117,7 +120,7 @@ impl McpConnectionPool {
 
         // Initialize the provider with proper parameters
         let provider_startup_timeout = self.resolve_startup_timeout(&config);
-        let initialize_params = build_pool_initialize_params(&provider);
+        let initialize_params = build_pool_initialize_params(advertise_ui_apps);
         let tool_timeout_opt = Some(tool_timeout);
 
         if let Err(err) = provider
@@ -280,6 +283,7 @@ impl PooledMcpManager {
         sandbox_context: Option<McpSandboxContext>,
         tool_timeout: Option<Duration>,
         allowlist_snapshot: &McpAllowListConfig,
+        advertise_ui_apps: bool,
     ) -> Result<Vec<(String, Arc<McpProvider>)>, McpPoolError> {
         // Initialize providers in parallel
         let providers = self
@@ -290,6 +294,7 @@ impl PooledMcpManager {
                 sandbox_context,
                 tool_timeout,
                 allowlist_snapshot,
+                advertise_ui_apps,
             )
             .await?;
 
@@ -372,8 +377,10 @@ pub struct PooledMcpStats {
 }
 
 /// Build initialize params for an MCP provider
-fn build_pool_initialize_params(_provider: &McpProvider) -> InitializeRequestParams {
-    InitializeRequestParams::new(ClientCapabilities::default(), super::utils::build_client_implementation())
+fn build_pool_initialize_params(advertise_ui_apps: bool) -> InitializeRequestParams {
+    let mut capabilities = ClientCapabilities::default();
+    apply_ui_extension_gate(&mut capabilities, advertise_ui_apps);
+    InitializeRequestParams::new(capabilities, super::utils::build_client_implementation())
         .with_protocol_version(super::rmcp_client::latest_protocol_version())
 }
 
@@ -498,5 +505,19 @@ pub(crate) mod tests {
         assert_eq!(stats.max_connections, 7);
         assert_eq!(stats.available_permits, 7);
         assert_eq!(stats.active_connections, 0);
+    }
+
+    #[test]
+    fn pool_initialize_params_gate_ui_extension_on_flag() {
+        let advertised = build_pool_initialize_params(true);
+        assert!(
+            advertised
+                .capabilities
+                .extensions
+                .as_ref()
+                .is_some_and(|extensions| extensions.contains_key("io.modelcontextprotocol/ui")),
+        );
+        let silent = build_pool_initialize_params(false);
+        assert_eq!(silent.capabilities.extensions, None);
     }
 }

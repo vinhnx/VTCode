@@ -8,7 +8,7 @@ use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
 use tracing::{debug, warn};
 
-use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
+use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo, McpToolVisibility};
 use crate::tools::mcp::build_mcp_registration;
 use vtcode_commons::classify_anyhow_error;
 
@@ -118,6 +118,11 @@ impl ToolRegistry {
                         // which carries no output schema; live discovery via
                         // `ToolDiscovery` retains it.
                         output_schema: None,
+                        // Stored registration metadata carries no MCP Apps
+                        // linkage either; live discovery retains it.
+                        ui: None,
+                        // Registered tools are model tools by construction.
+                        visibility: McpToolVisibility::default(),
                     });
                 }
             }

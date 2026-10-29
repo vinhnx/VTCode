@@ -552,6 +552,8 @@ mod tests {
                 provider: "test".to_string(),
                 input_schema: serde_json::json!({}),
                 output_schema: None,
+                ui: None,
+                visibility: crate::types::McpToolVisibility::default(),
             },
             relevance_score: 0.9,
             detail_level,

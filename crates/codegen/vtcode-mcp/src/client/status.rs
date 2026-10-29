@@ -65,6 +65,7 @@ impl McpClient {
         if !self.config.enabled {
             bail!("MCP support is disabled in the current configuration");
         }
+        reject_unsupported_ui_apps_tier(&self.config.ui)?;
 
         if self.state.read().providers.contains_key(server_name) {
             return Ok(());

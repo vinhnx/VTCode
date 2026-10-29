@@ -779,6 +779,7 @@ async fn apply_post_execution_side_effects(
                     None,
                     None,
                     error.to_string(),
+                    Vec::new(),
                 );
                 return Err(error);
             }

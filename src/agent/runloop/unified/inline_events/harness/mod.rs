@@ -16,10 +16,10 @@ use vtcode_core::core::agent::events::{
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::exec::events::{
-    AgentMessageItem, CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
-    ReasoningItem, ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem,
-    ThreadItemDetails, ToolCallStatus, ToolOutcome, TurnBlockedEvent, TurnCompletedEvent, TurnFailedEvent,
-    TurnStartedEvent, Usage, VersionedThreadEvent,
+    AgentMessageItem, AppPreviewItem, CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind,
+    ItemCompletedEvent, ReasoningItem, ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype,
+    ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolOutcome, TurnBlockedEvent, TurnCompletedEvent,
+    TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
 };
 #[cfg(test)]
 use vtcode_webmcp::EventHubConfig;
@@ -651,8 +651,9 @@ pub(crate) fn tool_output_completed_event(
     exit_code: Option<i32>,
     spool_path: Option<&str>,
     output: impl Into<String>,
+    app_previews: Vec<AppPreviewItem>,
 ) -> ThreadEvent {
-    shared_tool_output_completed_event(call_item_id, tool_call_id, status, exit_code, spool_path, output)
+    shared_tool_output_completed_event(call_item_id, tool_call_id, status, exit_code, spool_path, output, app_previews)
 }
 
 pub(crate) fn tool_updated_event(

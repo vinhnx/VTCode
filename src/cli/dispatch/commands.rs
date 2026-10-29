@@ -42,7 +42,7 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
             vtcode_core::cli::tool_policy_commands::handle_tool_policy_command(command).await?;
         }
         Commands::Mcp { command } => {
-            handle_mcp_command(command).await?;
+            handle_mcp_command(command, &startup.workspace).await?;
         }
         Commands::A2a { command } => {
             vtcode_core::cli::a2a::execute_a2a_command(command).await?;

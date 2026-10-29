@@ -590,6 +590,7 @@ impl ExecutionContextTracker {
             exit_code,
             spool_path,
             output,
+            Vec::new(),
         );
         if let ThreadEvent::ItemCompleted(completed) = &mut event {
             completed.item.id = format!("{}:exec-session-output", launch.call_item_id);

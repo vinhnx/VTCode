@@ -1,8 +1,9 @@
 use crate::exec::events::{
-    AgentMessageItem, ErrorItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ReasoningItem, ThreadEvent,
-    ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutcome, ToolOutputItem,
-    tool_outcome_from_status,
+    AgentMessageItem, AppPreviewItem, AppUiPosture, ErrorItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent,
+    ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutcome,
+    ToolOutputItem, tool_outcome_from_status,
 };
+use crate::mcp::{MCP_APP_DISCLOSURE_KEY, McpAppDisclosure};
 use crate::tools::file_ops::{canonical_diff_previews, diff_preview_user_message};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -52,6 +53,8 @@ pub struct ToolOutputPayload {
     pub aggregated_output: String,
     /// Optional path to a spool file containing the full output.
     pub spool_path: Option<String>,
+    /// MCP Apps referenced by the result, mapped from execution-time disclosure.
+    pub app_previews: Vec<AppPreviewItem>,
 }
 
 /// Attribute only a successful file tool's recorded result, never current Git state.
@@ -651,6 +654,7 @@ fn tool_output_item(
     exit_code: Option<i32>,
     spool_path: Option<&str>,
     output: impl Into<String>,
+    app_previews: Vec<AppPreviewItem>,
 ) -> ThreadItem {
     ThreadItem {
         context: None,
@@ -662,6 +666,7 @@ fn tool_output_item(
             output: output.into(),
             exit_code,
             status,
+            app_previews,
         })),
     }
 }
@@ -708,7 +713,15 @@ pub fn tool_invocation_completed_event(
 #[must_use]
 pub fn tool_output_started_event(call_item_id: String, tool_call_id: Option<&str>) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_output_item(&call_item_id, tool_call_id, ToolCallStatus::InProgress, None, None, String::new()),
+        item: tool_output_item(
+            &call_item_id,
+            tool_call_id,
+            ToolCallStatus::InProgress,
+            None,
+            None,
+            String::new(),
+            Vec::new(),
+        ),
     })
 }
 
@@ -719,7 +732,7 @@ pub fn tool_output_updated_event(
     output: impl Into<String>,
 ) -> ThreadEvent {
     ThreadEvent::ItemUpdated(ItemUpdatedEvent {
-        item: tool_output_item(&call_item_id, tool_call_id, ToolCallStatus::InProgress, None, None, output),
+        item: tool_output_item(&call_item_id, tool_call_id, ToolCallStatus::InProgress, None, None, output, Vec::new()),
     })
 }
 
@@ -731,9 +744,10 @@ pub fn tool_output_completed_event(
     exit_code: Option<i32>,
     spool_path: Option<&str>,
     output: impl Into<String>,
+    app_previews: Vec<AppPreviewItem>,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_output_item(&call_item_id, tool_call_id, status, exit_code, spool_path, output),
+        item: tool_output_item(&call_item_id, tool_call_id, status, exit_code, spool_path, output, app_previews),
     })
 }
 

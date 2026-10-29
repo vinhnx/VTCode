@@ -496,6 +496,7 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
                 output: "done".to_string(),
                 exit_code: Some(0),
                 status: ToolCallStatus::Completed,
+                app_previews: Vec::new(),
             })),
         },
     });
@@ -504,6 +505,59 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
     let restored: ThreadEvent = serde_json::from_str(&json)?;
 
     assert_eq!(restored, event);
+    Ok(())
+}
+
+#[test]
+fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<dyn Error>> {
+    let item = ToolOutputItem {
+        call_id: "tool_1".to_string(),
+        tool_call_id: None,
+        spool_path: None,
+        output: "done".to_string(),
+        exit_code: Some(0),
+        status: ToolCallStatus::Completed,
+        app_previews: vec![AppPreviewItem {
+            uri: "ui://demo/app.html".to_string(),
+            mime_type: Some("text/html;profile=mcp-app".to_string()),
+            bytes: 4312,
+            blocks: 1,
+            ui: Some(AppUiPosture {
+                connect_domains: vec!["https://api.example.com".to_string()],
+                permissions: vec!["camera".to_string()],
+                ..AppUiPosture::default()
+            }),
+        }],
+    };
+
+    let value = serde_json::to_value(&item)?;
+    assert_eq!(value["app_previews"][0]["uri"], "ui://demo/app.html");
+    assert_eq!(value["app_previews"][0]["ui"]["connect_domains"], serde_json::json!(["https://api.example.com"]));
+    // Empty lists are omitted; absent fields decode to empty.
+    assert!(value["app_previews"][0]["ui"].get("frame_domains").is_none());
+    let restored: ToolOutputItem = serde_json::from_value(value)?;
+    assert_eq!(restored, item);
+
+    let bare = ToolOutputItem {
+        call_id: "tool_1".to_string(),
+        tool_call_id: None,
+        spool_path: None,
+        output: "done".to_string(),
+        exit_code: Some(0),
+        status: ToolCallStatus::Completed,
+        app_previews: Vec::new(),
+    };
+    let value = serde_json::to_value(&bare)?;
+    assert!(value.get("app_previews").is_none());
+
+    // Legacy payloads without the field decode to empty previews.
+    let legacy = serde_json::json!({
+        "call_id": "tool_1",
+        "output": "done",
+        "status": "completed",
+    });
+    let restored: ToolOutputItem = serde_json::from_value(legacy)?;
+    assert!(restored.app_previews.is_empty());
     Ok(())
 }
 

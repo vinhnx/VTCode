@@ -223,6 +223,58 @@ pub struct ToolOutputItem {
     pub exit_code: Option<i32>,
     /// Current lifecycle status of the output item.
     pub status: ToolCallStatus,
+    /// MCP Apps referenced by this output, when the tool result was enriched
+    /// with app disclosure. Surfaces render preview affordances from these;
+    /// empty for non-app results. Schema 0.21.0; omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub app_previews: Vec<AppPreviewItem>,
+}
+
+/// Disclosure facts about one MCP Apps resource referenced by a tool output.
+///
+/// Mirrors the disclosure attached at execution time; surfaces must not
+/// re-derive these by parsing rendered output text.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct AppPreviewItem {
+    /// Canonical `ui://` resource URI.
+    pub uri: String,
+    /// MIME type of the first content block, when the server provides one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    /// Total body bytes across content blocks.
+    #[serde(default)]
+    pub bytes: u64,
+    /// Number of content blocks.
+    #[serde(default)]
+    pub blocks: usize,
+    /// Declared UI sandbox posture, when the server declares `_meta.ui`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui: Option<AppUiPosture>,
+}
+
+/// Declared sandbox posture of an MCP Apps UI resource (SEP-1865 `UIResourceMeta`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct AppUiPosture {
+    /// Origins for network requests (`csp.connectDomains`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub connect_domains: Vec<String>,
+    /// Origins for static resources (`csp.resourceDomains`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub resource_domains: Vec<String>,
+    /// Origins for nested iframes (`csp.frameDomains`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frame_domains: Vec<String>,
+    /// Allowed base URIs (`csp.baseUriDomains`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub base_uri_domains: Vec<String>,
+    /// Requested permission-policy features (`permissions`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions: Vec<String>,
+    /// Dedicated sandbox origin for the view (`domain`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

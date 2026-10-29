@@ -565,3 +565,64 @@ fn flush_open_tool_call_arguments_skips_redundant_flush() {
     let flushed = emitter.drain_events();
     assert!(flushed.is_empty(), "flush should skip when the last update already carried the full arguments");
 }
+
+#[test]
+fn tool_output_payload_maps_app_disclosure_to_previews() {
+    let payload = tool_output_payload_from_value(&json!({
+        "output": "tool ran",
+        "uiDisclosure": {
+            "ui://demo/app.html": {
+                "uri": "ui://demo/app.html",
+                "mimeType": "text/html;profile=mcp-app",
+                "bytes": 4312,
+                "blocks": 2,
+                "ui": {
+                    "connectDomains": ["https://api.example.com"],
+                    "resourceDomains": [],
+                    "frameDomains": [],
+                    "baseUriDomains": [],
+                    "permissions": ["camera"],
+                    "domain": null,
+                },
+            },
+        },
+    }));
+
+    assert_eq!(payload.app_previews.len(), 1);
+    let preview = &payload.app_previews[0];
+    assert_eq!(preview.uri, "ui://demo/app.html");
+    assert_eq!(preview.mime_type.as_deref(), Some("text/html;profile=mcp-app"));
+    assert_eq!(preview.bytes, 4312);
+    assert_eq!(preview.blocks, 2);
+    let ui = preview.ui.as_ref().expect("ui posture must be mapped");
+    assert_eq!(ui.connect_domains, vec!["https://api.example.com".to_string()]);
+    assert_eq!(ui.permissions, vec!["camera".to_string()]);
+    assert!(ui.resource_domains.is_empty());
+}
+
+#[test]
+fn tool_output_payload_skips_malformed_disclosure_entries() {
+    let payload = tool_output_payload_from_value(&json!({
+        "output": "tool ran",
+        "uiDisclosure": {
+            "ui://demo/good.html": {
+                "uri": "ui://demo/good.html",
+                "bytes": 128,
+                "blocks": 1,
+            },
+            "ui://demo/bad.html": {"bytes": "not-a-number"},
+        },
+    }));
+
+    assert_eq!(payload.app_previews.len(), 1);
+    assert_eq!(payload.app_previews[0].uri, "ui://demo/good.html");
+}
+
+#[test]
+fn tool_output_payload_without_disclosure_has_no_previews() {
+    let payload = tool_output_payload_from_value(&json!({"output": "plain result"}));
+    assert!(payload.app_previews.is_empty());
+
+    let payload = tool_output_payload_from_value(&json!({"output": "x", "uiDisclosure": "not-an-object"}));
+    assert!(payload.app_previews.is_empty());
+}

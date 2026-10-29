@@ -45,6 +45,62 @@ static SECRET_ASSIGNMENT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 pub const PROVIDER_DIAGNOSTIC_MAX_BYTES: usize = 8 * 1024;
 const PROVIDER_DIAGNOSTIC_TRUNCATION_MARKER: &str = "… [diagnostic truncated]";
 
+/// Replacement marker for control characters in terminal-bound text.
+const TERMINAL_CONTROL_REPLACEMENT: char = '\u{FFFD}';
+
+/// Bidi controls that reorder terminal output while occupying no visible space.
+///
+/// A crafted override (U+202E) in a displayed URI or domain can visually spoof a
+/// trusted value, so these are neutralized like control characters. Joiners and
+/// other format characters stay intact: legitimate names may contain emoji.
+fn is_bidi_control(character: char) -> bool {
+    matches!(
+        character,
+        '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
+fn is_neutralized_terminal_char(character: char) -> bool {
+    character.is_control() || is_bidi_control(character)
+}
+
+/// Neutralize control and bidi-reordering characters and bound length for terminal display.
+///
+/// Server-originated strings (resource URIs, domains, names) must pass through
+/// here before reaching terminal output: raw newlines split rows, BEL/CR/ESC
+/// enable terminal mangling, bidi controls visually reorder text, and unbounded
+/// values blow up layouts. Shell metacharacters (`$`, backticks) are inert in
+/// terminal output and preserved.
+pub fn sanitize_terminal_text(input: &str, max_chars: usize) -> String {
+    if input.chars().all(|character| !is_neutralized_terminal_char(character)) {
+        return crate::formatting::truncate_text(input, max_chars, "…");
+    }
+    let neutralized: String = input
+        .chars()
+        .map(|character| {
+            if is_neutralized_terminal_char(character) {
+                TERMINAL_CONTROL_REPLACEMENT
+            } else {
+                character
+            }
+        })
+        .collect();
+    crate::formatting::truncate_text(&neutralized, max_chars, "…")
+}
+
+/// Join disclosed entries with per-item sanitizing and a count-capped tail.
+///
+/// Each item is neutralized via [`sanitize_terminal_text`] with `max_item_chars`;
+/// at most `max_items` are shown before the remainder folds into a count.
+pub fn join_sanitized_truncated(items: &[String], max_items: usize, max_item_chars: usize) -> String {
+    let sanitized: Vec<String> = items.iter().map(|item| sanitize_terminal_text(item, max_item_chars)).collect();
+    if sanitized.len() <= max_items {
+        return sanitized.join(", ");
+    }
+    let shown: Vec<&str> = sanitized.iter().take(max_items).map(String::as_str).collect();
+    format!("{} … +{} more", shown.join(", "), sanitized.len() - max_items)
+}
+
 /// Redact secrets and sensitive keys from a string.
 ///
 /// This is a best-effort operation using well-known regex patterns.
@@ -281,6 +337,51 @@ mod tests {
 
         assert_eq!(output, "password=[REDACTED_SECRET]\n");
         assert!(!output.contains("supersecretvalue"));
+    }
+
+    #[test]
+    fn terminal_text_neutralizes_controls_and_bounds_length() {
+        assert_eq!(sanitize_terminal_text("", 8), "");
+        assert_eq!(sanitize_terminal_text("abc", 8), "abc");
+        assert_eq!(sanitize_terminal_text("abcdefgh", 8), "abcdefgh");
+        assert_eq!(sanitize_terminal_text("abcdefghi", 8), "abcdefgh…");
+        assert_eq!(sanitize_terminal_text("ab", 0), "…");
+    }
+
+    #[test]
+    fn terminal_text_replaces_controls_but_preserves_shell_metachars() {
+        assert_eq!(sanitize_terminal_text("a\nb\rc\td\0e\x07f\x1bg", 64), "a�b�c�d�e�f�g");
+        assert_eq!(sanitize_terminal_text("price is $5 `code` ~user", 64), "price is $5 `code` ~user");
+        assert_eq!(sanitize_terminal_text("ui://x/\u{7f}app", 64), "ui://x/�app");
+    }
+
+    #[test]
+    fn terminal_text_truncates_on_char_boundaries() {
+        assert_eq!(sanitize_terminal_text("日本語テスト", 4), "日本語テ…");
+        assert_eq!(sanitize_terminal_text("日本語", 4), "日本語");
+    }
+
+    #[test]
+    fn terminal_text_neutralizes_bidi_controls_but_preserves_joiners() {
+        assert_eq!(sanitize_terminal_text("ui://\u{202e}evil/app", 64), "ui://�evil/app");
+        assert_eq!(sanitize_terminal_text("a\u{2066}b\u{2069}c", 64), "a�b�c");
+        assert_eq!(sanitize_terminal_text("x\u{200e}y\u{200f}z", 64), "x�y�z");
+        // Zero-width joiners keep emoji sequences intact.
+        assert_eq!(sanitize_terminal_text("fam 👨\u{200d}👩\u{200d}👧 ok", 64), "fam 👨\u{200d}👩\u{200d}👧 ok");
+    }
+
+    #[test]
+    fn join_sanitized_truncated_folds_only_past_max() {
+        let items: Vec<String> = (0..8).map(|n| format!("d{n}")).collect();
+        assert_eq!(join_sanitized_truncated(&items, 8, usize::MAX), "d0, d1, d2, d3, d4, d5, d6, d7");
+        let items: Vec<String> = (0..9).map(|n| format!("d{n}")).collect();
+        assert_eq!(join_sanitized_truncated(&items, 8, usize::MAX), "d0, d1, d2, d3, d4, d5, d6, d7 … +1 more");
+        let items: Vec<String> = (0..11).map(|n| format!("d{n}")).collect();
+        assert_eq!(join_sanitized_truncated(&items, 8, usize::MAX), "d0, d1, d2, d3, d4, d5, d6, d7 … +3 more");
+        // Per-item caps apply before joining; controls in any item are neutralized.
+        let items = vec!["abcdefghij".to_string(), "x\ny".to_string()];
+        assert_eq!(join_sanitized_truncated(&items, 8, 4), "abcd…, x�y");
+        assert!(join_sanitized_truncated(&[], 8, usize::MAX).is_empty());
     }
 
     #[test]

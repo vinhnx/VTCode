@@ -26,7 +26,10 @@ pub use collaboration::{
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
 pub use matrix::{MATRIX_DESCRIPTION, matrix_parameters};
 #[cfg(feature = "mcp")]
-pub use mcp_tool::{ParsedMcpTool, parse_mcp_tool};
+pub use mcp_tool::{
+    MCP_UI_EXTENSION_ID, MCP_UI_RESOURCE_MIME_TYPE, MCP_UI_RESOURCE_SCHEME, McpToolVisibility, McpUiResourceMeta,
+    McpUiToolMeta, ParsedMcpTool, parse_mcp_tool, parse_ui_resource_meta,
+};
 pub use responses_api::{FreeformTool, FreeformToolFormat, ResponsesApiTool};
 pub(crate) use tool_kind::{CanonicalToolMeta, TokenBucket, ToolKind, ToolNamespace};
 

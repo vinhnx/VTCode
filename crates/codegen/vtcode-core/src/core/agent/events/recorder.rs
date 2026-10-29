@@ -336,6 +336,7 @@ impl ExecEventRecorder {
         exit_code: Option<i32>,
         aggregated_output: &str,
         spool_path: Option<&str>,
+        app_previews: Vec<AppPreviewItem>,
     ) {
         let outcome = tool_outcome_from_status(&status);
         self.record(tool_invocation_completed_event(
@@ -353,6 +354,7 @@ impl ExecEventRecorder {
             exit_code,
             spool_path,
             aggregated_output,
+            app_previews,
         ));
     }
 
@@ -372,6 +374,7 @@ impl ExecEventRecorder {
         exit_code: Option<i32>,
         aggregated_output: &str,
         spool_path: Option<&str>,
+        app_previews: Vec<AppPreviewItem>,
     ) {
         self.record(tool_output_completed_event(
             call_item_id.to_string(),
@@ -380,6 +383,7 @@ impl ExecEventRecorder {
             exit_code,
             spool_path,
             aggregated_output,
+            app_previews,
         ));
     }
 
@@ -408,6 +412,7 @@ impl ExecEventRecorder {
             None,
             None,
             detail,
+            Vec::new(),
         ));
         let error_item_id = self.next_item_id();
         self.record(error_item_completed_event(error_item_id, detail.to_string()));

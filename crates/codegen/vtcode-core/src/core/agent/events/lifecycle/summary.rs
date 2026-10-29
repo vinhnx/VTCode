@@ -477,17 +477,46 @@ fn append_diff_stream_context(parts: &mut Vec<String>, output: &Value) {
     }
 }
 
+/// Map execution-time app disclosure to contract preview items.
+///
+/// Best-effort: entries that fail to deserialize are skipped rather than
+/// failing the whole payload.
+fn app_previews_from_value(output: &Value) -> Vec<AppPreviewItem> {
+    let Some(entries) = output.get(MCP_APP_DISCLOSURE_KEY).and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    entries
+        .values()
+        .filter_map(|entry| serde_json::from_value::<McpAppDisclosure>(entry.clone()).ok())
+        .map(|disclosure| AppPreviewItem {
+            uri: disclosure.uri,
+            mime_type: disclosure.mime_type,
+            bytes: disclosure.bytes,
+            blocks: disclosure.blocks,
+            ui: disclosure.ui.map(|ui| AppUiPosture {
+                connect_domains: ui.connect_domains,
+                resource_domains: ui.resource_domains,
+                frame_domains: ui.frame_domains,
+                base_uri_domains: ui.base_uri_domains,
+                permissions: ui.permissions,
+                domain: ui.domain,
+            }),
+        })
+        .collect()
+}
+
 /// Extract a [`ToolOutputPayload`] from a tool result JSON value, preserving
 /// bounded metadata alongside a spool reference and falling back to inline
 /// text aggregation otherwise.
 pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
+    let app_previews = app_previews_from_value(output);
     if !output.is_object() {
         let aggregated_output = match output {
             Value::Null => String::new(),
             Value::String(text) => text.to_string(),
             _ => serde_json::to_string(output).unwrap_or_default(),
         };
-        return ToolOutputPayload { aggregated_output, spool_path: None };
+        return ToolOutputPayload { aggregated_output, spool_path: None, app_previews };
     }
 
     if let Some(spool_path) = output.get("spool_path").and_then(Value::as_str) {
@@ -496,6 +525,7 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
         return ToolOutputPayload {
             aggregated_output: parts.join("\n"),
             spool_path: Some(spool_path.to_string()),
+            app_previews,
         };
     }
 
@@ -506,6 +536,7 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
         return ToolOutputPayload {
             aggregated_output: parts.join("\n"),
             spool_path: None,
+            app_previews,
         };
     }
 
@@ -516,6 +547,7 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
         return ToolOutputPayload {
             aggregated_output: primary_text.join("\n"),
             spool_path: None,
+            app_previews,
         };
     }
 
@@ -565,5 +597,6 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
     ToolOutputPayload {
         aggregated_output: parts.join("\n"),
         spool_path: None,
+        app_previews,
     }
 }

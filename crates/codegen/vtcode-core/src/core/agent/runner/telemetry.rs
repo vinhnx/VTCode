@@ -157,6 +157,7 @@ impl AgentRunner {
                 None,
                 &failure_text,
                 None,
+                Vec::new(),
             );
         }
         // Move failure_text into warnings first, then reference for conversation

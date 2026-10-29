@@ -132,6 +132,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
             output: inline_preview.into(),
             exit_code: Some(0),
             status: ToolCallStatus::Completed,
+            app_previews: Vec::new(),
         })),
     }
 }

@@ -692,6 +692,7 @@ fn activity_details_omit_tool_output_from_the_metadata_copy() {
         output: "large captured result".repeat(32),
         exit_code: Some(0),
         status: ToolCallStatus::Completed,
+        app_previews: Vec::new(),
     }));
     let payload = super::super::activity_details_payload(&details);
 

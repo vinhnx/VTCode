@@ -141,6 +141,7 @@ pub(super) fn emit_failed_tool_outputs_for_completed_invocations(
             None,
             detail,
             None,
+            Vec::new(),
         );
     }
 }

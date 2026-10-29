@@ -130,6 +130,7 @@ fn record_successful_tool_result(
             .and_then(|code| i32::try_from(code).ok()),
         &payload.aggregated_output,
         payload.spool_path.as_deref(),
+        payload.app_previews,
     );
     event_recorder.record_exec_session_output(call_item_id, tool_name, args, output);
     if let Some(event) = crate::core::agent::events::file_change_completed_event(call_item_id, tool_name, args, output)
