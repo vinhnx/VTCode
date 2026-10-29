@@ -324,6 +324,7 @@ mod config_sessions;
 mod files_webmcp;
 mod inspector_appearance;
 mod mcp_app;
+mod notifications;
 mod option_popups;
 mod options_misc;
 mod review_output;

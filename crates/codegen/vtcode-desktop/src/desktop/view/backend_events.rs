@@ -1,5 +1,6 @@
 //! Backend event intake: drain loop, dispatch, thread-event projection.
 
+use super::super::notifications::BackgroundAgentActivity;
 use super::*;
 
 impl DesktopView {
@@ -92,7 +93,8 @@ impl DesktopView {
         let previous_interaction_id = new_interaction
             .then(|| self.interaction.as_ref().map(|interaction| interaction.interaction_id.clone()))
             .flatten();
-        self.notify_background_activity(&event, window, cx);
+        self.notify_agent_activity(&event, window, cx);
+        self.maybe_notify_update_available(&event, window, cx);
         self.handle_backend_event(event, cx);
         let interaction_replaced = new_interaction
             && previous_interaction_id.as_deref()
@@ -111,10 +113,7 @@ impl DesktopView {
         self.restore_focus_after_review_close(window, cx);
     }
 
-    fn notify_background_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if window.is_window_active() {
-            return;
-        }
+    fn notify_agent_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
         let activity = match event {
             BackendEvent::ThreadEvent(notification) => {
                 if self.selected_session_id.as_deref() != Some(notification.session_id.as_str())
@@ -128,13 +127,9 @@ impl DesktopView {
                     return;
                 }
                 match notification.event.event() {
-                    vtcode_exec_events::ThreadEvent::TurnCompleted(_) => {
-                        Some(super::super::notifications::BackgroundAgentActivity::Completed)
-                    }
+                    vtcode_exec_events::ThreadEvent::TurnCompleted(_) => Some(BackgroundAgentActivity::Completed),
                     vtcode_exec_events::ThreadEvent::TurnFailed(_)
-                    | vtcode_exec_events::ThreadEvent::TurnBlocked(_) => {
-                        Some(super::super::notifications::BackgroundAgentActivity::NeedsAttention)
-                    }
+                    | vtcode_exec_events::ThreadEvent::TurnBlocked(_) => Some(BackgroundAgentActivity::NeedsAttention),
                     _ => None,
                 }
             }
@@ -152,13 +147,35 @@ impl DesktopView {
                 {
                     return;
                 }
-                Some(super::super::notifications::BackgroundAgentActivity::WaitingForDecision)
+                Some(super::super::notifications::activity_for_interaction_kind(interaction.kind))
+            }
+            // The transport reports its terminal state before the channel
+            // drops, so these fire exactly once per disconnect. Intentional
+            // restarts (workspace switch, settings reload) carry a pending
+            // workspace and clean exits need no banner; `backend.is_some()`
+            // collapses a LaunchFailed+Exited pair into one banner because the
+            // first handler clears the backend before the second arrives.
+            BackendEvent::Exited { status, .. }
+                if self.backend.is_some() && self.pending_workspace.is_none() && *status != Some(0) =>
+            {
+                Some(BackgroundAgentActivity::ServiceDisconnected)
+            }
+            BackendEvent::LaunchFailed(_) if self.backend.is_some() && self.pending_workspace.is_none() => {
+                Some(BackgroundAgentActivity::ServiceDisconnected)
             }
             _ => None,
         };
-        if let Some(activity) = activity {
-            super::super::notifications::background_agent_activity(window, activity, cx);
+        let Some(activity) = activity else {
+            return;
+        };
+        if !super::super::notifications::activity_allowed(
+            activity,
+            &self.preferences.notifications,
+            window.is_window_active(),
+        ) {
+            return;
         }
+        super::super::notifications::background_agent_activity(window, activity, cx);
     }
 
     pub(super) fn handle_backend_event(&mut self, event: BackendEvent, cx: &mut Context<Self>) {
@@ -278,6 +295,9 @@ impl DesktopView {
                         self.config_write_pending = false;
                         self.config_editor_error = Some(error.clone());
                     }
+                    if method == protocol::method::UPDATE_STATUS {
+                        self.update_request_pending = false;
+                    }
                     if method == protocol::method::WORKSPACE_REVIEW {
                         self.fail_workspace_review(error);
                         return;
@@ -339,6 +359,7 @@ impl DesktopView {
                                 }
                                 if discovery_queued {
                                     self.request_webmcp_status();
+                                    self.request_update_status();
                                 }
                             }
                             _ => {
@@ -372,6 +393,9 @@ impl DesktopView {
                     }
                     protocol::method::WEBMCP_STATUS | protocol::method::WEBMCP_PAIR | protocol::method::WEBMCP_STOP => {
                         let _handled = self.handle_webmcp_response(&method, result, cx);
+                    }
+                    protocol::method::UPDATE_STATUS => {
+                        self.handle_update_status_response(result);
                     }
                     protocol::method::CONFIG_MODELS => {
                         match serde_json::from_value::<Vec<protocol::ModelInfo>>(result) {

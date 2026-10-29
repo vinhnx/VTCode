@@ -63,7 +63,7 @@ use webmcp::{DesktopWebmcpRuntime, start_session};
 mod restore;
 use catalog::{
     active_agent_config, catalog_models, configuration_snapshot, effective_speed_config, listing_matches_workspace,
-    sanitize_public_error, workspace_label,
+    sanitize_public_error, update_status_snapshot, workspace_label,
 };
 use restore::{RestoredInspectorHistory, read_restored_spool_page, restored_history_page, restored_inspector_history};
 #[cfg(test)]
@@ -410,6 +410,10 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
         method::WEBMCP_STOP => {
             stop_webmcp_bridge(context).await;
             Ok((json!({ "stopped": true }), false))
+        }
+        method::UPDATE_STATUS => {
+            let status = update_status_snapshot()?;
+            Ok((serde_json::to_value(status)?, false))
         }
         method::CONFIG_MODELS => {
             let (provider, model) = {

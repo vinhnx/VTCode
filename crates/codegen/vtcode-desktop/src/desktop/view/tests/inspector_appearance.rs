@@ -247,7 +247,7 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
 #[gpui_kit::test]
 fn initialization_gates_commands_until_the_negotiated_protocol_is_validated(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(5);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.initialize_backend(BackendHandle { commands });
@@ -276,11 +276,13 @@ fn initialization_gates_commands_until_the_negotiated_protocol_is_validated(cx: 
                 vtcode_desktop_protocol::method::CONFIG_MODELS,
                 vtcode_desktop_protocol::method::SESSION_LIST,
                 vtcode_desktop_protocol::method::WEBMCP_STATUS,
+                vtcode_desktop_protocol::method::UPDATE_STATUS,
             ] {
                 let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else { panic!("discovery") };
                 assert_eq!(method, expected);
             }
             assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+            assert!(view.update_request_pending);
             assert!(requests.try_recv().is_err());
         });
     }).unwrap();

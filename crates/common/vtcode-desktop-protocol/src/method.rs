@@ -55,3 +55,5 @@ pub const WEBMCP_STATUS: &str = "webmcp/status";
 pub const WEBMCP_PAIR: &str = "webmcp/pair";
 /// Revoke the bridge's pairings and stop its listener.
 pub const WEBMCP_STOP: &str = "webmcp/stop";
+/// Read the cached updater status (current/latest version, no network I/O).
+pub const UPDATE_STATUS: &str = "update/status";

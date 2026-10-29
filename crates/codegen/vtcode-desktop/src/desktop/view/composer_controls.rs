@@ -42,6 +42,7 @@ fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
         "shortcuts" | "keybindings" => Some(settings::SettingsTab::Shortcuts),
         "vtcode" | "general" => Some(settings::SettingsTab::VtCode),
         "connections" | "mcp" | "webmcp" => Some(settings::SettingsTab::Connections),
+        "notifications" | "notification" | "alerts" | "updates" => Some(settings::SettingsTab::Notifications),
         _ => None,
     }
 }
@@ -584,9 +585,10 @@ pub(super) fn effort_at(levels: &[String], value: f32) -> Option<&String> {
 mod tests {
     use gpui_kit::assets::IconName;
 
+    use super::settings::SettingsTab;
     use super::{
         ComposerTriggerKind, DesktopSlashAction, capitalize_agent_label, composer_trigger, desktop_slash_action,
-        effort_at, file_mention_token, permission_indicator,
+        effort_at, file_mention_token, permission_indicator, settings_tab_for_name,
     };
 
     #[test]
@@ -630,6 +632,30 @@ mod tests {
                 "package-manager words outside the active command must not suppress {input:?}"
             );
         }
+    }
+
+    #[test]
+    fn settings_deep_links_cover_every_settings_tab() {
+        for (name, expected) in [
+            ("appearance", SettingsTab::Appearance),
+            ("theme", SettingsTab::Appearance),
+            ("accessibility", SettingsTab::Accessibility),
+            ("a11y", SettingsTab::Accessibility),
+            ("shortcuts", SettingsTab::Shortcuts),
+            ("keybindings", SettingsTab::Shortcuts),
+            ("vtcode", SettingsTab::VtCode),
+            ("general", SettingsTab::VtCode),
+            ("connections", SettingsTab::Connections),
+            ("mcp", SettingsTab::Connections),
+            ("webmcp", SettingsTab::Connections),
+            ("notifications", SettingsTab::Notifications),
+            ("notification", SettingsTab::Notifications),
+            ("alerts", SettingsTab::Notifications),
+            ("updates", SettingsTab::Notifications),
+        ] {
+            assert_eq!(settings_tab_for_name(name), Some(expected), "alias {name:?}");
+        }
+        assert_eq!(settings_tab_for_name("unknown"), None);
     }
 
     #[test]
@@ -697,7 +723,7 @@ mod tests {
         assert_eq!(desktop_slash_action("/config permissions"), Some(DesktopSlashAction::Permissions));
         assert_eq!(
             desktop_slash_action("/config appearance"),
-            Some(DesktopSlashAction::Settings(Some(super::super::settings::SettingsTab::Appearance,)))
+            Some(DesktopSlashAction::Settings(Some(SettingsTab::Appearance,)))
         );
         assert_eq!(
             desktop_slash_action("/config agent.default_model"),

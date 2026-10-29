@@ -132,6 +132,30 @@ pub(super) async fn configuration_snapshot(
     })
 }
 
+/// Cached updater status for the desktop client. Read-only: the startup
+/// check only inspects the local update cache, so serving it performs no
+/// network I/O and never blocks the request loop on GitHub.
+pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot> {
+    let current = env!("CARGO_PKG_VERSION");
+    let updater = crate::updater::Updater::new(current)?;
+    let check = updater.startup_update_check()?;
+    let (latest_version, release_url, update_available) = match check.cached_notice {
+        Some(notice) => {
+            let url = crate::updater::Updater::release_url(&notice.latest_version);
+            (Some(notice.latest_version.to_string()), Some(url), true)
+        }
+        None => (None, None, false),
+    };
+    Ok(protocol::UpdateStatusSnapshot {
+        current_version: current.to_string(),
+        latest_version,
+        update_available,
+        release_url,
+        channel: Some(updater.config().channel.to_string()),
+        check_due: check.should_refresh,
+    })
+}
+
 /// The selectable model catalog, mirroring the TUI picker's source.
 pub(super) fn catalog_models(active_provider: &str, active_model: &str) -> Vec<ModelInfo> {
     let recommended_models = ModelId::fallback_models();

@@ -143,3 +143,4 @@ mod shutdown_turns;
 mod spooled_scope;
 mod startup_interaction;
 mod terminal_pump;
+mod update_status;

@@ -111,6 +111,7 @@ mod shortcuts;
 mod submit;
 mod transcript_render;
 mod typography;
+mod updates;
 mod utilities;
 mod webmcp;
 mod workspace;
@@ -348,6 +349,8 @@ struct DesktopView {
     _ui_language_subscription: Subscription,
     file_destination_select: Entity<preferences::FileDestinationSelectState>,
     _file_destination_subscription: Subscription,
+    turn_completion_select: Entity<preferences::TurnCompletionModeSelectState>,
+    _turn_completion_subscription: Subscription,
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
@@ -417,6 +420,8 @@ struct DesktopView {
     webmcp_request_pending: Option<&'static str>,
     webmcp_status_dirty: bool,
     webmcp_notice: Option<webmcp::WebmcpNotice>,
+    update_status: Option<protocol::UpdateStatusSnapshot>,
+    update_request_pending: bool,
     cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
     config_target: protocol::ConfigTarget,
     config_search_input: Entity<InputState>,

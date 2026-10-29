@@ -10,7 +10,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 19 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 20 };
 
 /// A turn was rejected before delivery because a startup interaction is pending.
 pub const STARTUP_INTERACTION_PENDING_ERROR: i32 = -32001;
@@ -906,6 +906,31 @@ pub struct WebmcpPairResult {
     pub pairing_code: String,
     /// Remaining lifetime of the pairing code.
     pub expires_in_secs: u64,
+}
+
+/// Cached updater status for the desktop client. The service owns update
+/// policy (channel, pin, check interval); this snapshot never triggers
+/// network I/O, it only reports the last cached check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStatusSnapshot {
+    /// Version of the running service binary.
+    pub current_version: String,
+    /// Latest known release version, when a check has reported one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_version: Option<String>,
+    /// Whether `latest_version` is newer than `current_version` and not dismissed.
+    #[serde(default)]
+    pub update_available: bool,
+    /// HTTPS release page for `latest_version`, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_url: Option<String>,
+    /// Release channel the service follows (stable/beta/nightly).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    /// Whether the configured check interval has elapsed since the last check.
+    #[serde(default)]
+    pub check_due: bool,
 }
 
 pub mod method;

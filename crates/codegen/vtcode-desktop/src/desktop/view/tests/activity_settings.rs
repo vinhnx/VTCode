@@ -505,12 +505,12 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         window.press("end", cx);
         window.render_frame(cx);
         window.render_frame(cx);
-        assert!(window.try_find("connections-settings").is_some());
-        assert_eq!(window.within("settings-tabs").find(4usize).selected(), Some(true));
+        assert!(window.try_find("notification-settings").is_some());
+        assert_eq!(window.within("settings-tabs").find(5usize).selected(), Some(true));
         let scroll = &view.read(cx).settings_tabs_scroll;
         let offset = scroll.offset().x;
         assert!(
-            horizontal_scroll_item_is_visible(scroll, 4),
+            horizontal_scroll_item_is_visible(scroll, 5),
             "End reveals the selected settings category; scroll offset={offset:?}"
         );
         assert!(offset < px(0.), "narrow settings tabs must scroll to the selected category");

@@ -15,6 +15,12 @@ below based on the topic area.
 
 ### Configuration & Customization
 
+- **File**: `docs/config/agent-memory.md`
+  - **Content**: Agent Guidance, Memory, and Context
+  - **Topics**: Instruction Guidance and Persistent Memory, Context compaction and session history, Participant system
+  - **User Questions**: "What can you tell me about Agent Guidance, Memory, and Context?", "How does Instruction
+    Guidance and Persistent Memory work?", "How does Context compaction and session history work?"
+
 - **File**: `docs/config/CONFIG_FIELD_REFERENCE.md`
   - **Content**: Config Field Reference
   - **User Questions**: "What can you tell me about Config Field Reference?"
@@ -26,6 +32,31 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Configuration Precedence in VT Code?", "How does Resolution Order
     work?", "How does Resetting a configuration layer work?"
 
+- **File**: `docs/config/execution-security.md`
+  - **Content**: Execution, Integrations, and Security
+  - **Topics**: Execution environment, MCP integration, WebMCP browser bridge, Security and approvals
+  - **User Questions**: "What can you tell me about Execution, Integrations, and Security?", "How does Execution
+    environment work?", "How does MCP integration work?"
+
+- **File**: `docs/config/interface.md`
+  - **Content**: Interface and Session Settings
+  - **Topics**: Settings palette and reset, Live reload, Feature flags, External editor, Fullscreen interaction
+  - **User Questions**: "What can you tell me about Interface and Session Settings?", "How does Settings palette and
+    reset work?", "How does Live reload work?"
+
+- **File**: `docs/config/models.md`
+  - **Content**: Model Selection and Providers
+  - **Topics**: Model selection, Native Claude speed
+  - **User Questions**: "What can you tell me about Model Selection and Providers?", "How does Model selection work?",
+    "How does Native Claude speed work?"
+
+- **File**: `docs/config/profiles-reference.md`
+  - **Content**: Profiles, Operations, and Reference
+  - **Topics**: Profiles and overrides, Observability and telemetry, Authentication and authorization, CLI
+    Configuration, Configuration Validation and Troubleshooting
+  - **User Questions**: "What can you tell me about Profiles, Operations, and Reference?", "How does Profiles and
+    overrides work?", "How does Observability and telemetry work?"
+
 - **File**: `docs/config/TOOLS_CONFIG.md`
   - **Content**: Tools Configuration
   - **Topics**: Blocked-call limits and blocked handoffs
@@ -34,9 +65,8 @@ below based on the topic area.
 
 - **File**: `docs/config/config.md`
   - **Content**: VT Code Configuration
-  - **Topics**: Quick navigation, Settings palette and reset, Live reload, Feature flags, Model selection
-  - **User Questions**: "What can you tell me about VT Code Configuration?", "How does Quick navigation work?", "How
-    does Settings palette and reset work?"
+  - **Topics**: Quick navigation
+  - **User Questions**: "What can you tell me about VT Code Configuration?", "How does Quick navigation work?"
 
 ### Development & Testing
 

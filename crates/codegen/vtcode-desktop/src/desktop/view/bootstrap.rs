@@ -237,6 +237,20 @@ impl DesktopView {
                     view.set_file_open_destination(*destination, cx);
                 }
             });
+        let turn_completion_select = cx.new(|cx| {
+            gpui_kit::component::select::SelectState::new(
+                preferences::TurnCompletionModeOption::for_modes(),
+                preferences::TurnCompletionModeOption::selected_index(preferences.notifications.turn_completion()),
+                window,
+                cx,
+            )
+            .searchable(false)
+        });
+        let turn_completion_subscription = cx.subscribe_in(&turn_completion_select, window, |view, _, event, _, cx| {
+            if let SelectEvent::Confirm(Some(mode)) = event {
+                view.set_turn_completion_mode(*mode, cx);
+            }
+        });
         let config_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search settings…"));
         let config_search_subscription = cx.subscribe_in(&config_search_input, window, |_, _, event, _, cx| {
             if matches!(event, InputEvent::Change) {
@@ -297,6 +311,8 @@ impl DesktopView {
             _ui_language_subscription: ui_language_subscription,
             file_destination_select,
             _file_destination_subscription: file_destination_subscription,
+            turn_completion_select,
+            _turn_completion_subscription: turn_completion_subscription,
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
@@ -370,6 +386,8 @@ impl DesktopView {
             webmcp_request_pending: None,
             webmcp_status_dirty: false,
             webmcp_notice: None,
+            update_status: None,
+            update_request_pending: false,
             cli_config_settings: None,
             config_target: protocol::ConfigTarget::Workspace,
             config_search_input,

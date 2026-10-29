@@ -266,6 +266,84 @@ mod tests {
     }
 
     #[test]
+    fn notification_settings_copy_covers_every_language() {
+        assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "en").to_string(), "Notifications");
+        assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "vi").to_string(), "Thông báo");
+        assert_eq!(
+            rust_i18n::t!("app.settings.notifications.enable", locale = "en").to_string(),
+            "Enable notifications"
+        );
+        assert_eq!(rust_i18n::t!("app.settings.notifications.enable", locale = "vi").to_string(), "Bật thông báo");
+        assert_eq!(
+            rust_i18n::t!("app.settings.notifications.turn_completion.title", locale = "en").to_string(),
+            "Turn completion notifications"
+        );
+        assert_eq!(
+            rust_i18n::t!("app.settings.notifications.turn_completion.title", locale = "vi").to_string(),
+            "Tác vụ agent hoàn thành"
+        );
+        assert_eq!(
+            rust_i18n::t!("app.settings.notifications.permission", locale = "en").to_string(),
+            "Enable permission notifications"
+        );
+        assert_eq!(
+            rust_i18n::t!("app.settings.notifications.permission", locale = "vi").to_string(),
+            "Bật thông báo xin phép"
+        );
+        assert_eq!(
+            rust_i18n::t!("app.settings.notifications.up_to_date", locale = "en").to_string(),
+            "You're up to date"
+        );
+        assert_eq!(
+            rust_i18n::t!("app.settings.notifications.up_to_date", locale = "vi").to_string(),
+            "Bạn đang dùng bản mới nhất"
+        );
+
+        macro_rules! assert_catalog_key {
+            ($key:literal) => {
+                for language in UiLanguage::ALL {
+                    let locale = language.locale();
+                    let translated = rust_i18n::t!($key, locale = locale).to_string();
+                    assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
+                    // French "Notifications" is a genuine cognate of the
+                    // English group/tab title, not an untranslated entry.
+                    let cognate = locale == "fr"
+                        && ($key == "app.settings.tab.notifications" || $key == "app.settings.notifications.group");
+                    if language != UiLanguage::English && !cognate {
+                        assert_ne!(
+                            translated,
+                            rust_i18n::t!($key, locale = "en").to_string(),
+                            "{locale}/{} must be translated",
+                            $key
+                        );
+                    }
+                }
+            };
+        }
+
+        assert_catalog_key!("app.settings.tab.notifications");
+        assert_catalog_key!("app.settings.notifications.group");
+        assert_catalog_key!("app.settings.notifications.enable");
+        assert_catalog_key!("app.settings.notifications.enable_description");
+        assert_catalog_key!("app.settings.notifications.turn_completion.title");
+        assert_catalog_key!("app.settings.notifications.turn_completion.description");
+        assert_catalog_key!("app.settings.notifications.turn_completion.always");
+        assert_catalog_key!("app.settings.notifications.turn_completion.unfocused");
+        assert_catalog_key!("app.settings.notifications.turn_completion.never");
+        assert_catalog_key!("app.settings.notifications.permission");
+        assert_catalog_key!("app.settings.notifications.permission_description");
+        assert_catalog_key!("app.settings.notifications.questions");
+        assert_catalog_key!("app.settings.notifications.questions_description");
+        assert_catalog_key!("app.settings.notifications.updates");
+        assert_catalog_key!("app.settings.notifications.updates_description");
+        assert_catalog_key!("app.settings.notifications.updates_status");
+        assert_catalog_key!("app.settings.notifications.check_for_updates");
+        assert_catalog_key!("app.settings.notifications.up_to_date");
+        assert_catalog_key!("app.settings.notifications.update_available");
+        assert_catalog_key!("app.settings.notifications.status_unavailable");
+    }
+
+    #[test]
     fn transcript_and_configuration_copy_are_localized_for_every_language() {
         macro_rules! assert_catalog_key {
             ($key:literal) => {
