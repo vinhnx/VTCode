@@ -1,4 +1,14 @@
-use super::*;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, anyhow};
+use glob::Pattern;
+use tracing::warn;
+use vtcode_commons::canonicalize;
+use vtcode_commons::canonicalize_async;
+
+use super::IMPORT_PROBE_NAME;
+use super::discovery::user_global_instruction_roots;
+use super::types::{MatchCandidate, RuleFrontmatter};
 
 pub(super) fn parse_rule_frontmatter(contents: &str, path: &Path) -> Result<RuleFrontmatter> {
     let Some((frontmatter, _body)) = split_frontmatter(contents) else {

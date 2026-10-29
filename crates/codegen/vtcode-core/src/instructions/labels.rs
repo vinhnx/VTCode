@@ -1,4 +1,6 @@
-use super::*;
+use std::path::Path;
+
+use super::{CLAUDE_FILENAME, InstructionScope, InstructionSource, InstructionSourceKind};
 
 pub fn instruction_scope_label(scope: &InstructionScope) -> &'static str {
     match scope {

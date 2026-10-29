@@ -1,5 +1,17 @@
-use super::*;
+use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+use glob::Pattern;
 use tempfile::tempdir;
+use vtcode_commons::canonicalize;
+
+use super::matching::{RulePattern, pattern_matches_candidate};
+use super::types::MatchCandidate;
+use super::{
+    InstructionDiscoveryOptions, InstructionScope, InstructionSegment, InstructionSource, InstructionSourceKind,
+    discover_instruction_sources, extract_instruction_highlights, format_instruction_path, instruction_source_label,
+    read_instruction_bundle,
+};
 
 fn write_doc(dir: &Path, content: &str) -> Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
