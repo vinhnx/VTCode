@@ -217,6 +217,19 @@ until it clears the contrast floor as terminal text.
 VT Code validates theme contrast at startup and logs warnings for colors that don't meet the configured minimum contrast
 ratio.
 
+## Desktop Sync
+
+The desktop app builds its full theme catalog from this registry (`builtin_theme_colors`), so every CLI theme is
+selectable on desktop. Sync between the two surfaces follows these rules:
+
+- Desktop → CLI: palette themes sync by id; the desktop-only System Light/Dark entries sync as their per-mode
+  default built-in theme. The CLI config writer accepts registry ids only.
+- CLI → Desktop: the service reports the effective CLI theme (unknown config values resolve to the default, matching
+  CLI startup), so follow/import always receives a registered id. Custom `.vtcode/theme.toml` color overrides do not
+  transfer; desktop follows the base registry theme.
+- Code syntax colors: the CLI maps UI themes to bat themes per id, while desktop code-token colors stay on the Kit
+  mode default (Kit 0.8.0 exposes no per-palette syntax-token API); desktop code-block surfaces follow the palette.
+
 ## API Reference
 
 For developers extending VT Code:
@@ -224,8 +237,7 @@ For developers extending VT Code:
 ```rust
 use vtcode_ui::theme::{
     ColorAccessibilityConfig,
-    gpui_kit_theme_colors,
-    gpui_kit_theme_colors_all,
+    builtin_theme_colors,
     set_color_accessibility_config,
     get_minimum_contrast,
     is_bold_bright_mode,

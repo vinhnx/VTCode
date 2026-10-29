@@ -1,6 +1,12 @@
-//! Converts the terminal-free [`super::gpui_kit`] theme specs into shared UI
-//! palette tokens, so the desktop app (and any other UI consumer) renders the
-//! exact colors the CLI registry derives from the same upstream rows.
+//! Shared UI palette tokens derived from the CLI theme registry.
+//!
+//! [`builtin_theme_colors`] is the consumer API: the desktop app (and any
+//! other UI consumer) renders these colors, which run through the same
+//! accessible style pipeline as the TUI. The [`gpui_kit_theme_colors`] family
+//! instead exposes the raw upstream spec rows and exists to verify the port
+//! (scheme agreement, upstream hue pins); for curated themes (Catppuccin,
+//! Gruvbox, Solarized) the registry intentionally overrides the spec rows, so
+//! the two answers differ there by design.
 
 use anstyle::{Color, RgbColor};
 use vtcode_config::constants::ui;
@@ -55,12 +61,15 @@ pub fn gpui_kit_theme_label(theme_id: &str) -> Option<&'static str> {
     find_spec(theme_id).map(|spec| spec.label)
 }
 
-/// Derive the shared palette tokens for a gpui-kit theme id.
+/// Derive the raw upstream palette tokens for a gpui-kit theme id.
+/// Port-verification oracle only; UI consumers must use
+/// [`builtin_theme_colors`], which reflects the curated registry entries.
 pub fn gpui_kit_theme_colors(theme_id: &str) -> Option<UiThemeColors> {
     find_spec(theme_id).map(|spec| colors_for(&spec.palette))
 }
 
 /// Every gpui-kit theme as `(id, dark, colors)`, in upstream order.
+/// Port-verification oracle only; see [`gpui_kit_theme_colors`].
 pub fn gpui_kit_theme_colors_all() -> impl Iterator<Item = (&'static str, bool, UiThemeColors)> {
     theme_specs().iter().map(|spec| (spec.id, spec.dark, colors_for(&spec.palette)))
 }

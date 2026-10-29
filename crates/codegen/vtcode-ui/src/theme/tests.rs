@@ -258,21 +258,24 @@ fn test_theme_for_terminal_scheme_change_prefers_suite_twin() {
 #[test]
 fn test_theme_for_terminal_scheme_change_falls_back_without_twin() {
     // mono is a single dark theme with no light twin; a light report falls
-    // back to the default suggestion for the reported scheme.
-    vtcode_commons::ansi_capabilities::set_color_scheme_override(Some(
-        vtcode_commons::ansi_capabilities::ColorScheme::Light,
-    ));
+    // back to the default suggestion for the requested scheme.
     assert_eq!(theme_for_terminal_scheme_change("mono", false), "vitesse-light");
-    vtcode_commons::ansi_capabilities::set_color_scheme_override(None);
 }
 
 #[test]
 fn test_theme_for_terminal_scheme_change_falls_back_for_unknown_theme() {
-    vtcode_commons::ansi_capabilities::set_color_scheme_override(Some(
-        vtcode_commons::ansi_capabilities::ColorScheme::Dark,
-    ));
     assert_eq!(theme_for_terminal_scheme_change("not-a-theme", true), DEFAULT_THEME_ID);
-    vtcode_commons::ansi_capabilities::set_color_scheme_override(None);
+}
+
+#[test]
+fn every_theme_resolves_a_registered_scheme_twin() {
+    for id in available_themes() {
+        for dark in [false, true] {
+            let twin = theme_for_terminal_scheme_change(id, dark);
+            assert!(ensure_theme(twin).is_ok(), "{id} twin {twin} must be registered");
+            assert_eq!(is_light_theme(twin), !dark, "{id} twin {twin} must match the requested scheme");
+        }
+    }
 }
 
 fn style_rgb(style: Style) -> Option<RgbColor> {
@@ -496,5 +499,5 @@ fn suite_scheme_flip_prefers_the_set_flagship_variant() {
     assert_eq!(theme_for_terminal_scheme_change("molokai-dark", false), "molokai-light");
     assert_eq!(theme_for_terminal_scheme_change("molokai-light", true), "molokai-dark");
     // Sets without a light variant fall back to the default suggestion.
-    assert_eq!(theme_for_terminal_scheme_change("tokyo-night", false), suggest_theme_for_terminal());
+    assert_eq!(theme_for_terminal_scheme_change("tokyo-night", false), "vitesse-light");
 }

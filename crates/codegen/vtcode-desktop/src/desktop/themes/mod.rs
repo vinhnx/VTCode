@@ -41,6 +41,19 @@ pub(super) fn system_id(mode: ThemeMode) -> &'static str {
     }
 }
 
+/// CLI registry id for a desktop selection, for theme sync.
+///
+/// Palette ids pass through; the kit-base sentinels map to the per-mode VT
+/// Code default because the CLI has no kit base to mirror. Unknown ids stay
+/// unknown so the service-side registry guard keeps rejecting them.
+pub(super) fn cli_id_for(id: &str) -> Option<&'static str> {
+    match id {
+        SYSTEM_LIGHT_ID => Some(default_id(ThemeMode::Light)),
+        SYSTEM_DARK_ID => Some(default_id(ThemeMode::Dark)),
+        _ => find(id).map(|theme| theme.id),
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct DesktopTheme {
     pub id: &'static str,

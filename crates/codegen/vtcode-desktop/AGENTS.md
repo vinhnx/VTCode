@@ -12,7 +12,7 @@
   Fast mode follows the validated CLI route and persists through the service.
 - Palettes retain `CommandState` and shared immutable entries; guard callbacks by originating entity.
   Focus next frame and consume Cancel. Kit TabBar needs scoped focus and arrow/Home/End navigation.
-- Theme uses brand `primary`, hover `accent`, and shared `apply_theme`; Markdown blocks images and uses Kit `syntect` highlighting.
+- Theme uses brand `primary`, hover `accent`, and shared `apply_theme`; Markdown blocks images and uses Kit `syntect` highlighting. Syntax *token* colors stay on the Kit mode default (`ThemeStyle` is unconstructible in Kit 0.8.0; pinned by `code_token_colors_follow_the_kit_mode_default`); only code-block surfaces follow the palette.
 - Localization uses app-owned `app` keys in `locales/ui.yml`; notify the view after locale changes.
 - Appearance scrolling locks axes; typography follows active profiles, then becomes shared when separation is disabled.
 - Use `aa_muted` (captions/metadata only), `muted_text` (row descriptions/hints, 6:1 target), `label_foreground` (headings/labels/tabs), `faded_chrome` (quiet chrome icons, 3:1 floor), and `filled_button_foreground` over palette colors; never hardcode colors over a theme. Titles and body stay regular; semibold is reserved for small headings via `group_box_title`/`section_label` (Kit `GroupBox` titles render muted by default). Settings rows use `row_title`/`row_description` with `row_divider` separators. Compose new screens from `view/components.rs` builders (`settings_group_box`, `settings_row`, `centered_empty_state`, `scroll_column`/`scroll_column_flex`, `sheet_panel_height`, `desktop_selected`); check there before adding render helpers.

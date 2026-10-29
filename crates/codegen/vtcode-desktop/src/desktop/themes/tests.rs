@@ -435,6 +435,15 @@ fn theme_modes_have_valid_defaults_and_system_ids() {
 }
 
 #[test]
+fn cli_sync_ids_cover_sentinels_and_reject_unknown_ids() {
+    assert_eq!(cli_id_for(SYSTEM_LIGHT_ID), Some(default_id(ThemeMode::Light)));
+    assert_eq!(cli_id_for(SYSTEM_DARK_ID), Some(default_id(ThemeMode::Dark)));
+    assert_ne!(cli_id_for(SYSTEM_LIGHT_ID), cli_id_for(SYSTEM_DARK_ID));
+    assert_eq!(cli_id_for("ciapre-blue"), Some("ciapre-blue"));
+    assert_eq!(cli_id_for("invalid-theme"), None);
+}
+
+#[test]
 fn every_cli_theme_is_offered_in_the_desktop_picker() {
     let desktop_ids: Vec<&str> = all_themes().iter().map(|theme| theme.id).collect();
     for id in theme::available_themes() {
@@ -530,6 +539,27 @@ fn contrast_blend_covers_fallback_and_blend_arms_in_both_directions() {
             "blend must move toward the background"
         );
     }
+}
+
+#[gpui_kit::test]
+fn code_token_colors_follow_the_kit_mode_default(cx: &mut gpui_kit::TestAppContext) {
+    use gpui_kit::component::highlighter::HighlightTheme;
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        // Kit 0.8.0 exposes no constructor for per-palette syntax tokens
+        // (`ThemeStyle` fields are private), so every palette of a mode shares
+        // the Kit default highlight theme. Code-block *surfaces* still follow
+        // the palette through `theme.muted`.
+        for palette in all_themes() {
+            let _mode = apply_by_id(palette.id, None, cx);
+            let highlight = &cx.global::<Theme>().highlight_theme;
+            let expected = match palette.mode {
+                ThemeMode::Light => HighlightTheme::default_light(),
+                ThemeMode::Dark => HighlightTheme::default_dark(),
+            };
+            assert_eq!(**highlight, *expected, "{}: syntax tokens use the Kit mode default", palette.id);
+        }
+    });
 }
 
 #[test]

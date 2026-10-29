@@ -11,24 +11,29 @@ impl DesktopView {
     }
 
     pub(super) fn can_sync_theme_to_cli(&self) -> bool {
+        let Some(cli_id) = themes::cli_id_for(&self.theme_id) else {
+            return false;
+        };
         self.session_change_idle()
             && !self.has_unresolved_submission()
             && !self.attachments_picker_open
             && self.attachments_task.is_none()
             && !self.workspace_picker_open
-            && themes::find(&self.theme_id).is_some()
             && self
                 .configuration
                 .as_ref()
                 .and_then(|configuration| configuration.shared_ui.as_ref())
-                .is_some_and(|preferences| preferences.theme != self.theme_id)
+                .is_some_and(|preferences| preferences.theme != cli_id)
     }
 
     pub(super) fn sync_theme_to_cli(&mut self, cx: &mut Context<Self>) {
         if !self.can_sync_theme_to_cli() {
             return;
         }
-        let params = protocol::ThemePreferenceSelectParams { theme: self.theme_id.clone() };
+        let Some(cli_id) = themes::cli_id_for(&self.theme_id) else {
+            return;
+        };
+        let params = protocol::ThemePreferenceSelectParams { theme: cli_id.to_string() };
         if self.request(protocol::method::CONFIG_THEME, serde_json::json!(params)) {
             self.session_request = Some(protocol::method::CONFIG_THEME);
             self.status = "Saving the selected theme to CLI configuration…".into();
@@ -150,7 +155,7 @@ impl DesktopView {
                             })),
                     ),
             )
-            .footer("Sync saves the selected built-in theme through the CLI config writer; new CLI sessions use it. Reload reads all CLI configuration layers through a fresh local service. Reload starts a new conversation, keeps the editable draft and attached files, and leaves previous sessions in history.");
+            .footer("Sync saves the selected built-in theme through the CLI config writer; new CLI sessions use it. System Light/Dark sync as their per-mode default built-in theme. Reload reads all CLI configuration layers through a fresh local service. Reload starts a new conversation, keeps the editable draft and attached files, and leaves previous sessions in history.");
         accessible_group_box("cli-preferences-group", "CLI preferences", group)
     }
 

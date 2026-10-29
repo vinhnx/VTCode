@@ -6,7 +6,10 @@ use vtcode_ui::tui::core_tui::session::parse_key_binding;
 
 pub(super) fn snapshot(bindings: &HashMap<String, Vec<String>>, theme: &str) -> SharedUiPreferences {
     let mut result = SharedUiPreferences {
-        theme: theme.into(),
+        // Report the effective theme the CLI would activate (unknown config
+        // values fall back to the default), so desktop follow/import never
+        // receives an id outside the shared registry.
+        theme: vtcode_ui::theme::resolve_theme(Some(theme.to_string())),
         shortcuts: Default::default(),
         shortcut_warnings: Vec::new(),
     };
@@ -81,6 +84,15 @@ fn native_key(spec: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn snapshot_reports_the_effective_cli_theme() {
+        let bindings = HashMap::new();
+        assert_eq!(snapshot(&bindings, "ciapre-blue").theme, "ciapre-blue");
+        assert_eq!(snapshot(&bindings, "Ciapre-Blue").theme, "ciapre-blue");
+        assert_eq!(snapshot(&bindings, "not-a-theme").theme, vtcode_ui::theme::DEFAULT_THEME_ID);
+        assert_eq!(snapshot(&bindings, "").theme, vtcode_ui::theme::DEFAULT_THEME_ID);
+    }
+
     #[test]
     fn shared_ui_preferences_reuse_cli_aliases_and_preserve_explicit_unbinds() {
         let projected = snapshot(

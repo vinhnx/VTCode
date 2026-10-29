@@ -24,17 +24,19 @@ pub fn is_light_theme(theme_id: &str) -> bool {
 
 /// Suggest a built-in theme that matches the current terminal scheme.
 pub fn suggest_theme_for_terminal() -> &'static str {
-    match detect_color_scheme() {
-        ColorScheme::Light => "vitesse-light",
-        ColorScheme::Dark | ColorScheme::Unknown => DEFAULT_THEME_ID,
-    }
+    suggest_theme_for_scheme(!matches!(detect_color_scheme(), ColorScheme::Light))
+}
+
+/// Suggest a built-in theme for an explicit light/dark scheme.
+fn suggest_theme_for_scheme(dark: bool) -> &'static str {
+    if dark { DEFAULT_THEME_ID } else { "vitesse-light" }
 }
 
 /// Pick the theme to apply after a terminal light/dark scheme change.
 ///
 /// Prefers a light/dark twin from the same suite as `current_theme_id` so
-/// suite-aware themes stay within their family; falls back to
-/// [`suggest_theme_for_terminal`] for single-theme or custom selections.
+/// suite-aware themes stay within their family; falls back to the default
+/// suggestion for the requested scheme for single-theme or custom selections.
 pub fn theme_for_terminal_scheme_change(current_theme_id: &str, dark: bool) -> &'static str {
     if let Some(suite_id) = theme_suite_id(current_theme_id)
         && let Some(suite) = available_theme_suites().into_iter().find(|suite| suite.id == suite_id)
@@ -43,7 +45,7 @@ pub fn theme_for_terminal_scheme_change(current_theme_id: &str, dark: bool) -> &
             return theme_id;
         }
     }
-    suggest_theme_for_terminal()
+    suggest_theme_for_scheme(dark)
 }
 
 /// The suite variant for the requested scheme.

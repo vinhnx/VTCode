@@ -377,6 +377,49 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
 }
 
 #[gpui_kit::test]
+fn sync_cli_theme_maps_system_sentinels_to_builtin_defaults(cx: &mut TestAppContext) {
+    use super::super::themes;
+    let directory = tempfile::tempdir().expect("workspace");
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let configuration = |theme: &str| {
+        serde_json::from_value(json!({
+            "provider": "ollama",
+            "model": "gpt-oss:20b",
+            "authenticated": true,
+            "credentialSetupCommand": "vtcode login ollama",
+            "sharedUi": { "theme": theme, "shortcuts": {}, "shortcutWarnings": [] }
+        }))
+        .ok()
+    };
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(directory.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = configuration("vitesse-dark");
+            for (system_id, expected) in [
+                (themes::SYSTEM_LIGHT_ID, themes::default_id(ThemeMode::Light)),
+                (themes::SYSTEM_DARK_ID, themes::default_id(ThemeMode::Dark)),
+            ] {
+                view.theme_id = system_id.into();
+                assert!(view.can_sync_theme_to_cli(), "{system_id} must sync as its per-mode default");
+                view.sync_theme_to_cli(cx);
+                let BackendCommand::Request { method, params } = requests.try_recv().expect("theme request") else {
+                    panic!("expected a theme request");
+                };
+                assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_THEME);
+                assert_eq!(params, json!({ "theme": expected }));
+                view.session_request = None;
+            }
+            view.theme_id = themes::SYSTEM_DARK_ID.into();
+            view.configuration = configuration(themes::default_id(ThemeMode::Dark));
+            assert!(!view.can_sync_theme_to_cli(), "a CLI already on the mapped default needs no sync");
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temp workspace");
     std::fs::write(workspace.path().join("README.md"), "# Notes\n\nhello from the workspace").expect("write file");
