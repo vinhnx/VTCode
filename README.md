@@ -2,54 +2,14 @@
 
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
-**Plan, change, and verify code from your terminal, with every step auditable.**
+<p>Open-source coding agent</p>
 
-VT Code is an open-source coding agent for your repository. Choose the model, keep tool calls under
-policy, and review every change.
-
-[![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
 [![Rust](https://img.shields.io/badge/rust-1.99.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-30363D?style=flat-square)](#license)
-[![hotpath-cloud](https://img.shields.io/endpoint?url=https://hotpath.rs/badge-cloud.json)](https://hotpath.rs/app/repos/vinhnx/VTCode)
+[![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
 
-<a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-
-<!-- markdownlint-disable-next-line MD013 -->
-<img src="./resources/gif/vtcode.gif" alt="VT Code demo: plan, then review changes in the terminal" width="76%" />
 </div>
-
-## Contents
-
-- [Contents](#contents)
-- [Overview](#overview)
-- [Quick start](#quick-start)
-    - [1. Install](#1-install)
-    - [2. Configure your project](#2-configure-your-project)
-    - [3. Run your first task](#3-run-your-first-task)
-- [Usage](#usage)
-    - [Interactive](#interactive)
-    - [Modes](#modes)
-    - [Automation](#automation)
-    - [Sessions](#sessions)
-- [Documentation](#documentation)
-    - [Get started](#get-started)
-    - [Work in the TUI](#work-in-the-tui)
-    - [Automate](#automate)
-    - [Extend and integrate](#extend-and-integrate)
-    - [Develop and evaluate](#develop-and-evaluate)
-- [Development](#development)
-- [Contributing](#contributing)
-- [Security](#security)
-- [Community](#community)
-- [Thanks to our contributors](#thanks-to-our-contributors)
-    - [Security Advisors](#security-advisors)
-    - [Main Contributor](#main-contributor)
-    - [Core Contributors](#core-contributors)
-    - [Contributors](#contributors)
-    - [Resources](#resources)
-- [Support VT Code](#support-vt-code)
-- [Thank you!](#thank-you)
-- [License](#license)
 
 ## Overview
 

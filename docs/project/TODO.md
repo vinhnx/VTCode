@@ -28,10 +28,6 @@ https://gpui-kit.com/component/chart/
 
 ---
 
-sync and port all themes from CLI to Desktop. use gpui skills kit for guidance.
-
----
-
 check Settings' tab appearence not showing correctly for selected tab and highlight tabs. use gpui skills kit for guidance.
 
 ---
@@ -73,7 +69,3 @@ also revise chat input styling to match CLI. or at least make it simple and mini
 ---
 
 check and reference codex/chatgpt app typography design, it looks cleaner and more readable. /Users/vinhnguyenxuan/Documents/vtcode-resources/typography -> apply to improve desktop app text. use gpui skills kit for guidance.
-
----
-
-implement desktop notifications for updates and alerts. when new updates are available or important events occur. configure them in settings.

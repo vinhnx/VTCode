@@ -1873,7 +1873,8 @@ below based on the topic area.
 
 - **File**: `docs/harness/ZEN_ALIGNMENT.md`
   - **Content**: Zen Alignment for VT Code
-  - **Topics**: Scope, Full Principle Mapping (All 19), Baseline Metrics (2026-03-03), Rollout, Verification Commands
+  - **Topics**: Scope, Full Principle Mapping (All 19), Baseline Metrics (2026-03-03), Hard-Ceiling Metrics
+    (2026-10-29), Rollout
   - **User Questions**: "What can you tell me about Zen Alignment for VT Code?", "How does Scope work?", "How does Full
     Principle Mapping (All 19) work?"
 
