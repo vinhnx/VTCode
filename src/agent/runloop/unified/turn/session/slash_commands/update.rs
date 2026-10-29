@@ -45,6 +45,15 @@ pub(crate) async fn handle_update(
                 return Ok(SlashCommandControl::Continue);
             }
 
+            // The install prompt is a modal: without inline UI it would wedge the
+            // turn until cancel, and replacing the serving binary mid-session
+            // is not something a headless turn should do unprompted.
+            if !ctx.renderer.supports_inline_ui() {
+                ctx.renderer
+                    .line(MessageStyle::Info, "Run `vtcode update install` in a terminal to apply this release.")?;
+                return Ok(SlashCommandControl::Continue);
+            }
+
             let notice = updater.notice_for_version(update.version.clone());
             run_inline_update_prompt(
                 ctx.renderer,

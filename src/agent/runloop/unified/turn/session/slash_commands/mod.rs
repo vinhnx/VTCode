@@ -35,6 +35,9 @@ mod handlers;
 mod outcome_router;
 pub mod secrets;
 
+#[cfg(test)]
+mod headless_tests;
+
 pub(crate) enum SlashCommandControl {
     Continue,
     BackgroundCompletionHandled { completion_identity: String },

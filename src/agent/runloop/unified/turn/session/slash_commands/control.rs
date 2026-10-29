@@ -49,6 +49,19 @@ pub(crate) async fn handle_show_permissions(ctx: SlashCommandContext<'_>) -> Res
     if !ui::ensure_selection_ui_available(&mut ctx, "changing permissions")? {
         return Ok(SlashCommandControl::Continue);
     }
+    // The mode switcher is a confirmation modal; without inline UI it would
+    // wedge the turn until cancel. Report the effective mode as text instead.
+    if !ctx.renderer.supports_inline_ui() {
+        let mode = if ctx.vt_cfg.as_ref().is_some_and(|config| config.sandbox.is_full_access()) {
+            "Full access (this session)"
+        } else {
+            "Configured"
+        };
+        ctx.renderer.line(MessageStyle::Info, &format!("Permission mode: {mode}"))?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Change it from the permissions picker in your client.")?;
+        return Ok(SlashCommandControl::Continue);
+    }
     let active = ctx.vt_cfg.as_ref().is_some_and(|config| config.sandbox.is_full_access());
     let request = permission_choices(active, false);
     let choice = show_overlay_and_wait(
@@ -278,6 +291,13 @@ pub(crate) async fn handle_clear_conversation(ctx: SlashCommandContext<'_>) -> R
 }
 
 pub(crate) async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "This surface keeps the full transcript; nothing was cleared. Conversation context is preserved.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
     ctx.renderer.clear_screen();
     ctx.renderer
         .line(MessageStyle::Info, "Cleared screen. Conversation context is preserved.")?;
@@ -288,6 +308,11 @@ pub(crate) async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<
 pub(crate) async fn handle_show_transcript_stats(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let disk_event_count = transcript::len();
 
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer
+            .line(MessageStyle::Info, &format!("Transcript: {disk_event_count} disk events."))?;
+        return Ok(SlashCommandControl::Continue);
+    }
     ctx.renderer.line(
         MessageStyle::Info,
         &format!("Transcript: {disk_event_count} disk events (TUI-only memory is bounded and evicts oldest lines)."),

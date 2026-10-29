@@ -88,6 +88,16 @@ pub(crate) async fn handle_oauth_login(
     if !ensure_supported_provider(ctx.renderer, &provider, "login")? {
         return Ok(SlashCommandControl::Continue);
     }
+    // The OpenAI/OpenRouter device flows need a browser round-trip plus modal
+    // input, neither of which exists without inline UI. Copilot stays
+    // available: it shells out to the `copilot` CLI with text-driven events.
+    if !ctx.renderer.supports_inline_ui() && provider.as_str() != COPILOT_PROVIDER {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            &format!("OAuth login for {provider} needs a browser flow. Run `vtcode login {provider}` in a terminal."),
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
     let vt_cfg = ctx.vt_cfg.as_ref();
 
     match provider.as_str() {

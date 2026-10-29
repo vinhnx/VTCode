@@ -7,7 +7,7 @@ use vtcode_commons::resolve_editor_target;
 use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
     InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission, WizardModalMode,
     WizardStep,
@@ -56,7 +56,29 @@ pub(crate) async fn handle_new_session(ctx: SlashCommandContext<'_>) -> Result<S
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::NewSession))
 }
 
+/// Headless browser open for an explicitly typed command: there is no surface to
+/// confirm on, and waiting on the guard modal would wedge the turn until
+/// cancel. The slash command itself is the user intent, so open directly and
+/// report the outcome as text.
+fn report_direct_url_open(renderer: &mut AnsiRenderer, url: &str, opened: &str) -> Result<()> {
+    match open_external_url(url) {
+        Ok(()) => {
+            renderer.line(MessageStyle::Info, &format!("{opened}: {url}"))?;
+        }
+        Err(err) => {
+            renderer.line(MessageStyle::Error, &format!("Failed to open browser: {err}"))?;
+            renderer.line(MessageStyle::Info, &format!("Please visit: {url}"))?;
+        }
+    }
+    renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(())
+}
+
 pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    if !ctx.renderer.supports_inline_ui() {
+        report_direct_url_open(ctx.renderer, DOCS_URL, "Opening documentation in browser")?;
+        return Ok(SlashCommandControl::Continue);
+    }
     match request_external_url_open(
         ExternalUrlGuardContext::new(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify),
         DOCS_URL,
@@ -88,6 +110,10 @@ pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<Sla
 }
 
 pub(crate) async fn handle_open_feedback(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    if !ctx.renderer.supports_inline_ui() {
+        report_direct_url_open(ctx.renderer, FEEDBACK_URL, "Opening a new GitHub issue")?;
+        return Ok(SlashCommandControl::Continue);
+    }
     match request_external_url_open(
         ExternalUrlGuardContext::new(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify),
         FEEDBACK_URL,
@@ -120,6 +146,15 @@ pub(crate) async fn handle_open_feedback(ctx: SlashCommandContext<'_>) -> Result
 }
 
 pub(crate) async fn handle_open_donate_links(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    // Two link targets and no picker: print both instead of opening either
+    // unprompted or wedging the turn on a selection modal.
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(MessageStyle::Info, "Support VT Code in your browser:")?;
+        ctx.renderer.line(MessageStyle::Output, &format!("Coffee: {DONATE_URL}"))?;
+        ctx.renderer.line(MessageStyle::Output, &format!("Project: {PROJECT_URL}"))?;
+        ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+        return Ok(SlashCommandControl::Continue);
+    }
     let request = TransientRequest::List(ListOverlayRequest {
         title: "Support VT Code".to_string(),
         lines: vec![

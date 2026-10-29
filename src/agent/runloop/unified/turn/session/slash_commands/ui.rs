@@ -3,7 +3,7 @@ use tokio::task;
 use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, TransientSubmission};
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -320,10 +320,37 @@ pub(crate) async fn handle_start_mode_palette(mut ctx: SlashCommandContext<'_>) 
     };
 
     let current_name = ctx.active_primary_agent.active().identity.name.clone();
+    if !ctx.renderer.supports_inline_ui() {
+        render_mode_list_headless(ctx.renderer, &specs, &current_name)?;
+        return Ok(SlashCommandControl::Continue);
+    }
     if show_mode_palette(ctx.renderer, &specs, &current_name)? {
         *ctx.palette_state = Some(ActivePalette::Mode);
     }
     Ok(SlashCommandControl::Continue)
+}
+
+fn render_mode_list_headless(
+    renderer: &mut AnsiRenderer,
+    specs: &[vtcode_config::SubagentSpec],
+    current_name: &str,
+) -> Result<()> {
+    let primary: Vec<_> = specs.iter().filter(|spec| spec.is_primary()).collect();
+    if primary.is_empty() {
+        renderer.line(MessageStyle::Info, "No primary agents available.")?;
+        return Ok(());
+    }
+    renderer.line(MessageStyle::Info, "Agent modes (switch with /mode <name>):")?;
+    for spec in primary {
+        let marker = if spec.name.eq_ignore_ascii_case(current_name) {
+            " (active)"
+        } else {
+            ""
+        };
+        renderer.line(MessageStyle::Output, &format!("  {}{marker} — {}", spec.name, spec.description))?;
+    }
+    renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(())
 }
 
 pub(crate) async fn handle_select_primary_agent_from_slash(
@@ -331,4 +358,21 @@ pub(crate) async fn handle_select_primary_agent_from_slash(
     name: &str,
 ) -> Result<SlashCommandControl> {
     Ok(SlashCommandControl::SelectAgent(name.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn headless_mode_list_renders_empty_and_populated_catalogs() {
+        let mut renderer = AnsiRenderer::stdout();
+        render_mode_list_headless(&mut renderer, &[], "build").expect("empty catalog must render");
+
+        let mut build = vtcode_config::builtin_primary_build_agent();
+        build.description = "Build & ship".to_string();
+        let mut renderer = AnsiRenderer::stdout();
+        render_mode_list_headless(&mut renderer, std::slice::from_ref(&build), "BUILD")
+            .expect("populated catalog must render");
+    }
 }

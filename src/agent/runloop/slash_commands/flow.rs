@@ -399,4 +399,41 @@ mod tests {
             }
         ));
     }
+
+    #[tokio::test]
+    async fn session_palette_commands_headless_render_text_instead_of_a_picker() {
+        // Ambient archives decide whether the empty message or the text list
+        // renders; either way the outcome must stay Handled so no picker
+        // state is ever parked without a surface to answer it.
+        let mut renderer = AnsiRenderer::stdout();
+        assert!(!renderer.supports_inline_ui());
+        let outcome = handle_resume_command("", &mut renderer, Path::new("."))
+            .await
+            .expect("resume outcome");
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
+
+        let mut renderer = AnsiRenderer::stdout();
+        let outcome = handle_fork_command("", &mut renderer, Path::new("."))
+            .await
+            .expect("fork outcome");
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
+
+    #[test]
+    fn bare_oauth_commands_headless_print_usage_instead_of_a_picker() {
+        let mut renderer = AnsiRenderer::stdout();
+        assert!(!renderer.supports_inline_ui());
+        assert!(matches!(
+            handle_login_command("", &mut renderer).expect("login outcome"),
+            SlashCommandOutcome::Handled
+        ));
+        assert!(matches!(
+            handle_logout_command("", &mut renderer).expect("logout outcome"),
+            SlashCommandOutcome::Handled
+        ));
+        assert!(matches!(
+            handle_refresh_oauth_command("", &mut renderer).expect("refresh outcome"),
+            SlashCommandOutcome::Handled
+        ));
+    }
 }
