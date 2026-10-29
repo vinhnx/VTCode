@@ -7,6 +7,7 @@
 #   - rustfmt (formatting)
 #   - clippy (linting, default-members only)
 #   - cargo check (compilation verification)
+#   - file length gate (hard ceiling: 1000 lines per tracked text file)
 #
 # Optional checks (via flags):
 #   - Tests (--test)
@@ -142,6 +143,17 @@ run_check() {
 		return 0
 	else
 		print_error "Compilation failed."
+		return 1
+	fi
+}
+
+run_file_length_gate() {
+	print_status "Running file length gate (max 1000 lines)..."
+	if python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
+		print_success "File lengths within budget!"
+		return 0
+	else
+		print_error "File length violations found."
 		return 1
 	fi
 }
@@ -399,6 +411,7 @@ main() {
 	run_rustfmt || ((FAILED_CHECKS++))
 	run_clippy || ((FAILED_CHECKS++))
 	run_check || ((FAILED_CHECKS++))
+	run_file_length_gate || ((FAILED_CHECKS++))
 
 	# Run extra lints if requested
 	if [ "$RUN_EXTRA_LINTS" = true ]; then

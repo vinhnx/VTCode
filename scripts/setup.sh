@@ -94,6 +94,12 @@ if ! cargo clippy -- -D warnings; then
     exit 1
 fi
 
+# Run file length gate (hard ceiling: 1000 lines per tracked text file)
+if ! python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
+    echo "File length violations found. Split oversized files or see scripts/file_length_allowlist.txt."
+    exit 1
+fi
+
 echo "Pre-commit checks passed!"
 EOF
 

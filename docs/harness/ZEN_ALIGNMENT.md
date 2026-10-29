@@ -2,7 +2,7 @@
 
 Full mapping of all 19 Zen of Python principles to VT Code controls, checks, and operating behavior.
 
-Last reviewed: 2026-03-03
+Last reviewed: 2026-10-29
 
 ## Scope
 
@@ -16,7 +16,7 @@ Last reviewed: 2026-03-03
 | --- | --- | --- | --- | --- |
 | 1 | Beautiful is better than ugly. | Prefer coherent, legible output and docs structure. | Markdown lint + harness document structure | Active |
 | 2 | Explicit is better than implicit. | Keep links, policies, and constraints explicit. | `python3 scripts/check_docs_links.py` | Active |
-| 3 | Simple is better than complex. | Keep files decomplected and focused. | `python3 scripts/check_rust_file_length.py --mode warn --max-lines 500` | Baseline active |
+| 3 | Simple is better than complex. | Keep files decomplected and focused. | Soft: `check_rust_file_length.py --mode warn --max-lines 500`; hard ceiling: `check_file_length.py --mode enforce --max-lines 1000` | Hard ceiling active |
 | 4 | Complex is better than complicated. | Accept necessary complexity, reject avoidable complication. | Layering invariants + focused scripts | Active |
 | 5 | Flat is better than nested. | Keep docs and modules discoverable and shallow where possible. | `python3 scripts/check_markdown_location.py` | Active |
 | 6 | Sparse is better than dense. | Prefer concise structures over dense prose in governance output. | Structured tables and remediation sections in checks | Active |
@@ -41,6 +41,14 @@ Last reviewed: 2026-03-03
 - unwrap/expect production scan (warn, with allowlist):
 - `scanned_files=1237`, `findings=121`
 
+## Hard-Ceiling Metrics (2026-10-29)
+
+- All-files line ceiling (`--max-lines 1000`, enforce):
+- `scanned_text=4551`, `skipped_binary=26`, `>1000_unallowed=0`, `>1000_allowed=29`, `stale_allowlist=0`
+- Allowed outliers: 8 vendored (`patches/**`), 10 generated/data (lockfile, changelog, notices, model registry,
+  docs map, producer audit, dated snapshots, locale data, sample skill asset), 11 first-party source under
+  temporary split-plan caps in `scripts/file_length_allowlist.txt`.
+
 ## Rollout
 
 1. Phase 0 (completed)
@@ -53,10 +61,12 @@ Last reviewed: 2026-03-03
 - Run Zen governance in warn mode in CI and `check.sh`.
 - Include allowlist hygiene for explicit exception silencing.
 
-1. Phase 2 (planned)
+1. Phase 2 (partially complete)
 
-- Promote `check_zen_allowlist.py` to enforce.
-- Promote selected `unwrap/expect` and file-length thresholds to enforce.
+- Promoted the 1000-line all-files ceiling to enforce (`check_file_length.py`, gated by `check-dev.sh`,
+  `check.sh file-length`, and the `setup.sh --with-hooks` pre-commit hook). Caps only ratchet down; stale
+  allowlist entries fail the gate.
+- Still planned: promote `check_zen_allowlist.py` and the `unwrap/expect` production scan to enforce.
 
 ## Verification Commands
 
@@ -65,6 +75,7 @@ python3 scripts/check_docs_links.py
 python3 scripts/check_markdown_location.py
 python3 scripts/check_large_files.py 400000
 python3 scripts/check_rust_file_length.py --mode warn --max-lines 500
+python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet
 python3 scripts/check_no_unwrap_expect_prod.py --mode warn --allowlist scripts/zen_allowlist.txt
 python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt
 ```

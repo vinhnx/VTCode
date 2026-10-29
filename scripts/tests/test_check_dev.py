@@ -21,6 +21,13 @@ class CheckDevTests(unittest.TestCase):
             scripts.mkdir()
             for name in ("check-dev.sh", "common.sh"):
                 shutil.copy2(SCRIPTS / name, scripts / name)
+            stub = scripts / "check_file_length.py"
+            stub.write_text(
+                f"#!{sys.executable}\n"
+                "import os, sys\n"
+                "print('File length summary: stub')\n"
+                "sys.exit(int(os.environ.get('CHECK_DEV_FILE_LENGTH_STATUS', '0')))\n"
+            )
             if quick:
                 config = root / ".config/nextest.toml"
                 config.parent.mkdir()
@@ -72,6 +79,7 @@ class CheckDevTests(unittest.TestCase):
                 "CHECK_DEV_CALLS": str(calls_file),
                 "CHECK_DEV_SCENARIO": json.dumps(scenario),
                 "CHECK_DEV_CHANGED_PATHS": json.dumps(changed_paths),
+                "CHECK_DEV_FILE_LENGTH_STATUS": str(scenario.get("file_length_status", 0)),
             }
             result = subprocess.run(
                 ["bash", str(scripts / "check-dev.sh"), *options],
@@ -146,6 +154,11 @@ class CheckDevTests(unittest.TestCase):
                 result, _, _ = self.run_fixture(("--test",), **scenario)
                 self.assert_failure(result)
                 self.assertNotIn("All tests passed!", result.stdout)
+
+    def test_file_length_gate_failure_fails_the_gate(self):
+        result, _, _ = self.run_fixture(file_length_status=1)
+        self.assert_failure(result)
+        self.assertIn("File length violations found.", result.stdout)
 
     def test_failed_locked_check_or_clippy_fails_the_gate(self):
         for scenario in ({"check_status": 31}, {"clippy_status": 32}):
