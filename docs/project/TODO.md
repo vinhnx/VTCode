@@ -69,3 +69,31 @@ also revise chat input styling to match CLI. or at least make it simple and mini
 ---
 
 check and reference codex/chatgpt app typography design, it looks cleaner and more readable. /Users/vinhnguyenxuan/Documents/vtcode-resources/typography -> apply to improve desktop app text. use gpui skills kit for guidance.
+
+---
+
+desktop: add this option '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.30.43 PM.png'
+
+---
+
+desktop: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.32.02 PM.png'
+
+---
+
+desktop: implement font smoothing. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.34.48 PM.png'
+
+---
+
+desktop: implement '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.36.32 PM.png'
+
+---
+
+desktop: storage settings '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.37.08 PM.png'
+
+---
+
+desktop: implement configs '/Users/vinhnguyenxuan/Documents/vtcode-resources/config/Screenshot 2026-10-29 at 9.38.22 PM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/config/Screenshot 2026-10-29 at 9.38.13 PM.png'
+
+---
+
+desktop: keyboard shortcuts '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.40.22 PM.png'
