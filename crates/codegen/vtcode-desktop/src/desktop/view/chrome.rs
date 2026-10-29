@@ -292,7 +292,6 @@ impl DesktopView {
 
         sidebar = sidebar.child(
             div()
-                .mt_2()
                 .flex()
                 .items_center()
                 .justify_between()
@@ -410,27 +409,36 @@ impl DesktopView {
             .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
             .and_then(|session| session.title.as_deref())
             .unwrap_or(&title_fallback);
-        div()
-            .id("thread-header")
-            .test_support()
-            .w_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            .px_8()
-            .py_3()
-            .child(
-                div()
-                    .id("thread-title")
-                    .test_support()
-                    .min_w_0()
-                    .flex_1()
-                    .text_lg()
-                    .font_semibold()
-                    .truncate()
-                    .child(title.to_string()),
-            )
-            .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta))
+        // Centered on the conversation spine: the title shares the transcript
+        // and composer column instead of hugging the workspace edge. When
+        // both side panels are collapsed the floating toggle overlaps the
+        // header row, so the title reserves its corner.
+        div().w_full().flex().justify_center().child(
+            div()
+                .id("thread-header")
+                .test_support()
+                .w_full()
+                .max_w(px(self.content_width()))
+                .min_w_0()
+                .flex()
+                .items_center()
+                .justify_between()
+                .px_4()
+                .when(self.side_panels_collapsed(), |header| header.pr_8())
+                .py_3()
+                .child(
+                    div()
+                        .id("thread-title")
+                        .test_support()
+                        .min_w_0()
+                        .flex_1()
+                        .text_lg()
+                        .font_semibold()
+                        .truncate()
+                        .child(title.to_string()),
+                )
+                .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta)),
+        )
     }
 
     /// Leaf toggle pinned to the main container's top-trailing corner while

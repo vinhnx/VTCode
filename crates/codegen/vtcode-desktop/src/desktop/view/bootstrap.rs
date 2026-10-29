@@ -436,7 +436,7 @@ impl DesktopView {
             hovered_message: None,
             zen_mode: true,
             sidebar_width: 270.0,
-            inspector_width: 320.0,
+            inspector_width: 440.0,
             resizing: None,
         }
     }

@@ -20,7 +20,6 @@ fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mu
             assert_eq!(kit.colors.border.a, 0.);
             assert_eq!(kit.colors.sidebar_border, kit.colors.border, "{}", palette.id);
             assert_eq!(kit.colors.input.a, 0.);
-            assert_eq!(kit.colors.tab_bar_segmented, kit.colors.secondary, "{}", palette.id);
             assert!(
                 contrast_ratio(kit.colors.background, kit.colors.tab_bar_segmented) >= 1.04,
                 "{}: selected segmented tabs must stand out from the track",
@@ -76,7 +75,6 @@ fn system_themes_hide_decorative_surface_borders(cx: &mut gpui_kit::TestAppConte
             assert_eq!(colors.border.a, 0., "{id}");
             assert_eq!(colors.sidebar_border, colors.border, "{id}");
             assert_eq!(colors.input.a, 0., "{id}");
-            assert_eq!(colors.tab_bar_segmented, colors.secondary, "{id}");
             assert!(
                 contrast_ratio(colors.background, colors.tab_bar_segmented) >= 1.04,
                 "{id}: selected segmented tabs must stand out from the track"
@@ -259,6 +257,8 @@ fn label_grade_text_stays_crisp_on_every_surface(cx: &mut gpui_kit::TestAppConte
             let sidebar = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
             // Label-grade text targets 7:1, falling back to the palette
             // foreground itself when a theme has no headroom above it.
+            // Resting tab labels are AA-grade instead (see the tab-state test):
+            // dimming them leaves room for a visible hover/selected shift.
             for (name, surface) in [
                 ("canvas", colors.background),
                 ("panel", colors.secondary),
@@ -266,16 +266,64 @@ fn label_grade_text_stays_crisp_on_every_surface(cx: &mut gpui_kit::TestAppConte
                 ("sidebar", sidebar),
             ] {
                 let foreground_ratio = contrast_ratio(colors.foreground, surface);
-                for (kind, text) in [
-                    ("section label", label_foreground(&colors)),
-                    ("inactive tab", colors.tab_foreground),
-                ] {
-                    let ratio = contrast_ratio(text, surface);
+                let ratio = contrast_ratio(label_foreground(&colors), surface);
+                assert!(
+                    ratio >= LABEL_CONTRAST || ratio >= foreground_ratio - 0.01,
+                    "{id}: section label contrast on {name} is {ratio:.2} (foreground {foreground_ratio:.2})"
+                );
+            }
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn segmented_tab_states_are_distinct_and_readable(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let track = colors.tab_bar_segmented;
+            // The track keeps label text readable while standing clear of the
+            // canvas pill, at maximal separation for its achieved readability:
+            // no fill the foreground reads better on stands further out.
+            let achieved = contrast_ratio(colors.foreground, track);
+            assert!(achieved >= 4.5, "{id}: tab label on track is unreadable");
+            for step in 4_u8..=30 {
+                let candidate = mix(colors.background, colors.foreground, f32::from(step) / 100.0);
+                if contrast_ratio(colors.foreground, candidate) >= achieved - 0.001
+                    && contrast_ratio(colors.background, candidate) >= 1.04
+                {
                     assert!(
-                        ratio >= LABEL_CONTRAST || ratio >= foreground_ratio - 0.01,
-                        "{id}: {kind} contrast on {name} is {ratio:.2} (foreground {foreground_ratio:.2})"
+                        contrast_ratio(colors.background, track)
+                            >= contrast_ratio(colors.background, candidate) - 0.001,
+                        "{id}: track leaves separation on the table at step {step}"
                     );
                 }
+            }
+            // Rest labels sit on the track; the canvas and panel seats stay
+            // readable for the other tab variants that share the token.
+            for (name, surface) in [
+                ("track", track),
+                ("canvas", colors.background),
+                ("panel", colors.secondary),
+            ] {
+                let ratio = contrast_ratio(colors.tab_foreground, surface);
+                assert!(ratio >= 4.5, "{id}: resting tab label on {name} is {ratio:.2}");
+            }
+            // Hover and selected labels use the full foreground on the track
+            // and on the canvas-colored pill respectively.
+            assert_eq!(colors.tab_active_foreground, colors.foreground, "{id}");
+            assert!(contrast_ratio(colors.foreground, track) >= 4.5, "{id}: hovered tab label is unreadable");
+            // On the default theme the resting label is visibly dimmer than
+            // the hover/selected label, so the highlight reads as a state.
+            if id == DEFAULT_THEME_ID {
+                let rest = contrast_ratio(colors.tab_foreground, track);
+                let active = contrast_ratio(colors.tab_active_foreground, track);
+                assert!(active > rest + 0.5, "{id}: hover shift is too subtle (rest {rest:.2}, active {active:.2})");
             }
         }
     });

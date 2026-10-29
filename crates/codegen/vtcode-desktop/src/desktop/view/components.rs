@@ -42,9 +42,11 @@ pub(super) fn skeleton_line(id: &'static str, width: Pixels, cx: &App) -> AnyEle
         .into_any_element()
 }
 
-/// Shared compact tab treatment for settings and the inspector.
+/// Shared segmented tab treatment at the ecosystem-default medium size. Dense
+/// panels chain `.small()` with a justification instead of shrinking the
+/// shared default.
 pub(super) fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
-    TabBar::new(id).segmented().small().w_full()
+    TabBar::new(id).segmented().w_full()
 }
 
 pub(super) fn section_label(

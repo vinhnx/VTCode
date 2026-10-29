@@ -377,7 +377,7 @@ impl DesktopView {
                     .flex_wrap()
                     .items_center()
                     .gap_2()
-                    .px_3()
+                    .px_1()
                     .py_1()
                     .with_animation("composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
                         el.opacity(delta)

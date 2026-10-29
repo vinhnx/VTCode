@@ -380,6 +380,9 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
 #[gpui_kit::test]
 fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 900.);
+    // Narrow the rail so the scroll-reveal assertions below hold by
+    // construction; the default width fits every tab (see the fit test).
+    view.update(cx, |view, _| view.inspector_width = 240.);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.within("inspector-tabs").find(0usize).role(), Some(gpui_kit::Role::Tab));
@@ -416,6 +419,27 @@ fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn inspector_tabs_fit_without_scrolling_at_default_width(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1280., 900.);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            (view.read(cx).inspector_width - 440.).abs() < f32::EPSILON,
+            "baseline pins the default width this fit is measured against"
+        );
+        let bar = window.find("inspector-tabs-focus").bounds();
+        for index in 0..crate::desktop::inspector::InspectorTab::ALL.len() {
+            let tab = window.within("inspector-tabs").find(index).bounds();
+            assert!(
+                tab.left() >= bar.left() && tab.right() <= bar.right(),
+                "tab {index} overflows the rail at default width: {tab:?} vs {bar:?}"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn hiding_a_focused_inspector_restores_the_desktop_focus_path(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -439,6 +463,9 @@ fn hiding_a_focused_inspector_restores_the_desktop_focus_path(cx: &mut TestAppCo
 #[gpui_kit::test]
 fn inspector_programmatic_selection_reveals_selected_tab(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 900.);
+    // Narrow the rail so the scroll-reveal assertions below hold by
+    // construction; the default width fits every tab (see the fit test).
+    view.update(cx, |view, _| view.inspector_width = 240.);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| view.open_utilities(cx));

@@ -283,10 +283,10 @@ fn pane_splitters_expose_accessibility_and_keyboard_resize(cx: &mut TestAppConte
         }
         assert!(view.read(cx).inspector_resize_focus.is_focused(window), "Tab reaches the inspector splitter");
         window.press("left", cx);
-        assert_eq!(view.read(cx).inspector_width, 330.);
+        assert_eq!(view.read(cx).inspector_width, 450.);
         window.press("shift-right", cx);
-        assert_eq!(view.read(cx).inspector_width, 280.);
-        assert_eq!(view.read(cx).preferences.inspector_width, Some(280.));
+        assert_eq!(view.read(cx).inspector_width, 400.);
+        assert_eq!(view.read(cx).preferences.inspector_width, Some(400.));
     })
     .unwrap();
 }

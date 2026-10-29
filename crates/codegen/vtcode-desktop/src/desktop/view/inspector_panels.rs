@@ -310,7 +310,7 @@ impl DesktopView {
                 .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()
-                .p_2()
+                .p_3()
                 .text_xs()
                 .font_family(mono)
                 .text_size(theme.mono_font_size)

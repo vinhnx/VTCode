@@ -87,6 +87,12 @@ impl DesktopView {
                     .border_1()
                     .border_color(colors.border.opacity(0.))
                     .focus_visible(|style| style.border_color(colors.ring))
+                    // Inset the rail from the panel edge; the 12px sides share
+                    // the content spine, and the tighter bottom keeps the tabs
+                    // attached to their panel.
+                    .px_3()
+                    .pt_3()
+                    .pb_2()
                     .on_action(
                         cx.listener(|view, _: &NextInspectorTab, window, cx| {
                             view.cycle_inspector_tab(true, window, cx)
@@ -108,6 +114,9 @@ impl DesktopView {
                             .track_focus(&self.inspector_focus)
                             .child(
                                 desktop_tab_bar("inspector-tabs")
+                                    // Five tabs share a narrow rail, so the inspector keeps the
+                                    // compact size; settings uses the medium default.
+                                    .small()
                                     .track_scroll(&self.inspector_tabs_scroll)
                                     .selected_index(
                                         InspectorTab::ALL
@@ -118,9 +127,7 @@ impl DesktopView {
                                     .on_click(cx.listener(|view, index: &usize, window, cx| {
                                         view.select_inspector_tab(*index, window, cx)
                                     }))
-                                    .children(
-                                        InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer()),
-                                    ),
+                                    .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
                             ),
                     ),
             );
@@ -352,7 +359,7 @@ impl DesktopView {
                                             .flex()
                                             .items_center()
                                             .gap_2()
-                                            .px_2()
+                                            .px_3()
                                             .rounded_md()
                                             .when(selected, |row| row.bg(change_row_colors.secondary))
                                             .child(

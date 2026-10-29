@@ -332,11 +332,62 @@ fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.secondary_active = surface;
     colors.popover = raised_surface;
     colors.popover_foreground = colors.foreground;
-    // Kit's segmented TabBar otherwise retains its stock track when VT Code
-    // replaces the palette, making selected tabs blend into other themes.
-    colors.tab_bar_segmented = colors.secondary;
-    colors.tab_foreground = text_at_contrast(raised_surface, colors.foreground, LABEL_CONTRAST);
+    // Kit's segmented TabBar paints its track from `tab_bar_segmented` and the
+    // selected pill in the canvas color, so the track needs real separation
+    // from the canvas: the resting panel fill only guarantees 1.04, which
+    // renders selection nearly invisible. Rest labels dim toward the track so
+    // the hover/selected shift to the full foreground reads as a highlight
+    // instead of a rounding error.
+    let track = segmented_track(colors.background, colors.foreground, surface);
+    colors.tab_bar_segmented = track;
+    colors.tab_foreground = inactive_tab_foreground(colors.foreground, track, &[track, colors.background, surface]);
     colors.tab_active_foreground = colors.foreground;
+}
+
+/// Resting tab labels sit on the segmented track; the token is also shared
+/// with variants that paint on the canvas or panels, so those seats stay
+/// covered too. (No shipped bar paints labels directly on a popover: the
+/// track always sits between the text and the sheet.) Dim the palette
+/// foreground toward the track as far as every seat stays at WCAG AA. The
+/// linear scan (not a binary search) stays valid because per-seat contrast
+/// is not monotonic along the blend.
+fn inactive_tab_foreground(foreground: Hsla, track: Hsla, seats: &[Hsla]) -> Hsla {
+    const AA_RATIO: f32 = 4.5;
+    let mut best = foreground;
+    for step in 1_u8..=100 {
+        let candidate = mix(foreground, track, f32::from(step) / 100.0);
+        if seats.iter().all(|seat| contrast_ratio(candidate, *seat) >= AA_RATIO) {
+            best = candidate;
+        }
+    }
+    best
+}
+
+/// Segmented-tab track: the strongest foreground-leaning fill that keeps label
+/// text readable with room to spare. Resting labels dim to the 4.5 floor, so
+/// the track holds the full foreground about a point above it whenever the
+/// palette allows — that gap is the visible hover/selected shift. Palettes
+/// without the headroom fall back to plain AA, where selection still reads
+/// through the pill but the highlight degrades gracefully.
+fn segmented_track(background: Hsla, foreground: Hsla, panel: Hsla) -> Hsla {
+    let headroom = contrast_ratio(foreground, background);
+    let floor = 5.5_f32.min(headroom - 1.0).max(4.5);
+    if let Some(track) = strongest_track_step(background, foreground, floor) {
+        return track;
+    }
+    if let Some(track) = strongest_track_step(background, foreground, 4.5) {
+        return track;
+    }
+    panel
+}
+
+fn strongest_track_step(background: Hsla, foreground: Hsla, minimum_text: f32) -> Option<Hsla> {
+    (4_u8..=30)
+        .rev()
+        .map(|step| mix(background, foreground, f32::from(step) / 100.0))
+        .find(|candidate| {
+            contrast_ratio(foreground, *candidate) >= minimum_text && contrast_ratio(background, *candidate) >= 1.04
+        })
 }
 
 fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8) -> Hsla {
