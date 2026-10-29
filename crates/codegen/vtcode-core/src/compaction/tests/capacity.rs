@@ -110,7 +110,7 @@ async fn capacity_error_context_carries_route_diagnostics() {
         request_tokens: Mutex::new(Vec::new()),
         failures: 1,
     };
-    let error = compact_history_manual(
+    let error = Box::pin(compact_history_manual(
         &provider,
         "stub-model",
         &history,
@@ -119,7 +119,7 @@ async fn capacity_error_context_carries_route_diagnostics() {
             ..CompactionConfig::default()
         },
         &ManualCompactionOptions::default(),
-    )
+    ))
     .await
     .expect_err("identical retry must not be attempted");
     let message = format!("{error:#}");
@@ -137,13 +137,13 @@ async fn compact_history_manual_falls_back_to_local_when_inline_compaction_not_f
     // NativeCompactionProvider is inline-capable but its `generate` returns a
     // normal `Stop` with no compaction block, so the inline attempt cannot
     // fire and the dispatch must transparently fall back to Local.
-    let (compacted, mode) = compact_history_manual(
+    let (compacted, mode) = Box::pin(compact_history_manual(
         &NativeCompactionProvider,
         "stub-model",
         &history,
         &config,
         &ManualCompactionOptions::default(),
-    )
+    ))
     .await
     .expect("manual compaction");
 
@@ -161,13 +161,13 @@ async fn compact_history_manual_falls_back_to_local_when_inline_request_errors()
     // `compact_20260112` edit must not abort the whole command; the dispatch
     // falls back to Local summarization (the manual `/compact` contract:
     // always succeeds).
-    let (compacted, mode) = compact_history_manual(
+    let (compacted, mode) = Box::pin(compact_history_manual(
         &InlineRejectingProvider,
         "stub-model",
         &history,
         &config,
         &ManualCompactionOptions::default(),
-    )
+    ))
     .await
     .expect("manual compaction should fall back to local");
 
@@ -192,7 +192,7 @@ async fn compact_history_manual_applies_options_to_local_summary_request() {
         ..ManualCompactionOptions::default()
     };
 
-    let (compacted, mode) = compact_history_manual(&provider, "stub-model", &history, &config, &options)
+    let (compacted, mode) = Box::pin(compact_history_manual(&provider, "stub-model", &history, &config, &options))
         .await
         .expect("manual compaction");
 

@@ -151,6 +151,10 @@ pub(super) fn benchmarks(c: &mut Criterion) {
                 black_box(text)
             };
             #[cfg(feature = "profiling")]
+            #[allow(
+                unsafe_code,
+                reason = "hotpath::future! emits #[unsafe(export_name)] for its measurement symbol; bench-only profiling hook."
+            )]
             let future = hotpath::future!(future, label = "responses_fixture_consume");
             runtime.block_on(future)
         };
