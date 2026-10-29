@@ -37,50 +37,108 @@ fn split_frontmatter(contents: &str) -> Option<(&str, &str)> {
     None
 }
 
-pub(super) fn pattern_matches_candidate(pattern: &Pattern, candidate: &MatchCandidate) -> bool {
-    if pattern_matches_path(pattern, candidate) {
-        return true;
-    }
-
-    zero_directory_pattern_variants(pattern.as_str()).into_iter().any(|variant| {
-        Pattern::new(&variant)
-            .ok()
-            .is_some_and(|variant_pattern| pattern_matches_path(&variant_pattern, candidate))
-    })
+enum RuleToken {
+    Literal(char),
+    Any,
+    Star,
+    Recursive,
+    Class(Pattern),
 }
 
-fn pattern_matches_path(pattern: &Pattern, candidate: &MatchCandidate) -> bool {
-    let path = Path::new(candidate.relative_path.as_str());
-    if pattern.matches_path(path) || pattern.matches(candidate.relative_path.as_str()) {
-        return true;
-    }
+pub(super) struct RulePattern(Vec<RuleToken>);
 
-    if candidate.is_dir {
-        let probe_path = path.join(IMPORT_PROBE_NAME);
-        return pattern.matches_path(&probe_path);
-    }
-
-    false
-}
-
-fn zero_directory_pattern_variants(pattern: &str) -> Vec<String> {
-    let mut variants = Vec::new();
-    let mut seen = HashSet::new();
-    collect_zero_directory_variants(pattern, &mut seen, &mut variants);
-    variants
-}
-
-fn collect_zero_directory_variants(pattern: &str, seen: &mut HashSet<String>, variants: &mut Vec<String>) {
-    let mut search_start = 0usize;
-    while let Some(relative_index) = pattern[search_start..].find("**/") {
-        let index = search_start + relative_index;
-        let variant = format!("{}{}", &pattern[..index], &pattern[index + 3..]);
-        if seen.insert(variant.clone()) {
-            variants.push(variant.clone());
-            collect_zero_directory_variants(&variant, seen, variants);
+impl RulePattern {
+    pub(super) fn new(pattern: &str) -> Result<Self> {
+        // Reuse glob's parser for syntax validation and character-class semantics.
+        Pattern::new(pattern)?;
+        let mut chars = pattern.chars().peekable();
+        let mut tokens = Vec::new();
+        while let Some(ch) = chars.next() {
+            match ch {
+                '?' => tokens.push(RuleToken::Any),
+                '*' if chars.peek() == Some(&'*') => {
+                    let _ignored = chars.next();
+                    if chars.peek().is_some_and(|ch| std::path::is_separator(*ch)) {
+                        let _ignored = chars.next();
+                    }
+                    tokens.push(RuleToken::Recursive);
+                }
+                '*' => tokens.push(RuleToken::Star),
+                '[' => {
+                    let mut class = String::from("[");
+                    let mut negated = false;
+                    for (content_len, ch) in chars.by_ref().enumerate() {
+                        if ch == ']' && content_len > usize::from(negated) {
+                            class.push(ch);
+                            break;
+                        }
+                        if content_len == 0 && ch == '!' {
+                            negated = true;
+                        }
+                        class.push(ch);
+                    }
+                    tokens.push(RuleToken::Class(Pattern::new(&class)?));
+                }
+                _ => tokens.push(RuleToken::Literal(ch)),
+            }
         }
-        search_start = index + 3;
+        Ok(Self(tokens))
     }
+
+    fn matches(&self, value: &str) -> bool {
+        let chars = value.chars().collect::<Vec<_>>();
+        let mut reachable = vec![false; chars.len() + 1];
+        if let Some(start) = reachable.first_mut() {
+            *start = true;
+        }
+        for (token_index, token) in self.0.iter().enumerate() {
+            let mut next = Vec::with_capacity(reachable.len());
+            match token {
+                RuleToken::Star | RuleToken::Recursive => {
+                    let mut seen = false;
+                    for (position, previous) in reachable.iter().copied().enumerate() {
+                        seen |= previous;
+                        let recursive_end = position
+                            .checked_sub(1)
+                            .and_then(|index| chars.get(index))
+                            .is_some_and(|ch| std::path::is_separator(*ch));
+                        next.push(
+                            previous
+                                || (seen
+                                    && (matches!(token, RuleToken::Star)
+                                        || token_index + 1 == self.0.len()
+                                        || recursive_end)),
+                        );
+                    }
+                }
+                _ => {
+                    next.push(false);
+                    for (previous, ch) in reachable.iter().zip(&chars) {
+                        let matched = match token {
+                            RuleToken::Literal(expected) => {
+                                *expected == *ch
+                                    || (cfg!(windows)
+                                        && std::path::is_separator(*expected)
+                                        && std::path::is_separator(*ch))
+                            }
+                            RuleToken::Any => true,
+                            RuleToken::Class(class) => class.matches(&ch.to_string()),
+                            RuleToken::Star | RuleToken::Recursive => false,
+                        };
+                        next.push(*previous && matched);
+                    }
+                }
+            }
+            reachable = next;
+        }
+        reachable.last().copied().unwrap_or(false)
+    }
+}
+
+pub(super) fn pattern_matches_candidate(pattern: &RulePattern, candidate: &MatchCandidate) -> bool {
+    pattern.matches(&candidate.relative_path)
+        || (candidate.is_dir
+            && pattern.matches(&Path::new(&candidate.relative_path).join(IMPORT_PROBE_NAME).to_string_lossy()))
 }
 
 pub(super) fn rule_specificity(pattern: &str) -> usize {
@@ -246,13 +304,10 @@ pub(super) async fn allowed_import_roots(project_root: &Path, home_dir: Option<&
     );
 
     if let Some(home) = home_dir {
-        roots.push(
-            canonicalize_async(home)
-                .await
-                .with_context(|| format!("Failed to canonicalize home import root {}", home.display()))?,
-        );
-
         for user_root in user_global_instruction_roots(home) {
+            if user_root == home {
+                continue;
+            }
             if tokio::fs::try_exists(&user_root).await.unwrap_or(false) {
                 roots.push(canonicalize_async(&user_root).await.with_context(|| {
                     format!("Failed to canonicalize VT Code user import root {}", user_root.display())

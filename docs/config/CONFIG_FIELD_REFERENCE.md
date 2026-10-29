@@ -187,7 +187,7 @@ python3 scripts/generate_config_field_reference.py
 | `auth.copilot.auth_timeout_secs` | `integer` | no | `300` | - |
 | `auth.copilot.available_tools` | `array` | no | `["view", "glob", "grep"]` | - |
 | `auth.copilot.available_tools[]` | `string` | no | `-` | - |
-| `auth.copilot.command` | `null \| string` | no | `null` | - |
+| `auth.copilot.command` | `null \| string` | no | `null` | Executable override; allowed only in system, user, or explicitly selected configuration. |
 | `auth.copilot.excluded_tools` | `array` | no | `[]` | - |
 | `auth.copilot.excluded_tools[]` | `string` | no | `-` | - |
 | `auth.copilot.host` | `null \| string` | no | `null` | - |

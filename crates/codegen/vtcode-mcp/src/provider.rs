@@ -102,7 +102,7 @@ impl McpProvider {
 
                 let bearer_token = if let Some(oauth) = http.oauth.as_ref() {
                     McpOAuthService::new()
-                        .resolve_access_token(&config.name, oauth)
+                        .resolve_access_token_for_resource(&config.name, oauth, &http.endpoint)
                         .await?
                         .ok_or_else(|| {
                             anyhow!(

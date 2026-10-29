@@ -31,6 +31,26 @@ pub(super) async fn build_agent_with_commands(
     default_primary_agent: &str,
     commands_config: CommandsConfig,
 ) -> ZedAgent {
+    build_agent_with_policies(
+        workspace,
+        default_primary_agent,
+        commands_config,
+        vtcode_config::SandboxConfig::default(),
+        vtcode_config::core::permissions::PermissionsConfig::default(),
+        Vec::new(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments, reason = "test fixture mirrors the ZedAgent constructor")]
+pub(super) async fn build_agent_with_policies(
+    workspace: &Path,
+    default_primary_agent: &str,
+    commands_config: CommandsConfig,
+    sandbox_config: vtcode_config::SandboxConfig,
+    permissions_config: vtcode_config::core::permissions::PermissionsConfig,
+    providers_whitelist: Vec<String>,
+) -> ZedAgent {
     let core_config = CoreAgentConfig {
         model: "gpt-5.6-sol".to_string(),
         api_key: String::new(),
@@ -69,6 +89,9 @@ pub(super) async fn build_agent_with_commands(
         String::new(),
         Some("Zed".to_string()),
         primary_agents,
+        sandbox_config,
+        permissions_config,
+        providers_whitelist,
     )
     .await
 }

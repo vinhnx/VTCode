@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use tracing::warn;
 use vtcode_core::config::constants::tools;
+use vtcode_core::permissions::{ResolvedPermissionDecision, build_permission_request, evaluate_effective_permissions};
 use vtcode_core::tools::registry::{ExecutionPolicySnapshot, ToolExecutionRequest, ToolPermissionDecision};
 use vtcode_core::tools::traits::Tool;
 use vtcode_core::utils::ansi_parser::strip_ansi;
@@ -22,12 +23,45 @@ use vtcode_core::utils::path::ensure_path_within_workspace;
 const RESTRICTED_LOCAL_TOOLS: &[&str] = &["debug_agent", "analyze_agent", "execute_code"];
 
 impl ZedAgent {
+    /// Authoritative dispatch check for model-returned local calls.
+    ///
+    /// Tool-catalog advertisement already filters by the selected primary
+    /// agent, but the model supplies names and arguments freely, so the
+    /// agent's policy is re-evaluated here against the concrete call: the
+    /// tool-name gate, then the effective global+agent permission decision
+    /// on the actual arguments. Read-only selections (such as the plan
+    /// agent) additionally require the call to satisfy the planning-workflow
+    /// gate. `Ask` outcomes are left to the client permission round-trip,
+    /// which runs before dispatch; only `Deny` fails here.
+    fn admit_local_tool_call(&self, primary_agent: &str, tool_name: &str, args: &Value) -> Result<(), String> {
+        if !self.primary_agents.allows_local_tool(primary_agent, tool_name) {
+            return Err(format!("Tool '{tool_name}' is not allowed for primary agent '{primary_agent}'"));
+        }
+        let Some(agent_permissions) = self.primary_agents.permissions_for(primary_agent) else {
+            return Err(format!("Unknown primary agent '{primary_agent}'"));
+        };
+        let workspace = &self.config.workspace;
+        let request = build_permission_request(workspace, workspace, tool_name, Some(args));
+        if evaluate_effective_permissions(&self.permissions_config, agent_permissions, workspace, workspace, &request)
+            == ResolvedPermissionDecision::Deny
+        {
+            return Err(format!("Tool '{tool_name}' is denied by primary agent '{primary_agent}' permissions"));
+        }
+        if self.primary_agents.is_read_only_agent(primary_agent)
+            && !self.local_tool_registry.is_planning_active_allowed(tool_name, args)
+        {
+            return Err(format!("Tool '{tool_name}' is blocked while primary agent '{primary_agent}' is read-only"));
+        }
+        Ok(())
+    }
+
     pub(super) async fn execute_local_tool(
         &self,
         tool_name: &str,
         args: &Value,
         call_id: &str,
         permission_granted: bool,
+        primary_agent: &str,
     ) -> ToolExecutionReport {
         if RESTRICTED_LOCAL_TOOLS.contains(&tool_name) {
             warn!(tool = tool_name, "Attempted execution of restricted tool from external ACP client");
@@ -35,6 +69,10 @@ impl ZedAgent {
                 tool_name,
                 &format!("Tool '{tool_name}' is not available to external clients"),
             );
+        }
+
+        if let Err(reason) = self.admit_local_tool_call(primary_agent, tool_name, args) {
+            return ToolExecutionReport::failure(tool_name, &reason);
         }
 
         if permission_granted {

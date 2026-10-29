@@ -192,12 +192,6 @@ impl StartupPolicy {
         Self { kind, allow_missing_provider_auth }
     }
 
-    /// Whether `.env` loading is needed before this command starts.
-    #[must_use]
-    pub(crate) const fn load_dotenv(self) -> bool {
-        !matches!(self.kind, StartupCommandKind::Metadata)
-    }
-
     /// Whether legacy global paths should be migrated during startup.
     #[must_use]
     pub(crate) const fn migrate_legacy_paths(self) -> bool {

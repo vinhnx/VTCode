@@ -19,6 +19,8 @@
 pub mod file_search;
 pub mod markdown_store;
 
+mod atomic_write;
+
 use anyhow::Result;
 use hashbrown::HashMap;
 use ignore::{DirEntry, Walk};
@@ -27,7 +29,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
 use std::fs;
-use std::io::{BufWriter, ErrorKind, Write};
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -98,16 +100,13 @@ impl IndexStorage for MarkdownIndexStorage {
     }
 
     fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()> {
-        fs::create_dir_all(index_dir)?;
+        let dir = atomic_write::canonical_storage_dir(index_dir)?;
         let file_name = format!("{}.md", calculate_hash(&entry.path));
-        let index_path = index_dir.join(file_name);
-        let file = fs::File::create(index_path)?;
-        let mut writer = BufWriter::new(file);
-        writeln!(writer, "# File Index: {}", entry.path)?;
-        writeln!(writer)?;
-        write_markdown_fields(&mut writer, entry)?;
-        writer.flush()?;
-        Ok(())
+        let mut buffer = Vec::new();
+        writeln!(buffer, "# File Index: {}", entry.path)?;
+        writeln!(buffer)?;
+        write_markdown_fields(&mut buffer, entry)?;
+        atomic_write::write_atomic(&dir, &file_name, &buffer)
     }
 
     fn prefers_snapshot_persistence(&self) -> bool {
@@ -115,9 +114,12 @@ impl IndexStorage for MarkdownIndexStorage {
     }
 
     fn remove(&self, index_dir: &Path, file_path: &Path) -> Result<()> {
+        if !index_dir.exists() {
+            return Ok(());
+        }
+        let dir = atomic_write::canonical_storage_dir(index_dir)?;
         let file_name = format!("{}.md", calculate_hash(file_path.to_string_lossy().as_ref()));
-        let index_path = index_dir.join(file_name);
-        match fs::remove_file(index_path) {
+        match fs::remove_file(dir.join(file_name)) {
             Ok(()) => Ok(()),
             Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
             Err(err) => Err(err.into()),
@@ -136,24 +138,20 @@ impl IndexStorage for MarkdownIndexStorage {
 fn persist_markdown_snapshot<'a>(index_dir: &Path, entries: impl IntoIterator<Item = &'a FileIndex>) -> Result<()> {
     let entries = entries.into_iter().collect::<Vec<_>>();
 
-    fs::create_dir_all(index_dir)?;
-    let temp_path = index_dir.join(".index.md.tmp");
-    let final_path = index_dir.join("index.md");
-    let file = fs::File::create(&temp_path)?;
-    let mut writer = BufWriter::new(file);
+    let dir = atomic_write::canonical_storage_dir(index_dir)?;
+    let mut buffer = Vec::new();
 
-    writeln!(writer, "# Workspace File Index")?;
-    writeln!(writer)?;
-    writeln!(writer, "- **Entries**: {}", entries.len())?;
-    writeln!(writer)?;
+    writeln!(buffer, "# Workspace File Index")?;
+    writeln!(buffer)?;
+    writeln!(buffer, "- **Entries**: {}", entries.len())?;
+    writeln!(buffer)?;
 
     for entry in entries {
-        write_markdown_entry(&mut writer, entry)?;
+        write_markdown_entry(&mut buffer, entry)?;
     }
 
-    writer.flush()?;
-    fs::rename(temp_path, final_path)?;
-    cleanup_legacy_markdown_entries(index_dir)?;
+    atomic_write::write_atomic(&dir, "index.md", &buffer)?;
+    cleanup_legacy_markdown_entries(&dir)?;
     Ok(())
 }
 

@@ -68,6 +68,9 @@ async fn build_agent_with_tools_config(workspace: &Path, tools_config: ToolsConf
         String::new(),
         Some("Zed".to_string()),
         primary_agents,
+        vtcode_config::SandboxConfig::default(),
+        vtcode_config::core::permissions::PermissionsConfig::default(),
+        Vec::new(),
     )
     .await
 }
@@ -271,6 +274,7 @@ async fn local_tool_execution_uses_registry_request_path() {
             }),
             "call-local-list",
             false,
+            "build",
         )
         .await;
 
@@ -287,7 +291,7 @@ async fn local_tool_execution_reports_registry_failure() {
     let agent = build_agent(temp.path()).await;
 
     let report = agent
-        .execute_local_tool("unknown_tool", &json!({}), "call-local-missing", false)
+        .execute_local_tool("unknown_tool", &json!({}), "call-local-missing", false, "build")
         .await;
 
     assert_eq!(report.status, crate::acp::ToolCallStatus::Failed);

@@ -203,6 +203,7 @@ async fn pty_exec_session_accepts_write_stdin() {
             }),
             "call-1",
             true,
+            "build",
         )
         .await;
     let started_payload: Value = serde_json::from_str(&started.llm_response).expect("exec payload should be JSON");
@@ -221,6 +222,7 @@ async fn pty_exec_session_accepts_write_stdin() {
             }),
             "call-2",
             true,
+            "build",
         )
         .await;
 

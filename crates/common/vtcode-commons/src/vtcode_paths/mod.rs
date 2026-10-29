@@ -10,6 +10,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use fs2::FileExt;
 
+use crate::paths::validate_no_escaping_symlink_ancestors;
+
 #[path = "../vtcode_paths_migration.rs"]
 mod migration;
 pub use migration::{
@@ -813,54 +815,6 @@ fn validate_file_destination(path: &Path) -> Result<()> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("could not inspect {}", path.display())),
     }
-}
-
-/// Validate every existing path component and reject escaping symlinks.
-///
-/// Platform aliases such as macOS `/tmp -> /private/tmp` are accepted when a
-/// symlink resolves beneath its containing directory. Missing trailing
-/// components are allowed so callers can create them safely afterwards.
-fn validate_no_escaping_symlink_ancestors(path: &Path, allow_missing_tail: bool) -> io::Result<()> {
-    let components = path.components().collect::<Vec<_>>();
-    let mut current = PathBuf::new();
-    for (index, component) in components.iter().enumerate() {
-        if matches!(component, Component::ParentDir) {
-            return Err(io::Error::other(format!("path contains traversal: {}", path.display())));
-        }
-        if matches!(component, Component::CurDir) {
-            continue;
-        }
-        current.push(component.as_os_str());
-        let is_leaf = index + 1 == components.len();
-        let metadata = match fs::symlink_metadata(&current) {
-            Ok(metadata) => metadata,
-            Err(error) if allow_missing_tail && error.kind() == io::ErrorKind::NotFound => break,
-            Err(error) => return Err(error),
-        };
-        if metadata.file_type().is_symlink() {
-            if is_leaf {
-                return Err(io::Error::other(format!("refusing symlink path {}", current.display())));
-            }
-            let parent = current
-                .parent()
-                .filter(|parent| !parent.as_os_str().is_empty())
-                .unwrap_or_else(|| Path::new("."));
-            let canonical_parent = crate::canonicalize(parent)?;
-            let canonical_target = crate::canonicalize(&current)?;
-            if !canonical_target.starts_with(&canonical_parent) {
-                return Err(io::Error::other(format!(
-                    "path component {} escapes its containing directory",
-                    current.display()
-                )));
-            }
-            if !fs::metadata(&current)?.is_dir() {
-                return Err(io::Error::other(format!("path component {} is not a directory", current.display())));
-            }
-        } else if !is_leaf && !metadata.is_dir() {
-            return Err(io::Error::other(format!("path component {} is not a directory", current.display())));
-        }
-    }
-    Ok(())
 }
 
 fn unique_private_file(parent: &Path, stem: &OsStr) -> Result<(PathBuf, File)> {

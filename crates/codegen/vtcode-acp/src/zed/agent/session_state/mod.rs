@@ -215,6 +215,18 @@ impl ZedAgent {
             .any(|entry| entry.as_str() == model)
     }
 
+    /// Whether the operator's provider whitelist admits `provider`.
+    ///
+    /// An empty whitelist admits every registered provider, matching the
+    /// interactive startup validation and the provider factory gate.
+    fn provider_is_whitelisted(&self, provider: &str) -> bool {
+        self.providers_whitelist.is_empty()
+            || self
+                .providers_whitelist
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(provider))
+    }
+
     fn provider_select_options(&self, current_provider: &str) -> Vec<acp::SessionConfigSelectOption> {
         let mut providers = get_factory()
             .lock()
@@ -228,6 +240,9 @@ impl ZedAgent {
                 .map(|provider| provider.to_string())
                 .collect();
         }
+        // Filter after the fallback so an empty factory cannot smuggle
+        // excluded providers back into the advertised options.
+        providers.retain(|provider| self.provider_is_whitelisted(provider));
 
         if !providers.iter().any(|provider| provider.eq_ignore_ascii_case(current_provider)) {
             providers.push(current_provider.to_string());
@@ -280,9 +295,14 @@ impl ZedAgent {
     }
 
     fn supports_provider(&self, provider: &str, current_provider: &str) -> bool {
-        self.provider_select_options(current_provider)
-            .iter()
-            .any(|option| option.value.0.as_ref() == provider)
+        // The options list is already whitelist-filtered; re-check here so a
+        // provider that only survives as the preserved current selection is
+        // still rejected on explicit re-selection.
+        self.provider_is_whitelisted(provider)
+            && self
+                .provider_select_options(current_provider)
+                .iter()
+                .any(|option| option.value.0.as_ref() == provider)
     }
 
     fn current_session_config_options(&self, session: &SessionHandle) -> Vec<acp::SessionConfigOption> {

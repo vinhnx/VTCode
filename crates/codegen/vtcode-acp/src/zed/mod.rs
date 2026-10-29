@@ -110,6 +110,9 @@ mod tests {
             String::new(),
             Some("Zed".to_string()),
             primary_agents,
+            vtcode_config::SandboxConfig::default(),
+            vtcode_config::core::permissions::PermissionsConfig::default(),
+            Vec::new(),
         )
         .await
     }

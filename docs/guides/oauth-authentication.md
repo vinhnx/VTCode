@@ -63,7 +63,7 @@ vtcode
 
 #### Configuration
 
-In `vtcode.toml`:
+In a system, user, or explicitly selected `vtcode.toml`:
 
 ```toml
 [auth.copilot]

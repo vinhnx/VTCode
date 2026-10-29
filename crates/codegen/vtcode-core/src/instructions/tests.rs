@@ -163,6 +163,165 @@ async fn expands_imports_strips_comments_and_matches_rule_paths() -> Result<()> 
 }
 
 #[tokio::test]
+async fn imports_are_limited_to_workspace_and_user_instruction_roots() -> Result<()> {
+    let workspace = tempdir()?;
+    let home = tempdir()?;
+    let user_root = home.path().join(".vtcode");
+    std::fs::create_dir_all(&user_root)?;
+    std::fs::write(home.path().join("private.md"), "PRIVATE HOME CONTENT")?;
+    std::fs::write(user_root.join("shared.md"), "ALLOWED USER CONTENT")?;
+    std::fs::write(user_root.join("secret.md"), "PRIVATE USER ROOT CONTENT")?;
+    std::fs::write(
+        workspace.path().join("local.md"),
+        format!("ALLOWED WORKSPACE CONTENT\n@{}\n", user_root.join("secret.md").display()),
+    )?;
+    write_doc(&user_root, &format!("@shared.md\n@{}\n", workspace.path().join("local.md").display()))?;
+    write_doc(
+        workspace.path(),
+        &format!(
+            "@{}\n@{}\n@local.md\n",
+            home.path().join("private.md").display(),
+            user_root.join("secret.md").display()
+        ),
+    )?;
+
+    let bundle = read_instruction_bundle(
+        &default_options(workspace.path(), workspace.path(), Some(home.path()), &[]),
+        16 * 1024,
+    )
+    .await?
+    .expect("instruction bundle");
+    let combined = bundle.combined_text();
+    assert!(!combined.contains("PRIVATE HOME CONTENT"));
+    assert!(!combined.contains("PRIVATE USER ROOT CONTENT"));
+    assert!(combined.contains("ALLOWED USER CONTENT"));
+    assert!(combined.contains("ALLOWED WORKSPACE CONTENT"));
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn workspace_instruction_discovery_rejects_symlink_escapes() -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let workspace = tempdir()?;
+    let outside = tempdir()?;
+    std::fs::write(outside.path().join("private.md"), "PRIVATE EXTERNAL CONTENT")?;
+    symlink(outside.path().join("private.md"), workspace.path().join("AGENTS.override.md"))?;
+    write_doc(workspace.path(), "ALLOWED WORKSPACE INSTRUCTIONS")?;
+    std::fs::create_dir_all(workspace.path().join(".vtcode/rules"))?;
+    symlink(outside.path().join("private.md"), workspace.path().join(".vtcode/rules/escape.md"))?;
+    symlink(outside.path(), workspace.path().join(".vtcode/rules/external"))?;
+    write_rule(&workspace.path().join(".vtcode/rules"), "local.md", "ALLOWED WORKSPACE RULE")?;
+
+    let bundle = read_instruction_bundle(&default_options(workspace.path(), workspace.path(), None, &[]), 16 * 1024)
+        .await?
+        .expect("instruction bundle");
+    let combined = bundle.combined_text();
+    assert!(combined.contains("ALLOWED WORKSPACE INSTRUCTIONS"));
+    assert!(combined.contains("ALLOWED WORKSPACE RULE"));
+    assert!(!combined.contains("PRIVATE EXTERNAL CONTENT"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn recursive_rule_patterns_are_bounded_and_match_zero_directories() -> Result<()> {
+    let workspace = tempdir()?;
+    let rules = workspace.path().join(".vtcode/rules");
+    let pattern = "**/a/**/b/**/c/**/d/**/e/**/f/**/g/**/h/file.rs";
+    let rule = write_rule(&rules, "bounded.md", &format!("---\npaths:\n  - \"{pattern}\"\n---\nMATCHED\n"))?;
+    let paths = vec![workspace.path().join("a/b/c/d/e/f/g/h/file.rs")];
+    let options = default_options(workspace.path(), workspace.path(), None, &paths);
+    let sources = discover_instruction_sources(&options).await?;
+    assert!(sources.iter().any(|source| source.matched));
+
+    std::fs::write(&rule, format!("---\npaths:\n  - \"{}\"\n---\nTOO LONG\n", "a".repeat(4097)))?;
+    let error = discover_instruction_sources(&options)
+        .await
+        .expect_err("oversized pattern must fail");
+    assert!(format!("{error:#}").contains("exceeds 4096 bytes"));
+    Ok(())
+}
+
+#[test]
+fn rule_matcher_preserves_glob_classes_and_handles_adversarial_patterns() -> Result<()> {
+    for (pattern, value, expected) in [
+        ("src/**/test?.[rR]s", "src/test1.rs", true),
+        ("src/**/test?.[rR]s", "src/a/b/test2.Rs", true),
+        ("src/**/test?.[!a-z]s", "src/test1.rs", false),
+        ("foo[[]bar[]]", "foo[bar]", true),
+        ("a*b*c", "a/b/c", true),
+        ("a*b*c", "a/b/d", false),
+    ] {
+        let candidate = MatchCandidate { relative_path: value.to_string(), is_dir: false };
+        assert_eq!(pattern_matches_candidate(&RulePattern::new(pattern)?, &candidate), expected, "{pattern} {value}");
+    }
+    let pattern = format!("{}z", "*a".repeat(100));
+    let candidate = MatchCandidate { relative_path: "a".repeat(500), is_dir: false };
+    assert!(!pattern_matches_candidate(&RulePattern::new(&pattern)?, &candidate));
+    let recursive = format!("{}file.rs", "**/x/".repeat(40));
+    let candidate = MatchCandidate {
+        relative_path: format!("{}file.rs", "x/".repeat(40)),
+        is_dir: false,
+    };
+    assert!(pattern_matches_candidate(&RulePattern::new(&recursive)?, &candidate));
+    Ok(())
+}
+
+#[test]
+fn bounded_rule_matcher_matches_legacy_glob_behavior() -> Result<()> {
+    // `glob` requires `**` to form a whole path component; the bounded matcher
+    // must reject the same malformed patterns instead of miscompiling them.
+    for pattern in ["**a", "a**b", "a**"] {
+        assert!(Pattern::new(pattern).is_err(), "{pattern} legacy");
+        assert!(RulePattern::new(pattern).is_err(), "{pattern} bounded");
+    }
+    fn variants(pattern: &str) -> Vec<String> {
+        let mut results = vec![pattern.to_string()];
+        let mut cursor = 0;
+        while cursor < results.len() {
+            let current = results[cursor].clone();
+            for (index, _) in current.match_indices("**/") {
+                let variant = format!("{}{}", &current[..index], &current[index + 3..]);
+                if !results.contains(&variant) {
+                    results.push(variant);
+                }
+            }
+            cursor += 1;
+        }
+        results
+    }
+    for pattern in [
+        "**/a",
+        "a/**/b",
+        "**/a/**/b",
+        "a*b?",
+        "a/[!x-z]",
+        "**",
+        "a/**",
+        "a/**/",
+        "[[]x[]]",
+    ] {
+        let bounded = RulePattern::new(pattern)?;
+        let legacy = variants(pattern)
+            .into_iter()
+            .filter_map(|variant| Pattern::new(&variant).ok())
+            .collect::<Vec<_>>();
+        for value in [
+            "", "a", "a/", "a/b", "a/b/", "a/x/b", "x/a/b", "a/z", "abc", "xa", "axb", "[x]", "a/b/c",
+        ] {
+            let candidate = MatchCandidate { relative_path: value.to_string(), is_dir: false };
+            assert_eq!(
+                pattern_matches_candidate(&bounded, &candidate),
+                legacy.iter().any(|p| p.matches(value)),
+                "{pattern} {value}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn excludes_instruction_paths_with_globs() -> Result<()> {
     let workspace = tempdir()?;
     let project_root = workspace.path();

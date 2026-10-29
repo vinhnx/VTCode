@@ -15,7 +15,7 @@ fn patch_args() -> Value {
 async fn run_apply_patch(workspace: &TempDir, permission_granted: bool) -> ToolExecutionReport {
     let agent = build_agent(workspace.path()).await;
     agent
-        .execute_local_tool(tools::APPLY_PATCH, &patch_args(), "call-1", permission_granted)
+        .execute_local_tool(tools::APPLY_PATCH, &patch_args(), "call-1", permission_granted, "build")
         .await
 }
 
@@ -67,7 +67,7 @@ async fn configured_deny_policy_outranks_client_permission() {
         .expect("deny policy should persist in the workspace");
 
     let report = agent
-        .execute_local_tool(tools::APPLY_PATCH, &patch_args(), "call-1", true)
+        .execute_local_tool(tools::APPLY_PATCH, &patch_args(), "call-1", true, "build")
         .await;
 
     assert!(
@@ -81,4 +81,91 @@ async fn configured_deny_policy_outranks_client_permission() {
         report.llm_response
     );
     assert!(!temp.path().join("hello.txt").exists(), "denied apply_patch must not write files");
+}
+
+#[tokio::test]
+async fn read_only_primary_agent_blocks_mutating_local_call() {
+    use crate::zed::agent::test_support::build_agent_with_default_primary_agent;
+
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent_with_default_primary_agent(temp.path(), "plan").await;
+
+    let report = agent
+        .execute_local_tool(tools::APPLY_PATCH, &patch_args(), "call-1", true, "plan")
+        .await;
+
+    assert!(
+        matches!(report.status, ToolCallStatus::Failed),
+        "plan agent must not run apply_patch: {}",
+        report.llm_response
+    );
+    assert!(
+        report.llm_response.contains("plan"),
+        "failure should name the selected agent: {}",
+        report.llm_response
+    );
+    assert!(!temp.path().join("hello.txt").exists(), "blocked apply_patch must not write files");
+}
+
+#[tokio::test]
+async fn denied_effective_permissions_block_local_call_for_build_agent() {
+    use crate::zed::agent::test_support::build_agent_with_policies;
+    use vtcode_config::CommandsConfig;
+
+    let temp = TempDir::new().unwrap();
+    let permissions = vtcode_config::core::permissions::PermissionsConfig {
+        deny: vec![tools::APPLY_PATCH.to_string()],
+        ..vtcode_config::core::permissions::PermissionsConfig::default()
+    };
+    let agent = build_agent_with_policies(
+        temp.path(),
+        "build",
+        CommandsConfig::default(),
+        vtcode_config::SandboxConfig::default(),
+        permissions,
+        Vec::new(),
+    )
+    .await;
+
+    let report = agent
+        .execute_local_tool(tools::APPLY_PATCH, &patch_args(), "call-1", true, "build")
+        .await;
+
+    assert!(
+        matches!(report.status, ToolCallStatus::Failed),
+        "denied permissions must block apply_patch: {}",
+        report.llm_response
+    );
+    assert!(
+        report.llm_response.contains("denied by primary agent"),
+        "failure should come from the dispatch permission check: {}",
+        report.llm_response
+    );
+    assert!(!temp.path().join("hello.txt").exists(), "denied apply_patch must not write files");
+}
+
+#[tokio::test]
+async fn local_registry_receives_operator_sandbox_config() {
+    use crate::zed::agent::test_support::build_agent_with_policies;
+    use vtcode_config::CommandsConfig;
+
+    let temp = TempDir::new().unwrap();
+    let sandbox = vtcode_config::SandboxConfig {
+        enabled: true,
+        ..vtcode_config::SandboxConfig::default()
+    };
+    let agent = build_agent_with_policies(
+        temp.path(),
+        "build",
+        CommandsConfig::default(),
+        sandbox,
+        vtcode_config::core::permissions::PermissionsConfig::default(),
+        Vec::new(),
+    )
+    .await;
+
+    assert!(
+        agent.local_tool_registry.sandbox_config().enabled,
+        "ACP local tools must run under the operator sandbox"
+    );
 }

@@ -366,8 +366,11 @@ vtcode secret status mycorp --key-name MYCORP_API_KEY
 ```
 
 `api_key_env` defaults to a derived `NAME_API_KEY` value when omitted. Process environment variables and workspace
-`.env` entries take precedence over secure storage. Legacy provider-only entries are migrated only for a provider's
-default key; use `--key-name` for every non-default profile.
+`.env` entries take precedence over secure storage. Unambiguous legacy provider-only entries are migrated only for a
+provider's default key; use `--key-name` for every non-default profile. Ambiguous legacy entries require a new key.
+Workspace `.env` values are read only for credential lookup and are not added to the process environment. Older
+key-scoped secure-storage entries use an ambiguous account format and are not imported automatically; add those keys
+again with `vtcode secret add`.
 
 These entries are editable from `/config`, and they show up in the model picker using `display_name` so you can toggle
 between multiple custom endpoints without losing track of the active one.

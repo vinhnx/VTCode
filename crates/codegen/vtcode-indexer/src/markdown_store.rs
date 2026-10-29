@@ -14,13 +14,18 @@
 //! human-readable state without requiring a database.
 
 use std::fs::{self, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+
+use crate::atomic_write::{
+    canonical_existing_storage_dir, canonical_storage_dir, contained_existing_record_path, contained_record_path,
+    reject_symlink_destination, validate_record_key, write_atomic,
+};
 
 /// Simple markdown storage manager
 #[derive(Clone)]
@@ -36,20 +41,34 @@ impl MarkdownStorage {
 
     /// Initialize storage directory
     fn init(&self) -> Result<()> {
-        fs::create_dir_all(&self.storage_dir)?;
+        canonical_storage_dir(&self.storage_dir)?;
         Ok(())
     }
 
     /// Store data as markdown
     fn store<T: Serialize>(&self, key: &str, data: &T, title: &str) -> Result<()> {
-        let file_path = self.storage_dir.join(format!("{key}.md"));
+        let file_path = self.storage_path(key)?;
         let markdown = self.serialize_to_markdown(data, title)?;
         write_with_lock(&file_path, markdown.as_bytes())
     }
 
+    /// Resolve `key` to the record path inside the canonical storage dir.
+    ///
+    /// Keys must be single file names: separators, parent components, and
+    /// absolute paths fail closed so record operations cannot escape the
+    /// store when names arrive from workspaces or CLI input.
+    fn storage_path(&self, key: &str) -> Result<PathBuf> {
+        contained_record_path(&self.storage_dir, key, "md")
+    }
+
+    /// Resolve `key` without creating anything, for read and delete paths.
+    fn existing_storage_path(&self, key: &str) -> Result<PathBuf> {
+        contained_existing_record_path(&self.storage_dir, key, "md")
+    }
+
     /// Load data from markdown
     pub fn load<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<T> {
-        let file_path = self.storage_dir.join(format!("{key}.md"));
+        let file_path = self.existing_storage_path(key)?;
         let content = read_with_shared_lock(&file_path)?;
         self.deserialize_from_markdown(&content)
     }
@@ -58,7 +77,8 @@ impl MarkdownStorage {
     pub fn list(&self) -> Result<Vec<String>> {
         let mut items = Vec::new();
 
-        for entry in fs::read_dir(&self.storage_dir)? {
+        let dir = canonical_existing_storage_dir(&self.storage_dir)?;
+        for entry in fs::read_dir(&dir)? {
             let entry = entry?;
             if let Some(name) = entry.path().file_stem().and_then(|file_name| file_name.to_str()) {
                 items.push(name.to_string());
@@ -70,7 +90,11 @@ impl MarkdownStorage {
 
     /// Delete stored item
     pub fn delete(&self, key: &str) -> Result<()> {
-        let file_path = self.storage_dir.join(format!("{key}.md"));
+        validate_record_key(key)?;
+        if !self.storage_dir.join(format!("{key}.md")).exists() {
+            return Ok(());
+        }
+        let file_path = self.existing_storage_path(key)?;
         if file_path.exists() {
             // Try to obtain an exclusive lock before removing the file so
             // concurrent readers or writers can finish gracefully.
@@ -95,9 +119,14 @@ impl MarkdownStorage {
     }
 
     /// Check if item exists
+    ///
+    /// Key validation keeps the probe inside the store without creating
+    /// anything; only mutating and loading operations canonicalize.
     pub fn exists(&self, key: &str) -> bool {
-        let file_path = self.storage_dir.join(format!("{key}.md"));
-        file_path.exists()
+        if validate_record_key(key).is_err() {
+            return false;
+        }
+        self.storage_dir.join(format!("{key}.md")).exists()
     }
 
     fn serialize_to_markdown<T: Serialize>(&self, data: &T, title: &str) -> Result<String> {
@@ -178,34 +207,40 @@ impl MarkdownStorage {
 }
 
 fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to ensure parent directory exists for {}", path.display()))?;
-    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("storage path {} has no parent", path.display()))?;
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| anyhow::anyhow!("storage path {} has no file name", path.display()))?;
+    reject_symlink_destination(path)?;
 
-    let mut file = OpenOptions::new()
+    // Lock the destination inode itself while the bytes land atomically:
+    // the destination is never truncated in place, so readers observe the
+    // old or the new record but never a mix, and a failed write keeps the
+    // last committed record instead of a torn one. A writer that opens the
+    // path after our rename locks the new inode instead, so overlapping
+    // writes resolve as last-writer-wins between complete files.
+    let lock = OpenOptions::new()
         .create(true)
+        .read(true)
         .write(true)
         .truncate(false)
         .open(path)
         .with_context(|| format!("Failed to open file at {}", path.display()))?;
 
-    FileExt::lock_exclusive(&file)
+    FileExt::lock_exclusive(&lock)
         .with_context(|| format!("Failed to acquire exclusive lock for {}", path.display()))?;
 
-    file.set_len(0)
-        .with_context(|| format!("Failed to truncate file at {} while holding exclusive lock", path.display()))?;
+    let result = write_atomic(parent, file_name, data);
 
-    file.write_all(data)
-        .with_context(|| format!("Failed to write file content to {} while holding exclusive lock", path.display()))?;
-
-    file.sync_all()
-        .with_context(|| format!("Failed to sync file at {} after writing with exclusive lock", path.display()))?;
-
-    FileExt::unlock(&file).with_context(|| format!("Failed to release exclusive lock for {}", path.display()))
+    FileExt::unlock(&lock).with_context(|| format!("Failed to release exclusive lock for {}", path.display()))?;
+    result
 }
 
 fn read_with_shared_lock(path: &Path) -> Result<String> {
+    reject_symlink_destination(path)?;
     let mut file = OpenOptions::new()
         .read(true)
         .open(path)
@@ -462,19 +497,19 @@ impl SimpleCache {
 
     /// Initialize cache directory
     pub fn init(&self) -> Result<()> {
-        fs::create_dir_all(&self.cache_dir)?;
+        canonical_storage_dir(&self.cache_dir)?;
         Ok(())
     }
 
     /// Store data in cache
     pub fn store(&self, key: &str, data: &str) -> Result<()> {
-        let file_path = self.cache_dir.join(format!("{key}.txt"));
+        let file_path = contained_record_path(&self.cache_dir, key, "txt")?;
         write_with_lock(&file_path, data.as_bytes())
     }
 
     /// Load data from cache
     pub fn load(&self, key: &str) -> Result<String> {
-        let file_path = self.cache_dir.join(format!("{key}.txt"));
+        let file_path = contained_existing_record_path(&self.cache_dir, key, "txt")?;
         read_with_shared_lock(&file_path).map_err(|err| {
             if err
                 .downcast_ref::<std::io::Error>()
@@ -489,13 +524,16 @@ impl SimpleCache {
 
     /// Check if cache entry exists
     pub fn exists(&self, key: &str) -> bool {
-        let file_path = self.cache_dir.join(format!("{key}.txt"));
-        file_path.exists()
+        if validate_record_key(key).is_err() {
+            return false;
+        }
+        self.cache_dir.join(format!("{key}.txt")).exists()
     }
 
     /// Clear cache
     pub fn clear(&self) -> Result<()> {
-        for entry in fs::read_dir(&self.cache_dir)? {
+        let dir = canonical_existing_storage_dir(&self.cache_dir)?;
+        for entry in fs::read_dir(&dir)? {
             let entry = entry?;
             if entry.path().is_file() {
                 fs::remove_file(entry.path())?;
@@ -507,7 +545,8 @@ impl SimpleCache {
     /// List cache entries
     pub fn list(&self) -> Result<Vec<String>> {
         let mut entries = Vec::new();
-        for entry in fs::read_dir(&self.cache_dir)? {
+        let dir = canonical_existing_storage_dir(&self.cache_dir)?;
+        for entry in fs::read_dir(&dir)? {
             let entry = entry?;
             if let Some(name) = entry.path().file_stem().and_then(|file_name| file_name.to_str()) {
                 entries.push(name.to_string());

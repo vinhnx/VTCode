@@ -115,7 +115,7 @@ where
             ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
                 .verb("Get-ChildItem")
                 .flag_if(show_hidden, "Force")
-                .named("Path", format_path(ShellKind::Windows, &target))
+                .named("LiteralPath", format_path(ShellKind::Windows, &target))
                 .build(),
         };
 
@@ -148,13 +148,15 @@ where
                 .flag_if(parents, "p")
                 .value(format_path(ShellKind::Unix, &target))
                 .build(),
-            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
-                .verb("New-Item")
-                .flag("ItemType")
-                .value("Directory")
-                .flag_if(parents, "Force")
-                .named("Path", format_path(ShellKind::Windows, &target))
-                .build(),
+            ShellKind::Windows => {
+                let target = format_path(ShellKind::Windows, &target);
+                let validate = if parents {
+                    ""
+                } else {
+                    "if ([System.IO.Directory]::Exists($p)) { throw 'Directory already exists' }; if (-not [System.IO.Directory]::Exists([System.IO.Path]::GetDirectoryName($p))) { throw 'Parent directory does not exist' }; "
+                };
+                format!("$p = {target}; {validate}[void][System.IO.Directory]::CreateDirectory($p)")
+            }
         };
 
         let invocation = CommandInvocation::new(
@@ -163,7 +165,8 @@ where
             CommandCategory::CreateDirectory,
             self.working_dir.clone(),
         )
-        .with_paths(vec![target]);
+        .with_paths(vec![target])
+        .with_create_parents(parents);
 
         self.expect_success(invocation).map(|_| ())
     }
@@ -200,7 +203,7 @@ where
                 .verb("Remove-Item")
                 .flag_if(options.recursive, "Recurse")
                 .flag_if(options.force, "Force")
-                .named("Path", format_path(ShellKind::Windows, &target))
+                .named("LiteralPath", format_path(ShellKind::Windows, &target))
                 .build(),
         };
 
@@ -225,7 +228,7 @@ where
                 .build(),
             ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
                 .verb("Copy-Item")
-                .named("Path", format_path(ShellKind::Windows, &source_path))
+                .named("LiteralPath", format_path(ShellKind::Windows, &source_path))
                 .named("Destination", format_path(ShellKind::Windows, &dest_path))
                 .flag_if(recursive, "Recurse")
                 .build(),
@@ -251,7 +254,7 @@ where
                 .build(),
             ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
                 .verb("Move-Item")
-                .named("Path", format_path(ShellKind::Windows, &source_path))
+                .named("LiteralPath", format_path(ShellKind::Windows, &source_path))
                 .named("Destination", format_path(ShellKind::Windows, &dest_path))
                 .build(),
         };
@@ -277,12 +280,16 @@ where
                 .value(format_pattern(ShellKind::Unix, pattern))
                 .value(format_path(ShellKind::Unix, &target))
                 .build(),
+            ShellKind::Windows if recursive => format!(
+                "Get-ChildItem -LiteralPath {} -File -Recurse | Select-String -Pattern {} -SimpleMatch",
+                format_path(ShellKind::Windows, &target),
+                format_pattern(ShellKind::Windows, pattern)
+            ),
             ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
                 .verb("Select-String")
                 .named("Pattern", format_pattern(ShellKind::Windows, pattern))
-                .named("Path", format_path(ShellKind::Windows, &target))
+                .named("LiteralPath", format_path(ShellKind::Windows, &target))
                 .value("-SimpleMatch")
-                .flag_if(recursive, "Recurse")
                 .build(),
         };
 
@@ -430,15 +437,22 @@ fn join_command(parts: Vec<String>) -> String {
 fn format_path(shell: ShellKind, path: &Path) -> String {
     match shell {
         ShellKind::Unix => escape(path.to_string_lossy()).into_owned(),
-        ShellKind::Windows => format!("'{}'", path.to_string_lossy().replace('\'', "''")),
+        ShellKind::Windows => powershell_data(&path.to_string_lossy()),
     }
 }
 
 fn format_pattern(shell: ShellKind, pattern: &str) -> String {
     match shell {
         ShellKind::Unix => escape(pattern.into()).into_owned(),
-        ShellKind::Windows => format!("'{}'", pattern.replace('\'', "''")),
+        ShellKind::Windows => powershell_data(pattern),
     }
+}
+
+// PowerShell recognizes Unicode quotation marks as delimiters too. Encode
+// values as byte literals so no input character is interpreted as script.
+fn powershell_data(value: &str) -> String {
+    let bytes = value.as_bytes().iter().map(u8::to_string).collect::<Vec<_>>().join(",");
+    format!("([System.Text.Encoding]::UTF8.GetString([byte[]]@({bytes})))")
 }
 
 /// Fluent builder for shell-aware command strings.
@@ -525,6 +539,94 @@ mod tests {
                 stderr: String::new(),
             })
         }
+    }
+
+    #[test]
+    fn powershell_arguments_are_data_and_paths_are_literal() -> Result<()> {
+        let dir = TempDir::new()?;
+        let source = "item[1]’ ; Write-Output INJECTED #.txt";
+        fs::write(dir.path().join(source), "content")?;
+        let executor = RecordingExecutor::default();
+        let mut runner = BashRunner::new(dir.path().to_path_buf(), executor.clone(), AllowAllPolicy)?;
+        runner.shell_kind = ShellKind::Windows;
+        runner.ls(Some(source), false)?;
+        runner.cp(source, "copy[2].txt", false)?;
+        runner.mv(source, "move[2].txt")?;
+        runner.rm(source, false, false)?;
+        runner.mkdir("new[3]", true)?;
+        runner.grep("a’ ; Write-Output INJECTED #", Some(source), false)?;
+        runner.grep("needle", Some(source), true)?;
+
+        let invocations = executor.invocations.lock().expect("invocations");
+        assert_eq!(invocations.len(), 7);
+        for invocation in invocations.iter() {
+            assert!(!invocation.command.contains("INJECTED"), "{}", invocation.command);
+        }
+        for index in [0, 1, 2, 3, 5, 6] {
+            assert!(invocations[index].command.contains("-LiteralPath"), "{}", invocations[index].command);
+        }
+        assert!(invocations[4].command.contains("[System.IO.Directory]::CreateDirectory($p)"));
+        assert!(invocations[4].create_parents);
+        assert!(invocations[6].command.contains("-File -Recurse | Select-String"));
+        assert_eq!(powershell_data("A’'"), "([System.Text.Encoding]::UTF8.GetString([byte[]]@(65,226,128,153,39)))");
+        Ok(())
+    }
+
+    #[cfg(feature = "pure-rust")]
+    #[test]
+    fn powershell_mkdir_parent_option_reaches_pure_rust_executor() -> Result<()> {
+        let dir = TempDir::new()?;
+        let mut runner =
+            BashRunner::new(dir.path().to_path_buf(), crate::executor::PureRustCommandExecutor, AllowAllPolicy)?;
+        runner.shell_kind = ShellKind::Windows;
+        assert!(runner.mkdir("missing/child", false).is_err());
+        runner.mkdir("missing/child", true)?;
+        assert!(dir.path().join("missing/child").is_dir());
+        Ok(())
+    }
+
+    #[cfg(all(feature = "pure-rust", unix))]
+    #[test]
+    fn recursive_copy_rejects_escaping_symlinks_on_both_sides() -> Result<()> {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new()?;
+        let outside = TempDir::new()?;
+        let secret = outside.path().join("secret.txt");
+        fs::write(&secret, "classified")?;
+        let victim = outside.path().join("victim.txt");
+        fs::write(&victim, "untouched")?;
+
+        let source = dir.path().join("source");
+        fs::create_dir_all(source.join("real"))?;
+        fs::write(source.join("real").join("file.txt"), "data")?;
+        symlink(&secret, source.join("escape"))?;
+
+        let runner =
+            BashRunner::new(dir.path().to_path_buf(), crate::executor::PureRustCommandExecutor, AllowAllPolicy)?;
+        let error = runner.cp("source", "copy", true).expect_err("escaping source link must fail");
+        assert!(format!("{error:#}").contains("escaping"), "{error:#}");
+        assert!(!dir.path().join("copy").join("escape").exists());
+
+        // Links that stay inside the source tree keep copy-through behavior.
+        fs::remove_file(source.join("escape"))?;
+        symlink(source.join("real").join("file.txt"), source.join("inner"))?;
+        runner.cp("source", "copy", true)?;
+        assert_eq!(fs::read_to_string(dir.path().join("copy").join("inner"))?, "data");
+
+        // Planted links inside a pre-existing destination tree must not
+        // redirect writes out: one shadows a copied file, one a copied dir.
+        let dest = dir.path().join("planted");
+        fs::create_dir_all(&dest)?;
+        symlink(&victim, dest.join("inner"))?;
+        symlink(outside.path(), dest.join("real"))?;
+        let error = runner
+            .cp("source", "planted", true)
+            .expect_err("escaping destination link must fail");
+        assert!(format!("{error:#}").contains("escaping"), "{error:#}");
+        assert_eq!(fs::read_to_string(&victim)?, "untouched");
+        assert!(!outside.path().join("file.txt").exists());
+        Ok(())
     }
 
     #[test]

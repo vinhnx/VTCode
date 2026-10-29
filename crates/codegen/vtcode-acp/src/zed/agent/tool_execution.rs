@@ -131,6 +131,7 @@ impl ZedAgent {
                         &func_ref.name,
                         client,
                         session_id,
+                        session,
                         call.id.as_str(),
                         &args_value,
                         permission_granted,
@@ -216,13 +217,23 @@ impl ZedAgent {
         tool_name: &str,
         client: &ConnectionHandle,
         session_id: &acp::SessionId,
+        session: &SessionHandle,
         call_id: &str,
         args: &Value,
         permission_granted: bool,
     ) -> ToolExecutionReport {
         match descriptor {
             ToolDescriptor::Acp(tool) => self.execute_acp_tool(tool, client, session_id, args).await,
-            ToolDescriptor::Local => self.execute_local_tool(tool_name, args, call_id, permission_granted).await,
+            ToolDescriptor::Local => {
+                let primary_agent = match session.data.lock() {
+                    Ok(data) => data.primary_agent.clone(),
+                    Err(_) => {
+                        return ToolExecutionReport::failure(tool_name, "session state unavailable");
+                    }
+                };
+                self.execute_local_tool(tool_name, args, call_id, permission_granted, &primary_agent)
+                    .await
+            }
         }
     }
 

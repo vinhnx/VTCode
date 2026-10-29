@@ -52,7 +52,7 @@ fn retention_ok_for_responses_model() {
 fn assert_policy(
     args: Cli,
     kind: StartupCommandKind,
-    loads_dotenv: bool,
+    migrates_legacy_paths: bool,
     resolves_auth: bool,
     initializes_runtime: bool,
     reads_theme: bool,
@@ -60,8 +60,7 @@ fn assert_policy(
 ) {
     let policy = command_startup_policy(&args);
     assert_eq!(policy.kind, kind, "unexpected policy for {args:?}");
-    assert_eq!(policy.load_dotenv(), loads_dotenv, "dotenv policy for {args:?}");
-    assert_eq!(policy.migrate_legacy_paths(), loads_dotenv, "migration policy for {args:?}");
+    assert_eq!(policy.migrate_legacy_paths(), migrates_legacy_paths, "migration policy for {args:?}");
     assert_eq!(policy.resolve_provider_auth(), resolves_auth, "auth policy for {args:?}");
     assert_eq!(
         policy.validate_startup_configuration(),

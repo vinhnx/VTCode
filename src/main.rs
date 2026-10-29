@@ -48,7 +48,6 @@ use colorchoice::ColorChoice as GlobalColorChoice;
 use vtcode_commons::color_policy;
 use vtcode_commons::{VtCodePaths, env_lock};
 use vtcode_core::cli::args::{Cli, Commands};
-use vtcode_core::config::api_keys::load_dotenv;
 use vtcode_ui::tui::panic_hook;
 
 mod agent;
@@ -263,16 +262,7 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     let tui_log_capture_enabled = debug_runtime_flag_enabled(args.debug, "VTCODE_TUI_LOGS");
     vtcode_ui::tui::log::set_tui_log_capture_enabled(tui_log_capture_enabled);
 
-    // Load .env on the critical path. Legacy path migration is maintenance
-    // (marker-checked, idempotent) and must not stall first paint — a large
-    // pre-XDG `~/.vtcode` tree has been observed to add 1s+ here.
-    if startup_policy.load_dotenv() {
-        let environment_phase = vtcode_commons::startup_trace::phase_started();
-        if let Err(_err) = load_dotenv()
-            && !args.quiet
-        {}
-        vtcode_commons::startup_trace::record_phase("dotenv_and_migration", environment_phase);
-    }
+    // Interactive legacy path migration is deferred until after first paint.
     if startup_policy.migrate_legacy_paths() && !startup_policy.run_interactive_maintenance() {
         // Non-interactive consumers still need migrated paths before dispatch.
         migrate_legacy_global_paths(args.quiet);
@@ -441,7 +431,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     }
 
     // Interactive legacy-path migration runs after the runtime exists so it
-    // never shares the pre-dispatch critical path with dotenv/config/auth.
+    // never shares the pre-dispatch critical path with config/auth.
     // Marker-checked and idempotent; non-interactive paths already migrated.
     if startup_policy.migrate_legacy_paths() && startup_policy.run_interactive_maintenance() {
         let quiet = args.quiet;

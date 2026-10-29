@@ -33,8 +33,11 @@ vtcode secret status mimo --key-name MIMO_TOKEN_PLAN_KEY
 ```
 
 Environment variables and workspace `.env` values take precedence over secure storage. Existing provider-only entries
-are migrated lazily only when the requested key is the provider default; non-default profiles require an explicit key
-name. Configured `[[custom_providers]]` and `[providers.<name>]` overrides use the same identity rules.
+are migrated lazily only when the requested key is the provider default and the legacy account is unambiguous;
+non-default profiles require an explicit key name. Configured `[[custom_providers]]` and `[providers.<name>]`
+overrides use the same identity rules.
+Workspace `.env` values are scoped to credential lookup. Older key-scoped secure-storage entries cannot be safely
+attributed and must be added again with `vtcode secret add`.
 
 For debug or release launches:
 

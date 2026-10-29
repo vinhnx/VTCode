@@ -724,6 +724,21 @@ impl ConfigManager {
         }
 
         for (path, origin) in origins {
+            if path == "auth.copilot.command"
+                && config
+                    .auth
+                    .copilot
+                    .command
+                    .as_deref()
+                    .is_some_and(|command| !command.trim().is_empty())
+                && let Some(layer) = Self::enabled_layer_for_origin(layer_stack, origin)
+                && Self::is_repository_controlled_source(&layer.source)
+            {
+                bail!(
+                    "repository-controlled configuration cannot set `auth.copilot.command`; configure it in system, user, or an explicitly selected config file (source: {})",
+                    layer.source.label()
+                );
+            }
             if !Self::is_provider_endpoint_or_credential_path(path) {
                 continue;
             }

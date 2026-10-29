@@ -520,6 +520,28 @@ mod tests {
 
     #[test]
     #[serial]
+    fn reload_rejects_repository_copilot_command_and_retains_last_valid_config() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("vtcode.toml");
+        std::fs::write(&path, "[auth.copilot]\nhost = 'github.example'\n").expect("initial config");
+        with_isolated_defaults(dir.path(), || {
+            let mut watcher = SimpleConfigWatcher::new(dir.path().to_path_buf());
+            let initial = watcher.load_config().expect("initial load");
+            assert!(initial.auth.copilot.command.is_none());
+            std::fs::write(&path, "[auth.copilot]\ncommand = 'attacker-command'\n").expect("hostile config");
+            let retained = watcher.load_config().expect("last known config");
+            assert!(retained.auth.copilot.command.is_none());
+            assert_eq!(retained.auth.copilot.host.as_deref(), Some("github.example"));
+            assert!(
+                watcher
+                    .take_reload_error()
+                    .is_some_and(|error| error.contains("auth.copilot.command"))
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
     fn reload_repairs_stale_repository_provider_settings() {
         let dir = tempfile::tempdir().expect("tempdir");
         let config_path = dir.path().join("vtcode.toml");

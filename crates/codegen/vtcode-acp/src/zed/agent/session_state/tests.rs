@@ -9,7 +9,8 @@ use vtcode_config::{SubagentDiscoveryInput, discover_subagents};
 use vtcode_core::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 use vtcode_core::utils::session_archive::{SessionArchiveMetadata, SessionListing, SessionSnapshot};
 
-use super::super::test_support::{build_agent, build_agent_with_default_primary_agent};
+use super::super::handlers::build_session_provider;
+use super::super::test_support::{build_agent, build_agent_with_default_primary_agent, build_agent_with_policies};
 
 fn primary_agent(session: &SessionHandle) -> String {
     session.data.lock().map(|data| data.primary_agent.clone()).unwrap_or_default()
@@ -382,4 +383,35 @@ async fn delete_after_delete_fails_closed() {
     let again = agent.delete_session(acp::DeleteSessionRequest::new(session_id)).await;
     let error = format!("{:?}", again.expect_err("second delete must fail"));
     assert!(error.contains("unknown_session"));
+}
+
+#[tokio::test]
+async fn provider_whitelist_blocks_excluded_selection_and_construction() {
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent_with_policies(
+        temp.path(),
+        "build",
+        vtcode_config::CommandsConfig::default(),
+        vtcode_config::SandboxConfig::default(),
+        vtcode_config::core::permissions::PermissionsConfig::default(),
+        vec!["openai".to_string()],
+    )
+    .await;
+
+    assert!(agent.supports_provider("openai", "openai"));
+    assert!(!agent.supports_provider("anthropic", "openai"));
+    assert!(
+        agent
+            .provider_select_options("openai")
+            .iter()
+            .all(|option| option.value.0.as_ref() != "anthropic"),
+        "excluded providers must not be advertised"
+    );
+    let error = format!(
+        "{:?}",
+        build_session_provider(&agent, "anthropic", "claude-x")
+            .err()
+            .expect("excluded provider must fail")
+    );
+    assert!(error.contains("providers_whitelist"), "{error}");
 }

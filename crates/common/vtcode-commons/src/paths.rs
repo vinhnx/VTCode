@@ -82,6 +82,65 @@ pub fn canonicalize_workspace(workspace_root: &Path) -> PathBuf {
     })
 }
 
+/// Validate every existing path component and reject escaping symlinks.
+///
+/// Platform aliases such as macOS `/tmp -> /private/tmp` are accepted when a
+/// symlink resolves beneath its containing directory. Missing trailing
+/// components are allowed when `allow_missing_tail` is set so callers can
+/// create them safely afterwards. A symlinked leaf always fails: callers
+/// must decide explicitly whether to follow, replace, or reject it.
+///
+/// # Errors
+///
+/// Returns an error when the path contains `..`, when any existing
+/// component is a symlink escaping its containing directory (including a
+/// symlinked leaf), when a non-leaf component is not a directory, or when
+/// a component is missing and `allow_missing_tail` is false.
+pub fn validate_no_escaping_symlink_ancestors(path: &Path, allow_missing_tail: bool) -> std::io::Result<()> {
+    use std::fs;
+
+    let components = path.components().collect::<Vec<_>>();
+    let mut current = PathBuf::new();
+    for (index, component) in components.iter().enumerate() {
+        if matches!(component, Component::ParentDir) {
+            return Err(std::io::Error::other(format!("path contains traversal: {}", path.display())));
+        }
+        if matches!(component, Component::CurDir) {
+            continue;
+        }
+        current.push(component.as_os_str());
+        let is_leaf = index + 1 == components.len();
+        let metadata = match fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(error) if allow_missing_tail && error.kind() == std::io::ErrorKind::NotFound => break,
+            Err(error) => return Err(error),
+        };
+        if metadata.file_type().is_symlink() {
+            if is_leaf {
+                return Err(std::io::Error::other(format!("refusing symlink path {}", current.display())));
+            }
+            let parent = current
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let canonical_parent = canonicalize(parent)?;
+            let canonical_target = canonicalize(&current)?;
+            if !canonical_target.starts_with(&canonical_parent) {
+                return Err(std::io::Error::other(format!(
+                    "path component {} escapes its containing directory",
+                    current.display()
+                )));
+            }
+            if !fs::metadata(&current)?.is_dir() {
+                return Err(std::io::Error::other(format!("path component {} is not a directory", current.display())));
+            }
+        } else if !is_leaf && !metadata.is_dir() {
+            return Err(std::io::Error::other(format!("path component {} is not a directory", current.display())));
+        }
+    }
+    Ok(())
+}
+
 /// Render a path relative to the workspace when it belongs to that workspace.
 ///
 /// Paths outside the workspace remain absolute (or otherwise unchanged) so a
@@ -927,5 +986,40 @@ mod tests {
             let resolved = expand_tilde("~/projects/vtcode");
             assert_eq!(resolved, home.join("projects/vtcode"));
         }
+    }
+
+    #[test]
+    fn symlink_ancestor_validation_rejects_traversal_and_missing_tail() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let missing = temp.path().join("absent").join("child");
+        assert!(validate_no_escaping_symlink_ancestors(&missing, true).is_ok());
+        assert!(validate_no_escaping_symlink_ancestors(&missing, false).is_err());
+        assert!(validate_no_escaping_symlink_ancestors(Path::new("a/../b"), false).is_err());
+        assert!(validate_no_escaping_symlink_ancestors(temp.path(), false).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_ancestor_validation_rejects_escaping_links_but_allows_in_parent_aliases() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        let escape = temp.path().join("escape");
+        symlink(outside.path(), &escape).expect("symlink");
+        let error = validate_no_escaping_symlink_ancestors(&escape.join("child"), false)
+            .expect_err("escaping ancestor must fail");
+        assert!(error.to_string().contains("escapes its containing directory"), "{error}");
+        let leaf_error = validate_no_escaping_symlink_ancestors(&escape, false).expect_err("symlinked leaf must fail");
+        assert!(leaf_error.to_string().contains("refusing symlink path"), "{leaf_error}");
+
+        let inner = temp.path().join("inner");
+        std::fs::create_dir(&inner).expect("mkdir");
+        symlink(&inner, temp.path().join("alias")).expect("symlink");
+        // An in-parent alias as a non-leaf ancestor is tolerated (this is
+        // how platform aliases like /tmp survive validation); as a leaf it
+        // still fails closed.
+        assert!(validate_no_escaping_symlink_ancestors(&temp.path().join("alias").join("child"), true).is_ok());
+        assert!(validate_no_escaping_symlink_ancestors(&temp.path().join("alias"), false).is_err());
     }
 }

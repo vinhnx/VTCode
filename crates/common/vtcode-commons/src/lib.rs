@@ -109,7 +109,7 @@ pub use modal_hints::{
 pub use paths::{
     PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths, canonicalize, canonicalize_async,
     file_name_from_path, is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,
-    workspace_relative_display,
+    validate_no_escaping_symlink_ancestors, workspace_relative_display,
 };
 pub use project::{ProjectOverview, build_project_overview};
 pub use reference::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};

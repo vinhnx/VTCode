@@ -18,7 +18,8 @@
 
 ## Gotchas
 
-- `BashRunner::new()` canonicalizes root — bails if missing. Authorization resolves paths freshly; never cache symlink targets across operations. OS sandboxing or bound filesystem handles remain necessary against concurrent replacement. Unsafe env mutation (`set_var`/`remove_var`) is centralized in `vtcode-commons::env_lock`, serialized by a process-wide mutex, single-threaded startup only.
+- `BashRunner::new()` canonicalizes root — bails if missing. Authorization resolves paths freshly; never cache symlink targets across operations. OS sandboxing or bound filesystem handles remain necessary against concurrent replacement. Unsafe env mutation (`set_var`/`remove_var`) is centralized in `vtcode-commons::env_lock`, serialized by a process-wide mutex, single-threaded startup only. Pure-Rust recursive copy anchors both sides at canonical roots and rejects escaping descendant links; in-tree links keep copy-through behavior.
+- PowerShell commands encode untrusted inputs as UTF-8 byte data and use literal path operations. Keep `create_parents` on the invocation so the pure-Rust executor does not infer it from script text.
 - `policy` containment delegates to `vtcode_commons::paths::ensure_path_within_workspace` — `..`-traversal paths are rejected (intentionally stricter than the old `starts_with`).
 - Pipe spooling opts into `SpawnedProcess::reliable_output_rx`, a bounded lossless stream; legacy broadcast subscribers must remain independent of that backpressure path.
 - Pipe session termination kills the complete process group before final draining; `wait_with_output` still bounds post-exit draining even when a descendant inherits the pipe, and must never become an unbounded wait.

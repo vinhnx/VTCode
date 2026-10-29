@@ -78,6 +78,7 @@ impl ConfigManager {
             Self::remove_deprecated_config_keys(&mut doc);
             if repository_controlled {
                 Self::remove_repository_provider_settings(&mut doc);
+                Self::remove_path_and_prune_empty_parents(doc.as_table_mut(), &["auth", "copilot", "command"]);
             }
 
             let new_doc: toml_edit::DocumentMut = sparse_content
@@ -112,6 +113,7 @@ impl ConfigManager {
     fn repository_safe_config(config: &VTCodeConfig) -> VTCodeConfig {
         let mut safe_config = config.clone();
         safe_config.custom_providers.clear();
+        safe_config.auth.copilot.command = None;
         for provider_override in safe_config.provider_overrides.values_mut() {
             provider_override.base_url = None;
             provider_override.api_key_env = None;
@@ -141,13 +143,13 @@ impl ConfigManager {
 
     /// Remove `path` from `table`, then drop ancestor tables left empty.
     /// Returns true when `table` itself is now empty.
-    fn remove_path_and_prune_empty_parents(table: &mut toml_edit::Table, path: &[&str]) -> bool {
+    fn remove_path_and_prune_empty_parents(table: &mut dyn toml_edit::TableLike, path: &[&str]) -> bool {
         let Some((first, rest)) = path.split_first() else {
             return table.is_empty();
         };
         if rest.is_empty() {
             table.remove(first);
-        } else if let Some(child) = table.get_mut(first).and_then(toml_edit::Item::as_table_mut) {
+        } else if let Some(child) = table.get_mut(first).and_then(toml_edit::Item::as_table_like_mut) {
             if Self::remove_path_and_prune_empty_parents(child, rest) {
                 table.remove(first);
             }

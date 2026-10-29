@@ -1,6 +1,31 @@
 use super::*;
 
 #[test]
+fn repository_save_removes_copilot_commands_in_table_and_inline_forms() {
+    let dir = assert_fs::TempDir::new().expect("workspace");
+    for content in [
+        "[auth.copilot]\ncommand = 'old-command'\nhost = 'github.example'\n",
+        "auth = { copilot = { command = 'old-command', host = 'github.example' } }\n",
+    ] {
+        let path = dir.path().join("vtcode.toml");
+        fs::write(&path, content).expect("existing config");
+        let mut config = VTCodeConfig::default();
+        config.auth.copilot.command = Some("trusted-command".to_string());
+        config.auth.copilot.host = Some("github.example".to_string());
+        ConfigManager::save_repository_config_to_path(&path, &config).expect("save");
+        let saved: toml::Value = toml::from_str(&fs::read_to_string(path).expect("read")).expect("parse");
+        assert!(
+            saved
+                .get("auth")
+                .and_then(|auth| auth.get("copilot"))
+                .and_then(|copilot| copilot.get("command"))
+                .is_none()
+        );
+        assert_eq!(saved["auth"]["copilot"]["host"].as_str(), Some("github.example"));
+    }
+}
+
+#[test]
 fn save_config_preserves_comments() {
     use std::io::Write;
 

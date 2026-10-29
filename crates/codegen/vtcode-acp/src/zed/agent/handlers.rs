@@ -711,6 +711,20 @@ pub(super) fn build_session_provider(
     provider_name: &str,
     model: &str,
 ) -> Result<Box<dyn LLMProvider>, SdkError> {
+    // Enforce the operator's provider whitelist at construction — after
+    // selection-time filtering — so prompts and compaction can never route
+    // session content to an excluded provider, and no credential is loaded
+    // for one.
+    if !agent.providers_whitelist.is_empty()
+        && !agent
+            .providers_whitelist
+            .iter()
+            .any(|allowed| allowed.eq_ignore_ascii_case(provider_name))
+    {
+        return Err(
+            SdkError::invalid_params().data(format!("Provider '{provider_name}' is not in providers_whitelist"))
+        );
+    }
     let api_key = if provider_name.eq_ignore_ascii_case(&agent.config.provider) && !agent.config.api_key.is_empty() {
         agent.config.api_key.clone()
     } else {

@@ -30,6 +30,7 @@ pub(crate) struct PrimaryAgentSessionOption {
     pub allowed_local_tools: Option<HashSet<String>>,
     pub denied_local_tools: HashSet<String>,
     pub permissions: AgentPermissionsConfig,
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +129,20 @@ impl PrimaryAgentCatalog {
         self.options.iter().find(|option| option.id == resolved)
     }
 
+    /// The selected agent's permission policy for dispatch-time evaluation
+    /// against the concrete call. Unknown agents have no policy and deny.
+    #[must_use]
+    pub(crate) fn permissions_for(&self, primary_agent: &str) -> Option<&AgentPermissionsConfig> {
+        self.option_for(primary_agent).map(|option| &option.permissions)
+    }
+
+    /// Whether the selected agent is read-only, in which case mutating calls
+    /// must additionally satisfy the planning-workflow gate at dispatch.
+    #[must_use]
+    pub(crate) fn is_read_only_agent(&self, primary_agent: &str) -> bool {
+        self.option_for(primary_agent).is_some_and(|option| option.read_only)
+    }
+
     /// Returns `true` if the resolved primary agent's permission policy permits
     /// (allow/ask/auto) the given local tool. Unknown agents deny by default.
     ///
@@ -187,6 +202,7 @@ fn primary_agent_option_from_spec(spec: &SubagentSpec) -> PrimaryAgentSessionOpt
         allowed_local_tools,
         denied_local_tools,
         permissions: spec.permissions.clone(),
+        read_only: spec.is_read_only(),
     }
 }
 

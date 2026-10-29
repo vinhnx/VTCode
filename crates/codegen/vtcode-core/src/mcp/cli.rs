@@ -380,7 +380,10 @@ async fn run_login(login_args: LoginArgs) -> Result<()> {
         .ok_or_else(|| anyhow!("No MCP provider named '{}' found.", login_args.name))?;
     let oauth = provider_http_oauth_config(provider)?;
     let service = McpOAuthService::new();
-    let prepared = service.prepare_login(&provider.name, oauth)?;
+    let McpTransportConfig::Http(http) = &provider.transport else {
+        bail!("MCP OAuth login requires HTTP transport");
+    };
+    let prepared = service.prepare_login_for_resource(&provider.name, oauth, &http.endpoint)?;
     let callback_server = start_auth_code_callback_server(
         prepared.callback_port,
         prepared.timeout_secs,
@@ -541,7 +544,7 @@ fn http_oauth_status_label(provider_name: &str, http: &McpHttpServerConfig) -> S
         return "-".to_string();
     };
 
-    match McpOAuthService::new().status(provider_name, oauth.credentials_store_mode) {
+    match McpOAuthService::new().status_for_resource(provider_name, oauth, &http.endpoint) {
         Ok(vtcode_config::auth::McpOAuthStatus::Authenticated { .. }) => "authenticated".to_string(),
         Ok(vtcode_config::auth::McpOAuthStatus::NotAuthenticated) => "not authenticated".to_string(),
         Err(error) => format!("error: {error}"),

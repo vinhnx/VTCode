@@ -835,3 +835,45 @@ fn assert_task_tracker_snapshot_schema(
     assert_eq!(parameters["properties"]["index"]["minimum"], json!(expected_minimum));
     assert_eq!(parameters["properties"]["index_path"]["pattern"], json!(expected_pattern));
 }
+
+#[tokio::test]
+async fn delegated_child_policy_denies_at_concrete_admission() {
+    // Delegated child runners must carry their spec's policy as the active
+    // primary agent: without it, admission evaluates global rules only and
+    // child-local denies never fire.
+    let temp = TempDir::new().expect("workspace");
+    let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-child-policy".to_string(),
+        RunnerSettings { reasoning_effort: None, verbosity: None },
+        None,
+        ThreadBootstrap::new(None),
+        Some(VTCodeConfig::default()),
+        None,
+    ))
+    .await
+    .expect("runner");
+    runner.set_subagent_mode(true);
+
+    let mut state = AgentSessionState::new("thread-child-policy".to_string(), 1, 1, 8_000);
+    assert!(
+        runner
+            .admit_tool_call(tools::EXEC_COMMAND, json!({"cmd": "true"}), &mut state)
+            .is_ok(),
+        "global policy alone admits the call"
+    );
+
+    let mut spec = vtcode_config::builtin_primary_auto_agent();
+    spec.permissions.deny = vec!["Bash".to_string()];
+    runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
+
+    assert!(
+        runner
+            .admit_tool_call(tools::EXEC_COMMAND, json!({"cmd": "true"}), &mut state)
+            .is_err(),
+        "attached child policy must deny the same call"
+    );
+}

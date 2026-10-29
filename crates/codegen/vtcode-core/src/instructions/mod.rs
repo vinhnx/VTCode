@@ -24,7 +24,7 @@ mod labels;
 pub use labels::{format_instruction_path, instruction_scope_label, instruction_source_label};
 mod matching;
 use matching::{
-    allowed_import_roots, collect_imports, contains_glob_meta, is_fence_line, parse_rule_frontmatter,
+    RulePattern, allowed_import_roots, collect_imports, contains_glob_meta, is_fence_line, parse_rule_frontmatter,
     pattern_matches_candidate, resolve_import_path, rule_specificity, strip_html_comments, strip_rule_frontmatter,
 };
 
@@ -191,26 +191,31 @@ impl MatchContext {
         Self { candidates }
     }
 
-    fn matches_any(&self, patterns: &[String]) -> bool {
-        if patterns.is_empty() {
-            return false;
-        }
-
-        patterns.iter().any(|raw_pattern| {
+    fn matches_any(&self, patterns: &[String]) -> Result<bool> {
+        const MAX_RULE_PATTERN_BYTES: usize = 4096;
+        for raw_pattern in patterns {
             let trimmed = raw_pattern.trim();
             if trimmed.is_empty() {
-                return false;
+                continue;
+            }
+            if trimmed.len() > MAX_RULE_PATTERN_BYTES {
+                anyhow::bail!("instruction rule path pattern exceeds {MAX_RULE_PATTERN_BYTES} bytes");
             }
 
-            let Ok(pattern) = Pattern::new(trimmed) else {
+            let Ok(pattern) = RulePattern::new(trimmed) else {
                 warn!("Ignoring invalid instruction rule path pattern `{trimmed}`");
-                return false;
+                continue;
             };
 
-            self.candidates
+            if self
+                .candidates
                 .iter()
                 .any(|candidate| pattern_matches_candidate(&pattern, candidate))
-        })
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -383,7 +388,8 @@ pub async fn discover_instruction_sources(options: &InstructionDiscoveryOptions<
         }
 
         let (user_unconditional_rules, user_matched_rules) =
-            discover_rule_sources(user_rules_roots(home), InstructionScope::User, &match_context, &excludes).await?;
+            discover_rule_sources(user_rules_roots(home), InstructionScope::User, &match_context, &excludes, None)
+                .await?;
         for source in user_unconditional_rules.into_iter().chain(user_matched_rules) {
             if seen_paths.insert(source.path.clone()) {
                 sources.push(source);
@@ -417,7 +423,7 @@ pub async fn discover_instruction_sources(options: &InstructionDiscoveryOptions<
     let mut workspace_levels = Vec::with_capacity(4);
     loop {
         let chosen_paths =
-            select_workspace_instruction_candidates(&cursor, options.fallback_filenames, &excludes).await?;
+            select_workspace_instruction_candidates(&cursor, &root, options.fallback_filenames, &excludes).await?;
 
         let mut level_sources = Vec::with_capacity(chosen_paths.len());
         for path in chosen_paths {
@@ -447,9 +453,14 @@ pub async fn discover_instruction_sources(options: &InstructionDiscoveryOptions<
     workspace_levels.reverse();
     sources.extend(workspace_levels.into_iter().flatten());
 
-    let (workspace_unconditional_rules, workspace_matched_rules) =
-        discover_rule_sources(vec![root.join(RULES_DIRECTORY)], InstructionScope::Workspace, &match_context, &excludes)
-            .await?;
+    let (workspace_unconditional_rules, workspace_matched_rules) = discover_rule_sources(
+        vec![root.join(RULES_DIRECTORY)],
+        InstructionScope::Workspace,
+        &match_context,
+        &excludes,
+        Some(&root),
+    )
+    .await?;
     for source in workspace_unconditional_rules.into_iter().chain(workspace_matched_rules) {
         if seen_paths.insert(source.path.clone()) {
             sources.push(source);
@@ -473,6 +484,9 @@ pub async fn read_instruction_bundle(
     }
 
     let allowed_import_roots = allowed_import_roots(options.project_root, options.home_dir).await?;
+    let workspace_import_root = canonicalize_async(options.project_root)
+        .await
+        .with_context(|| format!("Failed to canonicalize project root {}", options.project_root.display()))?;
     let import_max_depth = options.import_max_depth.max(1);
 
     // expand_instruction_contents performs blocking filesystem I/O (read_to_string,
@@ -491,10 +505,20 @@ pub async fn read_instruction_bundle(
                 break;
             }
 
+            let import_policy = ImportPolicy {
+                workspace_root: &workspace_import_root,
+                allowed_roots: if source.scope == InstructionScope::User
+                    && !source.path.starts_with(&workspace_import_root)
+                {
+                    &allowed_import_roots
+                } else {
+                    std::slice::from_ref(&workspace_import_root)
+                },
+            };
             let contents = match expand_instruction_contents(
                 &source.path,
                 &source.kind,
-                &allowed_import_roots,
+                import_policy,
                 import_max_depth,
                 &mut seen_imports,
                 0,
@@ -588,11 +612,14 @@ fn instruction_candidates_for_dir(dir: &Path, fallback_filenames: &[String]) -> 
 
 async fn select_workspace_instruction_candidate(
     dir: &Path,
+    workspace_root: &Path,
     fallback_filenames: &[String],
     excludes: &ExclusionMatcher,
 ) -> Result<Option<PathBuf>> {
     for candidate in instruction_candidates_for_dir(dir, fallback_filenames) {
-        if let Some(path) = normalize_instruction_candidate(&candidate, excludes).await? {
+        if let Some(path) = normalize_instruction_candidate(&candidate, excludes).await?
+            && path.starts_with(workspace_root)
+        {
             return Ok(Some(path));
         }
     }
@@ -601,15 +628,19 @@ async fn select_workspace_instruction_candidate(
 
 async fn select_workspace_instruction_candidates(
     dir: &Path,
+    workspace_root: &Path,
     fallback_filenames: &[String],
     excludes: &ExclusionMatcher,
 ) -> Result<Vec<PathBuf>> {
     let mut selected = Vec::with_capacity(2);
-    if let Some(path) = select_workspace_instruction_candidate(dir, fallback_filenames, excludes).await? {
+    if let Some(path) =
+        select_workspace_instruction_candidate(dir, workspace_root, fallback_filenames, excludes).await?
+    {
         selected.push(path);
     }
 
     if let Some(path) = normalize_instruction_candidate(&dir.join(CLAUDE_FILENAME), excludes).await?
+        && path.starts_with(workspace_root)
         && !selected.iter().any(|existing_path| existing_path == &path)
     {
         selected.push(path);
@@ -638,12 +669,14 @@ async fn discover_rule_sources(
     scope: InstructionScope,
     match_context: &MatchContext,
     excludes: &ExclusionMatcher,
+    workspace_root: Option<&Path>,
 ) -> Result<(Vec<InstructionSource>, Vec<InstructionSource>)> {
     // Directory walking performs blocking filesystem I/O (readdir, stat, canonicalize).
     // Offload the traversal to the blocking thread pool so the async runtime
     // stays responsive while we discover rule files on disk.
     let discovered = {
         let excludes = excludes.clone();
+        let workspace_root = workspace_root.map(Path::to_path_buf);
         tokio::task::spawn_blocking(move || {
             let mut paths = Vec::new();
             let mut seen = HashSet::new();
@@ -652,13 +685,21 @@ async fn discover_rule_sources(
                 if !root.exists() {
                     continue;
                 }
+                if workspace_root.as_ref().is_some_and(|workspace_root| {
+                    canonicalize(root).map_or(true, |path| !path.starts_with(workspace_root))
+                }) {
+                    continue;
+                }
 
-                for entry in build_walker_single_threaded(root)
-                    .follow_links(true)
-                    .sort_by_file_name(|a, b| a.cmp(b))
-                    .build()
-                    .filter_map(std::result::Result::ok)
-                {
+                let mut builder = build_walker_single_threaded(root);
+                builder.follow_links(true).sort_by_file_name(|a, b| a.cmp(b));
+                if let Some(workspace_root) = &workspace_root {
+                    let workspace_root = workspace_root.clone();
+                    builder.filter_entry(move |entry| {
+                        canonicalize(entry.path()).is_ok_and(|path| path.starts_with(&workspace_root))
+                    });
+                }
+                for entry in builder.build().filter_map(std::result::Result::ok) {
                     if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                         continue;
                     }
@@ -676,7 +717,10 @@ async fn discover_rule_sources(
                     }
 
                     let path = canonicalize_with_context(entry.path(), "instruction rule")?;
-                    if excludes.matches(&path) || !seen.insert(path.clone()) {
+                    if workspace_root.as_ref().is_some_and(|root| !path.starts_with(root))
+                        || excludes.matches(&path)
+                        || !seen.insert(path.clone())
+                    {
                         continue;
                     }
 
@@ -699,7 +743,9 @@ async fn discover_rule_sources(
         let is_matched = if descriptor.patterns.is_empty() {
             false
         } else {
-            match_context.matches_any(&descriptor.patterns)
+            match_context
+                .matches_any(&descriptor.patterns)
+                .with_context(|| format!("Failed to match instruction rule {}", path.display()))?
         };
         let source = InstructionSource {
             path,
@@ -823,10 +869,16 @@ async fn instruction_exists(path: &Path) -> Result<bool> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct ImportPolicy<'a> {
+    workspace_root: &'a PathBuf,
+    allowed_roots: &'a [PathBuf],
+}
+
 fn expand_instruction_contents(
     path: &Path,
     kind: &InstructionSourceKind,
-    allowed_roots: &[PathBuf],
+    import_policy: ImportPolicy<'_>,
     max_depth: usize,
     seen_imports: &mut HashSet<PathBuf>,
     depth: usize,
@@ -869,7 +921,7 @@ fn expand_instruction_contents(
         InstructionSourceKind::Agents | InstructionSourceKind::Extra => raw,
     };
     let sanitized = strip_html_comments(&contents_without_frontmatter);
-    let output = expand_inline_imports(&sanitized, &canonical, allowed_roots, max_depth, seen_imports, depth, stack)?;
+    let output = expand_inline_imports(&sanitized, &canonical, import_policy, max_depth, seen_imports, depth, stack)?;
 
     stack.pop();
 
@@ -883,7 +935,7 @@ fn expand_instruction_contents(
 fn expand_inline_imports(
     contents: &str,
     containing_file: &Path,
-    allowed_roots: &[PathBuf],
+    import_policy: ImportPolicy<'_>,
     max_depth: usize,
     seen_imports: &mut HashSet<PathBuf>,
     depth: usize,
@@ -910,15 +962,23 @@ fn expand_inline_imports(
 
         let imports = collect_imports(line);
         for import in imports {
-            let Some(import_path) = resolve_import_path(&import, containing_file, allowed_roots)? else {
+            let Some(import_path) = resolve_import_path(&import, containing_file, import_policy.allowed_roots)? else {
                 continue;
             };
 
             let import_kind = infer_instruction_kind(&import_path);
+            let child_policy = if import_path.starts_with(import_policy.workspace_root) {
+                ImportPolicy {
+                    allowed_roots: std::slice::from_ref(import_policy.workspace_root),
+                    ..import_policy
+                }
+            } else {
+                import_policy
+            };
             let imported = expand_instruction_contents(
                 &import_path,
                 &import_kind,
-                allowed_roots,
+                child_policy,
                 max_depth,
                 seen_imports,
                 depth + 1,

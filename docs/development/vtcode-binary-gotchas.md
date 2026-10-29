@@ -21,7 +21,7 @@ changing the runloop, update path, allocator, or request assembly.
   until later allocation activity. `jemalloc` returns memory while idle only when `background_thread` is active; on
   macOS its build reports `background_thread currently supports pthread only` and behaves like mimalloc. On Linux
   containers it can reclaim memory. Measure with `vtcode bench-allocator` before changing the default.
-- `load_dotenv()` must run before config load so `.env` API keys are available.
+- Workspace `.env` credentials are resolved on demand; its values are not imported into the process environment.
 - Debug binaries are hundreds of megabytes: the *first* exec of a fresh `target/debug/vtcode` in a process pays a
   multi-second pre-`main` startup cost (loader work on cold pages), while later execs in that process take
   milliseconds. Tests that race a wall-clock deadline against fixture readiness (for example

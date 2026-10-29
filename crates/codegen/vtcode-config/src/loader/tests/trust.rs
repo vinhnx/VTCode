@@ -2,6 +2,65 @@ use super::*;
 
 #[test]
 #[serial]
+fn repository_copilot_command_is_rejected_but_explicit_config_is_trusted() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let workspace_config = workspace.path().join("vtcode.toml");
+    let explicit_config = workspace.path().join("explicit.toml");
+    let content = "[auth.copilot]\ncommand = 'attacker-command'\nhost = 'github.example'\n";
+    fs::write(&workspace_config, content).expect("workspace config");
+    fs::write(&explicit_config, content).expect("explicit config");
+    let paths = StaticWorkspacePaths::new(workspace.path(), workspace.path().join(".vtcode"));
+    let provider = WorkspacePathsDefaults::new(Arc::new(paths)).with_home_paths(Vec::new());
+    defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+        let error = ConfigManager::load_from_workspace(workspace.path())
+            .err()
+            .expect("reject workspace command");
+        assert!(format!("{error:#}").contains("auth.copilot.command"));
+        let error = ConfigManager::load_from_workspace_with_repository_repair(workspace.path())
+            .err()
+            .expect("startup must reject command");
+        assert!(format!("{error:#}").contains("auth.copilot.command"));
+        assert_eq!(fs::read_to_string(&workspace_config).expect("workspace remains"), content);
+        let trusted = ConfigManager::load_from_file(&explicit_config).expect("explicit config");
+        assert_eq!(trusted.config().auth.copilot.command.as_deref(), Some("attacker-command"));
+    });
+}
+
+#[test]
+#[serial]
+fn project_copilot_command_cannot_override_trusted_user_command() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let config_dir = workspace.path().join(".vtcode");
+    let user_config = workspace.path().join("home/vtcode.toml");
+    let project_config = config_dir.join("projects/repository/config/vtcode.toml");
+    fs::create_dir_all(user_config.parent().expect("user parent")).expect("user directory");
+    fs::create_dir_all(project_config.parent().expect("project parent")).expect("project directory");
+    fs::write(&user_config, "[auth.copilot]\ncommand = 'trusted-command'\n").expect("user config");
+    fs::write(workspace.path().join(".vtcode-project"), "repository\n").expect("project marker");
+    let paths = StaticWorkspacePaths::new(workspace.path(), &config_dir);
+    let provider = WorkspacePathsDefaults::new(Arc::new(paths)).with_home_paths(vec![user_config]);
+    defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+        let trusted = ConfigManager::load_from_workspace(workspace.path()).expect("trusted user command");
+        assert_eq!(trusted.config().auth.copilot.command.as_deref(), Some("trusted-command"));
+        fs::write(&project_config, "[auth.copilot]\ncommand = 'attacker-command'\n").expect("project config");
+        ConfigManager::invalidate_workspace_cache(workspace.path());
+        let error = ConfigManager::load_from_workspace(workspace.path())
+            .err()
+            .expect("reject project command");
+        assert!(format!("{error:#}").contains("auth.copilot.command"));
+        // Inline-table syntax must not bypass the origin check either.
+        fs::write(&project_config, "auth = { copilot = { command = 'attacker-command' } }\n")
+            .expect("inline project config");
+        ConfigManager::invalidate_workspace_cache(workspace.path());
+        let error = ConfigManager::load_from_workspace(workspace.path())
+            .err()
+            .expect("reject inline project command");
+        assert!(format!("{error:#}").contains("auth.copilot.command"));
+    });
+}
+
+#[test]
+#[serial]
 fn workspace_config_cannot_define_command_authenticated_custom_provider() {
     let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
     let workspace_root = workspace.path();

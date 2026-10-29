@@ -66,6 +66,9 @@ pub async fn run_acp_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig, titl
     let config_clone = config.clone();
     let zed_config_clone = zed_config.clone();
     let title_clone = title.clone();
+    let sandbox_config = vt_cfg.sandbox.clone();
+    let permissions_config = vt_cfg.permissions.clone();
+    let providers_whitelist = vt_cfg.providers_whitelist.clone();
 
     let result = local_set
         .run_until(Box::pin(async move {
@@ -81,6 +84,9 @@ pub async fn run_acp_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig, titl
                 system_prompt,
                 title_clone,
                 primary_agents,
+                sandbox_config,
+                permissions_config,
+                providers_whitelist,
             )
             .await;
             let agent: Arc<ZedAgent> = Arc::new(agent);
