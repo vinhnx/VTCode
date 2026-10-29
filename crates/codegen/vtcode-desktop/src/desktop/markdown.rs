@@ -12,6 +12,12 @@ pub(super) struct PreparedMarkdown {
     pub accessible_text: SharedString,
 }
 
+/// Transcript body leading. 1.6 matches Kit's own fenced-code default
+/// (`gpui-base` code blocks use 1.6) while staying above the WCAG 1.4.8
+/// 1.5 floor for body copy.
+const TRANSCRIPT_LINE_HEIGHT: f32 = 1.6;
+const _: () = assert!(TRANSCRIPT_LINE_HEIGHT >= 1.5, "WCAG 1.4.8 needs at least 1.5x body leading");
+
 /// Preserve Markdown structure and derive readable text while dropping raw HTML.
 pub(super) fn prepare_markdown(source: &SharedString) -> PreparedMarkdown {
     let mut sanitized = String::new();
@@ -172,9 +178,9 @@ pub(super) fn render_html(id: String, source: SharedString, cx: &gpui_kit::App) 
 
 fn harden_transcript_text_view(text_view: TextView) -> TextView {
     text_view
-        // WCAG 1.4.8 visual presentation: body copy keeps at least 1.5x
-        // leading so transcript paragraphs stay readable at small sizes.
-        .line_height(relative(1.5))
+        // Shared by the Markdown and HTML transcript paths so conversation
+        // text and app previews keep the same vertical rhythm.
+        .line_height(relative(TRANSCRIPT_LINE_HEIGHT))
         .scrollable(false)
         // A richer renderer must not fetch URLs or local files from agent output.
         .image_source(|_| blocked_image_source())
@@ -230,7 +236,8 @@ mod tests {
     use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{
-        AppContext, Context, IntoElement, ParentElement, Render, Styled, TestAppContext, Window, WindowOptions,
+        AppContext, Context, InteractiveElement, IntoElement, ParentElement, Render, Styled, TestAppContext,
+        TestSupportExt, Window, WindowOptions,
     };
 
     struct ThemeFixture;
@@ -254,6 +261,70 @@ mod tests {
         let motion = super::streaming_motion();
         assert_eq!(motion.stream_fade(), Duration::from_millis(350));
         assert_eq!(motion.stream_fade_stagger(), Duration::ZERO);
+    }
+
+    struct LeadingFixture;
+
+    impl Render for LeadingFixture {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            // One paragraph with hard breaks: three lines and no
+            // inter-paragraph gaps, so the height delta isolates line leading.
+            let source: gpui_kit::SharedString = "aaa  \nbbb  \nccc".into();
+            gpui_kit::div()
+                .flex()
+                .flex_col()
+                .w_full()
+                .child(gpui_kit::div().id("leading-probe").test_support().child(super::render_markdown(
+                    "leading-probe-md".to_string(),
+                    source.clone(),
+                    false,
+                    cx,
+                )))
+                .child(
+                    gpui_kit::div().id("leading-baseline").test_support().child(
+                        gpui_kit::base::TextView::markdown("leading-baseline-md".to_string(), source)
+                            .scrollable(false)
+                            .line_height(gpui_kit::relative(1.5)),
+                    ),
+                )
+        }
+    }
+
+    #[gpui_kit::test]
+    fn transcript_body_leading_renders_roomier_than_baseline(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = gpui_kit::px(16.);
+            });
+        });
+        let (window, _) = cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| cx.new(|_| LeadingFixture)).unwrap()
+        });
+        let (probe, baseline) = cx
+            .update_window(window, |_, window, cx| {
+                window.render_frame(cx);
+                (
+                    window.find("leading-probe").bounds().size.height,
+                    window.find("leading-baseline").bounds().size.height,
+                )
+            })
+            .unwrap();
+        // Three 16px lines at 1.6 vs 1.5 leading differ by
+        // 3 × 16 × 0.1 = 4.8px. Both views share Kit layout and font
+        // metrics, so only the transcript leading choice moves this delta.
+        assert!(probe > baseline, "transcript leading must render roomier: probe={probe:?} baseline={baseline:?}");
+        let delta = probe - baseline;
+        let expected = gpui_kit::px(4.8);
+        let drift = if delta > expected {
+            delta - expected
+        } else {
+            expected - delta
+        };
+        assert!(
+            drift < gpui_kit::px(0.5),
+            "transcript leading drifted: probe={probe:?} baseline={baseline:?} delta={delta:?}"
+        );
     }
 
     #[gpui_kit::test]
