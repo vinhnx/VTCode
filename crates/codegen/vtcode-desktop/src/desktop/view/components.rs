@@ -58,6 +58,40 @@ pub(super) fn section_label(
         .child(text.into())
 }
 
+/// Pre-configured fill group box for settings sections. Callers chain
+/// `.child(...)`/`.footer(...)` as before. The local-service group keeps its
+/// bespoke `.outline()` chain, and the Utilities card its shrinkable one.
+pub(super) fn settings_group_box(
+    title: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> GroupBox {
+    GroupBox::new().flex_shrink_0().fill().title(group_box_title(title, colors))
+}
+
+/// One settings row: title and description stacked left, a control pinned
+/// right. The row wraps so the control drops below the text in narrow sheets.
+pub(super) fn settings_row(
+    title: impl Into<gpui_kit::SharedString>,
+    description: impl Into<gpui_kit::SharedString>,
+    control: impl IntoElement,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .child(row_title(title, colors))
+                .child(row_description(description, colors)),
+        )
+        .child(control)
+}
+
 /// Section headings for Kit group boxes, whose default title renders in muted
 /// metadata text. Headings stay at primary foreground with semibold weight so
 /// they read above body text instead of below it.
@@ -202,6 +236,66 @@ pub(super) fn empty_state(
     )
 }
 
+/// Page-level empty state centered in the remaining space. Returns the `Div`
+/// so callers can chain trailing content (a trailing action also needs
+/// `.gap_3()`); the base carries no gap. Status-role empty states with their
+/// own accessible wiring (inspector, workspace review) stay bespoke.
+pub(super) fn centered_empty_state(
+    title: impl Into<gpui_kit::SharedString>,
+    description: impl Into<gpui_kit::SharedString>,
+    icon: IconName,
+) -> gpui_kit::Div {
+    div()
+        .flex_1()
+        .min_h_0()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .child(empty_state(title, description, icon))
+}
+
+/// Usable height for a settings-sheet page: the viewport minus the sheet
+/// chrome and the font-scaled title row, with 8px beneath it so only the
+/// content region scrolls.
+pub(super) fn sheet_panel_height(window: &Window, cx: &App) -> Pixels {
+    let sheet_header_height = cx.theme().font_size * 2.5;
+    (window.viewport_size().height - cx.theme().sheet.margin_top - sheet_header_height - px(8.)).max(px(0.))
+}
+
+/// Scrollable settings-sheet content column: axis-locked vertical scroll
+/// with a themed scrollbar.
+pub(super) fn scroll_column(id: &'static str, scroll: &ScrollHandle, child: impl IntoElement) -> impl IntoElement {
+    scroll_column_inner(id, scroll, child, false)
+}
+
+/// Scrollable content column whose children grow (flex column): used where
+/// `flex_1` children such as centered empty states must fill the height.
+pub(super) fn scroll_column_flex(id: &'static str, scroll: &ScrollHandle, child: impl IntoElement) -> impl IntoElement {
+    scroll_column_inner(id, scroll, child, true)
+}
+
+fn scroll_column_inner(
+    id: &'static str,
+    scroll: &ScrollHandle,
+    child: impl IntoElement,
+    flex: bool,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .flex_1()
+        .min_h_0()
+        .min_w_0()
+        .lock_scroll_axis()
+        .test_support()
+        .when(flex, |column| column.flex().flex_col())
+        .track_scroll(scroll)
+        .overflow_y_scroll()
+        .vertical_scrollbar(scroll)
+        .pr_2()
+        .child(child)
+}
+
 /// Interactive desktop buttons use a pointing hand; disabled buttons keep the arrow.
 pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer()
@@ -247,6 +341,12 @@ pub(super) fn zen_fade_animation(theme: &Theme) -> Animation {
 pub(super) trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
+    /// Selected-option treatment: pressed-state metadata plus a secondary
+    /// fill when selected, quiet ghost otherwise. Only for options whose
+    /// selected paint is the default base + secondary fill; ghost-base
+    /// (theme profiles, diff layout) and label-only (reduced motion)
+    /// selections keep their bespoke chains.
+    fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self;
 }
 
 impl DesktopButtonExt for Button {
@@ -256,6 +356,12 @@ impl DesktopButtonExt for Button {
         } else {
             CursorStyle::PointingHand
         })
+    }
+
+    fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self {
+        self.toggled(selected)
+            .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+            .when(!selected, |button| button.ghost())
     }
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {

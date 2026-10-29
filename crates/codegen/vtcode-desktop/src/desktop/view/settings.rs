@@ -116,11 +116,7 @@ impl DesktopView {
 
     pub(super) fn render_settings_tabs(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        // The sheet title row scales with the active UI font (40px at 16px).
-        // Leave 8px beneath it so only settings-content scrolls in the sheet.
-        let sheet_header_height = cx.theme().font_size * 2.5;
-        let panel_height =
-            (window.viewport_size().height - cx.theme().sheet.margin_top - sheet_header_height - px(8.)).max(px(0.));
+        let panel_height = sheet_panel_height(window, cx);
         let selected_index = SettingsTab::ALL
             .iter()
             .position(|tab| *tab == self.settings_tab)
@@ -223,20 +219,7 @@ impl DesktopView {
                             .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer())),
                     ),
             )
-            .child(
-                div()
-                    .id("settings-content")
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .lock_scroll_axis()
-                    .test_support()
-                    .track_scroll(&self.settings_scroll)
-                    .overflow_y_scroll()
-                    .vertical_scrollbar(&self.settings_scroll)
-                    .pr_2()
-                    .child(content),
-            );
+            .child(scroll_column("settings-content", &self.settings_scroll, content));
         if self.config_editor.is_some() {
             panel = panel.child(self.render_cli_config_editor(cx));
         }
@@ -274,10 +257,7 @@ impl DesktopView {
             .child(accessible_group_box(
                 "appearance-visual-style-group",
                 visual_style.clone(),
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .fill()
-                    .title(group_box_title(visual_style, colors))
+                settings_group_box(visual_style, colors)
                     .child(
                         gpui_kit::component::switch::Switch::new("separate-theme-profiles")
                             .label(rust_i18n::t!("app.settings.appearance.separate_modes").to_string())
@@ -403,10 +383,7 @@ impl DesktopView {
             .child(accessible_group_box(
                 "appearance-typography-group",
                 typography.clone(),
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .fill()
-                    .title(group_box_title(typography, colors))
+                settings_group_box(typography, colors)
                     .child(self.render_font_family(FontTarget::Ui, cx))
                     .child(row_divider(colors))
                     .child(self.render_font_family(FontTarget::Code, cx))
@@ -432,45 +409,23 @@ impl DesktopView {
         content = content.child(accessible_group_box(
             "appearance-language-group",
             language_group_title.clone(),
-            GroupBox::new()
-                .flex_shrink_0()
-                .fill()
-                .title(group_box_title(language_group_title, colors))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .justify_between()
-                        .gap_3()
-                        .child(
-                            div()
-                                .min_w_0()
-                                .flex_1()
-                                .child(row_title(rust_i18n::t!("app.settings.language.label").to_string(), colors))
-                                .child(row_description(
-                                    rust_i18n::t!("app.settings.language.description").to_string(),
-                                    colors,
-                                )),
-                        )
-                        .child(
-                            Select::new(&self.ui_language_select)
-                                .id("ui-language-select")
-                                .accessibility_label(rust_i18n::t!("app.settings.language.label").to_string())
-                                .search_placeholder(rust_i18n::t!("app.settings.language.search").to_string())
-                                .menu_max_h(px(320.))
-                                .w(px(240.)),
-                        ),
-                ),
+            settings_group_box(language_group_title, colors).child(settings_row(
+                rust_i18n::t!("app.settings.language.label").to_string(),
+                rust_i18n::t!("app.settings.language.description").to_string(),
+                Select::new(&self.ui_language_select)
+                    .id("ui-language-select")
+                    .accessibility_label(rust_i18n::t!("app.settings.language.label").to_string())
+                    .search_placeholder(rust_i18n::t!("app.settings.language.search").to_string())
+                    .menu_max_h(px(320.))
+                    .w(px(240.)),
+                colors,
+            )),
         ));
 
         content = content.child(accessible_group_box(
             "appearance-layout-group",
             layout.clone(),
-            GroupBox::new()
-                .flex_shrink_0()
-                .fill()
-                .title(group_box_title(layout, colors))
+            settings_group_box(layout, colors)
                 .child(
                     gpui_kit::component::switch::Switch::new("navigation-visible")
                         .label(rust_i18n::t!("app.settings.appearance.show_navigation").to_string())
@@ -514,38 +469,16 @@ impl DesktopView {
         content = content.child(accessible_group_box(
             "appearance-files-group",
             files_group_title.clone(),
-            GroupBox::new()
-                .flex_shrink_0()
-                .fill()
-                .title(group_box_title(files_group_title, colors))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .justify_between()
-                        .gap_3()
-                        .child(
-                            div()
-                                .min_w_0()
-                                .flex_1()
-                                .child(row_title(
-                                    rust_i18n::t!("app.settings.files.destination.label").to_string(),
-                                    colors,
-                                ))
-                                .child(row_description(
-                                    rust_i18n::t!("app.settings.files.destination.description").to_string(),
-                                    colors,
-                                )),
-                        )
-                        .child(
-                            Select::new(&self.file_destination_select)
-                                .id("file-open-destination-select")
-                                .accessibility_label(rust_i18n::t!("app.settings.files.destination.label").to_string())
-                                .menu_max_h(px(320.))
-                                .w(px(240.)),
-                        ),
-                ),
+            settings_group_box(files_group_title, colors).child(settings_row(
+                rust_i18n::t!("app.settings.files.destination.label").to_string(),
+                rust_i18n::t!("app.settings.files.destination.description").to_string(),
+                Select::new(&self.file_destination_select)
+                    .id("file-open-destination-select")
+                    .accessibility_label(rust_i18n::t!("app.settings.files.destination.label").to_string())
+                    .menu_max_h(px(320.))
+                    .w(px(240.)),
+                colors,
+            )),
         ));
         content.into_any_element()
     }
@@ -617,13 +550,7 @@ impl DesktopView {
             .child(accessible_group_box(
                 "accessibility-display-group",
                 rust_i18n::t!("app.settings.accessibility.display").to_string(),
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .fill()
-                    .title(group_box_title(
-                        rust_i18n::t!("app.settings.accessibility.display").to_string(),
-                        &cx.theme().colors,
-                    ))
+                settings_group_box(rust_i18n::t!("app.settings.accessibility.display").to_string(), &cx.theme().colors)
                     .child(
                         gpui_kit::component::switch::Switch::new("show-status-bar")
                             .label(rust_i18n::t!("app.settings.accessibility.show_status_bar").to_string())
@@ -654,15 +581,11 @@ impl DesktopView {
             return accessible_group_box(
                 PROVIDER_SETTINGS_GROUP_ID,
                 rust_i18n::t!("app.settings.provider.group").to_string(),
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .fill()
-                    .title(group_box_title(rust_i18n::t!("app.settings.provider.title").to_string(), &theme.colors))
-                    .child(
-                        div()
-                            .text_color(theme.colors.muted_foreground)
-                            .child(rust_i18n::t!("app.settings.provider.connect_hint").to_string()),
-                    ),
+                settings_group_box(rust_i18n::t!("app.settings.provider.title").to_string(), &theme.colors).child(
+                    div()
+                        .text_color(theme.colors.muted_foreground)
+                        .child(rust_i18n::t!("app.settings.provider.connect_hint").to_string()),
+                ),
             );
         };
 
@@ -671,10 +594,7 @@ impl DesktopView {
         } else {
             configuration.provider.clone()
         };
-        let mut group = GroupBox::new()
-            .flex_shrink_0()
-            .fill()
-            .title(group_box_title(rust_i18n::t!("app.settings.provider.title").to_string(), &theme.colors))
+        let mut group = settings_group_box(rust_i18n::t!("app.settings.provider.title").to_string(), &theme.colors)
             .child(
                 div()
                     .id("provider-details")

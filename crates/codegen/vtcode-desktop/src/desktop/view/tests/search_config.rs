@@ -788,3 +788,41 @@ fn conversation_search_snippet_is_single_line_and_bounded() {
     assert_eq!(super::super::transcript_search_snippet("\n  First line\nsecond line"), "First line");
     assert_eq!(super::super::transcript_search_snippet(&"x".repeat(98)), format!("{}…", "x".repeat(96)));
 }
+
+#[gpui_kit::test]
+fn config_target_switch_flips_selected_accessibility_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![config_page_setting(
+                    "agent.default_model",
+                    json!("model-a"),
+                    "Model & Provider",
+                )],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("config-target-user").checked(), Some(false));
+        assert_eq!(window.find("config-target-workspace").checked(), Some(true));
+        assert_eq!(window.find("config-target-user").label(), Some("Write CLI settings to User configuration"));
+        window.click("config-target-user", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).config_target, vtcode_desktop_protocol::ConfigTarget::User);
+        assert_eq!(window.find("config-target-user").checked(), Some(true));
+        assert_eq!(
+            window.find("config-target-user").label(),
+            Some("Write CLI settings to User configuration (selected)")
+        );
+        assert_eq!(window.find("config-target-workspace").checked(), Some(false));
+    })
+    .unwrap();
+}

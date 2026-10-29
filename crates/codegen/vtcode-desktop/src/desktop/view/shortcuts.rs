@@ -513,10 +513,7 @@ impl DesktopView {
         }
         actions = actions.child(import_button);
 
-        let mut group = GroupBox::new()
-            .flex_shrink_0()
-            .fill()
-            .title(group_box_title("Keyboard shortcuts", &cx.theme().colors))
+        let mut group = settings_group_box("Keyboard shortcuts", &cx.theme().colors)
             .child(
                 div()
                     .text_xs()

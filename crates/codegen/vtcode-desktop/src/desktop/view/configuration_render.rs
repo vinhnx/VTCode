@@ -90,9 +90,7 @@ impl DesktopView {
                         "Write CLI settings to {label} configuration{}",
                         if selected { " (selected)" } else { "" }
                     ))
-                    .toggled(selected)
-                    .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                    .when(!selected, |button| button.ghost())
+                    .desktop_selected(selected, &colors)
                     .small()
                     .desktop_disabled(!self.can_edit_cli_settings())
                     .on_click(cx.listener(move |view, _, _, cx| view.set_cli_config_target(target, cx))),
@@ -128,20 +126,11 @@ impl DesktopView {
         }
 
         let body = match (self.cli_config_settings.as_ref(), selected.as_ref()) {
-            (None, _) if self.workspace.is_none() => self.render_config_content_frame(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .child(empty_state(
-                        "Choose a workspace",
-                        "Choose a workspace to browse CLI configuration settings.",
-                        IconName::Folder,
-                    )),
-            ),
+            (None, _) if self.workspace.is_none() => self.render_config_content_frame(centered_empty_state(
+                "Choose a workspace",
+                "Choose a workspace to browse CLI configuration settings.",
+                IconName::Folder,
+            )),
             (None, _) => self.render_config_content_frame(
                 div()
                     .flex_1()
@@ -166,28 +155,21 @@ impl DesktopView {
                     .flex_col()
                     .gap_3()
                     .child(
-                        div()
-                            .flex_1()
-                            .min_h_0()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .justify_center()
-                            .gap_3()
-                            .child(empty_state(
-                                "No matching settings",
-                                "Try a different search or browse another group.",
-                                IconName::Search,
-                            ))
-                            .child(
-                                desktop_button("clear-config-search")
-                                    .label("Clear search")
-                                    .ghost()
-                                    .small()
-                                    .on_click(
-                                        cx.listener(|view, _, window, cx| view.set_config_search_query("", window, cx)),
-                                    ),
-                            ),
+                        centered_empty_state(
+                            "No matching settings",
+                            "Try a different search or browse another group.",
+                            IconName::Search,
+                        )
+                        .gap_3()
+                        .child(
+                            desktop_button("clear-config-search")
+                                .label("Clear search")
+                                .ghost()
+                                .small()
+                                .on_click(
+                                    cx.listener(|view, _, window, cx| view.set_config_search_query("", window, cx)),
+                                ),
+                        ),
                     )
                     .child(self.render_config_page_footer(cx)),
             ),
@@ -216,9 +198,7 @@ impl DesktopView {
                             .small()
                             .w_full()
                             .justify_start()
-                            .toggled(active)
-                            .when(active, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                            .when(!active, |button| button.ghost())
+                            .desktop_selected(active, &colors)
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.config_page_group = Some(group.clone());
                                 cx.notify();
@@ -260,9 +240,7 @@ impl DesktopView {
             }
         };
 
-        let panel_height =
-            (window.viewport_size().height - cx.theme().sheet.margin_top - cx.theme().font_size * 2.5 - px(8.))
-                .max(px(0.));
+        let panel_height = sheet_panel_height(window, cx);
         let mut panel = div()
             .id("cli-config-page")
             .test_support()
@@ -291,21 +269,7 @@ impl DesktopView {
     /// scrollable region keeps the header fixed while the catalog, empty
     /// states, and trailing notes share the remaining height.
     fn render_config_content_frame(&self, child: impl IntoElement) -> AnyElement {
-        div()
-            .id("cli-config-page-content")
-            .flex_1()
-            .min_h_0()
-            .min_w_0()
-            .lock_scroll_axis()
-            .test_support()
-            .track_scroll(&self.settings_scroll)
-            .overflow_y_scroll()
-            .vertical_scrollbar(&self.settings_scroll)
-            .pr_2()
-            .flex()
-            .flex_col()
-            .child(child)
-            .into_any_element()
+        scroll_column_flex("cli-config-page-content", &self.settings_scroll, child).into_any_element()
     }
 
     /// One value-first setting row: title and live value on stable lanes,
@@ -448,10 +412,7 @@ impl DesktopView {
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());
         let editable_count =
             snapshot.map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| setting.editable).count());
-        let mut group = GroupBox::new()
-            .flex_shrink_0()
-            .fill()
-            .title(group_box_title("CLI configuration", &cx.theme().colors));
+        let mut group = settings_group_box("CLI configuration", &cx.theme().colors);
         group = group.child(div().text_sm().child(match snapshot {
             Some(_) => format!("{editable_count} editable settings across {count} CLI config fields · values follow the active config layers"),
             None if self.workspace.is_some() => "Loading shared CLI settings…".into(),
@@ -477,9 +438,7 @@ impl DesktopView {
                     "Write CLI settings to {label} configuration{}",
                     if selected { " (selected)" } else { "" }
                 ))
-                .toggled(selected)
-                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                .when(!selected, |button| button.ghost())
+                .desktop_selected(selected, &colors)
                 .small()
                 .desktop_disabled(!self.can_edit_cli_settings())
                 .on_click(cx.listener(move |view, _, _, cx| view.set_cli_config_target(target, cx))),
