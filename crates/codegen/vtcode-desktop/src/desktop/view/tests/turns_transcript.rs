@@ -777,3 +777,185 @@ fn palette_entry_ids_follow_action_identity_without_exposing_payloads() {
         palette_action_id(&super::super::PaletteAction::PreviewFile("private/workspace/src/lib.rs".into()))
     );
 }
+
+/// Mirror of `submit()`: user echo present, turn running, no content yet.
+fn running_turn_without_content(cx: &mut TestAppContext, view: &Entity<DesktopView>) {
+    use crate::desktop::transcript::TranscriptRole;
+
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some("session".into());
+        view.transcript.push(TranscriptItem::new(
+            "echo-1".into(),
+            TranscriptRole::User.as_str().into(),
+            "You".into(),
+            "hello".into(),
+        ));
+        view.running = true;
+        view.turn_content_seen = false;
+        view.active_turn_id = None;
+        view.status = rust_i18n::t!("app.composer.submitting_turn").to_string();
+    });
+}
+
+fn turn_started_event(session_id: &str, turn_id: &str) -> BackendEvent {
+    use vtcode_exec_events::{ThreadEvent, TurnStartedEvent, VersionedThreadEvent};
+
+    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+        session_id: session_id.into(),
+        turn_id: Some(turn_id.into()),
+        event: VersionedThreadEvent::new(ThreadEvent::TurnStarted(TurnStartedEvent::default())),
+    })
+}
+
+fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
+    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
+
+    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+        session_id: session_id.into(),
+        turn_id: Some(turn_id.into()),
+        event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
+            usage: Usage {
+                input_tokens: 10,
+                output_tokens: 5,
+                cached_input_tokens: 0,
+                cache_creation_tokens: 0,
+            },
+            in_progress_exec_sessions: Vec::new(),
+        })),
+    })
+}
+
+#[gpui_kit::test]
+fn turn_pending_row_shows_until_first_content_then_clears(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    running_turn_without_content(cx, &view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let status = view.read(cx).status.clone();
+        let pending = window.find("turn-pending");
+        assert_eq!(pending.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(pending.label(), Some(status.as_str()));
+        assert!(window.find("turn-pending-line-1").bounds().size.height > px(0.));
+        assert!(window.find("turn-pending-line-2").bounds().size.height > px(0.));
+
+        // Lifecycle events carry no content: TurnStarted keeps the row up.
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_started_event("session", "turn-1"), cx);
+            assert!(view.running);
+            assert!(!view.turn_content_seen);
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_some());
+
+        // First content clears the row while the turn keeps running.
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(agent_message_update_event("session", "turn-1", "item-1", "hello back"), cx);
+            assert!(view.running);
+            assert!(view.turn_content_seen);
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_none());
+        assert!(window.try_find("transcript-row-item-1").is_some());
+
+        // Turn end keeps it cleared.
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_completed_event("session", "turn-1"), cx);
+            assert!(!view.running);
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn turn_pending_row_clears_on_turn_end_without_content(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    running_turn_without_content(cx, &view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_some());
+
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_completed_event("session", "turn-1"), cx);
+            assert!(!view.running);
+            assert!(!view.turn_content_seen, "no content arrived for this turn");
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_none(), "idle view shows no pending row");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn turn_started_resets_content_seen_for_new_turn(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    running_turn_without_content(cx, &view);
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(turn_started_event("session", "turn-1"), cx);
+        view.handle_backend_event(agent_message_update_event("session", "turn-1", "item-1", "first"), cx);
+        assert!(view.turn_content_seen);
+        view.handle_backend_event(turn_completed_event("session", "turn-1"), cx);
+        assert!(!view.running);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_none());
+
+        // A new turn starts: the pending row returns until its content arrives.
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_started_event("session", "turn-2"), cx);
+            assert!(view.running);
+            assert!(!view.turn_content_seen);
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("turn-pending").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_loading_skeletons_show_while_page_loads(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    running_turn_without_content(cx, &view);
+    view.update(cx, |view, _| {
+        view.history_has_earlier = true;
+        view.history_page_loading = true;
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let loading = rust_i18n::t!("app.palette.history.loading").to_string();
+        assert_eq!(window.find("load-earlier-history").label(), Some(loading.as_str()));
+        assert!(window.find("history-loading-line-1").bounds().size.height > px(0.));
+        assert!(window.find("history-loading-line-2").bounds().size.height > px(0.));
+
+        view.update(cx, |view, _| {
+            view.history_page_loading = false;
+            view.history_has_earlier = false;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("history-loading-line-1").is_none());
+        assert!(window.try_find("history-loading-line-2").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn loading_shimmer_labels_render_under_reduced_motion(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    running_turn_without_content(cx, &view);
+    view.update(cx, |view, _| {
+        view.pending_navigation = Some(PendingNavigation { target_index: 0, workspace_switch: false });
+    });
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Static text stays readable with motion disabled; the Kit shimmer and
+        // the skeleton wrapper take the non-animated branches.
+        assert!(window.try_find("turn-pending-label").is_some());
+        assert!(window.try_find("navigation-loading-label").is_some());
+        assert!(window.find("turn-pending-line-1").bounds().size.height > px(0.));
+    })
+    .unwrap();
+}

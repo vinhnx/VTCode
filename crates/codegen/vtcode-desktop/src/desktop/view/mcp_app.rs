@@ -223,12 +223,10 @@ impl DesktopView {
                         .items_center()
                         .gap_2()
                         .child(Spinner::new().small().color(caption))
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(themes::muted_text(&colors))
-                                .child(rust_i18n::t!("app.preview.loading").to_string()),
-                        ),
+                        .child(div().text_sm().text_color(themes::muted_text(&colors)).child(shimmer_label(
+                            format!("mcp-app-loading-label-{}-{index}", item.id),
+                            rust_i18n::t!("app.preview.loading").to_string(),
+                        ))),
                 );
             } else {
                 card = card.child(

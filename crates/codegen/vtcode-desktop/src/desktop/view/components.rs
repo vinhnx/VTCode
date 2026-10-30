@@ -53,6 +53,53 @@ pub(super) fn skeleton_line(id: &'static str, width: Pixels, cx: &App) -> AnyEle
         .into_any_element()
 }
 
+/// Animated status label for an owned loading state. The Kit shimmer inherits
+/// typography and color from the call-site parent and renders static text
+/// under reduced motion, so callers only style the row, never the motion.
+/// Loop sites pass an owned domain-derived id (never a visible index), so
+/// repeated rows keep stable animation identity across reordering.
+pub(super) fn shimmer_label(id: impl Into<gpui_kit::ElementId>, text: impl Into<gpui_kit::SharedString>) -> AnyElement {
+    let id = id.into();
+    div()
+        .id(id.clone())
+        .test_support()
+        .child(ShimmerText::new(text.into()).id(id))
+        .into_any_element()
+}
+
+/// Pending assistant row pinned below the transcript scroller while a turn
+/// runs with no content yet. It lives outside the measured list on purpose:
+/// scroller geometry never churns when the row appears or clears. The label
+/// reuses the owned turn-phase status, so it tracks
+/// submitting/running/cancelling with no extra copy.
+pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> AnyElement {
+    div()
+        .id("turn-pending")
+        .test_support()
+        .role(gpui_kit::Role::Status)
+        .aria_label(status.clone())
+        .w_full()
+        .flex()
+        .justify_center()
+        .child(
+            div()
+                .w_full()
+                .max_w(px(content_width))
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .px_3()
+                .py_2()
+                .text_sm()
+                .text_color(cx.theme().colors.muted_foreground)
+                .child(shimmer_label("turn-pending-label", status))
+                .child(skeleton_line("turn-pending-line-1", px(280.), cx))
+                .child(skeleton_line("turn-pending-line-2", px(208.), cx)),
+        )
+        .into_any_element()
+}
+
 /// Shared segmented tab treatment at the ecosystem-default medium size. Dense
 /// panels chain `.small()` with a justification instead of shrinking the
 /// shared default.

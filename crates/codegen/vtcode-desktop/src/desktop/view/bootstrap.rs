@@ -338,6 +338,7 @@ impl DesktopView {
             cancel_requested: false,
             cancel_request_sent: false,
             running: false,
+            turn_content_seen: false,
             status: rust_i18n::t!("app.workspace.startup_hint").to_string(),
             error: None,
             configuration: None,

@@ -143,6 +143,7 @@ impl DesktopView {
         self.pending_first_submission = false;
         self.transcript.follow_latest();
         self.running = true;
+        self.turn_content_seen = false;
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;

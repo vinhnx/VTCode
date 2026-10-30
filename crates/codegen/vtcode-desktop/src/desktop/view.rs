@@ -43,6 +43,7 @@ use gpui_kit::component::radio::Radio;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::select::{Select, SelectEvent};
+use gpui_kit::component::shimmer::ShimmerText;
 use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::status_bar::StatusBar;
@@ -368,6 +369,11 @@ struct DesktopView {
     cancel_requested: bool,
     cancel_request_sent: bool,
     running: bool,
+    /// Whether the active turn has produced transcript content. Meaningful
+    /// only while `running`: reset when a turn begins (submit, `TurnStarted`),
+    /// set by content events. Stale `true` after a turn ends is unobserved
+    /// because the pending row also requires `running`.
+    turn_content_seen: bool,
     status: String,
     error: Option<String>,
     configuration: Option<ConfigurationSnapshot>,

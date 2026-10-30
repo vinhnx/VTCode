@@ -371,7 +371,10 @@ impl DesktopView {
                         .role(gpui_kit::Role::Status)
                         .text_xs()
                         .text_color(colors.muted_foreground)
-                        .child(rust_i18n::t!("app.inspector.reading_next_page").to_string()),
+                        .child(shimmer_label(
+                            "output-page-loading-label",
+                            rust_i18n::t!("app.inspector.reading_next_page").to_string(),
+                        )),
                 );
             }
             if let Some(error) = output_page_error {

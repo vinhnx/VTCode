@@ -842,11 +842,26 @@ impl DesktopView {
         )
         .then(|| notification.turn_id.clone())
         .flatten();
+        // Content arms mirror the match below: any transcript mutation for the
+        // active turn clears the pending row. Lifecycle and unknown events add
+        // no content, so they leave the flag untouched.
+        let produced_content = matches!(
+            notification.event.event(),
+            ThreadEvent::PlanDelta(_)
+                | ThreadEvent::ItemStarted(_)
+                | ThreadEvent::ItemUpdated(_)
+                | ThreadEvent::ItemCompleted(_)
+                | ThreadEvent::Error(_)
+                | ThreadEvent::ThreadCompactBoundary(_)
+                | ThreadEvent::ContextReset(_)
+                | ThreadEvent::AppSandboxDenied(_)
+        );
         match notification.event.event() {
             ThreadEvent::TurnStarted(_) => {
                 self.pending_submission = None;
                 self.pending_first_submission = false;
                 self.running = true;
+                self.turn_content_seen = false;
                 self.active_turn_id = notification.turn_id;
                 self.set_selected_session_completed(false);
                 self.status = rust_i18n::t!("app.service.running").to_string();
@@ -938,6 +953,9 @@ impl DesktopView {
                 ));
             }
             _ => {}
+        }
+        if produced_content {
+            self.turn_content_seen = true;
         }
         if let Some(turn_id) = terminal_turn_id {
             self.finished_turn_id = Some(turn_id);

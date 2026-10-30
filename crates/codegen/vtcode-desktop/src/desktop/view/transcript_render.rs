@@ -82,7 +82,7 @@ impl DesktopView {
                 .items_center()
                 .justify_center()
                 .text_color(cx.theme().colors.foreground)
-                .child(label)
+                .child(shimmer_label("new-thread-pending-label", label))
                 .into_any_element()
         } else if empty_conversation && !self.zen_mode {
             let colors = cx.theme().colors;
@@ -226,6 +226,11 @@ impl DesktopView {
                             .on_click(cx.listener(|view, _, _, cx| view.request_earlier_history(cx))),
                     );
                 }
+                if self.history_page_loading {
+                    history_bar = history_bar
+                        .child(skeleton_line("history-loading-line-1", px(240.), cx))
+                        .child(skeleton_line("history-loading-line-2", px(176.), cx));
+                }
                 transcript_content = transcript_content.child(history_bar);
             }
             let scroller = MessageScroller::new(
@@ -245,7 +250,12 @@ impl DesktopView {
             .min_h_0()
             .py_6()
             .into_any_element();
-            transcript_content.child(scroller).into_any_element()
+            transcript_content = transcript_content.child(scroller);
+            if self.turn_awaiting_content() {
+                transcript_content =
+                    transcript_content.child(turn_pending_row(self.status.clone(), self.content_width(), cx));
+            }
+            transcript_content.into_any_element()
         };
         div()
             .id("transcript-scroll")
@@ -328,6 +338,11 @@ impl DesktopView {
             && (self.pending_new_thread || self.pending_navigation.is_some())
     }
 
+    /// Whether the active turn is still waiting for its first content.
+    fn turn_awaiting_content(&self) -> bool {
+        self.running && !self.turn_content_seen
+    }
+
     /// Compact loading status shown above the transcript while a history
     /// navigation is in flight. Blank transitions already replace the
     /// transcript with their own status, so this covers session loads and
@@ -353,7 +368,7 @@ impl DesktopView {
             .text_xs()
             .text_color(cx.theme().colors.muted_foreground)
             .child(Spinner::new().small().color(cx.theme().colors.muted_foreground))
-            .child(label)
+            .child(shimmer_label("navigation-loading-label", label))
     }
 
     fn render_transcript_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {

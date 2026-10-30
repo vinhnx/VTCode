@@ -310,7 +310,10 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .child(Spinner::new().small().color(colors.muted_foreground))
-                .child(row_description(rust_i18n::t!("app.settings.storage.loading").to_string(), colors))
+                .child(div().text_sm().text_color(themes::muted_text(colors)).child(shimmer_label(
+                    "storage-loading-label",
+                    rust_i18n::t!("app.settings.storage.loading").to_string(),
+                )))
                 .into_any_element();
         }
         if let Some(error) = self.storage.error.as_ref() {
@@ -521,7 +524,10 @@ impl DesktopView {
                     .items_center()
                     .gap_2()
                     .child(Spinner::new().small().color(colors.muted_foreground))
-                    .child(row_description(rust_i18n::t!("app.settings.storage.loading").to_string(), &colors)),
+                    .child(div().text_sm().text_color(themes::muted_text(&colors)).child(shimmer_label(
+                        "storage-worktrees-loading-label",
+                        rust_i18n::t!("app.settings.storage.loading").to_string(),
+                    ))),
             );
         }
         if let Some(error) = self.storage.worktrees_error.as_ref() {
