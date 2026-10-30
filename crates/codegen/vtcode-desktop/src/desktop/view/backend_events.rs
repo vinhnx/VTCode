@@ -737,6 +737,16 @@ impl DesktopView {
                 self.invalidate_webmcp_status();
                 self.status = rust_i18n::t!("app.service.awaiting_decision").to_string();
             }
+            BackendEvent::UiProgress(progress) => {
+                if progress
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .is_some_and(|session_id| self.selected_session_id.as_deref() == Some(session_id))
+                {
+                    self.ui_progress_active = progress.get("active").and_then(Value::as_bool).unwrap_or(false);
+                    cx.notify();
+                }
+            }
             BackendEvent::TurnStatus(status) => {
                 if !status.get(keys::SESSION_ID).and_then(Value::as_str).is_some_and(|session_id| {
                     self.notification_matches(session_id, status.get(keys::TURN_ID).and_then(Value::as_str))
@@ -744,7 +754,11 @@ impl DesktopView {
                     return;
                 }
                 if let Some(label) = status.get(keys::STATUS).and_then(Value::as_str) {
-                    self.status = label.to_string();
+                    self.status = if label.eq_ignore_ascii_case("running") {
+                        rust_i18n::t!("app.service.running").to_string()
+                    } else {
+                        label.to_string()
+                    };
                     self.invalidate_webmcp_status();
                 }
             }
@@ -763,6 +777,7 @@ impl DesktopView {
                 self.recover_pending_submission(true);
                 self.backend = None;
                 self.running = false;
+                self.ui_progress_active = false;
                 self.active_turn_id = None;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
@@ -813,6 +828,7 @@ impl DesktopView {
                 self.interrupt_cli_config_write();
                 self.backend = None;
                 self.running = false;
+                self.ui_progress_active = false;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
             }
@@ -842,9 +858,7 @@ impl DesktopView {
         )
         .then(|| notification.turn_id.clone())
         .flatten();
-        // Content arms mirror the match below: any transcript mutation for the
-        // active turn clears the pending row. Lifecycle and unknown events add
-        // no content, so they leave the flag untouched.
+        // Transcript mutations clear the pending row; lifecycle events leave it untouched.
         let produced_content = matches!(
             notification.event.event(),
             ThreadEvent::PlanDelta(_)

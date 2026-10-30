@@ -11,13 +11,13 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, ClipboardItem, Context, Entity, TestSupportExt, Window, div, px};
+use gpui_kit::{AnyElement, ClipboardItem, Context, Entity, TestSupportExt, Window, div};
 use serde_json::json;
 use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
 use super::{
     DesktopButtonExt, DesktopView, NextReviewFile, PaletteAction, PaletteKind, PreviousReviewFile, RefreshWorkspace,
-    command, desktop_button, empty_state, skeleton_line, uuid_like_id, warning_alert,
+    command, desktop_button, empty_state, shimmer_label, uuid_like_id, warning_alert,
 };
 use crate::desktop::strings::{i18n, key_context, keys};
 
@@ -385,32 +385,15 @@ impl DesktopView {
                 .flex_col()
                 .gap_4()
                 .p_4()
-                .child(
-                    div()
-                        .font_medium()
-                        .child(rust_i18n::t!("app.workspace_review.reading_git_changes_progress").to_string()),
-                )
+                .child(div().font_medium().child(shimmer_label(
+                    "workspace-review-loading-label",
+                    rust_i18n::t!("app.workspace_review.reading_git_changes_progress").to_string(),
+                )))
                 .child(
                     div()
                         .text_sm()
                         .text_color(colors.muted_foreground)
                         .child(rust_i18n::t!("app.workspace_review.capturing_snapshot").to_string()),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .rounded_lg()
-                        .bg(colors.secondary)
-                        .p_4()
-                        .flex()
-                        .flex_col()
-                        .gap_3()
-                        .child(skeleton_line("workspace-review-placeholder-file", px(180.), cx))
-                        .child(skeleton_line("workspace-review-placeholder-hunk", px(120.), cx))
-                        .child(skeleton_line("workspace-review-placeholder-line-1", px(320.), cx))
-                        .child(skeleton_line("workspace-review-placeholder-line-2", px(248.), cx))
-                        .child(skeleton_line("workspace-review-placeholder-line-3", px(286.), cx))
-                        .child(skeleton_line("workspace-review-placeholder-line-4", px(196.), cx)),
                 );
             return body.child(loading).into_any_element();
         }

@@ -11,10 +11,49 @@ pub(super) fn spawn_session_pump(
     tokio::spawn(async move {
         let mut commands_open = true;
         let mut events_open = true;
+        let mut progress = vtcode_commons::ui_protocol::ProgressTracker::default();
+        let mut background_active = false;
+        let mut activity_active = false;
+        let mut activity_blocked = false;
         while commands_open || events_open {
             tokio::select! {
                 command = commands.recv(), if commands_open => match command {
                     Some(command) => {
+                        let changed = match &command {
+                            InlineCommand::UpdateProgress(update) => progress.apply(*update),
+                            InlineCommand::SetLocalAgents { entries } => {
+                                let active = entries.iter().any(|entry| entry.is_loading());
+                                let changed = background_active != active;
+                                background_active = active;
+                                changed
+                            }
+                            InlineCommand::SetActivityState(activity) => {
+                                let active = activity.is_busy();
+                                let blocked = matches!(activity, vtcode_commons::ui_protocol::ActivityState::Blocked);
+                                let changed = activity_active != active || activity_blocked != blocked;
+                                activity_active = active;
+                                activity_blocked = blocked;
+                                changed
+                            }
+                            _ => false,
+                        };
+                        if changed && state.lock().await.session_id.as_deref() == Some(session_id.as_str()) {
+                            let phase = progress.phase();
+                            if let Err(error) = send_notification(&notifications, protocol::method::UI_PROGRESS, json!({
+                                "sessionId": session_id,
+                                "active": vtcode_commons::ui_protocol::LoadingActivity {
+                                    blocked: activity_blocked,
+                                    turn: activity_active,
+                                    progress: phase.is_some_and(|phase| phase.is_animated()),
+                                    background: background_active,
+                                    // Thinking is derived client-side from the awaiting-content
+                                    // window; the pump owns turn/activity/progress/background only.
+                                    thinking: false,
+                                }.is_active(),
+                            })).await {
+                                tracing::warn!(target: "vtcode.desktop", %error, "failed to publish progress");
+                            }
+                        }
                         if let InlineCommand::SetPrimaryAgent { name, .. } = &command
                             && let Err(error) = publish_primary_agent_changed(
                                 &session_id,
@@ -75,8 +114,21 @@ pub(super) fn spawn_session_pump(
                 None
             }
         };
-        if let Some(turn_id) = completed_turn {
+        if completed_turn.is_some() {
             turn_finished.notify_waiters();
+        }
+        if (activity_active || background_active || progress.phase().is_some())
+            && state.lock().await.session_id.as_deref() == Some(session_id.as_str())
+            && let Err(error) = send_notification(
+                &notifications,
+                protocol::method::UI_PROGRESS,
+                json!({"sessionId": session_id, "active": false}),
+            )
+            .await
+        {
+            tracing::warn!(target: "vtcode.desktop", %error, "failed to clear progress on runtime shutdown");
+        }
+        if let Some(turn_id) = completed_turn {
             let _ = send_notification(
                 &notifications,
                 protocol::method::TURN_STATUS,

@@ -1,8 +1,22 @@
 //! Root layout: navigation sidebar, conversation workspace, inspector, and overlays.
 use super::*;
 
+impl DesktopView {
+    /// Native window title: the selected thread title, or the app name when
+    /// no thread is selected or its title is blank.
+    pub(super) fn window_title(&self) -> &str {
+        self.sessions
+            .iter()
+            .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
+            .and_then(|session| session.title.as_deref())
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or(app::NAME)
+    }
+}
+
 impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        window.set_window_title(self.window_title());
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
         let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;
@@ -201,7 +215,8 @@ impl Render for DesktopView {
         if self.review_open {
             body = body.child(self.render_change_review(cx));
         }
-        if !self.palette_kind.is_composer_popup()
+        if !(self.settings_open && self.palette_kind == PaletteKind::SettingsSearch)
+            && !self.palette_kind.is_composer_popup()
             && let Some(state) = self.palette.clone()
         {
             body = body.child(self.render_command_palette(state, window, cx));

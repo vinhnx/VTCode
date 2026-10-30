@@ -142,13 +142,9 @@ impl DesktopView {
                     .flex_col()
                     .gap_3()
                     .p_3()
-                    .children([
-                        skeleton_line("file-scan-skeleton-1", px(196.), cx),
-                        skeleton_line("file-scan-skeleton-2", px(148.), cx),
-                        skeleton_line("file-scan-skeleton-3", px(218.), cx),
-                        skeleton_line("file-scan-skeleton-4", px(172.), cx),
-                        skeleton_line("file-scan-skeleton-5", px(204.), cx),
-                    ]),
+                    .text_sm()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .child(shimmer_label("file-scan-loading-label", rust_i18n::t!("app.files.scanning").to_string())),
             );
         } else if self.files.is_empty() {
             let (title, description) = if self.workspace.is_some() {

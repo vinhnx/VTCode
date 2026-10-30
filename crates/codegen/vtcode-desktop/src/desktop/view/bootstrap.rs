@@ -340,6 +340,7 @@ impl DesktopView {
             running: false,
             turn_content_seen: false,
             status: rust_i18n::t!("app.workspace.startup_hint").to_string(),
+            ui_progress_active: false,
             error: None,
             configuration: None,
             pending_permission_choice: None,

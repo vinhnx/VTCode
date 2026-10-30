@@ -278,6 +278,9 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
             .expect("enum settings use a Kit select");
         assert!(select.read(cx).focus_handle(cx).is_focused(window), "the enum picker receives initial focus");
         window.within("cli-config-option-select").click("input", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("config-option-auto").label(), Some("auto"));
+        assert_eq!(window.find("config-option-fast").label(), Some("fast"));
         window.press("down", cx);
         window.press("enter", cx);
         window.render_frame(cx);
@@ -570,7 +573,7 @@ fn workspace_files_show_loading_and_empty_states(cx: &mut TestAppContext) {
         let loading = window.find("file-list-loading");
         assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
         assert_eq!(loading.label(), Some("Scanning workspace files"));
-        assert!(window.find("file-scan-skeleton-1").bounds().size.height > px(0.));
+        assert!(window.find("file-scan-loading-label").bounds().size.height > px(0.));
 
         view.update(cx, |view, cx| {
             view.files_scan_cancel = None;

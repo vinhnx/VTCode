@@ -155,3 +155,62 @@ mod tests {
         assert_eq!(ProgressPhase::WaitingForModel.elapsed_secs(operation, now), 84);
     }
 }
+
+/// Tracks the current UI progress operation, ignoring stale updates.
+#[derive(Debug, Default)]
+pub struct ProgressTracker {
+    latest_id: u64,
+    active: Option<(ProgressOperation, ProgressPhase)>,
+}
+
+impl ProgressTracker {
+    /// Apply an update only when it belongs to the current operation.
+    pub fn apply(&mut self, update: ProgressUpdate) -> bool {
+        match update {
+            ProgressUpdate::Begin { operation, phase } if operation.id() > self.latest_id => {
+                self.latest_id = operation.id();
+                self.active = Some((operation, phase));
+                true
+            }
+            ProgressUpdate::Phase { operation, phase }
+                if self.active.is_some_and(|(current, old)| current == operation && old != phase) =>
+            {
+                self.active = Some((operation, phase));
+                true
+            }
+            ProgressUpdate::Finish { operation } if self.active.is_some_and(|(current, _)| current == operation) => {
+                self.active = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    #[must_use]
+    pub fn phase(&self) -> Option<ProgressPhase> {
+        self.active.map(|(_, phase)| phase)
+    }
+}
+
+#[cfg(test)]
+mod tracker_tests {
+    use super::*;
+
+    #[test]
+    fn stale_updates_cannot_replace_or_finish_newer_progress() {
+        let old = ProgressOperation::start();
+        let new = ProgressOperation::start();
+        let mut tracker = ProgressTracker::default();
+        assert!(tracker.apply(ProgressUpdate::Begin { operation: old, phase: ProgressPhase::Processing }));
+        assert!(tracker.apply(ProgressUpdate::Begin {
+            operation: new,
+            phase: ProgressPhase::WaitingForModel
+        }));
+        assert!(!tracker.apply(ProgressUpdate::Finish { operation: old }));
+        assert!(!tracker.apply(ProgressUpdate::Phase { operation: old, phase: ProgressPhase::RunningTools }));
+        assert_eq!(tracker.phase(), Some(ProgressPhase::WaitingForModel));
+        assert!(tracker.apply(ProgressUpdate::Finish { operation: new }));
+        assert!(!tracker.apply(ProgressUpdate::Begin { operation: old, phase: ProgressPhase::Processing }));
+        assert_eq!(tracker.phase(), None);
+    }
+}

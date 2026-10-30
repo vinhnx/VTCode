@@ -668,11 +668,14 @@ impl Session {
     /// the footer shimmer both follow; seeding a new animated surface here
     /// keeps them from drifting.
     pub(crate) fn loading_activity_active(&self) -> bool {
-        !matches!(self.activity_state, ActivityState::Blocked)
-            && (self.status_indicator_active()
-                || self.thinking_spinner.is_active
-                || self.progress.is_animated()
-                || self.background_status_shimmer_active())
+        vtcode_commons::ui_protocol::LoadingActivity {
+            blocked: matches!(self.activity_state, ActivityState::Blocked),
+            turn: self.status_indicator_active(),
+            thinking: self.thinking_spinner.is_active,
+            progress: self.progress.is_animated(),
+            background: self.background_status_shimmer_active(),
+        }
+        .is_active()
     }
 
     /// Terminal-title attention signal: only real user attention (blocked

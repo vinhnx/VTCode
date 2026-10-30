@@ -8,6 +8,7 @@ impl DesktopView {
         self.pending_submission = None;
         self.pending_first_submission = false;
         self.running = false;
+        self.ui_progress_active = false;
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;

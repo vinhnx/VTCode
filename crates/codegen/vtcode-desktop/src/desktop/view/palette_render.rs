@@ -414,6 +414,17 @@ impl DesktopView {
                 });
             });
 
+        if self.settings_open && self.palette_kind == PaletteKind::SettingsSearch {
+            return div()
+                .id(COMMAND_PALETTE_ELEMENT_ID)
+                .test_support()
+                .role(gpui_kit::Role::Group)
+                .aria_label(title.clone())
+                .w_full()
+                .child(command)
+                .into_any_element();
+        }
+
         let panel = div()
             .id(COMMAND_PALETTE_ELEMENT_ID)
             .test_support()

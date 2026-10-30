@@ -44,7 +44,6 @@ use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::select::{Select, SelectEvent};
 use gpui_kit::component::shimmer::ShimmerText;
-use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::status_bar::StatusBar;
 use gpui_kit::component::stepper::{Stepper, StepperItem};
@@ -380,6 +379,7 @@ struct DesktopView {
     /// because the pending row also requires `running`.
     turn_content_seen: bool,
     status: String,
+    ui_progress_active: bool,
     error: Option<String>,
     configuration: Option<ConfigurationSnapshot>,
     pending_permission_choice: Option<protocol::PermissionMode>,

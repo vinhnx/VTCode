@@ -346,6 +346,8 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
             assert_eq!(preferences.light_theme.as_deref(), Some("catppuccin-latte"));
         }
         assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (light profile)"),);
+        assert_eq!(window.find("theme-catppuccin-latte").checked(), Some(false));
+        assert_eq!(window.find("theme-ciapre").checked(), Some(true));
         assert_eq!(window.find("edit-dark-profile").label(), Some("Edit the Dark appearance profile (selected)"));
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit the Light appearance profile"));
         assert_eq!(window.find("edit-dark-profile").checked(), Some(true));

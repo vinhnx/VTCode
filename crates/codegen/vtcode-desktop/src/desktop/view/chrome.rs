@@ -397,6 +397,11 @@ impl DesktopView {
                 .child(Scrollbar::vertical(&self.session_scroll)),
         );
 
+        let status = if self.ui_progress_active && !self.running && self.interaction.is_none() {
+            rust_i18n::t!("app.service.running").to_string()
+        } else {
+            self.status.clone()
+        };
         sidebar.child(
             div()
                 .mt_auto()
@@ -408,8 +413,11 @@ impl DesktopView {
                         .id("sidebar-status")
                         .test_support()
                         .role(gpui_kit::Role::Status)
-                        .aria_label(self.status.clone())
-                        .child(self.status.clone()),
+                        .aria_label(status.clone())
+                        .when(self.global_loading_active(), |row| {
+                            row.child(shimmer_label("sidebar-status-loading", status.clone()))
+                        })
+                        .when(!self.global_loading_active(), |row| row.child(status.clone())),
                 ),
         )
     }
@@ -558,7 +566,6 @@ impl DesktopView {
                             .tooltip_with_action(navigation_label, &ToggleSidebar, Some(key_context::DESKTOP))
                             .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                     )
-                    .child(brand_logo(22.))
                     .child(div().text_sm().font_semibold().child(app::NAME))
                     .child(
                         div()
@@ -658,7 +665,13 @@ impl DesktopView {
                             Some(key_context::DESKTOP),
                         )
                         .ghost()
-                        .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            if view.settings_open {
+                                view.close_settings(window, cx);
+                            } else {
+                                view.open_settings(window, cx);
+                            }
+                        })),
                 );
             if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
                 group = group.content(

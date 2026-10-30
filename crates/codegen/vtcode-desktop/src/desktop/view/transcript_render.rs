@@ -227,9 +227,10 @@ impl DesktopView {
                     );
                 }
                 if self.history_page_loading {
-                    history_bar = history_bar
-                        .child(skeleton_line("history-loading-line-1", px(240.), cx))
-                        .child(skeleton_line("history-loading-line-2", px(176.), cx));
+                    history_bar = history_bar.child(shimmer_label(
+                        "history-loading-label",
+                        rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string(),
+                    ));
                 }
                 transcript_content = transcript_content.child(history_bar);
             }
@@ -339,7 +340,7 @@ impl DesktopView {
     }
 
     /// Whether the active turn is still waiting for its first content.
-    fn turn_awaiting_content(&self) -> bool {
+    pub(super) fn turn_awaiting_content(&self) -> bool {
         self.running && !self.turn_content_seen
     }
 

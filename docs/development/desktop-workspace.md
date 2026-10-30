@@ -504,6 +504,7 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `composer/resources` | List bounded CLI-safe resource tokens for composer file and mention autocomplete. |
 | `mcp/app/read` | Read one bounded MCP app resource body for static previews. |
 | `session/primaryAgentChanged` | Publish ephemeral active-agent display state for a live session; it does not change next-session options. |
+| `session/ui_progress` | Publish transient loading state (`active`) for the selected session; the client folds it into the shared `LoadingActivity` model with its own turn/thinking signals. |
 | `webmcp/status`, `webmcp/pair`, `webmcp/stop` | Report the authenticated browser bridge, pair a browser origin with a short-lived code, or revoke pairings and stop the listener. |
 | `update/status` | Read the cached updater snapshot (current/latest version, release URL, channel, check-due flag) without network I/O. |
 | `desktop/shutdown` | Cancel and clean up owned work before exit. |
@@ -515,6 +516,13 @@ Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-even
 turn status, and session-scoped primary-agent display changes. A client must reject stale or duplicate interaction
 responses. EOF triggers service cleanup. The full wire
 types and framing helpers live in [`vtcode-desktop-protocol`](../../crates/common/vtcode-desktop-protocol/README.md).
+
+Transient loading state travels as `session/ui_progress` (`sessionId`, `active`). The service pump folds turn
+activity, typed progress phases, and background-agent signals into `active`, publishes only on change for the
+currently selected session, and emits a final `active: false` when the runtime ends with live state. The desktop
+combines that flag with its own turn and awaiting-content signals through the shared `LoadingActivity`
+aggregation in `vtcode-commons`, so both surfaces apply identical blocked/loading semantics. It clears the flag
+on session change and disconnect; at turn end the service's idle/finish transition publishes the reset.
 
 Terminal cleanup uses the accepted active-turn identity and typed runtime outcomes. It does not depend on receipt of
 `turn.started`: cancellation during preparation or a saturated live queue can omit that event. The UI rejects

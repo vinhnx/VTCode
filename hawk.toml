@@ -172,14 +172,6 @@ item = "atif::AtifTrajectoryBuilder::set_session_id"
 level = "allow"
 reason = "public ATIF builder API"
 
-# vtcode-exec-events ToolOutcome — intentional public API
-[[override]]
-lint = "hawk::dead_public"
-crate = "vtcode_exec_events"
-item = "ToolOutcome::is_terminal"
-level = "allow"
-reason = "public API for tool outcome consumers"
-
 [[override]]
 lint = "hawk::unnecessary_public"
 crate = "vtcode_commons"

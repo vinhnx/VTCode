@@ -863,3 +863,18 @@ fn connections_terminal_row_copies_the_resume_command(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn settings_toolbar_button_closes_an_open_sheet(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).settings_open);
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).settings_open);
+    })
+    .unwrap();
+}

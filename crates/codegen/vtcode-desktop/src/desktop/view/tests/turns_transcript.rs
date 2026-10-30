@@ -778,54 +778,6 @@ fn palette_entry_ids_follow_action_identity_without_exposing_payloads() {
     );
 }
 
-/// Mirror of `submit()`: user echo present, turn running, no content yet.
-fn running_turn_without_content(cx: &mut TestAppContext, view: &Entity<DesktopView>) {
-    use crate::desktop::transcript::TranscriptRole;
-
-    view.update(cx, |view, _| {
-        view.selected_session_id = Some("session".into());
-        view.transcript.push(TranscriptItem::new(
-            "echo-1".into(),
-            TranscriptRole::User.as_str().into(),
-            "You".into(),
-            "hello".into(),
-        ));
-        view.running = true;
-        view.turn_content_seen = false;
-        view.active_turn_id = None;
-        view.status = rust_i18n::t!("app.composer.submitting_turn").to_string();
-    });
-}
-
-fn turn_started_event(session_id: &str, turn_id: &str) -> BackendEvent {
-    use vtcode_exec_events::{ThreadEvent, TurnStartedEvent, VersionedThreadEvent};
-
-    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
-        session_id: session_id.into(),
-        turn_id: Some(turn_id.into()),
-        event: VersionedThreadEvent::new(ThreadEvent::TurnStarted(TurnStartedEvent::default())),
-    })
-}
-
-fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
-    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
-
-    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
-        session_id: session_id.into(),
-        turn_id: Some(turn_id.into()),
-        event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
-            completed_at: None,
-            usage: Usage {
-                input_tokens: 10,
-                output_tokens: 5,
-                cached_input_tokens: 0,
-                cache_creation_tokens: 0,
-            },
-            in_progress_exec_sessions: Vec::new(),
-        })),
-    })
-}
-
 #[gpui_kit::test]
 fn turn_pending_row_shows_until_first_content_then_clears(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -836,8 +788,7 @@ fn turn_pending_row_shows_until_first_content_then_clears(cx: &mut TestAppContex
         let pending = window.find("turn-pending");
         assert_eq!(pending.role(), Some(gpui_kit::Role::Status));
         assert_eq!(pending.label(), Some(status.as_str()));
-        assert!(window.find("turn-pending-line-1").bounds().size.height > px(0.));
-        assert!(window.find("turn-pending-line-2").bounds().size.height > px(0.));
+        assert!(window.find("turn-pending-label").bounds().size.height > px(0.));
 
         // Lifecycle events carry no content: TurnStarted keeps the row up.
         view.update(cx, |view, cx| {
@@ -916,7 +867,7 @@ fn turn_started_resets_content_seen_for_new_turn(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn history_loading_skeletons_show_while_page_loads(cx: &mut TestAppContext) {
+fn history_loading_shimmer_shows_while_page_loads(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     running_turn_without_content(cx, &view);
     view.update(cx, |view, _| {
@@ -927,16 +878,14 @@ fn history_loading_skeletons_show_while_page_loads(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let loading = rust_i18n::t!("app.palette.history.loading").to_string();
         assert_eq!(window.find("load-earlier-history").label(), Some(loading.as_str()));
-        assert!(window.find("history-loading-line-1").bounds().size.height > px(0.));
-        assert!(window.find("history-loading-line-2").bounds().size.height > px(0.));
+        assert!(window.find("history-loading-label").bounds().size.height > px(0.));
 
         view.update(cx, |view, _| {
             view.history_page_loading = false;
             view.history_has_earlier = false;
         });
         window.render_frame(cx);
-        assert!(window.try_find("history-loading-line-1").is_none());
-        assert!(window.try_find("history-loading-line-2").is_none());
+        assert!(window.try_find("history-loading-label").is_none());
     })
     .unwrap();
 }
@@ -952,10 +901,26 @@ fn loading_shimmer_labels_render_under_reduced_motion(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         // Static text stays readable with motion disabled; the Kit shimmer and
-        // the skeleton wrapper take the non-animated branches.
+        // the shimmer takes its non-animated branch.
         assert!(window.try_find("turn-pending-label").is_some());
         assert!(window.try_find("navigation-loading-label").is_some());
-        assert!(window.find("turn-pending-line-1").bounds().size.height > px(0.));
+        assert!(window.find("turn-pending-label").bounds().size.height > px(0.));
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn loading_updates_require_the_selected_session_and_reset_on_session_change(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(BackendEvent::UiProgress(json!({"active": true})), cx);
+        assert!(!view.ui_progress_active);
+        view.selected_session_id = Some("current".into());
+        view.handle_backend_event(BackendEvent::UiProgress(json!({"sessionId": "other", "active": true})), cx);
+        assert!(!view.ui_progress_active);
+        view.handle_backend_event(BackendEvent::UiProgress(json!({"sessionId": "current", "active": true})), cx);
+        assert!(view.ui_progress_active);
+        view.reset_session_state();
+        assert!(!view.ui_progress_active);
+    });
 }

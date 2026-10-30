@@ -392,7 +392,7 @@ impl DesktopView {
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
-        if self.settings_open {
+        if self.settings_open && kind != PaletteKind::SettingsSearch {
             self.close_settings(window, cx);
         }
         self.palette_return_focus = window.focused(cx);

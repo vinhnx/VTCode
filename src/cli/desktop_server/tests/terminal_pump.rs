@@ -203,3 +203,221 @@ async fn session_pump_projects_primary_agent_host_commands() {
     assert_eq!(update.params["sessionId"], "session-a");
     assert_eq!(update.params["displayName"], "Plan");
 }
+
+#[tokio::test]
+async fn session_pump_ignores_stale_progress_and_clears_on_finish() {
+    use vtcode_commons::ui_protocol::{ProgressOperation, ProgressPhase, ProgressUpdate};
+    let state = std::sync::Arc::new(Mutex::new(ServerState {
+        session_id: Some("session-a".into()),
+        ..Default::default()
+    }));
+    let (commands, command_receiver) = mpsc::channel(8);
+    let (event_sender, event_receiver) = protocol::live_event_channel(1);
+    let (notifications, mut received) = mpsc::channel(8);
+    spawn_session_pump(
+        "session-a".into(),
+        command_receiver,
+        event_receiver,
+        state,
+        notifications,
+        std::sync::Arc::new(Notify::new()),
+    );
+    let old = ProgressOperation::start();
+    let new = ProgressOperation::start();
+    for update in [
+        ProgressUpdate::Begin { operation: old, phase: ProgressPhase::Processing },
+        ProgressUpdate::Begin {
+            operation: new,
+            phase: ProgressPhase::WaitingForModel,
+        },
+        ProgressUpdate::Finish { operation: old },
+        ProgressUpdate::Finish { operation: new },
+    ] {
+        commands.send(InlineCommand::UpdateProgress(update)).await.unwrap();
+    }
+    drop(commands);
+    drop(event_sender);
+    let mut values = Vec::new();
+    while let Some(event) = timeout(Duration::from_secs(1), received.recv()).await.unwrap() {
+        if event.method == protocol::method::UI_PROGRESS {
+            values.push(event.params["active"].as_bool().unwrap());
+        }
+    }
+    assert_eq!(values, [true, true, false]);
+}
+
+#[tokio::test]
+async fn session_pump_tracks_live_background_and_blocked_states() {
+    use vtcode_commons::ui_protocol::ActivityState;
+    use vtcode_ui::tui::app::{LocalAgentEntry, LocalAgentKind};
+    let state = std::sync::Arc::new(Mutex::new(ServerState {
+        session_id: Some("session-b".into()),
+        ..Default::default()
+    }));
+    let (commands, command_receiver) = mpsc::channel(8);
+    let (event_sender, event_receiver) = protocol::live_event_channel(1);
+    let (notifications, mut received) = mpsc::channel(8);
+    spawn_session_pump(
+        "session-b".into(),
+        command_receiver,
+        event_receiver,
+        state,
+        notifications,
+        std::sync::Arc::new(Notify::new()),
+    );
+    let entry = LocalAgentEntry {
+        id: "job".into(),
+        display_label: "Job".into(),
+        agent_name: "Job".into(),
+        color: None,
+        kind: LocalAgentKind::ExecSession,
+        program_status: vtcode_commons::program_status::ProgramState::Working,
+        updated_at: 0,
+        status: "running".into(),
+        summary: None,
+        preview: String::new(),
+        transcript_path: None,
+    };
+    commands
+        .send(InlineCommand::SetLocalAgents { entries: vec![entry] })
+        .await
+        .unwrap();
+    commands
+        .send(InlineCommand::SetActivityState(ActivityState::Blocked))
+        .await
+        .unwrap();
+    commands
+        .send(InlineCommand::SetActivityState(ActivityState::Idle))
+        .await
+        .unwrap();
+    commands.send(InlineCommand::SetLocalAgents { entries: vec![] }).await.unwrap();
+    drop(commands);
+    drop(event_sender);
+    let mut values = Vec::new();
+    while let Some(event) = timeout(Duration::from_secs(1), received.recv()).await.unwrap() {
+        if event.method == protocol::method::UI_PROGRESS {
+            values.push(event.params["active"].as_bool().unwrap());
+        }
+    }
+    assert_eq!(values, [true, false, true, false]);
+}
+
+#[tokio::test]
+async fn session_pump_drops_progress_after_session_switch() {
+    use vtcode_commons::ui_protocol::{ProgressOperation, ProgressPhase, ProgressUpdate};
+    let state = std::sync::Arc::new(Mutex::new(ServerState {
+        session_id: Some("session-a".into()),
+        ..Default::default()
+    }));
+    let (commands, command_receiver) = mpsc::channel(8);
+    let (event_sender, event_receiver) = protocol::live_event_channel(1);
+    let (notifications, mut received) = mpsc::channel(8);
+    spawn_session_pump(
+        "session-a".into(),
+        command_receiver,
+        event_receiver,
+        state.clone(),
+        notifications,
+        std::sync::Arc::new(Notify::new()),
+    );
+    commands
+        .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+            operation: ProgressOperation::start(),
+            phase: ProgressPhase::Processing,
+        }))
+        .await
+        .unwrap();
+    let first = timeout(Duration::from_secs(1), received.recv()).await.unwrap().unwrap();
+    assert_eq!(first.method, protocol::method::UI_PROGRESS);
+    assert_eq!(first.params["active"], true);
+
+    // The selection moves away: later updates from the stale pump, including
+    // its shutdown clear, must not leak to the newly selected session.
+    state.lock().await.session_id = Some("session-b".into());
+    commands
+        .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+            operation: ProgressOperation::start(),
+            phase: ProgressPhase::WaitingForModel,
+        }))
+        .await
+        .unwrap();
+    drop(commands);
+    drop(event_sender);
+    assert!(timeout(Duration::from_secs(1), received.recv()).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn session_pump_clears_live_progress_on_shutdown() {
+    use vtcode_commons::ui_protocol::{ProgressOperation, ProgressPhase, ProgressUpdate};
+    let state = std::sync::Arc::new(Mutex::new(ServerState {
+        session_id: Some("session-c".into()),
+        ..Default::default()
+    }));
+    let (commands, command_receiver) = mpsc::channel(2);
+    let (event_sender, event_receiver) = protocol::live_event_channel(1);
+    let (notifications, mut received) = mpsc::channel(4);
+    spawn_session_pump(
+        "session-c".into(),
+        command_receiver,
+        event_receiver,
+        state,
+        notifications,
+        std::sync::Arc::new(Notify::new()),
+    );
+    commands
+        .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+            operation: ProgressOperation::start(),
+            phase: ProgressPhase::Processing,
+        }))
+        .await
+        .unwrap();
+    drop(commands);
+    drop(event_sender);
+    let first = timeout(Duration::from_secs(1), received.recv()).await.unwrap().unwrap();
+    let last = timeout(Duration::from_secs(1), received.recv()).await.unwrap().unwrap();
+    assert_eq!(first.params["active"], true);
+    assert_eq!(last.method, protocol::method::UI_PROGRESS);
+    assert_eq!(last.params["active"], false);
+}
+
+#[tokio::test]
+async fn shutdown_clears_progress_after_full_queue_without_delaying_turn_cleanup() {
+    use vtcode_commons::ui_protocol::{ProgressOperation, ProgressPhase, ProgressUpdate};
+    let state = std::sync::Arc::new(Mutex::new(ServerState {
+        session_id: Some("session-full".into()),
+        active_turn_id: Some("turn".into()),
+        ..Default::default()
+    }));
+    let (commands, command_receiver) = mpsc::channel(2);
+    let (event_sender, event_receiver) = protocol::live_event_channel(1);
+    let (notifications, mut received) = mpsc::channel(1);
+    let finished = std::sync::Arc::new(Notify::new());
+    let waiting = finished.notified();
+    tokio::pin!(waiting);
+    waiting.as_mut().enable();
+    spawn_session_pump(
+        "session-full".into(),
+        command_receiver,
+        event_receiver,
+        state.clone(),
+        notifications,
+        finished.clone(),
+    );
+    commands
+        .send(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+            operation: ProgressOperation::start(),
+            phase: ProgressPhase::Processing,
+        }))
+        .await
+        .unwrap();
+    drop(commands);
+    drop(event_sender);
+    timeout(Duration::from_secs(1), waiting)
+        .await
+        .expect("turn cleanup must not wait for the full queue");
+    assert!(state.lock().await.active_turn_id.is_none());
+    assert_eq!(received.recv().await.unwrap().params["active"], true);
+    let cleared = timeout(Duration::from_secs(1), received.recv()).await.unwrap().unwrap();
+    assert_eq!(cleared.method, protocol::method::UI_PROGRESS);
+    assert_eq!(cleared.params["active"], false);
+}

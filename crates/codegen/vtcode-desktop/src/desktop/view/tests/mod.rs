@@ -321,6 +321,54 @@ enum MousePhase {
     Up,
 }
 
+/// Mirror of `submit()`: user echo present, turn running, no content yet.
+fn running_turn_without_content(cx: &mut TestAppContext, view: &Entity<DesktopView>) {
+    use crate::desktop::transcript::TranscriptRole;
+
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some("session".into());
+        view.transcript.push(TranscriptItem::new(
+            "echo-1".into(),
+            TranscriptRole::User.as_str().into(),
+            "You".into(),
+            "hello".into(),
+        ));
+        view.running = true;
+        view.turn_content_seen = false;
+        view.active_turn_id = None;
+        view.status = rust_i18n::t!("app.composer.submitting_turn").to_string();
+    });
+}
+
+fn turn_started_event(session_id: &str, turn_id: &str) -> BackendEvent {
+    use vtcode_exec_events::{ThreadEvent, TurnStartedEvent, VersionedThreadEvent};
+
+    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+        session_id: session_id.into(),
+        turn_id: Some(turn_id.into()),
+        event: VersionedThreadEvent::new(ThreadEvent::TurnStarted(TurnStartedEvent::default())),
+    })
+}
+
+fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
+    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
+
+    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+        session_id: session_id.into(),
+        turn_id: Some(turn_id.into()),
+        event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
+            usage: Usage {
+                input_tokens: 10,
+                output_tokens: 5,
+                cached_input_tokens: 0,
+                cache_creation_tokens: 0,
+            },
+            in_progress_exec_sessions: Vec::new(),
+        })),
+    })
+}
+
 mod activity_settings;
 mod config_catalog;
 mod config_sessions;
@@ -328,6 +376,7 @@ mod curated_config;
 mod files_webmcp;
 mod heading_tiers;
 mod inspector_appearance;
+mod loading_lifecycle;
 mod mcp_app;
 mod notifications;
 mod option_popups;

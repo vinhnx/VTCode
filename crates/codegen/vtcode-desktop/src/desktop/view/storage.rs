@@ -1,7 +1,8 @@
 //! Storage settings: usage overview plus session and worktree cleanup.
 
 use super::*;
-use gpui_kit::relative;
+use gpui_kit::component::chart::BarChart;
+use gpui_kit::component::plot::shape::BarAlignment;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum StorageView {
@@ -332,13 +333,12 @@ impl DesktopView {
         let Some(summary) = self.storage.summary.as_ref() else {
             return div().into_any_element();
         };
-        let segments = [
-            (summary.sessions_bytes, colors.chart_1),
-            (summary.worktrees_bytes, colors.chart_2),
-            (summary.memory_bytes, colors.chart_3),
-            (summary.other_bytes, colors.chart_4),
+        let chart_data = [
+            (rust_i18n::t!("app.settings.storage.sessions").to_string(), summary.sessions_bytes, colors.chart_1),
+            (rust_i18n::t!("app.settings.storage.worktrees").to_string(), summary.worktrees_bytes, colors.chart_2),
+            (rust_i18n::t!("app.settings.storage.memory").to_string(), summary.memory_bytes, colors.chart_3),
+            (rust_i18n::t!("app.settings.storage.other").to_string(), summary.other_bytes, colors.chart_4),
         ];
-        let total = summary.total_bytes.max(1) as f64;
         let breakdown = [
             (rust_i18n::t!("app.settings.storage.sessions").to_string(), summary.sessions_bytes),
             (rust_i18n::t!("app.settings.storage.worktrees").to_string(), summary.worktrees_bytes),
@@ -359,19 +359,20 @@ impl DesktopView {
                     .test_support()
                     .role(gpui_kit::Role::Group)
                     .aria_label(rust_i18n::t!("app.settings.storage.usage", breakdown = breakdown).to_string())
-                    .flex()
-                    .flex_row()
                     .w_full()
-                    .h_3()
-                    .bg(colors.muted)
-                    .children(segments.into_iter().filter(|(bytes, _)| *bytes > 0).map(|(bytes, color)| {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "f64 byte total intentionally narrows to f32 layout proportions"
-                        )]
-                        let proportion = bytes as f32 / total as f32;
-                        div().h_full().w(relative(proportion)).bg(color)
-                    })),
+                    .when(summary.total_bytes > 0, |chart| {
+                        chart.h(px(144.)).child(
+                            BarChart::new(chart_data.to_vec())
+                                .band(|datum| datum.0.clone())
+                                .value(|datum| datum.1 as f64)
+                                .alignment(BarAlignment::Left)
+                                .value_axis(false)
+                                .grid(false)
+                                .interactive(false)
+                                .appear(false)
+                                .fill(|datum, _, _, _| datum.2),
+                        )
+                    }),
             )
             .child(
                 div().flex().flex_col().gap_1().children(

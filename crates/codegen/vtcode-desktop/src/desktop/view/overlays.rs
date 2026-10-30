@@ -4,6 +4,17 @@
 use super::*;
 
 impl DesktopView {
+    pub(super) fn global_loading_active(&self) -> bool {
+        vtcode_commons::ui_protocol::LoadingActivity {
+            blocked: self.interaction.is_some(),
+            turn: self.running,
+            thinking: self.turn_awaiting_content(),
+            progress: self.ui_progress_active,
+            ..Default::default()
+        }
+        .is_active()
+    }
+
     pub(super) fn focus_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.composer.read(cx).focus_handle(cx).focus(window, cx);
     }
@@ -128,6 +139,10 @@ impl DesktopView {
             return;
         }
         self.settings_open = false;
+        if self.palette_kind == PaletteKind::SettingsSearch && self.palette.is_some() {
+            self.clear_palette_state();
+            self.palette_return_focus = None;
+        }
         self.config_page_open = false;
         // Capture never survives the sheet, staged edits or not, so reopening never shows an
         // armed pill without focus.

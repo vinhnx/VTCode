@@ -251,10 +251,10 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         let loading = window.find("workspace-review-loading");
         assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
         assert_eq!(loading.label(), Some("Reading Git changes"));
-        assert!(window.find("workspace-review-placeholder-file").visible());
+        assert!(window.find("workspace-review-loading-label").visible());
         cx.set_reduce_motion(false);
         window.render_frame(cx);
-        assert!(window.find("workspace-review-placeholder-file").visible());
+        assert!(window.find("workspace-review-loading-label").visible());
         cx.set_reduce_motion(true);
         window.render_frame(cx);
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
@@ -680,11 +680,15 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
         window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
         window.render_frame(cx);
         assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
+        assert_eq!(window.find("reduce-motion-system").checked(), Some(true));
+        assert_eq!(window.find("reduce-motion-off").checked(), Some(false));
 
         window.click("reduce-motion-off", cx);
         window.render_frame(cx);
         assert!(!cx.reduce_motion());
         assert_eq!(window.find("reduce-motion-off").label(), Some("Reduce motion: Off (selected)"));
+        assert_eq!(window.find("reduce-motion-off").checked(), Some(true));
+        assert_eq!(window.find("reduce-motion-system").checked(), Some(false));
         assert_eq!(
             crate::desktop::preferences::Preferences::load().reduced_motion,
             crate::desktop::preferences::ReducedMotionPreference::Off

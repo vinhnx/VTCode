@@ -124,6 +124,9 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
         window.render_frame(cx);
         window.press("cmd-f", cx);
         window.render_frame(cx);
+        assert!(view.read(cx).settings_open);
+        assert!(window.within("settings-panel").try_find("command-palette").is_some());
+        assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("command-palette").label(), Some("Search settings and CLI config"));
         assert!(matches!(view.read(cx).palette_kind, super::super::PaletteKind::SettingsSearch));
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -413,7 +416,7 @@ fn config_deep_link_before_catalog_load_filters_once_settings_arrive(cx: &mut Te
         window.render_frame(cx);
         assert!(view.read(cx).config_page_open);
         assert_eq!(view.read(cx).config_search_input.read(cx).value().as_str(), "budget");
-        assert!(window.try_find("config-loading-line-one").is_some());
+        assert!(window.try_find("config-loading-label").is_some());
 
         view.update(cx, |view, _| {
             view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {

@@ -851,3 +851,32 @@ fn malformed_catalog_responses_preserve_the_last_valid_sessions_and_models(cx: &
     });
     cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
 }
+
+#[gpui_kit::test]
+fn window_title_follows_the_selected_thread_title(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let summary = |session_id: &str, title: Option<&str>| vtcode_desktop_protocol::SessionSummary {
+        session_id: session_id.into(),
+        title: title.map(str::to_string),
+        workspace: std::env::temp_dir().display().to_string(),
+        completed: false,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    };
+    view.update(cx, |view, _| {
+        assert_eq!(view.window_title(), "VT Code");
+        view.sessions = vec![
+            summary("titled", Some("Fix the login timeout")),
+            summary("untitled", None),
+        ];
+        view.selected_session_id = Some("titled".into());
+        assert_eq!(view.window_title(), "Fix the login timeout");
+        view.selected_session_id = Some("untitled".into());
+        assert_eq!(view.window_title(), "VT Code");
+        view.sessions[1].title = Some("   ".into());
+        assert_eq!(view.window_title(), "VT Code", "blank titles fall back to the app name");
+        view.selected_session_id = Some("missing".into());
+        assert_eq!(view.window_title(), "VT Code");
+    });
+}

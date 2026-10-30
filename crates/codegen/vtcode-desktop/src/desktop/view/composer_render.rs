@@ -57,6 +57,13 @@ impl DesktopView {
             let waiting_label = rust_i18n::t!("app.session.waiting_to_send").to_string();
             panel = panel.child(
                 div()
+                    .w_full()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.popover)
+                    .px_3()
+                    .py_2()
                     .flex()
                     .items_center()
                     .justify_between()
@@ -98,14 +105,21 @@ impl DesktopView {
             };
             panel = panel.child(
                 div()
+                    .w_full()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.popover)
+                    .p_3()
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(explanation)
+                    .child(row_title(explanation, &colors))
                     .child(rust_i18n::t!("app.composer.clear_draft_hint").to_string())
                     .child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .gap_2()
                             .child(
                                 desktop_button("restore-submission")
@@ -238,7 +252,6 @@ impl DesktopView {
                     )
                     .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                     .icon(IconName::Square)
-                    .rounded_full()
                     .danger()
                     .when(self.zen_mode, |button| button.small())
                     .dispatches_desktop_action(CancelRun, self.focus_handle.clone()),
@@ -249,7 +262,6 @@ impl DesktopView {
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
-                    .rounded_full()
                     .primary()
                     .when(self.zen_mode, |button| button.small())
                     .desktop_disabled(!can_submit)
@@ -310,13 +322,6 @@ impl DesktopView {
                     .when(!self.zen_mode, |row| row.child(self.render_mode_button(cx))),
             );
         }
-        // Zen restyles the card while the column narrows (see content_width):
-        // a defined input surface with a hairline border, roomier padding,
-        // and a small send action. The border lives on the frame only; the
-        // inner group stays borderless with no focus ring, so the card never
-        // shifts its boundary when the draft gains focus — the caret marks
-        // the focused field.
-        let frame_radius = px(if self.zen_mode { 16. } else { 22. });
         div().w_full().flex().justify_center().child(
             panel.child(
                 div()
@@ -359,20 +364,26 @@ impl DesktopView {
                             .test_support()
                             .w_full()
                             .min_w_0()
-                            .rounded(frame_radius)
+                            .rounded_md()
+                            .border_1()
+                            .border_color(colors.border)
                             .bg(colors.popover)
-                            .when(self.zen_mode, |frame| frame.border_1().border_color(colors.border))
                             .child(
                                 InputGroup::new("message-composer")
                                     .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
                                     .w_full()
-                                    .rounded(frame_radius)
+                                    .rounded_md()
                                     .border_0()
                                     .focus_ring(false)
                                     .p_2()
                                     .when(self.zen_mode, |group| group.p_3())
                                     .bg(colors.popover)
                                     .input(input)
+                                    .addon(
+                                        InputGroupAddon::new("composer-prompt-marker")
+                                            .align(InputGroupAddonAlignment::InlineStart)
+                                            .child(div().text_color(colors.muted_foreground).child(">")),
+                                    )
                                     .addon(
                                         InputGroupAddon::new("composer-actions")
                                             .align(InputGroupAddonAlignment::BlockEnd)

@@ -169,6 +169,22 @@ impl DesktopView {
             SettingsTab::Storage => self.render_storage_settings(cx),
         };
 
+        if self.palette_kind == PaletteKind::SettingsSearch
+            && let Some(state) = self.palette.clone()
+        {
+            return div()
+                .id("settings-panel")
+                .track_focus(&self.settings_focus)
+                .test_support()
+                .role(gpui_kit::Role::Dialog)
+                .aria_label(rust_i18n::t!(i18n::SETTINGS_TITLE).to_string())
+                .w_full()
+                .h(panel_height)
+                .p_6()
+                .child(self.render_command_palette(state, window, cx))
+                .into_any_element();
+        }
+
         let mut panel = div()
             .id("settings-panel")
             .lock_scroll_axis()

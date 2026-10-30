@@ -31,29 +31,6 @@ pub(super) fn accessible_group_box(
         .into_any_element()
 }
 
-pub(super) fn skeleton_line(id: &'static str, width: Pixels, cx: &App) -> AnyElement {
-    let placeholder = if cx.reduce_motion() {
-        div()
-            .w(width)
-            .max_w_full()
-            .h_4()
-            .rounded_md()
-            .bg(cx.theme().skeleton)
-            .into_any_element()
-    } else {
-        Skeleton::new().w(width).max_w_full().h_4().rounded_md().into_any_element()
-    };
-
-    div()
-        .id(id)
-        .test_support()
-        .w(width)
-        .max_w_full()
-        .h_4()
-        .child(placeholder)
-        .into_any_element()
-}
-
 /// Animated status label for an owned loading state. The Kit shimmer inherits
 /// typography and color from the call-site parent and renders static text
 /// under reduced motion, so callers only style the row, never the motion.
@@ -94,9 +71,7 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
                 .py_2()
                 .text_sm()
                 .text_color(cx.theme().colors.muted_foreground)
-                .child(shimmer_label("turn-pending-label", status))
-                .child(skeleton_line("turn-pending-line-1", px(280.), cx))
-                .child(skeleton_line("turn-pending-line-2", px(208.), cx)),
+                .child(shimmer_label("turn-pending-label", status)),
         )
         .into_any_element()
 }

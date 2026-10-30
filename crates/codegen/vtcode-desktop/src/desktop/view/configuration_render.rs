@@ -157,6 +157,7 @@ impl DesktopView {
                 .min_h_0()
                 .min_w_0()
                 .flex()
+                .flex_col()
                 .gap_4()
                 .child(rail)
                 .child(content)
@@ -177,14 +178,10 @@ impl DesktopView {
                         .items_center()
                         .justify_center()
                         .gap_3()
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(colors.muted_foreground)
-                                .child(rust_i18n::t!("app.configuration.loading").to_string()),
-                        )
-                        .child(skeleton_line("config-loading-line-one", px(320.), cx))
-                        .child(skeleton_line("config-loading-line-two", px(240.), cx)),
+                        .child(div().text_sm().text_color(colors.muted_foreground).child(shimmer_label(
+                            "config-loading-label",
+                            rust_i18n::t!("app.configuration.loading").to_string(),
+                        ))),
                 ),
                 (Some(_), None) => self.render_config_content_frame(
                     div()
@@ -215,7 +212,7 @@ impl DesktopView {
                     let catalog_group = catalog.and_then(|catalog| catalog.group(name));
                     let row_count = catalog_group.map_or(0, |group| group.indices.len());
                     let limit = self.config_visible_row_limit.max(1);
-                    let mut list = div().flex().flex_col();
+                    let mut list = settings_group_box(name.clone(), &colors);
                     let mut shown = 0;
                     if let Some(catalog_group) = catalog_group {
                         for setting in catalog_group
@@ -287,6 +284,7 @@ impl DesktopView {
                         .min_h_0()
                         .min_w_0()
                         .flex()
+                        .flex_col()
                         .gap_4()
                         .child(rail)
                         .child(content)
@@ -338,14 +336,12 @@ impl DesktopView {
             .test_support()
             .role(gpui_kit::Role::Navigation)
             .aria_label(rust_i18n::t!("app.configuration.groups").to_string())
-            .w_56()
+            .w_full()
             .flex_shrink_0()
-            .min_h_0()
             .track_scroll(&self.config_rail_scroll)
-            .overflow_y_scroll()
-            .vertical_scrollbar(&self.config_rail_scroll)
+            .overflow_x_scroll()
             .flex()
-            .flex_col()
+            .flex_row()
             .gap_1();
         if show_curated_entry {
             let active = selected == Some(curated::CURATED_GROUP_NAME);
@@ -354,8 +350,7 @@ impl DesktopView {
                     .icon(config_group_icon(curated::CURATED_GROUP_NAME))
                     .label(rust_i18n::t!("app.configuration.page_title").to_string())
                     .small()
-                    .w_full()
-                    .justify_start()
+                    .flex_shrink_0()
                     .desktop_selected(active, &colors)
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.config_page_group = Some(curated::CURATED_GROUP_NAME.to_string());
@@ -372,8 +367,7 @@ impl DesktopView {
                     .icon(config_group_icon(&name))
                     .label(name.clone())
                     .small()
-                    .w_full()
-                    .justify_start()
+                    .flex_shrink_0()
                     .desktop_selected(active, &colors)
                     .on_click(cx.listener(move |view, _, _, cx| {
                         view.config_page_group = Some(name.clone());

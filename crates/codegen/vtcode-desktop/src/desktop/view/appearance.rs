@@ -391,6 +391,7 @@ impl DesktopView {
                                 }
                             })
                             .ghost()
+                            .toggled(selected)
                             .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
                             .on_click(cx.listener(move |view, _, _, cx| view.set_reduced_motion(preference, cx)))
                     })),
@@ -550,7 +551,7 @@ impl DesktopView {
             );
         desktop_button(id)
             .accessibility_label(if selected { format!("{label} ({badge})") } else { label })
-            .toggled(selected)
+            .toggled(active)
             .ghost()
             .w(px(104.))
             .flex_shrink_0()

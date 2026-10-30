@@ -23,7 +23,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [button](https://gpui-kit.com/component/button) | Retained and restyled: accessible buttons, packaged icons, and embedded brand artwork. |
 | [calendar](https://gpui-kit.com/component/calendar) | Not needed for the current coding-workspace workflows or available data. |
 | [carousel](https://gpui-kit.com/component/carousel) | Not needed for the current coding-workspace workflows or available data. |
-| [chart](https://gpui-kit.com/component/chart) | Not needed for the current coding-workspace workflows or available data. |
+| [chart](https://gpui-kit.com/component/chart) | Applied: storage usage breakdown as a labeled 4-category bar chart, replacing the hand-rolled proportional bar; axes, grid, tooltips, and interaction stay off, and the full breakdown remains in the container aria label. |
 | [checkbox](https://gpui-kit.com/component/checkbox) | Applied: controlled opt-in for untracked Git previews; preserve runtime-owned approval identities. |
 | [clipboard](https://gpui-kit.com/component/clipboard) | Retain rich Markdown, owned input state, raw copy, and image/security policy. |
 | [collapsible](https://gpui-kit.com/component/collapsible) | Retain app-owned pane visibility; no extra disclosure or animated layer needed. |

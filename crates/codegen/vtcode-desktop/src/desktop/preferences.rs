@@ -262,6 +262,10 @@ impl SearchableListItem for FileDestinationOption {
         self.0.label().into()
     }
 
+    fn render(&self, _: &mut gpui_kit::Window, _: &mut App) -> impl gpui_kit::IntoElement {
+        super::accessible_select_option(format!("destination-option-{}", self.0.id()), self.title())
+    }
+
     fn value(&self) -> &Self::Value {
         &self.0
     }
@@ -341,6 +345,10 @@ impl SearchableListItem for TurnCompletionModeOption {
 
     fn title(&self) -> SharedString {
         self.0.label().into()
+    }
+
+    fn render(&self, _: &mut gpui_kit::Window, _: &mut App) -> impl gpui_kit::IntoElement {
+        super::accessible_select_option(format!("notification-mode-option-{}", self.0.id()), self.title())
     }
 
     fn value(&self) -> &Self::Value {

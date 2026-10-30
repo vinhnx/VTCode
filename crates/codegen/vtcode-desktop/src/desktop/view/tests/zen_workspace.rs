@@ -847,6 +847,30 @@ fn sidebar_service_status_announces_state_changes(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn sidebar_shows_running_for_background_work_after_turn_completion(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.status = "Completed".into();
+        view.running = false;
+        view.ui_progress_active = true;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("sidebar-status").label(), Some("Running"));
+        assert!(window.try_find("sidebar-status-loading").is_some());
+        view.update(cx, |view, cx| {
+            view.ui_progress_active = false;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("sidebar-status").label(), Some("Completed"));
+        assert!(window.try_find("sidebar-status-loading").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn zen_empty_state_centers_brand_mark_with_greeting(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);

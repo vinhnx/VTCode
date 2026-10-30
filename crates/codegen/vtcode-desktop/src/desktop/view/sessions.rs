@@ -591,6 +591,7 @@ impl DesktopView {
 
     /// Clear session-owned projections together so another conversation cannot inherit them.
     pub(super) fn reset_session_state(&mut self) {
+        self.ui_progress_active = false;
         self.cancel_session_load_task();
         self.active_primary_agent_display = None;
         self.transcript.clear();

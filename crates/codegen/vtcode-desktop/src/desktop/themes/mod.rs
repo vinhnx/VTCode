@@ -573,11 +573,11 @@ pub(super) fn filled_button_foreground(color: Hsla) -> Hsla {
 
 /// Minimum contrast for label-grade text: headings, tab labels, and section
 /// overlines sit between primary foreground and muted metadata.
-const LABEL_CONTRAST: f32 = 7.0;
+const LABEL_CONTRAST: f32 = 9.0;
 
 /// Label-grade text readable on every filled surface: the palette foreground
 /// blended toward the hardest surface (the raised popover fill) just until the
-/// 7:1 threshold holds. Background, panel, sidebar, and hover fills are all
+/// 9:1 threshold holds. Background, panel, sidebar, and hover fills are all
 /// farther from the foreground, so the ratio only grows there. Returns the
 /// foreground untouched when even it cannot reach the threshold.
 pub(super) fn label_foreground(colors: &ThemeColor) -> Hsla {
@@ -604,12 +604,12 @@ pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
 
 /// Secondary copy (row descriptions, hints) one step brighter than
 /// [`aa_muted`]: small muted text at the 4.5 floor reads washed, so this
-/// targets 6:1 on the hardest surface (the raised popover fill, which is
+/// targets 7:1 on the hardest surface (the raised popover fill, which is
 /// lighter than canvas, panel, and sidebar fills, so the ratio only grows
 /// there). Falls back toward the palette foreground on low-headroom themes
 /// instead of collapsing below AA.
 pub(super) fn muted_text(colors: &ThemeColor) -> Hsla {
-    const TARGET_RATIO: f32 = 6.0;
+    const TARGET_RATIO: f32 = 7.0;
     let headroom = contrast_ratio(colors.foreground, colors.popover);
     text_at_contrast(colors.popover, colors.foreground, TARGET_RATIO.min(headroom))
 }

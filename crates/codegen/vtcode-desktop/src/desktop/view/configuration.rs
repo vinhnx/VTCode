@@ -22,6 +22,10 @@ impl SearchableListItem for ConfigOption {
         }
     }
 
+    fn render(&self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        super::super::accessible_select_option(format!("config-option-{}", self.value), self.title())
+    }
+
     fn value(&self) -> &Self::Value {
         &self.value
     }

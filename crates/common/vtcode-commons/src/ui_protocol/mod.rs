@@ -9,6 +9,7 @@
 //! and core-layer protocols diverge.
 
 mod activity;
+mod loading;
 mod markdown;
 mod progress;
 mod selection;
@@ -17,6 +18,7 @@ mod tool_summary;
 mod types;
 
 pub use activity::*;
+pub use loading::*;
 pub use markdown::*;
 pub use progress::*;
 pub use selection::*;
