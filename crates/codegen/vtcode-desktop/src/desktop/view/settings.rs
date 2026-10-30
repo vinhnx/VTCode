@@ -13,16 +13,18 @@ pub(super) enum SettingsTab {
     VtCode,
     Connections,
     Notifications,
+    Storage,
 }
 
 impl SettingsTab {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Appearance,
         Self::Accessibility,
         Self::Shortcuts,
         Self::VtCode,
         Self::Connections,
         Self::Notifications,
+        Self::Storage,
     ];
 
     fn label(self) -> String {
@@ -33,6 +35,7 @@ impl SettingsTab {
             Self::VtCode => rust_i18n::t!("app.settings.tab.vtcode"),
             Self::Connections => rust_i18n::t!("app.settings.tab.connections"),
             Self::Notifications => rust_i18n::t!("app.settings.tab.notifications"),
+            Self::Storage => rust_i18n::t!("app.settings.tab.storage"),
         }
         .to_string()
     }
@@ -41,9 +44,9 @@ impl SettingsTab {
         match self {
             Self::Appearance => &[
                 "appearance",
-                "theme",
                 "themes",
                 "color",
+                "contrast",
                 "font",
                 "typography",
                 "visual style",
@@ -52,7 +55,6 @@ impl SettingsTab {
                 "sidebar",
                 "layout",
                 "files",
-                "file",
                 "editor",
                 "destination",
                 "viewer",
@@ -76,7 +78,7 @@ impl SettingsTab {
                 "phím tắt",
             ],
             Self::VtCode => &[
-                "vt code",
+                "vt code menu bar",
                 "config",
                 "configuration",
                 "provider",
@@ -84,6 +86,7 @@ impl SettingsTab {
                 "agent",
                 "cli",
                 "permissions",
+                "third-party notices",
             ],
             Self::Connections => &["connections", "mcp", "webmcp", "server", "bridge"],
             Self::Notifications => &[
@@ -99,6 +102,17 @@ impl SettingsTab {
                 "permission",
                 "question",
                 "thông báo",
+            ],
+            Self::Storage => &[
+                "storage",
+                "disk",
+                "space",
+                "cleanup",
+                "clean up",
+                "worktree",
+                "worktrees",
+                "archive",
+                "delete",
             ],
         }
     }
@@ -116,6 +130,9 @@ impl DesktopView {
             .map(|tab| {
                 let mut entry = command(tab.label(), PaletteAction::SelectSettingsTab(tab));
                 entry.keywords = tab.search_keywords().iter().map(|keyword| (*keyword).to_owned()).collect();
+                if tab == SettingsTab::VtCode {
+                    entry.keywords.push(rust_i18n::t!("app.settings.licenses.title").to_string());
+                }
                 entry
             })
             .collect();
@@ -149,6 +166,7 @@ impl DesktopView {
             SettingsTab::VtCode => self.render_vtcode_settings(cx),
             SettingsTab::Connections => self.render_connections_settings(cx),
             SettingsTab::Notifications => self.render_notification_settings(cx),
+            SettingsTab::Storage => self.render_storage_settings(cx),
         };
 
         let mut panel = div()
@@ -244,263 +262,6 @@ impl DesktopView {
         panel.into_any_element()
     }
 
-    fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        let swatches = themes::picker_swatches().collect::<Vec<_>>();
-        let mut counts = HashMap::new();
-        for entry in &swatches {
-            *counts.entry(entry.label()).or_insert(0_usize) += 1;
-        }
-        let swatch_rows = swatches
-            .into_iter()
-            .map(|entry| {
-                self.render_theme_swatch(entry, counts.get(entry.label()).copied().unwrap_or_default() > 1, cx)
-            })
-            .collect::<Vec<_>>();
-        let theme = cx.theme();
-        let colors = &theme.colors;
-        let active_theme_profile = if self.theme_mode == ThemeMode::Light {
-            rust_i18n::t!("app.settings.appearance.light").to_string()
-        } else {
-            rust_i18n::t!("app.settings.appearance.dark").to_string()
-        };
-        let visual_style = rust_i18n::t!("app.settings.visual_style").to_string();
-        let typography = rust_i18n::t!("app.settings.typography").to_string();
-        let layout = rust_i18n::t!("app.settings.layout").to_string();
-        let mut content = div()
-            .id("appearance-settings")
-            .test_support()
-            .flex()
-            .flex_col()
-            .gap_5()
-            .child(accessible_group_box(
-                "appearance-visual-style-group",
-                visual_style.clone(),
-                settings_group_box(visual_style, colors)
-                    .child(
-                        gpui_kit::component::switch::Switch::new("separate-theme-profiles")
-                            .label(rust_i18n::t!("app.settings.appearance.separate_modes").to_string())
-                            .checked(self.preferences.separate_theme_profiles)
-                            .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
-                    )
-                    .when(self.preferences.separate_theme_profiles, |group| {
-                        group.child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .id("theme-profile-hint")
-                                        .role(gpui_kit::Role::Label)
-                                        .aria_label(
-                                            rust_i18n::t!(
-                                                "app.settings.appearance.editing_profile",
-                                                profile = active_theme_profile
-                                            )
-                                            .to_string(),
-                                        )
-                                        .text_sm()
-                                        .child(
-                                            rust_i18n::t!("app.settings.appearance.editing_profile_short").to_string(),
-                                        ),
-                                )
-                                .children([ThemeMode::Light, ThemeMode::Dark].into_iter().map(|mode| {
-                                    let light = mode == ThemeMode::Light;
-                                    let id = if light { "light" } else { "dark" };
-                                    let label = if light {
-                                        rust_i18n::t!("app.settings.appearance.light").to_string()
-                                    } else {
-                                        rust_i18n::t!("app.settings.appearance.dark").to_string()
-                                    };
-                                    let selected = self.theme_mode == mode;
-                                    let profile_action_key = if selected {
-                                        "app.settings.appearance.edit_profile_selected"
-                                    } else {
-                                        "app.settings.appearance.edit_profile"
-                                    };
-                                    desktop_button(format!("edit-{id}-profile"))
-                                        .label(label.clone())
-                                        .accessibility_label(
-                                            rust_i18n::t!(profile_action_key, profile = label).to_string(),
-                                        )
-                                        .toggled(selected)
-                                        .ghost()
-                                        .when(selected, |button| {
-                                            button.bg(colors.secondary).text_color(colors.foreground)
-                                        })
-                                        .on_click(cx.listener(move |view, _, window, cx| {
-                                            if view.theme_mode != mode {
-                                                view.apply_theme_mode(mode, window, cx);
-                                            }
-                                        }))
-                                })),
-                        )
-                    })
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(section_label(&rust_i18n::t!("app.settings.appearance.themes").to_string(), colors))
-                            .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
-                                let scroll = self.theme_scroll.clone();
-                                desktop_button(if forward { "next-themes" } else { "previous-themes" })
-                                    .icon(if forward {
-                                        IconName::ChevronRight
-                                    } else {
-                                        IconName::ChevronLeft
-                                    })
-                                    .accessibility_label(
-                                        rust_i18n::t!(if forward {
-                                            "app.settings.appearance.next_themes"
-                                        } else {
-                                            "app.settings.appearance.previous_themes"
-                                        })
-                                        .to_string(),
-                                    )
-                                    .ghost()
-                                    .small()
-                                    .on_click(cx.listener(move |_, _, _, cx| {
-                                        let mut offset = scroll.offset();
-                                        offset.x += px(if forward { -336. } else { 336. });
-                                        scroll.set_offset(offset);
-                                        cx.notify();
-                                    }))
-                            }))),
-                    )
-                    .child(
-                        div()
-                            .id("theme-list")
-                            .test_support()
-                            .role(gpui_kit::Role::Group)
-                            .aria_label(rust_i18n::t!("app.settings.appearance.visual_themes").to_string())
-                            .w_full()
-                            .min_w_0()
-                            .flex_shrink_0()
-                            .h(px(96.))
-                            .relative()
-                            .child(
-                                div()
-                                    .id("theme-scroller")
-                                    .lock_scroll_axis()
-                                    .size_full()
-                                    .overflow_x_scroll()
-                                    .track_scroll(&self.theme_scroll)
-                                    .flex()
-                                    .items_start()
-                                    .gap_2()
-                                    .children(swatch_rows)
-                                    .test_support(),
-                            )
-                            .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
-                            .child(Scrollbar::horizontal(&self.theme_scroll)),
-                    ),
-            ))
-            .child(accessible_group_box(
-                "appearance-typography-group",
-                typography.clone(),
-                settings_group_box(typography, colors)
-                    .child(self.render_font_family(FontTarget::Ui, cx))
-                    .child(row_divider(colors))
-                    .child(self.render_font_family(FontTarget::Code, cx))
-                    .child(row_divider(colors))
-                    .child(self.render_font_size(false, cx))
-                    .child(row_divider(colors))
-                    .child(self.render_font_size(true, cx))
-                    .child(
-                        div()
-                            .id("appearance-code-preview")
-                            .test_support()
-                            .w_full()
-                            .child(render_markdown(
-                                "appearance-code-preview-text".into(),
-                                "```rust\nfn main() { /* VT Code */ }\n```".into(),
-                                false,
-                                cx,
-                            )),
-                    ),
-            ));
-
-        let language_group_title = rust_i18n::t!("app.settings.language.group").to_string();
-        content = content.child(accessible_group_box(
-            "appearance-language-group",
-            language_group_title.clone(),
-            settings_group_box(language_group_title, colors).child(settings_row(
-                rust_i18n::t!("app.settings.language.label").to_string(),
-                rust_i18n::t!("app.settings.language.description").to_string(),
-                Select::new(&self.ui_language_select)
-                    .id("ui-language-select")
-                    .accessibility_label(rust_i18n::t!("app.settings.language.label").to_string())
-                    .search_placeholder(rust_i18n::t!("app.settings.language.search").to_string())
-                    .menu_max_h(px(320.))
-                    .w(px(240.)),
-                colors,
-            )),
-        ));
-
-        content = content.child(accessible_group_box(
-            "appearance-layout-group",
-            layout.clone(),
-            settings_group_box(layout, colors)
-                .child(
-                    gpui_kit::component::switch::Switch::new("navigation-visible")
-                        .label(rust_i18n::t!("app.settings.appearance.show_navigation").to_string())
-                        .checked(self.preferences.navigation_visible())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_navigation_visible(*checked, cx);
-                        })),
-                )
-                .child(row_description(rust_i18n::t!("app.settings.appearance.navigation_hint").to_string(), colors))
-                .child(
-                    gpui_kit::component::switch::Switch::new("navigation-on-right")
-                        .label(rust_i18n::t!("app.settings.appearance.navigation_right").to_string())
-                        .checked(self.preferences.navigation_on_right())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_navigation_on_right(*checked, cx);
-                        })),
-                ),
-        ));
-
-        content = content.child(
-            desktop_button("reset-appearance")
-                .label(rust_i18n::t!("app.settings.appearance.reset").to_string())
-                .ghost()
-                .on_click(cx.listener(|view, _, window, cx| {
-                    view.preferences.separate_theme_profiles = false;
-                    view.preferences.light_theme = None;
-                    view.preferences.dark_theme = None;
-                    view.preferences.light_typography = None;
-                    view.preferences.dark_typography = None;
-                    view.preferences.ui_font_family = None;
-                    view.preferences.code_font_family = None;
-                    view.preferences.ui_font_size = None;
-                    view.preferences.code_font_size = None;
-                    view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
-                    preferences::apply_reduced_motion(view.preferences.reduced_motion, view.system_motion_baseline, cx);
-                    view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
-                })),
-        );
-        // Last: appending here keeps every existing row's scroll position intact.
-        let files_group_title = rust_i18n::t!("app.settings.files.group").to_string();
-        content = content.child(accessible_group_box(
-            "appearance-files-group",
-            files_group_title.clone(),
-            settings_group_box(files_group_title, colors).child(settings_row(
-                rust_i18n::t!("app.settings.files.destination.label").to_string(),
-                rust_i18n::t!("app.settings.files.destination.description").to_string(),
-                Select::new(&self.file_destination_select)
-                    .id("file-open-destination-select")
-                    .accessibility_label(rust_i18n::t!("app.settings.files.destination.label").to_string())
-                    .menu_max_h(px(320.))
-                    .w(px(240.)),
-                colors,
-            )),
-        ));
-        content.into_any_element()
-    }
-
     pub(super) fn set_ui_language(&mut self, language: UiLanguage, window: &mut Window, cx: &mut Context<Self>) {
         if self.preferences.ui_language() == language {
             return;
@@ -508,6 +269,7 @@ impl DesktopView {
 
         self.preferences.set_ui_language(language);
         super::super::localization::set_language(language);
+        menu_bar::refresh_labels(cx);
         let placeholder = rust_i18n::t!("app.composer.input_placeholder").to_string();
         self.composer
             .update(cx, |state, cx| state.set_placeholder(placeholder, window, cx));
@@ -532,7 +294,7 @@ impl DesktopView {
         cx.notify();
     }
 
-    fn set_navigation_on_right(&mut self, on_right: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_navigation_on_right(&mut self, on_right: bool, cx: &mut Context<Self>) {
         if self.preferences.navigation_on_right() == on_right {
             return;
         }
@@ -542,7 +304,7 @@ impl DesktopView {
         cx.notify();
     }
 
-    fn set_navigation_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_navigation_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
         if self.preferences.navigation_visible() == visible {
             return;
         }
@@ -753,7 +515,9 @@ impl DesktopView {
             .gap_4()
             .child(self.render_provider_settings(cx))
             .child(self.render_shared_preferences(cx))
-            .child(self.render_cli_configuration(cx));
+            .child(self.render_cli_configuration(cx))
+            .child(self.render_licenses_settings(cx))
+            .child(self.render_menu_bar_settings(cx));
         content.into_any_element()
     }
 
@@ -839,9 +603,7 @@ impl DesktopView {
         )
     }
 
-    /// Terminal command that continues the selected session outside the GUI.
-    /// `--all` lets it run from any directory; without a selection it opens a
-    /// plain terminal session. Session ids are bounded archive tokens, safe to
+    /// Continue a session from any directory; bounded archive IDs are safe to
     /// interpolate unquoted.
     pub(super) fn terminal_command_for_session(selected_session_id: Option<&str>) -> String {
         match selected_session_id {
@@ -970,6 +732,9 @@ impl DesktopView {
     fn update_settings_tab(&mut self, index: usize, reveal: bool, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(tab) = SettingsTab::ALL.get(index) {
             self.settings_tab = *tab;
+            if *tab == SettingsTab::Storage {
+                self.maybe_request_storage_summary(cx);
+            }
             if reveal {
                 self.settings_tabs_scroll.scroll_to_item(index);
             }

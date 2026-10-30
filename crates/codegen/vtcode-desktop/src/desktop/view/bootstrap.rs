@@ -91,6 +91,9 @@ pub(crate) fn run() {
         super::super::notifications::initialize(cx);
         init_keybindings(cx, &preferences);
         init_native_menus(cx);
+        if preferences.show_in_menu_bar && !menu_bar::set_enabled(true, cx) {
+            vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
+        }
         if let Err(error) = open_or_activate_main_window(cx, Some(preferences)) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
         }
@@ -129,6 +132,17 @@ pub(super) fn open_or_activate_main_window(
         let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, preferences));
         view.update(cx, |view, cx| view.load_preferences(window, cx));
         view
+    })?;
+    window.update(cx, |_, window, cx| {
+        DesktopView::apply_sidebar_background(view.read(cx).preferences.translucent_sidebar, window, cx);
+        window.on_window_should_close(cx, |_, cx| {
+            if menu_bar::should_hide(cx) {
+                menu_bar::hide(cx);
+                false
+            } else {
+                true
+            }
+        });
     })?;
     if start_maximized {
         // macOS ignores WindowBounds::Maximized at creation, so zoom after
@@ -178,6 +192,16 @@ impl DesktopView {
         focus_handle.focus(window, cx);
         let system_motion_baseline = preferences::system_motion_baseline(cx);
         preferences::apply_reduced_motion(preferences.reduced_motion, system_motion_baseline, cx);
+        let contrast_slider = cx.new(|_| {
+            gpui_kit::component::slider::SliderState::new()
+                .min(0.)
+                .max(100.)
+                .step(1.)
+                .default_value(f32::from(preferences.contrast()))
+        });
+        let contrast_slider_subscription = cx.observe_in(&contrast_slider, window, |view, slider, window, cx| {
+            view.set_contrast(slider.read(cx).value().start(), window, cx);
+        });
         let shortcut_capture_focus = cx.focus_handle().tab_stop(true);
         let shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
         let shortcut_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search shortcuts"));
@@ -369,6 +393,9 @@ impl DesktopView {
             palette_kind: PaletteKind::Commands,
             palette_query: gpui_kit::SharedString::default(),
             effort_slider: None,
+            contrast_slider,
+            contrast_focus: cx.focus_handle().tab_stop(true),
+            _contrast_slider_subscription: contrast_slider_subscription,
             effort_focus: cx.focus_handle().tab_stop(true),
             _effort_slider_subscriptions: Vec::new(),
             composer_resources: Vec::new(),
@@ -396,6 +423,7 @@ impl DesktopView {
             settings_navigation_focus: cx.focus_handle().tab_stop(true),
             settings_tab: settings::SettingsTab::Appearance,
             settings_return_focus: None,
+            storage: storage::StorageState::default(),
             webmcp_status: None,
             webmcp_pairing: None,
             webmcp_origin_input: cx.new(|cx| {
@@ -473,8 +501,10 @@ impl DesktopView {
         let preferences = self.preferences.clone();
         self.preferences.follow_cli_theme = Some(preferences.follow_cli_theme.unwrap_or(preferences.theme.is_none()));
         if let Some(theme) = preferences.theme.as_deref() {
-            self.theme_mode = themes::apply_by_id(theme, Some(window), cx);
+            self.theme_mode = themes::apply_with_contrast(theme, preferences.contrast(), Some(window), cx);
             self.theme_id = theme.to_string();
+        } else if preferences.contrast() > 0 {
+            self.theme_mode = themes::apply_with_contrast(&self.theme_id, preferences.contrast(), Some(window), cx);
         }
         self.apply_typography(cx);
         self.sidebar_width = preferences.sidebar_width();

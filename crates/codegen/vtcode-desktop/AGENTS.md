@@ -8,7 +8,7 @@
   Inspector projections reuse live/restored rows; rebuild changes on upsert. Activity/output/tool-tail projections memoize per
   (transcript revision, restored revision): mutate `restored_activity` only via the `*_restored_activity` helpers, and new
   `Transcript` mutators that touch rows must bump the revision.
-- Menus and `view/shortcuts.rs` reuse typed actions; shortcut ids are a `CommandId` table shared with `view/shortcuts_render.rs` (staged draft + per-row capture + search). Keymap actions dispatch before element key handlers: intercept sheet `Cancel` via `on_action` (palette precedent), never `on_key_down`; render capture only while the pill holds focus. Buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.
+- Menus and `view/shortcuts.rs` reuse typed actions; shortcut ids are a `CommandId` table shared with `view/shortcuts_render.rs` (staged draft + per-row capture + search). Menu-bar mode hides the last window instead of dropping its view/backend; native close and Cmd-W share the `menu_bar::should_hide` predicate. Keymap actions dispatch before element key handlers: intercept sheet `Cancel` via `on_action` (palette precedent), never `on_key_down`; render capture only while the pill holds focus. Buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.
 - Gate discovery on validated initialization; serialize session/model changes and capture first-message Send content.
 - Compact model picks use optional CLI ranking; full search uses the catalog.
   Fast mode follows the validated CLI route and persists through the service.

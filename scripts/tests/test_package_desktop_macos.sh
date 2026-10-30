@@ -81,6 +81,8 @@ SUCCESS_APP="${TEST_ROOT}/success/VT Code.app"
 "${ROOT_DIR}/scripts/package-desktop-macos.sh" "${SUCCESS_APP}"
 [[ "$(cat "${SUCCESS_APP}/Contents/MacOS/vtcode-desktop")" == "custom target desktop binary" ]]
 [[ "$(cat "${SUCCESS_APP}/Contents/Helpers/vtcode")" == "custom target CLI helper" ]]
+cmp -s "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${SUCCESS_APP}/Contents/Resources/THIRD-PARTY-NOTICES"
+cmp -s "${ROOT_DIR}/LICENSE" "${SUCCESS_APP}/Contents/Resources/LICENSE"
 grep -Fq -- "build --locked --release --manifest-path ${ROOT_DIR}/Cargo.toml -p vtcode -p vtcode-desktop" "${CARGO_LOG}"
 grep -Fq -- "--verify --deep --strict ${SUCCESS_APP}" "${CODESIGN_LOG}"
 printf 'PASS: custom Cargo target artifacts are packaged and the copied app is verified.\n'

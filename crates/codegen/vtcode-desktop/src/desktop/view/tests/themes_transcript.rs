@@ -13,6 +13,8 @@ fn command_palette_searches_all_loaded_sessions_and_workspace_files(cx: &mut Tes
                 workspace: std::env::temp_dir().display().to_string(),
                 completed: true,
                 resumable: true,
+                size_bytes: 0,
+                updated_at: None,
             })
             .collect();
         view.files = (0..60)

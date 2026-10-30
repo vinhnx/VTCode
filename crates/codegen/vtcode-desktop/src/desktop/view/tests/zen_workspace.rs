@@ -77,6 +77,8 @@ fn zen_mode_hides_navigation_and_keeps_one_toggle_slot(cx: &mut TestAppContext) 
             workspace: workspace.path().display().to_string(),
             completed: false,
             resumable: true,
+            size_bytes: 0,
+            updated_at: None,
         }];
         view.selected_session_id = Some("zen-thread".into());
         view.transcript.push(TranscriptItem::new(
@@ -240,6 +242,8 @@ fn recent_threads_virtualize_rows_and_scroll_to_older_sessions(cx: &mut TestAppC
             workspace: "/project/vtcode".into(),
             completed: false,
             resumable: true,
+            size_bytes: 0,
+            updated_at: None,
         })
         .collect();
     view.update(cx, |view, _| {
@@ -303,6 +307,8 @@ fn recent_session_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppCo
             workspace: std::env::temp_dir().display().to_string(),
             completed: false,
             resumable: true,
+            size_bytes: 0,
+            updated_at: None,
         });
         view.apply_typography(cx);
     });

@@ -1,6 +1,15 @@
 use super::*;
 
 #[test]
+fn contrast_defaults_to_zero_and_clamps_saved_values() {
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.contrast(), 0);
+    let high: Preferences = serde_json::from_str(r#"{"contrast":240,"theme":"ciapre"}"#).unwrap();
+    assert_eq!(high.contrast(), 100);
+    assert_eq!(high.theme.as_deref(), Some("ciapre"));
+}
+
+#[test]
 fn test_preferences_paths_are_fresh_and_isolated_per_thread() {
     let first = install_test_preferences_path();
     let current = install_test_preferences_path();

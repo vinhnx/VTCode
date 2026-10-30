@@ -168,10 +168,12 @@ impl DesktopView {
             .flex_col()
             .gap_3()
             .p_4()
-            .bg(
+            .bg(if self.preferences.translucent_sidebar {
+                themes::translucent_sidebar_surface(&theme.colors)
+            } else {
                 themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground)
-                    .panel,
-            )
+                    .panel
+            })
             .rounded_lg()
             .child(
                 div()

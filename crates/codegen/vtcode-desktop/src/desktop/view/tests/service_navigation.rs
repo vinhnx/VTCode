@@ -460,6 +460,8 @@ fn navigation_toolbar_and_shortcuts_traverse_thread_history(cx: &mut TestAppCont
         workspace: workspace.display().to_string(),
         completed: true,
         resumable: true,
+        size_bytes: 0,
+        updated_at: None,
     };
     let current = vtcode_desktop_protocol::SessionSummary {
         session_id: "current-session".into(),
@@ -467,6 +469,8 @@ fn navigation_toolbar_and_shortcuts_traverse_thread_history(cx: &mut TestAppCont
         workspace: workspace.display().to_string(),
         completed: false,
         resumable: true,
+        size_bytes: 0,
+        updated_at: None,
     };
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });
@@ -743,6 +747,8 @@ fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut Test
         workspace: target_workspace.display().to_string(),
         completed: true,
         resumable: true,
+        size_bytes: 0,
+        updated_at: None,
     };
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });

@@ -100,7 +100,9 @@ mod files_panel;
 mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
+mod licenses;
 mod mcp_app;
+mod menu_bar;
 mod navigation;
 mod navigation_history;
 mod overlays;
@@ -114,6 +116,7 @@ mod settings;
 mod shared_preferences;
 mod shortcuts;
 mod shortcuts_render;
+mod storage;
 mod submit;
 mod transcript_render;
 mod typography;
@@ -432,6 +435,9 @@ struct DesktopView {
     palette_kind: PaletteKind,
     palette_query: gpui_kit::SharedString,
     effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
+    contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
+    contrast_focus: FocusHandle,
+    _contrast_slider_subscription: Subscription,
     effort_focus: FocusHandle,
     _effort_slider_subscriptions: Vec<Subscription>,
     composer_resources: Vec<protocol::ComposerResource>,
@@ -459,6 +465,7 @@ struct DesktopView {
     settings_navigation_focus: FocusHandle,
     settings_tab: settings::SettingsTab,
     settings_return_focus: Option<FocusHandle>,
+    storage: storage::StorageState,
     webmcp_status: Option<protocol::WebmcpBridgeStatus>,
     webmcp_pairing: Option<protocol::WebmcpPairResult>,
     webmcp_origin_input: Entity<TextareaState>,

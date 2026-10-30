@@ -95,6 +95,54 @@ fn every_theme_keeps_wcag_aa_foreground_contrast() {
 }
 
 #[test]
+fn every_theme_stays_within_srgb_gamut() {
+    for theme in all_themes() {
+        for (name, color) in [
+            ("background", theme.background),
+            ("foreground", theme.foreground),
+            ("accent", theme.accent),
+            ("secondary", theme.secondary),
+            ("success", theme.success),
+            ("danger", theme.danger),
+            ("warning", theme.warning),
+        ] {
+            let rgba = gpui_kit::Rgba::from(color);
+            for (channel, value) in [("r", rgba.r), ("g", rgba.g), ("b", rgba.b)] {
+                assert!(
+                    (0.0..=1.0).contains(&value),
+                    "{}: {name}.{channel}={value} is outside sRGB gamut; macOS clips it on Display P3 and the contrast math no longer holds",
+                    theme.id
+                );
+            }
+        }
+    }
+}
+
+#[gpui_kit::test]
+fn contrast_setting_increases_foreground_contrast_for_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let mut previous = 0.0;
+            for amount in [0, 40, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                let ratio = contrast_ratio(colors.foreground, colors.background);
+                assert!(ratio >= 4.5, "{id} at {amount}: {ratio}");
+                assert!(ratio + 0.001 >= previous, "{id} at {amount}: {ratio} < {previous}");
+                for surface in [colors.secondary, colors.popover, colors.tab_bar_segmented] {
+                    assert!(contrast_ratio(colors.foreground, surface) >= 4.5, "{id} at {amount}: unreadable surface");
+                }
+                previous = ratio;
+            }
+        }
+    });
+}
+
+#[test]
 fn faded_chrome_meets_non_text_contrast_on_canvas() {
     for theme in all_themes() {
         let faded = faded_chrome(theme.background, theme.foreground);
@@ -529,6 +577,43 @@ fn navigation_surfaces_are_distinct_and_readable(cx: &mut gpui_kit::TestAppConte
             assert!(contrast_ratio(colors.foreground, surfaces.panel) >= 4.5, "{id}: sidebar text must meet WCAG AA");
             assert!(contrast_ratio(colors.foreground, surfaces.rail) >= 4.5, "{id}: shell text must meet WCAG AA");
         }
+    });
+}
+
+#[gpui_kit::test]
+fn translucent_sidebar_preserves_contrast_over_light_and_dark_backdrops(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let mut translucent_count = 0;
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let surface = translucent_sidebar_surface(&colors);
+            if id == DEFAULT_THEME_ID {
+                assert!(surface.a < 1.0, "default theme must show the blurred backdrop");
+            }
+            if surface.a >= 1.0 {
+                continue;
+            }
+            translucent_count += 1;
+            let rgba = gpui_kit::Rgba::from(surface);
+            for backdrop in [0.0, 1.0] {
+                let composite = Hsla::from(gpui_kit::Rgba {
+                    r: rgba.r * rgba.a + backdrop * (1.0 - rgba.a),
+                    g: rgba.g * rgba.a + backdrop * (1.0 - rgba.a),
+                    b: rgba.b * rgba.a + backdrop * (1.0 - rgba.a),
+                    a: 1.0,
+                });
+                assert!(contrast_ratio(colors.foreground, composite) >= 4.5, "{id}: foreground");
+                assert!(contrast_ratio(colors.muted_foreground, composite) >= 4.5, "{id}: muted");
+                assert!(contrast_ratio(label_foreground(&colors), composite) >= 4.5, "{id}: label");
+                assert!(contrast_ratio(colors.primary, composite) >= 3.0, "{id}: icon");
+            }
+        }
+        assert!(translucent_count > 0, "at least one theme must permit translucency");
     });
 }
 

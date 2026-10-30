@@ -1,5 +1,98 @@
 use super::*;
 
+fn open_settings_search(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.press("cmd-f", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    (window, view)
+}
+
+fn reopen_settings_search(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("settings-filter-search", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut TestAppContext) {
+    let (window, view) = open_settings_search(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.within("command-palette").input("Open source licenses", cx);
+        window.render_frame(cx);
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
+        window.within("command-palette").click(palette_action_id(&action), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::VtCode);
+        assert_eq!(window.find("open-source-licenses").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("open-source-licenses").label(), Some("Open source licenses"));
+    })
+    .unwrap();
+    reopen_settings_search(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.within("command-palette").input("menu bar", cx);
+        window.render_frame(cx);
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
+        window.within("command-palette").click(palette_action_id(&action), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    reopen_settings_search(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.within("command-palette").input("third-party notices", cx);
+        window.render_frame(cx);
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_search_matches_singular_and_plural_theme_queries(cx: &mut TestAppContext) {
+    let (window, view) = open_settings_search(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.within("command-palette").input("themes", cx);
+        window.render_frame(cx);
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::Appearance);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("Appearance"));
+        window.within("command-palette").click(palette_action_id(&action), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Appearance);
+    })
+    .unwrap();
+    reopen_settings_search(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.within("command-palette").input("theme", cx);
+        window.render_frame(cx);
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::Appearance);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("Appearance"));
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

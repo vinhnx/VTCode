@@ -3,6 +3,127 @@
 use super::*;
 
 impl DesktopView {
+    pub(super) fn render_contrast_settings(&self, cx: &Context<Self>) -> AnyElement {
+        let label = rust_i18n::t!("app.settings.appearance.contrast").to_string();
+        let slider = self.contrast_slider.clone();
+        let focus = self.contrast_focus.clone();
+        let ring = cx.theme().colors.ring;
+        accessible_group_box(
+            "appearance-contrast-group",
+            label.clone(),
+            settings_group_box(label.clone(), &cx.theme().colors).child(settings_row(
+                label.clone(),
+                rust_i18n::t!("app.settings.appearance.contrast_description").to_string(),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(
+                        div()
+                            .id("contrast-slider-control")
+                            .test_support()
+                            .track_focus(&self.contrast_focus)
+                            .focus_visible(move |style| style.border_1().border_color(ring))
+                            .capture_any_mouse_down(move |event, window, cx| {
+                                if event.button == MouseButton::Left {
+                                    focus.focus(window, cx);
+                                }
+                            })
+                            .on_key_down(move |event, window, cx| {
+                                if event.keystroke.modifiers.control
+                                    || event.keystroke.modifiers.alt
+                                    || event.keystroke.modifiers.platform
+                                    || event.keystroke.modifiers.function
+                                {
+                                    return;
+                                }
+                                let delta = match event.keystroke.key.as_str() {
+                                    "left" | "down" => -1.0,
+                                    "right" | "up" => 1.0,
+                                    _ => return,
+                                };
+                                cx.stop_propagation();
+                                slider.update(cx, |state, cx| {
+                                    let value = (state.value().start() + delta).clamp(0.0, 100.0);
+                                    state.set_value(value, window, cx);
+                                });
+                            })
+                            .child(
+                                gpui_kit::component::slider::Slider::new(&self.contrast_slider)
+                                    .accessibility_label(label)
+                                    .w(px(180.)),
+                            ),
+                    )
+                    .child(self.preferences.contrast().to_string()),
+                &cx.theme().colors,
+            )),
+        )
+    }
+
+    pub(super) fn set_contrast(&mut self, value: f32, window: &mut Window, cx: &mut Context<Self>) {
+        if !value.is_finite() {
+            return;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "finite value is rounded and clamped to 0..=100"
+        )]
+        let contrast = value.round().clamp(0.0, 100.0) as u8;
+        if self.preferences.contrast() == contrast {
+            return;
+        }
+        self.preferences.contrast = contrast;
+        self.theme_mode = themes::apply_with_contrast(&self.theme_id, contrast, Some(window), cx);
+        self.apply_typography(cx);
+        self.transcript.remeasure();
+        self.save_preferences();
+        cx.notify();
+    }
+
+    pub(super) fn reset_contrast(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_contrast(0.0, window, cx);
+        self.contrast_slider.update(cx, |slider, cx| slider.set_value(0.0, window, cx));
+    }
+
+    pub(super) fn render_translucent_sidebar_switch(&self, cx: &Context<Self>) -> AnyElement {
+        gpui_kit::component::switch::Switch::new("translucent-sidebar")
+            .label(rust_i18n::t!("app.settings.appearance.translucent_sidebar").to_string())
+            .checked(self.preferences.translucent_sidebar)
+            .on_click(cx.listener(|view, checked, window, cx| view.set_translucent_sidebar(*checked, window, cx)))
+            .into_any_element()
+    }
+
+    pub(super) fn set_translucent_sidebar(&mut self, enabled: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preferences.translucent_sidebar == enabled {
+            return;
+        }
+        self.preferences.translucent_sidebar = enabled;
+        Self::apply_sidebar_background(enabled, window, cx);
+        self.save_preferences();
+        cx.notify();
+    }
+
+    pub(super) fn apply_sidebar_background(enabled: bool, window: &mut Window, cx: &mut App) {
+        use gpui_kit::Refineable as _;
+        window.set_background_appearance(if enabled {
+            gpui_kit::WindowBackgroundAppearance::Blurred
+        } else {
+            gpui_kit::WindowBackgroundAppearance::Opaque
+        });
+        if let Some(root) = window.root::<gpui_kit::base::Root>().flatten() {
+            root.update(cx, |root, cx| {
+                if enabled {
+                    root.style()
+                        .refine(&gpui_kit::StyleRefinement::default().bg(gpui_kit::transparent_black()));
+                } else {
+                    root.style().background = None;
+                }
+                cx.notify();
+            });
+        }
+    }
+
     /// Full-width bottom bar: workspace, git branch, provider · model, and
     /// the live turn status.
     pub(super) fn toggle_status_bar(&mut self, cx: &mut Context<Self>) {
@@ -168,7 +289,7 @@ impl DesktopView {
     }
 
     pub(super) fn apply_theme_state(&mut self, id: String, window: Option<&mut Window>, cx: &mut Context<Self>) {
-        self.theme_mode = themes::apply_by_id(&id, window, cx);
+        self.theme_mode = themes::apply_with_contrast(&id, self.preferences.contrast(), window, cx);
         let id = if themes::mode_for_id(&id) == Some(self.theme_mode) {
             id
         } else {
@@ -413,5 +534,264 @@ impl DesktopView {
             }))
             .child(swatch)
             .into_any_element()
+    }
+
+    pub(super) fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let swatches = themes::picker_swatches().collect::<Vec<_>>();
+        let mut counts = HashMap::new();
+        for entry in &swatches {
+            *counts.entry(entry.label()).or_insert(0_usize) += 1;
+        }
+        let swatch_rows = swatches
+            .into_iter()
+            .map(|entry| {
+                self.render_theme_swatch(entry, counts.get(entry.label()).copied().unwrap_or_default() > 1, cx)
+            })
+            .collect::<Vec<_>>();
+        let theme = cx.theme();
+        let colors = &theme.colors;
+        let active_theme_profile = if self.theme_mode == ThemeMode::Light {
+            rust_i18n::t!("app.settings.appearance.light").to_string()
+        } else {
+            rust_i18n::t!("app.settings.appearance.dark").to_string()
+        };
+        let visual_style = rust_i18n::t!("app.settings.visual_style").to_string();
+        let typography = rust_i18n::t!("app.settings.typography").to_string();
+        let layout = rust_i18n::t!("app.settings.layout").to_string();
+        let mut content = div()
+            .id("appearance-settings")
+            .test_support()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .child(accessible_group_box(
+                "appearance-visual-style-group",
+                visual_style.clone(),
+                settings_group_box(visual_style, colors)
+                    .child(
+                        gpui_kit::component::switch::Switch::new("separate-theme-profiles")
+                            .label(rust_i18n::t!("app.settings.appearance.separate_modes").to_string())
+                            .checked(self.preferences.separate_theme_profiles)
+                            .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
+                    )
+                    .when(self.preferences.separate_theme_profiles, |group| {
+                        group.child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .id("theme-profile-hint")
+                                        .role(gpui_kit::Role::Label)
+                                        .aria_label(
+                                            rust_i18n::t!(
+                                                "app.settings.appearance.editing_profile",
+                                                profile = active_theme_profile
+                                            )
+                                            .to_string(),
+                                        )
+                                        .text_sm()
+                                        .child(
+                                            rust_i18n::t!("app.settings.appearance.editing_profile_short").to_string(),
+                                        ),
+                                )
+                                .children([ThemeMode::Light, ThemeMode::Dark].into_iter().map(|mode| {
+                                    let light = mode == ThemeMode::Light;
+                                    let id = if light { "light" } else { "dark" };
+                                    let label = if light {
+                                        rust_i18n::t!("app.settings.appearance.light").to_string()
+                                    } else {
+                                        rust_i18n::t!("app.settings.appearance.dark").to_string()
+                                    };
+                                    let selected = self.theme_mode == mode;
+                                    let profile_action_key = if selected {
+                                        "app.settings.appearance.edit_profile_selected"
+                                    } else {
+                                        "app.settings.appearance.edit_profile"
+                                    };
+                                    desktop_button(format!("edit-{id}-profile"))
+                                        .label(label.clone())
+                                        .accessibility_label(
+                                            rust_i18n::t!(profile_action_key, profile = label).to_string(),
+                                        )
+                                        .toggled(selected)
+                                        .ghost()
+                                        .when(selected, |button| {
+                                            button.bg(colors.secondary).text_color(colors.foreground)
+                                        })
+                                        .on_click(cx.listener(move |view, _, window, cx| {
+                                            if view.theme_mode != mode {
+                                                view.apply_theme_mode(mode, window, cx);
+                                            }
+                                        }))
+                                })),
+                        )
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(section_label(&rust_i18n::t!("app.settings.appearance.themes").to_string(), colors))
+                            .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
+                                let scroll = self.theme_scroll.clone();
+                                desktop_button(if forward { "next-themes" } else { "previous-themes" })
+                                    .icon(if forward {
+                                        IconName::ChevronRight
+                                    } else {
+                                        IconName::ChevronLeft
+                                    })
+                                    .accessibility_label(
+                                        rust_i18n::t!(if forward {
+                                            "app.settings.appearance.next_themes"
+                                        } else {
+                                            "app.settings.appearance.previous_themes"
+                                        })
+                                        .to_string(),
+                                    )
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(move |_, _, _, cx| {
+                                        let mut offset = scroll.offset();
+                                        offset.x += px(if forward { -336. } else { 336. });
+                                        scroll.set_offset(offset);
+                                        cx.notify();
+                                    }))
+                            }))),
+                    )
+                    .child(
+                        div()
+                            .id("theme-list")
+                            .test_support()
+                            .role(gpui_kit::Role::Group)
+                            .aria_label(rust_i18n::t!("app.settings.appearance.visual_themes").to_string())
+                            .w_full()
+                            .min_w_0()
+                            .flex_shrink_0()
+                            .h(px(96.))
+                            .relative()
+                            .child(
+                                div()
+                                    .id("theme-scroller")
+                                    .lock_scroll_axis()
+                                    .size_full()
+                                    .overflow_x_scroll()
+                                    .track_scroll(&self.theme_scroll)
+                                    .flex()
+                                    .items_start()
+                                    .gap_2()
+                                    .children(swatch_rows)
+                                    .test_support(),
+                            )
+                            .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
+                            .child(Scrollbar::horizontal(&self.theme_scroll)),
+                    ),
+            ))
+            .child(accessible_group_box(
+                "appearance-typography-group",
+                typography.clone(),
+                settings_group_box(typography, colors)
+                    .child(self.render_font_family(FontTarget::Ui, cx))
+                    .child(row_divider(colors))
+                    .child(self.render_font_family(FontTarget::Code, cx))
+                    .child(row_divider(colors))
+                    .child(self.render_font_size(false, cx))
+                    .child(row_divider(colors))
+                    .child(self.render_font_size(true, cx))
+                    .child(
+                        div()
+                            .id("appearance-code-preview")
+                            .test_support()
+                            .w_full()
+                            .child(render_markdown(
+                                "appearance-code-preview-text".into(),
+                                "```rust\nfn main() { /* VT Code */ }\n```".into(),
+                                false,
+                                cx,
+                            )),
+                    ),
+            ));
+
+        let language_group_title = rust_i18n::t!("app.settings.language.group").to_string();
+        content = content.child(accessible_group_box(
+            "appearance-language-group",
+            language_group_title.clone(),
+            settings_group_box(language_group_title, colors).child(settings_row(
+                rust_i18n::t!("app.settings.language.label").to_string(),
+                rust_i18n::t!("app.settings.language.description").to_string(),
+                Select::new(&self.ui_language_select)
+                    .id("ui-language-select")
+                    .accessibility_label(rust_i18n::t!("app.settings.language.label").to_string())
+                    .search_placeholder(rust_i18n::t!("app.settings.language.search").to_string())
+                    .menu_max_h(px(320.))
+                    .w(px(240.)),
+                colors,
+            )),
+        ));
+
+        content = content.child(accessible_group_box(
+            "appearance-layout-group",
+            layout.clone(),
+            settings_group_box(layout, colors)
+                .child(
+                    gpui_kit::component::switch::Switch::new("navigation-visible")
+                        .label(rust_i18n::t!("app.settings.appearance.show_navigation").to_string())
+                        .checked(self.preferences.navigation_visible())
+                        .on_click(cx.listener(|view, checked, _, cx| {
+                            view.set_navigation_visible(*checked, cx);
+                        })),
+                )
+                .child(row_description(rust_i18n::t!("app.settings.appearance.navigation_hint").to_string(), colors))
+                .child(self.render_translucent_sidebar_switch(cx))
+                .child(
+                    gpui_kit::component::switch::Switch::new("navigation-on-right")
+                        .label(rust_i18n::t!("app.settings.appearance.navigation_right").to_string())
+                        .checked(self.preferences.navigation_on_right())
+                        .on_click(cx.listener(|view, checked, _, cx| {
+                            view.set_navigation_on_right(*checked, cx);
+                        })),
+                ),
+        ));
+
+        content = content.child(
+            desktop_button("reset-appearance")
+                .label(rust_i18n::t!("app.settings.appearance.reset").to_string())
+                .ghost()
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.preferences.separate_theme_profiles = false;
+                    view.preferences.light_theme = None;
+                    view.preferences.dark_theme = None;
+                    view.preferences.light_typography = None;
+                    view.preferences.dark_typography = None;
+                    view.preferences.ui_font_family = None;
+                    view.preferences.code_font_family = None;
+                    view.preferences.ui_font_size = None;
+                    view.preferences.code_font_size = None;
+                    view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
+                    view.set_translucent_sidebar(false, window, cx);
+                    view.reset_contrast(window, cx);
+                    preferences::apply_reduced_motion(view.preferences.reduced_motion, view.system_motion_baseline, cx);
+                    view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
+                })),
+        );
+        let files_group_title = rust_i18n::t!("app.settings.files.group").to_string();
+        content = content.child(accessible_group_box(
+            "appearance-files-group",
+            files_group_title.clone(),
+            settings_group_box(files_group_title, colors).child(settings_row(
+                rust_i18n::t!("app.settings.files.destination.label").to_string(),
+                rust_i18n::t!("app.settings.files.destination.description").to_string(),
+                Select::new(&self.file_destination_select)
+                    .id("file-open-destination-select")
+                    .accessibility_label(rust_i18n::t!("app.settings.files.destination.label").to_string())
+                    .menu_max_h(px(320.))
+                    .w(px(240.)),
+                colors,
+            )),
+        ));
+        content.child(self.render_contrast_settings(cx)).into_any_element()
     }
 }

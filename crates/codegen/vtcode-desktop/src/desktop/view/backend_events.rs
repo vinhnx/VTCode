@@ -302,6 +302,14 @@ impl DesktopView {
                         self.handle_secret_store_error(error.clone(), cx);
                         return;
                     }
+                    if method == protocol::method::STORAGE_SUMMARY || method == protocol::method::SESSION_DELETE {
+                        self.fail_storage_summary(error.clone(), cx);
+                        return;
+                    }
+                    if method == protocol::method::WORKTREE_LIST || method == protocol::method::WORKTREE_REMOVE {
+                        self.fail_storage_worktrees(error.clone(), cx);
+                        return;
+                    }
                     if method == protocol::method::UPDATE_STATUS {
                         self.update_request_pending = false;
                     }
@@ -497,6 +505,10 @@ impl DesktopView {
                             .unwrap_or_default();
                         self.status = format!("Switched to {model}. Start a new session to use it.");
                     }
+                    protocol::method::STORAGE_SUMMARY => self.apply_storage_summary(result),
+                    protocol::method::SESSION_DELETE => self.apply_session_delete(result, cx),
+                    protocol::method::WORKTREE_LIST => self.apply_worktree_list(result),
+                    protocol::method::WORKTREE_REMOVE => self.apply_worktree_remove(result, cx),
                     protocol::method::SESSION_LIST => {
                         match serde_json::from_value::<Vec<SessionSummary>>(result) {
                             Ok(mut refreshed) => {

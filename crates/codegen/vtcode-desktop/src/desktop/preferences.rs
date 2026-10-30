@@ -439,6 +439,12 @@ pub(super) struct Preferences {
     pub navigation_on_right: Option<bool>,
     /// Show the project and thread navigation panel. Its actions remain in the header when hidden.
     pub navigation_visible: Option<bool>,
+    /// Use the system's blurred backdrop behind the navigation panel.
+    pub translucent_sidebar: bool,
+    /// Keep the main window available from the macOS status bar when closed.
+    pub show_in_menu_bar: bool,
+    /// Additional foreground contrast, from 0 (theme default) to 100.
+    pub contrast: u8,
     /// Sidebar width in logical pixels.
     pub sidebar_width: Option<f32>,
     /// Inspector width in logical pixels.
@@ -451,6 +457,9 @@ pub(super) struct Preferences {
 }
 
 impl Preferences {
+    pub(super) fn contrast(&self) -> u8 {
+        self.contrast.min(100)
+    }
     pub(super) fn ui_language(&self) -> UiLanguage {
         UiLanguage::from_saved(self.ui_language.as_deref())
     }

@@ -1,6 +1,828 @@
 _version: 2
 app:
   settings:
+    menu_bar:
+      show:
+        en: Show VT Code
+        vi: Hiện VT Code
+        es: Mostrar VT Code
+        fr: Afficher VT Code
+        ja: VT Codeを表示
+        de: VT Code anzeigen
+        it: Mostra VT Code
+        zh-CN: 显示 VT Code
+        zh-TW: 顯示 VT Code
+        zh-HK: 顯示 VT Code
+        pt-BR: Mostrar VT Code
+        ko: VT Code 보기
+        nl: Toon VT Code
+        sv: Visa VT Code
+        uk: Показати VT Code
+        hi: VT Code दिखाएँ
+        pl: Pokaż VT Code
+        tr: VT Code’u göster
+        ru: Показать VT Code
+        id: Tampilkan VT Code
+      quit:
+        en: Quit VT Code
+        vi: Thoát VT Code
+        es: Salir de VT Code
+        fr: Quitter VT Code
+        ja: VT Codeを終了
+        de: VT Code beenden
+        it: Esci da VT Code
+        zh-CN: 退出 VT Code
+        zh-TW: 結束 VT Code
+        zh-HK: 結束 VT Code
+        pt-BR: Sair do VT Code
+        ko: VT Code 종료
+        nl: Stop VT Code
+        sv: Avsluta VT Code
+        uk: Завершити VT Code
+        hi: VT Code बंद करें
+        pl: Zakończ VT Code
+        tr: VT Code’dan çık
+        ru: Завершить VT Code
+        id: Keluar dari VT Code
+      title:
+        en: Show in menu bar
+        vi: Hiển thị trên thanh menu
+        es: Mostrar en la barra de menús
+        fr: Afficher dans la barre des menus
+        ja: メニューバーに表示
+        de: In der Menüleiste anzeigen
+        it: Mostra nella barra dei menu
+        zh-CN: 在菜单栏中显示
+        zh-TW: 在選單列顯示
+        zh-HK: 在選單列顯示
+        pt-BR: Mostrar na barra de menus
+        ko: 메뉴 막대에 표시
+        nl: Toon in menubalk
+        sv: Visa i menyraden
+        uk: Показувати в рядку меню
+        hi: मेनू बार में दिखाएँ
+        pl: Pokaż na pasku menu
+        tr: Menü çubuğunda göster
+        ru: Показывать в строке меню
+        id: Tampilkan di bar menu
+      description:
+        en: Keep VT Code in the macOS menu bar when the main window is closed
+        vi: Giữ VT Code trên thanh menu macOS khi đóng cửa sổ chính
+        es: Mantén VT Code en la barra de menús de macOS al cerrar la ventana principal
+        fr: Garder VT Code dans la barre des menus macOS à la fermeture de la fenêtre principale
+        ja: メインウインドウを閉じてもVT CodeをmacOSのメニューバーに表示します
+        de: VT Code nach dem Schließen des Hauptfensters in der macOS-Menüleiste behalten
+        it: Mantieni VT Code nella barra dei menu di macOS quando chiudi la finestra principale
+        zh-CN: 关闭主窗口时在 macOS 菜单栏中保留 VT Code
+        zh-TW: 關閉主視窗時將 VT Code 保留在 macOS 選單列
+        zh-HK: 關閉主視窗時將 VT Code 保留在 macOS 選單列
+        pt-BR: Mantenha o VT Code na barra de menus do macOS ao fechar a janela principal
+        ko: 기본 윈도우를 닫아도 macOS 메뉴 막대에 VT Code를 유지합니다
+        nl: Houd VT Code in de macOS-menubalk als het hoofdvenster wordt gesloten
+        sv: Behåll VT Code i macOS-menyraden när huvudfönstret stängs
+        uk: Залишати VT Code у рядку меню macOS після закриття головного вікна
+        hi: मुख्य विंडो बंद होने पर VT Code को macOS मेनू बार में रखें
+        pl: Zachowaj VT Code na pasku menu macOS po zamknięciu głównego okna
+        tr: Ana pencere kapatıldığında VT Code’u macOS menü çubuğunda tut
+        ru: Сохранять VT Code в строке меню macOS после закрытия главного окна
+        id: Pertahankan VT Code di bar menu macOS saat jendela utama ditutup
+      unavailable:
+        en: Could not create the menu bar item.
+        vi: Không thể tạo mục trên thanh menu.
+        es: No se pudo crear el elemento de la barra de menús.
+        fr: Impossible de créer l’élément de la barre des menus.
+        ja: メニューバーの項目を作成できませんでした。
+        de: Das Menüleistenelement konnte nicht erstellt werden.
+        it: Impossibile creare l’elemento nella barra dei menu.
+        zh-CN: 无法创建菜单栏项目。
+        zh-TW: 無法建立選單列項目。
+        zh-HK: 無法建立選單列項目。
+        pt-BR: Não foi possível criar o item da barra de menus.
+        ko: 메뉴 막대 항목을 만들 수 없습니다.
+        nl: Kon het menubalkonderdeel niet maken.
+        sv: Det gick inte att skapa menyradsobjektet.
+        uk: Не вдалося створити елемент рядка меню.
+        hi: मेनू बार आइटम नहीं बनाया जा सका।
+        pl: Nie można utworzyć elementu paska menu.
+        tr: Menü çubuğu öğesi oluşturulamadı.
+        ru: Не удалось создать элемент строки меню.
+        id: Tidak dapat membuat item bar menu.
+    licenses:
+      title:
+        en: Open source licenses
+        vi: Giấy phép mã nguồn mở
+        es: Licencias de código abierto
+        fr: Licences open source
+        ja: オープンソースライセンス
+        de: Open-Source-Lizenzen
+        it: Licenze open source
+        zh-CN: 开源许可证
+        zh-TW: 開放原始碼授權
+        zh-HK: 開放原始碼授權
+        pt-BR: Licenças de código aberto
+        ko: 오픈 소스 라이선스
+        nl: Opensourcelicenties
+        sv: Licenser för öppen källkod
+        uk: Ліцензії відкритого коду
+        hi: ओपन सोर्स लाइसेंस
+        pl: Licencje otwartego oprogramowania
+        tr: Açık kaynak lisansları
+        ru: Лицензии открытого ПО
+        id: Lisensi sumber terbuka
+      description:
+        en: Third-party notices for bundled dependencies
+        vi: Thông báo của bên thứ ba cho các thành phần đi kèm
+        es: Avisos de terceros para las dependencias incluidas
+        fr: Avis tiers pour les dépendances incluses
+        ja: 同梱される依存関係のサードパーティ通知
+        de: Drittanbieterhinweise zu enthaltenen Abhängigkeiten
+        it: Note di terze parti per le dipendenze incluse
+        zh-CN: 随附依赖项的第三方声明
+        zh-TW: 隨附相依套件的第三方聲明
+        zh-HK: 隨附相依套件的第三方聲明
+        pt-BR: Avisos de terceiros para dependências incluídas
+        ko: 포함된 종속성의 서드파티 고지
+        nl: Kennisgevingen van derden voor meegeleverde afhankelijkheden
+        sv: Tredjepartsmeddelanden för inkluderade beroenden
+        uk: Повідомлення третіх сторін для включених залежностей
+        hi: शामिल निर्भरताओं के लिए तृतीय-पक्ष सूचनाएँ
+        pl: Informacje podmiotów trzecich o dołączonych zależnościach
+        tr: Dahil edilen bağımlılıklar için üçüncü taraf bildirimleri
+        ru: Уведомления третьих сторон для включённых зависимостей
+        id: Pemberitahuan pihak ketiga untuk dependensi yang disertakan
+      view:
+        en: View
+        vi: Xem
+        es: Ver
+        fr: Voir
+        ja: 表示
+        de: Anzeigen
+        it: Visualizza
+        zh-CN: 查看
+        zh-TW: 檢視
+        zh-HK: 檢視
+        pt-BR: Ver
+        ko: 보기
+        nl: Bekijken
+        sv: Visa
+        uk: Переглянути
+        hi: देखें
+        pl: Wyświetl
+        tr: Görüntüle
+        ru: Просмотреть
+        id: Lihat
+      error:
+        en: "Could not open third-party notices: %{error}"
+        vi: "Không thể mở thông báo của bên thứ ba: %{error}"
+        es: "No se pudieron abrir los avisos de terceros: %{error}"
+        fr: "Impossible d’ouvrir les avis tiers : %{error}"
+        ja: "サードパーティ通知を開けませんでした: %{error}"
+        de: "Drittanbieterhinweise konnten nicht geöffnet werden: %{error}"
+        it: "Impossibile aprire le note di terze parti: %{error}"
+        zh-CN: "无法打开第三方声明：%{error}"
+        zh-TW: "無法開啟第三方聲明：%{error}"
+        zh-HK: "無法開啟第三方聲明：%{error}"
+        pt-BR: "Não foi possível abrir os avisos de terceiros: %{error}"
+        ko: "서드파티 고지를 열 수 없습니다: %{error}"
+        nl: "Kennisgevingen van derden konden niet worden geopend: %{error}"
+        sv: "Det gick inte att öppna tredjepartsmeddelandena: %{error}"
+        uk: "Не вдалося відкрити повідомлення третіх сторін: %{error}"
+        hi: "तृतीय-पक्ष सूचनाएँ नहीं खोली जा सकीं: %{error}"
+        pl: "Nie można otworzyć informacji podmiotów trzecich: %{error}"
+        tr: "Üçüncü taraf bildirimleri açılamadı: %{error}"
+        ru: "Не удалось открыть уведомления третьих сторон: %{error}"
+        id: "Tidak dapat membuka pemberitahuan pihak ketiga: %{error}"
+    storage:
+      device_title:
+        en: This device
+        vi: Thiết bị này
+        es: Este dispositivo
+        fr: Cet appareil
+        ja: このデバイス
+        de: Dieses Gerät
+        it: Questo dispositivo
+        zh-CN: 此设备
+        zh-TW: 此裝置
+        zh-HK: 此裝置
+        pt-BR: Este dispositivo
+        ko: 이 기기
+        nl: Dit apparaat
+        sv: Den här enheten
+        uk: Цей пристрій
+        hi: यह डिवाइस
+        pl: To urządzenie
+        tr: Bu cihaz
+        ru: Это устройство
+        id: Perangkat ini
+      device_description:
+        en: Manage chats and worktrees stored on this computer
+        vi: Quản lý đoạn chat và worktree lưu trên máy tính này
+        es: Gestiona los chats y worktrees guardados en este equipo
+        fr: Gérez les discussions et les worktrees stockés sur cet ordinateur
+        ja: このコンピュータに保存されたチャットとワークツリーを管理します
+        de: Verwalte auf diesem Computer gespeicherte Chats und Worktrees
+        it: Gestisci le chat e i worktree archiviati su questo computer
+        zh-CN: 管理存储在此电脑上的聊天和工作树
+        zh-TW: 管理儲存在這部電腦上的聊天和工作樹
+        zh-HK: 管理儲存在這部電腦上的聊天和工作樹
+        pt-BR: Gerencie conversas e worktrees armazenados neste computador
+        ko: 이 컴퓨터에 저장된 채팅과 워크트리를 관리합니다
+        nl: Beheer chats en worktrees die op deze computer zijn opgeslagen
+        sv: Hantera chattar och worktrees som lagras på den här datorn
+        uk: Керуйте чатами та робочими деревами, збереженими на цьому комп’ютері
+        hi: इस कंप्यूटर पर संग्रहीत चैट और वर्कट्री प्रबंधित करें
+        pl: Zarządzaj czatami i drzewami roboczymi przechowywanymi na tym komputerze
+        tr: Bu bilgisayarda saklanan sohbetleri ve çalışma ağaçlarını yönetin
+        ru: Управляйте чатами и рабочими деревьями, сохранёнными на этом компьютере
+        id: Kelola chat dan worktree yang disimpan di komputer ini
+      used_by:
+        en: "%{size} used by VT Code"
+        vi: "%{size} được VT Code sử dụng"
+        es: "%{size} usados por VT Code"
+        fr: "%{size} utilisés par VT Code"
+        ja: "VT Code が使用中: %{size}"
+        de: "%{size} von VT Code verwendet"
+        it: "%{size} utilizzati da VT Code"
+        zh-CN: "VT Code 已使用 %{size}"
+        zh-TW: "VT Code 已使用 %{size}"
+        zh-HK: "VT Code 已使用 %{size}"
+        pt-BR: "%{size} usados por VT Code"
+        ko: "VT Code 사용량: %{size}"
+        nl: "%{size} gebruikt door VT Code"
+        sv: "%{size} används av VT Code"
+        uk: "%{size} використовується VT Code"
+        hi: "VT Code द्वारा %{size} प्रयुक्त"
+        pl: "%{size} używane przez VT Code"
+        tr: "VT Code tarafından kullanılan: %{size}"
+        ru: "VT Code использует: %{size}"
+        id: "%{size} digunakan oleh VT Code"
+      refresh:
+        en: Refresh
+        vi: Làm mới
+        es: Actualizar
+        fr: Actualiser
+        ja: 更新
+        de: Aktualisieren
+        it: Aggiorna
+        zh-CN: 刷新
+        zh-TW: 重新整理
+        zh-HK: 重新整理
+        pt-BR: Atualizar
+        ko: 새로 고침
+        nl: Vernieuwen
+        sv: Uppdatera
+        uk: Оновити
+        hi: रीफ़्रेश करें
+        pl: Odśwież
+        tr: Yenile
+        ru: Обновить
+        id: Muat ulang
+      loading:
+        en: Loading storage…
+        vi: Đang tải dung lượng…
+        es: Cargando almacenamiento…
+        fr: Chargement du stockage…
+        ja: ストレージを読み込み中…
+        de: Speicher wird geladen…
+        it: Caricamento spazio…
+        zh-CN: 正在加载存储空间…
+        zh-TW: 正在載入儲存空間…
+        zh-HK: 正在載入儲存空間…
+        pt-BR: Carregando armazenamento…
+        ko: 저장 공간을 불러오는 중…
+        nl: Opslag laden…
+        sv: Läser in lagring…
+        uk: Завантаження сховища…
+        hi: संग्रहण लोड हो रहा है…
+        pl: Wczytywanie pamięci…
+        tr: Depolama yükleniyor…
+        ru: Загрузка хранилища…
+        id: Memuat penyimpanan…
+      retry:
+        en: Retry
+        vi: Thử lại
+        es: Reintentar
+        fr: Réessayer
+        ja: 再試行
+        de: Erneut versuchen
+        it: Riprova
+        zh-CN: 重试
+        zh-TW: 重試
+        zh-HK: 重試
+        pt-BR: Tentar novamente
+        ko: 다시 시도
+        nl: Opnieuw proberen
+        sv: Försök igen
+        uk: Повторити
+        hi: पुनः प्रयास करें
+        pl: Ponów
+        tr: Yeniden dene
+        ru: Повторить
+        id: Coba lagi
+      sessions:
+        en: Sessions
+        vi: Phiên
+        es: Sesiones
+        fr: Sessions
+        ja: セッション
+        de: Sitzungen
+        it: Sessioni
+        zh-CN: 会话
+        zh-TW: 工作階段
+        zh-HK: 工作階段
+        pt-BR: Sessões
+        ko: 세션
+        nl: Sessies
+        sv: Sessioner
+        uk: Сеанси
+        hi: सत्र
+        pl: Sesje
+        tr: Oturumlar
+        ru: Сеансы
+        id: Sesi
+      worktrees:
+        en: Worktrees
+        vi: Worktree
+        es: Worktrees
+        fr: Worktrees
+        ja: ワークツリー
+        de: Worktrees
+        it: Worktree
+        zh-CN: 工作树
+        zh-TW: 工作樹
+        zh-HK: 工作樹
+        pt-BR: Worktrees
+        ko: 워크트리
+        nl: Worktrees
+        sv: Worktrees
+        uk: Робочі дерева
+        hi: वर्कट्री
+        pl: Drzewa robocze
+        tr: Çalışma ağaçları
+        ru: Рабочие деревья
+        id: Worktree
+      memory:
+        en: Session memory
+        vi: Bộ nhớ phiên
+        es: Memoria de sesiones
+        fr: Mémoire des sessions
+        ja: セッションメモリ
+        de: Sitzungsdaten
+        it: Memoria sessioni
+        zh-CN: 会话内存
+        zh-TW: 工作階段記憶體
+        zh-HK: 工作階段記憶體
+        pt-BR: Memória de sessão
+        ko: 세션 메모리
+        nl: Sessiegeheugen
+        sv: Sessionsminne
+        uk: Пам’ять сеансів
+        hi: सत्र मेमोरी
+        pl: Pamięć sesji
+        tr: Oturum belleği
+        ru: Память сеансов
+        id: Memori sesi
+      other:
+        en: Other
+        vi: Khác
+        es: Otros
+        fr: Autres
+        ja: その他
+        de: Sonstiges
+        it: Altro
+        zh-CN: 其他
+        zh-TW: 其他
+        zh-HK: 其他
+        pt-BR: Outros
+        ko: 기타
+        nl: Overig
+        sv: Övrigt
+        uk: Інше
+        hi: अन्य
+        pl: Inne
+        tr: Diğer
+        ru: Прочее
+        id: Lainnya
+      usage:
+        en: "Storage usage: %{breakdown}"
+        vi: "Mức sử dụng dung lượng: %{breakdown}"
+        es: "Uso de almacenamiento: %{breakdown}"
+        fr: "Utilisation du stockage: %{breakdown}"
+        ja: "ストレージ使用量: %{breakdown}"
+        de: "Speichernutzung: %{breakdown}"
+        it: "Utilizzo spazio: %{breakdown}"
+        zh-CN: "存储空间使用情况: %{breakdown}"
+        zh-TW: "儲存空間使用情形: %{breakdown}"
+        zh-HK: "儲存空間使用情形: %{breakdown}"
+        pt-BR: "Uso de armazenamento: %{breakdown}"
+        ko: "저장 공간 사용량: %{breakdown}"
+        nl: "Opslaggebruik: %{breakdown}"
+        sv: "Lagringsanvändning: %{breakdown}"
+        uk: "Використання сховища: %{breakdown}"
+        hi: "संग्रहण उपयोग: %{breakdown}"
+        pl: "Użycie pamięci: %{breakdown}"
+        tr: "Depolama kullanımı: %{breakdown}"
+        ru: "Использование хранилища: %{breakdown}"
+        id: "Penggunaan penyimpanan: %{breakdown}"
+      cleanup_title:
+        en: Clean up old chats
+        vi: Dọn dẹp đoạn chat cũ
+        es: Limpiar chats antiguos
+        fr: Nettoyer les anciennes discussions
+        ja: 古いチャットを整理
+        de: Alte Chats bereinigen
+        it: Pulisci le vecchie chat
+        zh-CN: 清理旧聊天
+        zh-TW: 清理舊聊天
+        zh-HK: 清理舊聊天
+        pt-BR: Limpar conversas antigas
+        ko: 오래된 채팅 정리
+        nl: Oude chats opruimen
+        sv: Rensa gamla chattar
+        uk: Очистити старі чати
+        hi: पुरानी चैट साफ़ करें
+        pl: Wyczyść stare czaty
+        tr: Eski sohbetleri temizle
+        ru: Очистить старые чаты
+        id: Bersihkan chat lama
+      cleanup_description:
+        en: Review chats before permanently deleting them
+        vi: Xem lại các đoạn chat trước khi xóa vĩnh viễn
+        es: Revisa los chats antes de eliminarlos definitivamente
+        fr: Vérifiez les discussions avant de les supprimer définitivement
+        ja: 完全に削除する前にチャットを確認します
+        de: Prüfe Chats, bevor du sie endgültig löschst
+        it: Rivedi le chat prima di eliminarle definitivamente
+        zh-CN: 在永久删除之前查看聊天
+        zh-TW: 在永久刪除之前檢視聊天
+        zh-HK: 在永久刪除之前檢視聊天
+        pt-BR: Revise as conversas antes de excluí-las permanentemente
+        ko: 영구적으로 삭제하기 전에 채팅을 검토합니다
+        nl: Controleer chats voordat je ze definitief verwijdert
+        sv: Granska chattar innan du tar bort dem permanent
+        uk: Перегляньте чати, перш ніж видалити їх назавжди
+        hi: स्थायी रूप से हटाने से पहले चैट की समीक्षा करें
+        pl: Przejrzyj czaty przed trwałym usunięciem
+        tr: Kalıcı olarak silmeden önce sohbetleri inceleyin
+        ru: Просмотрите чаты перед окончательным удалением
+        id: Tinjau chat sebelum menghapusnya secara permanen
+      review:
+        en: Review
+        vi: Xem lại
+        es: Revisar
+        fr: Vérifier
+        ja: 確認
+        de: Prüfen
+        it: Rivedi
+        zh-CN: 查看
+        zh-TW: 檢視
+        zh-HK: 檢視
+        pt-BR: Revisar
+        ko: 검토
+        nl: Controleren
+        sv: Granska
+        uk: Переглянути
+        hi: समीक्षा करें
+        pl: Przejrzyj
+        tr: İncele
+        ru: Просмотреть
+        id: Tinjau
+      worktrees_title:
+        en: Manage worktrees
+        vi: Quản lý worktree
+        es: Gestionar worktrees
+        fr: Gérer les worktrees
+        ja: ワークツリーを管理
+        de: Worktrees verwalten
+        it: Gestisci i worktree
+        zh-CN: 管理工作树
+        zh-TW: 管理工作樹
+        zh-HK: 管理工作樹
+        pt-BR: Gerenciar worktrees
+        ko: 워크트리 관리
+        nl: Worktrees beheren
+        sv: Hantera worktrees
+        uk: Керувати робочими деревами
+        hi: वर्कट्री प्रबंधित करें
+        pl: Zarządzaj drzewami roboczymi
+        tr: Çalışma ağaçlarını yönet
+        ru: Управление рабочими деревьями
+        id: Kelola worktree
+      worktrees_description:
+        en: Review working copies and remove the ones you no longer need
+        vi: Xem lại các bản sao làm việc và xóa những bản không còn cần
+        es: Revisa las copias de trabajo y elimina las que ya no necesites
+        fr: Vérifiez les copies de travail et supprimez celles dont vous n’avez plus besoin
+        ja: 作業コピーを確認し、不要なものを削除します
+        de: Prüfe Arbeitskopien und entferne die, die du nicht mehr brauchst
+        it: Rivedi le copie di lavoro e rimuovi quelle che non servono più
+        zh-CN: 查看工作副本并删除不再需要的副本
+        zh-TW: 檢視工作複本並刪除不再需要的複本
+        zh-HK: 檢視工作複本並刪除不再需要的複本
+        pt-BR: Revise as cópias de trabalho e remova as desnecessárias
+        ko: 작업 복사본을 검토하고 더 이상 필요 없는 항목을 제거합니다
+        nl: Controleer werkkopieën en verwijder wat je niet meer nodig hebt
+        sv: Granska arbetskopior och ta bort dem du inte längre behöver
+        uk: Перегляньте робочі копії та видаліть непотрібні
+        hi: कार्यशील प्रतियों की समीक्षा करें और अनावश्यक हटाएं
+        pl: Przejrzyj kopie robocze i usuń niepotrzebne
+        tr: Çalışma kopyalarını inceleyin ve artık gerek duymadıklarınızı kaldırın
+        ru: Просмотрите рабочие копии и удалите ненужные
+        id: Tinjau salinan kerja dan hapus yang tidak lagi diperlukan
+      manage:
+        en: Manage
+        vi: Quản lý
+        es: Gestionar
+        fr: Gérer
+        ja: 管理
+        de: Verwalten
+        it: Gestisci
+        zh-CN: 管理
+        zh-TW: 管理
+        zh-HK: 管理
+        pt-BR: Gerenciar
+        ko: 관리
+        nl: Beheren
+        sv: Hantera
+        uk: Керувати
+        hi: प्रबंधित करें
+        pl: Zarządzaj
+        tr: Yönet
+        ru: Управлять
+        id: Kelola
+      back:
+        en: Back
+        vi: Quay lại
+        es: Atrás
+        fr: Retour
+        ja: 戻る
+        de: Zurück
+        it: Indietro
+        zh-CN: 返回
+        zh-TW: 返回
+        zh-HK: 返回
+        pt-BR: Voltar
+        ko: 뒤로
+        nl: Terug
+        sv: Tillbaka
+        uk: Назад
+        hi: वापस
+        pl: Wstecz
+        tr: Geri
+        ru: Назад
+        id: Kembali
+      no_sessions:
+        en: No sessions to review
+        vi: Không có phiên nào để xem lại
+        es: No hay sesiones para revisar
+        fr: Aucune session à vérifier
+        ja: 確認するセッションがありません
+        de: Keine Sitzungen zu prüfen
+        it: Nessuna sessione da rivedere
+        zh-CN: 没有要查看的会话
+        zh-TW: 沒有要檢視的工作階段
+        zh-HK: 沒有要檢視的工作階段
+        pt-BR: Nenhuma sessão para revisar
+        ko: 검토할 세션이 없습니다
+        nl: Geen sessies om te controleren
+        sv: Inga sessioner att granska
+        uk: Немає сеансів для перегляду
+        hi: समीक्षा हेतु कोई सत्र नहीं
+        pl: Brak sesji do przejrzenia
+        tr: İncelenecek oturum yok
+        ru: Нет сеансов для просмотра
+        id: Tidak ada sesi untuk ditinjau
+      no_worktrees:
+        en: No worktrees
+        vi: Không có worktree
+        es: No hay worktrees
+        fr: Aucun worktree
+        ja: ワークツリーがありません
+        de: Keine Worktrees
+        it: Nessun worktree
+        zh-CN: 没有工作树
+        zh-TW: 沒有工作樹
+        zh-HK: 沒有工作樹
+        pt-BR: Nenhum worktree
+        ko: 워크트리가 없습니다
+        nl: Geen worktrees
+        sv: Inga worktrees
+        uk: Немає робочих дерев
+        hi: कोई वर्कट्री नहीं
+        pl: Brak drzew roboczych
+        tr: Çalışma ağacı yok
+        ru: Нет рабочих деревьев
+        id: Tidak ada worktree
+      current_session:
+        en: Current session
+        vi: Phiên hiện tại
+        es: Sesión actual
+        fr: Session active
+        ja: 現在のセッション
+        de: Aktuelle Sitzung
+        it: Sessione corrente
+        zh-CN: 当前会话
+        zh-TW: 目前的工作階段
+        zh-HK: 目前的工作階段
+        pt-BR: Sessão atual
+        ko: 현재 세션
+        nl: Huidige sessie
+        sv: Aktuell session
+        uk: Поточний сеанс
+        hi: वर्तमान सत्र
+        pl: Bieżąca sesja
+        tr: Geçerli oturum
+        ru: Текущий сеанс
+        id: Sesi saat ini
+      dirty:
+        en: Unsaved changes
+        vi: Thay đổi chưa lưu
+        es: Cambios sin guardar
+        fr: Modifications non enregistrées
+        ja: 未保存の変更
+        de: Ungespeicherte Änderungen
+        it: Modifiche non salvate
+        zh-CN: 未保存的更改
+        zh-TW: 未儲存的變更
+        zh-HK: 未儲存的變更
+        pt-BR: Alterações não salvas
+        ko: 저장되지 않은 변경 사항
+        nl: Niet-opgeslagen wijzigingen
+        sv: Osparade ändringar
+        uk: Незбережені зміни
+        hi: असहेजे हुए परिवर्तन
+        pl: Niezapisane zmiany
+        tr: Kaydedilmemiş değişiklikler
+        ru: Несохранённые изменения
+        id: Perubahan yang belum disimpan
+      delete:
+        en: Delete
+        vi: Xóa
+        es: Eliminar
+        fr: Supprimer
+        ja: 削除
+        de: Löschen
+        it: Elimina
+        zh-CN: 删除
+        zh-TW: 刪除
+        zh-HK: 刪除
+        pt-BR: Excluir
+        ko: 삭제
+        nl: Verwijderen
+        sv: Ta bort
+        uk: Видалити
+        hi: हटाएं
+        pl: Usuń
+        tr: Sil
+        ru: Удалить
+        id: Hapus
+      remove:
+        en: Remove
+        vi: Gỡ bỏ
+        es: Quitar
+        fr: Retirer
+        ja: 削除
+        de: Entfernen
+        it: Rimuovi
+        zh-CN: 移除
+        zh-TW: 移除
+        zh-HK: 移除
+        pt-BR: Remover
+        ko: 제거
+        nl: Verwijderen
+        sv: Ta bort
+        uk: Прибрати
+        hi: हटाएं
+        pl: Usuń
+        tr: Kaldır
+        ru: Убрать
+        id: Hapus
+      delete_title:
+        en: 'Delete "%{name}"?'
+        vi: 'Xóa "%{name}"?'
+        es: '¿Eliminar "%{name}"?'
+        fr: 'Supprimer « %{name} » ?'
+        ja: '"%{name}"を削除しますか?'
+        de: '"%{name}" löschen?'
+        it: 'Eliminare "%{name}"?'
+        zh-CN: '删除"%{name}"?'
+        zh-TW: '刪除"%{name}"?'
+        zh-HK: '刪除"%{name}"?'
+        pt-BR: 'Excluir "%{name}"?'
+        ko: '"%{name}"을(를) 삭제하시겠습니까?'
+        nl: '"%{name}" verwijderen?'
+        sv: 'Ta bort "%{name}"?'
+        uk: 'Видалити "%{name}"?'
+        hi: '"%{name}" हटाएं?'
+        pl: 'Usunąć "%{name}"?'
+        tr: '"%{name}" silinsin mi?'
+        ru: 'Удалить "%{name}"?'
+        id: 'Hapus "%{name}"?'
+      delete_detail:
+        en: This permanently deletes the chat archive. This cannot be undone.
+        vi: Thao tác này sẽ xóa vĩnh viễn kho lưu trữ đoạn chat. Không thể hoàn tác.
+        es: Esto elimina definitivamente el archivo del chat. No se puede deshacer.
+        fr: Ceci supprime définitivement l’archive de la discussion. Cette action est irréversible.
+        ja: チャットのアーカイブが完全に削除されます。この操作は取り消せません。
+        de: Dadurch wird das Chat-Archiv endgültig gelöscht. Dies kann nicht rückgängig gemacht werden.
+        it: Questo elimina definitivamente l’archivio della chat. L’operazione non può essere annullata.
+        zh-CN: 这将永久删除聊天存档。此操作无法撤销。
+        zh-TW: 這將永久刪除聊天存檔。此動作無法復原。
+        zh-HK: 這將永久刪除聊天存檔。此動作無法復原。
+        pt-BR: Isso exclui permanentemente o arquivo da conversa. Não é possível desfazer.
+        ko: 채팅 보관함이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.
+        nl: Hiermee wordt het chatarchief definitief verwijderd. Dit kan niet ongedaan worden gemaakt.
+        sv: Detta tar permanent bort chattarkivet. Detta kan inte ångras.
+        uk: Це назавжди видалить архів чату. Цю дію не можна скасувати.
+        hi: इससे चैट संग्रह स्थायी रूप से हट जाएगा। इसे पूर्ववत नहीं किया जा सकता।
+        pl: Spowoduje to trwałe usunięcie archiwum czatu. Tej operacji nie można cofnąć.
+        tr: Bu işlem sohbet arşivini kalıcı olarak siler. Bu işlem geri alınamaz.
+        ru: Архив чата будет удалён без возможности восстановления.
+        id: Tindakan ini menghapus arsip chat secara permanen. Tindakan ini tidak dapat dibatalkan.
+      remove_title:
+        en: 'Remove "%{name}"?'
+        vi: 'Gỡ bỏ "%{name}"?'
+        es: '¿Quitar "%{name}"?'
+        fr: 'Retirer « %{name} » ?'
+        ja: '"%{name}"を削除しますか?'
+        de: '"%{name}" entfernen?'
+        it: 'Rimuovere "%{name}"?'
+        zh-CN: '移除"%{name}"?'
+        zh-TW: '移除"%{name}"?'
+        zh-HK: '移除"%{name}"?'
+        pt-BR: 'Remover "%{name}"?'
+        ko: '"%{name}"을(를) 제거하시겠습니까?'
+        nl: '"%{name}" verwijderen?'
+        sv: 'Ta bort "%{name}"?'
+        uk: 'Прибрати "%{name}"?'
+        hi: '"%{name}" हटाएं?'
+        pl: 'Usunąć "%{name}"?'
+        tr: '"%{name}" kaldırılsın mı?'
+        ru: 'Убрать "%{name}"?'
+        id: 'Hapus "%{name}"?'
+      remove_detail:
+        en: This permanently deletes the working copy. This cannot be undone.
+        vi: Thao tác này sẽ xóa vĩnh viễn bản sao làm việc. Không thể hoàn tác.
+        es: Esto elimina definitivamente la copia de trabajo. No se puede deshacer.
+        fr: Ceci supprime définitivement la copie de travail. Cette action est irréversible.
+        ja: 作業コピーが完全に削除されます。この操作は取り消せません。
+        de: Dadurch wird die Arbeitskopie endgültig gelöscht. Dies kann nicht rückgängig gemacht werden.
+        it: Questo elimina definitivamente la copia di lavoro. L’operazione non può essere annullata.
+        zh-CN: 这将永久删除工作副本。此操作无法撤销。
+        zh-TW: 這將永久刪除工作複本。此動作無法復原。
+        zh-HK: 這將永久刪除工作複本。此動作無法復原。
+        pt-BR: Isso remove permanentemente a cópia de trabalho. Não é possível desfazer.
+        ko: 작업 복사본이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.
+        nl: Hiermee wordt de werkkopie definitief verwijderd. Dit kan niet ongedaan worden gemaakt.
+        sv: Detta tar permanent bort arbetskopian. Detta kan inte ångras.
+        uk: Це назавжди видалить робочу копію. Цю дію не можна скасувати.
+        hi: इससे कार्यशील प्रति स्थायी रूप से हट जाएगी। इसे पूर्ववत नहीं किया जा सकता।
+        pl: Spowoduje to trwałe usunięcie kopii roboczej. Tej operacji nie można cofnąć.
+        tr: Bu işlem çalışma kopyasını kalıcı olarak siler. Bu işlem geri alınamaz.
+        ru: Рабочая копия будет удалена без возможности восстановления.
+        id: Tindakan ini menghapus salinan kerja secara permanen. Tindakan ini tidak dapat dibatalkan.
+      remove_dirty_detail:
+        en: This permanently deletes the working copy, including uncommitted changes. This cannot be undone.
+        vi: Thao tác này sẽ xóa vĩnh viễn bản sao làm việc, kể cả các thay đổi chưa lưu. Không thể hoàn tác.
+        es: Esto elimina definitivamente la copia de trabajo, incluidos los cambios sin guardar. No se puede deshacer.
+        fr: Ceci supprime définitivement la copie de travail, y compris les modifications non enregistrées. Cette action est irréversible.
+        ja: 未保存の変更を含め、作業コピーが完全に削除されます。この操作は取り消せません。
+        de: Dadurch wird die Arbeitskopie einschließlich ungespeicherter Änderungen endgültig gelöscht. Dies kann nicht rückgängig gemacht werden.
+        it: Questo elimina definitivamente la copia di lavoro, comprese le modifiche non salvate. L’operazione non può essere annullata.
+        zh-CN: 这将永久删除工作副本，包括未保存的更改。此操作无法撤销。
+        zh-TW: 這將永久刪除工作複本，包括未儲存的變更。此動作無法復原。
+        zh-HK: 這將永久刪除工作複本，包括未儲存的變更。此動作無法復原。
+        pt-BR: Isso remove permanentemente a cópia de trabalho, incluindo alterações não salvas. Não é possível desfazer.
+        ko: 저장되지 않은 변경 사항을 포함하여 작업 복사본이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.
+        nl: Hiermee wordt de werkkopie definitief verwijderd, inclusief niet-opgeslagen wijzigingen. Dit kan niet ongedaan worden gemaakt.
+        sv: Detta tar permanent bort arbetskopian, inklusive osparade ändringar. Detta kan inte ångras.
+        uk: Це назавжди видалить робочу копію, включно з незбереженими змінами. Цю дію не можна скасувати.
+        hi: इससे असहेजे हुए परिवर्तनों सहित कार्यशील प्रति स्थायी रूप से हट जाएगी। इसे पूर्ववत नहीं किया जा सकता।
+        pl: Spowoduje to trwałe usunięcie kopii roboczej, w tym niezapisanych zmian. Tej operacji nie można cofnąć.
+        tr: Bu işlem, kaydedilmemiş değişiklikler dahil çalışma kopyasını kalıcı olarak siler. Bu işlem geri alınamaz.
+        ru: Рабочая копия будет удалена вместе с несохранёнными изменениями без возможности восстановления.
+        id: Tindakan ini menghapus salinan kerja secara permanen, termasuk perubahan yang belum disimpan. Tindakan ini tidak dapat dibatalkan.
+      cancel:
+        en: Cancel
+        vi: Hủy
+        es: Cancelar
+        fr: Annuler
+        ja: キャンセル
+        de: Abbrechen
+        it: Annulla
+        zh-CN: 取消
+        zh-TW: 取消
+        zh-HK: 取消
+        pt-BR: Cancelar
+        ko: 취소
+        nl: Annuleren
+        sv: Avbryt
+        uk: Скасувати
+        hi: रद्द करें
+        pl: Anuluj
+        tr: Vazgeç
+        ru: Отмена
+        id: Batal
     visual_style:
       en: Visual style
       sv: "Visuell stil"
@@ -360,6 +1182,27 @@ app:
         nl: "Meldingen"
         ru: "Уведомления"
         id: "Notifikasi"
+      storage:
+        en: Storage
+        vi: Dung lượng
+        es: Almacenamiento
+        fr: Stockage
+        ja: ストレージ
+        de: Speicher
+        it: Spazio
+        zh-CN: 存储空间
+        zh-TW: 儲存空間
+        zh-HK: 儲存空間
+        pt-BR: Armazenamento
+        ko: 저장 공간
+        nl: Opslag
+        sv: Lagring
+        uk: Сховище
+        hi: संग्रहण
+        pl: Pamięć
+        tr: Depolama
+        ru: Хранилище
+        id: Penyimpanan
     notifications:
       group:
         en: Notifications
@@ -954,6 +1797,69 @@ app:
         pl: Szukaj języków…
         hi: भाषाएँ खोजें…
     appearance:
+      contrast:
+        en: Contrast
+        vi: Độ tương phản
+        es: Contraste
+        fr: Contraste
+        ja: コントラスト
+        de: Kontrast
+        it: Contrasto
+        zh-CN: 对比度
+        zh-TW: 對比度
+        zh-HK: 對比度
+        pt-BR: Contraste
+        ko: 대비
+        nl: Contrast
+        sv: Kontrast
+        uk: Контрастність
+        hi: कंट्रास्ट
+        pl: Kontrast
+        tr: Kontrast
+        ru: Контрастность
+        id: Kontras
+      contrast_description:
+        en: Increase text contrast while preserving the selected theme
+        vi: Tăng độ tương phản chữ và giữ chủ đề đã chọn
+        es: Aumenta el contraste del texto y conserva el tema seleccionado
+        fr: Augmente le contraste du texte tout en conservant le thème choisi
+        ja: 選択したテーマを維持して文字のコントラストを高めます
+        de: Textkontrast erhöhen und das gewählte Design beibehalten
+        it: Aumenta il contrasto del testo mantenendo il tema selezionato
+        zh-CN: 保留所选主题并提高文字对比度
+        zh-TW: 保留選取的主題並提高文字對比度
+        zh-HK: 保留選取的主題並提高文字對比度
+        pt-BR: Aumenta o contraste do texto e mantém o tema selecionado
+        ko: 선택한 테마를 유지하면서 텍스트 대비를 높입니다
+        nl: Verhoog het tekstcontrast met behoud van het gekozen thema
+        sv: Öka textkontrasten och behåll det valda temat
+        uk: Збільшити контраст тексту зі збереженням вибраної теми
+        hi: चुनी गई थीम बनाए रखते हुए टेक्स्ट का कंट्रास्ट बढ़ाएँ
+        pl: Zwiększ kontrast tekstu, zachowując wybrany motyw
+        tr: Seçili temayı koruyarak metin kontrastını artırın
+        ru: Повысить контраст текста с сохранением выбранной темы
+        id: Tingkatkan kontras teks dengan mempertahankan tema yang dipilih
+      translucent_sidebar:
+        en: Translucent sidebar
+        vi: Thanh bên trong suốt
+        es: Barra lateral translúcida
+        fr: Barre latérale translucide
+        ja: 半透明のサイドバー
+        de: Transparente Seitenleiste
+        it: Barra laterale traslucida
+        zh-CN: 半透明侧边栏
+        zh-TW: 半透明側邊欄
+        zh-HK: 半透明側邊欄
+        pt-BR: Barra lateral translúcida
+        ko: 반투명 사이드바
+        nl: Doorschijnende zijbalk
+        sv: Halvgenomskinligt sidofält
+        uk: Напівпрозора бічна панель
+        hi: पारभासी साइडबार
+        pl: Półprzezroczysty pasek boczny
+        tr: Yarı saydam kenar çubuğu
+        ru: Полупрозрачная боковая панель
+        id: Bilah samping tembus cahaya
       separate_modes:
         en: Separate light and dark modes
         sv: "Separata ljusa och mörka lägen"

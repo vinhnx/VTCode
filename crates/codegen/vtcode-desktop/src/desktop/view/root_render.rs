@@ -55,7 +55,9 @@ impl Render for DesktopView {
             .flex_1()
             .min_h_0()
             .flex()
-            .bg(chrome_background(&colors))
+            .when(!self.preferences.translucent_sidebar || !navigation_visible, |pane| {
+                pane.bg(chrome_background(&colors))
+            })
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
@@ -91,7 +93,7 @@ impl Render for DesktopView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(colors.background)
+            .when(!self.preferences.translucent_sidebar || !navigation_visible, |body| body.bg(colors.background))
             .text_color(colors.foreground)
             .track_focus(&self.focus_handle)
             .key_context(key_context::DESKTOP)
@@ -177,7 +179,7 @@ impl Render for DesktopView {
             .when(self.session_change_allowed(None), |body| {
                 body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_options(window, cx)))
             })
-            .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
+            .on_action(cx.listener(|_, _: &CloseWindow, window, cx| menu_bar::close_or_hide(window, cx)))
             .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
             .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()))
             .child(self.render_toolbar(cx))

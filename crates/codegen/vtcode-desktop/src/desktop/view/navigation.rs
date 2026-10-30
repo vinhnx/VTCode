@@ -22,6 +22,7 @@ impl DesktopView {
             .items_center()
             .gap_2()
             .py_2()
+            .bg(chrome_background(&colors))
             .child(
                 div()
                     .id("nav-home-hover")
@@ -102,7 +103,7 @@ impl DesktopView {
                 .when(expanded, |navigation| navigation.child(self.render_sidebar(cx)))
         };
         navigation
-            .bg(chrome_background(&colors))
+            .when(!self.preferences.translucent_sidebar, |navigation| navigation.bg(chrome_background(&colors)))
             .with_animation("navigation-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
             .into_any_element()
     }

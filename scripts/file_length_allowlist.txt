@@ -44,7 +44,7 @@ docs/development/refactor-scan-2026-10-04.csv=2_500
 docs/development/refactor-scan-2026-10-04.md=1_200
 
 # Bundled locale data; grows as UI strings are added per language.
-crates/codegen/vtcode-desktop/locales/ui.yml=7_000
+crates/codegen/vtcode-desktop/locales/ui.yml=8_000
 
 # Sample skill asset shipped for ast-grep workflows and tests.
 crates/codegen/vtcode-skills/src/skills/assets/samples/ast-grep/SKILL.md=2_000

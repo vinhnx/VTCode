@@ -1,6 +1,129 @@
 use super::*;
 
 #[gpui_kit::test]
+fn menu_bar_setting_keeps_the_window_and_draft_when_closed(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.composer
+                .update(cx, |input, cx| input.set_value("keep this draft", window, cx));
+            view.settings_tab = super::super::settings::SettingsTab::VtCode;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("show-in-menu-bar").checked(), Some(false));
+        window.click("show-in-menu-bar", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("show-in-menu-bar").checked(), Some(true));
+        assert!(crate::desktop::preferences::Preferences::load().show_in_menu_bar);
+        view.update(cx, |view, cx| view.close_settings(window, cx));
+        window.render_frame(cx);
+        window.dispatch_action(Box::new(super::super::CloseWindow), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 1);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "keep this draft");
+        assert!(super::super::menu_bar::enabled(cx));
+    });
+}
+
+#[gpui_kit::test]
+fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        window.render_frame(cx);
+        view.read(cx).contrast_focus.clone().focus(window, cx);
+        window.press("right", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.contrast(), 1);
+        assert_eq!(crate::desktop::preferences::Preferences::load().contrast(), 1);
+        let slider_id = ("slider", view.read(cx).contrast_slider.entity_id());
+        assert_eq!(window.find(slider_id).role(), Some(gpui_kit::Role::Slider));
+        assert_eq!(window.find(slider_id).label(), Some("Contrast"));
+        let track = window.find("slider-bar-container").bounds();
+        window.click_at("slider-bar-container", point(track.size.width * 0.75, track.size.height / 2.), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).preferences.contrast() > 50, "pointer selection updates the preference");
+        let before = view.read(cx).preferences.contrast();
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).contrast_slider.read(cx).value().start(), f32::from(before + 1));
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(3000.))), cx);
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        window.render_frame(cx);
+        window.click("reset-appearance", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_entity(&view, |view, _| assert_eq!(view.preferences.contrast(), 0));
+    assert_eq!(crate::desktop::preferences::Preferences::load().contrast(), 0);
+}
+
+#[gpui_kit::test]
+fn contrast_survives_theme_change_and_restores_from_preferences(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let slider = view.read(cx).contrast_slider.clone();
+        slider.update(cx, |slider, cx| slider.set_value(67.0, window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.apply_theme("solarized-light".into(), window, cx));
+        assert_eq!(view.read(cx).preferences.contrast(), 67);
+        let changed_foreground = cx.theme().colors.foreground;
+        let _mode = super::super::themes::apply_with_contrast("solarized-light", 0, Some(window), cx);
+        assert_ne!(changed_foreground, cx.theme().colors.foreground);
+        view.update(cx, |view, cx| view.load_preferences(window, cx));
+        assert_eq!(cx.theme().colors.foreground, changed_foreground);
+        assert_eq!(crate::desktop::preferences::Preferences::load().contrast(), 67);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn translucent_sidebar_toggle_persists_and_reset_restores_opaque(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("translucent-sidebar").checked(), Some(false));
+        window.click("translucent-sidebar", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("translucent-sidebar").checked(), Some(true));
+        assert!(view.read(cx).preferences.translucent_sidebar);
+        assert!(crate::desktop::preferences::Preferences::load().translucent_sidebar);
+        let root = window.root::<gpui_kit::base::Root>().flatten().unwrap();
+        assert!(root.update(cx, |root, _| root.style().background.is_some()));
+        window.click("reset-appearance", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).preferences.translucent_sidebar);
+        assert!(!crate::desktop::preferences::Preferences::load().translucent_sidebar);
+        assert!(root.update(cx, |root, _| root.style().background.is_none()));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn partial_history_warnings_remain_visible_when_no_rows_were_restored(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
@@ -596,6 +719,8 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
                     workspace: "/project/alpha".into(),
                     completed: false,
                     resumable: true,
+                    size_bytes: 0,
+                    updated_at: None,
                 })
                 .collect();
             view.selected_session_id = Some("Second".into());
@@ -736,6 +861,8 @@ fn long_thread_titles_truncate_within_the_header_in_narrow_windows(cx: &mut Test
             workspace: workspace.path().display().to_string(),
             completed: false,
             resumable: true,
+            size_bytes: 0,
+            updated_at: None,
         }];
         view.selected_session_id = Some("narrow-thread".into());
         view.transcript.push(TranscriptItem::new(
@@ -772,6 +899,8 @@ fn zen_toggle_keeps_one_title_bar_slot_with_collapsed_panels(cx: &mut TestAppCon
             workspace: workspace.path().display().to_string(),
             completed: false,
             resumable: true,
+            size_bytes: 0,
+            updated_at: None,
         }];
         view.selected_session_id = Some("collapsed-thread".into());
         view.transcript.push(TranscriptItem::new(

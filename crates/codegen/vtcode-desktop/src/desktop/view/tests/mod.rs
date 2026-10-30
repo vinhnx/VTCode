@@ -272,6 +272,8 @@ fn swipe_history_fixture(
             workspace: workspace.display().to_string(),
             completed: true,
             resumable: true,
+            size_bytes: 0,
+            updated_at: None,
         })
         .collect::<Vec<_>>();
     view.update(cx, |view, _| {
@@ -337,6 +339,7 @@ mod sessions_startup;
 mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
+mod storage_settings;
 mod themes_transcript;
 mod turns_transcript;
 mod worktree_a11y;

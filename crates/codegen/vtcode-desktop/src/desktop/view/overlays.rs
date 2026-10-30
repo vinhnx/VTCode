@@ -66,6 +66,9 @@ impl DesktopView {
             self.settings_return_focus = window.focused(cx);
         }
         self.settings_open = true;
+        if self.settings_tab == settings::SettingsTab::Storage {
+            self.maybe_request_storage_summary(cx);
+        }
         let settings_view = cx.entity().clone();
         let close_view = settings_view.clone();
         let initial_focus = std::cell::Cell::new(true);

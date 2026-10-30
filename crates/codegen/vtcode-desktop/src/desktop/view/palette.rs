@@ -519,6 +519,9 @@ impl DesktopView {
             PaletteAction::SelectFont { target, family } => self.select_font(target, family, cx),
             PaletteAction::SelectSettingsTab(tab) => {
                 self.settings_tab = tab;
+                if tab == settings::SettingsTab::Storage {
+                    self.maybe_request_storage_summary(cx);
+                }
                 self.open_settings(window, cx);
                 self.settings_navigation_focus.focus(window, cx);
                 cx.notify();

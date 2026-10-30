@@ -1,4 +1,140 @@
 use super::{UiLanguage, UiLanguageOption};
+
+#[test]
+fn menu_bar_copy_is_localized_for_every_language() {
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.menu_bar.title",
+            "app.settings.menu_bar.description",
+            "app.settings.menu_bar.unavailable",
+            "app.settings.menu_bar.show",
+            "app.settings.menu_bar.quit",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            if language != UiLanguage::English {
+                assert_ne!(text, rust_i18n::t!(key, locale = "en").to_string(), "{locale}/{key}");
+            }
+        }
+    }
+}
+
+#[test]
+fn storage_copy_is_localized_for_every_language() {
+    const KEYS: [&str; 31] = [
+        "app.settings.tab.storage",
+        "app.settings.storage.device_title",
+        "app.settings.storage.device_description",
+        "app.settings.storage.used_by",
+        "app.settings.storage.refresh",
+        "app.settings.storage.loading",
+        "app.settings.storage.retry",
+        "app.settings.storage.sessions",
+        "app.settings.storage.worktrees",
+        "app.settings.storage.memory",
+        "app.settings.storage.other",
+        "app.settings.storage.usage",
+        "app.settings.storage.cleanup_title",
+        "app.settings.storage.cleanup_description",
+        "app.settings.storage.review",
+        "app.settings.storage.worktrees_title",
+        "app.settings.storage.worktrees_description",
+        "app.settings.storage.manage",
+        "app.settings.storage.back",
+        "app.settings.storage.no_sessions",
+        "app.settings.storage.no_worktrees",
+        "app.settings.storage.current_session",
+        "app.settings.storage.dirty",
+        "app.settings.storage.delete",
+        "app.settings.storage.remove",
+        "app.settings.storage.delete_title",
+        "app.settings.storage.delete_detail",
+        "app.settings.storage.remove_title",
+        "app.settings.storage.remove_detail",
+        "app.settings.storage.remove_dirty_detail",
+        "app.settings.storage.cancel",
+    ];
+    // Legitimate cognates: correct translations spelled like the English source.
+    const COGNATES: [(&str, &str); 7] = [
+        ("fr", "app.settings.storage.sessions"),
+        ("es", "app.settings.storage.worktrees"),
+        ("fr", "app.settings.storage.worktrees"),
+        ("de", "app.settings.storage.worktrees"),
+        ("pt-BR", "app.settings.storage.worktrees"),
+        ("nl", "app.settings.storage.worktrees"),
+        ("sv", "app.settings.storage.worktrees"),
+    ];
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in KEYS {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            if language != UiLanguage::English && !COGNATES.contains(&(locale, key)) {
+                assert_ne!(text, rust_i18n::t!(key, locale = "en").to_string(), "{locale}/{key}");
+            }
+        }
+    }
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        let used = rust_i18n::t!("app.settings.storage.used_by", locale = locale, size = "1 GB").to_string();
+        assert!(used.contains("1 GB"), "{locale}");
+        let title = rust_i18n::t!("app.settings.storage.delete_title", locale = locale, name = "demo").to_string();
+        assert!(title.contains("demo"), "{locale}");
+        let usage = rust_i18n::t!("app.settings.storage.usage", locale = locale, breakdown = "demo").to_string();
+        assert!(usage.contains("demo"), "{locale}");
+        let removed = rust_i18n::t!("app.settings.storage.remove_title", locale = locale, name = "demo").to_string();
+        assert!(removed.contains("demo"), "{locale}");
+    }
+}
+
+#[test]
+fn contrast_description_is_localized_for_every_language() {
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        let label = rust_i18n::t!("app.settings.appearance.contrast", locale = locale).to_string();
+        let description = rust_i18n::t!("app.settings.appearance.contrast_description", locale = locale).to_string();
+        assert!(!label.is_empty() && !description.is_empty(), "{locale}");
+        if language != UiLanguage::English {
+            assert_ne!(description, "Increase text contrast while preserving the selected theme", "{locale}");
+        }
+    }
+}
+
+#[test]
+fn translucent_sidebar_label_is_localized_for_every_language() {
+    for language in UiLanguage::ALL {
+        let value =
+            rust_i18n::t!("app.settings.appearance.translucent_sidebar", locale = language.locale()).to_string();
+        assert!(!value.is_empty());
+        if language != UiLanguage::English {
+            assert_ne!(value, "Translucent sidebar", "{}", language.locale());
+        }
+    }
+}
+
+#[test]
+fn license_settings_copy_is_translated_and_interpolates_errors() {
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.licenses.title",
+            "app.settings.licenses.description",
+            "app.settings.licenses.view",
+        ] {
+            let value = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!value.is_empty(), "{locale}/{key}");
+            if language != UiLanguage::English {
+                assert_ne!(value, rust_i18n::t!(key, locale = "en").to_string(), "{locale}/{key}");
+            }
+        }
+        let error = rust_i18n::t!("app.settings.licenses.error", locale = locale, error = "example-error").to_string();
+        assert!(error.contains("example-error"), "{locale}: {error}");
+        if language != UiLanguage::English {
+            assert_ne!(error, "Could not open third-party notices: example-error", "{locale}");
+        }
+    }
+}
 use gpui_kit::component::searchable_list::SearchableListItem;
 
 #[test]

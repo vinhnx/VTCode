@@ -359,6 +359,52 @@ fn reopening_after_last_window_closes_creates_one_new_window(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
+fn native_close_uses_menu_bar_mode_only_when_enabled(cx: &mut TestAppContext) {
+    let (initial, view) = open_desktop(cx);
+    drop(view);
+    cx.update_window(initial, |_, window, _| window.remove_window()).unwrap();
+    let window = cx.update(|cx| {
+        assert!(super::super::menu_bar::set_enabled(true, cx));
+        super::super::open_or_activate_main_window(cx, None).unwrap()
+    });
+    let mut visual = gpui_kit::VisualTestContext::from_window(window, cx);
+    assert!(!visual.simulate_close(), "enabled mode retains the window");
+    cx.update(|cx| assert!(super::super::menu_bar::set_enabled(false, cx)));
+    assert!(visual.simulate_close(), "disabled mode allows the window to close");
+}
+
+#[gpui_kit::test]
+fn menu_bar_mode_closes_one_window_when_another_remains(cx: &mut TestAppContext) {
+    let (first, _) = open_desktop(cx);
+    let (second, _) = open_desktop(cx);
+    cx.update(|cx| assert!(super::super::menu_bar::set_enabled(true, cx)));
+    cx.update_window(first, |_, window, cx| super::super::menu_bar::close_or_hide(window, cx))
+        .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(cx.windows(), vec![second]);
+        assert!(super::super::menu_bar::enabled(cx));
+    });
+}
+
+#[gpui_kit::test]
+fn reopening_restores_translucent_sidebar_root(cx: &mut TestAppContext) {
+    let (closed, view) = open_desktop(cx);
+    cx.update_window(closed, |_, window, cx| {
+        view.update(cx, |view, cx| view.set_translucent_sidebar(true, window, cx));
+        window.remove_window();
+    })
+    .unwrap();
+    drop(view);
+    let reopened = cx.update(|cx| super::super::open_or_activate_main_window(cx, None).unwrap());
+    cx.update_window(reopened, |_, window, cx| {
+        let root = window.root::<gpui_kit::base::Root>().flatten().unwrap();
+        assert!(root.update(cx, |root, _| root.style().background.is_some()));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn picker_completion_rejects_switching_after_turn_starts(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);
     let (view, cx) = cx.add_window_view(|window, cx| DesktopView::new(window, cx, ThemeMode::Light));
@@ -665,6 +711,8 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
                     workspace: std::env::temp_dir().display().to_string(),
                     completed: false,
                     resumable: true,
+                    size_bytes: 0,
+                    updated_at: None,
                 },
             );
             view.selected_session_id = Some("session-e".to_string());
@@ -747,6 +795,8 @@ fn malformed_catalog_responses_preserve_the_last_valid_sessions_and_models(cx: &
         workspace: std::env::temp_dir().display().to_string(),
         completed: true,
         resumable: true,
+        size_bytes: 0,
+        updated_at: None,
     };
     let model = vtcode_desktop_protocol::ModelInfo {
         provider: "openai".to_string(),

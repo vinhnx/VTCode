@@ -238,6 +238,29 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
     }
 }
 
+/// Apply an additional foreground contrast while rebuilding its dependent surfaces.
+pub(super) fn apply_with_contrast(id: &str, contrast: u8, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
+    let mode = apply_by_id(id, window, cx);
+    if contrast == 0 {
+        return mode;
+    }
+    Theme::update(cx, |theme| {
+        let colors = &mut theme.colors;
+        let target = if relative_luminance(colors.foreground) >= relative_luminance(colors.background) {
+            rgb(0xffffff).into()
+        } else {
+            rgb(0).into()
+        };
+        colors.foreground = mix(colors.foreground, target, f32::from(contrast.min(100)) / 100.0);
+        apply_filled_surfaces(colors);
+        apply_unified_hover_surface(colors, hover_surface(colors.background, colors.foreground));
+        colors.ring = accessible_focus_color(colors.primary, colors);
+        colors.caret = accessible_focus_color(colors.primary, colors);
+    });
+    cx.refresh_windows();
+    mode
+}
+
 fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
     Theme::change(theme.mode, window, cx);
     Theme::update(cx, |kit_theme| {
@@ -675,6 +698,31 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
         surfaces.panel
     };
     NavigationSurfaces { rail, panel }
+}
+
+/// Choose a translucent sidebar fill that remains readable over light and dark backdrops.
+pub(super) fn translucent_sidebar_surface(colors: &ThemeColor) -> Hsla {
+    let surface = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
+    let rgba = gpui_kit::Rgba::from(surface);
+    for step in 0..=20 {
+        let alpha = 0.80 + step as f32 * 0.01;
+        let readable = [0.0, 1.0].into_iter().all(|backdrop| {
+            let composite = Hsla::from(gpui_kit::Rgba {
+                r: rgba.r * alpha + backdrop * (1.0 - alpha),
+                g: rgba.g * alpha + backdrop * (1.0 - alpha),
+                b: rgba.b * alpha + backdrop * (1.0 - alpha),
+                a: 1.0,
+            });
+            contrast_ratio(colors.foreground, composite) >= 4.5
+                && contrast_ratio(colors.muted_foreground, composite) >= 4.5
+                && contrast_ratio(label_foreground(colors), composite) >= 4.5
+                && contrast_ratio(colors.primary, composite) >= 3.0
+        });
+        if readable {
+            return surface.opacity(alpha);
+        }
+    }
+    surface
 }
 
 /// WCAG contrast ratio between two colors.
