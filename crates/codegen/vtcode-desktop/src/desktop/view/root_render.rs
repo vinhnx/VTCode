@@ -47,17 +47,35 @@ impl Render for DesktopView {
                         .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
                 )
             });
-        let panes = div()
+        let content = div()
             .id("pane-root")
             .test_support()
             .p_3()
-            .gap_3()
             .flex_1()
             .min_h_0()
             .flex()
             .when(!self.preferences.translucent_sidebar || !navigation_visible, |pane| {
                 pane.bg(chrome_background(&colors))
             })
+            .child(workspace);
+        // Navigation sits beside this column instead of below the toolbar,
+        // so the sidebar spans the full window height.
+        let main = div()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .child(self.render_toolbar(cx))
+            .child(content)
+            .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)));
+        let mut body = div()
+            .size_full()
+            .flex()
+            .when(!self.preferences.translucent_sidebar || !navigation_visible, |body| body.bg(colors.background))
+            // The sidebar and inspector are siblings now, so the resize drag
+            // ends on the body to catch releases over either pane.
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
@@ -66,34 +84,7 @@ impl Render for DesktopView {
                         cx.notify();
                     }
                 }),
-            );
-        let panes = if navigation_visible {
-            let navigation = self.render_navigation(cx);
-            let sidebar = div().relative().h_full().flex_shrink_0();
-            let sidebar = if navigation_on_right {
-                sidebar
-                    .when(self.sidebar_open, |sidebar| {
-                        sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
-                    })
-                    .child(navigation)
-            } else {
-                sidebar.child(navigation).when(self.sidebar_open, |sidebar| {
-                    sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
-                })
-            };
-            if navigation_on_right {
-                panes.child(workspace).child(sidebar)
-            } else {
-                panes.child(sidebar).child(workspace)
-            }
-        } else {
-            panes.child(workspace)
-        };
-        let mut body = div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .when(!self.preferences.translucent_sidebar || !navigation_visible, |body| body.bg(colors.background))
+            )
             .text_color(colors.foreground)
             .track_focus(&self.focus_handle)
             .key_context(key_context::DESKTOP)
@@ -181,10 +172,29 @@ impl Render for DesktopView {
             })
             .on_action(cx.listener(|_, _: &CloseWindow, window, cx| menu_bar::close_or_hide(window, cx)))
             .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
-            .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()))
-            .child(self.render_toolbar(cx))
-            .child(panes)
-            .when(self.preferences.show_status_bar && !self.zen_mode, |body| body.child(self.render_status_bar(cx)));
+            .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()));
+        if navigation_visible {
+            let navigation = self.render_navigation(cx);
+            let sidebar = div().relative().h_full().flex_shrink_0();
+            let sidebar = if navigation_on_right {
+                sidebar
+                    .when(self.sidebar_open, |sidebar| {
+                        sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                    })
+                    .child(navigation)
+            } else {
+                sidebar.child(navigation).when(self.sidebar_open, |sidebar| {
+                    sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                })
+            };
+            if navigation_on_right {
+                body = body.child(main).child(sidebar);
+            } else {
+                body = body.child(sidebar).child(main);
+            }
+        } else {
+            body = body.child(main);
+        }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
         }

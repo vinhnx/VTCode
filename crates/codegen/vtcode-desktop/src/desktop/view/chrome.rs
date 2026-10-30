@@ -171,6 +171,7 @@ impl DesktopView {
             .flex_col()
             .gap_3()
             .p_4()
+            .when(!self.preferences.navigation_on_right(), |sidebar| sidebar.pt(px(TOOLBAR_HEIGHT)))
             .bg(if self.preferences.translucent_sidebar {
                 themes::translucent_sidebar_surface(&theme.colors)
             } else {
@@ -461,7 +462,7 @@ impl DesktopView {
         if self.zen_mode {
             return TitleBar::new()
                 .w_full()
-                .h(px(48.))
+                .h(px(TOOLBAR_HEIGHT))
                 .pr_3()
                 .border_b_0()
                 .bg(toolbar_surface)
@@ -498,7 +499,7 @@ impl DesktopView {
         // whole title bar is one band: same frame, same center line.
         TitleBar::new()
             .w_full()
-            .h(px(48.))
+            .h(px(TOOLBAR_HEIGHT))
             .pr_3()
             .border_b_0()
             .bg(toolbar_surface)

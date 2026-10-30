@@ -249,6 +249,11 @@ fn scale_row_height_for_ui_font(row_height: f32, font_size: Pixels) -> f32 {
 const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;
 const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
 
+/// Window toolbar height. Left-side navigation content starts below this
+/// line so it clears the macOS traffic lights while the sidebar surface
+/// itself still spans the full window height.
+const TOOLBAR_HEIGHT: f32 = 48.;
+
 actions!(
     desktop,
     [

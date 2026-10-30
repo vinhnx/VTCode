@@ -101,6 +101,7 @@ fn zen_mode_hides_navigation_and_keeps_one_toggle_slot(cx: &mut TestAppContext) 
         assert!(window.try_find("thread-header").is_some());
         assert!(window.try_find("composer-context").is_some());
         let expanded_panels_slot = window.find("zen-mode-toggle").bounds();
+        let expanded_panels_bar = window.find("title-bar").bounds();
 
         view.update(cx, |view, _| view.preferences.navigation_visible = Some(false));
         window.render_frame(cx);
@@ -109,9 +110,11 @@ fn zen_mode_hides_navigation_and_keeps_one_toggle_slot(cx: &mut TestAppContext) 
         assert!(window.try_find("top-utilities").is_some());
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
         let collapsed_nav_slot = window.find("zen-mode-toggle").bounds();
+        let collapsed_nav_bar = window.find("title-bar").bounds();
         assert_eq!(
-            collapsed_nav_slot.origin, expanded_panels_slot.origin,
-            "hiding navigation must not move the zen slot"
+            collapsed_nav_bar.right() - collapsed_nav_slot.right(),
+            expanded_panels_bar.right() - expanded_panels_slot.right(),
+            "hiding navigation must keep the zen toggle in its trailing slot"
         );
         let normal_frame = window.find("message-composer-frame").bounds();
         let normal_send = window.find("send-prompt").bounds();

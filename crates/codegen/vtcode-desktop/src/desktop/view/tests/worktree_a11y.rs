@@ -804,9 +804,12 @@ fn hidden_navigation_moves_its_actions_to_the_header_and_can_be_restored(cx: &mu
         assert!(window.try_find("top-new-thread").is_some());
         assert!(window.try_find("top-utilities").is_some());
         assert_eq!(window.find("toggle-sidebar").label(), Some("Show navigation"));
-        // The zen toggle keeps its single header slot even while both side
-        // panels are collapsed.
+        // The zen toggle keeps its single trailing header slot even while
+        // both side panels are collapsed. The full-height sidebar narrows the
+        // toolbar when restored, so the slot is its trailing inset, not its
+        // absolute origin.
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        let collapsed_bar = window.find("title-bar").bounds();
         let collapsed_slot = window.find("zen-mode-toggle").bounds();
 
         window.click("toggle-sidebar", cx);
@@ -815,10 +818,12 @@ fn hidden_navigation_moves_its_actions_to_the_header_and_can_be_restored(cx: &mu
         assert!(window.try_find("navigation-rail").is_some());
         assert!(window.try_find("project-thread-sidebar").is_some());
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
+        let restored_bar = window.find("title-bar").bounds();
+        let restored_slot = window.find("zen-mode-toggle").bounds();
         assert_eq!(
-            window.find("zen-mode-toggle").bounds().origin,
-            collapsed_slot.origin,
-            "restoring navigation must not move the zen slot"
+            restored_bar.right() - restored_slot.right(),
+            collapsed_bar.right() - collapsed_slot.right(),
+            "restoring navigation must keep the zen toggle in its trailing slot"
         );
     })
     .unwrap();

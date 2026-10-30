@@ -22,6 +22,7 @@ impl DesktopView {
             .items_center()
             .gap_2()
             .py_2()
+            .when(!navigation_on_right, |rail| rail.pt(px(TOOLBAR_HEIGHT)))
             .bg(chrome_background(&colors))
             .child(
                 div()

@@ -202,6 +202,59 @@ fn conversation_workspace_is_inset_below_the_toolbar_and_after_navigation(cx: &m
 }
 
 #[gpui_kit::test]
+fn navigation_sidebar_spans_the_full_window_height(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).preferences.navigation_on_right(), "navigation defaults to the right");
+        let viewport = window.viewport_size();
+        let toolbar = window.find("title-bar").bounds();
+        let navigation = window.find("primary-navigation").bounds();
+        let panel = window.find("project-thread-sidebar").bounds();
+        assert_eq!(navigation.top(), toolbar.top(), "navigation starts at the window top");
+        assert_eq!(navigation.bottom(), viewport.height, "navigation spans the full window height");
+        assert_eq!(panel.top(), toolbar.top(), "sidebar panel starts at the window top");
+        assert_eq!(panel.bottom(), viewport.height, "sidebar panel spans the full window height");
+
+        // The status bar lives in the content column, so showing it must not
+        // shorten the sidebar.
+        view.update(cx, |view, _| view.preferences.show_status_bar = true);
+        window.render_frame(cx);
+        let status = window.find("status-bar").bounds();
+        let navigation = window.find("primary-navigation").bounds();
+        assert_eq!(status.bottom(), viewport.height, "status bar anchors the content column bottom");
+        assert_eq!(navigation.top(), toolbar.top());
+        assert_eq!(navigation.bottom(), viewport.height);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn left_navigation_surface_stays_full_height_while_content_clears_the_toolbar(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| view.preferences.navigation_on_right = Some(false));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let toolbar = window.find("title-bar").bounds();
+        let navigation = window.find("primary-navigation").bounds();
+        let panel = window.find("project-thread-sidebar").bounds();
+        assert_eq!(navigation.top(), toolbar.top(), "left navigation surface stays full height");
+        assert_eq!(navigation.bottom(), viewport.height);
+        assert_eq!(panel.top(), toolbar.top());
+        assert!(
+            window.find("nav-home").bounds().top() >= toolbar.bottom(),
+            "rail buttons start below the traffic-light row"
+        );
+        assert!(
+            window.find("session-list").bounds().top() >= toolbar.bottom(),
+            "sidebar content starts below the traffic-light row"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
