@@ -179,6 +179,11 @@ impl DesktopView {
     /// names select the group, and anything else becomes a search query so
     /// the page shows the closest matches with a clear path back.
     pub(super) fn resolve_config_deep_link(&mut self, target: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if target.trim().eq_ignore_ascii_case(curated::CURATED_GROUP_NAME) {
+            self.config_page_group = Some(curated::CURATED_GROUP_NAME.to_string());
+            self.set_config_search_query("", window, cx);
+            return;
+        }
         let settings = self
             .cli_config_settings
             .as_ref()
@@ -377,6 +382,91 @@ impl DesktopView {
             focus.focus(window, cx);
         }
         cx.notify();
+    }
+
+    /// The layer file can be opened whenever a backend is attached outside a
+    /// settings write or reload.
+    pub(super) fn can_open_config_file(&self) -> bool {
+        self.backend.is_some()
+            && self.workspace.is_some()
+            && self.pending_workspace.is_none()
+            && !self.config_write_pending
+    }
+
+    /// Open the selected write-target layer file in the platform default
+    /// editor. The service resolves the path itself, so no filesystem path
+    /// crosses the protocol boundary.
+    pub(super) fn open_config_target_file(&mut self, cx: &mut Context<Self>) {
+        if !self.can_open_config_file() {
+            return;
+        }
+        let params = protocol::ConfigOpenFileParams { target: self.config_target };
+        if self.request(protocol::method::CONFIG_OPEN_FILE, json!(params)) {
+            self.status = "Opening vtcode.toml…".into();
+            self.error = None;
+        } else {
+            self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+        }
+        cx.notify();
+    }
+
+    /// Opening can create a never-written layer file, so refresh the catalog
+    /// versions that guard the next write.
+    pub(super) fn handle_config_open_file_response(&mut self, cx: &mut Context<Self>) {
+        self.status = "Opened vtcode.toml in the default editor.".into();
+        if !self.request(protocol::method::CONFIG_SETTINGS_READ, json!({})) {
+            self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+        }
+        cx.notify();
+    }
+
+    /// Flip network egress between allow-all and allowlist-only. The toggle
+    /// is only offered for an enabled workspace-write sandbox.
+    pub(super) fn set_network_access(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        self.save_cli_config_value(
+            curated::NETWORK_POLICY_PATH.to_string(),
+            curated::network_toggle_value(enabled),
+            cx,
+        );
+    }
+
+    /// Show or hide one reasoning effort level in model controls. The stored
+    /// preference stays in canonical order no matter which switch moved.
+    pub(super) fn set_available_effort(&mut self, level: &str, enabled: bool, cx: &mut Context<Self>) {
+        let mut visible = self.preferences.available_efforts();
+        if enabled {
+            if !visible.iter().any(|entry| entry == level) {
+                visible.push(level.to_string());
+            }
+        } else {
+            visible.retain(|entry| entry != level);
+        }
+        let allowed = vtcode_commons::reasoning::ReasoningEffortLevel::allowed_values();
+        visible.sort_by_key(|entry| allowed.iter().position(|known| known == entry).unwrap_or(usize::MAX));
+        visible.dedup();
+        self.preferences.available_efforts = Some(visible);
+        self.preferences.save();
+        cx.notify();
+    }
+
+    /// Effort levels currently shown in model controls: the saved selection
+    /// intersected with route support, plus the active effort when supported.
+    pub(super) fn visible_effort_levels(&self) -> Vec<String> {
+        let Some(options) = self.session_options() else {
+            return Vec::new();
+        };
+        curated::visible_effort_levels(
+            &options.supported_efforts,
+            &self.preferences.available_efforts(),
+            &options.reasoning_effort,
+        )
+    }
+
+    pub(super) fn approval_policy_label(&self) -> String {
+        self.session_options().map_or_else(
+            || "Unavailable".to_string(),
+            |options| composer_actions::permission_mode_label(options.permission_mode).to_string(),
+        )
     }
 
     pub(super) fn handle_cli_config_write_response(&mut self, result: Value, cx: &mut Context<Self>) {

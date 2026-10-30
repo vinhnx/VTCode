@@ -34,6 +34,12 @@ pub(super) async fn write(
         .context("CLI config write worker stopped")?
 }
 
+pub(super) async fn open_file(workspace: PathBuf, target: protocol::ConfigTarget) -> Result<()> {
+    tokio::task::spawn_blocking(move || open_file_blocking(&workspace, target))
+        .await
+        .context("CLI config open worker stopped")?
+}
+
 fn read_blocking(workspace: &Path) -> Result<protocol::ConfigSettingsSnapshot> {
     let response = ConfigService::read(ConfigReadRequest {
         workspace: workspace.to_path_buf(),
@@ -319,6 +325,58 @@ fn core_target(target: protocol::ConfigTarget) -> ConfigWriteTarget {
         protocol::ConfigTarget::User => ConfigWriteTarget::User,
         protocol::ConfigTarget::Workspace => ConfigWriteTarget::Workspace,
         protocol::ConfigTarget::Project => ConfigWriteTarget::Project,
+    }
+}
+
+/// Resolve the selected layer through the shared writer path (never a client
+/// path), create the file when the layer has never been written, and open it
+/// with the platform default handler without a shell.
+fn open_file_blocking(workspace: &Path, target: protocol::ConfigTarget) -> Result<()> {
+    let path = ConfigService::resolve_target_path(workspace, &core_target(target))
+        .context("Failed to resolve the configuration file for the selected layer")?;
+    let path = ensure_open_file(&path)?;
+    let output = std::process::Command::new("/usr/bin/open")
+        .arg("-t")
+        .arg(&path)
+        .output()
+        .context("Could not launch the editor")?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let detail: String = String::from_utf8_lossy(&output.stderr)
+        .chars()
+        .filter(|character| !character.is_control() || *character == ' ')
+        .take(300)
+        .collect();
+    if detail.trim().is_empty() {
+        bail!("Could not open the configuration file in the default editor");
+    }
+    bail!("Could not open the configuration file in the default editor: {}", detail.trim());
+}
+
+/// Create the resolved layer file (plus parents) when absent. Uses
+/// `symlink_metadata` plus `create_new` so creation never writes through a
+/// symlink and never clobbers a file that raced into existence.
+fn ensure_open_file(path: &Path) -> Result<PathBuf> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.is_dir() {
+                bail!("The configuration path is a directory, not a file");
+            }
+            Ok(path.to_path_buf())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
+            }
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .with_context(|| format!("Failed to create {}", path.display()))?;
+            Ok(path.to_path_buf())
+        }
+        Err(error) => Err(error).with_context(|| format!("Failed to inspect {}", path.display())),
     }
 }
 
@@ -739,6 +797,46 @@ mod tests {
             Some("ReasoningEffortLevel | null"),
             &["low".into(), "high".into()]
         ));
+    }
+
+    #[test]
+    fn open_target_creates_a_missing_layer_file_but_preserves_existing_content() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let missing = directory.path().join("nested").join("vtcode.toml");
+        let created = super::ensure_open_file(&missing).expect("create missing layer file");
+        assert_eq!(created, missing);
+        assert_eq!(std::fs::read_to_string(&missing).expect("read created file"), "");
+
+        std::fs::write(&missing, "agent.provider = \"openai\"\n").expect("seed layer file");
+        let kept = super::ensure_open_file(&missing).expect("keep existing layer file");
+        assert_eq!(kept, missing);
+        assert_eq!(std::fs::read_to_string(&missing).expect("read kept file"), "agent.provider = \"openai\"\n");
+    }
+
+    #[test]
+    fn open_target_rejects_a_directory_at_the_layer_path() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let nested = directory.path().join("vtcode.toml");
+        std::fs::create_dir(&nested).expect("seed directory");
+        let error = super::ensure_open_file(&nested).expect_err("directories are not openable");
+        assert!(error.to_string().contains("directory"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_target_never_writes_through_a_symlinked_layer_file() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let target = directory.path().join("real.toml");
+        std::fs::write(&target, "agent.provider = \"openai\"\n").expect("seed link target");
+        let link = directory.path().join("vtcode.toml");
+        std::os::unix::fs::symlink(&target, &link).expect("seed symlink");
+        let kept = super::ensure_open_file(&link).expect("symlinks open as-is");
+        assert_eq!(kept, link);
+        assert_eq!(
+            std::fs::read_to_string(&target).expect("read link target"),
+            "agent.provider = \"openai\"\n",
+            "creation must not write through the link"
+        );
     }
 
     #[test]

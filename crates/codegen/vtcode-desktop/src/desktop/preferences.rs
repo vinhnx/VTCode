@@ -429,6 +429,9 @@ pub(super) struct Preferences {
     pub recent_workspaces: Vec<String>,
     /// Explicit confirmation choices, retained alongside recent workspace paths.
     pub workspace_permissions: std::collections::BTreeMap<String, vtcode_desktop_protocol::PermissionMode>,
+    /// Reasoning effort levels shown in model controls. Missing means every
+    /// allowed level; unknown entries are ignored on read.
+    pub available_efforts: Option<Vec<String>>,
     /// Last inspector state, retained for compatibility; launch always starts collapsed.
     pub inspector_open: Option<bool>,
     /// Place the project and thread navigation on the right side of the workspace.
@@ -591,6 +594,20 @@ impl Preferences {
 
     pub(super) fn set_window_maximized(&mut self, maximized: bool) {
         self.window_maximized = Some(maximized);
+    }
+
+    /// Effort levels shown in model controls, in canonical order. Unknown
+    /// saved entries are dropped; a missing preference shows every level.
+    pub(super) fn available_efforts(&self) -> Vec<String> {
+        let allowed = vtcode_commons::reasoning::ReasoningEffortLevel::allowed_values();
+        match self.available_efforts.as_ref() {
+            None => allowed.iter().map(ToString::to_string).collect(),
+            Some(selected) => allowed
+                .iter()
+                .filter(|level| selected.iter().any(|entry| entry == *level))
+                .map(ToString::to_string)
+                .collect(),
+        }
     }
 
     /// Record a workspace as most-recently-used.

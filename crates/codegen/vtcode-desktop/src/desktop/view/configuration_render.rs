@@ -125,118 +125,109 @@ impl DesktopView {
             );
         }
 
-        let body = match (self.cli_config_settings.as_ref(), selected.as_ref()) {
-            (None, _) if self.workspace.is_none() => self.render_config_content_frame(centered_empty_state(
-                "Choose a workspace",
-                "Choose a workspace to browse CLI configuration settings.",
-                IconName::Folder,
-            )),
-            (None, _) => self.render_config_content_frame(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap_3()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(colors.muted_foreground)
-                            .child("Loading shared CLI settings…"),
-                    )
-                    .child(skeleton_line("config-loading-line-one", px(320.), cx))
-                    .child(skeleton_line("config-loading-line-two", px(240.), cx)),
-            ),
-            (Some(_), None) => self.render_config_content_frame(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(
-                        centered_empty_state(
-                            "No matching settings",
-                            "Try a different search or browse another group.",
-                            IconName::Search,
-                        )
+        let curated_selected = terms.is_empty()
+            && self.cli_config_settings.is_some()
+            && self
+                .config_page_group
+                .as_deref()
+                .is_none_or(|group| group == curated::CURATED_GROUP_NAME);
+        let body = if curated_selected {
+            let rail = self.render_config_rail(&groups, Some(curated::CURATED_GROUP_NAME), true, cx);
+            let content = self.render_config_content_frame(self.render_curated_configuration(cx));
+            div()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .flex()
+                .gap_4()
+                .child(rail)
+                .child(content)
+                .into_any_element()
+        } else {
+            match (self.cli_config_settings.as_ref(), selected.as_ref()) {
+                (None, _) if self.workspace.is_none() => self.render_config_content_frame(centered_empty_state(
+                    "Choose a workspace",
+                    "Choose a workspace to browse CLI configuration settings.",
+                    IconName::Folder,
+                )),
+                (None, _) => self.render_config_content_frame(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
                         .gap_3()
                         .child(
-                            desktop_button("clear-config-search")
-                                .label("Clear search")
-                                .ghost()
-                                .small()
-                                .on_click(
-                                    cx.listener(|view, _, window, cx| view.set_config_search_query("", window, cx)),
-                                ),
-                        ),
-                    )
-                    .child(self.render_config_page_footer(cx)),
-            ),
-            (Some(_), Some(name)) => {
-                let mut rail = div()
-                    .id("config-rail")
-                    .lock_scroll_axis()
-                    .test_support()
-                    .role(gpui_kit::Role::Navigation)
-                    .aria_label("Configuration groups")
-                    .w_56()
-                    .flex_shrink_0()
-                    .min_h_0()
-                    .track_scroll(&self.config_rail_scroll)
-                    .overflow_y_scroll()
-                    .vertical_scrollbar(&self.config_rail_scroll)
-                    .flex()
-                    .flex_col()
-                    .gap_1();
-                for (group, settings) in &groups {
-                    let group = group.clone();
-                    let active = Some(&group) == selected.as_ref();
-                    rail = rail.child(
-                        desktop_button(format!("config-category-{group}"))
-                            .label(format!("{group} ({})", settings.len()))
-                            .small()
-                            .w_full()
-                            .justify_start()
-                            .desktop_selected(active, &colors)
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.config_page_group = Some(group.clone());
-                                cx.notify();
-                            })),
-                    );
-                }
-                let mut list = div().flex().flex_col();
-                if let Some(settings) = groups.get(name) {
-                    for (index, setting) in settings.iter().enumerate() {
-                        if index > 0 {
-                            list = list.child(row_divider(&colors));
+                            div()
+                                .text_sm()
+                                .text_color(colors.muted_foreground)
+                                .child("Loading shared CLI settings…"),
+                        )
+                        .child(skeleton_line("config-loading-line-one", px(320.), cx))
+                        .child(skeleton_line("config-loading-line-two", px(240.), cx)),
+                ),
+                (Some(_), None) => self.render_config_content_frame(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            centered_empty_state(
+                                "No matching settings",
+                                "Try a different search or browse another group.",
+                                IconName::Search,
+                            )
+                            .gap_3()
+                            .child(
+                                desktop_button("clear-config-search")
+                                    .label("Clear search")
+                                    .ghost()
+                                    .small()
+                                    .on_click(
+                                        cx.listener(|view, _, window, cx| view.set_config_search_query("", window, cx)),
+                                    ),
+                            ),
+                        )
+                        .child(self.render_config_page_footer(cx)),
+                ),
+                (Some(_), Some(name)) => {
+                    let rail = self.render_config_rail(&groups, selected.as_deref(), terms.is_empty(), cx);
+                    let mut list = div().flex().flex_col();
+                    if let Some(settings) = groups.get(name) {
+                        for (index, setting) in settings.iter().enumerate() {
+                            if index > 0 {
+                                list = list.child(row_divider(&colors));
+                            }
+                            list = list.child(self.render_config_setting_row(setting, cx));
                         }
-                        list = list.child(self.render_config_setting_row(setting, cx));
                     }
+                    let description = groups
+                        .get(name)
+                        .and_then(|settings| settings.iter().find_map(|setting| setting.group_description.as_ref()));
+                    let mut group = div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.clone()));
+                    if let Some(description) = description {
+                        group =
+                            group.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
+                    }
+                    group = group.child(list);
+                    group = group.child(self.render_config_page_footer(cx));
+                    let content = self.render_config_content_frame(group);
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .min_w_0()
+                        .flex()
+                        .gap_4()
+                        .child(rail)
+                        .child(content)
+                        .into_any_element()
                 }
-                let description = groups
-                    .get(name)
-                    .and_then(|settings| settings.iter().find_map(|setting| setting.group_description.as_ref()));
-                let mut group = div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.clone()));
-                if let Some(description) = description {
-                    group = group.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
-                }
-                group = group.child(list);
-                group = group.child(self.render_config_page_footer(cx));
-                let content = self.render_config_content_frame(group);
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .flex()
-                    .gap_4()
-                    .child(rail)
-                    .child(content)
-                    .into_any_element()
             }
         };
 
@@ -263,6 +254,252 @@ impl DesktopView {
             panel = panel.child(self.render_cli_config_editor(cx));
         }
         panel.into_any_element()
+    }
+
+    /// Group navigation rail shared by the curated overview and the catalog.
+    /// The curated entry leads while the catalog is unfiltered.
+    fn render_config_rail(
+        &self,
+        groups: &std::collections::BTreeMap<String, Vec<&protocol::ConfigSetting>>,
+        selected: Option<&str>,
+        show_curated_entry: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let colors = cx.theme().colors;
+        let mut rail = div()
+            .id("config-rail")
+            .lock_scroll_axis()
+            .test_support()
+            .role(gpui_kit::Role::Navigation)
+            .aria_label("Configuration groups")
+            .w_56()
+            .flex_shrink_0()
+            .min_h_0()
+            .track_scroll(&self.config_rail_scroll)
+            .overflow_y_scroll()
+            .vertical_scrollbar(&self.config_rail_scroll)
+            .flex()
+            .flex_col()
+            .gap_1();
+        if show_curated_entry {
+            let active = selected == Some(curated::CURATED_GROUP_NAME);
+            rail = rail.child(
+                desktop_button("config-category-curated")
+                    .label(curated::CURATED_GROUP_NAME)
+                    .small()
+                    .w_full()
+                    .justify_start()
+                    .desktop_selected(active, &colors)
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        view.config_page_group = Some(curated::CURATED_GROUP_NAME.to_string());
+                        cx.notify();
+                    })),
+            );
+        }
+        for (group, settings) in groups {
+            let group = group.clone();
+            let active = selected == Some(group.as_str());
+            rail = rail.child(
+                desktop_button(format!("config-category-{group}"))
+                    .label(format!("{group} ({})", settings.len()))
+                    .small()
+                    .w_full()
+                    .justify_start()
+                    .desktop_selected(active, &colors)
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.config_page_group = Some(group.clone());
+                        cx.notify();
+                    })),
+            );
+        }
+        rail.into_any_element()
+    }
+
+    /// Curated overview: the settings most users change, with the layer file
+    /// one click away. The catalog groups stay the complete browser beneath.
+    fn render_curated_configuration(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(self.render_curated_header(cx))
+            .child(self.render_curated_overview_card(cx))
+            .child(
+                div()
+                    .text_lg()
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                    .child("Model features"),
+            )
+            .child(self.render_curated_efforts_card(cx))
+            .child(self.render_config_page_footer(cx))
+            .into_any_element()
+    }
+
+    fn render_curated_header(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let can_open = self.can_open_config_file();
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                            .child("Configuration"),
+                    )
+                    .child(row_description("Choose how VT Code works on your tasks", &colors)),
+            )
+            .child(
+                desktop_button("open-config-file")
+                    .label("Open vtcode.toml")
+                    .icon(IconName::ExternalLink)
+                    .accessibility_label("Open the selected configuration file in the default editor")
+                    .ghost()
+                    .small()
+                    .desktop_disabled(!can_open)
+                    .on_click(cx.listener(|view, _, _, cx| view.open_config_target_file(cx))),
+            )
+            .into_any_element()
+    }
+
+    fn render_curated_overview_card(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let mut card = GroupBox::new().flex_shrink_0().fill();
+        for (index, row) in curated::curated_rows().iter().enumerate() {
+            if index > 0 {
+                card = card.child(row_divider(&colors));
+            }
+            card = card.child(self.render_curated_row(row, cx));
+        }
+        accessible_group_box("curated-configuration-group", "Configuration overview", card)
+    }
+
+    fn render_curated_row(&self, row: &curated::CuratedRow, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        match row.kind {
+            curated::CuratedRowKind::PermissionPolicy => {
+                let label = self.approval_policy_label();
+                let control = desktop_button(format!("curated-{}", row.id))
+                    .label(label.clone())
+                    .accessibility_label(format!("{}: {label}", row.title))
+                    .dropdown_caret(true)
+                    .ghost()
+                    .small()
+                    .desktop_disabled(!self.can_select_session_options())
+                    .on_click(cx.listener(|view, _, window, cx| view.open_permissions(window, cx)));
+                settings_row(row.title, row.description, control, &colors).into_any_element()
+            }
+            curated::CuratedRowKind::ConfigValue => {
+                let path = row.path.unwrap_or_default();
+                let setting = curated::find_setting(self.cli_config_settings.as_ref(), path);
+                let value = setting.map_or_else(|| "Unavailable".to_string(), curated::setting_display_value);
+                let editable = setting.is_some_and(|setting| setting.editable) && self.can_edit_cli_settings();
+                let path = path.to_string();
+                let control = desktop_button(format!("curated-{}", row.id))
+                    .label(value.clone())
+                    .accessibility_label(format!("{}: {value}", row.title))
+                    .dropdown_caret(true)
+                    .ghost()
+                    .small()
+                    .desktop_disabled(!editable)
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        view.open_cli_config_editor(path.clone(), window, cx);
+                    }));
+                settings_row(row.title, row.description, control, &colors).into_any_element()
+            }
+            curated::CuratedRowKind::NetworkToggle => {
+                let snapshot = self.cli_config_settings.as_ref();
+                let enabled = curated::network_access_enabled(snapshot);
+                let blocked = curated::network_policy_blocked(snapshot);
+                let editable = curated::find_setting(snapshot, curated::NETWORK_POLICY_PATH)
+                    .is_some_and(|setting| setting.editable);
+                let available =
+                    curated::network_toggle_available(snapshot) && self.can_edit_cli_settings() && editable && !blocked;
+                let control = gpui_kit::component::switch::Switch::new(format!("curated-{}", row.id))
+                    .small()
+                    .checked(enabled)
+                    .disabled(!available)
+                    .accessibility_label(row.title)
+                    .tooltip(if blocked {
+                        "Blocked — change in the catalog".to_string()
+                    } else if enabled {
+                        "Turn off".to_string()
+                    } else {
+                        "Turn on".to_string()
+                    })
+                    .on_click(cx.listener(move |view, enabled, _, cx| {
+                        view.set_network_access(*enabled, cx);
+                    }));
+                settings_row(row.title, row.description, control, &colors).into_any_element()
+            }
+            curated::CuratedRowKind::BoolToggle => {
+                let path = row.path.unwrap_or_default();
+                let setting = curated::find_setting(self.cli_config_settings.as_ref(), path);
+                let enabled = setting.and_then(|setting| setting.value.as_bool()).unwrap_or(false);
+                let available = setting.is_some_and(|setting| setting.editable) && self.can_edit_cli_settings();
+                let path = path.to_string();
+                let control = gpui_kit::component::switch::Switch::new(format!("curated-{}", row.id))
+                    .small()
+                    .checked(enabled)
+                    .disabled(!available)
+                    .accessibility_label(row.title)
+                    .tooltip(if enabled {
+                        "Turn off".to_string()
+                    } else {
+                        "Turn on".to_string()
+                    })
+                    .on_click(cx.listener(move |view, enabled, _, cx| {
+                        view.save_cli_config_value(path.clone(), Value::Bool(*enabled), cx);
+                    }));
+                settings_row(row.title, row.description, control, &colors).into_any_element()
+            }
+        }
+    }
+
+    fn render_curated_efforts_card(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let selected = self.preferences.available_efforts();
+        let mut card = settings_group_box("Available reasoning efforts", &colors).child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .child(div().flex_1().min_w_0().child(row_description(
+                    "Choose which reasoning effort levels appear in model controls. Availability varies by model.",
+                    &colors,
+                )))
+                .child(Tag::secondary().outline().small().child(format!("{} selected", selected.len()))),
+        );
+        for level in vtcode_commons::reasoning::ReasoningEffortLevel::allowed_values() {
+            let enabled = selected.iter().any(|entry| entry.as_str() == *level);
+            let label = curated::humanize_config_value(level);
+            let level = level.to_string();
+            let switch = gpui_kit::component::switch::Switch::new(format!("curated-effort-{level}"))
+                .small()
+                .checked(enabled)
+                .accessibility_label(format!("{label} effort"))
+                .tooltip(if enabled {
+                    "Hide from model controls".to_string()
+                } else {
+                    "Show in model controls".to_string()
+                })
+                .on_click(cx.listener(move |view, enabled, _, cx| {
+                    view.set_available_effort(level.as_str(), *enabled, cx);
+                }));
+            card = card.child(row_divider(&colors));
+            card = card.child(settings_row(label, "", switch, &colors));
+        }
+        accessible_group_box("curated-efforts-group", "Available reasoning efforts", card)
     }
 
     /// Shared scroll frame for the configuration content column: one
@@ -367,6 +604,9 @@ impl DesktopView {
             "Saving uses VT Code's validated configuration writer and reloads the local CLI service. Higher-precedence settings can still override the selected layer."
                 .to_string(),
         ];
+        if let Some(info) = self.service_info.as_ref() {
+            notes.insert(0, format!("Current version: {}", info.server_version));
+        }
         if let Some(snapshot) = self.cli_config_settings.as_ref() {
             if snapshot.omitted_sensitive > 0 {
                 notes.push(

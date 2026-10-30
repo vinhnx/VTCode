@@ -321,6 +321,7 @@ enum MousePhase {
 
 mod activity_settings;
 mod config_sessions;
+mod curated_config;
 mod files_webmcp;
 mod inspector_appearance;
 mod mcp_app;

@@ -92,6 +92,7 @@ mod composer_controls;
 mod composer_render;
 mod configuration;
 mod configuration_render;
+mod curated;
 mod files_panel;
 mod inspector_changes;
 mod inspector_panels;

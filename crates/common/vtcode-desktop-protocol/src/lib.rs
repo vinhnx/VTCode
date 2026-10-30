@@ -10,7 +10,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 21 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 22 };
 
 /// A turn was rejected before delivery because a startup interaction is pending.
 pub const STARTUP_INTERACTION_PENDING_ERROR: i32 = -32001;
@@ -405,6 +405,14 @@ pub struct ConfigSettingsWriteResult {
     pub written_layer_version: String,
     /// Whether a higher-precedence layer still controls the effective value.
     pub overridden: bool,
+}
+
+/// Open one layered config file in the platform default editor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfigOpenFileParams {
+    /// Layer whose file should be opened.
+    pub target: ConfigTarget,
 }
 
 /// CLI preferences projected through existing parsers rather than a second config loader.

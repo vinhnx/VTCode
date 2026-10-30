@@ -33,6 +33,8 @@ pub const CONFIG_THEME: &str = "config/theme";
 pub const CONFIG_SETTINGS_READ: &str = "config/settings/read";
 /// Persist one CLI setting through the shared configuration service.
 pub const CONFIG_SETTINGS_WRITE: &str = "config/settings/write";
+/// Open one layered config file in the platform default editor.
+pub const CONFIG_OPEN_FILE: &str = "config/openFile";
 /// Discover installed CLI skills and Agent Plugins.
 pub const COMPOSER_RESOURCES: &str = "composer/resources";
 /// List selectable models from the service's catalog.

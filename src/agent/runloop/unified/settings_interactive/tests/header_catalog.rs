@@ -121,6 +121,28 @@ fn desktop_config_catalog_reuses_cli_advanced_fields_and_curated_groups() {
 }
 
 #[test]
+fn desktop_config_catalog_exposes_curated_dropdown_options() {
+    let config = VTCodeConfig::default();
+    let fields = desktop_config_catalog(&config).expect("desktop CLI config catalog");
+    // Options are sorted by extract_options; order here follows that contract.
+    for (path, expected) in [
+        ("sandbox.default_policy", vec!["danger_full_access", "external", "read_only", "workspace_write"]),
+        ("sandbox.network.policy", vec!["allow_all", "allowlist_only", "block_all"]),
+        ("tools.web_search.provider", vec!["auto", "duckduckgo"]),
+        ("agent.verbosity", vec!["high", "low", "medium"]),
+        ("ui.reasoning_display_mode", vec!["always", "hidden", "toggle"]),
+    ] {
+        let field = fields.iter().find(|field| field.path == path).expect("curated catalog field");
+        assert_eq!(
+            field.options,
+            expected.into_iter().map(str::to_string).collect::<Vec<_>>(),
+            "{path} must expose every documented choice"
+        );
+        assert!(field.editable, "{path} is selectable from the desktop editor");
+    }
+}
+
+#[test]
 fn desktop_config_catalog_exposes_mcp_apps_tier_with_all_options() {
     let config = VTCodeConfig::default();
     let fields = desktop_config_catalog(&config).expect("desktop CLI config catalog");

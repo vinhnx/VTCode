@@ -31,7 +31,7 @@ pub struct SandboxConfig {
     #[serde(default = "default_false")]
     pub enabled: bool,
 
-    /// Default sandbox policy
+    /// Default sandbox policy. Options: "read_only", "workspace_write", "danger_full_access", "external".
     #[serde(default)]
     pub default_policy: SandboxPolicy,
 
@@ -122,6 +122,7 @@ pub enum NetworkPolicy {
 pub struct NetworkConfig {
     /// Network egress policy.
     /// Defaults to [`NetworkPolicy::AllowlistOnly`] (default-deny, then allowlist).
+    /// Options: "allowlist_only", "allow_all", "block_all".
     pub policy: NetworkPolicy,
 
     /// Domain allowlist for network egress.

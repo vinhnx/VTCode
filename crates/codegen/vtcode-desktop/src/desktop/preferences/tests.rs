@@ -423,6 +423,25 @@ fn notification_preferences_default_on_and_round_trip() {
 }
 
 #[test]
+fn available_efforts_default_to_every_level_and_ignore_unknown_entries() {
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(
+        legacy.available_efforts(),
+        ["minimal", "low", "medium", "high", "xhigh", "max"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    );
+
+    let shuffled: Preferences = serde_json::from_str(r#"{"availableEfforts":["max","bogus","low","low"]}"#).unwrap();
+    assert_eq!(shuffled.available_efforts(), vec!["low".to_string(), "max".to_string()]);
+
+    let serialized = serde_json::to_string(&shuffled).unwrap();
+    let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(loaded.available_efforts(), vec!["low".to_string(), "max".to_string()]);
+}
+
+#[test]
 fn turn_completion_mode_parsing_is_case_insensitive_with_unfocused_fallback() {
     assert_eq!(TurnCompletionMode::default(), TurnCompletionMode::Unfocused);
     for mode in TurnCompletionMode::ALL {

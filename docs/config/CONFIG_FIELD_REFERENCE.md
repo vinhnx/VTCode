@@ -166,7 +166,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.trim_system_prompt` | `boolean` | no | `true` | Trim low-priority advisory system prompt sections when over budget. Base, shell-safety, and active-tool contracts are never trimmed. |
 | `agent.ui_surface` | `string` | no | `"inline"` | Preferred rendering surface for the interactive chat UI (inline by default; auto, alternate, inline) |
 | `agent.user_instructions` | `null \| string` | no | `null` | Custom instructions provided by the user via configuration to guide agent behavior |
-| `agent.verbosity` | `string` | no | `"medium"` | Output verbosity for supported models (low to high). |
+| `agent.verbosity` | `string` | no | `"medium"` | Output verbosity for supported models (low to high). Options: "low", "medium", "high". |
 | `agent.vibe_coding.enable_conversation_memory` | `boolean` | no | `true` | Enable conversation memory for pronoun resolution |
 | `agent.vibe_coding.enable_entity_resolution` | `boolean` | no | `true` | Enable fuzzy entity resolution |
 | `agent.vibe_coding.enable_proactive_context` | `boolean` | no | `true` | Enable proactive context gathering |
@@ -710,7 +710,7 @@ python3 scripts/generate_config_field_reference.py
 | `pty.shell_zsh_fork` | `boolean` | no | `false` | Feature-gated shell runtime path that routes shell execution through zsh EXEC_WRAPPER hooks. |
 | `pty.stdout_tail_lines` | `integer` | no | `20` | Number of recent PTY output lines to display in the chat transcript |
 | `pty.zsh_path` | `null \| string` | no | `null` | Optional absolute path to patched zsh used when shell_zsh_fork is enabled. |
-| `sandbox.default_policy` | `string` | no | `"read_only"` | Default sandbox policy |
+| `sandbox.default_policy` | `string` | no | `"read_only"` | Default sandbox policy. Options: "read_only", "workspace_write", "danger_full_access", "external". |
 | `sandbox.enabled` | `boolean` | no | `false` | Enable sandboxing for command execution |
 | `sandbox.external.docker.cpu_limit` | `string` | no | `""` | CPU limit for container |
 | `sandbox.external.docker.image` | `string` | no | `"ubuntu:22.04"` | Docker image to use |
@@ -724,7 +724,7 @@ python3 scripts/generate_config_field_reference.py
 | `sandbox.network.allowlist` | `array` | no | `[]` | Domain allowlist for network egress. Following field guide: "Default-deny outbound network, then allowlist." |
 | `sandbox.network.allowlist[].domain` | `string` | yes | `-` | Domain pattern (e.g., "api.github.com", "*.npmjs.org") |
 | `sandbox.network.allowlist[].port` | `integer` | no | `443` | Port (defaults to 443) |
-| `sandbox.network.policy` | `string` | yes | `-` | Network egress policy. Defaults to [`NetworkPolicy::AllowlistOnly`] (default-deny, then allowlist). |
+| `sandbox.network.policy` | `string` | yes | `-` | Network egress policy. Defaults to [`NetworkPolicy::AllowlistOnly`] (default-deny, then allowlist). Options: "allowlist_only", "allow_all", "block_all". |
 | `sandbox.resource_limits.cpu_time_secs` | `integer` | no | `0` | Custom CPU time limit in seconds (0 = use preset) |
 | `sandbox.resource_limits.max_disk_mb` | `integer` | no | `0` | Custom disk write limit in MB (0 = use preset) |
 | `sandbox.resource_limits.max_memory_mb` | `integer` | no | `0` | Custom memory limit in MB (0 = use preset) |
@@ -833,7 +833,7 @@ python3 scripts/generate_config_field_reference.py
 | `tools.web_search.cache_ttl_secs` | `integer` | no | `300` | How long successful search results are cached before a fresh request is made, in seconds. Defaults to 300s (5 min). |
 | `tools.web_search.cooldown_ms` | `integer` | no | `3000` | Minimum gap between consecutive live requests, in milliseconds. Defaults to 3000ms (3s). |
 | `tools.web_search.max_results` | `integer` | no | `8` | Default cap on the number of results returned per call. Hard-capped at 20 by the runtime to keep responses inline-friendly. |
-| `tools.web_search.provider` | `string` | no | `"auto"` | Provider selection. The built-in backend is the keyless DuckDuckGo HTML endpoint. |
+| `tools.web_search.provider` | `string` | no | `"auto"` | Provider selection. The built-in backend is the keyless DuckDuckGo HTML endpoint; `auto` is retained as a compatibility alias. Options: "auto", "duckduckgo". |
 | `tools.web_search.session_max_requests` | `integer` | no | `12` | Hard cap on outbound network requests per tool instance. Defaults to 12 to stay well below DDG's soft session quotas. |
 | `tools.web_search.timeout_secs` | `integer` | no | `20` | Per-request timeout in seconds. Capped at 60s by the runtime. |
 | `tui.alternate_screen` | `TuiAlternateScreen \| null` | no | `null` | - |
@@ -882,7 +882,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.tool_failure` | `boolean` | no | `false` | Notify when a tool call fails. |
 | `ui.notifications.tool_success` | `boolean` | no | `false` | Notify on successful tool calls. |
 | `ui.program_status.enabled` | `boolean` | no | `false` | Emit OSC 7501 status reports on the interactive TUI terminal stream. |
-| `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden") |
+| `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden"). Options: "always", "toggle", "hidden". |
 | `ui.reasoning_visible_default` | `boolean` | no | `true` | Default visibility for reasoning when display mode is "toggle" |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while reduce_motion_mode is enabled. Screen reader mode still disables progress animation. |
 | `ui.reduce_motion_mode` | `boolean` | no | `false` | Reduce motion mode: keeps progress labels visible without animated effects. If omitted, defaults from VTCODE_REDUCE_MOTION, then a supported OS accessibility preference; unknown or unavailable preferences default to false. |

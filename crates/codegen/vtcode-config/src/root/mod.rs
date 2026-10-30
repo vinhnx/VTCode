@@ -215,7 +215,7 @@ pub struct UiConfig {
     #[serde(default = "default_inline_viewport_rows")]
     pub inline_viewport_rows: u16,
 
-    /// Reasoning display mode for chat UI ("always", "toggle", or "hidden")
+    /// Reasoning display mode for chat UI ("always", "toggle", or "hidden"). Options: "always", "toggle", "hidden".
     #[serde(default = "default_reasoning_display_mode")]
     pub reasoning_display_mode: ReasoningDisplayMode,
 

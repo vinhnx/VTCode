@@ -627,20 +627,31 @@ impl DesktopView {
             return;
         }
         self.show_palette(PaletteKind::ModelOptions, Vec::new(), window, cx);
+        // Reopening must not reuse a previous knob: the fallback paths below
+        // leave the slider untouched, so a stale range would mislabel the new
+        // levels.
+        self._effort_slider_subscriptions.clear();
+        self.effort_slider = None;
         let Some(config) = self.configuration.as_ref() else {
             return;
         };
         let Some(options) = config.session_options.as_ref() else {
             return;
         };
-        let levels = options.supported_efforts.clone();
-        if !(1..=8).contains(&levels.len()) {
+        let levels = self.visible_effort_levels();
+        if options.supported_efforts.len() > 8 {
             return;
         }
         let Some(selected) = levels.iter().position(|effort| effort == &options.reasoning_effort) else {
             // An inherited CLI value can be unsupported after a model switch. Offer
             // explicit valid choices without pretending that the knob is already set.
-            let entries = levels
+            // These ignore the visibility preference: the user must pick a level
+            // the route actually supports.
+            if options.supported_efforts.is_empty() {
+                return;
+            }
+            let entries = options
+                .supported_efforts
                 .iter()
                 .map(|effort| {
                     command(
@@ -679,6 +690,7 @@ impl DesktopView {
                 };
                 let provider = provider.clone();
                 let model = model.clone();
+                let revert_levels = levels.clone();
                 let view = cx.entity().downgrade();
                 window.defer(cx, move |window, cx| {
                     let _updated = view.update(cx, |view, cx| {
@@ -700,10 +712,7 @@ impl DesktopView {
                             // the CLI value so the panel never shows an
                             // uncommitted level as selected.
                             let current = view.session_options().and_then(|options| {
-                                options
-                                    .supported_efforts
-                                    .iter()
-                                    .position(|level| level == &options.reasoning_effort)
+                                revert_levels.iter().position(|level| level == &options.reasoning_effort)
                             });
                             if let Some(index) = current
                                 && let Some(slider) = view.effort_slider.clone()
@@ -817,17 +826,17 @@ impl DesktopView {
         let entries = [
             (
                 protocol::PermissionMode::Ask,
-                "Ask before protected actions",
+                permission_mode_label(protocol::PermissionMode::Ask),
                 "Confirm protected commands using the CLI's approval flow.",
             ),
             (
                 protocol::PermissionMode::AutoApproveCommands,
-                "Auto-approve commands",
+                permission_mode_label(protocol::PermissionMode::AutoApproveCommands),
                 "Skip command confirmations. Sandbox and tool authorization still apply.",
             ),
             (
                 protocol::PermissionMode::FullAccess,
-                "Full access",
+                permission_mode_label(protocol::PermissionMode::FullAccess),
                 "Run without the process sandbox or approval prompts. Explicit denies still apply.",
             ),
         ]
@@ -899,5 +908,15 @@ impl DesktopView {
             .desktop_disabled(!self.can_select_session_options())
             .dispatches_desktop_action(OpenModePicker, self.focus_handle.clone())
             .into_any_element()
+    }
+}
+
+/// Short label for a session permission mode, shared by the composer
+/// permission picker and the curated configuration row.
+pub(super) fn permission_mode_label(mode: protocol::PermissionMode) -> &'static str {
+    match mode {
+        protocol::PermissionMode::Ask => "Ask before protected actions",
+        protocol::PermissionMode::AutoApproveCommands => "Auto-approve commands",
+        protocol::PermissionMode::FullAccess => "Full access",
     }
 }

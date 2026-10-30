@@ -223,6 +223,7 @@ impl DesktopView {
                     .unwrap_or_else(|| config.model.clone())
             });
             let effort_focus = self.effort_focus.clone();
+            let effort_levels = self.visible_effort_levels();
             let options_enabled = self.can_select_session_options();
             command = command.searchable(false).header(move |_, _, cx| {
                 let speed_control = speed_toggle.as_ref().map(|(label, enabled, provider, model, palette_id)| {
@@ -277,6 +278,7 @@ impl DesktopView {
                 });
                 composer_controls::model_options_header(
                     configuration.as_ref(),
+                    &effort_levels,
                     slider.as_ref(),
                     &effort_focus,
                     label.as_deref(),

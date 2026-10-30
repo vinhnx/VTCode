@@ -123,7 +123,7 @@ pub struct AgentConfig {
     #[serde(default)]
     pub allow_reasoning_effort_downgrade: bool,
 
-    /// Output verbosity for supported models (low to high).
+    /// Output verbosity for supported models (low to high). Options: "low", "medium", "high".
     #[serde(default = "default_verbosity")]
     pub verbosity: VerbosityLevel,
 

@@ -373,6 +373,11 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             context.state.lock().await.session_id = None;
             Ok((serde_json::to_value(result)?, false))
         }
+        method::CONFIG_OPEN_FILE => {
+            let params: protocol::ConfigOpenFileParams = parse_params(&request.params)?;
+            config_settings::open_file(context.workspace.clone(), params.target).await?;
+            Ok((json!({ "opened": true }), false))
+        }
         method::WEBMCP_STATUS => {
             let status = webmcp_status(context).await;
             Ok((serde_json::to_value(status)?, false))

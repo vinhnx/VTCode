@@ -349,6 +349,7 @@ impl PaletteKind {
 
 pub(super) fn model_options_header(
     config: Option<&ConfigurationSnapshot>,
+    effort_levels: &[String],
     slider: Option<&Entity<gpui_kit::component::slider::SliderState>>,
     focus: &FocusHandle,
     model_label: Option<&str>,
@@ -360,7 +361,7 @@ pub(super) fn model_options_header(
     let options = config.and_then(|config| config.session_options.as_ref());
     let effort = options.map(|options| {
         slider
-            .and_then(|slider| effort_at(&options.supported_efforts, slider.read(cx).value().start()))
+            .and_then(|slider| effort_at(effort_levels, slider.read(cx).value().start()))
             .unwrap_or(&options.reasoning_effort)
             .as_str()
     });
@@ -407,14 +408,7 @@ pub(super) fn model_options_header(
     }
     let mut panel = div().p_3().flex().flex_col().gap_2().min_w_0().child(summary);
     if let Some(slider) = slider {
-        panel = panel.child(effort_knob(
-            slider,
-            focus,
-            options.map_or(0, |options| options.supported_efforts.len()),
-            effort,
-            enabled,
-            cx,
-        ));
+        panel = panel.child(effort_knob(slider, focus, effort_levels.len(), effort, enabled, cx));
     }
     if let Some(speed_control) = speed_control {
         panel = panel.child(

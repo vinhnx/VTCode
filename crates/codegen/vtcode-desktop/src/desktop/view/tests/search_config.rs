@@ -142,6 +142,9 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
         assert!(view.read(cx).settings_open);
         assert!(view.read(cx).config_page_open);
         assert!(window.try_find("cli-config-page").is_some());
+        assert!(window.try_find("config-category-curated").is_some());
+        window.click("config-category-Model & Provider", cx);
+        window.render_frame(cx);
         assert!(window.try_find("config-edit-agent.default_model").is_some());
         assert!(window.try_find("config-category-Model & Provider").is_some());
         assert!(view.read(cx).palette.is_none(), "/config opens the configuration page first");
@@ -362,6 +365,7 @@ fn config_boolean_switch_writes_the_toggled_value_in_both_directions(cx: &mut Te
                 omitted_large: 0,
                 omitted_limit: 0,
             });
+            view.config_page_group = Some("Model & Provider".into());
             view.config_page_open = true;
             view.open_settings(window, cx);
         });

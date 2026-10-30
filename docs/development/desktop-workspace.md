@@ -151,7 +151,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Toggle status bar | Hidden by default. Settings → Accessibility, the header menu, and ⌘⇧S share one saved visibility preference. |
 | Sync theme to CLI | Settings → VT Code → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
-| Edit CLI settings | `/config` opens the dedicated configuration page: search the catalog, browse the groups rail, and edit rows in place. Booleans toggle with a switch; strings/numbers use typed editors and arrays/maps use JSON. Choose the User, Workspace, or Project write target; VT Code validates and version-checks the write, then reloads the service and reports higher-precedence overrides on the page. Credential-bearing fields stay excluded and schema templates without concrete values show as read-only references; layer resets stay in the terminal (`vtcode config reset`). Settings → VT Code → CLI configuration keeps the same summary with a Browse entry point into the catalog. |
+| Edit CLI settings | `/config` opens the dedicated configuration page on the Configuration overview: sandboxing, approval policy, sandbox settings, network access, web search, output detail, reasoning display, and the Model features effort picker, with Open vtcode.toml for the selected write target and the current service version in the footer. Search the catalog, browse the groups rail, and edit rows in place. Booleans toggle with a switch; strings/numbers use typed editors and arrays/maps use JSON. Choose the User, Workspace, or Project write target; VT Code validates and version-checks the write, then reloads the service and reports higher-precedence overrides on the page. Credential-bearing fields stay excluded and schema templates without concrete values show as read-only references; layer resets stay in the terminal (`vtcode config reset`). Settings → VT Code → CLI configuration keeps the same summary with a Browse entry point into the catalog. |
 | Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings sheet. Appearance contains live theme previews for every built-in CLI theme, typography, and the file open destination; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing, local service status, and a terminal handoff row that copies `vtcode --resume <id> --all` for the selected session; Notifications contains the turn-completion dropdown, category toggles, and the cached app-update status with a manual refresh. |
 | Choose where files open | Settings → Appearance → Files lists the built-in viewer, the system default, Finder, Terminal, and detected editors; a saved choice stays listed even when its app is missing. Selection opens there directly. |
 | Change interface language | Settings → Appearance offers 20 languages, including Hindi, Ukrainian, and Swedish. Use the searchable language picker by native name or locale code; the selection updates supported labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
@@ -269,7 +269,14 @@ Credential-bearing branches are never sent to the GUI or accepted as write value
 environment variables for credentials. Large values and catalogs beyond the UI bound are omitted and called out in
 Settings. A successful write restarts the local service to reload all CLI layers while retaining the draft, attached
 files, and history. If a higher-precedence layer still overrides the saved value, Settings reports that after
-reloading.
+reloading. The page opens on a curated Configuration overview (sandboxing, approval policy, sandbox settings,
+network access, web search, output detail, reasoning display) plus a Model features card that chooses which reasoning effort levels
+appear in model controls; every row reuses the same typed editors, palette, and validated writer as the catalog.
+Open vtcode.toml opens the selected layer file in the default editor through a service-side `config/openFile`
+call (protocol 1.22), which creates a never-written layer file first; the service resolves the path itself, so no
+filesystem path crosses the protocol. The effort picker is a desktop preference (`availableEfforts`): it filters the
+route-supported levels in model controls while the active effort stays visible whenever the route supports it, and
+explicit fallback choices ignore the filter when the inherited effort is unsupported.
 
 **CLI preferences → Reload CLI settings** remains available to refresh configuration changed outside Desktop.
 It starts a fresh conversation and resets helper-lifetime model, effort, and permission overrides. The editable
@@ -277,8 +284,10 @@ draft and attached files remain; previous sessions are available in history. Rel
 and is unavailable during active turns, pending submissions, interactions, session changes, or file pickers/reads.
 It also retries a disconnected service after configuration or authentication has been repaired outside the app.
 
-Protocol 1.16 reports first-prompt rejection with a dedicated startup-interaction error so Desktop can retry
-after the acknowledged decision. Protocol 1.15 adds bounded restored-output paging. Protocol 1.14 adds the
+Protocol 1.22 adds service-side `config/openFile` so Desktop can open the selected `vtcode.toml` layer without
+a filesystem path crossing the protocol. Protocol 1.16 reports first-prompt rejection with a dedicated
+startup-interaction error so Desktop can retry after the acknowledged decision. Protocol 1.15 adds bounded
+restored-output paging. Protocol 1.14 adds the
 CLI slash-command catalog, the CLI-discovered primary-agent catalog, and documented settings metadata
 (labels, types, defaults) for the native configuration browser. Protocol 1.13 added model capability
 metadata and a CLI-backed fast-processing toggle. Protocol 1.10 adds live
@@ -441,7 +450,7 @@ Cancelling sends no answer drafts; oversized submissions remain editable instead
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.21` (additive over 1.0–1.20; older fields are serde-defaulted). Incompatible ranges
+server negotiate protocol version `1.22` (additive over 1.0–1.21; older fields are serde-defaulted). Incompatible ranges
 fail explicitly. The protocol crate caps a line at 1 MiB.
 Restored history keeps archive indices for model-only context but marks those rows hidden; desktop paging advances through
 hidden-only pages without displaying them. The CLI resume view uses the same context filter.

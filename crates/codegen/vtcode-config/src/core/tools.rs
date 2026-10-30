@@ -202,6 +202,7 @@ impl<'de> Deserialize<'de> for WebSearchProvider {
 pub struct WebSearchConfig {
     /// Provider selection. The built-in backend is the keyless DuckDuckGo
     /// HTML endpoint; `auto` is retained as a compatibility alias.
+    /// Options: "auto", "duckduckgo".
     #[serde(default)]
     pub provider: WebSearchProvider,
 

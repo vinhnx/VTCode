@@ -396,6 +396,9 @@ impl DesktopView {
                     protocol::method::CONFIG_SETTINGS_WRITE => {
                         self.handle_cli_config_write_response(result, cx);
                     }
+                    protocol::method::CONFIG_OPEN_FILE => {
+                        self.handle_config_open_file_response(cx);
+                    }
                     protocol::method::CONFIG_SECRET_STORE => {
                         self.handle_secret_store_response(result, cx);
                     }
