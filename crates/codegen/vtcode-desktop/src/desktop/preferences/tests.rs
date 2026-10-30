@@ -26,6 +26,20 @@ fn test_preferences_paths_are_fresh_and_isolated_per_thread() {
 }
 
 #[test]
+fn stale_test_preferences_file_is_removed_before_reuse() {
+    let dir = tempfile::tempdir().expect("isolated stale-file probe");
+    let path = dir.path().join("vtcode-desktop-test-prefs-stale.json");
+    std::fs::write(&path, r#"{"uiFontSize":17,"codeFontSize":15,"followCliTheme":false}"#)
+        .expect("seed stale preferences");
+    remove_stale_test_file(&path);
+    assert!(!path.exists(), "leftover file from a dead process must not survive");
+    set_test_preferences_path(path);
+    let loaded = Preferences::load();
+    assert_eq!(loaded.ui_font_size, None);
+    assert_eq!(loaded.code_font_size, None);
+}
+
+#[test]
 fn ui_language_round_trips_and_invalid_saved_values_preserve_other_preferences() {
     let old: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
     assert_eq!(old.ui_language(), UiLanguage::English);
