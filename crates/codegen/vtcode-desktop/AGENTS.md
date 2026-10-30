@@ -13,22 +13,16 @@
 - Compose from `view/components.rs` (`desktop_button`, `settings_row`, `settings_group_box`, `accessible_group_box`, `centered_empty_state`, `track_focus`, shimmer labels, turn pending row); rem scale (`text_sm`, `gap_2`, `p_4`) and component `Size` APIs over `px()` (pixels only for hairlines, platform insets, hit-test tolerances, and fixed pane/region geometry); `truncate()` long/dynamic text; mono font only for code/ids/shortcuts/aligned numbers; load the `gpui-kit` (coding guides) and `gpui-kit-design-guides` (design guides) skills via `read_skill` before UI work, follow their review checklists, and check `docs/development/desktop-component-review.md` before introducing a component (Applied/Retained/Not-needed decisions stand).
 - States visible and honest: distinct hover/focus/selected/disabled/loading; spinners in `muted_foreground`; shimmer labels only while genuinely loading (skeleton viewers were removed in favor of shimmer text); disable submission in flight; errors scoped near the action (`colors.danger`, `text_sm`); keep views free of service/runtime logic.
 - Thin response routers: method match arms delegate to `apply_*`/`fail_*` beside the feature's request builders; `fail_pending_navigation()` on async errors; confirm destructive service calls natively and enforce server-side (service validates, client guards).
+- Performance: memoize projections per revision/epoch (transcript revision, config catalog epoch, inspector); page long lists (20 rows + `Show more (N remaining)`); virtualize measured rows; remeasure only on typography/theme changes; blocking work via `background_spawn`; no I/O or unbounded loops in render fns.
 
 ## Typography & accessibility
 
-- Hierarchy via `row_title`/`row_description`, `text_sm` body, `text_xs` metadata; `muted_text` for secondary info, `aa_muted` captions-only; semibold reserved for unread/active/emphasis; verify roles/labels in the test tree (`role()`, `label()`); container aria labels need `role(Group)`.
-- Type scales with the user's text-size choice: verify zoom at several base fonts (wrapping, truncation, pane minima, virtual-list measurement, focus-ring clearance); longer translations must not clip or shift sibling spines.
+- Hierarchy via `row_title`/`row_description`, `text_sm` body, `text_xs` metadata; `muted_text` for secondary info, `aa_muted` captions-only; semibold reserved for unread/active/emphasis; verify roles/labels in the test tree (`role()`, `label()`); container aria labels need `role(Group)`; type scales with the user's text-size choice, so verify zoom at several base fonts (wrapping, truncation, pane minima, virtual-list measurement, focus-ring clearance) and keep longer translations from clipping or shifting sibling spines.
 
 ## Color
 
-- Theme tokens only: no hex/`rgb()`/`hsla()` outside `themes/`; read `cx.theme()` by semantic role (`background`/`foreground`, `muted`, `primary`, `danger`/`warning`/`success` only for their meanings; `chart_*` for categorical segments); floors: secondary copy targets 6:1 where headroom allows, AA 4.5 enforced, chrome 3:1 (`faded_chrome`, `label_foreground`, `tab_foreground`).
-- Derive via `readable_semantic_color`, `readable_indicator_color`, `accessible_focus_color`, `filled_button_foreground`; verify light + dark, never assume fg/bg polarity; sRGB holds on Display P3 via macOS color management (wide-gamut authoring blocked on kit support; `every_theme_stays_within_srgb_gamut` guards it).
-
-## Performance
-
-- Memoize projections per revision/epoch (transcript revision, config catalog epoch, inspector); page long lists (20 rows + `Show more (N remaining)`); virtualize measured rows; remeasure only on typography/theme changes; blocking work via `background_spawn`; no I/O or unbounded loops in render fns.
+- Theme tokens only: no hex/`rgb()`/`hsla()` outside `themes/`; read `cx.theme()` by semantic role (`background`/`foreground`, `muted`, `primary`, `danger`/`warning`/`success` only for their meanings; `chart_*` for categorical segments); floors: secondary copy targets 6:1 where headroom allows, AA 4.5 enforced, chrome 3:1 (`faded_chrome`, `label_foreground`, `tab_foreground`); derive via `readable_semantic_color`, `readable_indicator_color`, `accessible_focus_color`, `filled_button_foreground`; verify light + dark, never assume fg/bg polarity; sRGB holds on Display P3 via macOS color management (wide-gamut authoring blocked on kit support; `every_theme_stays_within_srgb_gamut` guards it).
 
 ## Gotchas
 
-- Menu-bar close/Cmd-W share `menu_bar::should_hide` (objc2 AppKit bindings); cross-window refresh goes through `reload_views`; settings sheets swallow cmd-w.
-- Storage search keywords are plain substrings; storage mutations refetch usage and review protects the current session; shortcuts persist only on capture; transcript follows THREAD_ID ordering with role labels from `t!`.
+- Menu-bar close/Cmd-W share `menu_bar::should_hide` (objc2 AppKit bindings); cross-window refresh goes through `reload_views`; settings sheets swallow cmd-w; storage search keywords are plain substrings; storage mutations refetch usage and review protects the current session; shortcuts persist only on capture; transcript follows THREAD_ID ordering with role labels from `t!`.
