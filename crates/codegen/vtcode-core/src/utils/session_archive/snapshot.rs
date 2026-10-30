@@ -70,6 +70,10 @@ pub struct SessionArchiveSummary {
     pub completed: bool,
     /// Whether saved messages are available to resume.
     pub resumable: bool,
+    /// Archive file size in bytes, zero when the file cannot be inspected.
+    pub size_bytes: u64,
+    /// Snapshot end time as unix seconds, zero when out of range.
+    pub updated_at: u64,
 }
 
 /// An archive identifier derived from a loaded session listing.
@@ -158,19 +162,33 @@ impl SessionListing {
         self.preview_for_role(MessageRole::Assistant)
     }
 
+    /// Archive file size in bytes, zero when the file cannot be inspected.
+    pub fn size_bytes(&self) -> u64 {
+        std::fs::metadata(&self.path).map(|metadata| metadata.len()).unwrap_or(0)
+    }
+
+    /// Snapshot end time as unix seconds, zero when out of range.
+    pub fn updated_at(&self) -> u64 {
+        u64::try_from(self.snapshot.ended_at.timestamp()).unwrap_or(0)
+    }
+
     /// Project the fields needed for recent-session navigation and release the full transcript.
     pub(crate) fn into_summary(self) -> SessionArchiveSummary {
+        let size_bytes = self.size_bytes();
+        let updated_at = self.updated_at();
         let identifier = self.identifier();
         let title = self.first_prompt_preview();
-        let workspace_path = self.snapshot.metadata.workspace_path;
         let completed = self.snapshot.progress.is_none();
         let resumable = !self.snapshot.messages.is_empty();
+        let workspace_path = self.snapshot.metadata.workspace_path;
         SessionArchiveSummary {
             identifier,
             title,
             workspace_path,
             completed,
             resumable,
+            size_bytes,
+            updated_at,
         }
     }
 

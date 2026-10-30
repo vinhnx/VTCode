@@ -196,6 +196,39 @@ pub async fn find_session_by_id_or_name(id_or_name: &str) -> Result<SessionListi
     Err(anyhow::anyhow!("No saved chat found matching '{id_or_name}'."))
 }
 
+/// Delete one session archive by identifier. Returns false when no archive
+/// file exists. Invalid identifiers are rejected before any filesystem access.
+pub async fn delete_session_archive(identifier: &str) -> Result<bool> {
+    let sessions_dir = match resolve_sessions_dir().await {
+        Ok(dir) => dir,
+        Err(_) => return Ok(false),
+    };
+
+    if !sessions_dir.exists() {
+        return Ok(false);
+    }
+
+    let path = session_archive_path_for_identifier(&sessions_dir, identifier)?;
+    match tokio::fs::symlink_metadata(&path).await {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => return Ok(false),
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to inspect session archive {}", path.display()));
+        }
+    }
+
+    tokio::fs::remove_file(&path)
+        .await
+        .with_context(|| format!("failed to delete session archive {}", path.display()))?;
+    Ok(true)
+}
+
+/// Resolve the session archive directory for storage accounting.
+pub async fn sessions_dir() -> Result<PathBuf> {
+    resolve_sessions_dir().await
+}
+
 async fn resolve_sessions_dir() -> Result<PathBuf> {
     if let Some(custom) = read_env_var_os(SESSION_DIR_ENV) {
         let path = PathBuf::from(custom);

@@ -1,5 +1,5 @@
 use super::{
-    list_recent_session_summaries_in_workspace, list_recent_sessions_in_workspace,
+    delete_session_archive, list_recent_session_summaries_in_workspace, list_recent_sessions_in_workspace,
     resolve_sessions_dir_for_archive_writes,
 };
 use crate::llm::provider::MessageRole;
@@ -89,5 +89,90 @@ async fn workspace_session_limit_ignores_newer_archives_from_other_workspaces() 
     assert_eq!(summaries[0].workspace_path, workspace.display().to_string());
     assert!(summaries[0].completed);
     assert!(summaries[0].resumable);
+    clear_sessions_dir_override_for_tests();
+}
+
+#[tokio::test]
+#[serial_test::serial(session_dir_override)]
+async fn session_summaries_carry_size_and_recency() {
+    let sessions_dir = TempDir::new().expect("sessions directory");
+    override_sessions_dir_for_tests(sessions_dir.path());
+    let workspace = sessions_dir.path().join("workspace");
+    let now = Utc::now();
+    for (index, age_seconds, padding) in [(0, 90, "x"), (1, 10, "xxxxxxxxxx")] {
+        let ended_at = now - chrono::Duration::seconds(age_seconds);
+        let snapshot = SessionSnapshot {
+            metadata: SessionArchiveMetadata::new(
+                "workspace",
+                workspace.display().to_string(),
+                "model",
+                "provider",
+                "theme",
+                "medium",
+            ),
+            started_at: ended_at,
+            ended_at,
+            total_messages: 1,
+            distinct_tools: Vec::new(),
+            transcript: vec![padding.to_string()],
+            messages: vec![SessionMessage::new(MessageRole::User, format!("message {index}"))],
+            progress: None,
+            error_logs: Vec::new(),
+        };
+        let path = sessions_dir.path().join(format!("session-{index:02}.json"));
+        std::fs::write(&path, serde_json::to_vec(&snapshot).expect("serialize session"))
+            .expect("write session archive");
+    }
+
+    let summaries = list_recent_session_summaries_in_workspace(10, &workspace)
+        .await
+        .expect("list workspace session summaries");
+    assert_eq!(summaries.len(), 2);
+    assert_eq!(summaries[0].identifier, "session-01");
+    assert_eq!(summaries[1].identifier, "session-00");
+    for summary in &summaries {
+        let expected = std::fs::metadata(sessions_dir.path().join(format!("{}.json", summary.identifier)))
+            .expect("stat seeded archive")
+            .len();
+        assert_eq!(summary.size_bytes, expected, "{}", summary.identifier);
+    }
+    assert!(summaries[0].size_bytes > summaries[1].size_bytes);
+    assert_eq!(summaries[0].updated_at, u64::try_from((now - chrono::Duration::seconds(10)).timestamp()).unwrap());
+    assert_eq!(summaries[1].updated_at, u64::try_from((now - chrono::Duration::seconds(90)).timestamp()).unwrap());
+    assert!(summaries[0].updated_at > summaries[1].updated_at);
+    clear_sessions_dir_override_for_tests();
+}
+
+#[tokio::test]
+#[serial_test::serial(session_dir_override)]
+async fn delete_session_archive_removes_only_the_named_file() {
+    let sessions_dir = TempDir::new().expect("sessions directory");
+    override_sessions_dir_for_tests(sessions_dir.path());
+    for index in [0, 1] {
+        std::fs::write(sessions_dir.path().join(format!("session-{index:02}.json")), b"{}").expect("seed archive");
+    }
+
+    assert!(delete_session_archive("session-00").await.expect("delete archive"));
+    assert!(!sessions_dir.path().join("session-00.json").exists());
+    assert!(sessions_dir.path().join("session-01.json").exists());
+    assert!(!delete_session_archive("session-00").await.expect("delete missing archive"));
+    assert!(delete_session_archive("../session-01").await.is_err());
+    assert!(delete_session_archive("session 01").await.is_err());
+    assert!(sessions_dir.path().join("session-01.json").exists());
+    clear_sessions_dir_override_for_tests();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial_test::serial(session_dir_override)]
+async fn delete_session_archive_refuses_symlinks() {
+    let sessions_dir = TempDir::new().expect("sessions directory");
+    override_sessions_dir_for_tests(sessions_dir.path());
+    let target = sessions_dir.path().join("target.json");
+    std::fs::write(&target, b"{}").expect("seed target");
+    std::os::unix::fs::symlink(&target, sessions_dir.path().join("linked.json")).expect("seed symlink");
+
+    assert!(!delete_session_archive("linked").await.expect("delete symlink"));
+    assert!(target.exists());
     clear_sessions_dir_override_for_tests();
 }

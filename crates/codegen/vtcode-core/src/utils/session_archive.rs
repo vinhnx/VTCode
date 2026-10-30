@@ -32,8 +32,8 @@ pub(crate) use self::identifier::generate_unique_archive_path;
 pub use self::identifier::{generate_session_archive_identifier, reserve_session_archive_identifier};
 pub(crate) use self::query::resolve_sessions_dir_for_archive_writes;
 pub use self::query::{
-    find_session_by_id_or_name, find_session_by_identifier, list_recent_session_summaries_in_workspace,
-    list_recent_sessions, list_recent_sessions_in_workspace,
+    delete_session_archive, find_session_by_id_or_name, find_session_by_identifier,
+    list_recent_session_summaries_in_workspace, list_recent_sessions, list_recent_sessions_in_workspace, sessions_dir,
 };
 #[cfg(test)]
 pub(crate) use self::retention::{SessionRetentionLimits, apply_session_retention_with_limits};
