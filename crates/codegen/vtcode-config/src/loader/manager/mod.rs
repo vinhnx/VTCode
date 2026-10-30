@@ -830,16 +830,6 @@ impl ConfigManager {
     }
 }
 
-/// Migrate plain-text API keys from config to secure storage.
-///
-/// This function checks if there are any API keys stored in plain-text in the config
-/// and migrates them to secure storage (keyring). After successful migration,
-/// the key material is cleared and a normalized provider/key metadata marker is
-/// retained for configuration introspection.
-///
-/// # Arguments
-/// * `config` - The configuration to migrate
-
 #[cfg(test)]
 mod sparse_config_tests;
 #[cfg(test)]

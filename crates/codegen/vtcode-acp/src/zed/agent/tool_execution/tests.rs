@@ -106,8 +106,14 @@ async fn run_tool_call(
 }
 
 async fn run_apply_patch_call(answer: ClientAnswer) -> (TempDir, String) {
-    run_tool_call(answer, tools::APPLY_PATCH, json!({ "input": PATCH_ADD_FILE }), false, CommandsConfig::default())
-        .await
+    Box::pin(run_tool_call(
+        answer,
+        tools::APPLY_PATCH,
+        json!({ "input": PATCH_ADD_FILE }),
+        false,
+        CommandsConfig::default(),
+    ))
+    .await
 }
 
 /// The default command policy plus the `exit` builtin used by the issue #792
@@ -149,7 +155,7 @@ async fn rejected_client_permission_keeps_prompt_policy_tool_unrun() {
 /// `terminal/create`; the command runs locally and reports its own evidence.
 #[tokio::test]
 async fn terminal_capable_client_keeps_pty_commands_local() {
-    let (_temp, llm_response) = run_tool_call(
+    let (_temp, llm_response) = Box::pin(run_tool_call(
         ClientAnswer::Allow,
         tools::EXEC_COMMAND,
         json!({
@@ -159,7 +165,7 @@ async fn terminal_capable_client_keeps_pty_commands_local() {
         }),
         true,
         repro_commands_config(),
-    )
+    ))
     .await;
 
     assert!(llm_response.contains("TTY_YES"), "PTY command output should reach the model: {llm_response}");

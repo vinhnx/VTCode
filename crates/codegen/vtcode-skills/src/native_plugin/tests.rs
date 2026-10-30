@@ -13,6 +13,12 @@ thread_local! {
 static TEST_EXECUTE_ACTIVE_CALLS: AtomicUsize = AtomicUsize::new(0);
 static TEST_EXECUTE_MAX_CONCURRENCY: AtomicUsize = AtomicUsize::new(0);
 
+/// Test-only C ABI shim for the plugin loader.
+///
+/// # Safety
+///
+/// The loader calls it with pointers produced by `CString::into_raw` in this module.
+#[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_free_string(ptr: *const c_char) {
     TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(true));
     if !ptr.is_null() {

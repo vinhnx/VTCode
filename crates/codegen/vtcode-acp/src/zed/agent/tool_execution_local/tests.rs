@@ -23,7 +23,7 @@ async fn run_apply_patch(workspace: &TempDir, permission_granted: bool) -> ToolE
 async fn granted_client_permission_satisfies_prompt_policy() {
     let temp = TempDir::new().unwrap();
 
-    let report = run_apply_patch(&temp, true).await;
+    let report = Box::pin(run_apply_patch(&temp, true)).await;
 
     assert!(
         matches!(report.status, ToolCallStatus::Completed),
@@ -41,7 +41,7 @@ async fn granted_client_permission_satisfies_prompt_policy() {
 async fn missing_client_permission_still_denies_prompt_policy() {
     let temp = TempDir::new().unwrap();
 
-    let report = run_apply_patch(&temp, false).await;
+    let report = Box::pin(run_apply_patch(&temp, false)).await;
 
     assert!(
         matches!(report.status, ToolCallStatus::Failed),
