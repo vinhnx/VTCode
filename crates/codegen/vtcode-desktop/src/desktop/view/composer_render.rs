@@ -152,38 +152,6 @@ impl DesktopView {
             && !self.attachments_picker_open
             && self.retained_submission.is_none()
             && !self.composer.read(cx).value().trim().is_empty();
-        let current_model = self
-            .configuration
-            .as_ref()
-            .map(|configuration| {
-                self.models
-                    .iter()
-                    .find(|model| model.provider == configuration.provider && model.id == configuration.model)
-                    .map(|model| model.display_name.clone())
-                    .unwrap_or_else(|| configuration.model.clone())
-            })
-            .unwrap_or_else(|| rust_i18n::t!("app.composer.choose_model").to_string());
-        let permission_mode = self.session_options().map(|options| options.permission_mode);
-        let (policy, policy_label) = match permission_mode {
-            Some(protocol::PermissionMode::Ask) => {
-                (rust_i18n::t!("app.composer.permission_ask").to_string(), "Ask".to_owned())
-            }
-            Some(protocol::PermissionMode::AutoApproveCommands) => {
-                (rust_i18n::t!("app.composer.permission_auto").to_string(), "Auto".to_owned())
-            }
-            Some(protocol::PermissionMode::FullAccess) => {
-                (rust_i18n::t!("app.composer.permission_full").to_string(), "Full access".to_owned())
-            }
-            None => match self.configuration.as_ref().and_then(|config| config.sandbox.clone()) {
-                Some(policy) => (policy.clone(), policy),
-                None => (
-                    rust_i18n::t!("app.composer.permissions_unavailable").to_string(),
-                    rust_i18n::t!("app.composer.policy").to_string(),
-                ),
-            },
-        };
-        let (permission_icon, permission_icon_color) =
-            composer_controls::permission_indicator(permission_mode, cx.theme().colors);
         let buttons = div()
             .w_full()
             .min_w_0()
@@ -193,24 +161,25 @@ impl DesktopView {
             .justify_between()
             .gap_2()
             .when(self.zen_mode, |buttons| {
-                // Zen replaces the control cluster with one quiet status line:
-                // the send action keeps the trailing slot, the model/policy
-                // context fills the leading space. Changes stay on the command
-                // palette keyboard path, so this text is descriptive, not a control.
-                let context = format!("{current_model} · {policy_label}");
+                // Zen keeps the same option commands as one quiet cluster:
+                // model (with effort), mode, and policy stay reachable
+                // opposite the send action while every other control hides.
                 buttons.justify_between().child(
                     div()
                         .id("zen-composer-context")
                         .test_support()
-                        .role(gpui_kit::Role::Label)
-                        .aria_label(context.clone())
                         .min_w_0()
                         .flex_1()
-                        .truncate()
-                        .text_left()
-                        .text_xs()
-                        .text_color(themes::muted_text(&colors))
-                        .child(context),
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .overflow_hidden()
+                        .with_animation("zen-composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
+                            el.opacity(delta)
+                        })
+                        .child(self.render_model_button(cx).max_w(px(224.)))
+                        .child(self.render_mode_button(cx))
+                        .child(self.render_policy_button(cx)),
                 )
             })
             .when(!self.zen_mode, |buttons| {
@@ -241,65 +210,9 @@ impl DesktopView {
                                 )
                                 .dispatches_desktop_action(OpenAddContext, self.focus_handle.clone()),
                         )
-                        .child(
-                            desktop_button("composer-policy")
-                                .accessibility_label(
-                                    rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string(),
-                                )
-                                .tooltip_with_action(
-                                    rust_i18n::t!("app.composer.command_permissions").to_string(),
-                                    &OpenPermissions,
-                                    Some(key_context::DESKTOP),
-                                )
-                                .icon(Icon::new(permission_icon).text_color(permission_icon_color))
-                                .child(
-                                    div()
-                                        .id("composer-policy-label")
-                                        .test_support()
-                                        .truncate()
-                                        .child(policy_label.to_string()),
-                                )
-                                .dropdown_caret(true)
-                                .ghost()
-                                .small()
-                                .min_w_0()
-                                .max_w(px(112.))
-                                .desktop_disabled(!self.can_select_session_options())
-                                .dispatches_desktop_action(OpenPermissions, self.focus_handle.clone()),
-                        ),
+                        .child(self.render_policy_button(cx)),
                 )
             });
-        let model_options = self.session_options();
-        let selected_effort = model_options
-            .filter(|options| options.supported_efforts.contains(&options.reasoning_effort))
-            .map(|options| composer_controls::runtime_option_label(&options.reasoning_effort));
-        let selected_speed = model_options
-            .and_then(|options| options.speed.as_deref())
-            .map(composer_controls::runtime_option_label);
-        let model_summary = std::iter::once(current_model.as_str())
-            .chain(selected_effort.as_deref())
-            .chain(selected_speed.as_deref())
-            .collect::<Vec<_>>()
-            .join(" · ");
-        let model_label = div()
-            .min_w_0()
-            .flex()
-            .items_center()
-            .gap_1()
-            .child(div().min_w_0().max_w(px(176.)).truncate().child(current_model))
-            .when_some(selected_effort, |row, effort| {
-                row.child(
-                    div()
-                        .id("composer-model-effort")
-                        .test_support()
-                        .role(gpui_kit::Role::Label)
-                        .aria_label(rust_i18n::t!("app.composer.reasoning_effort", effort = effort).to_string())
-                        .flex_shrink_0()
-                        .text_color(themes::muted_text(&colors))
-                        .child(format!("· {effort}")),
-                )
-            })
-            .when_some(selected_speed, |row, speed| row.child(composer_controls::processing_tier_badge(&speed, cx)));
         let mut model_actions =
             div()
                 .min_w_0()
@@ -309,26 +222,11 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .when(!self.zen_mode, |actions| {
-                    actions.child(
-                        desktop_button("pick-model")
-                            .accessibility_label(model_summary)
-                            .child(model_label)
-                            .dropdown_caret(true)
-                            .small()
-                            .max_w(px(336.))
-                            .overflow_hidden()
-                            .tooltip_with_action(
-                                rust_i18n::t!("app.composer.choose_model_tooltip").to_string(),
-                                &OpenModelPicker,
-                                Some(key_context::DESKTOP),
-                            )
-                            .ghost()
-                            .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
-                            .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone())
-                            .with_animation("pick-model-fade", zen_fade_animation(cx.theme()), |el, delta| {
-                                el.opacity(delta)
-                            }),
-                    )
+                    actions.child(self.render_model_button(cx).max_w(px(336.)).with_animation(
+                        "pick-model-fade",
+                        zen_fade_animation(cx.theme()),
+                        |el, delta| el.opacity(delta),
+                    ))
                 });
         if self.running {
             model_actions = model_actions.child(
@@ -409,7 +307,7 @@ impl DesktopView {
                             .small()
                             .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
                     )
-                    .child(self.render_mode_button(cx)),
+                    .when(!self.zen_mode, |row| row.child(self.render_mode_button(cx))),
             );
         }
         // Zen restyles the card while the column narrows (see content_width):
@@ -484,5 +382,117 @@ impl DesktopView {
                     ),
             ),
         )
+    }
+
+    /// Model picker button with the current effort and speed, shared by the
+    /// normal composer and the zen option cluster. Call sites add their own
+    /// width and fade: normal mode animates the button itself, while zen
+    /// fades the whole cluster at once.
+    fn render_model_button(&self, cx: &Context<Self>) -> Button {
+        let colors = cx.theme().colors;
+        let current_model = self
+            .configuration
+            .as_ref()
+            .map(|configuration| {
+                self.models
+                    .iter()
+                    .find(|model| model.provider == configuration.provider && model.id == configuration.model)
+                    .map(|model| model.display_name.clone())
+                    .unwrap_or_else(|| configuration.model.clone())
+            })
+            .unwrap_or_else(|| rust_i18n::t!("app.composer.choose_model").to_string());
+        let model_options = self.session_options();
+        let selected_effort = model_options
+            .filter(|options| options.supported_efforts.contains(&options.reasoning_effort))
+            .map(|options| composer_controls::runtime_option_label(&options.reasoning_effort));
+        let selected_speed = model_options
+            .and_then(|options| options.speed.as_deref())
+            .map(composer_controls::runtime_option_label);
+        let model_summary = std::iter::once(current_model.as_str())
+            .chain(selected_effort.as_deref())
+            .chain(selected_speed.as_deref())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let model_label = div()
+            .min_w_0()
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(div().min_w_0().max_w(px(176.)).truncate().child(current_model))
+            .when_some(selected_effort, |row, effort| {
+                row.child(
+                    div()
+                        .id("composer-model-effort")
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(rust_i18n::t!("app.composer.reasoning_effort", effort = effort).to_string())
+                        .flex_shrink_0()
+                        .text_color(themes::muted_text(&colors))
+                        .child(format!("· {effort}")),
+                )
+            })
+            .when_some(selected_speed, |row, speed| row.child(composer_controls::processing_tier_badge(&speed, cx)));
+        desktop_button("pick-model")
+            .accessibility_label(model_summary)
+            .child(model_label)
+            .dropdown_caret(true)
+            .small()
+            .overflow_hidden()
+            .tooltip_with_action(
+                rust_i18n::t!("app.composer.choose_model_tooltip").to_string(),
+                &OpenModelPicker,
+                Some(key_context::DESKTOP),
+            )
+            .ghost()
+            .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
+            .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone())
+    }
+
+    /// Execution-policy picker button shared by the normal composer and the
+    /// zen option cluster.
+    fn render_policy_button(&self, cx: &Context<Self>) -> Button {
+        let permission_mode = self.session_options().map(|options| options.permission_mode);
+        let (policy, policy_label) = match permission_mode {
+            Some(protocol::PermissionMode::Ask) => {
+                (rust_i18n::t!("app.composer.permission_ask").to_string(), "Ask".to_owned())
+            }
+            Some(protocol::PermissionMode::AutoApproveCommands) => {
+                (rust_i18n::t!("app.composer.permission_auto").to_string(), "Auto".to_owned())
+            }
+            Some(protocol::PermissionMode::FullAccess) => {
+                (rust_i18n::t!("app.composer.permission_full").to_string(), "Full access".to_owned())
+            }
+            None => match self.configuration.as_ref().and_then(|config| config.sandbox.clone()) {
+                Some(policy) => (policy.clone(), policy),
+                None => (
+                    rust_i18n::t!("app.composer.permissions_unavailable").to_string(),
+                    rust_i18n::t!("app.composer.policy").to_string(),
+                ),
+            },
+        };
+        let (permission_icon, permission_icon_color) =
+            composer_controls::permission_indicator(permission_mode, cx.theme().colors);
+        desktop_button("composer-policy")
+            .accessibility_label(rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string())
+            .tooltip_with_action(
+                rust_i18n::t!("app.composer.command_permissions").to_string(),
+                &OpenPermissions,
+                Some(key_context::DESKTOP),
+            )
+            .icon(Icon::new(permission_icon).text_color(permission_icon_color))
+            .child(
+                div()
+                    .id("composer-policy-label")
+                    .test_support()
+                    .truncate()
+                    .child(policy_label.to_string()),
+            )
+            .dropdown_caret(true)
+            .ghost()
+            .small()
+            .min_w_0()
+            .max_w(px(112.))
+            .desktop_disabled(!self.can_select_session_options())
+            .dispatches_desktop_action(OpenPermissions, self.focus_handle.clone())
     }
 }

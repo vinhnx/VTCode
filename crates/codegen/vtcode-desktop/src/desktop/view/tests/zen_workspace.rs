@@ -155,8 +155,9 @@ fn zen_mode_hides_navigation_and_keeps_one_toggle_slot(cx: &mut TestAppContext) 
         assert!(window.try_find("thread-header").is_none());
         assert!(window.try_find("composer-context").is_none());
         assert!(window.try_find("attach-files").is_none());
-        assert!(window.try_find("composer-policy").is_none());
-        assert!(window.try_find("pick-model").is_none());
+        assert!(window.try_find("composer-policy").is_some());
+        assert!(window.try_find("composer-mode").is_some());
+        assert!(window.try_find("pick-model").is_some());
         assert!(window.try_find("send-prompt").is_some());
         assert!(window.try_find("workspace-surface").is_some());
         let zen_frame = window.find("message-composer-frame").bounds();
@@ -890,7 +891,7 @@ fn zen_empty_state_offers_workspace_picker_when_workspaceless(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
-fn zen_composer_pairs_context_line_with_send_action(cx: &mut TestAppContext) {
+fn zen_composer_pairs_option_controls_with_send_action(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
@@ -907,34 +908,31 @@ fn zen_composer_pairs_context_line_with_send_action(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("attach-files").is_none());
-        assert!(window.try_find("composer-policy").is_none());
-        assert!(window.try_find("pick-model").is_none());
-        let context = window.find("zen-composer-context");
-        assert_eq!(context.role(), Some(gpui_kit::Role::Label));
-        assert_eq!(context.label(), Some("claude-sonnet-5 · Ask"));
+        assert_eq!(window.find("pick-model").label(), Some("claude-sonnet-5 · Medium · Ultrafast"));
+        assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
+        assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Ask before protected actions"));
+        let context = window.find("zen-composer-context").bounds();
         let send = window.find("send-prompt").bounds();
         assert!(
-            context.bounds().right() <= send.left(),
-            "the context line must end before the send action: {:?} vs {send:?}",
-            context.bounds()
+            context.right() <= send.left(),
+            "the option cluster must end before the send action: {context:?} vs {send:?}"
         );
         assert!(
-            send.top() <= context.bounds().center().y && context.bounds().center().y <= send.bottom(),
-            "the context line shares the send action row: {:?} vs {send:?}",
-            context.bounds()
+            send.top() <= context.center().y && context.center().y <= send.bottom(),
+            "the option cluster shares the send action row: {context:?} vs {send:?}"
         );
         assert!(
-            window
-                .find("message-composer-frame")
-                .bounds()
-                .contains(&context.bounds().center()),
-            "the context line sits inside the composer card"
+            window.find("message-composer-frame").bounds().contains(&context.center()),
+            "the option cluster sits inside the composer card"
         );
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
         assert!(window.try_find("zen-composer-context").is_none());
         assert!(window.try_find("attach-files").is_some());
+        assert!(window.try_find("pick-model").is_some());
+        assert!(window.try_find("composer-mode").is_some());
+        assert!(window.try_find("composer-policy").is_some());
     })
     .unwrap();
 }

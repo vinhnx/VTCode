@@ -1,0 +1,168 @@
+use super::*;
+
+#[gpui_kit::test]
+fn zen_model_button_opens_options_and_commits_effort(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.zen_mode = true;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("pick-model").label(), Some("gpt-5.6-sol · Medium · Ultrafast"));
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · medium"));
+        let track = window.find("slider-bar-container").bounds();
+        window.click_at("slider-bar-container", point(track.size.width - px(2.), track.size.height / 2.), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("effort request") else {
+        panic!("request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["reasoningEffort"], "high");
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn zen_mode_button_lists_cli_modes_and_sends_selection(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.zen_mode = true;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
+        window.click("composer-mode", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Agent mode"));
+        for name in ["build", "plan", "auto", "duck", "coordinator", "custom-reviewer"] {
+            assert!(
+                window
+                    .try_find(palette_action_id(&super::super::PaletteAction::SelectSessionOptions(
+                        vtcode_desktop_protocol::SessionOptionsSelectParams {
+                            mode: Some(name.into()),
+                            ..Default::default()
+                        }
+                    )))
+                    .is_some(),
+                "CLI mode {name} must be selectable in zen"
+            );
+        }
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("Plan", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("mode request") else {
+        panic!("request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["mode"], "plan");
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn zen_policy_button_changes_permission_and_blocks_during_active_work(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.zen_mode = true;
+            view.running = true;
+        });
+        window.render_frame(cx);
+        // Active work renders the controls but leaves them inert.
+        for button in ["pick-model", "composer-mode", "composer-policy"] {
+            assert!(window.try_find(button).is_some(), "{button} stays visible while running");
+            window.click(button, cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_none(), "{button} must not open a picker while running");
+        }
+        assert!(requests.try_recv().is_err(), "no request while running");
+
+        view.update(cx, |view, _| view.running = false);
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Ask before protected actions"));
+        window.click("composer-policy", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Command permissions"));
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.within("command-palette").press("down", cx);
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("permission request") else {
+        panic!("request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["permissionMode"], "autoApproveCommands");
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn zen_composer_popups_stay_above_input_in_narrow_window(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop_sized(cx, 520., 800.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.zen_mode = true;
+        });
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let cluster = window.find("zen-composer-context").bounds();
+        let send = window.find("send-prompt").bounds();
+        assert!(
+            cluster.right() <= send.left(),
+            "the narrow option cluster must end before the send action: {cluster:?} vs {send:?}"
+        );
+        for button in ["pick-model", "composer-mode", "composer-policy"] {
+            window.click(button, cx);
+            window.render_frame(cx);
+            let popup = window.find("command-palette").bounds();
+            let frame = window.find("message-composer-frame").bounds();
+            assert!(popup.bottom() <= frame.top(), "{button} popup must stay above the input");
+            assert!(popup.left() >= px(0.), "{button} popup left={:?}", popup.left());
+            assert!(popup.right() <= viewport.width, "{button} popup right={:?}, viewport={viewport:?}", popup.right());
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_none(), "{button} popup must dismiss on escape");
+            // The trigger stays healthy: reopening works after dismissal.
+            window.click(button, cx);
+            window.render_frame(cx);
+            assert!(window.try_find("command-palette").is_some(), "{button} must reopen after escape");
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_none());
+        }
+    })
+    .unwrap();
+}
