@@ -501,6 +501,12 @@ pub struct SessionSummary {
     pub completed: bool,
     /// Whether this session can be continued using existing archive data.
     pub resumable: bool,
+    /// Archive size in bytes, zero when unknown.
+    #[serde(default)]
+    pub size_bytes: u64,
+    /// Snapshot end time as unix seconds, absent when unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<u64>,
 }
 
 /// Text restored from the durable message snapshot for a loaded session.
@@ -1033,6 +1039,9 @@ pub use live_events::{LiveEventReceiver, LiveEventSendError, LiveEventSender, li
 
 pub mod secret;
 pub use secret::{SecretStoreInfo, SecretStoreParams, SecretStoreResult};
+
+pub mod storage;
+pub use storage::{SessionDeleteResult, StorageSummary, WorktreeEntry, WorktreeRemoveParams, WorktreeRemoveResult};
 
 #[cfg(test)]
 mod tests;

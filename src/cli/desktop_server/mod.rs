@@ -62,6 +62,7 @@ use webmcp::install_session_runtime;
 use webmcp::{DesktopWebmcpRuntime, start_session};
 mod restore;
 mod secret_store;
+mod storage;
 use catalog::{
     active_agent_config, catalog_models, configuration_snapshot, effective_speed_config, listing_matches_workspace,
     sanitize_public_error, update_status_snapshot, workspace_label,
@@ -525,6 +526,8 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                     workspace: session.workspace_path,
                     completed: session.completed,
                     resumable: session.resumable,
+                    size_bytes: session.size_bytes,
+                    updated_at: (session.updated_at != 0).then_some(session.updated_at),
                 })
                 .collect::<Vec<_>>();
             Ok((serde_json::to_value(sessions)?, false))
@@ -574,6 +577,8 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                     workspace: context.workspace.to_string_lossy().into_owned(),
                     completed: false,
                     resumable: history_persistence_enabled(),
+                    size_bytes: 0,
+                    updated_at: None,
                 })?,
                 false,
             ))
@@ -779,6 +784,9 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             let response: protocol::InteractionResponse = parse_params(&request.params)?;
             respond_to_interaction(context, response).await?;
             Ok((json!({ "accepted": true }), false))
+        }
+        method::STORAGE_SUMMARY | method::SESSION_DELETE | method::WORKTREE_LIST | method::WORKTREE_REMOVE => {
+            storage::handle_storage_request(context, request).await
         }
         _ => bail!("unknown desktop method"),
     }

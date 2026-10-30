@@ -17,6 +17,8 @@ fn legacy_session_load_defaults_review_history() {
     assert!(!loaded.history_has_earlier);
     assert_eq!(loaded.messages[0].archive_index, None);
     assert_eq!(loaded.messages[0].text, "Continue");
+    assert_eq!(loaded.session.size_bytes, 0);
+    assert_eq!(loaded.session.updated_at, None);
     let round_trip: SessionLoadResult = serde_json::from_value(serde_json::to_value(&loaded).unwrap()).unwrap();
     assert_eq!(round_trip, loaded);
 }
@@ -77,6 +79,8 @@ fn session_output_page_round_trips_bounded_cursor_and_request_identity() {
             workspace: "/workspace".into(),
             completed: true,
             resumable: true,
+            size_bytes: 0,
+            updated_at: None,
         },
         messages: Vec::new(),
         history_start_index: 0,
@@ -570,6 +574,39 @@ fn secret_store_types_round_trip_with_camel_case_and_redacted_debug() {
     let decoded: SecretStoreResult = serde_json::from_value(serde_json::to_value(&result).unwrap()).unwrap();
     assert_eq!(decoded, result);
     assert_eq!(method::CONFIG_SECRET_STORE, "config/secret/store");
+}
+
+#[test]
+fn storage_dtos_round_trip_with_camel_case_keys() {
+    let summary = StorageSummary {
+        state_dir: "/state".into(),
+        workspace: "/workspace".into(),
+        sessions_bytes: 10,
+        sessions_count: 2,
+        worktrees_bytes: 20,
+        worktrees_count: 1,
+        memory_bytes: 30,
+        other_bytes: 40,
+        total_bytes: 100,
+    };
+    let value = serde_json::to_value(&summary).unwrap();
+    assert_eq!(value.get("sessionsBytes").and_then(|v| v.as_u64()), Some(10));
+    assert_eq!(value.get("totalBytes").and_then(|v| v.as_u64()), Some(100));
+    let decoded: StorageSummary = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded, summary);
+
+    let entry = WorktreeEntry {
+        name: "loop-1".into(),
+        head: Some("abc123".into()),
+        is_dirty: true,
+    };
+    let decoded: WorktreeEntry = serde_json::from_value(serde_json::to_value(&entry).unwrap()).unwrap();
+    assert_eq!(decoded, entry);
+
+    assert_eq!(method::STORAGE_SUMMARY, "storage/summary");
+    assert_eq!(method::SESSION_DELETE, "session/delete");
+    assert_eq!(method::WORKTREE_LIST, "worktree/list");
+    assert_eq!(method::WORKTREE_REMOVE, "worktree/remove");
 }
 
 #[tokio::test]

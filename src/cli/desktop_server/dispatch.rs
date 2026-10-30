@@ -205,5 +205,7 @@ pub(super) fn session_summary(listing: &SessionListing) -> SessionSummary {
         workspace: listing.snapshot.metadata.workspace_path.clone(),
         completed: listing.snapshot.progress.is_none(),
         resumable: !listing.snapshot.messages.is_empty(),
+        size_bytes: listing.size_bytes(),
+        updated_at: Some(listing.updated_at()).filter(|updated| *updated > 0),
     }
 }

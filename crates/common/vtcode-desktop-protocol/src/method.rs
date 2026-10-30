@@ -17,6 +17,14 @@ pub const SESSION_OUTPUT_READ: &str = "session/output/read";
 pub const MCP_APP_READ: &str = "mcp/app/read";
 /// Close the selected session after cleanup.
 pub const SESSION_CLOSE: &str = "session/close";
+/// Delete one session archive by identifier.
+pub const SESSION_DELETE: &str = "session/delete";
+/// Read on-disk usage broken down by owning store.
+pub const STORAGE_SUMMARY: &str = "storage/summary";
+/// List managed loop-isolation worktrees.
+pub const WORKTREE_LIST: &str = "worktree/list";
+/// Remove one managed worktree by name.
+pub const WORKTREE_REMOVE: &str = "worktree/remove";
 /// Submit a user turn.
 pub const TURN_SUBMIT: &str = "turn/submit";
 /// Cancel a running turn.
