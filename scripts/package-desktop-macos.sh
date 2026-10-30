@@ -4,6 +4,23 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# ANSI styling for the launch summary; disabled for pipes, dumb terminals, or NO_COLOR.
+if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    CYAN='\033[0;36m'
+    NC='\033[0m'
+else
+    BOLD=''
+    DIM=''
+    GREEN=''
+    YELLOW=''
+    CYAN=''
+    NC=''
+fi
 OUTPUT_APP="${1:-${ROOT_DIR}/dist/VT Code.app}"
 TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT_DIR}/target}"
 if [[ "${TARGET_DIR}" != /* ]]; then
@@ -131,8 +148,8 @@ ditto "${STAGED_APP}" "${OUTPUT_APP}"
 # Verify the copied artifact that users will actually open.
 codesign --verify --deep --strict "${OUTPUT_APP}"
 
-printf 'Packaged locally signed app: %s\n' "${OUTPUT_APP}"
-printf 'Ad hoc signing does not provide Developer ID trust or notarization.\n'
+printf '%b%b%s%b %b%s%b\n' "$GREEN" "$BOLD" 'Packaged locally signed app:' "$NC" "$BOLD" "${OUTPUT_APP}" "$NC"
+printf '%b%s%b\n' "$YELLOW" 'Ad hoc signing does not provide Developer ID trust or notarization.' "$NC"
 
 # Ad hoc builds trip Gatekeeper on first launch. Leave the unlock steps next
 # to the bundle (it may be handed off without this terminal output) and print
@@ -154,5 +171,5 @@ You only need to do this once; later launches open normally. To
 distribute without this prompt, sign with a Developer ID certificate
 and notarize (see scripts/macos-release-signing.sh).
 NOTICE
-printf 'First launch: right-click the app and choose Open (or allow it in Settings > Privacy & Security).\n'
-printf 'Details written to: %s\n' "${OUTPUT_PARENT}/FIRST-LAUNCH.txt"
+printf '%b%b%s%b %s\n' "$CYAN" "$BOLD" 'First launch:' "$NC" 'right-click the app and choose Open (or allow it in Settings > Privacy & Security).'
+printf '%b%s%s%b\n' "$DIM" 'Details written to: ' "${OUTPUT_PARENT}/FIRST-LAUNCH.txt" "$NC"
