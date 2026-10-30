@@ -16,8 +16,8 @@ pub(super) use serde_json::json;
 pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation};
 pub(super) use super::{
     ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK,
-    TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page, restored_output_for_copy,
-    scale_row_height_for_ui_font, workspace_picker_options,
+    TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page, eyebrow_label, group_box_title,
+    restored_output_for_copy, row_title, scale_row_height_for_ui_font, section_label, workspace_picker_options,
 };
 pub(super) use crate::desktop::files::ExternalEditor;
 pub(super) use crate::desktop::preferences::FileOpenDestination;
@@ -326,6 +326,7 @@ mod config_catalog;
 mod config_sessions;
 mod curated_config;
 mod files_webmcp;
+mod heading_tiers;
 mod inspector_appearance;
 mod mcp_app;
 mod notifications;

@@ -4,9 +4,10 @@
 //! diff review) use `rounded_xl`; sidebar and inspector panels `rounded_lg`;
 //! nested cards and compact dialogs `rounded_md`; tiny inset boxes
 //! `rounded_sm`; pills only for intentional pill shapes. Panel toolbar rows
-//! share [`panel_header`]; short
-//! navigation labels share [`eyebrow_label`], settings labels keep sentence
-//! case via [`section_label`]. Interactive controls use the pointing hand
+//! share [`panel_header`]; short navigation labels share [`eyebrow_label`],
+//! settings section headings keep sentence case via [`section_label`] and
+//! [`group_box_title`] one size step above body text. Interactive controls
+//! use the pointing hand
 //! through [`desktop_button`]/[`DesktopButtonExt::desktop_disabled`]; rows
 //! that act as buttons keep their own cursor. Chain `.lock_scroll_axis()`
 //! before `.test_support()`: the test wrapper hides that method.
@@ -107,12 +108,14 @@ pub(super) fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
     TabBar::new(id).segmented().w_full()
 }
 
+/// Sentence-case settings section heading: one rem step above body text at
+/// label-grade foreground with semibold weight.
 pub(super) fn section_label(
     text: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
     div()
-        .text_xs()
+        .text_base()
         .font_semibold()
         .text_color(themes::label_foreground(colors))
         .child(text.into())
@@ -122,12 +125,17 @@ pub(super) fn section_label(
 /// style used by the sidebar, the utilities pane, and popover group headers.
 /// Callers pass natural-case text; the builder applies the casing once, so no
 /// call site hand-rolls `.to_uppercase()` or ships pre-uppercased literals.
-/// Settings and config surfaces keep sentence-case [`section_label`].
+/// Eyebrows stay at body size; settings and config surfaces keep sentence-case
+/// [`section_label`].
 pub(super) fn eyebrow_label(
     text: impl AsRef<str>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
-    section_label(text.as_ref().to_uppercase(), colors)
+    div()
+        .text_sm()
+        .font_semibold()
+        .text_color(themes::label_foreground(colors))
+        .child(gpui_kit::SharedString::from(text.as_ref().to_uppercase()))
 }
 
 /// One panel toolbar row: leading content pinned left, trailing actions
@@ -182,14 +190,15 @@ pub(super) fn settings_row(
 }
 
 /// Section headings for Kit group boxes, whose default title renders in muted
-/// metadata text. Headings stay at primary foreground with semibold weight so
-/// they read above body text instead of below it.
+/// metadata text. Headings stay one size step above body text at primary
+/// foreground with semibold weight so they read above body text instead of
+/// below it.
 pub(super) fn group_box_title(
     title: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
     div()
-        .text_sm()
+        .text_base()
         .font_semibold()
         .text_color(colors.foreground)
         .child(title.into())
