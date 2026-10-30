@@ -254,6 +254,340 @@ fn left_navigation_surface_stays_full_height_while_content_clears_the_toolbar(cx
     .unwrap();
 }
 
+fn browser_session(
+    id: &str,
+    workspace: &str,
+    updated_at: Option<u64>,
+    size_bytes: u64,
+) -> vtcode_desktop_protocol::SessionSummary {
+    vtcode_desktop_protocol::SessionSummary {
+        session_id: id.into(),
+        title: Some(format!("Thread {id}")),
+        workspace: workspace.into(),
+        completed: false,
+        resumable: true,
+        size_bytes,
+        updated_at,
+    }
+}
+
+#[gpui_kit::test]
+fn thread_browser_groups_current_workspace_first_at_full_window_size(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let current = std::env::temp_dir().display().to_string();
+    view.update(cx, |view, _| {
+        // Newest-first globally would put other-new on top; grouping must win.
+        view.sessions = vec![
+            browser_session("other-new", "/work/other", Some(50), 2048),
+            browser_session("cur-old", current.as_str(), Some(10), 100),
+            browser_session("cur-new", current.as_str(), Some(30), 0),
+            browser_session("other-old", "/work/other", Some(5), 100),
+            browser_session("ancient", "/work/other", None, 0),
+        ];
+        view.selected_session_id = Some("cur-old".into());
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let dialog = window.find("thread-browser");
+        assert_eq!(dialog.role(), Some(gpui_kit::Role::Dialog));
+        assert_eq!(dialog.label(), Some("Browse threads"));
+        let bounds = dialog.bounds();
+        assert!(
+            bounds.left() < px(100.) && bounds.top() < px(100.),
+            "dialog starts near the window edge: {bounds:?}"
+        );
+        assert!(
+            bounds.right() > viewport.width - px(100.) && bounds.bottom() > viewport.height - px(100.),
+            "dialog spans nearly the full window: {bounds:?} in {viewport:?}"
+        );
+        assert_eq!(window.find("thread-browser-list").role(), Some(gpui_kit::Role::List));
+
+        let top = |id: &str| window.find(format!("browser-session-row-{id}")).bounds().top();
+        assert!(top("cur-new") < top("cur-old"), "current group sorts newest first");
+        assert!(top("cur-old") < top("other-new"), "current group precedes other workspaces");
+        assert!(top("other-new") < top("other-old"), "other group sorts newest first");
+        assert!(top("other-old") < top("ancient"), "unknown timestamps sort last");
+        assert!(window.try_find("browser-session-meta-other-new").is_some(), "age and size share one lane");
+        assert!(window.try_find("browser-session-meta-cur-new").is_some(), "age alone still shows a lane");
+        assert!(
+            window.try_find("browser-session-meta-ancient").is_none(),
+            "unknown timestamp with unknown size shows no lane"
+        );
+        assert_eq!(window.find("browser-session-row-cur-old").selected(), Some(true));
+        assert_eq!(window.find("browser-session-row-cur-new").selected(), Some(false));
+        assert_eq!(window.find("browser-session-cur-old").label(), Some("Thread cur-old (current thread)"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_browser_row_load_selects_thread_and_closes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.sessions = vec![browser_session("load-me", "/work/other", Some(9), 0)];
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        window.click("browser-session-load-me", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_none(), "loading dismisses the browser");
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("selecting a browser row must request the session load");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "load-me" }));
+}
+
+#[gpui_kit::test]
+fn thread_browser_dismiss_button_closes_and_restores_focus(cx: &mut TestAppContext) {
+    let (window, _view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        focus_element_by_tab(window, "nav-browse-threads", cx);
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some());
+
+        window.click("browser-dismiss", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_none());
+        assert_eq!(window.find("nav-browse-threads").focused(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_browser_escape_restores_rail_button_focus(cx: &mut TestAppContext) {
+    let (window, _view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        focus_element_by_tab(window, "nav-browse-threads", cx);
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some());
+        assert_eq!(window.find("thread-browser").focused(), Some(true));
+
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_none());
+        assert_eq!(window.find("nav-browse-threads").focused(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_browser_new_thread_requests_close_and_marks_pending(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.sessions = vec![browser_session("current", "/work/main", Some(9), 0)];
+        view.selected_session_id = Some("current".into());
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        window.click("browser-new-session", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).pending_new_thread);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("browser new-thread must close the selected session first");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
+    assert_eq!(params, json!({ "sessionId": "current" }));
+}
+
+#[gpui_kit::test]
+fn thread_browser_close_thread_closes_selected_session(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.sessions = vec![browser_session("stale", "/work/main", Some(9), 0)];
+        view.selected_session_id = Some("stale".into());
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        window.click("browser-close-session", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("browser close-thread must close the selected session");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
+    assert_eq!(params, json!({ "sessionId": "stale" }));
+}
+
+#[gpui_kit::test]
+fn thread_browser_shows_empty_state_without_sessions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.sessions = Vec::new();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some());
+        assert!(window.try_find("thread-browser-list").is_none(), "empty browser shows no list");
+        assert!(window.try_find("browser-new-session").is_some(), "empty browser still offers a new thread");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_browser_and_settings_stay_mutually_exclusive(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        focus_element_by_tab(window, "nav-browse-threads", cx);
+        window.dispatch_action(Box::new(super::super::OpenThreadBrowser), cx);
+    })
+    .unwrap();
+    // Dispatch is deferred; park the loop before asserting the effect.
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some(), "the action opens the browser");
+
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("settings-panel").is_some());
+        assert!(window.try_find("thread-browser").is_none(), "settings replaces the browser");
+
+        view.update(cx, |view, cx| view.open_thread_browser(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some());
+        assert!(!view.read(cx).settings_open, "browser replaces settings");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_browser_replaces_command_palette(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("command-palette").is_some());
+
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some());
+        assert!(window.try_find("command-palette").is_none(), "browser replaces the palette");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_browser_from_palette_returns_focus_to_trigger_on_escape(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        focus_element_by_tab(window, "nav-browse-threads", cx);
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.input("browse", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window
+                .find(palette_action_id(&super::super::PaletteAction::BrowseThreads))
+                .label(),
+            Some("Browse threads")
+        );
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("command-palette").is_none());
+        assert!(window.try_find("thread-browser").is_some(), "confirming the command opens the browser");
+
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_none());
+        assert_eq!(
+            window.find("nav-browse-threads").focused(),
+            Some(true),
+            "escape returns focus through the palette to its trigger"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn composer_activation_dismisses_browser_and_focuses_input(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some());
+
+        view.update(cx, |view, cx| view.activate_composer(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_none(), "activating the composer dismisses the browser");
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "activating the composer focuses its input"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn trackpad_swipe_over_open_browser_does_not_navigate(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("nav-browse-threads", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-browser").is_some());
+        window.click_with_options(
+            "pane-root",
+            ClickOptions::new().with_button(MouseButton::Navigate(NavigationDirection::Back)),
+            cx,
+        );
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "a swipe over an open browser must not navigate the background");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close_browser(window, cx));
+        window.render_frame(cx);
+        window.click_with_options(
+            "pane-root",
+            ClickOptions::new().with_button(MouseButton::Navigate(NavigationDirection::Back)),
+            cx,
+        );
+    })
+    .unwrap();
+    let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+        panic!("closing the browser must re-arm background swipe navigation");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+}
+
 #[gpui_kit::test]
 fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

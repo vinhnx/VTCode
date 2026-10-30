@@ -187,7 +187,7 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
             let workspace_before = view.workspace.clone();
             view.create_session(cx);
             view.close_session(cx);
-            view.load_session("other".into(), cx);
+            let _ = view.load_session("other".into(), cx);
             view.select_model("other-provider".into(), "other-model".into(), cx);
             view.select_workspace(other_workspace.path().to_path_buf(), cx);
             assert_eq!(view.workspace, workspace_before);

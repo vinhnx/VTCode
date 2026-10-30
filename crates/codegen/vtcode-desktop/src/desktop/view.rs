@@ -87,6 +87,7 @@ use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigatio
 mod appearance;
 mod backend_events;
 mod bootstrap;
+mod browser;
 mod chrome;
 mod components;
 mod composer_actions;
@@ -271,6 +272,7 @@ actions!(
         OpenUtilities,
         OpenWorkspaceFiles,
         OpenWorkspaceReview,
+        OpenThreadBrowser,
         RefreshWorkspace,
         NavigateBack,
         NavigateForward,
@@ -432,6 +434,9 @@ struct DesktopView {
     workspace_review: Option<WorkspaceReviewState>,
     review_focus: FocusHandle,
     review_return_focus: Option<FocusHandle>,
+    browser_open: bool,
+    browser_focus: FocusHandle,
+    browser_return_focus: Option<FocusHandle>,
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,
@@ -460,9 +465,11 @@ struct DesktopView {
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
     change_list_scroll: VirtualListScrollHandle,
+    browser_scroll: VirtualListScrollHandle,
     session_row_sizes: FixedRowSizeCache,
     activity_row_sizes: FixedRowSizeCache,
     change_row_sizes: FixedRowSizeCache,
+    browser_row_sizes: FixedRowSizeCache,
     settings_focus: FocusHandle,
     settings_navigation_focus: FocusHandle,
     settings_tab: settings::SettingsTab,

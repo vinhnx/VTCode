@@ -276,11 +276,7 @@ impl DesktopView {
                     .workspace
                     .as_ref()
                     .is_some_and(|selected| selected.display().to_string() == *path);
-                let label = Path::new(path)
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or(path)
-                    .to_string();
+                let label = workspace_short_name(path).to_string();
                 div().w_full().child(
                     desktop_button(opaque_path_element_id("workspace", path))
                         .accessibility_label(if current {
@@ -339,10 +335,7 @@ impl DesktopView {
                                     let session = view.sessions.get(index)?;
                                     let session_id = session.session_id.clone();
                                     let selected = view.selected_session_id.as_deref() == Some(&session_id);
-                                    let label = session.title.clone().unwrap_or_else(|| {
-                                        let short = session_id.chars().take(8).collect::<String>();
-                                        rust_i18n::t!(i18n::SESSION_FALLBACK_TITLE, id = short.as_str()).to_string()
-                                    });
+                                    let label = session_display_title(&session_id, session.title.as_deref());
                                     let enabled = view.session_change_allowed(Some(&session_id));
                                     Some(
                                         div()
@@ -383,7 +376,7 @@ impl DesktopView {
                                                             .text_color(cx.theme().colors.foreground)
                                                     })
                                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                                        this.load_session(session_id.clone(), cx)
+                                                        let _ = this.load_session(session_id.clone(), cx);
                                                     })),
                                             )
                                             .into_any_element(),

@@ -114,6 +114,7 @@ impl DesktopView {
             && self.config_editor.is_none()
             && self.file_preview.is_none()
             && !self.review_open
+            && !self.browser_open
     }
 
     pub(super) fn navigate_back(&mut self, cx: &mut Context<Self>) {

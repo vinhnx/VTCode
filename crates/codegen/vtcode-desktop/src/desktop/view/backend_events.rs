@@ -102,12 +102,8 @@ impl DesktopView {
         if (self.interaction.is_none() || interaction_replaced) && !self.question_answer.read(cx).value().is_empty() {
             self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
         }
-        if accepted_decision
-            && self.interaction.is_none()
-            && !self.settings_open
-            && self.palette.is_none()
-            && !self.review_open
-        {
+        let overlay_open = self.settings_open || self.palette.is_some() || self.review_open || self.browser_open;
+        if accepted_decision && self.interaction.is_none() && !overlay_open {
             self.focus_composer(window, cx);
         }
         self.restore_focus_after_review_close(window, cx);

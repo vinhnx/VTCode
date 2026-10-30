@@ -32,6 +32,9 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        if self.browser_open {
+            self.close_browser(window, cx);
+        }
         self.focus_composer(window, cx);
         cx.notify();
     }
@@ -72,6 +75,9 @@ impl DesktopView {
         }
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
+        }
+        if self.browser_open {
+            self.close_browser(window, cx);
         }
         if !self.settings_open {
             self.settings_return_focus = window.focused(cx);
@@ -253,6 +259,8 @@ impl DesktopView {
             self.close_settings(window, cx);
         } else if self.palette.is_some() {
             self.close_palette(window, cx);
+        } else if self.browser_open {
+            self.close_browser(window, cx);
         } else if self.review_open {
             self.close_review(window, cx);
         } else if self.file_preview.is_some() {
@@ -280,6 +288,9 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        if self.browser_open {
+            self.close_browser(window, cx);
+        }
         if !self.review_open {
             self.review_return_focus = window.focused(cx);
         }
@@ -292,6 +303,37 @@ impl DesktopView {
         self.review_open = false;
         self.workspace_review = None;
         if let Some(focus) = self.review_return_focus.take() {
+            focus.focus(window, cx);
+        } else {
+            self.focus_composer(window, cx);
+        }
+        cx.notify();
+    }
+
+    pub(super) fn open_thread_browser(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings_open {
+            self.close_settings(window, cx);
+        }
+        if self.palette.is_some() {
+            self.close_palette(window, cx);
+        }
+        if self.review_open {
+            self.close_review(window, cx);
+        }
+        if self.file_preview.is_some() {
+            self.close_file_preview(window, cx);
+        }
+        if !self.browser_open {
+            self.browser_return_focus = window.focused(cx);
+        }
+        self.browser_open = true;
+        self.browser_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    pub(super) fn close_browser(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.browser_open = false;
+        if let Some(focus) = self.browser_return_focus.take() {
             focus.focus(window, cx);
         } else {
             self.focus_composer(window, cx);

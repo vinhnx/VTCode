@@ -173,9 +173,8 @@ impl DesktopView {
         let _started = self.begin_new_thread(cx);
     }
 
-    pub(super) fn load_session(&mut self, session_id: String, cx: &mut Context<Self>) {
-        let _sent =
-            self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx);
+    pub(super) fn load_session(&mut self, session_id: String, cx: &mut Context<Self>) -> bool {
+        self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx)
     }
 
     pub(super) fn request_earlier_history(&mut self, cx: &mut Context<Self>) {

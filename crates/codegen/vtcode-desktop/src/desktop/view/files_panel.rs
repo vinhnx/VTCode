@@ -213,6 +213,9 @@ impl DesktopView {
         if self.review_open {
             self.close_review(window, cx);
         }
+        if self.browser_open {
+            self.close_browser(window, cx);
+        }
         let Some(workspace) = self.workspace.clone() else {
             return;
         };

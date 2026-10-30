@@ -59,6 +59,7 @@ pub(super) enum PaletteAction {
     ChooseWorkspace,
     RefreshSessions,
     RefreshFiles,
+    BrowseThreads,
     ToggleInspector,
     ToggleTheme,
     SelectFont { target: FontTarget, family: Option<String> },
@@ -106,6 +107,7 @@ impl DesktopView {
         groups.push((
             rust_i18n::t!("app.palette.sections.view").to_string(),
             vec![
+                command(rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string(), PaletteAction::BrowseThreads),
                 command(
                     rust_i18n::t!(i18n::PALETTE_COMMAND_TOGGLE_INSPECTOR).to_string(),
                     PaletteAction::ToggleInspector,
@@ -156,10 +158,7 @@ impl DesktopView {
             .sessions
             .iter()
             .map(|session| {
-                let label = session.title.clone().unwrap_or_else(|| {
-                    let short = session.session_id.chars().take(8).collect::<String>();
-                    rust_i18n::t!(i18n::SESSION_FALLBACK_TITLE, id = short.as_str()).to_string()
-                });
+                let label = session_display_title(&session.session_id, session.title.as_deref());
                 command(
                     rust_i18n::t!("app.palette.command.open_session", label = label.as_str()).to_string(),
                     PaletteAction::LoadSession(session.session_id.clone()),
@@ -514,6 +513,7 @@ impl DesktopView {
                 let _ = self.request(protocol::method::SESSION_LIST, json!({}));
             }
             PaletteAction::RefreshFiles => self.refresh_files(cx),
+            PaletteAction::BrowseThreads => self.open_thread_browser(window, cx),
             PaletteAction::ToggleInspector => self.toggle_inspector(cx),
             PaletteAction::ToggleZenMode => self.toggle_zen_mode(window, cx),
             PaletteAction::ToggleTheme => self.toggle_theme(window, cx),
@@ -591,7 +591,9 @@ impl DesktopView {
                 window,
                 cx,
             ),
-            PaletteAction::LoadSession(session_id) => self.load_session(session_id, cx),
+            PaletteAction::LoadSession(session_id) => {
+                let _ = self.load_session(session_id, cx);
+            }
             PaletteAction::PreviewFile(rel_path) => self.open_file_preview(rel_path, window, cx),
             PaletteAction::SelectWorkspaceReviewFile(path) => self.select_workspace_review_file(path, cx),
             PaletteAction::SelectModel { provider, model } => {
@@ -650,7 +652,8 @@ impl DesktopView {
             PaletteAction::RefreshFiles | PaletteAction::ToggleInspector | PaletteAction::PreviewFile(_) => {
                 self.workspace.is_some()
             }
-            PaletteAction::ToggleZenMode
+            PaletteAction::BrowseThreads
+            | PaletteAction::ToggleZenMode
             | PaletteAction::ToggleTheme
             | PaletteAction::SelectFont { .. }
             | PaletteAction::SelectSettingsTab(_) => true,
@@ -765,6 +768,7 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::ChooseWorkspace
         | PaletteAction::RefreshSessions
         | PaletteAction::RefreshFiles
+        | PaletteAction::BrowseThreads
         | PaletteAction::ToggleInspector
         | PaletteAction::ToggleZenMode
         | PaletteAction::ToggleTheme

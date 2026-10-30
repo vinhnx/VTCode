@@ -91,6 +91,20 @@ impl DesktopView {
                     .when(utilities_selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
                     .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
             )
+            .child(
+                desktop_button("nav-browse-threads")
+                    .icon(IconName::Maximize2)
+                    .ghost()
+                    .rounded_lg()
+                    .accessibility_label(rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string())
+                    .tooltip_with_action(
+                        rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string(),
+                        &OpenThreadBrowser,
+                        Some(key_context::DESKTOP),
+                    )
+                    .when(self.browser_open, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                    .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone()),
+            )
             .into_any_element();
         let navigation = div()
             .id("primary-navigation")

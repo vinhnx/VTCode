@@ -1,0 +1,7 @@
+_version: 2
+app:
+  browser:
+    browse_threads: {en: "Browse threads"}
+    empty_title: {en: "No threads yet"}
+    empty_description: {en: "Threads you start in any workspace will appear here for review."}
+    close: {en: "Close"}

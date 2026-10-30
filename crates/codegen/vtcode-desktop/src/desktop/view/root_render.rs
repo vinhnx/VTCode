@@ -167,6 +167,7 @@ impl Render for DesktopView {
             .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
             .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenThreadBrowser, window, cx| view.open_thread_browser(window, cx)))
             .on_action(cx.listener(|view, _: &OpenConversationSearch, window, cx| {
                 if let Some(session_id) = view.selected_session_id.clone() {
                     view.open_conversation_search(session_id, window, cx);
@@ -214,6 +215,9 @@ impl Render for DesktopView {
         }
         if self.review_open {
             body = body.child(self.render_change_review(cx));
+        }
+        if self.browser_open {
+            body = body.child(self.render_thread_browser(cx));
         }
         if !(self.settings_open && self.palette_kind == PaletteKind::SettingsSearch)
             && !self.palette_kind.is_composer_popup()

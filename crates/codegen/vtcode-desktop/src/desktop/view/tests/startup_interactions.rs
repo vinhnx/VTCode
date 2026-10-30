@@ -196,7 +196,7 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
             view.composer.update(cx, |state, cx| state.set_value("Newer unsent draft", window, cx));
             view.submit_prompt(window, cx);
             view.create_session(cx);
-            view.load_session("other-session".into(), cx);
+            let _ = view.load_session("other-session".into(), cx);
             view.select_model("other".into(), "model".into(), cx);
             assert!(!view.workspace_switch_idle());
         });
@@ -374,7 +374,7 @@ fn session_load_blocks_submission_until_the_new_session_is_selected(cx: &mut Tes
             view.backend = Some(BackendHandle { commands });
             view.selected_session_id = Some("old-session".into());
             view.composer.update(cx, |state, cx| state.set_value("Send to loaded session", window, cx));
-            view.load_session("new-session".into(), cx);
+            let _ = view.load_session("new-session".into(), cx);
             view.submit_prompt(window, cx);
             view.close_session(cx);
             view.handle_backend_event(BackendEvent::Response {

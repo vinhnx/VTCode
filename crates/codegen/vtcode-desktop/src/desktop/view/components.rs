@@ -339,6 +339,21 @@ fn status_alert(
         .into_any_element()
 }
 
+/// Short display name for a workspace path: the final component, or the
+/// full path when it has none.
+pub(super) fn workspace_short_name(path: &str) -> &str {
+    Path::new(path).file_name().and_then(|name| name.to_str()).unwrap_or(path)
+}
+
+/// Display title for a session row: the archived title, or a stable
+/// fallback derived from the session id when no title was persisted.
+pub(super) fn session_display_title(session_id: &str, title: Option<&str>) -> String {
+    title.map(str::to_owned).unwrap_or_else(|| {
+        let short = session_id.chars().take(8).collect::<String>();
+        rust_i18n::t!(i18n::SESSION_FALLBACK_TITLE, id = short.as_str()).to_string()
+    })
+}
+
 pub(super) fn empty_state(
     title: impl Into<gpui_kit::SharedString>,
     description: impl Into<gpui_kit::SharedString>,

@@ -74,6 +74,7 @@ pub(super) mod bundle {
 /// tests keep their own literals as independent oracles. New keys go here
 /// and in the test table together, in the same order.
 pub(super) mod i18n {
+    pub const BROWSER_BROWSE_THREADS: &str = "app.browser.browse_threads";
     pub const COMPOSER_ADD_CONTEXT: &str = "app.composer.add_context";
     pub const COMPOSER_ATTACHMENTS_LIMIT: &str = "app.composer.attachments_limit";
     pub const COMPOSER_CHOOSE_MODEL: &str = "app.composer.choose_model";
@@ -146,7 +147,8 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 47] = [
+        const KEYS: [&str; 48] = [
+            i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
             i18n::COMPOSER_CHOOSE_MODEL,
