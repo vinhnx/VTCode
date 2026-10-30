@@ -63,3 +63,17 @@ desktop: storage settings '/Users/vinhnguyenxuan/Documents/vtcode-resources/Scre
 ---
 
 desktop and cli: implement P3 display color support if available
+
+---
+
+check and optimize heavy computations and large components panels, especially for desktop app. consider lazy loading or memoization, paging.
+
+---
+
+zen mode: simplify UI, hide distractions, allow to change models/effort and modes.
+
+---
+
+desktop: add shimmer effect or loading placeholder while loading contents for better UX.
+
+also improve the chat loading experience. can we use tui-shimmer for that?
