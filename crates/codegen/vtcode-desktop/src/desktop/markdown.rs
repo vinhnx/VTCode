@@ -133,7 +133,7 @@ fn append_separator(output: &mut String, separator: char) {
     }
 }
 
-fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
+pub(super) fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
     let mut code = gpui_kit::div()
         .font_family(cx.theme().mono_font_family.clone())
         .text_size(cx.theme().mono_font_size);
@@ -157,7 +157,18 @@ fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
 }
 
 pub(super) fn render_markdown(id: String, source: SharedString, streaming: bool, cx: &gpui_kit::App) -> TextView {
-    let text_view = harden_transcript_text_view(TextView::markdown(id, source).style(markdown_style(cx)));
+    render_markdown_with_style(id, source, streaming, markdown_style(cx))
+}
+
+/// Transcript Markdown with a caller-supplied style, so the per-frame row
+/// loop hoists one style build instead of rebuilding it per visible row.
+pub(super) fn render_markdown_with_style(
+    id: String,
+    source: SharedString,
+    streaming: bool,
+    style: TextViewStyle,
+) -> TextView {
+    let text_view = harden_transcript_text_view(TextView::markdown(id, source).style(style));
 
     if streaming {
         text_view.motion(streaming_motion())

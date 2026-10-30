@@ -441,6 +441,15 @@ pub(super) fn readable_indicator_color(background: Hsla, foreground: Hsla, color
     })
 }
 
+/// Fallback seeds that keep Ask (success-family) and Auto-approve
+/// (warning-family) permission states visually distinct on palettes where
+/// `success == warning`. Raw palette values live only in this theme layer;
+/// callers must pass the result through [`readable_indicator_color`] for the
+/// target surface. Returns `(ask_seed, auto_approve_seed)`.
+pub(super) fn distinct_permission_seeds() -> (Hsla, Hsla) {
+    (rgb(0x237A45).into(), rgb(0xB45309).into())
+}
+
 fn adjust_color_until_readable(
     background: Hsla,
     foreground: Hsla,

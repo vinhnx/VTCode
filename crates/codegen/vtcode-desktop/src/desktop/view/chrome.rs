@@ -153,9 +153,9 @@ impl DesktopView {
 
     pub(super) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let workspace_section = rust_i18n::t!("app.workspace.section").to_string().to_uppercase();
-        let projects_section = rust_i18n::t!("app.workspace.projects").to_string().to_uppercase();
-        let recent_threads_section = rust_i18n::t!("app.workspace.recent_threads").to_string().to_uppercase();
+        let workspace_section = rust_i18n::t!("app.workspace.section").to_string();
+        let projects_section = rust_i18n::t!("app.workspace.projects").to_string();
+        let recent_threads_section = rust_i18n::t!("app.workspace.recent_threads").to_string();
         let mut sidebar = div()
             .id("project-thread-sidebar")
             .test_support()
@@ -178,7 +178,7 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(section_label(workspace_section, &theme.colors))
+                    .child(eyebrow_label(workspace_section, &theme.colors))
                     .child(
                         desktop_button("choose-workspace")
                             .tooltip_with_action(
@@ -257,7 +257,7 @@ impl DesktopView {
                 ),
         );
 
-        sidebar = sidebar.child(section_label(projects_section, &theme.colors));
+        sidebar = sidebar.child(eyebrow_label(projects_section, &theme.colors));
         let recent = self.recent_workspaces();
         if !recent.is_empty() {
             sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().map(|path| {
@@ -280,6 +280,7 @@ impl DesktopView {
                         })
                         .child(navigation_label(label, IconName::Folder, current, theme.colors.primary))
                         .ghost()
+                        .toggled(current)
                         .w_full()
                         .desktop_disabled(!self.workspace_switch_idle() || self.retained_submission.is_some())
                         .when(current, |button| button.bg(theme.colors.secondary).text_color(theme.colors.foreground))
@@ -295,7 +296,7 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_between()
-                .child(section_label(recent_threads_section, &theme.colors))
+                .child(eyebrow_label(recent_threads_section, &theme.colors))
                 .child(
                     div()
                         .text_xs()
@@ -361,6 +362,7 @@ impl DesktopView {
                                                         session_primary,
                                                     ))
                                                     .ghost()
+                                                    .toggled(selected)
                                                     .desktop_disabled(!enabled)
                                                     .w_full()
                                                     .justify_start()

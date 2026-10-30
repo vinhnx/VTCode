@@ -1,12 +1,13 @@
 //! Read-only Git review; snapshots never enter the agent transcript.
 
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, StyledExt};
+use gpui_kit::base::{Disableable, InteractiveElementExt, StyledExt};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::diff::{Diff, DiffFile, DiffMode, DiffState};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
@@ -620,12 +621,15 @@ impl DesktopView {
                     .child(
                         div()
                             .id("workspace-review-raw")
+                            .lock_scroll_axis()
                             .test_support()
                             .role(gpui_kit::Role::Label)
                             .aria_label(patch.to_string())
                             .flex_1()
                             .min_h_0()
+                            .track_scroll(&self.review_scroll)
                             .overflow_y_scroll()
+                            .vertical_scrollbar(&self.review_scroll)
                             .p_4()
                             .font_family(cx.theme().mono_font_family.clone())
                             .text_size(cx.theme().mono_font_size)

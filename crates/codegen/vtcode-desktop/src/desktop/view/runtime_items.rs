@@ -32,7 +32,7 @@ impl DesktopView {
     }
 
     pub(super) fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
-        self.restored_activity.retain(|restored| restored.id != item.id);
+        self.retain_restored_activity(|restored| restored.id != item.id);
         let _cursor = self.restored_output_cursors.remove(&item.id);
         let _pages = self.restored_output_pages.remove(&item.id);
         if self
@@ -99,7 +99,7 @@ impl DesktopView {
                         TranscriptItem::new(id, TranscriptRole::Tool.as_str().to_string(), title.into(), text);
                     item.output = output;
                     item.app_previews = app_previews;
-                    self.restored_activity.push(item);
+                    self.push_restored_activity(item);
                 } else {
                     self.append_or_update_item(id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
                     if output.is_some() {

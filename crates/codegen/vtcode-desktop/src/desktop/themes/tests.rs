@@ -542,6 +542,23 @@ fn accent_badges_stay_readable() {
 }
 
 #[test]
+fn permission_fallback_seeds_stay_distinct_and_readable() {
+    let (ask_seed, auto_seed) = distinct_permission_seeds();
+    assert_ne!(ask_seed, auto_seed, "Ask and Auto-approve fallbacks must differ");
+    for theme in all_themes() {
+        let raised = filled_surface(theme.background, theme.foreground, 24);
+        for (background, seat) in [(theme.background, "canvas"), (raised, "raised popover")] {
+            let ask = readable_indicator_color(background, theme.foreground, ask_seed);
+            let auto = readable_indicator_color(background, theme.foreground, auto_seed);
+            for (name, color) in [("Ask", ask), ("Auto-approve", auto)] {
+                let ratio = contrast_ratio(color, background);
+                assert!(ratio >= 4.5, "{}: {name} fallback on {seat} is {ratio:.2}", theme.id);
+            }
+        }
+    }
+}
+
+#[test]
 fn theme_ids_are_unique_and_default_exists() {
     let mut ids: Vec<&str> = all_themes().iter().map(|theme| theme.id).collect();
     let count = ids.len();

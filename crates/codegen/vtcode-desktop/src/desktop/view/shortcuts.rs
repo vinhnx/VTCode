@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn shortcut_search_matches_label_description_and_binding() {
-        use super::super::configuration::config_search_terms;
+        use super::super::config_search::config_search_terms;
 
         let zen = COMMANDS.iter().find(|command| command.id == CommandId::ZenMode).unwrap();
         let commands = COMMANDS.iter().find(|command| command.id == CommandId::Commands).unwrap();

@@ -1,5 +1,6 @@
 //! Searchable, typed edits for the CLI configuration shared with Desktop.
 
+use super::config_search::{ConfigSearchCorpus, config_search_terms, haystack_matches_terms, setting_matches_query};
 use super::*;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::searchable_list::SearchableListItem;
@@ -178,13 +179,26 @@ impl DesktopView {
     /// Rebuild the memoized catalog grouping for the current search query and
     /// reset row paging to the first page. Called on every snapshot/query
     /// change: read responses, keystrokes via the search subscription, and
-    /// programmatic query sets.
+    /// programmatic query sets. The search corpus is rebuilt only when the
+    /// snapshot epoch changed, so keystrokes filter without allocation.
     pub(super) fn refresh_config_catalog(&mut self, cx: &App) {
         let query = self.config_search_query(cx);
-        self.config_catalog_cache = self
-            .cli_config_settings
-            .as_ref()
-            .map(|snapshot| build_config_catalog_cache(snapshot, &query, self.config_catalog_epoch));
+        let epoch = self.config_catalog_epoch;
+        let corpus_fresh = self.cli_config_settings.as_ref().is_some_and(|snapshot| {
+            self.config_search_corpus
+                .as_ref()
+                .is_some_and(|corpus| corpus.is_fresh(snapshot, epoch))
+        });
+        if !corpus_fresh {
+            self.config_search_corpus = self
+                .cli_config_settings
+                .as_ref()
+                .map(|snapshot| ConfigSearchCorpus::build(snapshot, epoch));
+        }
+        self.config_catalog_cache = match (self.cli_config_settings.as_ref(), self.config_search_corpus.as_ref()) {
+            (Some(snapshot), Some(corpus)) => Some(build_config_catalog_cache(snapshot, corpus, &query, epoch)),
+            _ => None,
+        };
         self.config_visible_row_limit = CONFIG_GROUP_PAGE_SIZE;
     }
 
@@ -526,6 +540,7 @@ impl DesktopView {
             Err(_) => {
                 self.cli_config_settings = None;
                 self.config_catalog_cache = None;
+                self.config_search_corpus = None;
                 self.error = Some("The CLI returned an invalid settings catalog.".into());
             }
         }
@@ -602,15 +617,23 @@ impl ConfigCatalogCache {
 /// Pure grouping pass: filter by query, bucket by group name in catalog
 /// order, and precompute the header counts. Shared by the cache refresh and
 /// render's cold-start fallback so there is a single grouping code path.
+/// The corpus must be fresh for `snapshot`/`epoch`; a stale entry falls back
+/// to a direct match so grouping stays total.
 pub(super) fn build_config_catalog_cache(
     snapshot: &protocol::ConfigSettingsSnapshot,
+    corpus: &ConfigSearchCorpus,
     query: &str,
     epoch: u64,
 ) -> ConfigCatalogCache {
+    debug_assert!(corpus.is_fresh(snapshot, epoch), "config search corpus must match the snapshot it filters");
     let terms = config_search_terms(query);
     let mut grouped = std::collections::BTreeMap::<&str, Vec<usize>>::new();
     for (index, setting) in snapshot.settings.iter().enumerate() {
-        if setting_matches_query(setting, &terms) {
+        let matched = match corpus.haystacks.get(index) {
+            Some(haystack) => terms.is_empty() || haystack_matches_terms(haystack, &terms),
+            None => setting_matches_query(setting, &terms),
+        };
+        if matched {
             grouped.entry(config_group_name(setting)).or_default().push(index);
         }
     }
@@ -681,49 +704,6 @@ fn resolve_config_target(settings: &[protocol::ConfigSetting], target: &str) -> 
         return ConfigTargetResolution::Group { name: name.to_owned() };
     }
     ConfigTargetResolution::Search { query: target.to_owned() }
-}
-
-/// Lowercased whitespace-separated search terms; every term must match.
-/// Unicode lowering mirrors the CLI's `normalize_query`.
-pub(super) fn config_search_terms(query: &str) -> Vec<String> {
-    query.split_whitespace().map(|term| term.to_lowercase()).collect()
-}
-
-/// Whether a setting matches every search term across its path, label,
-/// value, group, and documentation, mirroring the CLI's exact-terms filter.
-pub(super) fn setting_matches_query(setting: &protocol::ConfigSetting, terms: &[String]) -> bool {
-    if terms.is_empty() {
-        return true;
-    }
-    let mut haystack = String::new();
-    haystack.push_str(&setting.path);
-    haystack.push(' ');
-    if let Some(label) = setting.label.as_deref() {
-        haystack.push_str(label);
-        haystack.push(' ');
-    }
-    haystack.push_str(&value_summary(&setting.value));
-    haystack.push(' ');
-    haystack.push_str(config_group_name(setting));
-    haystack.push(' ');
-    if let Some(description) = setting.description.as_deref() {
-        haystack.push_str(description);
-        haystack.push(' ');
-    }
-    if let Some(origin) = setting.origin.as_deref() {
-        haystack.push_str(origin);
-        haystack.push(' ');
-    }
-    if let Some(default) = setting.default_value.as_deref() {
-        haystack.push_str(default);
-        haystack.push(' ');
-    }
-    for option in &setting.options {
-        haystack.push_str(option);
-        haystack.push(' ');
-    }
-    let haystack = haystack.to_lowercase();
-    terms.iter().all(|term| haystack.contains(term))
 }
 
 pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot) -> Vec<(String, Vec<PaletteCommand>)> {
@@ -970,28 +950,5 @@ mod tests {
         assert!(!setting_matches_query(model, &config_search_terms("model zebra")));
         assert!(!setting_matches_query(model, &config_search_terms("service")));
         assert!(setting_matches_query(model, &config_search_terms("MODEL")));
-    }
-
-    #[test]
-    fn config_search_folds_unicode_case_without_stripping_accents() {
-        let accented = super::protocol::ConfigSetting {
-            path: "agent.break_mode".into(),
-            value: json!(true),
-            origin: None,
-            label: Some("Café mode".into()),
-            type_name: Some("bool".into()),
-            default_value: None,
-            description: None,
-            options: Vec::new(),
-            group: None,
-            group_description: None,
-            editable: true,
-        };
-        assert!(setting_matches_query(&accented, &config_search_terms("CAFÉ")));
-        assert!(setting_matches_query(&accented, &config_search_terms("café")));
-        assert!(
-            !setting_matches_query(&accented, &config_search_terms("CAFE")),
-            "folding is case-only; accents still distinguish terms"
-        );
     }
 }

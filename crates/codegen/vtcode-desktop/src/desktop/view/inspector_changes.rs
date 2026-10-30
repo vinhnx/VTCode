@@ -223,74 +223,59 @@ impl DesktopView {
         }
 
         let totals = self.changes.totals();
-        body = body.child(
+        body = body.child(panel_header(
             div()
                 .flex()
+                .flex_1()
+                .min_w_0()
                 .items_center()
-                .justify_between()
                 .gap_2()
-                .px_3()
-                .py_2()
+                .text_xs()
+                .child(format!("{} files", self.changes.entries().len()))
+                .when_some(totals, |summary, (additions, deletions)| {
+                    summary
+                        .child(div().text_color(colors.success).child(format!("+{additions}")))
+                        .child(div().text_color(colors.danger).child(format!("−{deletions}")))
+                })
+                .when(totals.is_none(), |summary| {
+                    summary.child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(colors.muted_foreground)
+                            .child("Partial totals"),
+                    )
+                }),
+            div()
+                .flex()
+                .flex_shrink_0()
+                .items_center()
+                .gap_1()
                 .child(
-                    div()
-                        .flex()
-                        .flex_1()
-                        .min_w_0()
-                        .items_center()
-                        .gap_2()
-                        .text_xs()
-                        .child(format!("{} files", self.changes.entries().len()))
-                        .when_some(totals, |summary, (additions, deletions)| {
-                            summary
-                                .child(div().text_color(colors.success).child(format!("+{additions}")))
-                                .child(div().text_color(colors.danger).child(format!("−{deletions}")))
-                        })
-                        .when(totals.is_none(), |summary| {
-                            summary.child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_color(colors.muted_foreground)
-                                    .child("Partial totals"),
-                            )
-                        }),
+                    desktop_button("previous-change-file")
+                        .icon(IconName::ChevronLeft)
+                        .accessibility_label("Previous changed file")
+                        .tooltip_with_action(
+                            "Previous changed file",
+                            &PreviousReviewFile,
+                            Some(key_context::DIFF_REVIEW),
+                        )
+                        .ghost()
+                        .small()
+                        .desktop_disabled(self.changes.preview_count() < 2)
+                        .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(false, cx))),
                 )
                 .child(
-                    div()
-                        .flex()
-                        .flex_shrink_0()
-                        .items_center()
-                        .gap_1()
-                        .child(
-                            desktop_button("previous-change-file")
-                                .icon(IconName::ChevronLeft)
-                                .accessibility_label("Previous changed file")
-                                .tooltip_with_action(
-                                    "Previous changed file",
-                                    &PreviousReviewFile,
-                                    Some(key_context::DIFF_REVIEW),
-                                )
-                                .ghost()
-                                .small()
-                                .desktop_disabled(self.changes.preview_count() < 2)
-                                .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(false, cx))),
-                        )
-                        .child(
-                            desktop_button("next-change-file")
-                                .icon(IconName::ChevronRight)
-                                .accessibility_label("Next changed file")
-                                .tooltip_with_action(
-                                    "Next changed file",
-                                    &NextReviewFile,
-                                    Some(key_context::DIFF_REVIEW),
-                                )
-                                .ghost()
-                                .small()
-                                .desktop_disabled(self.changes.preview_count() < 2)
-                                .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
-                        ),
+                    desktop_button("next-change-file")
+                        .icon(IconName::ChevronRight)
+                        .accessibility_label("Next changed file")
+                        .tooltip_with_action("Next changed file", &NextReviewFile, Some(key_context::DIFF_REVIEW))
+                        .ghost()
+                        .small()
+                        .desktop_disabled(self.changes.preview_count() < 2)
+                        .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
                 ),
-        );
+        ));
 
         let change_row_height = scale_row_height_for_ui_font(CHANGE_ROW_HEIGHT, cx.theme().font_size);
         let change_sizes = self.change_row_sizes.get(self.changes.entries().len(), change_row_height);

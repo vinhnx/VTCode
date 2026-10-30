@@ -64,6 +64,8 @@ impl DesktopView {
 
     pub(super) fn render_transcript(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_transcript_layout(cx);
+        // One style build per frame; rows clone it instead of rebuilding it each.
+        self.transcript_markdown_style = Some(markdown_style(cx));
         let empty_conversation = self.transcript.is_empty()
             && !self.history_has_earlier
             && !self.history_page_loading
@@ -349,7 +351,10 @@ impl DesktopView {
             .child(label)
     }
 
-    fn render_transcript_row(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+    fn render_transcript_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        // Resolve the tail before borrowing the row for render: the cache
+        // needs `&mut self` while the row borrows the transcript.
+        let tool_tail = self.expanded_tool_tail(index);
         let Some(item) = self.transcript.get(index) else {
             return div().into_any_element();
         };
@@ -379,7 +384,7 @@ impl DesktopView {
                         .child(turn_divider(&cx.theme().colors)),
                 )
             })
-            .when(show_item, |column| column.child(self.render_transcript_item(item, cx)));
+            .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)));
         let message_id = item.id.clone();
         div()
             .id(format!("transcript-row-{}", item.id))
@@ -405,12 +410,17 @@ impl DesktopView {
             .into_any_element()
     }
 
-    fn render_transcript_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
+    fn render_transcript_item(
+        &self,
+        item: &TranscriptItem,
+        tool_tail: Option<gpui_kit::SharedString>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if item.is_notice() {
             return self.render_notice_item(item, cx);
         }
         if item.is_tool() {
-            return self.render_tool_item(item, cx);
+            return self.render_tool_item(item, tool_tail, cx);
         }
         if item.is_diff() {
             return self.render_diff_item(item, cx);
@@ -451,11 +461,13 @@ impl DesktopView {
                                         .role(gpui_kit::Role::Label)
                                         .aria_label(format!("{label}: {}", item.accessibility_text))
                                         .test_support()
-                                        .child(render_markdown(
+                                        .child(render_markdown_with_style(
                                             format!("markdown-{}", item.id),
                                             item.markdown.clone(),
                                             item.is_assistant(),
-                                            cx,
+                                            self.transcript_markdown_style
+                                                .clone()
+                                                .unwrap_or_else(|| markdown_style(cx)),
                                         )),
                                 ),
                         ),
@@ -609,7 +621,12 @@ impl DesktopView {
             .into_any_element()
     }
 
-    fn render_tool_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
+    fn render_tool_item(
+        &self,
+        item: &TranscriptItem,
+        tool_tail: Option<gpui_kit::SharedString>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let colors = cx.theme().colors;
         let id = item.id.clone();
         let status = if item.has_activity_status {
@@ -685,7 +702,9 @@ impl DesktopView {
                 .cloned()
                 .unwrap_or_else(|| item.text.clone());
             let full_output = output.clone();
-            let output_excerpt = inspector::output_tail(&output);
+            // Pre-resolved by the row through the revision-keyed tail cache;
+            // the direct computation only runs if a future caller passes `None`.
+            let output_excerpt = tool_tail.unwrap_or_else(|| inspector::output_tail(&output));
             panel = panel.child(
                 div()
                     .flex()

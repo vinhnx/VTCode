@@ -566,7 +566,7 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
                 "completed".into(),
             );
             item.output = Some(format!("{prefix}{suffix}").into());
-            view.restored_activity.push(item);
+            view.push_restored_activity(item);
             let _previous = view.restored_output_cursors.insert(
                 "historical-output".into(),
                 vtcode_desktop_protocol::SessionOutputCursor {
@@ -774,7 +774,7 @@ fn failed_historical_output_page_keeps_the_incomplete_marker_and_retry_control(c
             "completed".into(),
         );
         item.output = Some(format!("valid prefix{suffix}").into());
-        view.restored_activity.push(item);
+        view.push_restored_activity(item);
         let _previous = view.restored_output_cursors.insert(
             "historical-output".into(),
             vtcode_desktop_protocol::SessionOutputCursor {

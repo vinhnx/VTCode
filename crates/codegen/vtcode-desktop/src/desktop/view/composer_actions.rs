@@ -198,6 +198,7 @@ impl DesktopView {
                     .w_full()
                     .min_h_0()
                     .max_h(px(340.))
+                    .lock_scroll_axis()
                     .overflow_y_scroll()
                     .flex()
                     .flex_col()
@@ -206,10 +207,7 @@ impl DesktopView {
                         div()
                             .px_2()
                             .py_1()
-                            .text_xs()
-                            .font_semibold()
-                            .text_color(colors.muted_foreground)
-                            .child(rust_i18n::t!("app.workspace.section").to_string().to_uppercase()),
+                            .child(eyebrow_label(&rust_i18n::t!("app.workspace.section"), &colors)),
                     );
                 let open_view = view.clone();
                 content = content.child(

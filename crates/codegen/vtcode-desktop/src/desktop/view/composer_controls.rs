@@ -257,11 +257,12 @@ pub(super) fn permission_indicator(
     // Keep permission states visually distinct there, then adapt those seeds to
     // the active surface below.
     let semantic_colors_overlap = colors.success == colors.warning;
+    let (ask_seed, auto_seed) = themes::distinct_permission_seeds();
     let (icon, color) = match mode {
         Some(protocol::PermissionMode::Ask) => (
             IconName::ShieldCheck,
             if semantic_colors_overlap {
-                gpui_kit::rgb(0x237A45).into()
+                ask_seed
             } else {
                 colors.success
             },
@@ -269,7 +270,7 @@ pub(super) fn permission_indicator(
         Some(protocol::PermissionMode::AutoApproveCommands) => (
             IconName::ShieldAlert,
             if semantic_colors_overlap {
-                gpui_kit::rgb(0xB45309).into()
+                auto_seed
             } else {
                 colors.warning
             },

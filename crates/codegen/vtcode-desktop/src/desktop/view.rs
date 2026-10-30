@@ -8,7 +8,9 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 use chrono::Timelike;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, Selectable, StyledExt};
+use gpui_kit::base::{
+    Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, Selectable, StyledExt, TextViewStyle,
+};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{
@@ -69,7 +71,7 @@ use vtcode_desktop_protocol::{
 
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
-use super::markdown::render_markdown;
+use super::markdown::{markdown_style, render_markdown, render_markdown_with_style};
 use super::preferences;
 use super::strings::{app, key_context, keys};
 use super::themes;
@@ -90,6 +92,7 @@ mod components;
 mod composer_actions;
 mod composer_controls;
 mod composer_render;
+mod config_search;
 mod configuration;
 mod configuration_render;
 mod curated;
@@ -346,7 +349,23 @@ struct DesktopView {
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
     message_scroller: Entity<MessageScrollerState>,
+    /// Restored history rows; mutate only via the `*_restored_activity`
+    /// helpers so `restored_activity_revision` stays in sync for the
+    /// inspector projection caches.
     restored_activity: Vec<TranscriptItem>,
+    restored_activity_revision: u64,
+    activity_projection_cache: Option<inspector::ActivityProjectionCache>,
+    output_view_cache: Option<inspector::OutputViewCache>,
+    /// Bounded tails for expanded transcript tool rows, keyed by row id and
+    /// valid only at the stored transcript revision. `output_tail` scans up
+    /// to 128 KB, so expanded rows resolve through `resolve_tool_tail`
+    /// instead of recomputing per frame.
+    tool_tail_cache: HashMap<String, inspector::ToolTailCacheEntry>,
+    /// Markdown style for transcript rows, rebuilt once per `render_transcript`
+    /// call so visible rows clone instead of rebuilding it each. Rows are only
+    /// reachable through `render_transcript`, so the field is always fresh
+    /// where it is read; the fallback covers hypothetical direct row renders.
+    transcript_markdown_style: Option<TextViewStyle>,
     selected_output_id: Option<String>,
     restored_review_history_incomplete: bool,
     restored_activity_history_incomplete: bool,
@@ -427,6 +446,9 @@ struct DesktopView {
     settings_scroll: ScrollHandle,
     settings_tabs_scroll: ScrollHandle,
     config_rail_scroll: ScrollHandle,
+    utilities_scroll: ScrollHandle,
+    output_scroll: ScrollHandle,
+    review_scroll: ScrollHandle,
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
     change_list_scroll: VirtualListScrollHandle,
@@ -451,6 +473,9 @@ struct DesktopView {
     config_catalog_cache: Option<configuration::ConfigCatalogCache>,
     /// Bumped on each catalog snapshot so the cache cannot go stale.
     config_catalog_epoch: u64,
+    /// Precomputed search haystacks, rebuilt only when the snapshot epoch
+    /// changes so per-keystroke filtering allocates nothing.
+    config_search_corpus: Option<config_search::ConfigSearchCorpus>,
     /// Rows rendered for the selected group; the "Show more" control grows it.
     config_visible_row_limit: usize,
     config_target: protocol::ConfigTarget,

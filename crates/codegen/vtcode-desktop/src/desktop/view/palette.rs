@@ -15,6 +15,11 @@ pub(super) struct PaletteCommand {
 /// Immutable entries shared by the owning palette and its rendered callbacks.
 pub(super) type PaletteGroups = Vec<(String, Vec<Rc<PaletteCommand>>)>;
 
+/// Conversation-search entries per group. Each entry clones full message text
+/// into its keywords, so the palette keeps the newest rows instead of cloning
+/// all 2,000 transcript items on every open and refresh.
+pub(super) const MAX_CONVERSATION_SEARCH_ROWS: usize = 200;
+
 pub(super) fn share_palette_commands(groups: Vec<(String, Vec<PaletteCommand>)>) -> PaletteGroups {
     groups
         .into_iter()
@@ -212,6 +217,7 @@ impl DesktopView {
         self.transcript
             .items_newest_first()
             .filter(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
+            .take(MAX_CONVERSATION_SEARCH_ROWS)
             .map(|item| {
                 let speaker = if item.is_user() {
                     rust_i18n::t!("app.palette.command.you").to_string()
@@ -238,11 +244,15 @@ impl DesktopView {
 
     fn conversation_search_outputs(&self, session_id: &str) -> Vec<PaletteCommand> {
         let mut seen = HashSet::new();
+        // Newest first, matching the message group: restored history is older
+        // than the live transcript, so the reversed chain reads newest-first.
         self.restored_activity
             .iter()
             .chain(self.transcript.items())
+            .rev()
             .filter(|item| item.is_tool() && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
             .filter(|item| seen.insert(item.id.as_str()))
+            .take(MAX_CONVERSATION_SEARCH_ROWS)
             .filter_map(|item| {
                 let output = item.output.as_ref()?;
                 let searchable_output = inspector::output_tail(output);

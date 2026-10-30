@@ -316,6 +316,14 @@ pub(super) struct Transcript {
     layout_initialized: bool,
     /// Head index of the trailing consecutive tool group, including single-row groups.
     trailing_tool_group_start: Option<usize>,
+    /// Bumped on every mutation of `items` so derived projections (inspector
+    /// activity/output, palette search) can memoize per revision instead of
+    /// rescanning per frame. Layout-queue-only changes (`take_layout_changes`,
+    /// `follow_latest`, `remeasure`) do not bump: they never alter rows.
+    /// A spurious bump only costs one recompute; a missing bump is a
+    /// stale-projection bug, so new `&mut self` methods that touch `items`
+    /// must call `bump_revision`.
+    revision: u64,
 }
 
 impl Transcript {
@@ -330,6 +338,17 @@ impl Transcript {
 
     pub fn remaining_capacity(&self) -> usize {
         MAX_TRANSCRIPT_ITEMS.saturating_sub(self.items.len())
+    }
+
+    /// Current mutation generation of `items`; see the `revision` field docs.
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    fn bump_revision(&mut self) {
+        // Wrapping is deliberate: the counter is a cache key, not a count.
+        // A collision needs 2^64 mutations without an intervening cache read.
+        self.revision = self.revision.wrapping_add(1);
     }
 
     pub fn get(&self, index: usize) -> Option<&TranscriptItem> {
@@ -376,6 +395,7 @@ impl Transcript {
         self.layout_changes.clear();
         self.trailing_tool_group_start = None;
         self.layout_changes.push(TranscriptLayoutChange::Reset(0));
+        self.bump_revision();
     }
 
     pub fn push(&mut self, item: TranscriptItem) {
@@ -413,6 +433,7 @@ impl Transcript {
         merged.extend(prefix);
         merged.append(&mut self.items);
         self.items = merged;
+        self.bump_revision();
         self.rebuild_activity_group_flags();
         self.refresh_trailing_tool_group_start();
         self.layout_changes.push(TranscriptLayoutChange::Prepend(count));
@@ -486,6 +507,7 @@ impl Transcript {
             None
         };
         self.items.push_back(item);
+        self.bump_revision();
         self.layout_changes
             .push(TranscriptLayoutChange::Splice { range: index..index, count: 1 });
         if promoted_group_head {
@@ -504,6 +526,7 @@ impl Transcript {
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.position_by_id(id) {
             let removed_was_tool = self.items.remove(index).is_some_and(|item| item.is_tool());
+            self.bump_revision();
             self.rebuild_activity_group_flags();
             self.refresh_trailing_tool_group_start();
             self.layout_changes
@@ -537,6 +560,9 @@ impl Transcript {
     }
 
     pub fn upsert(&mut self, mut item: TranscriptItem) {
+        // Unconditional: every path below either mutates a row or pushes, and
+        // a spurious bump on a pure no-op only costs one projection recompute.
+        self.bump_revision();
         if let Some(index) = self.position_by_id(&item.id) {
             let Some(existing) = self.items.get(index) else {
                 return;
@@ -640,6 +666,7 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 if item.output != output {
                     item.output = output;
+                    self.bump_revision();
                 }
             }
         }
@@ -650,6 +677,7 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 if item.app_previews != app_previews {
                     item.app_previews = app_previews;
+                    self.bump_revision();
                 }
             }
         }
@@ -742,6 +770,7 @@ impl Transcript {
                     item.activity_expanded = expanded;
                 }
             }
+            self.bump_revision();
             self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
             self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
         }
@@ -763,6 +792,7 @@ impl Transcript {
             return Some(index);
         }
 
+        self.bump_revision();
         self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
         if expand_group && let Some(range) = group {
             for group_index in range.clone() {
@@ -791,6 +821,7 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
             }
+            self.bump_revision();
             self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
             self.layout_changes
                 .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
@@ -806,6 +837,7 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
             }
+            self.bump_revision();
             self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
             self.layout_changes
                 .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));

@@ -348,3 +348,73 @@ fn group_summary_status_matches_the_shared_classifier() {
         assert_eq!((with_body.running, with_body.failed), (running, failed), "{label:?} with body");
     }
 }
+
+#[test]
+fn revision_bumps_on_item_mutations_but_not_layout_only_changes() {
+    // The revision is the invalidation key for memoized inspector/palette
+    // projections: a missing bump is a stale-projection bug, so every
+    // item-mutating method must bump and every layout-only method must not.
+    let mut transcript = Transcript::default();
+    assert_eq!(transcript.revision(), 0);
+
+    transcript.follow_latest();
+    transcript.remeasure();
+    let _drained = transcript.take_layout_changes();
+    assert_eq!(transcript.revision(), 0, "layout-only changes must not bump");
+
+    transcript.push(item(1, "assistant", "first"));
+    assert_eq!(transcript.revision(), 1);
+
+    // New rows via upsert bump (the push path bumps again; only the increase matters).
+    let before = transcript.revision();
+    transcript.upsert(item(2, "tool", "running"));
+    transcript.upsert(item(3, "tool", "completed"));
+    assert!(transcript.revision() > before, "upserted rows must bump");
+
+    // Updates to existing rows bump, including output-only changes.
+    let before = transcript.revision();
+    transcript.upsert(item(1, "assistant", "first, edited"));
+    assert!(transcript.revision() > before, "text updates must bump");
+    let before = transcript.revision();
+    transcript.set_output("2", Some("output".into()));
+    assert_eq!(transcript.revision(), before + 1, "output changes must bump");
+
+    // No-op writes do not bump (upsert always bumps; setters check first).
+    let before = transcript.revision();
+    transcript.set_output("2", Some("output".into()));
+    transcript.set_output("missing", Some("output".into()));
+    transcript.remove("missing");
+    assert_eq!(transcript.revision(), before, "no-op writes must not bump");
+
+    // Expansion toggles mutate rows, so they bump when they hit.
+    let before = transcript.revision();
+    transcript.toggle_tool("2");
+    transcript.toggle_activity_group("2");
+    assert!(transcript.revision() > before, "toggles on live rows must bump");
+    let before = transcript.revision();
+    transcript.toggle_tool("missing");
+    transcript.toggle_diff("missing");
+    assert_eq!(transcript.revision(), before, "toggles on missing rows must not bump");
+
+    // Structural mutations bump; empty prepends do not.
+    let before = transcript.revision();
+    transcript.remove("3");
+    assert_eq!(transcript.revision(), before + 1, "removal must bump");
+    let before = transcript.revision();
+    assert_eq!(transcript.prepend_prepared(Vec::new()), 0);
+    assert_eq!(transcript.revision(), before, "empty prepend must not bump");
+    let before = transcript.revision();
+    transcript.clear();
+    assert_eq!(transcript.revision(), before + 1, "clear must bump");
+
+    // Prepends, preview updates, and reveals bump when they land.
+    let before = transcript.revision();
+    assert_eq!(transcript.prepend_prepared(vec![item(9, "tool", "running")]), 1);
+    assert_eq!(transcript.revision(), before + 1, "non-empty prepend must bump");
+    let before = transcript.revision();
+    transcript.set_app_previews("9", Vec::new());
+    assert_eq!(transcript.revision(), before, "unchanged previews must not bump");
+    let before = transcript.revision();
+    assert_eq!(transcript.reveal_tool_item("9"), Some(0));
+    assert_eq!(transcript.revision(), before + 1, "reveal must bump");
+}

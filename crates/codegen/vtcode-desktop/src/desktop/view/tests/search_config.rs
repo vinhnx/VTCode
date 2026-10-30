@@ -611,7 +611,7 @@ fn conversation_search_finds_restored_tool_output_and_opens_it_in_the_inspector(
             "completed\n\ncargo check".into(),
         );
         item.output = Some("archived-only-output-marker\ncompiler finished".into());
-        view.restored_activity.push(item);
+        view.push_restored_activity(item);
     });
 
     cx.update_window(window, |_, window, cx| {
@@ -654,6 +654,74 @@ fn conversation_search_finds_restored_tool_output_and_opens_it_in_the_inspector(
         )
         .unwrap();
         assert!(output.text.contains("archived-only-output-marker"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn conversation_search_keeps_the_newest_capped_rows_in_each_group(cx: &mut TestAppContext) {
+    use super::super::MAX_CONVERSATION_SEARCH_ROWS;
+
+    let (window, view) = open_desktop(cx);
+    let session_id = "capped-search-thread".to_string();
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some(session_id.clone());
+        // Transcript outputs are newer than restored history; both groups
+        // must read newest-first so the cap keeps the freshest rows. Tools go
+        // first so the message cap drops them as the oldest rows.
+        for (id, output) in [("out-old", "older output marker"), ("out-new", "newer output marker")] {
+            let mut item = TranscriptItem::new(id.into(), "tool".into(), "Run command".into(), "completed".into());
+            item.output = Some(output.into());
+            view.transcript.push(item);
+        }
+        for index in 0..MAX_CONVERSATION_SEARCH_ROWS + 50 {
+            view.transcript.push(TranscriptItem::new(
+                format!("message-{index:03}"),
+                "user".into(),
+                "You".into(),
+                format!("searchable message number {index}"),
+            ));
+        }
+        for (id, output) in [
+            ("restored-old", "restored older marker"),
+            ("restored-new", "restored newer marker"),
+        ] {
+            let mut item = TranscriptItem::new(id.into(), "tool".into(), "Run command".into(), "completed".into());
+            item.output = Some(output.into());
+            view.push_restored_activity(item);
+        }
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_conversation_search(session_id.clone(), window, cx));
+        window.render_frame(cx);
+
+        let groups = view.read(cx).palette_groups.clone();
+        assert_eq!(groups.len(), 2, "messages and outputs both stay populated");
+
+        let message_ids: Vec<String> = groups[0]
+            .1
+            .iter()
+            .filter_map(|entry| match &entry.action {
+                super::super::PaletteAction::JumpToTranscriptItem { item_id, .. } => Some(item_id.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(message_ids.len(), MAX_CONVERSATION_SEARCH_ROWS);
+        assert_eq!(message_ids.first().unwrap(), "message-249", "newest message first");
+        assert_eq!(message_ids.last().unwrap(), "message-050", "cap drops the oldest");
+        assert!(!message_ids.contains(&"message-000".to_string()));
+
+        let output_ids: Vec<String> = groups[1]
+            .1
+            .iter()
+            .filter_map(|entry| match &entry.action {
+                super::super::PaletteAction::ShowActivityOutput { item_id, .. } => Some(item_id.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(output_ids, vec!["out-new", "out-old", "restored-new", "restored-old"]);
     })
     .unwrap();
 }

@@ -1,4 +1,5 @@
 //! CLI configuration page, setting rows, and editor dialog renders.
+use super::config_search::ConfigSearchCorpus;
 use super::configuration::{
     CONFIG_GROUP_PAGE_SIZE, ConfigCatalogGroup, ConfigValueKind, build_config_catalog_cache, config_group_icon,
     value_summary,
@@ -18,10 +19,12 @@ impl DesktopView {
         let catalog = match self.config_catalog_cache.as_ref() {
             Some(cached) if cached.is_fresh(&query, self.config_catalog_epoch) => Some(cached),
             _ => {
-                catalog_fallback = self
-                    .cli_config_settings
-                    .as_ref()
-                    .map(|snapshot| build_config_catalog_cache(snapshot, &query, self.config_catalog_epoch));
+                // Cold start only: production paths refresh the stored corpus
+                // first, so this one-shot build never runs per keystroke.
+                catalog_fallback = self.cli_config_settings.as_ref().map(|snapshot| {
+                    let corpus = ConfigSearchCorpus::build(snapshot, self.config_catalog_epoch);
+                    build_config_catalog_cache(snapshot, &corpus, &query, self.config_catalog_epoch)
+                });
                 catalog_fallback.as_ref()
             }
         };
@@ -785,6 +788,7 @@ impl DesktopView {
             .child(
                 div()
                     .id("cli-config-editor")
+                    .lock_scroll_axis()
                     .test_support()
                     .role(gpui_kit::Role::Dialog)
                     .aria_label(format!("Edit CLI setting {}", editor.path))

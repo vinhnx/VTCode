@@ -303,6 +303,7 @@ impl DesktopView {
                     view.fail_output_page(cx);
                     return;
                 }
+                view.bump_restored_activity_revision();
 
                 view.output_page_pending = None;
                 view.output_page_error = None;
@@ -594,7 +595,7 @@ impl DesktopView {
         self.cancel_session_load_task();
         self.active_primary_agent_display = None;
         self.transcript.clear();
-        self.restored_activity.clear();
+        self.clear_restored_activity();
         self.history_start_index = 0;
         self.history_has_earlier = false;
         self.restored_output_cursors.clear();

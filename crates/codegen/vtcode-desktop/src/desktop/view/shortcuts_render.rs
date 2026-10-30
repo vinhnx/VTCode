@@ -15,7 +15,7 @@ impl DesktopView {
             "Search and customize desktop bindings. Saved changes apply after restarting VT Code Desktop."
         };
         let query = self.shortcut_search_input.read(cx).value().trim().to_string();
-        let terms = configuration::config_search_terms(&query);
+        let terms = config_search::config_search_terms(&query);
         let visible: Vec<&shortcuts::ShortcutCommand> = shortcuts::COMMANDS
             .iter()
             .filter(|command| {

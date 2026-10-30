@@ -1,7 +1,7 @@
 use super::*;
 
 impl DesktopView {
-    pub(super) fn render_utilities(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_utilities(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let workspace = self
             .workspace
@@ -19,7 +19,7 @@ impl DesktopView {
                 )
             },
         );
-        let activity = inspector::activity_rows(&self.transcript, &self.restored_activity);
+        let activity = self.cached_activity_projection();
         let counts = ActivityCounts::from_rows(&activity.rows);
         let summary = if counts.total() == 0 {
             "No activity yet".to_string()
@@ -28,13 +28,16 @@ impl DesktopView {
         };
         div()
             .id("utilities-pane")
+            .lock_scroll_axis()
             .test_support()
             .role(gpui_kit::Role::Group)
             .aria_label("Workspace utilities")
             .w_full()
             .flex_1()
             .min_h_0()
+            .track_scroll(&self.utilities_scroll)
             .overflow_y_scroll()
+            .vertical_scrollbar(&self.utilities_scroll)
             .p_3()
             .child(accessible_group_box(
                 "utilities-workspace-group",
@@ -73,7 +76,7 @@ impl DesktopView {
                                 view.set_inspector_tab(InspectorTab::Changes, cx);
                             })),
                     )
-                    .child(div().pt_4().pb_1().child(section_label("RECENT ACTIVITY", &colors)))
+                    .child(div().pt_4().pb_1().child(eyebrow_label("Recent activity", &colors)))
                     .child(
                         desktop_button("utilities-activity")
                             .ghost()
@@ -99,7 +102,7 @@ impl DesktopView {
                             .flex()
                             .items_center()
                             .justify_between()
-                            .child(section_label("DRAFT SOURCES", &colors))
+                            .child(eyebrow_label("Draft sources", &colors))
                             .child(
                                 desktop_button("utilities-add-source")
                                     .icon(IconName::Plus)

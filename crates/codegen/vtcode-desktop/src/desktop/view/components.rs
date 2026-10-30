@@ -1,4 +1,15 @@
 //! Shared stateless element builders reused by every desktop screen.
+//!
+//! Surface tiers: workspace shell and large overlays (palette, config editor,
+//! diff review) use `rounded_xl`; sidebar and inspector panels `rounded_lg`;
+//! nested cards and compact dialogs `rounded_md`; tiny inset boxes
+//! `rounded_sm`; pills only for intentional pill shapes. Panel toolbar rows
+//! share [`panel_header`]; short
+//! navigation labels share [`eyebrow_label`], settings labels keep sentence
+//! case via [`section_label`]. Interactive controls use the pointing hand
+//! through [`desktop_button`]/[`DesktopButtonExt::desktop_disabled`]; rows
+//! that act as buttons keep their own cursor. Chain `.lock_scroll_axis()`
+//! before `.test_support()`: the test wrapper hides that method.
 
 use super::*;
 
@@ -58,6 +69,35 @@ pub(super) fn section_label(
         .font_semibold()
         .text_color(themes::label_foreground(colors))
         .child(text.into())
+}
+
+/// Eyebrow section label: the single owner of the ALL-CAPS short-section
+/// style used by the sidebar, the utilities pane, and popover group headers.
+/// Callers pass natural-case text; the builder applies the casing once, so no
+/// call site hand-rolls `.to_uppercase()` or ships pre-uppercased literals.
+/// Settings and config surfaces keep sentence-case [`section_label`].
+pub(super) fn eyebrow_label(
+    text: impl AsRef<str>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    section_label(text.as_ref().to_uppercase(), colors)
+}
+
+/// One panel toolbar row: leading content pinned left, trailing actions
+/// pinned right, on the shared panel content inset. Inspector tabs and review
+/// surfaces share this instead of hand-rolling
+/// `flex justify_between gap_2 px_3 py_2` headers. Rows inside an already
+/// padded group box keep their own unpadded flex row.
+pub(super) fn panel_header(leading: impl IntoElement, trailing: impl IntoElement) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .px_3()
+        .py_2()
+        .child(leading)
+        .child(trailing)
 }
 
 /// Pre-configured fill group box for settings sections. Callers chain

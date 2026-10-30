@@ -10,40 +10,120 @@ struct ActivityChartDatum {
 }
 
 impl DesktopView {
+    /// Generation bump after in-place `restored_activity` edits that keep no
+    /// helper (output-page appends); all other mutations go through the
+    /// helpers below so the inspector caches stay sound.
+    pub(super) fn bump_restored_activity_revision(&mut self) {
+        self.restored_activity_revision = self.restored_activity_revision.wrapping_add(1);
+    }
+
+    pub(super) fn push_restored_activity(&mut self, item: TranscriptItem) {
+        self.restored_activity.push(item);
+        self.bump_restored_activity_revision();
+    }
+
+    pub(super) fn retain_restored_activity(&mut self, mut keep: impl FnMut(&TranscriptItem) -> bool) {
+        let before = self.restored_activity.len();
+        self.restored_activity.retain(|item| keep(item));
+        if self.restored_activity.len() != before {
+            self.bump_restored_activity_revision();
+        }
+    }
+
+    pub(super) fn clear_restored_activity(&mut self) {
+        if !self.restored_activity.is_empty() {
+            self.restored_activity.clear();
+            self.bump_restored_activity_revision();
+        }
+    }
+
+    /// Shared activity projection, rebuilt only when the transcript or the
+    /// restored history changed since the last call.
+    pub(super) fn cached_activity_projection(&mut self) -> Rc<inspector::ActivityProjection> {
+        let transcript_revision = self.transcript.revision();
+        let restored_revision = self.restored_activity_revision;
+        if let Some(hit) = self
+            .activity_projection_cache
+            .as_ref()
+            .and_then(|cache| cache.get(transcript_revision, restored_revision))
+        {
+            return hit;
+        }
+        let cache = inspector::ActivityProjectionCache::fresh(
+            transcript_revision,
+            restored_revision,
+            inspector::activity_rows(&self.transcript, &self.restored_activity),
+        );
+        let shared = cache.shared();
+        self.activity_projection_cache = Some(cache);
+        shared
+    }
+
+    /// Shared output resolution plus its bounded tail, rebuilt only when the
+    /// transcript, the restored history, or the selection changed.
+    pub(super) fn cached_output_view(&mut self) -> (Option<Rc<inspector::OutputView>>, gpui_kit::SharedString) {
+        let transcript_revision = self.transcript.revision();
+        let restored_revision = self.restored_activity_revision;
+        if let Some(hit) = self
+            .output_view_cache
+            .as_ref()
+            .and_then(|cache| cache.get(transcript_revision, restored_revision, self.selected_output_id.as_deref()))
+        {
+            return hit;
+        }
+        let cache = inspector::OutputViewCache::fresh(
+            transcript_revision,
+            restored_revision,
+            self.selected_output_id.clone(),
+            inspector::output_for(&self.transcript, &self.restored_activity, self.selected_output_id.as_deref()),
+        );
+        let shared = cache.shared();
+        self.output_view_cache = Some(cache);
+        shared
+    }
+
+    /// Bounded tail for an expanded transcript tool row, memoized per
+    /// transcript revision so chatty outputs are not rescanned every frame.
+    pub(super) fn expanded_tool_tail(&mut self, index: usize) -> Option<gpui_kit::SharedString> {
+        let item = self.transcript.get(index)?;
+        if !(item.is_tool() && item.expanded) {
+            return None;
+        }
+        let output = item
+            .output
+            .as_ref()
+            .filter(|output| !output.is_empty())
+            .cloned()
+            .unwrap_or_else(|| item.text.clone());
+        let id = item.id.clone();
+        let revision = self.transcript.revision();
+        Some(inspector::resolve_tool_tail(&id, &output, revision, &mut self.tool_tail_cache))
+    }
+
     pub(super) fn render_inspector_files_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let mut body = div().w_full().flex_1().min_h_0().flex().flex_col();
-        body = body.child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px_3()
-                .py_2()
-                .child(
-                    desktop_button("focus-files")
-                        .label(rust_i18n::t!("app.files.workspace_files").to_string())
-                        .accessibility_label(rust_i18n::t!("app.files.focus_tree").to_string())
-                        .tooltip_with_action(
-                            rust_i18n::t!("app.files.focus_tree").to_string(),
-                            &OpenWorkspaceFiles,
-                            Some(key_context::DESKTOP),
-                        )
-                        .ghost()
-                        .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
+        body = body.child(panel_header(
+            desktop_button("focus-files")
+                .label(rust_i18n::t!("app.files.workspace_files").to_string())
+                .accessibility_label(rust_i18n::t!("app.files.focus_tree").to_string())
+                .tooltip_with_action(
+                    rust_i18n::t!("app.files.focus_tree").to_string(),
+                    &OpenWorkspaceFiles,
+                    Some(key_context::DESKTOP),
                 )
-                .child(
-                    desktop_button("refresh-files")
-                        .label(rust_i18n::t!("app.files.refresh").to_string())
-                        .accessibility_label(rust_i18n::t!("app.files.refresh_tooltip").to_string())
-                        .tooltip_with_action(
-                            rust_i18n::t!("app.files.refresh_tooltip").to_string(),
-                            &RefreshWorkspace,
-                            Some(key_context::DESKTOP),
-                        )
-                        .ghost()
-                        .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
-                ),
-        );
+                .ghost()
+                .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
+            desktop_button("refresh-files")
+                .label(rust_i18n::t!("app.files.refresh").to_string())
+                .accessibility_label(rust_i18n::t!("app.files.refresh_tooltip").to_string())
+                .tooltip_with_action(
+                    rust_i18n::t!("app.files.refresh_tooltip").to_string(),
+                    &RefreshWorkspace,
+                    Some(key_context::DESKTOP),
+                )
+                .ghost()
+                .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
+        ));
         let directory_paths = self.file_directory_paths.clone();
         let file_tree = self.file_tree.clone();
         let weak_view = cx.entity().downgrade();
@@ -156,7 +236,7 @@ impl DesktopView {
     }
 
     /// Show a selected historical capture or the newest command/tool output.
-    pub(super) fn render_output_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_output_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let colors = theme.colors;
         let mono = theme.mono_font_family.clone();
@@ -168,9 +248,8 @@ impl DesktopView {
                 &colors,
             )));
         }
-        let Some(output) =
-            inspector::output_for(&self.transcript, &self.restored_activity, self.selected_output_id.as_deref())
-        else {
+        let (output, tail) = self.cached_output_view();
+        let Some(output) = output else {
             return pane
                 .child(empty_state(
                     "No output yet",
@@ -179,7 +258,6 @@ impl DesktopView {
                 ))
                 .into_any_element();
         };
-        let tail = inspector::output_tail(&output.text);
         let is_selected_output = self.selected_output_id.as_deref() == Some(output.id.as_str());
         let has_more_output = self.restored_output_cursors.contains_key(&output.id);
         let output_page_loading = self
@@ -304,12 +382,15 @@ impl DesktopView {
         pane.child(
             div()
                 .id("output-body")
+                .lock_scroll_axis()
                 .test_support()
                 .role(gpui_kit::Role::Label)
                 .aria_label(tail.clone())
                 .flex_1()
                 .min_h_0()
+                .track_scroll(&self.output_scroll)
                 .overflow_y_scroll()
+                .vertical_scrollbar(&self.output_scroll)
                 .p_3()
                 .text_xs()
                 .font_family(mono)
@@ -324,7 +405,7 @@ impl DesktopView {
         colors: &gpui_kit::component::theme::ThemeColor,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let activity = inspector::activity_rows(&self.transcript, &self.restored_activity);
+        let activity = self.cached_activity_projection();
         let counts = ActivityCounts::from_rows(&activity.rows);
         let has_older_activity = activity.has_older;
         let mut body = div()
@@ -404,12 +485,7 @@ impl DesktopView {
                         .flex()
                         .justify_between()
                         .items_center()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_weight(gpui_kit::FontWeight::MEDIUM)
-                                .child("Recent activity"),
-                        )
+                        .child(row_title("Recent activity", colors))
                         .child(
                             div()
                                 .text_xs()
@@ -481,7 +557,7 @@ impl DesktopView {
         let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
         let item_sizes = self.activity_row_sizes.get(activity.rows.len(), activity_row_height);
         let activity_count = activity.rows.len();
-        let activity_rows = activity.rows;
+        let activity_rows = Rc::clone(&activity);
         let row_colors = *colors;
         let weak_view = cx.entity().downgrade();
         body = body.child(
@@ -499,7 +575,7 @@ impl DesktopView {
                     v_virtual_list(cx.entity(), "activity-virtual-list", item_sizes, move |_, visible_range, _, _| {
                         visible_range
                             .map(|index| {
-                                activity_rows.get(index).map_or_else(
+                                activity_rows.rows.get(index).map_or_else(
                                     || div().into_any_element(),
                                     |row| {
                                         let output_action = row.has_output.then(|| {

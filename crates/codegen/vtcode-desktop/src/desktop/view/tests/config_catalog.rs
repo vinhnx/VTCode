@@ -1,3 +1,4 @@
+use super::super::config_search::ConfigSearchCorpus;
 use super::super::configuration::{CONFIG_GROUP_PAGE_SIZE, build_config_catalog_cache, config_group_icon};
 use super::*;
 
@@ -247,7 +248,8 @@ fn catalog_cache_groups_filters_and_counts_in_catalog_order() {
         omitted_large: 0,
         omitted_limit: 0,
     };
-    let cache = build_config_catalog_cache(&snapshot, "", 7);
+    let corpus = ConfigSearchCorpus::build(&snapshot, 7);
+    let cache = build_config_catalog_cache(&snapshot, &corpus, "", 7);
     assert!(cache.is_fresh("", 7));
     assert!(!cache.is_fresh("", 8), "epoch mismatch is stale");
     assert!(!cache.is_fresh("x", 7), "query mismatch is stale");
@@ -260,9 +262,50 @@ fn catalog_cache_groups_filters_and_counts_in_catalog_order() {
     assert_eq!(cache.group("Advanced settings").expect("fallback group").indices, vec![2]);
     assert!(cache.group("Missing").is_none());
 
-    let filtered = build_config_catalog_cache(&snapshot, "first", 7);
+    let filtered = build_config_catalog_cache(&snapshot, &corpus, "first", 7);
     assert_eq!(filtered.total, 3, "totals ignore the filter");
     assert_eq!(filtered.visible_count, 1);
     assert_eq!(filtered.groups.len(), 1);
     assert_eq!(filtered.groups[0].name, "Alpha");
+}
+
+#[test]
+fn search_corpus_tracks_epochs_and_matches_direct_filtering() {
+    use super::super::config_search::{config_search_terms, setting_matches_query};
+
+    let snapshot = vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        settings: vec![
+            config_page_setting("agent.first", json!("one"), "Alpha"),
+            config_page_setting("agent.second", json!("two"), "Zulu"),
+            config_page_setting("agent.third", json!("three"), "Alpha"),
+        ],
+        target_versions: Vec::new(),
+        omitted_sensitive: 0,
+        omitted_large: 0,
+        omitted_limit: 0,
+    };
+    let corpus = ConfigSearchCorpus::build(&snapshot, 7);
+    assert!(corpus.is_fresh(&snapshot, 7));
+    assert!(!corpus.is_fresh(&snapshot, 8), "epoch mismatch is stale");
+    let mut grown = snapshot.clone();
+    grown.settings.push(config_page_setting("agent.fourth", json!("four"), "Zulu"));
+    assert!(!corpus.is_fresh(&grown, 7), "length mismatch is stale");
+
+    // Corpus filtering agrees with direct matching on every query shape:
+    // empty, hit, case-insensitive hit, multi-term conjunction, and miss.
+    for query in ["", "first", "SECOND", "agent alpha", "zulu", "missing"] {
+        let cache = build_config_catalog_cache(&snapshot, &corpus, query, 7);
+        let terms = config_search_terms(query);
+        let expected: Vec<usize> = snapshot
+            .settings
+            .iter()
+            .enumerate()
+            .filter(|(_, setting)| setting_matches_query(setting, &terms))
+            .map(|(index, _)| index)
+            .collect();
+        let mut actual: Vec<usize> = cache.groups.iter().flat_map(|group| group.indices.iter().copied()).collect();
+        actual.sort_unstable();
+        assert_eq!(actual, expected, "query {query:?}");
+        assert_eq!(cache.visible_count, expected.len(), "query {query:?}");
+    }
 }
