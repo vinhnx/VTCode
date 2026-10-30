@@ -47,6 +47,17 @@ fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
     }
 }
 
+/// Native routes for bare `model`/`permissions` keywords shared by the
+/// `/config` and `/settings` deep-links. Each caller keeps its own fallback
+/// for anything else.
+fn keyword_slash_action(keyword: &str) -> Option<DesktopSlashAction> {
+    match keyword {
+        "model" | "models" => Some(DesktopSlashAction::ModelPicker),
+        "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
+        _ => None,
+    }
+}
+
 /// Commands with a native Desktop equivalent; all other slash input
 /// remains owned by the shared CLI dispatcher. `/config` additionally
 /// deep-links setting paths and groups into the configuration page and treats
@@ -126,21 +137,16 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             if let Some(tab) = settings_tab_for_name(&keyword) {
                 return Some(DesktopSlashAction::Settings(Some(tab)));
             }
-            match keyword.as_str() {
-                "model" | "models" => Some(DesktopSlashAction::ModelPicker),
-                "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
-                _ => Some(DesktopSlashAction::Configuration(Some(args.to_string()))),
+            if let Some(action) = keyword_slash_action(&keyword) {
+                return Some(action);
             }
+            Some(DesktopSlashAction::Configuration(Some(args.to_string())))
         }
         "settings" => {
             if let Some(tab) = settings_tab_for_name(&keyword) {
                 return Some(DesktopSlashAction::Settings(Some(tab)));
             }
-            match keyword.as_str() {
-                "model" | "models" => Some(DesktopSlashAction::ModelPicker),
-                "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
-                _ => None,
-            }
+            keyword_slash_action(&keyword)
         }
         _ => None,
     }
@@ -366,11 +372,11 @@ pub(super) fn model_options_header(
             .unwrap_or(&options.reasoning_effort)
             .as_str()
     });
-    let model_fallback = rust_i18n::t!("app.composer.choose_model").to_string();
+    let model_fallback = rust_i18n::t!(i18n::COMPOSER_CHOOSE_MODEL).to_string();
     let model = model_label
         .or_else(|| config.map(|config| config.model.as_str()))
         .unwrap_or(&model_fallback);
-    let summary_label = format!("{model}{}{}", effort.map(|_| " · ").unwrap_or(""), effort.unwrap_or(""));
+    let summary_label = format!("{model}{}{}", effort.map(|_| display::MIDDOT).unwrap_or(""), effort.unwrap_or(""));
     let mut summary = div()
         .id("model-options-summary")
         .test_support()
@@ -471,7 +477,7 @@ fn effort_knob(
         .role(gpui_kit::Role::Slider)
         .aria_label(
             effort
-                .map(|effort| rust_i18n::t!("app.composer.reasoning_effort", effort = effort).to_string())
+                .map(|effort| rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort).to_string())
                 .unwrap_or_else(|| rust_i18n::t!("app.composer.reasoning_effort_generic").to_string()),
         )
         .aria_description(rust_i18n::t!("app.composer.reasoning_effort_hint").to_string())

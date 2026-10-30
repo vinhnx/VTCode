@@ -55,7 +55,7 @@ impl DesktopView {
                 self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), app::NAME, &message.text, false);
             }
             ThreadItemDetails::Plan(plan) => {
-                let title = rust_i18n::t!("app.transcript.plan_title").to_string();
+                let title = rust_i18n::t!(i18n::TRANSCRIPT_PLAN_TITLE).to_string();
                 self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &plan.text, false);
             }
             ThreadItemDetails::Reasoning(reasoning) => {

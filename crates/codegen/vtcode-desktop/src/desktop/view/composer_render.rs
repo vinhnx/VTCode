@@ -77,7 +77,7 @@ impl DesktopView {
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.retained_submission = view.first_submission.take();
-                                view.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
+                                view.status = rust_i18n::t!(i18n::COMPOSER_MESSAGE_NOT_SUBMITTED).to_string();
                                 cx.notify();
                             })),
                     ),
@@ -195,9 +195,9 @@ impl DesktopView {
                         .child(
                             desktop_button("attach-files")
                                 .icon(IconName::Plus)
-                                .accessibility_label(rust_i18n::t!("app.composer.add_context").to_string())
+                                .accessibility_label(rust_i18n::t!(i18n::COMPOSER_ADD_CONTEXT).to_string())
                                 .tooltip_with_action(
-                                    rust_i18n::t!("app.composer.add_context").to_string(),
+                                    rust_i18n::t!(i18n::COMPOSER_ADD_CONTEXT).to_string(),
                                     &OpenAddContext,
                                     Some(key_context::DESKTOP),
                                 )
@@ -400,7 +400,7 @@ impl DesktopView {
                     .map(|model| model.display_name.clone())
                     .unwrap_or_else(|| configuration.model.clone())
             })
-            .unwrap_or_else(|| rust_i18n::t!("app.composer.choose_model").to_string());
+            .unwrap_or_else(|| rust_i18n::t!(i18n::COMPOSER_CHOOSE_MODEL).to_string());
         let model_options = self.session_options();
         let selected_effort = model_options
             .filter(|options| options.supported_efforts.contains(&options.reasoning_effort))
@@ -412,7 +412,7 @@ impl DesktopView {
             .chain(selected_effort.as_deref())
             .chain(selected_speed.as_deref())
             .collect::<Vec<_>>()
-            .join(" · ");
+            .join(display::MIDDOT);
         let model_label = div()
             .min_w_0()
             .flex()
@@ -425,7 +425,7 @@ impl DesktopView {
                         .id("composer-model-effort")
                         .test_support()
                         .role(gpui_kit::Role::Label)
-                        .aria_label(rust_i18n::t!("app.composer.reasoning_effort", effort = effort).to_string())
+                        .aria_label(rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort).to_string())
                         .flex_shrink_0()
                         .text_color(themes::muted_text(&colors))
                         .child(format!("· {effort}")),
@@ -454,13 +454,13 @@ impl DesktopView {
         let permission_mode = self.session_options().map(|options| options.permission_mode);
         let (policy, policy_label) = match permission_mode {
             Some(protocol::PermissionMode::Ask) => {
-                (rust_i18n::t!("app.composer.permission_ask").to_string(), "Ask".to_owned())
+                (rust_i18n::t!(i18n::COMPOSER_PERMISSION_ASK).to_string(), "Ask".to_owned())
             }
             Some(protocol::PermissionMode::AutoApproveCommands) => {
-                (rust_i18n::t!("app.composer.permission_auto").to_string(), "Auto".to_owned())
+                (rust_i18n::t!(i18n::COMPOSER_PERMISSION_AUTO).to_string(), "Auto".to_owned())
             }
             Some(protocol::PermissionMode::FullAccess) => {
-                (rust_i18n::t!("app.composer.permission_full").to_string(), "Full access".to_owned())
+                (rust_i18n::t!(i18n::COMPOSER_PERMISSION_FULL).to_string(), "Full access".to_owned())
             }
             None => match self.configuration.as_ref().and_then(|config| config.sandbox.clone()) {
                 Some(policy) => (policy.clone(), policy),

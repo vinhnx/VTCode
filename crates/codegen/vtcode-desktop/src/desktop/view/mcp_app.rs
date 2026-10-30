@@ -288,7 +288,11 @@ impl DesktopView {
     }
 
     pub(super) fn begin_mcp_app_preview(&mut self, result: Value, cx: &mut Context<Self>) {
-        let request_id = result.get("requestId").and_then(Value::as_str).unwrap_or_default().to_string();
+        let request_id = result
+            .get(keys::REQUEST_ID)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
         let Some(pending) = self.mcp_app_pending.get(&request_id).cloned() else {
             return;
         };

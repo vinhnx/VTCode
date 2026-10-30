@@ -25,7 +25,7 @@ impl DesktopView {
         let activity = self.cached_activity_projection();
         let counts = ActivityCounts::from_rows(&activity.rows);
         let summary = if counts.total() == 0 {
-            rust_i18n::t!("app.inspector.empty_activity_title").to_string()
+            rust_i18n::t!(i18n::INSPECTOR_EMPTY_ACTIVITY_TITLE).to_string()
         } else {
             counts.summary()
         };

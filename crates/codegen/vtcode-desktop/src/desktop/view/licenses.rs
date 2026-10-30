@@ -5,12 +5,16 @@ const NOTICES_FILE: &str = "THIRD-PARTY-NOTICES";
 fn notices_directory(executable: &Path, workspace: &Path) -> PathBuf {
     if let Some(contents) = executable
         .parent()
-        .filter(|dir| dir.file_name().is_some_and(|name| name == "MacOS"))
+        .filter(|dir| dir.file_name().is_some_and(|name| name == bundle::MACOS_DIR))
         .and_then(Path::parent)
-        .filter(|dir| dir.file_name().is_some_and(|name| name == "Contents"))
-        .filter(|dir| dir.parent().and_then(Path::extension).is_some_and(|ext| ext == "app"))
+        .filter(|dir| dir.file_name().is_some_and(|name| name == bundle::CONTENTS_DIR))
+        .filter(|dir| {
+            dir.parent()
+                .and_then(Path::extension)
+                .is_some_and(|ext| ext == bundle::APP_EXTENSION)
+        })
     {
-        return contents.join("Resources");
+        return contents.join(bundle::RESOURCES_DIR);
     }
     workspace.to_path_buf()
 }
@@ -18,7 +22,7 @@ fn notices_directory(executable: &Path, workspace: &Path) -> PathBuf {
 impl DesktopView {
     pub(super) fn render_licenses_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let title = rust_i18n::t!("app.settings.licenses.title").to_string();
+        let title = rust_i18n::t!(i18n::LICENSES_TITLE).to_string();
         accessible_group_box(
             "licenses-settings-group",
             title.clone(),
@@ -27,7 +31,7 @@ impl DesktopView {
                 rust_i18n::t!("app.settings.licenses.description").to_string(),
                 desktop_button("open-source-licenses")
                     .label(rust_i18n::t!("app.settings.licenses.view").to_string())
-                    .accessibility_label(rust_i18n::t!("app.settings.licenses.title").to_string())
+                    .accessibility_label(rust_i18n::t!(i18n::LICENSES_TITLE).to_string())
                     .on_click(cx.listener(|_, _, window, cx| {
                         cx.spawn_in(window, async move |view, cx| {
                             let result = cx

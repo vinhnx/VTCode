@@ -130,7 +130,7 @@ impl DesktopView {
             self.session_request = Some(method);
             self.status = rust_i18n::t!("app.session.updating_session").to_string();
         } else {
-            self.error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
+            self.error = Some(rust_i18n::t!(i18n::QUEUE_FULL).to_string());
         }
         cx.notify();
         sent
@@ -161,9 +161,9 @@ impl DesktopView {
             self.record_current_navigation();
         }
         self.status = if self.pending_new_thread {
-            rust_i18n::t!("app.session.preparing_new_thread").to_string()
+            rust_i18n::t!(i18n::SESSION_PREPARING_NEW_THREAD).to_string()
         } else {
-            rust_i18n::t!("app.session.thread_ready").to_string()
+            rust_i18n::t!(i18n::SESSION_THREAD_READY).to_string()
         };
         cx.notify();
         true
@@ -208,7 +208,7 @@ impl DesktopView {
             self.history_page_loading = true;
             self.history_page_error = None;
         } else {
-            self.history_page_error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
+            self.history_page_error = Some(rust_i18n::t!(i18n::QUEUE_FULL).to_string());
         }
         cx.notify();
     }
@@ -251,7 +251,7 @@ impl DesktopView {
             self.output_page_pending = Some(pending);
             self.output_page_error = None;
         } else {
-            self.output_page_error = Some((item_id.to_string(), rust_i18n::t!("app.workspace.queue_full").to_string()));
+            self.output_page_error = Some((item_id.to_string(), rust_i18n::t!(i18n::QUEUE_FULL).to_string()));
         }
         cx.notify();
     }
@@ -692,7 +692,7 @@ pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHis
         .map(|message| {
             let SessionHistoryMessage { archive_index, role, text, .. } = message;
             let title = match TranscriptRole::from_str(&role) {
-                Some(TranscriptRole::User) => rust_i18n::t!("app.transcript.you").to_string(),
+                Some(TranscriptRole::User) => rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string(),
                 Some(TranscriptRole::Assistant) => app::NAME.to_string(),
                 Some(TranscriptRole::Tool) => rust_i18n::t!("app.transcript.tool_result").to_string(),
                 _ => role.clone(),

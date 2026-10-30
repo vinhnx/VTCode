@@ -91,9 +91,9 @@ impl DesktopView {
             });
             let on_close_view = close_view.clone();
             let sheet_title = if is_config_page {
-                rust_i18n::t!("app.palette.title.configuration").to_string()
+                rust_i18n::t!(i18n::PALETTE_TITLE_CONFIGURATION).to_string()
             } else {
-                rust_i18n::t!("app.settings.title").to_string()
+                rust_i18n::t!(i18n::SETTINGS_TITLE).to_string()
             };
             sheet
                 .title(

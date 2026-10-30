@@ -71,7 +71,7 @@ impl DesktopView {
             && !self.history_page_loading
             && self.history_page_error.is_none();
         let content = if self.pending_blank_transition() {
-            let label = rust_i18n::t!("app.session.preparing_new_thread").to_string();
+            let label = rust_i18n::t!(i18n::SESSION_PREPARING_NEW_THREAD).to_string();
             div()
                 .id("new-thread-pending")
                 .test_support()
@@ -215,9 +215,9 @@ impl DesktopView {
                     history_bar = history_bar.child(
                         desktop_button("load-earlier-history")
                             .label(if self.history_page_loading {
-                                rust_i18n::t!("app.palette.history.loading").to_string()
+                                rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string()
                             } else {
-                                rust_i18n::t!("app.palette.history.load").to_string()
+                                rust_i18n::t!(i18n::PALETTE_HISTORY_LOAD).to_string()
                             })
                             .small()
                             .ghost()
@@ -434,7 +434,7 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let user = item.is_user();
         let label = if user {
-            rust_i18n::t!("app.transcript.you").to_string()
+            rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string()
         } else {
             item.title.to_string()
         };
@@ -569,11 +569,11 @@ impl DesktopView {
         let status_color = Self::activity_status_color(status, colors);
         let mut label = rust_i18n::t!("app.transcript.activity_total", total = summary.total).to_string();
         if running > 0 {
-            label.push_str(" · ");
+            label.push_str(display::MIDDOT);
             label.push_str(rust_i18n::t!("app.transcript.activity_running", count = running).as_ref());
         }
         if failed > 0 {
-            label.push_str(" · ");
+            label.push_str(display::MIDDOT);
             label.push_str(rust_i18n::t!("app.transcript.activity_failed", count = failed).as_ref());
         }
         desktop_button(format!("activity-group-{}", head.id))

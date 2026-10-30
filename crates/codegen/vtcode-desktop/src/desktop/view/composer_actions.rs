@@ -169,7 +169,7 @@ impl DesktopView {
             .as_ref()
             .and_then(|path| path.file_name())
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| rust_i18n::t!("app.workspace.choose").to_string());
+            .unwrap_or_else(|| rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string());
         let recent = self.recent_workspaces();
         let disabled =
             !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;
@@ -181,7 +181,7 @@ impl DesktopView {
             .small()
             .max_w(px(240.))
             .overflow_hidden()
-            .accessibility_label(rust_i18n::t!("app.workspace.choose").to_string())
+            .accessibility_label(rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string())
             .tooltip(rust_i18n::t!("app.workspace.choose_or_recent").to_string())
             .desktop_disabled(disabled);
 
@@ -207,7 +207,7 @@ impl DesktopView {
                         div()
                             .px_2()
                             .py_1()
-                            .child(eyebrow_label(&rust_i18n::t!("app.workspace.section"), &colors)),
+                            .child(eyebrow_label(&rust_i18n::t!(i18n::WORKSPACE_SECTION), &colors)),
                     );
                 let open_view = view.clone();
                 content = content.child(
@@ -244,7 +244,7 @@ impl DesktopView {
                         content = content.child(
                             desktop_button(opaque_path_element_id("recent-workspace-popover", path))
                                 .accessibility_label(if selected {
-                                    rust_i18n::t!("app.workspace.current_label", workspace = label).to_string()
+                                    rust_i18n::t!(i18n::WORKSPACE_CURRENT_LABEL, workspace = label).to_string()
                                 } else {
                                     label.clone()
                                 })
@@ -276,7 +276,7 @@ impl DesktopView {
         if !self.resources_loaded && !self.resources_loading && self.session_change_idle() {
             self.resources_loading = self.request(protocol::method::COMPOSER_RESOURCES, json!({}));
             if !self.resources_loading {
-                self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+                self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
                 cx.notify();
             }
         }
@@ -345,16 +345,16 @@ impl DesktopView {
         groups.push((
             rust_i18n::t!("app.palette.sections.commands").to_string(),
             vec![
-                command(rust_i18n::t!("app.palette.command.choose_model").to_string(), PaletteAction::ChooseModel),
+                command(rust_i18n::t!(i18n::PALETTE_COMMAND_CHOOSE_MODEL).to_string(), PaletteAction::ChooseModel),
                 command(
-                    rust_i18n::t!("app.palette.command.switch_workspace").to_string(),
+                    rust_i18n::t!(i18n::PALETTE_COMMAND_SWITCH_WORKSPACE).to_string(),
                     PaletteAction::ChooseWorkspace,
                 ),
                 command(
-                    rust_i18n::t!("app.palette.command.toggle_inspector").to_string(),
+                    rust_i18n::t!(i18n::PALETTE_COMMAND_TOGGLE_INSPECTOR).to_string(),
                     PaletteAction::ToggleInspector,
                 ),
-                command(rust_i18n::t!("app.files.refresh_tooltip").to_string(), PaletteAction::RefreshFiles),
+                command(rust_i18n::t!(i18n::FILES_REFRESH_TOOLTIP).to_string(), PaletteAction::RefreshFiles),
             ],
         ));
         let slash_commands = self
@@ -368,7 +368,7 @@ impl DesktopView {
                 command
             })
             .collect();
-        groups.push((rust_i18n::t!("app.palette.sections.vtcode_commands").to_string(), slash_commands));
+        groups.push((rust_i18n::t!(i18n::PALETTE_SECTIONS_VTCODE_COMMANDS).to_string(), slash_commands));
         groups
     }
 
@@ -594,7 +594,7 @@ impl DesktopView {
             return;
         }
         if self.attachments.len() >= 5 {
-            self.error = Some(rust_i18n::t!("app.composer.attachments_limit", n = 5).to_string());
+            self.error = Some(rust_i18n::t!(i18n::COMPOSER_ATTACHMENTS_LIMIT, n = 5).to_string());
             cx.notify();
             return;
         }
@@ -907,7 +907,7 @@ impl DesktopView {
                 })
             })
             .map(capitalize_agent_label)
-            .unwrap_or_else(|| rust_i18n::t!("app.configuration.unavailable").to_string());
+            .unwrap_or_else(|| rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string());
         desktop_button("composer-mode")
             .child(div().id("composer-mode-label").test_support().truncate().child(mode.clone()))
             .max_w(px(180.))
@@ -931,8 +931,8 @@ impl DesktopView {
 /// permission picker and the curated configuration row.
 pub(super) fn permission_mode_label(mode: protocol::PermissionMode) -> String {
     match mode {
-        protocol::PermissionMode::Ask => rust_i18n::t!("app.composer.permission_ask").to_string(),
-        protocol::PermissionMode::AutoApproveCommands => rust_i18n::t!("app.composer.permission_auto").to_string(),
-        protocol::PermissionMode::FullAccess => rust_i18n::t!("app.composer.permission_full").to_string(),
+        protocol::PermissionMode::Ask => rust_i18n::t!(i18n::COMPOSER_PERMISSION_ASK).to_string(),
+        protocol::PermissionMode::AutoApproveCommands => rust_i18n::t!(i18n::COMPOSER_PERMISSION_AUTO).to_string(),
+        protocol::PermissionMode::FullAccess => rust_i18n::t!(i18n::COMPOSER_PERMISSION_FULL).to_string(),
     }
 }

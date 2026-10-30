@@ -185,7 +185,7 @@ impl DesktopView {
             if matches!(answer.await, Ok(0)) {
                 let _updated = view.update(cx, |view, cx| {
                     view.storage.error = None;
-                    let _ = view.request(protocol::method::SESSION_DELETE, json!({ "sessionId": session_id }));
+                    let _ = view.request(protocol::method::SESSION_DELETE, json!({ keys::SESSION_ID: session_id }));
                     cx.notify();
                 });
             }

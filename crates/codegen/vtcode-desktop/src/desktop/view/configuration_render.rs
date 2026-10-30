@@ -475,7 +475,7 @@ impl DesktopView {
                 let path = row.path.unwrap_or_default();
                 let setting = curated::find_setting(self.cli_config_settings.as_ref(), path);
                 let value = setting.map_or_else(
-                    || rust_i18n::t!("app.configuration.unavailable").to_string(),
+                    || rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string(),
                     curated::setting_display_value,
                 );
                 let editable = setting.is_some_and(|setting| setting.editable) && self.can_edit_cli_settings();
@@ -609,7 +609,7 @@ impl DesktopView {
                     .flex_shrink_0()
                     .text_sm()
                     .text_color(colors.muted_foreground)
-                    .child(rust_i18n::t!("app.configuration.unset").to_string()),
+                    .child(rust_i18n::t!(i18n::CONFIGURATION_UNSET).to_string()),
             );
         } else {
             header = header.child(
@@ -662,10 +662,10 @@ impl DesktopView {
         }
         let mut meta = setting.path.clone();
         if let Some(origin) = setting.origin.as_deref() {
-            meta.push_str(rust_i18n::t!("app.configuration.origin_hint", origin = origin).as_ref());
+            meta.push_str(rust_i18n::t!(i18n::CONFIGURATION_ORIGIN_HINT, origin = origin).as_ref());
         }
         if let Some(default) = setting.default_value.as_deref() {
-            meta.push_str(rust_i18n::t!("app.configuration.default_hint", value = default).as_ref());
+            meta.push_str(rust_i18n::t!(i18n::CONFIGURATION_DEFAULT_HINT, value = default).as_ref());
         }
         let mut row = div()
             .flex()
@@ -904,7 +904,7 @@ impl DesktopView {
                             .gap_2()
                             .child(
                                 desktop_button("cancel-cli-config-edit")
-                                    .label(rust_i18n::t!("app.configuration.cancel").to_string())
+                                    .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
                                     .ghost()
                                     .on_click(
                                         cx.listener(|view, _, window, cx| view.close_cli_config_editor(window, cx)),

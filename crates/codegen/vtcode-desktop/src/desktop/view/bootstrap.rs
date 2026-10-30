@@ -18,10 +18,10 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("cmd-q", QuitApplication, None),
         KeyBinding::new("cmd-h", HideApplication, None),
         KeyBinding::new("alt-cmd-h", HideOtherApplications, None),
-        KeyBinding::new("right", NextInspectorTab, Some("VTCodeInspector")),
-        KeyBinding::new("left", PreviousInspectorTab, Some("VTCodeInspector")),
-        KeyBinding::new("home", FirstInspectorTab, Some("VTCodeInspector")),
-        KeyBinding::new("end", LastInspectorTab, Some("VTCodeInspector")),
+        KeyBinding::new("right", NextInspectorTab, Some(key_context::INSPECTOR)),
+        KeyBinding::new("left", PreviousInspectorTab, Some(key_context::INSPECTOR)),
+        KeyBinding::new("home", FirstInspectorTab, Some(key_context::INSPECTOR)),
+        KeyBinding::new("end", LastInspectorTab, Some(key_context::INSPECTOR)),
         KeyBinding::new("right", NextSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("left", PreviousSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("home", FirstSettingsTab, Some(key_context::SETTINGS)),
@@ -205,7 +205,7 @@ impl DesktopView {
         let shortcut_capture_focus = cx.focus_handle().tab_stop(true);
         let shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
         let shortcut_search_input = cx
-            .new(|cx| InputState::new(window, cx).placeholder(rust_i18n::t!("app.shortcuts.search_aria").to_string()));
+            .new(|cx| InputState::new(window, cx).placeholder(rust_i18n::t!(i18n::SHORTCUTS_SEARCH_ARIA).to_string()));
         let shortcut_search_subscription = cx.subscribe_in(&shortcut_search_input, window, |_, _, event, _, cx| {
             if matches!(event, InputEvent::Change) {
                 cx.notify();
@@ -226,7 +226,7 @@ impl DesktopView {
         });
         let composer = cx.new(|cx| {
             TextareaState::new(window, cx)
-                .placeholder(rust_i18n::t!("app.composer.input_placeholder").to_string())
+                .placeholder(rust_i18n::t!(i18n::COMPOSER_INPUT_PLACEHOLDER).to_string())
                 .auto_grow(1, 6)
                 .submit_on_enter(true)
         });

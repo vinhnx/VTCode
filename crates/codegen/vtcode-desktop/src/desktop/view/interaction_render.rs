@@ -38,7 +38,7 @@ impl DesktopView {
                     .role(gpui_kit::Role::Status)
                     .aria_label(rust_i18n::t!("app.interaction.sending_aria").to_string())
                     .text_sm()
-                    .child(rust_i18n::t!("app.composer.sending_decision").to_string()),
+                    .child(rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string()),
             );
         }
 

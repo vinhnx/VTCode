@@ -64,7 +64,7 @@ impl DesktopView {
                     Ok((results, overflow)) => {
                         if overflow {
                             view.error =
-                                Some(rust_i18n::t!("app.composer.attachments_limit", n = MAX_ATTACHMENTS).to_string());
+                                Some(rust_i18n::t!(i18n::COMPOSER_ATTACHMENTS_LIMIT, n = MAX_ATTACHMENTS).to_string());
                         }
                         for result in results {
                             match result {
@@ -74,7 +74,7 @@ impl DesktopView {
                                     }
                                     if view.attachments.len() >= MAX_ATTACHMENTS {
                                         view.error = Some(
-                                            rust_i18n::t!("app.composer.attachments_limit", n = MAX_ATTACHMENTS)
+                                            rust_i18n::t!(i18n::COMPOSER_ATTACHMENTS_LIMIT, n = MAX_ATTACHMENTS)
                                                 .to_string(),
                                         );
                                         break;
@@ -403,7 +403,7 @@ impl DesktopView {
                             ))
                             .child(
                                 desktop_button("copy-preview")
-                                    .label(rust_i18n::t!("app.file_preview.copy").to_string())
+                                    .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
                                     .ghost()
                                     .small()
                                     .on_click(move |_, window, app| {

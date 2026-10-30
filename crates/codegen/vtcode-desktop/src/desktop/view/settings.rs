@@ -131,7 +131,7 @@ impl DesktopView {
                 let mut entry = command(tab.label(), PaletteAction::SelectSettingsTab(tab));
                 entry.keywords = tab.search_keywords().iter().map(|keyword| (*keyword).to_owned()).collect();
                 if tab == SettingsTab::VtCode {
-                    entry.keywords.push(rust_i18n::t!("app.settings.licenses.title").to_string());
+                    entry.keywords.push(rust_i18n::t!(i18n::LICENSES_TITLE).to_string());
                 }
                 entry
             })
@@ -175,7 +175,7 @@ impl DesktopView {
             .track_focus(&self.settings_focus)
             .test_support()
             .role(gpui_kit::Role::Dialog)
-            .aria_label(rust_i18n::t!("app.settings.title").to_string())
+            .aria_label(rust_i18n::t!(i18n::SETTINGS_TITLE).to_string())
             .relative()
             .w_full()
             .h(panel_height)
@@ -233,7 +233,7 @@ impl DesktopView {
                             )
                             .accessibility_label(rust_i18n::t!("app.settings.search.button").to_string())
                             .tooltip_with_action(
-                                rust_i18n::t!("app.settings.search.title").to_string(),
+                                rust_i18n::t!(i18n::SETTINGS_SEARCH_TITLE).to_string(),
                                 &OpenSettingsSearch,
                                 Some(key_context::DESKTOP),
                             )
@@ -270,7 +270,7 @@ impl DesktopView {
         self.preferences.set_ui_language(language);
         super::super::localization::set_language(language);
         menu_bar::refresh_labels(cx);
-        let placeholder = rust_i18n::t!("app.composer.input_placeholder").to_string();
+        let placeholder = rust_i18n::t!(i18n::COMPOSER_INPUT_PLACEHOLDER).to_string();
         self.composer
             .update(cx, |state, cx| state.set_placeholder(placeholder, window, cx));
         // Command rows cache their rendered labels. Drop that projection so a
@@ -675,7 +675,7 @@ impl DesktopView {
                         rust_i18n::t!("app.settings.connections.terminal").to_string(),
                         command.clone(),
                         desktop_button("copy-terminal-command")
-                            .label(rust_i18n::t!("app.file_preview.copy").to_string())
+                            .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
                             .ghost()
                             .small()
                             .on_click({

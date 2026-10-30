@@ -216,7 +216,7 @@ impl DesktopView {
                 } else {
                     self.recover_pending_submission(false);
                     self.error = Some(rust_i18n::t!("app.service.startup_question").to_string());
-                    self.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
+                    self.status = rust_i18n::t!(i18n::COMPOSER_MESSAGE_NOT_SUBMITTED).to_string();
                 }
             }
             BackendEvent::InteractionResponded { identity, error } => {
@@ -251,7 +251,7 @@ impl DesktopView {
                             Ok(()) => {}
                             Err(draft) => {
                                 self.retained_submission = Some(draft);
-                                self.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
+                                self.status = rust_i18n::t!(i18n::COMPOSER_MESSAGE_NOT_SUBMITTED).to_string();
                             }
                         }
                     }
@@ -366,8 +366,7 @@ impl DesktopView {
                                     protocol::method::SESSION_LIST,
                                 ] {
                                     if !self.request(method, json!({})) {
-                                        self.error =
-                                            Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+                                        self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
                                         discovery_queued = false;
                                         break;
                                     }
@@ -558,7 +557,7 @@ impl DesktopView {
                                     Ok(()) => self.pending_first_submission = true,
                                     Err(draft) => {
                                         self.retained_submission = Some(draft);
-                                        self.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
+                                        self.status = rust_i18n::t!(i18n::COMPOSER_MESSAGE_NOT_SUBMITTED).to_string();
                                     }
                                 }
                             }
@@ -585,7 +584,7 @@ impl DesktopView {
                             self.record_current_navigation();
                         }
                         self.status = if new_thread || pending_navigation.is_some() {
-                            rust_i18n::t!("app.session.thread_ready").to_string()
+                            rust_i18n::t!(i18n::SESSION_THREAD_READY).to_string()
                         } else {
                             rust_i18n::t!("app.session.closed_new").to_string()
                         };
@@ -873,7 +872,7 @@ impl DesktopView {
                 self.transcript.append_text(
                     delta.item_id.clone(),
                     TranscriptRole::Assistant.as_str(),
-                    rust_i18n::t!("app.transcript.plan_title").to_string().into(),
+                    rust_i18n::t!(i18n::TRANSCRIPT_PLAN_TITLE).to_string().into(),
                     &delta.delta,
                 );
             }

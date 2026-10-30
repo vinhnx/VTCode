@@ -92,22 +92,22 @@ impl DesktopView {
                 command(rust_i18n::t!("app.palette.command.new_session").to_string(), PaletteAction::NewSession),
                 command(rust_i18n::t!("app.palette.command.close_session").to_string(), PaletteAction::CloseSession),
                 command(
-                    rust_i18n::t!("app.palette.command.switch_workspace").to_string(),
+                    rust_i18n::t!(i18n::PALETTE_COMMAND_SWITCH_WORKSPACE).to_string(),
                     PaletteAction::ChooseWorkspace,
                 ),
                 command(
                     rust_i18n::t!("app.palette.command.refresh_recent_threads").to_string(),
                     PaletteAction::RefreshSessions,
                 ),
-                command(rust_i18n::t!("app.files.refresh_tooltip").to_string(), PaletteAction::RefreshFiles),
-                command(rust_i18n::t!("app.palette.command.choose_model").to_string(), PaletteAction::ChooseModel),
+                command(rust_i18n::t!(i18n::FILES_REFRESH_TOOLTIP).to_string(), PaletteAction::RefreshFiles),
+                command(rust_i18n::t!(i18n::PALETTE_COMMAND_CHOOSE_MODEL).to_string(), PaletteAction::ChooseModel),
             ],
         ));
         groups.push((
             rust_i18n::t!("app.palette.sections.view").to_string(),
             vec![
                 command(
-                    rust_i18n::t!("app.palette.command.toggle_inspector").to_string(),
+                    rust_i18n::t!(i18n::PALETTE_COMMAND_TOGGLE_INSPECTOR).to_string(),
                     PaletteAction::ToggleInspector,
                 ),
                 command(rust_i18n::t!("app.palette.command.toggle_zen_mode").to_string(), PaletteAction::ToggleZenMode),
@@ -150,7 +150,7 @@ impl DesktopView {
             })
             .collect::<Vec<_>>();
         if !slash_commands.is_empty() {
-            groups.push((rust_i18n::t!("app.palette.sections.vtcode_commands").to_string(), slash_commands));
+            groups.push((rust_i18n::t!(i18n::PALETTE_SECTIONS_VTCODE_COMMANDS).to_string(), slash_commands));
         }
         let sessions: Vec<PaletteCommand> = self
             .sessions
@@ -158,7 +158,7 @@ impl DesktopView {
             .map(|session| {
                 let label = session.title.clone().unwrap_or_else(|| {
                     let short = session.session_id.chars().take(8).collect::<String>();
-                    rust_i18n::t!("app.session.fallback_title", id = short.as_str()).to_string()
+                    rust_i18n::t!(i18n::SESSION_FALLBACK_TITLE, id = short.as_str()).to_string()
                 });
                 command(
                     rust_i18n::t!("app.palette.command.open_session", label = label.as_str()).to_string(),
@@ -536,7 +536,7 @@ impl DesktopView {
                     let title = rust_i18n::t!("app.permissions.confirm_full_title").to_string();
                     let detail = rust_i18n::t!("app.permissions.confirm_full_body").to_string();
                     let enable = rust_i18n::t!("app.permissions.enable_full").to_string();
-                    let cancel = rust_i18n::t!("app.configuration.cancel").to_string();
+                    let cancel = rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string();
                     let answer = window.prompt(
                         gpui_kit::PromptLevel::Warning,
                         &title,
@@ -794,13 +794,13 @@ pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) 
     let mut details = vec![model.provider.clone()];
     details.extend(capabilities.iter().map(|(_, display)| display.clone()));
     if !context.is_empty() {
-        details.push(context.trim_start_matches(" · ").to_string());
+        details.push(context.trim_start_matches(display::MIDDOT).to_string());
     }
     details.push(model.id.clone());
     if !current.is_empty() {
-        details.push(current.trim_start_matches(" · ").to_string());
+        details.push(current.trim_start_matches(display::MIDDOT).to_string());
     }
-    entry.description = Some(details.join(" · "));
+    entry.description = Some(details.join(display::MIDDOT));
     entry.keywords = vec![model.provider.clone(), model.id.clone()];
     entry
         .keywords

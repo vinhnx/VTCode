@@ -53,10 +53,10 @@ impl DesktopView {
         let composer_popup = self.palette_kind.is_composer_popup();
         let inline_completion = matches!(self.palette_kind, PaletteKind::FileMentions | PaletteKind::SlashCommands);
         let title = match self.palette_kind {
-            PaletteKind::Models => rust_i18n::t!("app.composer.choose_model").to_string(),
+            PaletteKind::Models => rust_i18n::t!(i18n::COMPOSER_CHOOSE_MODEL).to_string(),
             PaletteKind::ConversationSearch => rust_i18n::t!("app.palette.title.conversation_search").to_string(),
             PaletteKind::ModelOptions => rust_i18n::t!("app.composer.select_model").to_string(),
-            PaletteKind::AddContext => rust_i18n::t!("app.composer.add_context").to_string(),
+            PaletteKind::AddContext => rust_i18n::t!(i18n::COMPOSER_ADD_CONTEXT).to_string(),
             PaletteKind::FileMentions => rust_i18n::t!("app.palette.title.file_mention").to_string(),
             PaletteKind::SlashCommands => rust_i18n::t!("app.palette.title.slash_commands").to_string(),
             PaletteKind::PromptHistory => rust_i18n::t!("app.palette.title.prompt_history").to_string(),
@@ -64,8 +64,8 @@ impl DesktopView {
             PaletteKind::Modes => rust_i18n::t!("app.palette.title.modes").to_string(),
             PaletteKind::Fonts(FontTarget::Ui) => rust_i18n::t!("app.palette.title.ui_font").to_string(),
             PaletteKind::Fonts(FontTarget::Code) => rust_i18n::t!("app.palette.title.code_font").to_string(),
-            PaletteKind::SettingsSearch => rust_i18n::t!("app.settings.search.title").to_string(),
-            PaletteKind::ConfigSettings => rust_i18n::t!("app.palette.title.configuration").to_string(),
+            PaletteKind::SettingsSearch => rust_i18n::t!(i18n::SETTINGS_SEARCH_TITLE).to_string(),
+            PaletteKind::ConfigSettings => rust_i18n::t!(i18n::PALETTE_TITLE_CONFIGURATION).to_string(),
             PaletteKind::ReviewFiles => rust_i18n::t!("app.palette.title.changed_file").to_string(),
             PaletteKind::Commands => rust_i18n::t!("app.palette.title.commands").to_string(),
         };
@@ -120,7 +120,7 @@ impl DesktopView {
             .placeholder(placeholder)
             .max_h(px(360.))
             .when(models, |command| {
-                let title = rust_i18n::t!("app.composer.choose_model").to_string();
+                let title = rust_i18n::t!(i18n::COMPOSER_CHOOSE_MODEL).to_string();
                 command.header(move |_, _, _| div().px_3().py_2().font_semibold().child(title.clone()))
             })
             .when(conversation_search, |command| {
@@ -153,13 +153,13 @@ impl DesktopView {
             let can_load_history =
                 older_history_available && transcript_has_capacity && !history_page_loading && !self.running;
             let history_label = if history_page_loading {
-                rust_i18n::t!("app.palette.history.loading").to_string()
+                rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string()
             } else if !transcript_has_capacity && older_history_available {
                 rust_i18n::t!("app.palette.history.limit_reached").to_string()
             } else if history_page_failed {
                 rust_i18n::t!("app.palette.history.retry").to_string()
             } else {
-                rust_i18n::t!("app.palette.history.load").to_string()
+                rust_i18n::t!(i18n::PALETTE_HISTORY_LOAD).to_string()
             };
             let history_error = rust_i18n::t!("app.palette.history.retry_hint").to_string();
             command = command.footer(move |_, _, _| {

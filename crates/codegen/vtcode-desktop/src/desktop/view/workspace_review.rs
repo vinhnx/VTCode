@@ -19,7 +19,7 @@ use super::{
     DesktopButtonExt, DesktopView, NextReviewFile, PaletteAction, PaletteKind, PreviousReviewFile, RefreshWorkspace,
     command, desktop_button, empty_state, skeleton_line, uuid_like_id, warning_alert,
 };
-use crate::desktop::strings::{key_context, keys};
+use crate::desktop::strings::{i18n, key_context, keys};
 
 pub(super) struct WorkspaceReviewState {
     pub(super) request_id: String,
@@ -91,7 +91,7 @@ impl DesktopView {
             protocol::method::WORKSPACE_REVIEW,
             json!({ keys::REQUEST_ID: request_id, keys::SCOPE: scope, keys::INCLUDE_UNTRACKED: include_untracked }),
         ) {
-            self.fail_workspace_review(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+            self.fail_workspace_review(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
         cx.notify();
     }
@@ -326,7 +326,7 @@ impl DesktopView {
                         .gap_2()
                         .child(
                             desktop_button("workspace-review-unified")
-                                .label(rust_i18n::t!("app.workspace_review.unified").to_string())
+                                .label(rust_i18n::t!(i18n::WORKSPACE_REVIEW_UNIFIED).to_string())
                                 .ghost()
                                 .small()
                                 .toggled(review.mode == DiffMode::Unified)
@@ -338,7 +338,7 @@ impl DesktopView {
                         )
                         .child(
                             desktop_button("workspace-review-split")
-                                .label(rust_i18n::t!("app.workspace_review.split").to_string())
+                                .label(rust_i18n::t!(i18n::WORKSPACE_REVIEW_SPLIT).to_string())
                                 .ghost()
                                 .small()
                                 .toggled(review.mode == DiffMode::Split)

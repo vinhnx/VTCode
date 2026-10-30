@@ -58,9 +58,9 @@ impl DesktopView {
                         .icon(IconName::Plus)
                         .ghost()
                         .rounded_lg()
-                        .accessibility_label(rust_i18n::t!("app.navigation.new_thread").to_string())
+                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                         .tooltip_with_action(
-                            rust_i18n::t!("app.navigation.new_thread").to_string(),
+                            rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
                             &NewSession,
                             Some(key_context::DESKTOP),
                         )
@@ -79,10 +79,10 @@ impl DesktopView {
                     .accessibility_label(if utilities_selected {
                         rust_i18n::t!("app.navigation.workspace_utilities_selected").to_string()
                     } else {
-                        rust_i18n::t!("app.navigation.workspace_utilities").to_string()
+                        rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string()
                     })
                     .tooltip_with_action(
-                        rust_i18n::t!("app.navigation.workspace_utilities").to_string(),
+                        rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string(),
                         &OpenUtilities,
                         Some(key_context::DESKTOP),
                     )
@@ -131,24 +131,24 @@ impl DesktopView {
             .tooltip(label)
             .dropdown_menu(move |menu, _, _| {
                 menu.menu_with_disabled(
-                    rust_i18n::t!("app.navigation.new_thread").to_string(),
+                    rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
                     Box::new(NewSession),
                     !can_new,
                 )
                 .menu_with_disabled(
-                    rust_i18n::t!("app.navigation.close_thread").to_string(),
+                    rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string(),
                     Box::new(CloseSession),
                     !can_close,
                 )
                 .separator()
-                .menu(rust_i18n::t!("app.navigation.toggle_navigation").to_string(), Box::new(ToggleSidebar))
+                .menu(rust_i18n::t!(i18n::NAVIGATION_TOGGLE_NAVIGATION).to_string(), Box::new(ToggleSidebar))
                 .menu_with_disabled(
-                    rust_i18n::t!("app.navigation.toggle_inspector").to_string(),
+                    rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
                     Box::new(ToggleInspector),
                     !has_workspace,
                 )
                 .menu(rust_i18n::t!("app.navigation.toggle_zen_mode").to_string(), Box::new(ToggleZenMode))
-                .menu(rust_i18n::t!("app.navigation.search_commands").to_string(), Box::new(OpenCommandPalette))
+                .menu(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(), Box::new(OpenCommandPalette))
                 .separator()
                 .menu(rust_i18n::t!("app.navigation.toggle_status_bar").to_string(), Box::new(ToggleStatusBar))
                 .menu(rust_i18n::t!("app.navigation.settings_menu").to_string(), Box::new(OpenSettings))

@@ -118,7 +118,7 @@ pub(super) fn humanize_config_value(value: &str) -> String {
 pub(super) fn setting_display_value(setting: &protocol::ConfigSetting) -> String {
     match &setting.value {
         Value::String(value) => humanize_config_value(value),
-        Value::Null => rust_i18n::t!("app.configuration.unset").to_string(),
+        Value::Null => rust_i18n::t!(i18n::CONFIGURATION_UNSET).to_string(),
         value => value_summary(value),
     }
 }

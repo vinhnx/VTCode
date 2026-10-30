@@ -295,7 +295,7 @@ impl DesktopView {
             if backend.commands.try_send(BackendCommand::Stop).is_err() {
                 self.pending_workspace = None;
                 self.fail_pending_navigation();
-                self.error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
+                self.error = Some(rust_i18n::t!(i18n::QUEUE_FULL).to_string());
             }
             cx.notify();
             return;
@@ -386,7 +386,7 @@ impl DesktopView {
             // Reuse the session transition gate until the handshake is validated.
             self.session_request = Some(protocol::method::INITIALIZE);
         } else {
-            self.report_service_launch_failure(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+            self.report_service_launch_failure(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
     }
 }

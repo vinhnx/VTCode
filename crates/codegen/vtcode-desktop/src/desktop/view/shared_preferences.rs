@@ -39,7 +39,7 @@ impl DesktopView {
             self.status = rust_i18n::t!("app.settings.cli_sync.saving_theme").to_string();
             self.error = None;
         } else {
-            self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+            self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
         cx.notify();
     }
@@ -66,7 +66,7 @@ impl DesktopView {
         if let Some(backend) = self.backend.as_ref() {
             // Wait for the supervised transport's terminal event before replacing it.
             if backend.commands.try_send(BackendCommand::Stop).is_err() {
-                self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+                self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
             } else {
                 self.pending_workspace = Some(workspace);
                 self.status = rust_i18n::t!("app.settings.cli_sync.reloading").to_string();

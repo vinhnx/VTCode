@@ -156,7 +156,7 @@ impl DesktopView {
 
     pub(super) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let workspace_section = rust_i18n::t!("app.workspace.section").to_string();
+        let workspace_section = rust_i18n::t!(i18n::WORKSPACE_SECTION).to_string();
         let projects_section = rust_i18n::t!("app.workspace.projects").to_string();
         let recent_threads_section = rust_i18n::t!("app.workspace.recent_threads").to_string();
         let mut sidebar = div()
@@ -187,7 +187,7 @@ impl DesktopView {
                     .child(
                         desktop_button("choose-workspace")
                             .tooltip_with_action(
-                                rust_i18n::t!("app.workspace.choose").to_string(),
+                                rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string(),
                                 &ChooseWorkspace,
                                 Some(key_context::DESKTOP),
                             )
@@ -240,11 +240,11 @@ impl DesktopView {
                 .child(
                     desktop_button("new-session")
                         .tooltip_with_action(
-                            rust_i18n::t!("app.navigation.new_thread").to_string(),
+                            rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
                             &NewSession,
                             Some(key_context::DESKTOP),
                         )
-                        .label(rust_i18n::t!("app.navigation.new_thread").to_string())
+                        .label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                         .icon(IconName::Plus)
                         .ghost()
                         .flex_1()
@@ -259,7 +259,7 @@ impl DesktopView {
                             Some(key_context::DESKTOP),
                         )
                         .icon(IconName::X)
-                        .accessibility_label(rust_i18n::t!("app.navigation.close_thread").to_string())
+                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string())
                         .ghost()
                         .desktop_disabled(self.selected_session_id.is_none() || !self.session_change_allowed(None))
                         .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
@@ -283,7 +283,7 @@ impl DesktopView {
                 div().w_full().child(
                     desktop_button(opaque_path_element_id("workspace", path))
                         .accessibility_label(if current {
-                            rust_i18n::t!("app.workspace.current_label", workspace = label).to_string()
+                            rust_i18n::t!(i18n::WORKSPACE_CURRENT_LABEL, workspace = label).to_string()
                         } else {
                             label.clone()
                         })
@@ -340,7 +340,7 @@ impl DesktopView {
                                     let selected = view.selected_session_id.as_deref() == Some(&session_id);
                                     let label = session.title.clone().unwrap_or_else(|| {
                                         let short = session_id.chars().take(8).collect::<String>();
-                                        rust_i18n::t!("app.session.fallback_title", id = short.as_str()).to_string()
+                                        rust_i18n::t!(i18n::SESSION_FALLBACK_TITLE, id = short.as_str()).to_string()
                                     });
                                     let enabled = view.session_change_allowed(Some(&session_id));
                                     Some(
@@ -414,7 +414,7 @@ impl DesktopView {
     }
 
     pub(super) fn render_thread_header(&self, theme: &Theme) -> impl IntoElement {
-        let title_fallback = rust_i18n::t!("app.navigation.new_thread").to_string();
+        let title_fallback = rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string();
         let title = self
             .sessions
             .iter()
@@ -476,7 +476,7 @@ impl DesktopView {
         }
         let navigation_visible = self.preferences.navigation_visible();
         let navigation_label = if navigation_visible {
-            rust_i18n::t!("app.navigation.toggle_navigation").to_string()
+            rust_i18n::t!(i18n::NAVIGATION_TOGGLE_NAVIGATION).to_string()
         } else {
             rust_i18n::t!("app.navigation.show_navigation").to_string()
         };
@@ -594,9 +594,9 @@ impl DesktopView {
                         desktop_button("top-new-thread")
                             .icon(IconName::Plus)
                             .ghost()
-                            .accessibility_label(rust_i18n::t!("app.navigation.new_thread").to_string())
+                            .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                             .tooltip_with_action(
-                                rust_i18n::t!("app.navigation.new_thread").to_string(),
+                                rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
                                 &NewSession,
                                 Some(key_context::DESKTOP),
                             )
@@ -607,9 +607,9 @@ impl DesktopView {
                         desktop_button("top-utilities")
                             .icon(IconName::GitBranch)
                             .ghost()
-                            .accessibility_label(rust_i18n::t!("app.navigation.workspace_utilities").to_string())
+                            .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string())
                             .tooltip_with_action(
-                                rust_i18n::t!("app.navigation.workspace_utilities").to_string(),
+                                rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string(),
                                 &OpenUtilities,
                                 Some(key_context::DESKTOP),
                             )
@@ -620,11 +620,11 @@ impl DesktopView {
             group = group
                 .child(
                     desktop_button("search-commands")
-                        .accessibility_label(rust_i18n::t!("app.navigation.search_commands").to_string())
+                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string())
                         .icon(IconName::Search)
                         .ghost()
                         .tooltip_with_action(
-                            rust_i18n::t!("app.navigation.search_commands").to_string(),
+                            rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(),
                             &OpenCommandPalette,
                             Some(key_context::DESKTOP),
                         )
@@ -639,7 +639,7 @@ impl DesktopView {
                             rust_i18n::t!("app.navigation.show_panel").to_string()
                         })
                         .tooltip_with_action(
-                            rust_i18n::t!("app.navigation.toggle_inspector").to_string(),
+                            rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
                             &ToggleInspector,
                             Some(key_context::DESKTOP),
                         )

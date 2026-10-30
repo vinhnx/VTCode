@@ -115,9 +115,9 @@ impl DesktopView {
                 .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
             desktop_button("refresh-files")
                 .label(rust_i18n::t!("app.files.refresh").to_string())
-                .accessibility_label(rust_i18n::t!("app.files.refresh_tooltip").to_string())
+                .accessibility_label(rust_i18n::t!(i18n::FILES_REFRESH_TOOLTIP).to_string())
                 .tooltip_with_action(
-                    rust_i18n::t!("app.files.refresh_tooltip").to_string(),
+                    rust_i18n::t!(i18n::FILES_REFRESH_TOOLTIP).to_string(),
                     &RefreshWorkspace,
                     Some(key_context::DESKTOP),
                 )
@@ -428,7 +428,7 @@ impl DesktopView {
         if activity.rows.is_empty() {
             return body
                 .child(empty_state(
-                    rust_i18n::t!("app.inspector.empty_activity_title").to_string(),
+                    rust_i18n::t!(i18n::INSPECTOR_EMPTY_ACTIVITY_TITLE).to_string(),
                     rust_i18n::t!("app.inspector.empty_activity_description").to_string(),
                     IconName::Activity,
                 ))

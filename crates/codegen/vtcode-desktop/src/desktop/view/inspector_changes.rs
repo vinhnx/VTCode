@@ -80,7 +80,7 @@ impl DesktopView {
                 div()
                     .id("inspector-navigation")
                     .test_support()
-                    .key_context("VTCodeInspector")
+                    .key_context(key_context::INSPECTOR)
                     .role(gpui_kit::Role::Group)
                     .aria_label(rust_i18n::t!("app.inspector.inspector_tabs").to_string())
                     .aria_description(rust_i18n::t!("app.inspector.tabs_hint").to_string())
@@ -443,8 +443,8 @@ impl DesktopView {
             if expanded {
                 let mode = viewer.read(cx).mode();
                 for (id, label, target) in [
-                    ("review-unified", rust_i18n::t!("app.workspace_review.unified").to_string(), DiffMode::Unified),
-                    ("review-split", rust_i18n::t!("app.workspace_review.split").to_string(), DiffMode::Split),
+                    ("review-unified", rust_i18n::t!(i18n::WORKSPACE_REVIEW_UNIFIED).to_string(), DiffMode::Unified),
+                    ("review-split", rust_i18n::t!(i18n::WORKSPACE_REVIEW_SPLIT).to_string(), DiffMode::Split),
                 ] {
                     let state = viewer.clone();
                     let selected_suffix = if mode == target {

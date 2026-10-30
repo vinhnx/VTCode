@@ -44,7 +44,7 @@ impl DesktopView {
                 )
                 .child(
                     desktop_button("cancel-shortcuts")
-                        .label(rust_i18n::t!("app.configuration.cancel").to_string())
+                        .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
                         .ghost()
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| view.cancel_shortcut_edit(window, cx))),
@@ -108,7 +108,7 @@ impl DesktopView {
                         .flex_1()
                         .min_w_0()
                         .small()
-                        .aria_label(rust_i18n::t!("app.shortcuts.search_aria").to_string())
+                        .aria_label(rust_i18n::t!(i18n::SHORTCUTS_SEARCH_ARIA).to_string())
                         .prefix(Icon::new(IconName::Search).size_4())
                         .cleanable(true),
                 ),

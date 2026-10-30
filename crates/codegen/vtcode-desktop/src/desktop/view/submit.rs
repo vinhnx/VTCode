@@ -113,7 +113,7 @@ impl DesktopView {
             return Err(draft);
         }
         if !self.request(protocol::method::TURN_SUBMIT, params) {
-            self.error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
+            self.error = Some(rust_i18n::t!(i18n::QUEUE_FULL).to_string());
             return Err(draft);
         }
         if let Some(entry) = self
@@ -136,7 +136,7 @@ impl DesktopView {
         self.transcript.push(TranscriptItem::new(
             draft.echo_id.clone(),
             TranscriptRole::User.as_str().into(),
-            rust_i18n::t!("app.transcript.you").to_string().into(),
+            rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string().into(),
             echo,
         ));
         self.pending_submission = Some(draft);
@@ -262,7 +262,7 @@ impl DesktopView {
         if self.request(protocol::method::INTERACTION_RESPOND, params) {
             self.pending_interaction_response = Some(response.interaction_id);
             self.clear_error();
-            self.status = rust_i18n::t!("app.composer.sending_decision").to_string();
+            self.status = rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string();
         } else {
             self.error = Some(rust_i18n::t!("app.composer.decision_not_sent").to_string());
         }

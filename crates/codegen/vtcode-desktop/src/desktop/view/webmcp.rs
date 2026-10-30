@@ -12,7 +12,7 @@ use protocol::slash_command::{
 use serde_json::{Value, json};
 use vtcode_desktop_protocol as protocol;
 
-use super::{DesktopButtonExt, DesktopView, desktop_button};
+use super::{DesktopButtonExt, DesktopView, desktop_button, i18n};
 
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
 /// Slash-parse failure: help text goes through the localized notice catalog,
@@ -40,7 +40,7 @@ impl WebmcpNotice {
         match self {
             Self::CommandsHelp => rust_i18n::t!("app.webmcp_notice.commands_help").to_string(),
             Self::Disconnected => rust_i18n::t!("app.webmcp_notice.disconnected").to_string(),
-            Self::RequestQueueUnavailable => rust_i18n::t!("app.errors.request_queue_unavailable").to_string(),
+            Self::RequestQueueUnavailable => rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string(),
             Self::InvalidStatus => rust_i18n::t!("app.webmcp_notice.invalid_status").to_string(),
             Self::PairingCreated => rust_i18n::t!("app.webmcp_notice.pairing_created").to_string(),
             Self::InvalidPairing => rust_i18n::t!("app.webmcp_notice.invalid_pairing").to_string(),

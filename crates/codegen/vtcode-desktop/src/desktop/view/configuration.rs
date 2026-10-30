@@ -388,7 +388,7 @@ impl DesktopView {
             self.status = rust_i18n::t!("app.configuration.saving_settings").to_string();
             self.error = None;
         } else {
-            self.config_editor_error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+            self.config_editor_error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
         cx.notify();
     }
@@ -435,7 +435,7 @@ impl DesktopView {
             self.status = rust_i18n::t!("app.configuration.opening_file").to_string();
             self.error = None;
         } else {
-            self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+            self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
         cx.notify();
     }
@@ -445,7 +445,7 @@ impl DesktopView {
     pub(super) fn handle_config_open_file_response(&mut self, cx: &mut Context<Self>) {
         self.status = rust_i18n::t!("app.configuration.opened_editor").to_string();
         if !self.request(protocol::method::CONFIG_SETTINGS_READ, json!({})) {
-            self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
+            self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
         }
         cx.notify();
     }
@@ -494,7 +494,7 @@ impl DesktopView {
 
     pub(super) fn approval_policy_label(&self) -> String {
         self.session_options().map_or_else(
-            || rust_i18n::t!("app.configuration.unavailable").to_string(),
+            || rust_i18n::t!(i18n::CONFIGURATION_UNAVAILABLE).to_string(),
             |options| composer_actions::permission_mode_label(options.permission_mode),
         )
     }
@@ -729,7 +729,7 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
         let label = setting.label.as_deref().unwrap_or(&setting.path);
         let mut entry = command(label.to_string(), PaletteAction::EditConfigSetting(setting.path.clone()));
         let summary = if setting.value.is_null() {
-            rust_i18n::t!("app.configuration.unset").to_string()
+            rust_i18n::t!(i18n::CONFIGURATION_UNSET).to_string()
         } else {
             value_summary(&setting.value)
         };
@@ -740,7 +740,7 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
                 "project" => config_target_label(protocol::ConfigTarget::Project),
                 _ => origin.to_string(),
             };
-            rust_i18n::t!("app.configuration.origin_hint", origin = layer.as_str()).to_string()
+            rust_i18n::t!(i18n::CONFIGURATION_ORIGIN_HINT, origin = layer.as_str()).to_string()
         });
         let action_hint = setting.value.as_bool().map_or_else(String::new, |value| {
             if value {
@@ -753,7 +753,7 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
         let default = setting
             .default_value
             .as_deref()
-            .map_or(String::new(), |value| rust_i18n::t!("app.configuration.default_hint", value = value).to_string());
+            .map_or(String::new(), |value| rust_i18n::t!(i18n::CONFIGURATION_DEFAULT_HINT, value = value).to_string());
         let options = if setting.options.is_empty() {
             String::new()
         } else {
@@ -780,7 +780,7 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
 
 pub(super) fn value_summary(value: &Value) -> String {
     let rendered = match value {
-        Value::Null => rust_i18n::t!("app.configuration.unset").to_string(),
+        Value::Null => rust_i18n::t!(i18n::CONFIGURATION_UNSET).to_string(),
         Value::String(value) => {
             let safe = value
                 .chars()

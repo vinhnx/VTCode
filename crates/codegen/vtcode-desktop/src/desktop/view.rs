@@ -73,7 +73,7 @@ use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{markdown_style, render_markdown, render_markdown_with_style};
 use super::preferences;
-use super::strings::{app, key_context, keys};
+use super::strings::{app, bundle, display, i18n, key_context, keys};
 use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, NoticeSeverity, Transcript, TranscriptItem, TranscriptRole, status as tool_status,
@@ -612,7 +612,7 @@ fn workspace_picker_options() -> PathPromptOptions {
         files: false,
         directories: true,
         multiple: false,
-        prompt: Some(rust_i18n::t!("app.workspace.choose").to_string().into()),
+        prompt: Some(rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string().into()),
     }
 }
 
