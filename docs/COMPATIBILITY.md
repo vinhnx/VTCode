@@ -9,7 +9,7 @@ VT Code ecosystem.
 | --------------------- | ----- | -----   | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Core CLI              | Yes   | Yes     | Yes      | No      | Full terminal agent support                                                                                                                           |
 | TUI Interface         | Yes   | Yes     | Yes      | No      | Requires crossterm                                                                                                                                    |
-| Desktop Workspace     | No    | Partial | No       | No      | Local GPUI app for macOS 15+; ad hoc signed only, no Developer ID trust or notarization                                                               |
+| Desktop Workspace     | No    | Partial | No       | No      | Local GPUI app for macOS 15+ (Apple Silicon or Intel); ad hoc signed only, no Developer ID trust or notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
 | Keyring Auth          | Yes   | Yes     | Yes      | No      | OS-specific backends                                                                                                                                  |
 | MCP Protocol          | Yes   | Yes     | Yes      | No      | Model Context Protocol                                                                                                                                |
 | ACP Client            | Yes   | Yes     | Yes      | Partial | Agent Client Protocol                                                                                                                                 |
@@ -85,7 +85,7 @@ it.
 | File Permissions      | Yes     | `libc`                 | Unix permission model                                                                                                             |
 | Signal Handling       | Yes     | `signal-hook`          | POSIX signals                                                                                                                     |
 | Touch ID Auth         | No      | -                      | Not yet implemented                                                                                                               |
-| Desktop Workspace     | Partial | GPUI Kit               | Local app build on macOS 15+; ad hoc signing, no notarization                                                                     |
+| Desktop Workspace     | Partial | GPUI Kit               | Local app build on macOS 15+; ad hoc signing, no notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
 
 ### Windows
 

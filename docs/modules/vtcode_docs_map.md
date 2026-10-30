@@ -538,9 +538,9 @@ below based on the topic area.
 
 - **File**: `docs/development/desktop-workspace.md`
   - **Content**: VT Code Desktop Workspace
-  - **Topics**: Build and launch, Runtime and session behavior, UI quick reference, Accessibility, Themes
-  - **User Questions**: "What can you tell me about VT Code Desktop Workspace?", "How does Build and launch work?", "How
-    does Runtime and session behavior work?"
+  - **Topics**: System requirements, Build and launch, Runtime and session behavior, UI quick reference, Accessibility
+  - **User Questions**: "What can you tell me about VT Code Desktop Workspace?", "How does System requirements work?",
+    "How does Build and launch work?"
 
 - **File**: `docs/development/EXECUTION_POLICY.md`
   - **Content**: VT Code Execution Policy

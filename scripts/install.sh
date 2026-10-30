@@ -28,6 +28,12 @@ GITHUB_RELEASES="https://github.com/$REPO/releases/download"
 WITH_AST_GREP=0
 WITH_SEARCH_TOOLS=1
 WITH_COMPLETIONS=0
+WITH_DESKTOP=1
+WITH_DESKTOP_EXPLICIT=0
+DESKTOP_APP_NAME="VT Code.app"
+# Set by main() before the EXIT trap is installed. The trap handler cannot use
+# main()'s locals: they are unset by the time EXIT fires.
+VTCODE_WORK_DIR=""
 
 # Ensure INSTALL_DIR exists
 mkdir -p "$INSTALL_DIR"
@@ -421,11 +427,13 @@ install_man_and_completions() {
         local man_dir="$share_dir/man/man1"
         mkdir -p "$man_dir"
         local man_page
+        local man_count=0
         for man_page in "$man_source_dir"/*.1; do
             [[ -f "$man_page" ]] || continue
             cp "$man_page" "$man_dir/"
+            man_count=$((man_count + 1))
         done
-        log_success "Installed $(ls "$man_dir" | wc -l | tr -d ' ') man pages to $man_dir"
+        log_success "Installed $man_count man pages to $man_dir"
     fi
 
     if [[ -d "$completions_source" ]]; then
@@ -456,6 +464,129 @@ install_man_and_completions() {
     log_info "  Bash:  source $share_dir/bash-completion/completions/vtcode"
     log_info "  Zsh:   fpath=($share_dir/zsh/site-functions \$fpath)"
     log_info "  Fish:  fish_add_path $share_dir/fish/vendor_completions.d"
+}
+
+# Print the installed desktop bundle path when present.
+find_installed_desktop_app() {
+    local candidate
+    for candidate in "$HOME/Applications/$DESKTOP_APP_NAME" "/Applications/$DESKTOP_APP_NAME"; do
+        if [[ -d "$candidate" && -f "$candidate/Contents/Info.plist" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Fail-fast checks for a from-source desktop build. Returns nonzero (never
+# exits) so the caller can report context.
+check_desktop_prerequisites() {
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        log_error "The VT Code desktop app requires macOS."
+        return 1
+    fi
+
+    local macos_version macos_major
+    macos_version="$(sw_vers -productVersion 2>/dev/null || echo "")"
+    macos_major="${macos_version%%.*}"
+    if [[ ! "$macos_major" =~ ^[0-9]+$ ]] || (( macos_major < 15 )); then
+        log_error "VT Code Desktop requires macOS 15 or newer; found ${macos_version:-unknown}."
+        return 1
+    fi
+
+    local missing=()
+    local tool
+    for tool in git cargo codesign ditto sips iconutil plutil; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing+=("$tool")
+        fi
+    done
+    if (( ${#missing[@]} > 0 )); then
+        log_error "Missing required tools for the desktop build: ${missing[*]}"
+        log_info "Install the Xcode command line tools (xcode-select --install), Rust (https://rustup.rs), and git, then retry."
+        return 1
+    fi
+    return 0
+}
+
+# Build the desktop app from source at the installed release tag and install
+# it to ~/Applications. Returns nonzero on failure; never prompts (install.sh
+# often runs via curl | bash with no usable stdin).
+install_desktop_app() {
+    local release_tag="$1"
+    local work_dir="$2"
+
+    if ! check_desktop_prerequisites; then
+        return 1
+    fi
+
+    local existing
+    if existing=$(find_installed_desktop_app); then
+        log_success "Desktop app already installed at $existing"
+        log_info "Open it with: vtcode desktop"
+        return 0
+    fi
+
+    local user_applications="$HOME/Applications"
+    local target="$user_applications/$DESKTOP_APP_NAME"
+
+    log_info "Installing VT Code Desktop ($release_tag)..."
+    log_warning "The desktop build compiles from source and can take several minutes."
+
+    local source_dir="$work_dir/vtcode-desktop-src"
+    log_info "Cloning $REPO at $release_tag..."
+    if ! git clone --depth 1 --branch "$release_tag" "https://github.com/$REPO.git" "$source_dir"; then
+        log_error "Failed to clone $REPO at $release_tag"
+        return 1
+    fi
+
+    local staged_app="$work_dir/$DESKTOP_APP_NAME"
+    log_info "Building and packaging the desktop app (this takes a while)..."
+    if ! bash "$source_dir/scripts/package-desktop-macos.sh" "$staged_app"; then
+        log_error "Desktop packaging failed"
+        return 1
+    fi
+
+    log_info "Installing to $target..."
+    mkdir -p "$user_applications"
+    if ! ditto "$staged_app" "$target"; then
+        log_error "Failed to install the desktop app to $target"
+        return 1
+    fi
+    if [[ ! -f "$target/Contents/Info.plist" ]]; then
+        log_error "Desktop install verification failed: $target is not a valid app bundle"
+        return 1
+    fi
+
+    log_success "Desktop app installed to $target"
+    echo ""
+    log_warning "First launch: right-click the app and choose Open (or allow it in Settings > Privacy & Security)."
+    log_info "After that, open it anytime with: vtcode desktop"
+    return 0
+}
+
+# Install the desktop app when wanted. Explicit --with-desktop fails hard when the
+# app is unavailable; the macOS default stays best-effort so a missing toolchain
+# never breaks the CLI install. Returns nonzero only for a failed explicit request.
+maybe_install_desktop_app() {
+    local release_tag="$1"
+    local work_dir="$2"
+
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        if [[ "$WITH_DESKTOP_EXPLICIT" -eq 1 ]]; then
+            log_error "--with-desktop requires macOS; the desktop app is not available on this platform."
+            return 1
+        fi
+        return 0
+    fi
+    if install_desktop_app "$release_tag" "$work_dir"; then
+        return 0
+    fi
+    if [[ "$WITH_DESKTOP_EXPLICIT" -eq 1 ]]; then
+        return 1
+    fi
+    log_warning "Continuing without the desktop app (pass --without-desktop to silence this, or re-run with --with-desktop to retry)."
+    return 0
 }
 
 # Check if install directory is in PATH
@@ -497,13 +628,24 @@ add_to_path() {
     esac
 }
 
-# Cleanup temporary files
+# Cleanup temporary files (EXIT/INT/TERM handler; registered by name so the work
+# dir is quoted at cleanup time instead of expanded into the trap command).
+# Only the recorded work dir is removed: /tmp/vtcode-* also matches live temp
+# dirs owned by other sessions, so it must never be glob-deleted here.
 cleanup() {
-    rm -f /tmp/vtcode-* /tmp/vtcode.tar.gz /tmp/vtcode.zip
+    if [[ -n "${VTCODE_WORK_DIR:-}" ]]; then
+        rm -rf -- "${VTCODE_WORK_DIR:?}" || true
+    fi
+    show_cursor
 }
 
 # Main installation flow
 main() {
+    if [[ "$WITH_DESKTOP_EXPLICIT" -eq 1 && "$(uname -s)" != "Darwin" ]]; then
+        log_error "--with-desktop requires macOS; the desktop app is not available on this platform."
+        exit 1
+    fi
+
     log_info "VT Code Native Installer"
     echo ""
 
@@ -515,7 +657,8 @@ main() {
     # Create temporary directory for downloads
     local temp_dir
     temp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vtcode')
-    trap "rm -rf $temp_dir; show_cursor" EXIT INT TERM
+    VTCODE_WORK_DIR="$temp_dir"
+    trap cleanup EXIT INT TERM
 
     # Fetch recent releases
     local all_releases
@@ -617,6 +760,14 @@ main() {
         install_optional_dependency "$target_path" "ast-grep" "ast-grep"
     fi
 
+    if [[ "$WITH_DESKTOP" -eq 1 ]]; then
+        echo ""
+        if ! maybe_install_desktop_app "$release_tag" "$temp_dir"; then
+            log_error "Desktop installation failed, but the CLI is installed and ready at $target_path"
+            exit 1
+        fi
+    fi
+
     echo ""
     log_success "Next steps:"
     log_info "  vtcode init          # scaffold project config and AGENTS.md"
@@ -639,13 +790,17 @@ Options:
   --without-search-tools Skip ripgrep and ast-grep during install
   --with-ast-grep    Install VT Code-managed ast-grep after VT Code is installed
   --with-completions Install man page and shell completions (bash/zsh/fish)
+  --with-desktop     Require the macOS desktop app (default on macOS 15+; explicit use fails if unavailable)
+  --without-desktop  Skip the macOS desktop app
   -h, --help         Show this help message
 
 Examples:
-  ./install.sh                           # Install VT Code plus ripgrep and ast-grep
+  ./install.sh                           # Install VT Code, ripgrep, ast-grep (plus the desktop app on macOS)
   ./install.sh --without-search-tools    # Install VT Code only
   ./install.sh --with-ast-grep           # Install VT Code and managed ast-grep only
   ./install.sh --with-completions        # Install with man page and shell completions
+  ./install.sh --with-desktop            # Require the macOS desktop app (fail if unavailable)
+  ./install.sh --without-desktop         # Skip the macOS desktop app
   ./install.sh --dir /usr/local/bin    # Install to /usr/local/bin (may need sudo)
 
 Environment variables:
@@ -657,6 +812,11 @@ USAGE
 while [[ $# -gt 0 ]]; do
     case $1 in
         -d|--dir)
+            if [[ $# -lt 2 ]]; then
+                log_error "-d/--dir requires a directory argument"
+                show_usage
+                exit 1
+            fi
             INSTALL_DIR="$2"
             shift 2
             ;;
@@ -682,6 +842,16 @@ while [[ $# -gt 0 ]]; do
             WITH_COMPLETIONS=1
             shift
             ;;
+        --with-desktop)
+            WITH_DESKTOP=1
+            WITH_DESKTOP_EXPLICIT=1
+            shift
+            ;;
+        --without-desktop)
+            WITH_DESKTOP=0
+            WITH_DESKTOP_EXPLICIT=0
+            shift
+            ;;
         *)
             log_error "Unknown option: $1"
             show_usage
@@ -690,4 +860,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-main
+# Allow tests to source this file for its helper functions without installing.
+# BASH_SOURCE is unset when run via `curl ... | bash` (stdin); that is a real
+# install, not a source, so main must still run. The `:-` default keeps this
+# safe under `set -u`.
+if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]:-}" == "$0" ]]; then
+    main
+fi

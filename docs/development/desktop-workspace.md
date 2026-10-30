@@ -8,6 +8,26 @@ terminal presentation output to its protocol stream.
 The [GPUI Kit guide review](desktop-gpui-kit-review.md) records coverage of all 41 main guide topics,
 the applicable ownership/lifecycle improvements, and verification boundaries.
 
+## System requirements
+
+To run the app:
+
+- macOS 15 or newer, on Apple Silicon or Intel.
+- One-time Gatekeeper approval on first launch: local builds are signed ad hoc (no Developer ID, no notarization),
+  so right-click the app and choose Open, or allow it once in Settings > Privacy & Security.
+- Provider credentials configured for the CLI (see below); the desktop service reuses the CLI's configuration,
+  credentials, workspace trust, and sandbox policy.
+
+To build and install from source (`scripts/install.sh` does this by default on macOS; `--without-desktop` skips
+it; or run `scripts/package-desktop-macos.sh` directly):
+
+- A macOS 15+ build host (enforced by the packaging script).
+- Git, when installing through `install.sh` (it clones the release tag); not needed when packaging from a checkout.
+- Rust 1.99.1 or newer (the workspace MSRV).
+- Xcode command line tools (`xcode-select --install`) for the linker and macOS SDK; the packaging script also
+  requires `codesign`, `ditto`, `sips`, `iconutil`, and `plutil`.
+- Build time: the release build compiles the GUI and its matching CLI helper from source and takes several minutes.
+
 ## Build and launch
 
 For local development, build the service and launch the GUI from the workspace root:
