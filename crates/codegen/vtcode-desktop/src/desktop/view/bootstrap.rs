@@ -38,45 +38,45 @@ pub(super) fn init_native_menus(cx: &mut App) {
     let _app = cx.on_action(|_: &ShowMainWindow, cx| show_main_window(cx));
     cx.set_menus([
         Menu::new(app::NAME).items([
-            MenuItem::action("Settings…", OpenSettings),
+            MenuItem::action(rust_i18n::t!("app.menus.settings_menu").to_string(), OpenSettings),
             MenuItem::separator(),
-            MenuItem::os_submenu("Services", SystemMenuType::Services),
+            MenuItem::os_submenu(rust_i18n::t!("app.menus.services").to_string(), SystemMenuType::Services),
             MenuItem::separator(),
-            MenuItem::action("Hide VT Code", HideApplication),
-            MenuItem::action("Hide Others", HideOtherApplications),
-            MenuItem::action("Show All", ShowAllApplications),
+            MenuItem::action(rust_i18n::t!("app.menus.hide_app").to_string(), HideApplication),
+            MenuItem::action(rust_i18n::t!("app.menus.hide_others").to_string(), HideOtherApplications),
+            MenuItem::action(rust_i18n::t!("app.menus.show_all").to_string(), ShowAllApplications),
             MenuItem::separator(),
-            MenuItem::action("Quit VT Code", QuitApplication),
+            MenuItem::action(rust_i18n::t!("app.menus.quit_app").to_string(), QuitApplication),
         ]),
-        Menu::new("File").items([
-            MenuItem::action("New Session", NewSession),
-            MenuItem::action("Open Workspace…", ChooseWorkspace),
-            MenuItem::action("Close Session", CloseSession),
-            MenuItem::action("Choose Model…", OpenModelPicker),
+        Menu::new(rust_i18n::t!("app.menus.file_menu").to_string()).items([
+            MenuItem::action(rust_i18n::t!("app.menus.new_session").to_string(), NewSession),
+            MenuItem::action(rust_i18n::t!("app.menus.open_workspace").to_string(), ChooseWorkspace),
+            MenuItem::action(rust_i18n::t!("app.menus.close_session").to_string(), CloseSession),
+            MenuItem::action(rust_i18n::t!("app.menus.choose_model").to_string(), OpenModelPicker),
         ]),
-        Menu::new("Edit").items([
-            MenuItem::os_action("Undo", Undo, OsAction::Undo),
-            MenuItem::os_action("Redo", Redo, OsAction::Redo),
+        Menu::new(rust_i18n::t!("app.menus.edit_menu").to_string()).items([
+            MenuItem::os_action(rust_i18n::t!("app.menus.undo").to_string(), Undo, OsAction::Undo),
+            MenuItem::os_action(rust_i18n::t!("app.menus.redo").to_string(), Redo, OsAction::Redo),
             MenuItem::separator(),
-            MenuItem::os_action("Cut", Cut, OsAction::Cut),
-            MenuItem::os_action("Copy", Copy, OsAction::Copy),
-            MenuItem::os_action("Paste", Paste, OsAction::Paste),
-            MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
+            MenuItem::os_action(rust_i18n::t!("app.menus.cut").to_string(), Cut, OsAction::Cut),
+            MenuItem::os_action(rust_i18n::t!("app.menus.copy").to_string(), Copy, OsAction::Copy),
+            MenuItem::os_action(rust_i18n::t!("app.menus.paste").to_string(), Paste, OsAction::Paste),
+            MenuItem::os_action(rust_i18n::t!("app.menus.select_all").to_string(), SelectAll, OsAction::SelectAll),
         ]),
-        Menu::new("View").items([
-            MenuItem::action("Command Palette…", OpenCommandPalette),
-            MenuItem::action("Find in Conversation…", OpenConversationSearch),
-            MenuItem::action("Focus Composer", FocusComposer),
-            MenuItem::action("Toggle Inspector", ToggleInspector),
-            MenuItem::action("Toggle Zen Mode", ToggleZenMode),
+        Menu::new(rust_i18n::t!("app.menus.view_menu").to_string()).items([
+            MenuItem::action(rust_i18n::t!("app.menus.command_palette").to_string(), OpenCommandPalette),
+            MenuItem::action(rust_i18n::t!("app.menus.find_conversation").to_string(), OpenConversationSearch),
+            MenuItem::action(rust_i18n::t!("app.menus.focus_composer").to_string(), FocusComposer),
+            MenuItem::action(rust_i18n::t!("app.menus.toggle_inspector").to_string(), ToggleInspector),
+            MenuItem::action(rust_i18n::t!("app.menus.toggle_zen").to_string(), ToggleZenMode),
             MenuItem::separator(),
-            MenuItem::action("Cancel Run", CancelRun),
+            MenuItem::action(rust_i18n::t!("app.menus.cancel_run").to_string(), CancelRun),
         ]),
-        Menu::new("Window").items([
-            MenuItem::action("Show VT Code", ShowMainWindow),
-            MenuItem::action("Minimize", MinimizeWindow),
-            MenuItem::action("Zoom", ZoomWindow),
-            MenuItem::action("Close Window", CloseWindow),
+        Menu::new(rust_i18n::t!("app.menus.window_menu").to_string()).items([
+            MenuItem::action(rust_i18n::t!("app.menus.show_app").to_string(), ShowMainWindow),
+            MenuItem::action(rust_i18n::t!("app.menus.minimize").to_string(), MinimizeWindow),
+            MenuItem::action(rust_i18n::t!("app.menus.zoom").to_string(), ZoomWindow),
+            MenuItem::action(rust_i18n::t!("app.menus.close_window").to_string(), CloseWindow),
         ]),
     ]);
 }
@@ -204,7 +204,8 @@ impl DesktopView {
         });
         let shortcut_capture_focus = cx.focus_handle().tab_stop(true);
         let shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
-        let shortcut_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search shortcuts"));
+        let shortcut_search_input = cx
+            .new(|cx| InputState::new(window, cx).placeholder(rust_i18n::t!("app.shortcuts.search_aria").to_string()));
         let shortcut_search_subscription = cx.subscribe_in(&shortcut_search_input, window, |_, _, event, _, cx| {
             if matches!(event, InputEvent::Change) {
                 cx.notify();
@@ -282,7 +283,9 @@ impl DesktopView {
                 view.set_turn_completion_mode(*mode, cx);
             }
         });
-        let config_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search settings…"));
+        let config_search_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(rust_i18n::t!("app.configuration.search_placeholder").to_string())
+        });
         let config_search_subscription = cx.subscribe_in(&config_search_input, window, |view, _, event, _, cx| {
             if matches!(event, InputEvent::Change) {
                 view.refresh_config_catalog(cx);
@@ -335,7 +338,7 @@ impl DesktopView {
             cancel_requested: false,
             cancel_request_sent: false,
             running: false,
-            status: "Choose a workspace to get started".to_string(),
+            status: rust_i18n::t!("app.workspace.startup_hint").to_string(),
             error: None,
             configuration: None,
             pending_permission_choice: None,
@@ -451,7 +454,11 @@ impl DesktopView {
             config_editor_error: None,
             config_write_pending: false,
             config_write_notice: None,
-            secret_input: cx.new(|cx| InputState::new(window, cx).masked(true).placeholder("Paste API key…")),
+            secret_input: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .masked(true)
+                    .placeholder(rust_i18n::t!("app.secrets.paste_key").to_string())
+            }),
             secret_editor_error: None,
             secret_save_pending: false,
             models: Vec::new(),

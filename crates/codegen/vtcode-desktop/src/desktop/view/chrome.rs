@@ -37,12 +37,15 @@ impl DesktopView {
                 } else {
                     HandleEdge::Trailing
                 },
-                "Resize navigation",
+                rust_i18n::t!("app.navigation.resize_navigation").to_string(),
                 self.sidebar_width,
             ),
-            ResizeEdge::Inspector => {
-                ("resize-inspector", HandleEdge::Leading, "Resize inspector", self.inspector_width)
-            }
+            ResizeEdge::Inspector => (
+                "resize-inspector",
+                HandleEdge::Leading,
+                rust_i18n::t!("app.navigation.resize_inspector").to_string(),
+                self.inspector_width,
+            ),
         };
         let focus = match edge {
             ResizeEdge::Sidebar => &self.sidebar_resize_focus,
@@ -64,7 +67,7 @@ impl DesktopView {
             .track_focus(focus)
             .role(gpui_kit::Role::Splitter)
             .aria_label(label)
-            .aria_description("Use Left and Right arrow keys to resize; hold Shift for larger steps.")
+            .aria_description(rust_i18n::t!("app.navigation.resize_hint").to_string())
             .aria_numeric_value(width as f64)
             .aria_min_numeric_value(MIN_PANE_WIDTH as f64)
             .aria_max_numeric_value(MAX_PANE_WIDTH as f64)
@@ -250,7 +253,11 @@ impl DesktopView {
                 )
                 .child(
                     desktop_button("close-session")
-                        .tooltip_with_action("Close session", &CloseSession, Some(key_context::DESKTOP))
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.navigation.close_session").to_string(),
+                            &CloseSession,
+                            Some(key_context::DESKTOP),
+                        )
                         .icon(IconName::X)
                         .accessibility_label(rust_i18n::t!("app.navigation.close_thread").to_string())
                         .ghost()
@@ -332,7 +339,8 @@ impl DesktopView {
                                     let session_id = session.session_id.clone();
                                     let selected = view.selected_session_id.as_deref() == Some(&session_id);
                                     let label = session.title.clone().unwrap_or_else(|| {
-                                        format!("Session {}", session_id.chars().take(8).collect::<String>())
+                                        let short = session_id.chars().take(8).collect::<String>();
+                                        rust_i18n::t!("app.session.fallback_title", id = short.as_str()).to_string()
                                     });
                                     let enabled = view.session_change_allowed(Some(&session_id));
                                     Some(
@@ -468,9 +476,9 @@ impl DesktopView {
         }
         let navigation_visible = self.preferences.navigation_visible();
         let navigation_label = if navigation_visible {
-            "Toggle navigation"
+            rust_i18n::t!("app.navigation.toggle_navigation").to_string()
         } else {
-            "Show navigation"
+            rust_i18n::t!("app.navigation.show_navigation").to_string()
         };
         let navigation_icon = if navigation_visible && self.preferences.navigation_on_right() {
             IconName::PanelRight
@@ -485,7 +493,7 @@ impl DesktopView {
             .as_ref()
             .and_then(|path| path.file_name())
             .and_then(|name| name.to_str())
-            .unwrap_or("Workspace");
+            .map_or_else(|| rust_i18n::t!("app.navigation.workspace_fallback").to_string(), str::to_string);
         // The leading cluster shares the trailing toolbar's compact size, so the
         // whole title bar is one band: same frame, same center line.
         TitleBar::new()
@@ -503,33 +511,45 @@ impl DesktopView {
                     .gap_3()
                     .child(
                         desktop_button("navigate-back")
-                            .accessibility_label(if pending_back { "Back (navigating…)" } else { "Back" })
+                            .accessibility_label(if pending_back {
+                                rust_i18n::t!("app.navigation.back_navigating").to_string()
+                            } else {
+                                rust_i18n::t!("app.navigation.back").to_string()
+                            })
                             .icon(IconName::ArrowLeft)
                             .ghost()
                             .small()
                             .loading(pending_back)
-                            .tooltip_with_action("Back", &NavigateBack, Some(key_context::DESKTOP))
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.navigation.back").to_string(),
+                                &NavigateBack,
+                                Some(key_context::DESKTOP),
+                            )
                             .desktop_disabled(!self.can_navigate_back() && !pending_back)
                             .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("navigate-forward")
                             .accessibility_label(if pending_forward {
-                                "Forward (navigating…)"
+                                rust_i18n::t!("app.navigation.forward_navigating").to_string()
                             } else {
-                                "Forward"
+                                rust_i18n::t!("app.navigation.forward").to_string()
                             })
                             .icon(IconName::ArrowRight)
                             .ghost()
                             .small()
                             .loading(pending_forward)
-                            .tooltip_with_action("Forward", &NavigateForward, Some(key_context::DESKTOP))
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.navigation.forward").to_string(),
+                                &NavigateForward,
+                                Some(key_context::DESKTOP),
+                            )
                             .desktop_disabled(!self.can_navigate_forward() && !pending_forward)
                             .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("toggle-sidebar")
-                            .accessibility_label(navigation_label)
+                            .accessibility_label(navigation_label.as_str())
                             .toggled(navigation_visible && self.sidebar_open)
                             .icon(navigation_icon)
                             .ghost()
@@ -574,8 +594,12 @@ impl DesktopView {
                         desktop_button("top-new-thread")
                             .icon(IconName::Plus)
                             .ghost()
-                            .accessibility_label("New thread")
-                            .tooltip_with_action("New thread", &NewSession, Some(key_context::DESKTOP))
+                            .accessibility_label(rust_i18n::t!("app.navigation.new_thread").to_string())
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.navigation.new_thread").to_string(),
+                                &NewSession,
+                                Some(key_context::DESKTOP),
+                            )
                             .desktop_disabled(!self.session_change_allowed(None))
                             .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                     )
@@ -583,8 +607,12 @@ impl DesktopView {
                         desktop_button("top-utilities")
                             .icon(IconName::GitBranch)
                             .ghost()
-                            .accessibility_label("Workspace utilities")
-                            .tooltip_with_action("Workspace utilities", &OpenUtilities, Some(key_context::DESKTOP))
+                            .accessibility_label(rust_i18n::t!("app.navigation.workspace_utilities").to_string())
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.navigation.workspace_utilities").to_string(),
+                                &OpenUtilities,
+                                Some(key_context::DESKTOP),
+                            )
                             .desktop_disabled(self.workspace.is_none())
                             .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
                     );
@@ -592,30 +620,42 @@ impl DesktopView {
             group = group
                 .child(
                     desktop_button("search-commands")
-                        .accessibility_label("Search commands")
+                        .accessibility_label(rust_i18n::t!("app.navigation.search_commands").to_string())
                         .icon(IconName::Search)
                         .ghost()
-                        .tooltip_with_action("Search commands", &OpenCommandPalette, Some(key_context::DESKTOP))
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.navigation.search_commands").to_string(),
+                            &OpenCommandPalette,
+                            Some(key_context::DESKTOP),
+                        )
                         .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
                 )
                 .child(
                     desktop_button("toggle-inspector")
                         .icon(IconName::PanelRight)
                         .accessibility_label(if self.inspector_open {
-                            "Hide panel"
+                            rust_i18n::t!("app.navigation.hide_panel").to_string()
                         } else {
-                            "Show panel"
+                            rust_i18n::t!("app.navigation.show_panel").to_string()
                         })
-                        .tooltip_with_action("Toggle inspector", &ToggleInspector, Some(key_context::DESKTOP))
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.navigation.toggle_inspector").to_string(),
+                            &ToggleInspector,
+                            Some(key_context::DESKTOP),
+                        )
                         .ghost()
                         .desktop_disabled(self.workspace.is_none())
                         .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
                 )
                 .child(
                     desktop_button("open-settings")
-                        .accessibility_label("Settings")
+                        .accessibility_label(rust_i18n::t!("app.navigation.settings_button").to_string())
                         .icon(IconName::Settings2)
-                        .tooltip_with_action("Settings", &OpenSettings, Some(key_context::DESKTOP))
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.navigation.settings_button").to_string(),
+                            &OpenSettings,
+                            Some(key_context::DESKTOP),
+                        )
                         .ghost()
                         .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
                 );
@@ -626,7 +666,9 @@ impl DesktopView {
                         .child(speed.clone()),
                 );
             }
-            group = group.content(self.render_chrome_menu("header-overflow", "Window actions"));
+            group = group.content(
+                self.render_chrome_menu("header-overflow", rust_i18n::t!("app.navigation.window_actions").to_string()),
+            );
         }
         let faded = themes::faded_chrome(theme.colors.background, theme.colors.foreground);
         group = group.child(zen_mode_toggle(self.zen_mode, faded, &self.focus_handle));

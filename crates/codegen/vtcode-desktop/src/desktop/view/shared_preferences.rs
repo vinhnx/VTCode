@@ -96,8 +96,7 @@ impl DesktopView {
             return;
         };
         if !known_theme(&theme) {
-            self.error =
-                Some("The CLI theme is not available in VT Code Desktop. Choose a desktop theme in Settings.".into());
+            self.error = Some(rust_i18n::t!("app.settings.cli_sync.theme_unavailable").to_string());
             return;
         }
         self.preferences.follow_cli_theme = Some(true);
@@ -111,11 +110,24 @@ impl DesktopView {
             .and_then(|configuration| configuration.shared_ui.as_ref());
         let theme = shared.map(|preferences| preferences.theme.clone());
         let follows = self.preferences.follow_cli_theme.unwrap_or(self.preferences.theme.is_none());
-        let group = settings_group_box("CLI preferences", &cx.theme().colors)
-            .child(div().text_sm().child(match theme.as_ref() {
-                Some(theme) => format!("CLI theme: {theme} · {}", if follows { "Following CLI" } else { "Desktop override" }),
-                None => "Connect to the current desktop service to load CLI preferences.".into(),
-            }))
+        let sync_label = rust_i18n::t!("app.settings.cli_sync.sync_theme").to_string();
+        let reload_label = rust_i18n::t!("app.settings.cli_sync.reload_settings").to_string();
+        let use_theme_label = rust_i18n::t!("app.settings.cli_sync.use_theme").to_string();
+        let group = settings_group_box(
+            rust_i18n::t!("app.settings.cli_sync.group").to_string(),
+            &cx.theme().colors,
+        )
+        .child(div().text_sm().child(match theme.as_ref() {
+            Some(theme) => {
+                let mode = if follows {
+                    rust_i18n::t!("app.settings.cli_sync.following").to_string()
+                } else {
+                    rust_i18n::t!("app.settings.cli_sync.desktop_override").to_string()
+                };
+                rust_i18n::t!("app.settings.cli_sync.theme_status", theme = theme, mode = mode).to_string()
+            }
+            None => rust_i18n::t!("app.settings.cli_sync.disconnected").to_string(),
+        }))
             .child(
                 div()
                     .flex()
@@ -123,23 +135,23 @@ impl DesktopView {
                     .gap_2()
                     .child(
                         desktop_button("sync-cli-theme")
-                            .label("Sync current theme to CLI")
+                            .label(sync_label.as_str())
                             .ghost()
-                            .tooltip_with_action("Sync current theme to CLI", &SyncCliTheme, Some(key_context::DESKTOP))
+                            .tooltip_with_action(sync_label.as_str(), &SyncCliTheme, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_sync_theme_to_cli())
                             .dispatches_desktop_action(SyncCliTheme, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("reload-cli-settings")
-                            .label("Reload CLI settings")
+                            .label(reload_label.as_str())
                             .ghost()
-                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some(key_context::DESKTOP))
+                            .tooltip_with_action(reload_label.as_str(), &ReloadCliSettings, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_reload_cli_settings())
                             .dispatches_desktop_action(ReloadCliSettings, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("use-cli-theme")
-                            .label("Use CLI theme")
+                            .label(use_theme_label.as_str())
                             .ghost()
                             .desktop_disabled(theme.as_deref().is_none_or(|theme| !known_theme(theme)))
                             .on_click(cx.listener(|view, _, window, cx| {
@@ -169,7 +181,7 @@ impl DesktopView {
         };
         if shared.shortcuts.is_empty() {
             self.shortcut_message = Some(if shared.shortcut_warnings.is_empty() {
-                "No equivalent CLI shortcut overrides are configured.".into()
+                rust_i18n::t!("app.shortcuts.no_cli_overrides").to_string()
             } else {
                 shared.shortcut_warnings.join("; ")
             });
@@ -194,9 +206,13 @@ impl DesktopView {
                     self.shortcuts_editing = false;
                     self.settings_navigation_focus.focus(window, cx);
                     if shared.shortcut_warnings.is_empty() {
-                        "CLI shortcuts imported. Restart VT Code Desktop to apply.".into()
+                        rust_i18n::t!("app.shortcuts.cli_imported").to_string()
                     } else {
-                        format!("CLI shortcuts imported; {}. Restart to apply.", shared.shortcut_warnings.join("; "))
+                        rust_i18n::t!(
+                            "app.shortcuts.cli_imported_warnings",
+                            warnings = shared.shortcut_warnings.join("; ")
+                        )
+                        .to_string()
                     }
                 }
             },

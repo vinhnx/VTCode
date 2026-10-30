@@ -16,7 +16,7 @@ impl SearchableListItem for ConfigOption {
 
     fn title(&self) -> gpui_kit::SharedString {
         if self.value.is_empty() {
-            "Use CLI default".into()
+            rust_i18n::t!("app.configuration.use_cli_default").to_string().into()
         } else {
             self.value.clone().into()
         }
@@ -110,7 +110,7 @@ impl ConfigValueKind {
                 if value.is_boolean() {
                     Ok(value)
                 } else {
-                    Err("Enter true or false.".into())
+                    Err(rust_i18n::t!("app.configuration.enter_bool").to_string())
                 }
             }
             Self::String => Ok(Value::String(text.to_owned())),
@@ -119,7 +119,7 @@ impl ConfigValueKind {
                 if value.as_number().is_some_and(|number| number.is_i64() || number.is_u64()) {
                     Ok(value)
                 } else {
-                    Err("Enter a whole number.".into())
+                    Err(rust_i18n::t!("app.configuration.enter_integer").to_string())
                 }
             }
             Self::Float => {
@@ -127,7 +127,7 @@ impl ConfigValueKind {
                 if value.as_number().is_some_and(serde_json::Number::is_f64) {
                     Ok(value)
                 } else {
-                    Err("Enter a decimal number.".into())
+                    Err(rust_i18n::t!("app.configuration.enter_float").to_string())
                 }
             }
             Self::Array | Self::Object => {
@@ -141,9 +141,9 @@ impl ConfigValueKind {
                     Ok(value)
                 } else {
                     Err(match self {
-                        Self::Array => "Enter a JSON array.".into(),
-                        Self::Object => "Enter a JSON object.".into(),
-                        _ => "Unsupported value.".into(),
+                        Self::Array => rust_i18n::t!("app.configuration.enter_array").to_string(),
+                        Self::Object => rust_i18n::t!("app.configuration.enter_object").to_string(),
+                        _ => rust_i18n::t!("app.configuration.unsupported_value").to_string(),
                     })
                 }
             }
@@ -155,11 +155,11 @@ impl DesktopView {
     pub(super) fn interrupt_cli_config_write(&mut self) {
         if self.config_write_pending {
             self.config_write_pending = false;
-            let message = "The service disconnected while saving. The outcome is unknown; reload CLI settings before trying again.";
-            self.config_editor_error = Some(message.into());
+            let message = rust_i18n::t!("app.configuration.save_disconnected").to_string();
+            self.config_editor_error = Some(message.clone());
             self.error = Some(match self.error.take() {
                 Some(error) => format!("{error}\n\n{message}"),
-                None => message.into(),
+                None => message,
             });
         }
     }
@@ -271,7 +271,8 @@ impl DesktopView {
         };
 
         if !setting.editable {
-            self.error = Some(format!("{} is a schema reference and is not directly editable.", setting.path));
+            self.error =
+                Some(rust_i18n::t!("app.configuration.schema_reference", path = setting.path.as_str()).to_string());
             cx.notify();
             return;
         }
@@ -335,7 +336,8 @@ impl DesktopView {
         };
         let raw = if let Some(state) = self.config_editor.as_ref().and_then(|editor| editor.option_select.as_ref()) {
             let Some(value) = state.read(cx).selected_value().cloned() else {
-                self.config_editor_error = Some("Choose a documented value before saving.".into());
+                self.config_editor_error =
+                    Some(rust_i18n::t!("app.configuration.choose_value_before_saving").to_string());
                 let state = state.clone();
                 state.update(cx, |state, cx| state.focus(window, cx));
                 cx.notify();
@@ -383,7 +385,7 @@ impl DesktopView {
             self.config_write_pending = true;
             self.session_request = Some(protocol::method::CONFIG_SETTINGS_WRITE);
             self.config_editor_error = None;
-            self.status = "Saving CLI settings…".into();
+            self.status = rust_i18n::t!("app.configuration.saving_settings").to_string();
             self.error = None;
         } else {
             self.config_editor_error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
@@ -430,7 +432,7 @@ impl DesktopView {
         }
         let params = protocol::ConfigOpenFileParams { target: self.config_target };
         if self.request(protocol::method::CONFIG_OPEN_FILE, json!(params)) {
-            self.status = "Opening vtcode.toml…".into();
+            self.status = rust_i18n::t!("app.configuration.opening_file").to_string();
             self.error = None;
         } else {
             self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
@@ -441,7 +443,7 @@ impl DesktopView {
     /// Opening can create a never-written layer file, so refresh the catalog
     /// versions that guard the next write.
     pub(super) fn handle_config_open_file_response(&mut self, cx: &mut Context<Self>) {
-        self.status = "Opened vtcode.toml in the default editor.".into();
+        self.status = rust_i18n::t!("app.configuration.opened_editor").to_string();
         if !self.request(protocol::method::CONFIG_SETTINGS_READ, json!({})) {
             self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
         }
@@ -492,8 +494,8 @@ impl DesktopView {
 
     pub(super) fn approval_policy_label(&self) -> String {
         self.session_options().map_or_else(
-            || "Unavailable".to_string(),
-            |options| composer_actions::permission_mode_label(options.permission_mode).to_string(),
+            || rust_i18n::t!("app.configuration.unavailable").to_string(),
+            |options| composer_actions::permission_mode_label(options.permission_mode),
         )
     }
 
@@ -503,20 +505,28 @@ impl DesktopView {
                 self.config_write_pending = false;
                 self.config_editor = None;
                 self.config_editor_error = None;
+                let layer = config_target_label(result.target);
                 self.config_write_notice = Some(if result.overridden {
-                    format!(
-                        "Saved {} to {} configuration. A higher-precedence layer still controls the active value.",
-                        result.path,
-                        target_label(result.target)
+                    rust_i18n::t!(
+                        "app.configuration.saved_overridden",
+                        setting = result.path.as_str(),
+                        layer = layer.as_str()
                     )
+                    .to_string()
                 } else {
-                    format!("Saved {} to {} configuration.", result.path, target_label(result.target))
+                    rust_i18n::t!(
+                        "app.configuration.saved_simple",
+                        setting = result.path.as_str(),
+                        layer = layer.as_str()
+                    )
+                    .to_string()
                 });
                 self.reload_cli_settings(cx);
             }
             Err(_) => {
                 self.config_write_pending = false;
-                self.config_editor_error = Some("The CLI returned an invalid settings response.".into());
+                self.config_editor_error =
+                    Some(rust_i18n::t!("app.configuration.invalid_settings_response").to_string());
                 self.error = self.config_editor_error.clone();
                 cx.notify();
             }
@@ -534,14 +544,15 @@ impl DesktopView {
                 self.refresh_config_catalog(cx);
                 self.config_visible_row_limit = limit.max(CONFIG_GROUP_PAGE_SIZE);
                 if let Some(notice) = self.config_write_notice.take() {
-                    self.status = format!("{notice} Settings reloaded for the next session.");
+                    self.status =
+                        rust_i18n::t!("app.configuration.settings_reloaded", notice = notice.as_str()).to_string();
                 }
             }
             Err(_) => {
                 self.cli_config_settings = None;
                 self.config_catalog_cache = None;
                 self.config_search_corpus = None;
-                self.error = Some("The CLI returned an invalid settings catalog.".into());
+                self.error = Some(rust_i18n::t!("app.configuration.invalid_catalog").to_string());
             }
         }
     }
@@ -552,21 +563,24 @@ impl ConfigEditor {
         let value = self.kind.parse(text)?;
         if !self.options.is_empty() {
             let Some(selected) = value.as_str() else {
-                return Err("Choose one of the documented string options.".into());
+                return Err(rust_i18n::t!("app.configuration.choose_string_option").to_string());
             };
             if !self.options.iter().any(|option| option == selected) {
-                return Err(format!("Choose one of the documented values: {}.", self.options.join(", ")));
+                let options = self.options.join(", ");
+                return Err(
+                    rust_i18n::t!("app.configuration.choose_documented_values", options = options.as_str()).to_string()
+                );
             }
         }
         Ok(value)
     }
 }
 
-fn target_label(target: protocol::ConfigTarget) -> &'static str {
+pub(super) fn config_target_label(target: protocol::ConfigTarget) -> String {
     match target {
-        protocol::ConfigTarget::User => "user",
-        protocol::ConfigTarget::Workspace => "workspace",
-        protocol::ConfigTarget::Project => "project",
+        protocol::ConfigTarget::User => rust_i18n::t!("app.configuration.target_user").to_string(),
+        protocol::ConfigTarget::Workspace => rust_i18n::t!("app.configuration.target_workspace").to_string(),
+        protocol::ConfigTarget::Project => rust_i18n::t!("app.configuration.target_project").to_string(),
     }
 }
 
@@ -715,30 +729,36 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
         let label = setting.label.as_deref().unwrap_or(&setting.path);
         let mut entry = command(label.to_string(), PaletteAction::EditConfigSetting(setting.path.clone()));
         let summary = if setting.value.is_null() {
-            "<unset>".to_string()
+            rust_i18n::t!("app.configuration.unset").to_string()
         } else {
             value_summary(&setting.value)
         };
-        let origin = setting
-            .origin
-            .as_deref()
-            .map_or(String::new(), |origin| format!(" · from {origin}"));
+        let origin = setting.origin.as_deref().map_or(String::new(), |origin| {
+            let layer = match origin {
+                "user" => config_target_label(protocol::ConfigTarget::User),
+                "workspace" => config_target_label(protocol::ConfigTarget::Workspace),
+                "project" => config_target_label(protocol::ConfigTarget::Project),
+                _ => origin.to_string(),
+            };
+            rust_i18n::t!("app.configuration.origin_hint", origin = layer.as_str()).to_string()
+        });
         let action_hint = setting.value.as_bool().map_or_else(String::new, |value| {
             if value {
-                " · click to turn off".into()
+                rust_i18n::t!("app.configuration.click_turn_off").to_string()
             } else {
-                " · click to turn on".into()
+                rust_i18n::t!("app.configuration.click_turn_on").to_string()
             }
         });
         let description = setting.description.as_deref().unwrap_or_default();
         let default = setting
             .default_value
             .as_deref()
-            .map_or(String::new(), |value| format!(" · default {value}"));
+            .map_or(String::new(), |value| rust_i18n::t!("app.configuration.default_hint", value = value).to_string());
         let options = if setting.options.is_empty() {
             String::new()
         } else {
-            format!(" · options {}", setting.options.join(", "))
+            let joined = setting.options.join(", ");
+            rust_i18n::t!("app.configuration.options_hint", options = joined.as_str()).to_string()
         };
         entry.description = Some(format!("{summary}{origin}{action_hint} · {description}{default}{options}"));
         entry.keywords = vec![setting.path.clone(), summary];
@@ -760,7 +780,7 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
 
 pub(super) fn value_summary(value: &Value) -> String {
     let rendered = match value {
-        Value::Null => "<unset>".to_string(),
+        Value::Null => rust_i18n::t!("app.configuration.unset").to_string(),
         Value::String(value) => {
             let safe = value
                 .chars()

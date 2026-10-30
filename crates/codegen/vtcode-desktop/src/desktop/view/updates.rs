@@ -17,7 +17,7 @@ impl DesktopView {
         self.update_request_pending = false;
         match serde_json::from_value::<protocol::UpdateStatusSnapshot>(result) {
             Ok(status) => self.update_status = Some(status),
-            Err(_) => self.error = Some("The local service returned an invalid update status.".into()),
+            Err(_) => self.error = Some(rust_i18n::t!("app.service.invalid_updates").to_string()),
         }
     }
 

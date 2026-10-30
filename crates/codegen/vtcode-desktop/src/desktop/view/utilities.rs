@@ -8,21 +8,24 @@ impl DesktopView {
             .as_ref()
             .and_then(|path| path.file_name())
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "No workspace".into());
+            .unwrap_or_else(|| rust_i18n::t!("app.utilities.no_workspace").to_string());
         let totals = self.changes.totals();
         let change_accessibility_label = totals.map_or_else(
-            || format!("Session changes: {} files; line counts unavailable", self.changes.entries().len()),
+            || rust_i18n::t!("app.utilities.changes_unavailable", n = self.changes.entries().len()).to_string(),
             |(additions, deletions)| {
-                format!(
-                    "Session changes: {} files, {additions} additions, {deletions} deletions",
-                    self.changes.entries().len()
+                rust_i18n::t!(
+                    "app.utilities.changes_totals",
+                    n = self.changes.entries().len(),
+                    a = additions,
+                    d = deletions
                 )
+                .to_string()
             },
         );
         let activity = self.cached_activity_projection();
         let counts = ActivityCounts::from_rows(&activity.rows);
         let summary = if counts.total() == 0 {
-            "No activity yet".to_string()
+            rust_i18n::t!("app.inspector.empty_activity_title").to_string()
         } else {
             counts.summary()
         };
@@ -31,7 +34,7 @@ impl DesktopView {
             .lock_scroll_axis()
             .test_support()
             .role(gpui_kit::Role::Group)
-            .aria_label("Workspace utilities")
+            .aria_label(rust_i18n::t!("app.utilities.group_aria").to_string())
             .w_full()
             .flex_1()
             .min_h_0()
@@ -56,7 +59,9 @@ impl DesktopView {
                                     .gap_2()
                                     .w_full()
                                     .child(Icon::new(IconName::GitCompare).small())
-                                    .child(div().flex_1().child("Changes"))
+                                    .child(
+                                        div().flex_1().child(rust_i18n::t!("app.utilities.changes_title").to_string()),
+                                    )
                                     .when_some(totals, |row, (additions, deletions)| {
                                         row.child(
                                             div().text_sm().text_color(colors.success).child(format!("+{additions}")),
@@ -68,7 +73,7 @@ impl DesktopView {
                                             div()
                                                 .text_xs()
                                                 .text_color(colors.muted_foreground)
-                                                .child("Counts unavailable"),
+                                                .child(rust_i18n::t!("app.utilities.counts_unavailable").to_string()),
                                         )
                                     }),
                             )
@@ -76,13 +81,20 @@ impl DesktopView {
                                 view.set_inspector_tab(InspectorTab::Changes, cx);
                             })),
                     )
-                    .child(div().pt_4().pb_1().child(eyebrow_label("Recent activity", &colors)))
+                    .child(
+                        div()
+                            .pt_4()
+                            .pb_1()
+                            .child(eyebrow_label(rust_i18n::t!("app.utilities.recent_activity"), &colors)),
+                    )
                     .child(
                         desktop_button("utilities-activity")
                             .ghost()
                             .w_full()
                             .justify_start()
-                            .accessibility_label(format!("Recent activity: {summary}"))
+                            .accessibility_label(
+                                rust_i18n::t!("app.utilities.recent_summary", summary = summary.as_str()).to_string(),
+                            )
                             .child(
                                 div()
                                     .flex()
@@ -102,14 +114,14 @@ impl DesktopView {
                             .flex()
                             .items_center()
                             .justify_between()
-                            .child(eyebrow_label("Draft sources", &colors))
+                            .child(eyebrow_label(rust_i18n::t!("app.utilities.draft_sources"), &colors))
                             .child(
                                 desktop_button("utilities-add-source")
                                     .icon(IconName::Plus)
                                     .ghost()
                                     .small()
-                                    .accessibility_label("Attach source files")
-                                    .tooltip("Attach workspace files")
+                                    .accessibility_label(rust_i18n::t!("app.utilities.attach_sources").to_string())
+                                    .tooltip(rust_i18n::t!("app.utilities.attach_tooltip").to_string())
                                     .desktop_disabled(
                                         self.workspace.is_none()
                                             || self.attachments_picker_open
@@ -124,7 +136,7 @@ impl DesktopView {
                                 .py_2()
                                 .text_sm()
                                 .text_color(colors.muted_foreground)
-                                .child("Attach workspace files to include them with your next message."),
+                                .child(rust_i18n::t!("app.utilities.attach_hint").to_string()),
                         )
                     })
                     .children(self.attachments.iter().map(|attachment| {
@@ -133,7 +145,9 @@ impl DesktopView {
                             .ghost()
                             .w_full()
                             .justify_start()
-                            .accessibility_label(format!("Open attached source: {path}"))
+                            .accessibility_label(
+                                rust_i18n::t!("app.utilities.open_source", path = path.as_str()).to_string(),
+                            )
                             .tooltip(path.clone())
                             .child(
                                 div()
@@ -152,7 +166,7 @@ impl DesktopView {
                     }))
                     .child(
                         desktop_button("utilities-browse-files")
-                            .label("Browse workspace files")
+                            .label(rust_i18n::t!("app.utilities.browse_files").to_string())
                             .icon(IconName::Folder)
                             .ghost()
                             .w_full()

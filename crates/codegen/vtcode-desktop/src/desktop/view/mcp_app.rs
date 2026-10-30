@@ -122,7 +122,7 @@ impl DesktopView {
             } else {
                 let _previous = self
                     .mcp_app_errors
-                    .insert(key, "Could not load the app preview: the service request queue is full.".into());
+                    .insert(key, rust_i18n::t!("app.preview.queue_full").to_string().into());
             }
         }
         cx.notify();
@@ -143,7 +143,7 @@ impl DesktopView {
         let key = McpAppBodyKey { item_id: pending.item_id, uri: pending.uri };
         let _previous = self
             .mcp_app_errors
-            .insert(key, "Could not load the app preview. Try again.".into());
+            .insert(key, rust_i18n::t!("app.preview.load_failed").to_string().into());
         cx.notify();
     }
 
@@ -183,7 +183,7 @@ impl DesktopView {
                             div()
                                 .text_sm()
                                 .text_color(themes::label_foreground(&colors))
-                                .child("App preview"),
+                                .child(rust_i18n::t!("app.preview.title").to_string()),
                         )
                         .child(div().text_xs().text_color(caption).child(meta)),
                 )
@@ -201,8 +201,10 @@ impl DesktopView {
                         .child(div().text_sm().text_color(colors.danger).child(error.clone()))
                         .child(
                             desktop_button(format!("retry-mcp-app-{}-{index}", item.id))
-                                .label("Retry")
-                                .accessibility_label(format!("Retry loading the app preview for {}", preview.uri))
+                                .label(rust_i18n::t!("app.preview.retry").to_string())
+                                .accessibility_label(
+                                    rust_i18n::t!("app.preview.retry_for", uri = preview.uri.as_str()).to_string(),
+                                )
                                 .ghost()
                                 .xsmall()
                                 .on_click(cx.listener(move |view, _, _, cx| {
@@ -225,7 +227,7 @@ impl DesktopView {
                             div()
                                 .text_sm()
                                 .text_color(themes::muted_text(&colors))
-                                .child("Loading app preview…"),
+                                .child(rust_i18n::t!("app.preview.loading").to_string()),
                         ),
                 );
             } else {
@@ -233,7 +235,7 @@ impl DesktopView {
                     div()
                         .text_sm()
                         .text_color(themes::muted_text(&colors))
-                        .child("App preview not loaded yet."),
+                        .child(rust_i18n::t!("app.preview.not_loaded").to_string()),
                 );
             }
             cards = cards.child(card);
@@ -242,7 +244,7 @@ impl DesktopView {
             div()
                 .text_xs()
                 .text_color(caption)
-                .child("Static preview — scripts, images, and fetches are disabled."),
+                .child(rust_i18n::t!("app.preview.static_notice").to_string()),
         );
         cards.into_any_element()
     }
@@ -260,14 +262,14 @@ impl DesktopView {
             return div()
                 .text_sm()
                 .text_color(themes::muted_text(&cx.theme().colors))
-                .child("The app resource has no previewable text.")
+                .child(rust_i18n::t!("app.preview.no_text").to_string())
                 .into_any_element();
         }
         let (source, cut) = head_with_truncation(&body.body, MAX_PREVIEW_CHARS);
         let mut panel = div()
             .id(format!("mcp-app-body-{}-{index}", item.id))
             .role(gpui_kit::Role::Label)
-            .aria_label(format!("Static preview of {}", preview.uri))
+            .aria_label(rust_i18n::t!("app.preview.static_aria", uri = preview.uri.as_str()).to_string())
             .test_support()
             .px_3()
             .py_2()
@@ -279,7 +281,7 @@ impl DesktopView {
                 div()
                     .text_xs()
                     .text_color(themes::aa_muted(cx.theme().colors.secondary, cx.theme().colors.muted_foreground))
-                    .child("Preview truncated to the first characters of the app."),
+                    .child(rust_i18n::t!("app.preview.truncated").to_string()),
             );
         }
         panel.into_any_element()

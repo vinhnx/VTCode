@@ -32,8 +32,10 @@ impl DesktopView {
                         cx.spawn_in(window, async move |view, cx| {
                             let result = cx
                                 .background_spawn(async move {
-                                    let executable = std::env::current_exe()
-                                        .map_err(|error| format!("Could not locate the application: {error}"))?;
+                                    let executable = std::env::current_exe().map_err(|error| {
+                                        rust_i18n::t!("app.settings.licenses.locate_failed", error = error.to_string())
+                                            .to_string()
+                                    })?;
                                     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
                                     let directory = notices_directory(&executable, &workspace);
                                     files::open_in_editor(&directory, NOTICES_FILE, files::ExternalEditor::System)

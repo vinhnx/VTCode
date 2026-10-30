@@ -22,7 +22,7 @@ impl DesktopView {
                 if self.running {
                     self.cancel_turn(cx);
                 } else {
-                    self.status = "No active turn to stop.".into();
+                    self.status = rust_i18n::t!("app.composer.no_turn_to_stop").to_string();
                     cx.notify();
                 }
                 true
@@ -43,7 +43,7 @@ impl DesktopView {
                         self.clear_submitted_command(window, cx);
                     }
                 } else {
-                    self.status = "No active thread to close.".into();
+                    self.status = rust_i18n::t!("app.composer.no_thread_to_close").to_string();
                     self.clear_submitted_command(window, cx);
                     cx.notify();
                 }
@@ -101,7 +101,7 @@ impl DesktopView {
             }
             DesktopSlashAction::Files(filter) => {
                 if self.workspace.is_none() {
-                    self.error = Some("Choose a workspace before browsing files.".into());
+                    self.error = Some(rust_i18n::t!("app.composer.choose_workspace_files").to_string());
                     cx.notify();
                     return true;
                 }
@@ -135,7 +135,7 @@ impl DesktopView {
                     if themes::find(&canonical).is_none() {
                         self.clear_submitted_command(window, cx);
                         self.error =
-                            Some(format!("Theme '{theme}' is not available. Choose a theme from Appearance settings."));
+                            Some(rust_i18n::t!("app.composer.theme_unavailable", theme = theme.as_str()).to_string());
                         cx.notify();
                         return true;
                     }
@@ -404,7 +404,10 @@ impl DesktopView {
                     })
                     .take(48)
                     .collect();
-                (PaletteKind::FileMentions, vec![("Files".into(), entries)])
+                (
+                    PaletteKind::FileMentions,
+                    vec![(rust_i18n::t!("app.composer.palette_group_files").to_string(), entries)],
+                )
             }
             ComposerTriggerKind::SlashCommand => {
                 let needle = query.to_lowercase();
@@ -427,7 +430,10 @@ impl DesktopView {
                         command
                     })
                     .collect();
-                (PaletteKind::SlashCommands, vec![("Commands".into(), matching)])
+                (
+                    PaletteKind::SlashCommands,
+                    vec![(rust_i18n::t!("app.composer.palette_group_commands").to_string(), matching)],
+                )
             }
         };
 
@@ -588,7 +594,7 @@ impl DesktopView {
             return;
         }
         if self.attachments.len() >= 5 {
-            self.error = Some("At most 5 attachments per prompt.".into());
+            self.error = Some(rust_i18n::t!("app.composer.attachments_limit", n = 5).to_string());
             cx.notify();
             return;
         }
@@ -653,7 +659,7 @@ impl DesktopView {
                 .iter()
                 .map(|effort| {
                     command(
-                        format!("Use {effort} effort"),
+                        rust_i18n::t!("app.composer.use_effort", effort = effort.as_str()).to_string(),
                         PaletteAction::SelectSessionOptions(protocol::SessionOptionsSelectParams {
                             reasoning_effort: Some(effort.clone()),
                             ..Default::default()
@@ -661,7 +667,8 @@ impl DesktopView {
                     )
                 })
                 .collect();
-            self.palette_groups = share_palette_commands(vec![("Supported reasoning effort".into(), entries)]);
+            self.palette_groups =
+                share_palette_commands(vec![(rust_i18n::t!("app.composer.palette_group_effort").to_string(), entries)]);
             cx.notify();
             return;
         };
@@ -747,7 +754,7 @@ impl DesktopView {
         }
         if self.request_session_change(protocol::method::CONFIG_OPTIONS, json!(options), cx) {
             self.pending_permission_choice = options.permission_mode;
-            self.status = "Updating runtime options…".into();
+            self.status = rust_i18n::t!("app.permissions.updating_runtime").to_string();
             true
         } else {
             false
@@ -769,8 +776,7 @@ impl DesktopView {
             self.preferences.touch_workspace(&workspace);
             let _previous = self.preferences.workspace_permissions.insert(workspace, choice);
             if let Err(error) = self.preferences.try_save() {
-                self.error =
-                    Some(format!("Permission choice is active for this session, but could not be saved: {error}"));
+                self.error = Some(rust_i18n::t!("app.permissions.save_failed", error = error.to_string()).to_string());
             }
         }
     }
@@ -825,17 +831,17 @@ impl DesktopView {
             (
                 protocol::PermissionMode::Ask,
                 permission_mode_label(protocol::PermissionMode::Ask),
-                "Confirm protected commands using the CLI's approval flow.",
+                rust_i18n::t!("app.permissions.desc_ask").to_string(),
             ),
             (
                 protocol::PermissionMode::AutoApproveCommands,
                 permission_mode_label(protocol::PermissionMode::AutoApproveCommands),
-                "Skip command confirmations. Sandbox and tool authorization still apply.",
+                rust_i18n::t!("app.permissions.desc_auto").to_string(),
             ),
             (
                 protocol::PermissionMode::FullAccess,
                 permission_mode_label(protocol::PermissionMode::FullAccess),
-                "Run without the process sandbox or approval prompts. Explicit denies still apply.",
+                rust_i18n::t!("app.permissions.desc_full").to_string(),
             ),
         ]
         .into_iter()
@@ -847,11 +853,16 @@ impl DesktopView {
                     ..Default::default()
                 }),
             );
-            entry.description = Some(description.into());
+            entry.description = Some(description);
             entry
         })
         .collect();
-        self.show_palette(PaletteKind::Permissions, vec![("For the next session".into(), entries)], window, cx);
+        self.show_palette(
+            PaletteKind::Permissions,
+            vec![(rust_i18n::t!("app.permissions.group_next_session").to_string(), entries)],
+            window,
+            cx,
+        );
     }
 
     pub(super) fn open_modes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -874,7 +885,12 @@ impl DesktopView {
                 entry
             })
             .collect();
-        self.show_palette(PaletteKind::Modes, vec![("Default agent for this workspace".into(), entries)], window, cx);
+        self.show_palette(
+            PaletteKind::Modes,
+            vec![(rust_i18n::t!("app.permissions.group_default_agent").to_string(), entries)],
+            window,
+            cx,
+        );
     }
 
     pub(super) fn render_mode_button(&self, _cx: &Context<Self>) -> AnyElement {
@@ -898,8 +914,12 @@ impl DesktopView {
             .child(div().id("composer-mode-label").test_support().truncate().child(mode.clone()))
             .max_w(px(180.))
             .overflow_hidden()
-            .accessibility_label(format!("Agent mode: {mode}"))
-            .tooltip_with_action("Choose agent mode", &OpenModePicker, Some(key_context::DESKTOP))
+            .accessibility_label(rust_i18n::t!("app.composer.agent_mode_aria", mode = mode.as_str()).to_string())
+            .tooltip_with_action(
+                rust_i18n::t!("app.composer.choose_agent_mode").to_string(),
+                &OpenModePicker,
+                Some(key_context::DESKTOP),
+            )
             .dropdown_caret(true)
             .ghost()
             .small()
@@ -911,10 +931,10 @@ impl DesktopView {
 
 /// Short label for a session permission mode, shared by the composer
 /// permission picker and the curated configuration row.
-pub(super) fn permission_mode_label(mode: protocol::PermissionMode) -> &'static str {
+pub(super) fn permission_mode_label(mode: protocol::PermissionMode) -> String {
     match mode {
-        protocol::PermissionMode::Ask => "Ask before protected actions",
-        protocol::PermissionMode::AutoApproveCommands => "Auto-approve commands",
-        protocol::PermissionMode::FullAccess => "Full access",
+        protocol::PermissionMode::Ask => rust_i18n::t!("app.composer.permission_ask").to_string(),
+        protocol::PermissionMode::AutoApproveCommands => rust_i18n::t!("app.composer.permission_auto").to_string(),
+        protocol::PermissionMode::FullAccess => rust_i18n::t!("app.composer.permission_full").to_string(),
     }
 }

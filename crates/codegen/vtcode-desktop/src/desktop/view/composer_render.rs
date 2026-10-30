@@ -27,16 +27,22 @@ impl DesktopView {
                         .content(
                             AttachmentContent::new()
                                 .title(AttachmentTitle::new(attachment.path.clone()))
-                                .description(AttachmentDescription::new(format!(
-                                    "{} bytes · workspace file",
-                                    attachment.text.len()
-                                ))),
+                                .description(AttachmentDescription::new(
+                                    rust_i18n::t!("app.composer.attachment_file", bytes = attachment.text.len())
+                                        .to_string(),
+                                )),
                         )
                         .actions(
                             AttachmentActions::new().child(
                                 desktop_button(opaque_path_element_id("remove-attachment", &path))
                                     .icon(IconName::X)
-                                    .accessibility_label(format!("Remove {}", attachment.path))
+                                    .accessibility_label(
+                                        rust_i18n::t!(
+                                            "app.composer.remove_attachment",
+                                            path = attachment.path.as_str()
+                                        )
+                                        .to_string(),
+                                    )
                                     .ghost()
                                     .xsmall()
                                     .on_click(
@@ -71,7 +77,7 @@ impl DesktopView {
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.retained_submission = view.first_submission.take();
-                                view.status = "Message not submitted".into();
+                                view.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
                                 cx.notify();
                             })),
                     ),
@@ -86,9 +92,9 @@ impl DesktopView {
         if let Some(draft) = self.retained_submission.as_ref() {
             let prompt = draft.prompt.clone();
             let explanation = if draft.delivery_uncertain {
-                "Delivery was not confirmed. Check session history before resending. Restore this draft or copy it before dismissing."
+                rust_i18n::t!("app.composer.delivery_unconfirmed").to_string()
             } else {
-                "This message was not submitted. Restore this draft or copy it before dismissing."
+                rust_i18n::t!("app.composer.draft_not_submitted").to_string()
             };
             panel = panel.child(
                 div()
@@ -96,14 +102,14 @@ impl DesktopView {
                     .flex_col()
                     .gap_2()
                     .child(explanation)
-                    .child("Clear the current draft and attachments to restore.")
+                    .child(rust_i18n::t!("app.composer.clear_draft_hint").to_string())
                     .child(
                         div()
                             .flex()
                             .gap_2()
                             .child(
                                 desktop_button("restore-submission")
-                                    .label("Restore draft")
+                                    .label(rust_i18n::t!("app.composer.restore_draft").to_string())
                                     .desktop_disabled(
                                         !self.composer.read(cx).value().is_empty()
                                             || !self.attachments.is_empty()
@@ -112,12 +118,15 @@ impl DesktopView {
                                     )
                                     .on_click(cx.listener(|view, _, window, cx| view.restore_submission(window, cx))),
                             )
-                            .child(desktop_button("copy-retained-prompt").label("Copy prompt").ghost().on_click(
-                                move |_, window, cx| {
-                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()));
-                                    super::super::notifications::copied_to_clipboard(window, cx);
-                                },
-                            ))
+                            .child(
+                                desktop_button("copy-retained-prompt")
+                                    .label(rust_i18n::t!("app.composer.copy_prompt").to_string())
+                                    .ghost()
+                                    .on_click(move |_, window, cx| {
+                                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()));
+                                        super::super::notifications::copied_to_clipboard(window, cx);
+                                    }),
+                            )
                             .child(desktop_button("dismiss-retained-prompt").label("Dismiss").ghost().on_click(
                                 cx.listener(|view, _, _, cx| {
                                     view.retained_submission = None;

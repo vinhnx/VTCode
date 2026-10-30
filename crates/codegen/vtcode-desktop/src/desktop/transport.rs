@@ -215,16 +215,14 @@ pub(crate) fn launch_backend(workspace: PathBuf, ui_events: BackendEventSender) 
                 Err(_) => {
                     let _ = send_ui_event(
                         &ui_events,
-                        BackendEvent::LaunchFailed(
-                            "The VT Code desktop service could not initialize its runtime.".to_string(),
-                        ),
+                        BackendEvent::LaunchFailed(rust_i18n::t!("app.service.runtime_init").to_string()),
                     );
                     return;
                 }
             };
             runtime.block_on(run_client(executable, workspace, command_rx, ui_events));
         })
-        .map_err(|_error| "Could not start the VT Code desktop transport thread.".to_string())?;
+        .map_err(|_error| rust_i18n::t!("app.service.transport_thread").to_string())?;
 
     Ok(BackendHandle { commands })
 }
@@ -245,15 +243,13 @@ async fn run_client(
     let Some(stdout) = child.stdout.take() else {
         let _ = send_ui_event(
             &ui_events,
-            BackendEvent::LaunchFailed("The VT Code service did not open its protocol output.".to_string()),
+            BackendEvent::LaunchFailed(rust_i18n::t!("app.service.no_proto_out").to_string()),
         );
         return;
     };
     let Some(stdin) = child.stdin.take() else {
-        let _ = send_ui_event(
-            &ui_events,
-            BackendEvent::LaunchFailed("The VT Code service did not open its protocol input.".to_string()),
-        );
+        let _ =
+            send_ui_event(&ui_events, BackendEvent::LaunchFailed(rust_i18n::t!("app.service.no_proto_in").to_string()));
         return;
     };
     let stderr_capture = child.stderr.take().map(|mut stderr| {
@@ -294,7 +290,7 @@ async fn run_client(
                         if pending.len() >= MAX_PENDING_REQUESTS {
                             if !send_ui_event(
                                 &ui_events,
-                                request_context.finish(None, Some("The desktop service request backlog is full.".to_string())),
+                                request_context.finish(None, Some(rust_i18n::t!("app.service.backlog_full").to_string())),
                             ) {
                                 break;
                             }
@@ -303,7 +299,7 @@ async fn run_client(
                         let id = RequestId::Number(next_request_id);
                         let Some(next_id) = next_request_id.checked_add(1) else {
                             let _ = send_ui_event(&ui_events, BackendEvent::LaunchFailed(
-                                "Desktop request identity space was exhausted.".to_string(),
+                                rust_i18n::t!("app.service.id_exhausted").to_string(),
                             ));
                             break;
                         };
@@ -317,7 +313,7 @@ async fn run_client(
                         });
                         if protocol::write_frame(&mut writer, &request).await.is_err() {
                             let _ = send_ui_event(&ui_events, BackendEvent::LaunchFailed(
-                                "The VT Code service stopped accepting requests.".to_string(),
+                                rust_i18n::t!("app.service.not_accepting").to_string(),
                             ));
                             break;
                         }
@@ -346,7 +342,7 @@ async fn run_client(
                             Ok(None) => {}
                             Err(_) => {
                                 let _ = send_ui_event(&ui_events, BackendEvent::LaunchFailed(
-                                    "The VT Code service sent a malformed protocol message.".to_string(),
+                                    rust_i18n::t!("app.service.malformed").to_string(),
                                 ));
                                 break;
                             }
@@ -355,7 +351,7 @@ async fn run_client(
                     Ok(None) => break,
                     Err(_) => {
                         let _ = send_ui_event(&ui_events, BackendEvent::LaunchFailed(
-                            "The VT Code service sent an invalid or oversized protocol frame.".to_string(),
+                            rust_i18n::t!("app.service.bad_frame").to_string(),
                         ));
                         break;
                     }
@@ -400,26 +396,19 @@ async fn spawn_backend(executable: &Path, workspace: &Path) -> Result<Child, Str
         .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|_error| {
-            "The local VT Code service could not start. Build VT Code or reinstall the desktop app, then try again."
-                .to_string()
-        })
+        .map_err(|_error| rust_i18n::t!("app.service.cannot_start").to_string())
 }
 
 fn resolve_backend_executable() -> Result<PathBuf, String> {
-    let current = std::env::current_exe()
-        .map_err(|_error| "Could not locate the VT Code Desktop application binary.".to_string())?;
+    let current = std::env::current_exe().map_err(|_error| rust_i18n::t!("app.service.no_binary").to_string())?;
     let current_dir = current
         .parent()
-        .ok_or_else(|| "The app binary has no parent directory.".to_string())?;
+        .ok_or_else(|| rust_i18n::t!("app.service.no_parent").to_string())?;
     let (candidates, missing_message) = match packaged_backend_candidates(current_dir) {
-        Some(candidates) => (
-            candidates,
-            "The matching VT Code service is missing from this app bundle. Rebuild or reinstall the app.",
-        ),
+        Some(candidates) => (candidates, rust_i18n::t!("app.service.missing_helper").to_string()),
         None => (
             backend_development_candidates(current_dir, &manifest_workspace_root()),
-            "The matching VT Code backend was not found. Run `cargo build --locked -p vtcode -p vtcode-desktop` or package the app again.",
+            rust_i18n::t!("app.service.missing_dev_backend").to_string(),
         ),
     };
 
@@ -506,7 +495,8 @@ fn decode_frame(
         let safe_message = error
             .get(keys::MESSAGE)
             .and_then(Value::as_str)
-            .unwrap_or("The VT Code service rejected the request.");
+            .map(str::to_string)
+            .unwrap_or_else(|| rust_i18n::t!("app.service.request_rejected").to_string());
         let message = vtcode_commons::sanitizer::sanitize_provider_diagnostic(safe_message)
             .chars()
             .filter(|character| !character.is_control())

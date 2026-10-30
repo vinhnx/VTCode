@@ -128,7 +128,7 @@ impl DesktopView {
         let sent = self.request(method, params);
         if sent {
             self.session_request = Some(method);
-            self.status = "Updating session…".to_string();
+            self.status = rust_i18n::t!("app.session.updating_session").to_string();
         } else {
             self.error = Some(REQUEST_QUEUE_FULL_MESSAGE.to_string());
         }
@@ -163,7 +163,7 @@ impl DesktopView {
         self.status = if self.pending_new_thread {
             rust_i18n::t!("app.session.preparing_new_thread").to_string()
         } else {
-            "New thread ready. Submit a prompt to begin.".into()
+            rust_i18n::t!("app.session.thread_ready").to_string()
         };
         cx.notify();
         true
@@ -260,7 +260,7 @@ impl DesktopView {
         let item_id = self.output_page_pending.take().map(|pending| pending.item_id);
         self.output_page_task = None;
         self.output_page_error =
-            item_id.map(|item_id| (item_id, "Could not load more captured output. Try again.".into()));
+            item_id.map(|item_id| (item_id, rust_i18n::t!("app.session.load_more_failed").to_string()));
         cx.notify();
     }
 
@@ -349,7 +349,7 @@ impl DesktopView {
         }
         self.session_load_generation = self.session_load_generation.wrapping_add(1);
         let generation = self.session_load_generation;
-        self.status = "Restoring conversation…".to_string();
+        self.status = rust_i18n::t!("app.session.restoring").to_string();
         self.session_load_task = Some(cx.spawn(async move |view, cx| {
             let loaded = cx
                 .background_spawn(async move {
@@ -375,8 +375,8 @@ impl DesktopView {
                     Ok((loaded, history)) => view.accept_loaded_session(loaded, history, cx),
                     Err(_) => {
                         view.fail_pending_navigation();
-                        view.status = "Session load failed".to_string();
-                        view.error = Some("The local service returned an invalid session load result.".into());
+                        view.status = rust_i18n::t!("app.session.load_failed").to_string();
+                        view.error = Some(rust_i18n::t!("app.session.invalid_load_result").to_string());
                     }
                 }
                 view.event_tx.wake();
@@ -401,9 +401,11 @@ impl DesktopView {
             let page = cx
                 .background_spawn(async move {
                     serde_json::from_value::<SessionHistoryPage>(result).map(|mut page| {
-                        let valid_indices = page.messages.iter().enumerate().all(|(offset, message)| {
-                            page.start_index.checked_add(offset) == message.archive_index
-                        });
+                        let valid_indices = page
+                            .messages
+                            .iter()
+                            .enumerate()
+                            .all(|(offset, message)| page.start_index.checked_add(offset) == message.archive_index);
                         let valid = !page.messages.is_empty()
                             && page.messages.len() <= limit
                             && page.start_index < before_index
@@ -438,9 +440,7 @@ impl DesktopView {
                         let visible_count = history.len();
                         let inserted = view.transcript.prepend_prepared(history);
                         if visible_count > 0 && inserted == 0 {
-                            view.history_page_error = Some(
-                                "The transcript reached its local message limit. Start a new session to continue browsing.".into(),
-                            );
+                            view.history_page_error = Some(rust_i18n::t!("app.session.transcript_limit").to_string());
                         } else {
                             view.history_start_index = page.start_index;
                             view.history_has_earlier = page.has_earlier;
@@ -448,10 +448,10 @@ impl DesktopView {
                         }
                     }
                     Ok(_) => {
-                        view.history_page_error = Some("The local service returned an invalid history page.".into());
+                        view.history_page_error = Some(rust_i18n::t!("app.session.invalid_history_page").to_string());
                     }
                     Err(_) => {
-                        view.history_page_error = Some("The local service returned an invalid history page.".into());
+                        view.history_page_error = Some(rust_i18n::t!("app.session.invalid_history_page").to_string());
                     }
                 }
                 view.refresh_conversation_search(&session_id);
@@ -468,8 +468,8 @@ impl DesktopView {
     ) {
         if loaded.session.session_id.trim().is_empty() {
             self.fail_pending_navigation();
-            self.status = "Session load failed".to_string();
-            self.error = Some("The local service returned an invalid session load result.".into());
+            self.status = rust_i18n::t!("app.session.load_failed").to_string();
+            self.error = Some(rust_i18n::t!("app.session.invalid_load_result").to_string());
             return;
         }
         if let Some(pending) = self.pending_navigation
@@ -479,14 +479,14 @@ impl DesktopView {
                 .and_then(|location| location.session_id.as_deref())
                 != Some(loaded.session.session_id.as_str())
         {
-            self.error = Some("The service returned a different thread than the navigation target.".into());
+            self.error = Some(rust_i18n::t!("app.session.wrong_thread").to_string());
             self.fail_pending_navigation();
             return;
         }
         if self.retained_submission.is_some()
             && self.selected_session_id.as_deref() != Some(loaded.session.session_id.as_str())
         {
-            self.error = Some("The service returned a different session; the unsent message was retained.".to_string());
+            self.error = Some(rust_i18n::t!("app.session.wrong_session_retained").to_string());
             return;
         }
 
@@ -544,11 +544,10 @@ impl DesktopView {
             self.record_current_navigation();
         }
         self.status = if loaded.review_history_incomplete || loaded.activity_history_incomplete {
-            "Session loaded. Recent inspector history is partial or unavailable."
+            rust_i18n::t!("app.session.loaded_partial").to_string()
         } else {
-            "Session loaded. Submit a prompt to continue."
-        }
-        .to_string();
+            rust_i18n::t!("app.session.loaded_prompt").to_string()
+        };
         cx.notify();
     }
 
@@ -571,7 +570,7 @@ impl DesktopView {
             json!({ "provider": provider, "model": model }),
             cx,
         ) {
-            self.status = "Switching model…".to_string();
+            self.status = rust_i18n::t!("app.session.switching_model").to_string();
         }
     }
 
@@ -695,7 +694,7 @@ pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHis
             let title = match TranscriptRole::from_str(&role) {
                 Some(TranscriptRole::User) => USER_DISPLAY_NAME.to_string(),
                 Some(TranscriptRole::Assistant) => app::NAME.to_string(),
-                Some(TranscriptRole::Tool) => "Tool result".to_string(),
+                Some(TranscriptRole::Tool) => rust_i18n::t!("app.transcript.tool_result").to_string(),
                 _ => role.clone(),
             };
             let id = archive_index.map_or_else(

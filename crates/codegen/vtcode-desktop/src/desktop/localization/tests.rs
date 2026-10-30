@@ -114,6 +114,41 @@ fn translucent_sidebar_label_is_localized_for_every_language() {
 }
 
 #[test]
+fn appearance_and_cli_sync_copy_is_localized_for_every_language() {
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.settings.appearance.status_bar",
+            "app.settings.appearance.reduce_motion",
+            "app.settings.appearance.reduce_motion_description",
+            "app.settings.cli_sync.group",
+            "app.settings.cli_sync.sync_theme",
+            "app.settings.cli_sync.reload_settings",
+            "app.settings.cli_sync.use_theme",
+            "app.settings.cli_sync.following",
+            "app.settings.cli_sync.desktop_override",
+            "app.settings.cli_sync.disconnected",
+            "app.settings.cli_sync.theme_unavailable",
+        ] {
+            let value = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!value.is_empty(), "{locale}/{key}");
+            if language != UiLanguage::English {
+                assert_ne!(value, rust_i18n::t!(key, locale = "en").to_string(), "{locale}/{key}");
+            }
+        }
+        let status = rust_i18n::t!(
+            "app.settings.cli_sync.theme_status",
+            locale = locale,
+            theme = "demo-theme",
+            mode = "demo-mode"
+        )
+        .to_string();
+        assert!(status.contains("demo-theme"), "{locale}");
+        assert!(status.contains("demo-mode"), "{locale}");
+    }
+}
+
+#[test]
 fn license_settings_copy_is_translated_and_interpolates_errors() {
     for language in UiLanguage::ALL {
         let locale = language.locale();

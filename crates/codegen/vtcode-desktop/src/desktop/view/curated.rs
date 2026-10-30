@@ -37,11 +37,11 @@ pub(super) enum CuratedRowKind {
     BoolToggle,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct CuratedRow {
     pub(super) id: &'static str,
-    pub(super) title: &'static str,
-    pub(super) description: &'static str,
+    pub(super) title: String,
+    pub(super) description: String,
     pub(super) path: Option<&'static str>,
     pub(super) kind: CuratedRowKind,
 }
@@ -51,50 +51,50 @@ pub(super) fn curated_rows() -> [CuratedRow; 7] {
     [
         CuratedRow {
             id: "sandboxing",
-            title: "Sandboxing",
-            description: "Choose whether VT Code runs commands inside the sandbox.",
+            title: rust_i18n::t!("app.configuration.row_sandboxing_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_sandboxing_description").to_string(),
             path: Some(SANDBOX_ENABLED_PATH),
             kind: CuratedRowKind::BoolToggle,
         },
         CuratedRow {
             id: "approval",
-            title: "Approval policy",
-            description: "Choose when VT Code asks for approval.",
+            title: rust_i18n::t!("app.configuration.row_approval_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_approval_description").to_string(),
             path: None,
             kind: CuratedRowKind::PermissionPolicy,
         },
         CuratedRow {
             id: "sandbox",
-            title: "Sandbox settings",
-            description: "Choose how much VT Code can do when running commands. Takes effect when sandboxing is enabled.",
+            title: rust_i18n::t!("app.configuration.row_sandbox_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_sandbox_description").to_string(),
             path: Some(SANDBOX_POLICY_PATH),
             kind: CuratedRowKind::ConfigValue,
         },
         CuratedRow {
             id: "network",
-            title: "Allow network access",
-            description: "Allow network access when sandboxing is enabled with the workspace-write policy.",
+            title: rust_i18n::t!("app.configuration.row_network_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_network_description").to_string(),
             path: Some(NETWORK_POLICY_PATH),
             kind: CuratedRowKind::NetworkToggle,
         },
         CuratedRow {
             id: "web-search",
-            title: "Web search",
-            description: "Choose how VT Code accesses the web.",
+            title: rust_i18n::t!("app.configuration.row_web_search_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_web_search_description").to_string(),
             path: Some(WEB_SEARCH_PROVIDER_PATH),
             kind: CuratedRowKind::ConfigValue,
         },
         CuratedRow {
             id: "verbosity",
-            title: "Output detail",
-            description: "Choose how much detail VT Code includes in responses.",
+            title: rust_i18n::t!("app.configuration.row_verbosity_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_verbosity_description").to_string(),
             path: Some(VERBOSITY_PATH),
             kind: CuratedRowKind::ConfigValue,
         },
         CuratedRow {
             id: "reasoning",
-            title: "Reasoning display",
-            description: "Choose how reasoning is shown in chat.",
+            title: rust_i18n::t!("app.configuration.row_reasoning_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_reasoning_description").to_string(),
             path: Some(REASONING_DISPLAY_PATH),
             kind: CuratedRowKind::ConfigValue,
         },
@@ -118,7 +118,7 @@ pub(super) fn humanize_config_value(value: &str) -> String {
 pub(super) fn setting_display_value(setting: &protocol::ConfigSetting) -> String {
     match &setting.value {
         Value::String(value) => humanize_config_value(value),
-        Value::Null => "<unset>".to_string(),
+        Value::Null => rust_i18n::t!("app.configuration.unset").to_string(),
         value => value_summary(value),
     }
 }

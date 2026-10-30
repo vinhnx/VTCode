@@ -82,8 +82,8 @@ impl DesktopView {
                     .test_support()
                     .key_context("VTCodeInspector")
                     .role(gpui_kit::Role::Group)
-                    .aria_label("Context inspector tabs")
-                    .aria_description("Use Left and Right arrows, Home, or End to choose a tab.")
+                    .aria_label(rust_i18n::t!("app.inspector.inspector_tabs").to_string())
+                    .aria_description(rust_i18n::t!("app.inspector.tabs_hint").to_string())
                     .border_1()
                     .border_color(colors.border.opacity(0.))
                     .focus_visible(|style| style.border_color(colors.ring))
@@ -161,7 +161,11 @@ impl DesktopView {
                 .p_4()
                 .text_sm()
                 .when(self.restored_review_history_incomplete, |container| {
-                    container.child(warning_alert("review-history-warning", PARTIAL_REVIEW_HISTORY_MESSAGE, colors))
+                    container.child(warning_alert(
+                        "review-history-warning",
+                        rust_i18n::t!("app.inspector.partial_review_history").to_string(),
+                        colors,
+                    ))
                 })
                 .child(rust_i18n::t!("app.workspace_review.expanded_in_inspector").to_string())
                 .into_any_element();
@@ -171,7 +175,7 @@ impl DesktopView {
         if self.restored_review_history_incomplete {
             content_panel = content_panel.child(div().px_3().pt_2().child(warning_alert(
                 "review-history-warning",
-                PARTIAL_REVIEW_HISTORY_MESSAGE,
+                rust_i18n::t!("app.inspector.partial_review_history").to_string(),
                 colors,
             )));
         }
@@ -215,8 +219,8 @@ impl DesktopView {
 
         if self.changes.is_empty() {
             return empty_state(
-                "No changes yet",
-                "Edits made during this session will appear here for review.",
+                rust_i18n::t!("app.inspector.empty_changes_title").to_string(),
+                rust_i18n::t!("app.inspector.empty_changes_description").to_string(),
                 IconName::GitCompare,
             )
             .into_any_element();
@@ -231,7 +235,7 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .text_xs()
-                .child(format!("{} files", self.changes.entries().len()))
+                .child(rust_i18n::t!("app.inspector.files_count", count = self.changes.entries().len()).to_string())
                 .when_some(totals, |summary, (additions, deletions)| {
                     summary
                         .child(div().text_color(colors.success).child(format!("+{additions}")))
@@ -243,7 +247,7 @@ impl DesktopView {
                             .min_w_0()
                             .truncate()
                             .text_color(colors.muted_foreground)
-                            .child("Partial totals"),
+                            .child(rust_i18n::t!("app.inspector.partial_totals").to_string()),
                     )
                 }),
             div()
@@ -254,9 +258,9 @@ impl DesktopView {
                 .child(
                     desktop_button("previous-change-file")
                         .icon(IconName::ChevronLeft)
-                        .accessibility_label("Previous changed file")
+                        .accessibility_label(rust_i18n::t!("app.inspector.previous_file").to_string())
                         .tooltip_with_action(
-                            "Previous changed file",
+                            rust_i18n::t!("app.inspector.previous_file").to_string(),
                             &PreviousReviewFile,
                             Some(key_context::DIFF_REVIEW),
                         )
@@ -268,8 +272,12 @@ impl DesktopView {
                 .child(
                     desktop_button("next-change-file")
                         .icon(IconName::ChevronRight)
-                        .accessibility_label("Next changed file")
-                        .tooltip_with_action("Next changed file", &NextReviewFile, Some(key_context::DIFF_REVIEW))
+                        .accessibility_label(rust_i18n::t!("app.inspector.next_file").to_string())
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.inspector.next_file").to_string(),
+                            &NextReviewFile,
+                            Some(key_context::DIFF_REVIEW),
+                        )
                         .ghost()
                         .small()
                         .desktop_disabled(self.changes.preview_count() < 2)
@@ -295,7 +303,7 @@ impl DesktopView {
                 .id("change-list")
                 .test_support()
                 .role(gpui_kit::Role::List)
-                .aria_label("Changed files")
+                .aria_label(rust_i18n::t!("app.inspector.changed_files").to_string())
                 .relative()
                 .w_full()
                 .h(px(list_height))
@@ -316,8 +324,10 @@ impl DesktopView {
                                     let preview_available = view.changes.has_preview(&path);
                                     let file_summary = match (entry.additions, entry.deletions) {
                                         (Some(additions), Some(deletions)) => format!("+{additions} −{deletions}"),
-                                        _ if entry.preview_incomplete => "Partial diff".to_string(),
-                                        _ => "Preview unavailable".to_string(),
+                                        _ if entry.preview_incomplete => {
+                                            rust_i18n::t!("app.inspector.partial_diff").to_string()
+                                        }
+                                        _ => rust_i18n::t!("app.inspector.preview_unavailable").to_string(),
                                     };
                                     let kind_label = match entry.kind {
                                         DiffFileKind::Add => ("A", change_row_colors.success),
@@ -325,9 +335,11 @@ impl DesktopView {
                                         DiffFileKind::Update => ("M", change_row_colors.muted_foreground),
                                     };
                                     let kind_name = match entry.kind {
-                                        DiffFileKind::Add => "Added",
-                                        DiffFileKind::Delete => "Deleted",
-                                        DiffFileKind::Update => "Modified",
+                                        DiffFileKind::Add => rust_i18n::t!("app.inspector.kind_added").to_string(),
+                                        DiffFileKind::Delete => rust_i18n::t!("app.inspector.kind_deleted").to_string(),
+                                        DiffFileKind::Update => {
+                                            rust_i18n::t!("app.inspector.kind_modified").to_string()
+                                        }
                                     };
                                     let row_accessibility_label = format!("{kind_name} {path}, {file_summary}");
                                     Some(
@@ -365,19 +377,37 @@ impl DesktopView {
                                             .child(
                                                 desktop_button(opaque_path_element_id("change-row", &path))
                                                     .icon(IconName::ChevronRight)
-                                                    .accessibility_label(format!(
-                                                        "{} {path}{}",
-                                                        if preview_available {
-                                                            "Review"
+                                                    .accessibility_label({
+                                                        let suffix = if selected {
+                                                            rust_i18n::t!("app.inspector.selected_suffix").to_string()
                                                         } else {
-                                                            "Diff preview unavailable for"
-                                                        },
-                                                        if selected { " (selected)" } else { "" },
-                                                    ))
+                                                            String::new()
+                                                        };
+                                                        if preview_available {
+                                                            rust_i18n::t!(
+                                                                "app.inspector.review_file",
+                                                                path = path.as_str(),
+                                                                suffix = suffix.as_str()
+                                                            )
+                                                            .to_string()
+                                                        } else {
+                                                            rust_i18n::t!(
+                                                                "app.inspector.preview_unavailable_for",
+                                                                path = path.as_str(),
+                                                                suffix = suffix.as_str()
+                                                            )
+                                                            .to_string()
+                                                        }
+                                                    })
                                                     .tooltip(if preview_available {
                                                         path.clone()
                                                     } else {
-                                                        format!("Diff preview unavailable for {path}")
+                                                        rust_i18n::t!(
+                                                            "app.inspector.preview_unavailable_for",
+                                                            path = path.as_str(),
+                                                            suffix = ""
+                                                        )
+                                                        .to_string()
                                                     })
                                                     .ghost()
                                                     .small()
@@ -417,8 +447,17 @@ impl DesktopView {
                     ("review-split", rust_i18n::t!("app.workspace_review.split").to_string(), DiffMode::Split),
                 ] {
                     let state = viewer.clone();
-                    let accessible_label =
-                        format!("{label} diff view{}", if mode == target { " (selected)" } else { "" });
+                    let selected_suffix = if mode == target {
+                        rust_i18n::t!("app.inspector.selected_suffix").to_string()
+                    } else {
+                        String::new()
+                    };
+                    let accessible_label = rust_i18n::t!(
+                        "app.inspector.diff_view_label",
+                        label = label.as_str(),
+                        suffix = selected_suffix.as_str()
+                    )
+                    .to_string();
                     header = header.child(
                         desktop_button(id)
                             .label(label)
@@ -433,9 +472,9 @@ impl DesktopView {
                     .child(
                         desktop_button("review-previous-change")
                             .icon(IconName::ArrowUp)
-                            .accessibility_label("Previous change")
+                            .accessibility_label(rust_i18n::t!("app.inspector.previous_change").to_string())
                             .tooltip_with_action(
-                                "Previous change",
+                                rust_i18n::t!("app.inspector.previous_change").to_string(),
                                 &PreviousReviewChange,
                                 Some(key_context::DIFF_REVIEW),
                             )
@@ -446,8 +485,12 @@ impl DesktopView {
                     .child(
                         desktop_button("review-next-change")
                             .icon(IconName::ArrowDown)
-                            .accessibility_label("Next change")
-                            .tooltip_with_action("Next change", &NextReviewChange, Some(key_context::DIFF_REVIEW))
+                            .accessibility_label(rust_i18n::t!("app.inspector.next_change").to_string())
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.inspector.next_change").to_string(),
+                                &NextReviewChange,
+                                Some(key_context::DIFF_REVIEW),
+                            )
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(true, cx))),
@@ -456,8 +499,8 @@ impl DesktopView {
                 header = header.child(
                     desktop_button("expand-change-review")
                         .icon(IconName::Maximize2)
-                        .accessibility_label("Expand diff review")
-                        .tooltip("Expand diff review")
+                        .accessibility_label(rust_i18n::t!("app.inspector.expand_review").to_string())
+                        .tooltip(rust_i18n::t!("app.inspector.expand_review").to_string())
                         .ghost()
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| view.open_review(window, cx))),
@@ -467,8 +510,8 @@ impl DesktopView {
                 header = header.child(
                     desktop_button("copy-change-patch")
                         .icon(IconName::Copy)
-                        .accessibility_label("Copy patch")
-                        .tooltip("Copy patch")
+                        .accessibility_label(rust_i18n::t!("app.inspector.copy_patch").to_string())
+                        .tooltip(rust_i18n::t!("app.inspector.copy_patch").to_string())
                         .ghost()
                         .small()
                         .on_click(move |_, window, app| {
@@ -480,8 +523,8 @@ impl DesktopView {
             header = header.child(
                 desktop_button("open-change-file")
                     .icon(IconName::ExternalLink)
-                    .accessibility_label("Open file")
-                    .tooltip("Open file")
+                    .accessibility_label(rust_i18n::t!("app.inspector.open_file").to_string())
+                    .tooltip(rust_i18n::t!("app.inspector.open_file").to_string())
                     .ghost()
                     .small()
                     .on_click(

@@ -176,13 +176,19 @@ impl DesktopView {
             .child(div().truncate().child(workspace.to_string()))
             .when(self.git_branch.is_some(), |bar| {
                 bar.child(
-                    div()
-                        .truncate()
-                        .child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())),
+                    div().truncate().child(
+                        rust_i18n::t!(
+                            "app.appearance.branch_label",
+                            value = self.git_branch.clone().unwrap_or_default()
+                        )
+                        .to_string(),
+                    ),
                 )
             })
             .when(sandbox.is_some(), |bar| {
-                bar.child(div().truncate().child(format!("Sandbox: {}", sandbox.unwrap_or_default())))
+                bar.child(div().truncate().child(
+                    rust_i18n::t!("app.appearance.sandbox_label", value = sandbox.unwrap_or_default()).to_string(),
+                ))
             });
         let runtime_details = div()
             .flex()
@@ -191,10 +197,10 @@ impl DesktopView {
             .min_w_0()
             .when(context_percent.is_some(), |bar| {
                 bar.child(
-                    div()
-                        .id("context-usage")
-                        .test_support()
-                        .child(format!("Context: {}%", context_percent.unwrap_or_default())),
+                    div().id("context-usage").test_support().child(
+                        rust_i18n::t!("app.appearance.context_label", percent = context_percent.unwrap_or_default())
+                            .to_string(),
+                    ),
                 )
             })
             .child(div().truncate().child(provider_model))
@@ -218,7 +224,7 @@ impl DesktopView {
             .id("status-bar")
             .test_support()
             .role(gpui_kit::Role::Group)
-            .aria_label("Status bar")
+            .aria_label(rust_i18n::t!("app.settings.appearance.status_bar").to_string())
             .w_full()
             .flex_shrink_0()
             .child(
@@ -333,7 +339,7 @@ impl DesktopView {
             .id("reduced-motion-setting")
             .test_support()
             .role(gpui_kit::Role::Group)
-            .aria_label("Reduce motion")
+            .aria_label(rust_i18n::t!("app.settings.appearance.reduce_motion").to_string())
             .w_full()
             .flex()
             .items_center()
@@ -346,9 +352,9 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(row_title("Reduce motion", &colors))
+                    .child(row_title(rust_i18n::t!("app.settings.appearance.reduce_motion").to_string(), &colors))
                     .child(row_description(
-                        "System uses macOS accessibility settings; select it again to refresh.",
+                        rust_i18n::t!("app.settings.appearance.reduce_motion_description").to_string(),
                         &colors,
                     )),
             )
@@ -360,15 +366,29 @@ impl DesktopView {
                         let label = preference.label();
                         let selected = preference == current;
                         desktop_button(format!("reduce-motion-{}", preference.id()))
-                            .label(label)
-                            .accessibility_label(format!(
-                                "Reduce motion: {label}{}",
-                                if selected { " (selected)" } else { "" }
-                            ))
+                            .label(label.clone())
+                            .accessibility_label(
+                                rust_i18n::t!(
+                                    "app.appearance.motion_aria",
+                                    label = label.as_str(),
+                                    suffix = if selected {
+                                        rust_i18n::t!("app.appearance.selected_suffix").to_string()
+                                    } else {
+                                        String::new()
+                                    }
+                                )
+                                .to_string(),
+                            )
                             .tooltip(match preference {
-                                preferences::ReducedMotionPreference::System => "Re-read system accessibility settings",
-                                preferences::ReducedMotionPreference::On => "Reduce interface animations",
-                                preferences::ReducedMotionPreference::Off => "Allow interface animations",
+                                preferences::ReducedMotionPreference::System => {
+                                    rust_i18n::t!("app.appearance.reread_system").to_string()
+                                }
+                                preferences::ReducedMotionPreference::On => {
+                                    rust_i18n::t!("app.appearance.reduce_animations").to_string()
+                                }
+                                preferences::ReducedMotionPreference::Off => {
+                                    rust_i18n::t!("app.appearance.allow_animations").to_string()
+                                }
                             })
                             .ghost()
                             .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
@@ -382,8 +402,8 @@ impl DesktopView {
         let (key, label, description, size, minimum, maximum) = if code {
             (
                 "code",
-                "Code font size",
-                "Code, diffs, and terminal output",
+                rust_i18n::t!("app.appearance.code_font_size").to_string(),
+                rust_i18n::t!("app.appearance.code_font_desc").to_string(),
                 self.preferences.typography_for(self.theme_mode).code_font_size,
                 preferences::MIN_CODE_FONT_SIZE,
                 preferences::MAX_CODE_FONT_SIZE,
@@ -391,8 +411,8 @@ impl DesktopView {
         } else {
             (
                 "ui",
-                "UI font size",
-                "Base size for controls and conversation text",
+                rust_i18n::t!("app.appearance.ui_font_size").to_string(),
+                rust_i18n::t!("app.appearance.ui_font_desc").to_string(),
                 self.preferences.typography_for(self.theme_mode).ui_font_size,
                 preferences::MIN_UI_FONT_SIZE,
                 preferences::MAX_UI_FONT_SIZE,
@@ -412,7 +432,7 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(row_title(label, &cx.theme().colors))
+                    .child(row_title(label.clone(), &cx.theme().colors))
                     .child(row_description(description, &cx.theme().colors)),
             )
             .child(
@@ -423,7 +443,14 @@ impl DesktopView {
                     .children([-1i16, 1].into_iter().enumerate().map(|(index, delta)| {
                         desktop_button(format!("font-{key}-{index}"))
                             .label(if delta < 0 { "−" } else { "+" })
-                            .accessibility_label(format!("{} {label}", if delta < 0 { "Decrease" } else { "Increase" }))
+                            .accessibility_label(format!(
+                                "{} {label}",
+                                if delta < 0 {
+                                    rust_i18n::t!("app.appearance.decrease")
+                                } else {
+                                    rust_i18n::t!("app.appearance.increase")
+                                }
+                            ))
                             .ghost()
                             .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
                             .on_click(cx.listener(move |view, _, _, cx| {
@@ -451,7 +478,10 @@ impl DesktopView {
                         div()
                             .id(format!("font-{key}-value"))
                             .role(gpui_kit::Role::Label)
-                            .aria_label(format!("{label}: {size} pixels"))
+                            .aria_label(
+                                rust_i18n::t!("app.appearance.size_pixels", label = label.as_str(), size = size)
+                                    .to_string(),
+                            )
                             .test_support()
                             .text_sm()
                             .child(format!("{size} px")),

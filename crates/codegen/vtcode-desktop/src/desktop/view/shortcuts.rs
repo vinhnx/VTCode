@@ -115,194 +115,225 @@ impl CommandId {
     }
 }
 
-/// One configurable desktop command: stable id, settings label, description, default binding.
+/// One configurable desktop command: stable id, locale keys for the settings
+/// label and description, and the default binding. Copy resolves at the render
+/// call site so the const table stays locale-independent.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct ShortcutCommand {
     pub(super) id: CommandId,
-    pub(super) label: &'static str,
-    pub(super) description: &'static str,
+    pub(super) label_key: &'static str,
+    pub(super) description_key: &'static str,
     pub(super) default_binding: &'static str,
+}
+
+impl ShortcutCommand {
+    /// Settings label in the active locale.
+    pub(super) fn label(&self) -> String {
+        let key = self.label_key;
+        rust_i18n::t!(key).to_string()
+    }
+
+    /// Settings description in the active locale.
+    pub(super) fn description(&self) -> String {
+        let key = self.description_key;
+        rust_i18n::t!(key).to_string()
+    }
+
+    /// Settings label pinned to one locale, for tests that must not observe
+    /// the process-global locale while other tests switch languages.
+    #[cfg(test)]
+    pub(super) fn label_in(&self, locale: &str) -> String {
+        let key = self.label_key;
+        rust_i18n::t!(key, locale = locale).to_string()
+    }
+
+    /// Settings description pinned to one locale (see [`Self::label_in`]).
+    #[cfg(test)]
+    pub(super) fn description_in(&self, locale: &str) -> String {
+        let key = self.description_key;
+        rust_i18n::t!(key, locale = locale).to_string()
+    }
 }
 
 pub(super) const COMMANDS: [ShortcutCommand; 30] = [
     ShortcutCommand {
         id: CommandId::Commands,
-        label: "Search commands",
-        description: "Search session commands, threads, and files from the palette",
+        label_key: "app.shortcuts.commands_label",
+        description_key: "app.shortcuts.commands_description",
         default_binding: "cmd-k",
     },
     ShortcutCommand {
         id: CommandId::ConversationSearch,
-        label: "Find in conversation",
-        description: "Search loaded messages, activity, and output previews",
+        label_key: "app.shortcuts.conversation_search_label",
+        description_key: "app.shortcuts.conversation_search_description",
         default_binding: "cmd-shift-f",
     },
     ShortcutCommand {
         id: CommandId::NewSession,
-        label: "New thread",
-        description: "Start a new thread in the current workspace",
+        label_key: "app.shortcuts.new_session_label",
+        description_key: "app.shortcuts.new_session_description",
         default_binding: "cmd-n",
     },
     ShortcutCommand {
         id: CommandId::CloseSession,
-        label: "Close thread",
-        description: "Close the selected thread without starting a replacement",
+        label_key: "app.shortcuts.close_session_label",
+        description_key: "app.shortcuts.close_session_description",
         default_binding: "cmd-shift-w",
     },
     ShortcutCommand {
         id: CommandId::Workspace,
-        label: "Choose workspace",
-        description: "Open the workspace picker",
+        label_key: "app.shortcuts.workspace_label",
+        description_key: "app.shortcuts.workspace_description",
         default_binding: "cmd-o",
     },
     ShortcutCommand {
         id: CommandId::Composer,
-        label: "Focus composer",
-        description: "Focus the message input, dismissing supported overlays",
+        label_key: "app.shortcuts.composer_label",
+        description_key: "app.shortcuts.composer_description",
         default_binding: "cmd-l",
     },
     ShortcutCommand {
         id: CommandId::Sidebar,
-        label: "Toggle navigation",
-        description: "Show or hide the navigation rail",
+        label_key: "app.shortcuts.sidebar_label",
+        description_key: "app.shortcuts.sidebar_description",
         default_binding: "cmd-b",
     },
     ShortcutCommand {
         id: CommandId::Inspector,
-        label: "Toggle inspector",
-        description: "Show or hide the context inspector",
+        label_key: "app.shortcuts.inspector_label",
+        description_key: "app.shortcuts.inspector_description",
         default_binding: "cmd-shift-i",
     },
     ShortcutCommand {
         id: CommandId::ZenMode,
-        label: "Toggle Zen mode",
-        description: "Enter or exit the distraction-free Zen layout",
+        label_key: "app.shortcuts.zen_mode_label",
+        description_key: "app.shortcuts.zen_mode_description",
         default_binding: "ctrl-cmd-z",
     },
     ShortcutCommand {
         id: CommandId::Cancel,
-        label: "Cancel run",
-        description: "Cancel the active run",
+        label_key: "app.shortcuts.cancel_label",
+        description_key: "app.shortcuts.cancel_description",
         default_binding: "cmd-.",
     },
     ShortcutCommand {
         id: CommandId::Dismiss,
-        label: "Dismiss overlay",
-        description: "Close the topmost overlay and restore focus",
+        label_key: "app.shortcuts.dismiss_label",
+        description_key: "app.shortcuts.dismiss_description",
         default_binding: "escape",
     },
     ShortcutCommand {
         id: CommandId::Settings,
-        label: "Settings",
-        description: "Open Settings",
+        label_key: "app.shortcuts.settings_label",
+        description_key: "app.shortcuts.settings_description",
         default_binding: "cmd-,",
     },
     ShortcutCommand {
         id: CommandId::SettingsSearch,
-        label: "Search settings and CLI config",
-        description: "Search settings categories and CLI config paths",
+        label_key: "app.shortcuts.settings_search_label",
+        description_key: "app.shortcuts.settings_search_description",
         default_binding: "cmd-f",
     },
     ShortcutCommand {
         id: CommandId::Model,
-        label: "Choose model",
-        description: "Open the model picker",
+        label_key: "app.shortcuts.model_label",
+        description_key: "app.shortcuts.model_description",
         default_binding: "cmd-shift-m",
     },
     ShortcutCommand {
         id: CommandId::Permissions,
-        label: "Command permissions",
-        description: "Open the command permission control",
+        label_key: "app.shortcuts.permissions_label",
+        description_key: "app.shortcuts.permissions_description",
         default_binding: "cmd-shift-p",
     },
     ShortcutCommand {
         id: CommandId::AgentMode,
-        label: "Choose agent mode",
-        description: "Open the agent mode picker",
+        label_key: "app.shortcuts.agent_mode_label",
+        description_key: "app.shortcuts.agent_mode_description",
         default_binding: "cmd-shift-b",
     },
     ShortcutCommand {
         id: CommandId::AddContext,
-        label: "Add files and more @",
-        description: "Open the composer file and mention search",
+        label_key: "app.shortcuts.add_context_label",
+        description_key: "app.shortcuts.add_context_description",
         default_binding: "cmd-shift-a",
     },
     ShortcutCommand {
         id: CommandId::StatusBar,
-        label: "Toggle status bar",
-        description: "Show or hide the status bar",
+        label_key: "app.shortcuts.status_bar_label",
+        description_key: "app.shortcuts.status_bar_description",
         default_binding: "cmd-shift-s",
     },
     ShortcutCommand {
         id: CommandId::ReloadCliSettings,
-        label: "Reload CLI settings",
-        description: "Restart the idle service and reload CLI configuration",
+        label_key: "app.shortcuts.reload_cli_settings_label",
+        description_key: "app.shortcuts.reload_cli_settings_description",
         default_binding: "cmd-shift-r",
     },
     ShortcutCommand {
         id: CommandId::SyncCliTheme,
-        label: "Sync current theme to CLI",
-        description: "Save the selected theme through the CLI config writer",
+        label_key: "app.shortcuts.sync_cli_theme_label",
+        description_key: "app.shortcuts.sync_cli_theme_description",
         default_binding: "cmd-shift-t",
     },
     ShortcutCommand {
         id: CommandId::Utilities,
-        label: "Open workspace utilities",
-        description: "Open the Utilities inspector tab",
+        label_key: "app.shortcuts.utilities_label",
+        description_key: "app.shortcuts.utilities_description",
         default_binding: "cmd-shift-u",
     },
     ShortcutCommand {
         id: CommandId::WorkspaceFiles,
-        label: "Open workspace files",
-        description: "Open the workspace file browser",
+        label_key: "app.shortcuts.workspace_files_label",
+        description_key: "app.shortcuts.workspace_files_description",
         default_binding: "cmd-shift-e",
     },
     ShortcutCommand {
         id: CommandId::WorkspaceReview,
-        label: "Review working tree",
-        description: "Open the working tree review snapshot",
+        label_key: "app.shortcuts.workspace_review_label",
+        description_key: "app.shortcuts.workspace_review_description",
         default_binding: "cmd-shift-g",
     },
     ShortcutCommand {
         id: CommandId::RefreshWorkspace,
-        label: "Refresh current workspace view",
-        description: "Refresh the active workspace view",
+        label_key: "app.shortcuts.refresh_workspace_label",
+        description_key: "app.shortcuts.refresh_workspace_description",
         default_binding: "cmd-r",
     },
     ShortcutCommand {
         id: CommandId::NavigateBack,
-        label: "Navigate back",
-        description: "Move back through workspace and thread history",
+        label_key: "app.shortcuts.navigate_back_label",
+        description_key: "app.shortcuts.navigate_back_description",
         default_binding: "cmd-[",
     },
     ShortcutCommand {
         id: CommandId::NavigateForward,
-        label: "Navigate forward",
-        description: "Move forward through workspace and thread history",
+        label_key: "app.shortcuts.navigate_forward_label",
+        description_key: "app.shortcuts.navigate_forward_description",
         default_binding: "cmd-]",
     },
     ShortcutCommand {
         id: CommandId::NextReviewChange,
-        label: "Next review change",
-        description: "Move to the next change in review",
+        label_key: "app.shortcuts.next_review_change_label",
+        description_key: "app.shortcuts.next_review_change_description",
         default_binding: "f7",
     },
     ShortcutCommand {
         id: CommandId::PreviousReviewChange,
-        label: "Previous review change",
-        description: "Move to the previous change in review",
+        label_key: "app.shortcuts.previous_review_change_label",
+        description_key: "app.shortcuts.previous_review_change_description",
         default_binding: "shift-f7",
     },
     ShortcutCommand {
         id: CommandId::NextReviewFile,
-        label: "Next changed file",
-        description: "Move to the next changed file in review",
+        label_key: "app.shortcuts.next_review_file_label",
+        description_key: "app.shortcuts.next_review_file_description",
         default_binding: "alt-f7",
     },
     ShortcutCommand {
         id: CommandId::PreviousReviewFile,
-        label: "Previous changed file",
-        description: "Move to the previous changed file in review",
+        label_key: "app.shortcuts.previous_review_file_label",
+        description_key: "app.shortcuts.previous_review_file_description",
         default_binding: "alt-shift-f7",
     },
 ];
@@ -344,7 +375,7 @@ fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
 
 pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBinding>, String> {
     if overrides.keys().any(|key| CommandId::from_id(key).is_none()) {
-        return Err("Unknown shortcut action".into());
+        return Err(rust_i18n::t!("app.shortcuts.unknown_action").to_string());
     }
     let mut seen = HashSet::new();
     COMMANDS
@@ -354,15 +385,17 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                 .get(command.id.as_str())
                 .map(String::as_str)
                 .unwrap_or(command.default_binding);
-            let label = command.label;
+            let label = command.label();
             if source.is_empty() {
                 return Ok(Vec::new());
             }
             if source.trim().is_empty() || source.split_whitespace().count() != 1 {
-                return Err(format!("{label}: enter one key combination"));
+                return Err(rust_i18n::t!("app.shortcuts.enter_one_combo", label = label.as_str()).to_string());
             }
-            let key = gpui_kit::Keystroke::parse(source)
-                .map_err(|error| format!("{label}: invalid key combination: {error}"))?;
+            let key = gpui_kit::Keystroke::parse(source).map_err(|error| {
+                rust_i18n::t!("app.shortcuts.invalid_combo", label = label.as_str(), error = error.to_string())
+                    .to_string()
+            })?;
             let normalized = key.unparse();
             if [
                 "cmd-q",
@@ -380,7 +413,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
             ]
             .contains(&normalized.as_str())
             {
-                return Err(format!("{label}: reserved macOS shortcut"));
+                return Err(rust_i18n::t!("app.shortcuts.reserved_shortcut", label = label.as_str()).to_string());
             }
             if !(command.id == CommandId::Dismiss && source == "escape")
                 && !source.contains("cmd-")
@@ -388,10 +421,10 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                 && !source.contains("alt-")
                 && !is_function_key(&normalized)
             {
-                return Err(format!("{label}: include cmd, ctrl, alt, or use a function key"));
+                return Err(rust_i18n::t!("app.shortcuts.include_modifier", label = label.as_str()).to_string());
             }
             if !seen.insert(normalized) {
-                return Err(format!("{label}: shortcut is already assigned"));
+                return Err(rust_i18n::t!("app.shortcuts.already_assigned", label = label.as_str()).to_string());
             }
             let context = gpui_kit::KeyBindingContextPredicate::parse(context_for(command.id))
                 .map_err(|error| error.to_string())?;
@@ -404,7 +437,10 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                     None,
                     &gpui_kit::DummyKeyboardMapper,
                 )
-                .map_err(|error| format!("{label}: invalid shortcut: {error}"))?,
+                .map_err(|error| {
+                    rust_i18n::t!("app.shortcuts.invalid_shortcut", label = label.as_str(), error = error.to_string())
+                        .to_string()
+                })?,
             ];
             if command.id == CommandId::SettingsSearch {
                 let context = gpui_kit::KeyBindingContextPredicate::parse(key_context::SETTINGS)
@@ -418,7 +454,14 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                         None,
                         &gpui_kit::DummyKeyboardMapper,
                     )
-                    .map_err(|error| format!("{label}: invalid shortcut: {error}"))?,
+                    .map_err(|error| {
+                        rust_i18n::t!(
+                            "app.shortcuts.invalid_shortcut",
+                            label = label.as_str(),
+                            error = error.to_string()
+                        )
+                        .to_string()
+                    })?,
                 );
             }
             Ok(bindings)
@@ -475,7 +518,7 @@ pub(super) fn shortcut_matches_query(command: &ShortcutCommand, staged: &str, te
         return true;
     }
     let haystack =
-        format!("{} {} {staged} {}", command.label, command.description, command.default_binding).to_lowercase();
+        format!("{} {} {staged} {}", command.label(), command.description(), command.default_binding).to_lowercase();
     terms.iter().all(|term| haystack.contains(term))
 }
 
@@ -490,12 +533,12 @@ pub(super) fn is_modifier_key(key: &str) -> bool {
 
 pub(super) fn shortcut_accessibility_value(value: &str) -> String {
     if value.is_empty() {
-        return "not set".into();
+        return rust_i18n::t!("app.shortcuts.a11y_not_set").to_string();
     }
 
     gpui_kit::Keystroke::parse(value)
         .map(|keystroke| Kbd::format(&keystroke))
-        .unwrap_or_else(|_| "invalid shortcut".into())
+        .unwrap_or_else(|_| rust_i18n::t!("app.shortcuts.a11y_invalid").to_string())
 }
 
 #[cfg(test)]
@@ -609,9 +652,11 @@ mod tests {
 
         let mut labels = HashSet::new();
         for command in COMMANDS {
-            assert!(!command.label.is_empty(), "{:?} needs a label", command.id);
-            assert!(!command.description.is_empty(), "{:?} needs a description", command.id);
-            assert!(labels.insert(command.label), "duplicate label: {}", command.label);
+            let label = command.label_in("en");
+            let description = command.description_in("en");
+            assert!(!label.is_empty(), "{:?} needs a label", command.id);
+            assert!(!description.is_empty(), "{:?} needs a description", command.id);
+            assert!(labels.insert(label.clone()), "duplicate label: {label}");
             assert!(
                 gpui_kit::Keystroke::parse(command.default_binding).is_ok(),
                 "{:?} default must parse: {}",

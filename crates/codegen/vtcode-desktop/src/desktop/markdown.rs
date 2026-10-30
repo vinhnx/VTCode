@@ -49,7 +49,7 @@ pub(super) fn prepare_markdown(source: &SharedString) -> PreparedMarkdown {
 }
 
 fn invalid_markdown() -> PreparedMarkdown {
-    let message = SharedString::from("Unable to render Markdown: invalid source span.");
+    let message = SharedString::from(rust_i18n::t!("app.markdown.render_error").to_string());
     PreparedMarkdown {
         markdown: message.clone(),
         accessible_text: message,
@@ -207,7 +207,7 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
             Button::new("copy-code")
                 .tab_stop(true)
                 .cursor_pointer()
-                .label("Copy code")
+                .label(rust_i18n::t!("app.markdown.copy_code").to_string())
                 .ghost()
                 .on_click(move |_, window, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
@@ -222,7 +222,7 @@ fn streaming_motion() -> TextViewMotion {
 
 fn blocked_image_source() -> ImageSource {
     ImageSource::Custom(Arc::new(|_, _| {
-        Some(Err(ImageCacheError::Asset("Transcript images are not loaded automatically".into())))
+        Some(Err(ImageCacheError::Asset(rust_i18n::t!("app.markdown.images_blocked").to_string().into())))
     }))
 }
 

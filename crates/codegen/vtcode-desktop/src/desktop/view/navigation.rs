@@ -38,12 +38,16 @@ impl DesktopView {
                             .ghost()
                             .rounded_lg()
                             .accessibility_label(if expanded {
-                                "Projects and threads (expanded)"
+                                rust_i18n::t!("app.navigation.projects_threads_expanded").to_string()
                             } else {
-                                "Projects and threads"
+                                rust_i18n::t!("app.navigation.projects_threads").to_string()
                             })
                             .toggled(expanded)
-                            .tooltip_with_action("Projects and threads", &ToggleSidebar, Some(key_context::DESKTOP))
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.navigation.projects_threads").to_string(),
+                                &ToggleSidebar,
+                                Some(key_context::DESKTOP),
+                            )
                             .when(expanded, |button| button.bg(colors.secondary).text_color(colors.foreground))
                             .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                     ),
@@ -54,8 +58,12 @@ impl DesktopView {
                         .icon(IconName::Plus)
                         .ghost()
                         .rounded_lg()
-                        .accessibility_label("New thread")
-                        .tooltip_with_action("New thread", &NewSession, Some(key_context::DESKTOP))
+                        .accessibility_label(rust_i18n::t!("app.navigation.new_thread").to_string())
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.navigation.new_thread").to_string(),
+                            &NewSession,
+                            Some(key_context::DESKTOP),
+                        )
                         .desktop_disabled(!self.session_change_allowed(None))
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
@@ -69,11 +77,15 @@ impl DesktopView {
                     .ghost()
                     .rounded_lg()
                     .accessibility_label(if utilities_selected {
-                        "Workspace utilities (selected)"
+                        rust_i18n::t!("app.navigation.workspace_utilities_selected").to_string()
                     } else {
-                        "Workspace utilities"
+                        rust_i18n::t!("app.navigation.workspace_utilities").to_string()
                     })
-                    .tooltip_with_action("Workspace utilities", &OpenUtilities, Some(key_context::DESKTOP))
+                    .tooltip_with_action(
+                        rust_i18n::t!("app.navigation.workspace_utilities").to_string(),
+                        &OpenUtilities,
+                        Some(key_context::DESKTOP),
+                    )
                     .desktop_disabled(self.workspace.is_none())
                     .when(utilities_selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
                     .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
@@ -83,8 +95,8 @@ impl DesktopView {
             .id("primary-navigation")
             .test_support()
             .role(gpui_kit::Role::Navigation)
-            .aria_label("VT Code navigation")
-            .aria_description("Projects, threads, and workspace tools.")
+            .aria_label(rust_i18n::t!("app.navigation.navigation_label").to_string())
+            .aria_description(rust_i18n::t!("app.navigation.navigation_description").to_string())
             .h_full()
             .flex_shrink_0()
             .flex()
@@ -107,7 +119,7 @@ impl DesktopView {
             .with_animation("navigation-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
             .into_any_element()
     }
-    pub(super) fn render_chrome_menu(&self, id: &'static str, label: &'static str) -> AnyElement {
+    pub(super) fn render_chrome_menu(&self, id: &'static str, label: String) -> AnyElement {
         let can_new = self.session_change_allowed(None);
         let can_close = self.selected_session_id.is_some() && self.session_change_allowed(None);
         let has_workspace = self.workspace.is_some();
@@ -115,19 +127,31 @@ impl DesktopView {
             .icon(IconName::Ellipsis)
             .ghost()
             .small()
-            .accessibility_label(label)
+            .accessibility_label(label.as_str())
             .tooltip(label)
             .dropdown_menu(move |menu, _, _| {
-                menu.menu_with_disabled("New thread", Box::new(NewSession), !can_new)
-                    .menu_with_disabled("Close thread", Box::new(CloseSession), !can_close)
-                    .separator()
-                    .menu("Toggle navigation", Box::new(ToggleSidebar))
-                    .menu_with_disabled("Toggle inspector", Box::new(ToggleInspector), !has_workspace)
-                    .menu("Toggle Zen mode", Box::new(ToggleZenMode))
-                    .menu("Search commands", Box::new(OpenCommandPalette))
-                    .separator()
-                    .menu("Toggle status bar", Box::new(ToggleStatusBar))
-                    .menu("Settings…", Box::new(OpenSettings))
+                menu.menu_with_disabled(
+                    rust_i18n::t!("app.navigation.new_thread").to_string(),
+                    Box::new(NewSession),
+                    !can_new,
+                )
+                .menu_with_disabled(
+                    rust_i18n::t!("app.navigation.close_thread").to_string(),
+                    Box::new(CloseSession),
+                    !can_close,
+                )
+                .separator()
+                .menu(rust_i18n::t!("app.navigation.toggle_navigation").to_string(), Box::new(ToggleSidebar))
+                .menu_with_disabled(
+                    rust_i18n::t!("app.navigation.toggle_inspector").to_string(),
+                    Box::new(ToggleInspector),
+                    !has_workspace,
+                )
+                .menu(rust_i18n::t!("app.navigation.toggle_zen_mode").to_string(), Box::new(ToggleZenMode))
+                .menu(rust_i18n::t!("app.navigation.search_commands").to_string(), Box::new(OpenCommandPalette))
+                .separator()
+                .menu(rust_i18n::t!("app.navigation.toggle_status_bar").to_string(), Box::new(ToggleStatusBar))
+                .menu(rust_i18n::t!("app.navigation.settings_menu").to_string(), Box::new(OpenSettings))
             })
             .into_any_element()
     }

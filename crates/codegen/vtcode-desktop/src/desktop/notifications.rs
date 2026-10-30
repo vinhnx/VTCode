@@ -22,7 +22,7 @@ pub(super) fn initialize(cx: &mut App) {
 
 pub(super) fn copied_to_clipboard(window: &mut Window, cx: &mut App) {
     window.push_notification(
-        Notification::success("Copied to clipboard.")
+        Notification::success(rust_i18n::t!("app.notifications.copied").to_string())
             .id::<ClipboardCopyNotification>()
             .placement(Anchor::BottomRight),
         cx,
@@ -70,11 +70,13 @@ pub(super) fn activity_for_interaction_kind(kind: vtcode_desktop_protocol::Inter
 
 pub(super) fn background_agent_activity(window: &mut Window, activity: BackgroundAgentActivity, cx: &mut App) {
     let message = match activity {
-        BackgroundAgentActivity::Completed => "Your agent run has finished.",
-        BackgroundAgentActivity::NeedsAttention => "Your agent run needs attention.",
-        BackgroundAgentActivity::PermissionRequired => "An agent run is waiting for your approval.",
-        BackgroundAgentActivity::QuestionWaiting => "An agent run is waiting for your input.",
-        BackgroundAgentActivity::ServiceDisconnected => "The local VT Code service disconnected.",
+        BackgroundAgentActivity::Completed => rust_i18n::t!("app.notifications.agent_done").to_string(),
+        BackgroundAgentActivity::NeedsAttention => rust_i18n::t!("app.notifications.agent_attention").to_string(),
+        BackgroundAgentActivity::PermissionRequired => rust_i18n::t!("app.notifications.approval_waiting").to_string(),
+        BackgroundAgentActivity::QuestionWaiting => rust_i18n::t!("app.notifications.input_waiting").to_string(),
+        BackgroundAgentActivity::ServiceDisconnected => {
+            rust_i18n::t!("app.notifications.service_disconnected").to_string()
+        }
     };
     window.push_notification(
         Notification::info(message)

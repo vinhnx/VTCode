@@ -27,7 +27,7 @@ impl DesktopView {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Attach files".into()),
+            prompt: Some(rust_i18n::t!("app.composer.attach_files").to_string().into()),
         });
         cx.notify();
         let session_id = self.selected_session_id.clone();
@@ -51,7 +51,7 @@ impl DesktopView {
                 }
                 Ok(Ok(None)) => Ok((Vec::new(), false)),
                 Ok(Err(error)) => Err(format!("Unable to open the file picker: {error}")),
-                Err(_) => Err("The file picker was disconnected.".to_string()),
+                Err(_) => Err(rust_i18n::t!("app.files.picker_disconnected").to_string()),
             };
             let _updated = view.update(cx, |view, cx| {
                 view.attachments_picker_open = false;
@@ -63,7 +63,8 @@ impl DesktopView {
                     Err(error) => view.error = Some(error),
                     Ok((results, overflow)) => {
                         if overflow {
-                            view.error = Some(format!("At most {MAX_ATTACHMENTS} attachments per prompt."));
+                            view.error =
+                                Some(rust_i18n::t!("app.composer.attachments_limit", n = MAX_ATTACHMENTS).to_string());
                         }
                         for result in results {
                             match result {
@@ -72,7 +73,10 @@ impl DesktopView {
                                         continue;
                                     }
                                     if view.attachments.len() >= MAX_ATTACHMENTS {
-                                        view.error = Some(format!("At most {MAX_ATTACHMENTS} attachments per prompt."));
+                                        view.error = Some(
+                                            rust_i18n::t!("app.composer.attachments_limit", n = MAX_ATTACHMENTS)
+                                                .to_string(),
+                                        );
                                         break;
                                     }
                                     view.attachments.push(attachment);

@@ -395,7 +395,11 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
 /// Enter and exit share id, size, variant, and position; only the icon paint
 /// and label change, so the button never shifts when toggled.
 pub(super) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &FocusHandle) -> Button {
-    let label = if zen_mode { "Exit Zen mode" } else { "Enter Zen mode" };
+    let label = if zen_mode {
+        rust_i18n::t!("app.navigation.exit_zen").to_string()
+    } else {
+        rust_i18n::t!("app.navigation.enter_zen").to_string()
+    };
     let icon = if zen_mode {
         Icon::new(IconName::Leaf).text_color(faded)
     } else {
@@ -405,7 +409,7 @@ pub(super) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &Foc
         .icon(icon)
         .ghost()
         .small()
-        .accessibility_label(label)
+        .accessibility_label(label.clone())
         .tooltip_with_action(label, &ToggleZenMode, Some(key_context::DESKTOP))
         .dispatches_desktop_action(ToggleZenMode, focus.clone())
 }

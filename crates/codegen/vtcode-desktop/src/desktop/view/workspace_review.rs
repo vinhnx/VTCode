@@ -184,7 +184,14 @@ impl DesktopView {
                     .map(|file| {
                         let path = file.path().to_string();
                         let mut entry = command(path.clone(), PaletteAction::SelectWorkspaceReviewFile(path));
-                        entry.description = Some(format!("+{} · −{} lines", file.additions(), file.deletions()));
+                        entry.description = Some(
+                            rust_i18n::t!(
+                                "app.workspace_review.file_stats",
+                                add = file.additions(),
+                                del = file.deletions()
+                            )
+                            .to_string(),
+                        );
                         entry.keywords = vec!["working tree".into(), "changed file".into()];
                         entry
                     })

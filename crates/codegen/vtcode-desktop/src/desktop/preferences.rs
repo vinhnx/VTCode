@@ -44,11 +44,11 @@ pub(super) enum ReducedMotionPreference {
 impl ReducedMotionPreference {
     pub(super) const ALL: [Self; 3] = [Self::System, Self::On, Self::Off];
 
-    pub(super) const fn label(self) -> &'static str {
+    pub(super) fn label(self) -> String {
         match self {
-            Self::System => "System",
-            Self::On => "On",
-            Self::Off => "Off",
+            Self::System => rust_i18n::t!("app.appearance.motion_system").to_string(),
+            Self::On => rust_i18n::t!("app.appearance.motion_on").to_string(),
+            Self::Off => rust_i18n::t!("app.appearance.motion_off").to_string(),
         }
     }
 
@@ -660,7 +660,8 @@ impl Preferences {
     }
 
     pub(super) fn try_save(&self) -> Result<(), String> {
-        let path = Self::preferences_path().ok_or("Preferences directory is unavailable")?;
+        let path =
+            Self::preferences_path().ok_or_else(|| rust_i18n::t!("app.errors.preferences_unavailable").to_string())?;
         let content = serde_json::to_vec_pretty(self).map_err(|error| error.to_string())?;
         vtcode_commons::VtCodePaths::write_private_file_atomic(path, &content)
             .map_err(|error| format!("Could not save desktop preferences: {error}"))

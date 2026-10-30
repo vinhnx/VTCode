@@ -10,9 +10,9 @@ impl DesktopView {
         // every exit path (commit, cancel, save, reset, import, sheet close) clears the arm.
         let pill_focused = self.shortcut_capture_focus.is_focused(window);
         let description = if self.shortcuts_editing {
-            "You have unsaved changes. Saved changes apply after restarting VT Code Desktop."
+            rust_i18n::t!("app.shortcuts.unsaved_description").to_string()
         } else {
-            "Search and customize desktop bindings. Saved changes apply after restarting VT Code Desktop."
+            rust_i18n::t!("app.shortcuts.browse_description").to_string()
         };
         let query = self.shortcut_search_input.read(cx).value().trim().to_string();
         let terms = config_search::config_search_terms(&query);
@@ -37,14 +37,14 @@ impl DesktopView {
             actions = actions
                 .child(
                     desktop_button("save-shortcuts")
-                        .label("Save")
+                        .label(rust_i18n::t!("app.shortcuts.save").to_string())
                         .primary()
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| view.save_shortcut_draft(window, cx))),
                 )
                 .child(
                     desktop_button("cancel-shortcuts")
-                        .label("Cancel")
+                        .label(rust_i18n::t!("app.configuration.cancel").to_string())
                         .ghost()
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| view.cancel_shortcut_edit(window, cx))),
@@ -53,14 +53,14 @@ impl DesktopView {
         actions = actions
             .child(
                 desktop_button("reset-shortcuts")
-                    .label("Reset all to defaults")
+                    .label(rust_i18n::t!("app.shortcuts.reset_all").to_string())
                     .ghost()
                     .small()
                     .on_click(cx.listener(|view, _, window, cx| view.reset_shortcuts(window, cx))),
             )
             .child(
                 desktop_button("import-cli-shortcuts")
-                    .label("Import from CLI")
+                    .label(rust_i18n::t!("app.shortcuts.import_cli").to_string())
                     .ghost()
                     .small()
                     .desktop_disabled(!cli_shortcuts_available)
@@ -89,12 +89,12 @@ impl DesktopView {
                     .role(gpui_kit::Role::Status)
                     .text_sm()
                     .text_color(themes::muted_text(colors))
-                    .child(format!("No shortcuts match \"{query}\"."))
+                    .child(rust_i18n::t!("app.shortcuts.no_match", query = query.as_str()).to_string())
                     .into_any_element(),
             );
         }
 
-        let group = settings_group_box("Keyboard shortcuts", colors)
+        let group = settings_group_box(rust_i18n::t!("app.shortcuts.group_label").to_string(), colors)
             .child(
                 div()
                     .text_xs()
@@ -108,7 +108,7 @@ impl DesktopView {
                         .flex_1()
                         .min_w_0()
                         .small()
-                        .aria_label("Search shortcuts")
+                        .aria_label(rust_i18n::t!("app.shortcuts.search_aria").to_string())
                         .prefix(Icon::new(IconName::Search).size_4())
                         .cleanable(true),
                 ),
@@ -123,10 +123,13 @@ impl DesktopView {
                     .text_sm()
                     .child(message.clone())
             }))
-            .child(div().text_xs().text_color(cx.theme().colors.muted_foreground).child(
-                "Edit a row to press a new chord, or remove it to unbind it. Use cmd, ctrl, or alt with a key.",
-            ));
-        accessible_group_box("keyboard-shortcuts-group", "Keyboard shortcuts", group)
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .child(rust_i18n::t!("app.shortcuts.footer_hint").to_string()),
+            );
+        accessible_group_box("keyboard-shortcuts-group", rust_i18n::t!("app.shortcuts.group_label").to_string(), group)
     }
 
     fn begin_shortcut_capture(&mut self, id: shortcuts::CommandId, window: &mut Window, cx: &mut Context<Self>) {
@@ -220,7 +223,7 @@ impl DesktopView {
                         self.shortcut_capture = None;
                         self.shortcuts_editing = false;
                         self.settings_navigation_focus.focus(window, cx);
-                        self.shortcut_message = Some("Shortcuts saved. Restart VT Code Desktop to apply.".into());
+                        self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.saved").to_string());
                     }
                     Err(error) => self.shortcut_message = Some(error),
                 }
@@ -245,13 +248,13 @@ impl DesktopView {
         let defaults = shortcuts::draft_from(&std::collections::BTreeMap::new());
         self.shortcut_capture = None;
         if defaults == self.shortcut_draft {
-            self.shortcut_message = Some("Shortcuts already match the defaults.".into());
+            self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.already_default").to_string());
             cx.notify();
             return;
         }
         self.shortcut_draft = defaults;
         self.shortcuts_editing = true;
-        self.shortcut_message = Some("Defaults staged. Choose Save to apply them.".into());
+        self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.staged_defaults").to_string());
         self.focus_shortcut_search(window, cx);
         cx.notify();
     }
@@ -273,7 +276,7 @@ fn shortcut_row(
             .test_support()
             .track_focus(capture_focus)
             .role(gpui_kit::Role::Group)
-            .aria_label(format!("Press keys for {}, or Escape to cancel", command.label))
+            .aria_label(rust_i18n::t!("app.shortcuts.press_keys", label = command.label()).to_string())
             .px_2()
             .py_1()
             .rounded_md()
@@ -282,7 +285,7 @@ fn shortcut_row(
             .bg(colors.popover)
             .text_xs()
             .text_color(colors.foreground)
-            .child("Press keys…")
+            .child(rust_i18n::t!("app.shortcuts.press_keys_hint").to_string())
             .on_action(cx.listener(|view, _: &gpui_kit::base::actions::Cancel, window, cx| {
                 view.cancel_shortcut_capture(window, cx);
             }))
@@ -303,7 +306,7 @@ fn shortcut_row(
                 .icon(Icon::new(IconName::Pencil).size_4().text_color(faded))
                 .ghost()
                 .small()
-                .accessibility_label(format!("Edit shortcut for {}", command.label))
+                .accessibility_label(rust_i18n::t!("app.shortcuts.edit_for", label = command.label()).to_string())
                 .on_click(cx.listener(move |view, _, window, cx| view.begin_shortcut_capture(id, window, cx))),
         )
         .child(
@@ -311,7 +314,7 @@ fn shortcut_row(
                 .icon(Icon::new(IconName::Trash).size_4().text_color(faded))
                 .ghost()
                 .small()
-                .accessibility_label(format!("Remove shortcut for {}", command.label))
+                .accessibility_label(rust_i18n::t!("app.shortcuts.remove_for", label = command.label()).to_string())
                 .desktop_disabled(staged.is_empty())
                 .on_click(cx.listener(move |view, _, _, cx| view.unbind_shortcut(id, cx))),
         );
@@ -319,9 +322,16 @@ fn shortcut_row(
         .id(format!("shortcut-row-{}", id.as_str()))
         .test_support()
         .role(gpui_kit::Role::Group)
-        .aria_label(format!("{}, shortcut {}", command.label, shortcuts::shortcut_accessibility_value(staged)))
+        .aria_label(
+            rust_i18n::t!(
+                "app.shortcuts.row_aria",
+                label = command.label(),
+                value = shortcuts::shortcut_accessibility_value(staged)
+            )
+            .to_string(),
+        )
         .w_full()
-        .child(settings_row(command.label, command.description, control, colors))
+        .child(settings_row(command.label(), command.description(), control, colors))
         .into_any_element()
 }
 
@@ -334,19 +344,30 @@ fn shortcut_staged_badge(
         div()
             .text_xs()
             .text_color(themes::muted_text(colors))
-            .child("Unassigned")
+            .child(rust_i18n::t!("app.shortcuts.badge_unassigned").to_string())
             .into_any_element()
     } else {
         match gpui_kit::Keystroke::parse(staged) {
             Ok(keystroke) => div().child(Kbd::new(keystroke).outline()).into_any_element(),
-            Err(_) => div().text_xs().text_color(colors.danger).child("Invalid").into_any_element(),
+            Err(_) => div()
+                .text_xs()
+                .text_color(colors.danger)
+                .child(rust_i18n::t!("app.shortcuts.badge_invalid").to_string())
+                .into_any_element(),
         }
     };
     div()
         .id(format!("shortcut-badge-{}", command.id.as_str()))
         .test_support()
         .role(gpui_kit::Role::Label)
-        .aria_label(format!("Shortcut for {}: {}", command.label, shortcuts::shortcut_accessibility_value(staged)))
+        .aria_label(
+            rust_i18n::t!(
+                "app.shortcuts.badge_aria",
+                label = command.label(),
+                value = shortcuts::shortcut_accessibility_value(staged)
+            )
+            .to_string(),
+        )
         .child(badge)
         .into_any_element()
 }

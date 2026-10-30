@@ -11,11 +11,11 @@ impl DesktopView {
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;
-        self.status = "Turn ended without verified completion".to_string();
+        self.status = rust_i18n::t!("app.transcript.turn_unverified").to_string();
         self.set_selected_session_completed(false);
         self.transcript.push(TranscriptItem::notice(
             format!("event-{}", uuid_like_id()),
-            "Run status".into(),
+            rust_i18n::t!("app.transcript.run_status").to_string().into(),
             message.to_string(),
             NoticeSeverity::Warning,
         ));
@@ -55,25 +55,16 @@ impl DesktopView {
                 self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), app::NAME, &message.text, false);
             }
             ThreadItemDetails::Plan(plan) => {
-                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), "Plan", &plan.text, false);
+                let title = rust_i18n::t!("app.transcript.plan_title").to_string();
+                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &plan.text, false);
             }
             ThreadItemDetails::Reasoning(reasoning) => {
-                self.append_or_update_item(
-                    id,
-                    TranscriptRole::Assistant.as_str(),
-                    "Planning update",
-                    &reasoning.text,
-                    false,
-                );
+                let title = rust_i18n::t!("app.transcript.planning_update").to_string();
+                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &reasoning.text, false);
             }
             ThreadItemDetails::Decision(decision) => {
-                self.append_or_update_item(
-                    id,
-                    TranscriptRole::Assistant.as_str(),
-                    "Decision",
-                    &decision.summary,
-                    false,
-                );
+                let title = rust_i18n::t!("app.transcript.decision_title").to_string();
+                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &decision.summary, false);
             }
             ThreadItemDetails::FileChange(change) => self.upsert_diff_card(id, change),
             details => {
@@ -137,7 +128,7 @@ impl DesktopView {
         let mut item = TranscriptItem::new(
             id,
             TranscriptRole::Diff.as_str().to_string(),
-            "File changes".into(),
+            rust_i18n::t!("app.transcript.file_changes_title").to_string().into(),
             card.patch.clone(),
         );
         item.diff = Some(card);
@@ -230,7 +221,9 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
     use vtcode_exec_events::ThreadItemDetails;
     match details {
         ThreadItemDetails::ToolInvocation(tool) => (tool.tool_name.clone(), tool_status_label(&tool.status)),
-        ThreadItemDetails::ToolOutput(output) => ("Tool output".to_string(), tool_status_label(&output.status)),
+        ThreadItemDetails::ToolOutput(output) => {
+            (rust_i18n::t!("app.transcript.tool_output_title").to_string(), tool_status_label(&output.status))
+        }
         ThreadItemDetails::CommandExecution(command) => {
             let mut label = command_status_label(&command.status);
             if let Some(code) = command.exit_code
@@ -252,8 +245,8 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
         }
         ThreadItemDetails::WebSearch(search) => {
             let label = match search.provider.as_deref() {
-                Some(provider) => format!("web search via {provider}"),
-                None => "web search".to_string(),
+                Some(provider) => rust_i18n::t!("app.transcript.web_search_via", provider = provider).to_string(),
+                None => rust_i18n::t!("app.transcript.web_search").to_string(),
             };
             (search.query.clone(), label)
         }
@@ -266,7 +259,9 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
                 .unwrap_or_else(|| "Harness".to_string());
             (title, label)
         }
-        ThreadItemDetails::Error(error) => ("Runtime item error".to_string(), error.message.clone()),
+        ThreadItemDetails::Error(error) => {
+            (rust_i18n::t!("app.transcript.runtime_error").to_string(), error.message.clone())
+        }
         ThreadItemDetails::AgentMessage(_)
         | ThreadItemDetails::Plan(_)
         | ThreadItemDetails::Reasoning(_)

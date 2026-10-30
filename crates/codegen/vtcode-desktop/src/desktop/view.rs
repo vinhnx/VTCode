@@ -146,10 +146,7 @@ const CONTENT_WIDTH: f32 = 720.;
 const ZEN_CONTENT_WIDTH: f32 = 600.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const WELCOME_COPY_COUNT: usize = 3;
-const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
-    "Saved change history is partial. Some historical patches are unavailable.";
-const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
-    "Saved tool history is partial. Some output may be missing or shortened.";
+
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
 const CHANGE_ROW_HEIGHT: f32 = 28.;

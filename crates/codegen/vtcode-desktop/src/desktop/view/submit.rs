@@ -40,10 +40,7 @@ impl DesktopView {
             return;
         }
         if !self.workspace_permission_ready() {
-            self.error = Some(
-                "Wait for the saved permission choice to be restored, or choose permissions again before sending."
-                    .into(),
-            );
+            self.error = Some(rust_i18n::t!("app.composer.permission_restore_hint").to_string());
             cx.notify();
             return;
         }
@@ -67,7 +64,7 @@ impl DesktopView {
         let sent = if self.selected_session_id.is_none() {
             if self.request_session_change(protocol::method::SESSION_CREATE, json!({ "title": null }), cx) {
                 self.first_submission = Some(draft);
-                self.status = "Creating a session for your message…".to_string();
+                self.status = rust_i18n::t!("app.composer.creating_session").to_string();
                 true
             } else {
                 self.attachments = draft.attachments;
@@ -137,7 +134,7 @@ impl DesktopView {
                 .iter()
                 .map(|attachment| attachment.path.as_str())
                 .collect::<Vec<_>>();
-            format!("{}\n\nAttached: {}", draft.prompt, paths.join(", "))
+            format!("{}\n\n{}", draft.prompt, rust_i18n::t!("app.composer.attached_list", paths = paths.join(", ")))
         };
         self.transcript.push(TranscriptItem::new(
             draft.echo_id.clone(),
@@ -152,7 +149,7 @@ impl DesktopView {
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;
-        self.status = "Submitting turn…".to_string();
+        self.status = rust_i18n::t!("app.composer.submitting_turn").to_string();
         cx.notify();
         Ok(())
     }
@@ -181,7 +178,7 @@ impl DesktopView {
             self.composer.update(cx, |state, cx| state.set_value(draft.prompt, window, cx));
             self.attachments = draft.attachments;
             self.clear_error();
-            self.status = "Draft restored. Review it before sending again.".to_string();
+            self.status = rust_i18n::t!("app.composer.draft_restored").to_string();
             cx.notify();
         }
     }
@@ -191,7 +188,7 @@ impl DesktopView {
             return;
         }
         self.cancel_requested = true;
-        self.status = "Cancelling turn and waiting for cleanup…".to_string();
+        self.status = rust_i18n::t!("app.composer.cancelling_turn").to_string();
         self.try_send_pending_cancel();
         cx.notify();
     }
@@ -201,14 +198,14 @@ impl DesktopView {
             return;
         }
         let (Some(session_id), Some(turn_id)) = (self.selected_session_id.clone(), self.active_turn_id.clone()) else {
-            self.status = "Cancellation queued; waiting for the service to accept the turn…".to_string();
+            self.status = rust_i18n::t!("app.composer.cancellation_queued").to_string();
             return;
         };
         if self.request(protocol::method::TURN_CANCEL, json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id }))
         {
             self.cancel_request_sent = true;
         } else {
-            self.error = Some("The cancellation request could not be queued.".to_string());
+            self.error = Some(rust_i18n::t!("app.composer.cancellation_not_queued").to_string());
         }
     }
 
@@ -261,17 +258,16 @@ impl DesktopView {
         };
         let params = json!(response);
         if !request_fits_frame(protocol::method::INTERACTION_RESPOND, &params) {
-            self.error =
-                Some("These answers exceed the local service request limit. Shorten them before submitting.".into());
+            self.error = Some(rust_i18n::t!("app.composer.answers_too_long").to_string());
             cx.notify();
             return;
         }
         if self.request(protocol::method::INTERACTION_RESPOND, params) {
             self.pending_interaction_response = Some(response.interaction_id);
             self.clear_error();
-            self.status = "Sending decision to VT Code…".into();
+            self.status = rust_i18n::t!("app.composer.sending_decision").to_string();
         } else {
-            self.error = Some("The decision could not be sent to the local service.".to_string());
+            self.error = Some(rust_i18n::t!("app.composer.decision_not_sent").to_string());
         }
         cx.notify();
     }
@@ -355,7 +351,7 @@ impl DesktopView {
             .get(self.interaction_step_index)
             .is_some_and(|step| step.choices.iter().any(|choice| Some(choice.id.as_str()) == selected))
         {
-            self.error = Some("Choose an option for this question before continuing.".into());
+            self.error = Some(rust_i18n::t!("app.composer.choose_option").to_string());
             cx.notify();
             return;
         }
@@ -363,7 +359,7 @@ impl DesktopView {
         if final_step {
             let selections = self.interaction_choice_ids.iter().filter_map(Clone::clone).collect::<Vec<_>>();
             if selections.len() != interaction.steps.len() {
-                self.error = Some("Choose an option for every question before submitting.".to_string());
+                self.error = Some(rust_i18n::t!("app.composer.choose_all_options").to_string());
                 cx.notify();
                 return;
             }

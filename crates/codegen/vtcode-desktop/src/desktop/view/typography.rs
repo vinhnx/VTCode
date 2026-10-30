@@ -49,9 +49,13 @@ impl DesktopView {
     fn open_font_palette(&mut self, target: FontTarget, window: &mut Window, cx: &mut Context<Self>) {
         self.close_settings(window, cx);
         let default_label = match target {
-            FontTarget::Ui if cfg!(target_os = "macos") => "System default · SF Pro".to_owned(),
-            FontTarget::Ui => "System default".to_owned(),
-            FontTarget::Code => format!("System default · {}", self.default_code_font),
+            FontTarget::Ui if cfg!(target_os = "macos") => {
+                rust_i18n::t!("app.appearance.system_default_font", font = "SF Pro").to_string()
+            }
+            FontTarget::Ui => rust_i18n::t!("app.appearance.system_default").to_string(),
+            FontTarget::Code => {
+                rust_i18n::t!("app.appearance.system_default_font", font = self.default_code_font.as_str()).to_string()
+            }
         };
         let installed = installed_fonts(cx);
         let mut entries = vec![command(
@@ -63,7 +67,12 @@ impl DesktopView {
                 command(family.clone(), PaletteAction::SelectFont { target, family: Some(family.clone()) })
             }),
         );
-        self.show_palette(PaletteKind::Fonts(target), vec![("Installed fonts".into(), entries)], window, cx);
+        self.show_palette(
+            PaletteKind::Fonts(target),
+            vec![(rust_i18n::t!("app.appearance.installed_fonts").to_string(), entries)],
+            window,
+            cx,
+        );
     }
 
     pub(super) fn select_font(&mut self, target: FontTarget, family: Option<String>, cx: &mut Context<Self>) {
@@ -81,17 +90,23 @@ impl DesktopView {
 
     pub(super) fn render_font_family(&self, target: FontTarget, cx: &Context<Self>) -> AnyElement {
         let (id, label, family) = match target {
-            FontTarget::Ui => ("choose-ui-font", "UI font", &cx.theme().font_family),
-            FontTarget::Code => ("choose-code-font", "Code font", &cx.theme().mono_font_family),
+            FontTarget::Ui => {
+                ("choose-ui-font", rust_i18n::t!("app.appearance.ui_font").to_string(), &cx.theme().font_family)
+            }
+            FontTarget::Code => (
+                "choose-code-font",
+                rust_i18n::t!("app.appearance.code_font").to_string(),
+                &cx.theme().mono_font_family,
+            ),
         };
         let display = if family.as_str() == ".SystemUIFont" {
             if cfg!(target_os = "macos") {
-                "System · SF Pro"
+                rust_i18n::t!("app.appearance.system_pro").to_string()
             } else {
-                "System"
+                rust_i18n::t!("app.appearance.system_short").to_string()
             }
         } else {
-            family.as_str()
+            family.to_string()
         };
         div()
             .flex()
@@ -100,11 +115,18 @@ impl DesktopView {
             .justify_between()
             .gap_3()
             .py_2()
-            .child(super::row_title(label, &cx.theme().colors))
+            .child(super::row_title(label.clone(), &cx.theme().colors))
             .child(
                 desktop_button(id)
                     .label(display.to_string())
-                    .accessibility_label(format!("Choose {label}, current: {display}"))
+                    .accessibility_label(
+                        rust_i18n::t!(
+                            "app.appearance.choose_current",
+                            label = label.as_str(),
+                            value = display.as_str()
+                        )
+                        .to_string(),
+                    )
                     .ghost()
                     .on_click(cx.listener(move |view, _, window, cx| view.open_font_palette(target, window, cx))),
             )

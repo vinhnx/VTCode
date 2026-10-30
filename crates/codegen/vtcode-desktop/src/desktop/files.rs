@@ -275,15 +275,15 @@ fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command 
 /// for terminal emulators. Pure filesystem work, safe to unit test.
 fn launch_path(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<PathBuf, String> {
     let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path))
-        .map_err(|_error| "The file is missing or outside the workspace.".to_string())?;
+        .map_err(|_error| rust_i18n::t!("app.files.missing").to_string())?;
     if !fs::metadata(&path).map(|metadata| metadata.is_file()).unwrap_or(false) {
-        return Err("The selected path is not a regular file.".into());
+        return Err(rust_i18n::t!("app.files.not_regular").to_string());
     }
     if editor.open_action() == OpenAction::OpenDirectory {
         return path
             .parent()
             .map(Path::to_path_buf)
-            .ok_or_else(|| "The file has no containing directory.".to_string());
+            .ok_or_else(|| rust_i18n::t!("app.files.no_parent").to_string());
     }
     Ok(path)
 }
@@ -294,16 +294,16 @@ pub(super) fn open_in_editor(root: &Path, rel_path: &str, editor: ExternalEditor
     let path = launch_path(root, rel_path, editor)?;
     let output = editor_command(editor, &path)
         .output()
-        .map_err(|error| format!("Could not launch the editor: {error}"))?;
+        .map_err(|error| rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string())?;
     if output.status.success() {
         Ok(())
     } else {
         let detail = String::from_utf8_lossy(&output.stderr);
         let detail: String = detail.chars().filter(|c| !c.is_control() || *c == ' ').take(300).collect();
         Err(if detail.trim().is_empty() {
-            "Could not open the file in the selected editor.".into()
+            rust_i18n::t!("app.files.open_failed").to_string()
         } else {
-            format!("Could not open the file in the selected editor: {}", detail.trim())
+            rust_i18n::t!("app.files.open_failed_detail", detail = detail.trim()).to_string()
         })
     }
 }
@@ -435,7 +435,7 @@ pub(super) fn write_test_bundle(root: &Path, name: &str, bundle_id: &str) {
 pub(super) fn read_attachment(root: &Path, path: &Path) -> Result<vtcode_desktop_protocol::TurnAttachment, String> {
     let root = vtcode_commons::paths::canonicalize(root).map_err(|error| error.to_string())?;
     let resolved = vtcode_commons::paths::resolve_workspace_path(&root, path)
-        .map_err(|_error| "Attachments must be existing files inside the workspace.".to_string())?;
+        .map_err(|_error| rust_i18n::t!("app.files.attachments_workspace").to_string())?;
     let relative = resolved.strip_prefix(&root).map_err(|error| error.to_string())?;
     let relative = relative.to_string_lossy().replace('\\', "/");
     let preview = read_preview(&root, &relative)

@@ -152,19 +152,20 @@ impl DesktopView {
         if !slash_commands.is_empty() {
             groups.push((rust_i18n::t!("app.palette.sections.vtcode_commands").to_string(), slash_commands));
         }
-        let sessions: Vec<PaletteCommand> =
-            self.sessions
-                .iter()
-                .map(|session| {
-                    let label = session.title.clone().unwrap_or_else(|| {
-                        format!("Session {}", session.session_id.chars().take(8).collect::<String>())
-                    });
-                    command(
-                        rust_i18n::t!("app.palette.command.open_session", label = label.as_str()).to_string(),
-                        PaletteAction::LoadSession(session.session_id.clone()),
-                    )
-                })
-                .collect();
+        let sessions: Vec<PaletteCommand> = self
+            .sessions
+            .iter()
+            .map(|session| {
+                let label = session.title.clone().unwrap_or_else(|| {
+                    let short = session.session_id.chars().take(8).collect::<String>();
+                    rust_i18n::t!("app.session.fallback_title", id = short.as_str()).to_string()
+                });
+                command(
+                    rust_i18n::t!("app.palette.command.open_session", label = label.as_str()).to_string(),
+                    PaletteAction::LoadSession(session.session_id.clone()),
+                )
+            })
+            .collect();
         if !sessions.is_empty() {
             groups.push((rust_i18n::t!("app.palette.sections.recent_sessions").to_string(), sessions));
         }
@@ -532,11 +533,15 @@ impl DesktopView {
                     && !self.session_option_is_current(&options)
                 {
                     let workspace = self.workspace.clone();
+                    let title = rust_i18n::t!("app.permissions.confirm_full_title").to_string();
+                    let detail = rust_i18n::t!("app.permissions.confirm_full_body").to_string();
+                    let enable = rust_i18n::t!("app.permissions.enable_full").to_string();
+                    let cancel = rust_i18n::t!("app.configuration.cancel").to_string();
                     let answer = window.prompt(
                         gpui_kit::PromptLevel::Warning,
-                        "Enable Full access for this session?",
-                        Some("Shell commands can access files and the network without routine approval. Explicit denials and hard safety restrictions still apply."),
-                        &["Enable Full access", "Cancel"],
+                        &title,
+                        Some(detail.as_str()),
+                        &[enable.as_str(), cancel.as_str()],
                         cx,
                     );
                     cx.spawn(async move |view, cx| {
@@ -771,10 +776,14 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
 pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {
     let context = model
         .context_window
-        .map(|tokens| format!(" · {} context", format_context_window(tokens)))
+        .map(|tokens| rust_i18n::t!("app.palette.context_suffix", window = format_context_window(tokens)).to_string())
         .unwrap_or_default();
-    let current = if current { " · Current" } else { "" };
-    let capabilities = model.capabilities.as_ref().map(model_capability_labels).unwrap_or_default();
+    let current = if current {
+        rust_i18n::t!("app.palette.current_suffix").to_string()
+    } else {
+        String::new()
+    };
+    let capabilities = model.capabilities.as_ref().map(model_capability_badges).unwrap_or_default();
     let mut entry = command(
         model.display_name.clone(),
         PaletteAction::SelectModel {
@@ -783,7 +792,7 @@ pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) 
         },
     );
     let mut details = vec![model.provider.clone()];
-    details.extend(capabilities.iter().cloned());
+    details.extend(capabilities.iter().map(|(_, display)| display.clone()));
     if !context.is_empty() {
         details.push(context.trim_start_matches(" · ").to_string());
     }
@@ -793,35 +802,46 @@ pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) 
     }
     entry.description = Some(details.join(" · "));
     entry.keywords = vec![model.provider.clone(), model.id.clone()];
-    entry.keywords.extend(capabilities);
+    entry
+        .keywords
+        .extend(capabilities.into_iter().map(|(keyword, _)| keyword.to_string()));
     entry
 }
 
-fn model_capability_labels(capabilities: &protocol::ModelCapabilities) -> Vec<String> {
-    let mut labels = Vec::new();
+/// Capability badges as `(search_keyword, display_label)` pairs: keywords stay
+/// English so palette search is locale-independent, while display labels are
+/// localized. Tier and format names (`Pro`, `PDF`) are proper nouns/symbols
+/// and stay English in both positions.
+fn model_capability_badges(capabilities: &protocol::ModelCapabilities) -> Vec<(&'static str, String)> {
+    let mut badges = Vec::new();
     if capabilities.reasoning {
-        labels.push("Reasoning".into());
+        badges.push(("Reasoning", rust_i18n::t!("app.palette.cap_reasoning").to_string()));
     }
     if capabilities.vision {
-        labels.push("Vision".into());
+        badges.push(("Vision", rust_i18n::t!("app.palette.cap_vision").to_string()));
     }
     if capabilities.tool_call {
-        labels.push("Tools".into());
+        badges.push(("Tools", rust_i18n::t!("app.palette.cap_tools").to_string()));
     }
     if capabilities.structured_output {
-        labels.push("Structured output".into());
+        badges.push(("Structured output", rust_i18n::t!("app.palette.cap_structured").to_string()));
     }
     if capabilities.is_pro {
-        labels.push("Pro".into());
+        badges.push(("Pro", "Pro".to_string()));
     }
-    for (modality, label) in [("audio", "Audio"), ("video", "Video"), ("pdf", "PDF")] {
+    for (modality, keyword) in [("audio", "Audio"), ("video", "Video"), ("pdf", "PDF")] {
         if capabilities
             .input_modalities
             .iter()
             .any(|value| value.eq_ignore_ascii_case(modality))
         {
-            labels.push(label.into());
+            let display = match modality {
+                "audio" => rust_i18n::t!("app.palette.cap_audio").to_string(),
+                "video" => rust_i18n::t!("app.palette.cap_video").to_string(),
+                _ => keyword.to_string(),
+            };
+            badges.push((keyword, display));
         }
     }
-    labels
+    badges
 }

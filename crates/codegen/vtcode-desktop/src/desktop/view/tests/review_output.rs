@@ -200,7 +200,7 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
         window.render_frame(cx);
         let warning = window.find("review-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
-        assert_eq!(warning.label(), Some(super::super::PARTIAL_REVIEW_HISTORY_MESSAGE));
+        assert_eq!(warning.label(), Some("Saved change history is partial. Some historical patches are unavailable."));
         window.click(super::super::opaque_path_element_id("change-row", "src/app.rs"), cx);
         window.render_frame(cx);
         window.click("copy-change-patch", cx);
@@ -413,7 +413,7 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
         window.render_frame(cx);
         let warning = window.find("activity-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
-        assert_eq!(warning.label(), Some(super::super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
+        assert_eq!(warning.label(), Some("Saved tool history is partial. Some output may be missing or shortened."));
         assert_eq!(window.find("activity-saved-command").role(), Some(gpui_kit::Role::ListItem));
         assert_eq!(window.find("activity-saved-command").label(), Some("cargo check --locked"));
         let output_action = window.find("activity-output-finished-command");
@@ -423,7 +423,7 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
         window.render_frame(cx);
         let warning = window.find("activity-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
-        assert_eq!(warning.label(), Some(super::super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
+        assert_eq!(warning.label(), Some("Saved tool history is partial. Some output may be missing or shortened."));
         assert_eq!(window.find("output-body").label(), Some("previous output"));
         assert_eq!(view.read(cx).selected_output_id.as_deref(), Some("finished-command"));
         window.click("copy-output", cx);

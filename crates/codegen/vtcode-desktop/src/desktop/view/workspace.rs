@@ -19,15 +19,12 @@ impl DesktopView {
             return;
         }
         if self.retained_submission.is_some() {
-            self.error = Some("Restore or dismiss the unsent message before changing workspaces.".to_string());
+            self.error = Some(rust_i18n::t!("app.workspace.unsent_guard").to_string());
             cx.notify();
             return;
         }
         if !self.workspace_switch_idle() {
-            self.error = Some(
-                "Cancel the active turn or wait for the pending session change before switching workspaces."
-                    .to_string(),
-            );
+            self.error = Some(rust_i18n::t!("app.workspace.busy_guard").to_string());
             cx.notify();
             return;
         }
@@ -45,9 +42,12 @@ impl DesktopView {
                             view.select_workspace_from_ui(path, window, cx);
                         }
                     }
-                    Ok(Err(error)) => view.error = Some(format!("Unable to open the workspace picker: {error}")),
+                    Ok(Err(error)) => {
+                        view.error =
+                            Some(rust_i18n::t!("app.workspace.picker_failed", error = error.to_string()).to_string())
+                    }
                     Ok(Ok(None)) => {}
-                    Err(_) => view.error = Some("The workspace picker closed without returning a result.".to_string()),
+                    Err(_) => view.error = Some(rust_i18n::t!("app.workspace.picker_closed").to_string()),
                 }
                 cx.notify();
             });
@@ -196,7 +196,7 @@ impl DesktopView {
         let Some(session_id) = target.session_id else {
             self.pending_navigation = None;
             let _moved = self.navigation_history.navigate_to(pending.target_index);
-            self.status = "Workspace ready. Start a new thread to continue.".into();
+            self.status = rust_i18n::t!("app.workspace.workspace_ready").to_string();
             return;
         };
         if !self.sessions.iter().any(|session| session.session_id == session_id) {
@@ -241,15 +241,12 @@ impl DesktopView {
     ) {
         // A turn may have started while the asynchronous picker was open.
         if self.retained_submission.is_some() {
-            self.error = Some("Restore or dismiss the unsent message before changing workspaces.".to_string());
+            self.error = Some(rust_i18n::t!("app.workspace.unsent_guard").to_string());
             cx.notify();
             return;
         }
         if !self.workspace_switch_idle() {
-            self.error = Some(
-                "Cancel the active turn or wait for the pending session change before switching workspaces."
-                    .to_string(),
-            );
+            self.error = Some(rust_i18n::t!("app.workspace.busy_guard").to_string());
             cx.notify();
             return;
         }
@@ -266,7 +263,7 @@ impl DesktopView {
                     None => {
                         view.fail_pending_navigation();
                         if show_invalid_path_error {
-                            view.error = Some("Choose an existing workspace folder.".to_string());
+                            view.error = Some(rust_i18n::t!("app.workspace.invalid_folder").to_string());
                         }
                     }
                 }
@@ -280,15 +277,12 @@ impl DesktopView {
         // Revalidate because a turn or session transition may start while the path is checked.
         if self.retained_submission.is_some() {
             self.fail_pending_navigation();
-            self.error = Some("Restore or dismiss the unsent message before changing workspaces.".to_string());
+            self.error = Some(rust_i18n::t!("app.workspace.unsent_guard").to_string());
             return;
         }
         if !self.workspace_switch_idle() {
             self.fail_pending_navigation();
-            self.error = Some(
-                "Cancel the active turn or wait for the pending session change before switching workspaces."
-                    .to_string(),
-            );
+            self.error = Some(rust_i18n::t!("app.workspace.busy_guard").to_string());
             return;
         }
         if self.workspace.as_ref() == Some(&canonical) {
@@ -297,11 +291,11 @@ impl DesktopView {
         }
         if let Some(backend) = self.backend.as_ref() {
             self.pending_workspace = Some(canonical);
-            self.status = "Shutting down the current workspace service…".to_string();
+            self.status = rust_i18n::t!("app.workspace.shutting_down").to_string();
             if backend.commands.try_send(BackendCommand::Stop).is_err() {
                 self.pending_workspace = None;
                 self.fail_pending_navigation();
-                self.error = Some("The local service request queue is full. Try again.".to_string());
+                self.error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
             }
             cx.notify();
             return;
@@ -320,7 +314,7 @@ impl DesktopView {
 
     pub(super) fn report_service_launch_failure(&mut self, error: String) {
         self.fail_pending_navigation();
-        self.status = "Could not connect to the local VT Code service".to_string();
+        self.status = rust_i18n::t!("app.workspace.connect_failed").to_string();
         self.error = Some(format!("{error}\n\n{}", service_reconnect_guidance(self.retained_submission.is_some())));
     }
 
@@ -363,7 +357,7 @@ impl DesktopView {
         self.cancel_request_sent = false;
         self.running = false;
         self.error = None;
-        self.status = "Starting local VT Code service…".to_string();
+        self.status = rust_i18n::t!("app.workspace.starting_service").to_string();
         if !same_workspace {
             self.files.clear();
             self.file_directory_paths = Arc::new(HashSet::new());

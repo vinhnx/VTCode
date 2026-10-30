@@ -36,9 +36,9 @@ impl DesktopView {
                     .id("interaction-response-status")
                     .test_support()
                     .role(gpui_kit::Role::Status)
-                    .aria_label("Sending decision to VT Code")
+                    .aria_label(rust_i18n::t!("app.interaction.sending_aria").to_string())
                     .text_sm()
-                    .child("Sending decision to VT Code…"),
+                    .child(rust_i18n::t!("app.composer.sending_decision").to_string()),
             );
         }
 
@@ -46,7 +46,7 @@ impl DesktopView {
             let step_index = self.interaction_step_index.min(interaction.steps.len().saturating_sub(1));
             let steps = interaction.steps.iter().enumerate().map(|(index, step)| {
                 let title = if step.title.trim().is_empty() {
-                    format!("Question {}", index + 1)
+                    rust_i18n::t!("app.interaction.step_fallback", n = index + 1).to_string()
                 } else {
                     step.title.clone()
                 };
@@ -57,14 +57,14 @@ impl DesktopView {
                     .id("interaction-question-progress")
                     .test_support()
                     .role(gpui_kit::Role::Group)
-                    .aria_label("Question progress")
+                    .aria_label(rust_i18n::t!("app.interaction.progress_aria").to_string())
                     .w_full()
                     .child(
                         div()
                             .id("interaction-question-stepper")
                             .test_support()
                             .role(gpui_kit::Role::List)
-                            .aria_label("Question steps")
+                            .aria_label(rust_i18n::t!("app.interaction.steps_aria").to_string())
                             .w_full()
                             .child(
                                 Stepper::new("interaction-question-steps")
@@ -102,7 +102,7 @@ impl DesktopView {
                 .justify_between()
                 .child(
                     desktop_button("cancel-interaction")
-                        .label("Cancel request")
+                        .label(rust_i18n::t!("app.interaction.cancel_request").to_string())
                         .ghost()
                         .desktop_disabled(submitting)
                         .on_click(
@@ -120,7 +120,7 @@ impl DesktopView {
                                 .when(self.interaction_step_index > 0, |row| {
                                     row.child(
                                         desktop_button("previous-question")
-                                            .label("Previous")
+                                            .label(rust_i18n::t!("app.interaction.previous").to_string())
                                             .icon(IconName::ChevronLeft)
                                             .ghost()
                                             .desktop_disabled(submitting)
@@ -136,9 +136,9 @@ impl DesktopView {
                                 .child(
                                     desktop_button("continue-question")
                                         .label(if self.interaction_step_index + 1 == interaction.steps.len() {
-                                            "Submit answers"
+                                            rust_i18n::t!("app.interaction.submit_answers").to_string()
                                         } else {
-                                            "Next question"
+                                            rust_i18n::t!("app.interaction.next_question").to_string()
                                         })
                                         .primary()
                                         .desktop_disabled(submitting)
@@ -168,7 +168,7 @@ impl DesktopView {
             selected_choice_id.and_then(|selected| step.choices.iter().position(|choice| choice.id == selected));
         let choice_radios = step.choices.iter().enumerate().map(|(choice_index, choice)| {
             let label = if choice.recommended {
-                format!("{} (Recommended)", choice.label)
+                rust_i18n::t!("app.interaction.recommended", label = choice.label.as_str()).to_string()
             } else {
                 choice.label.clone()
             };
@@ -226,10 +226,10 @@ impl DesktopView {
                     .id("question-step-counter")
                     .test_support()
                     .role(gpui_kit::Role::Status)
-                    .aria_label(format!("Question {} of {total}", index + 1))
+                    .aria_label(rust_i18n::t!("app.interaction.step_counter", n = index + 1, total = total).to_string())
                     .text_xs()
                     .text_color(colors.muted_foreground)
-                    .child(format!("Question {} of {total}", index + 1)),
+                    .child(rust_i18n::t!("app.interaction.step_counter", n = index + 1, total = total).to_string()),
             )
             .child(div().font_medium().child(step.question.clone()));
         if !step.choices.is_empty() {
@@ -240,7 +240,7 @@ impl DesktopView {
                 div().w_full().rounded_sm().bg(colors.popover).p_2().child(
                     Textarea::new(&self.question_answer)
                         .accessibility_id("question-answer")
-                        .aria_label("Your answer")
+                        .aria_label(rust_i18n::t!("app.interaction.your_answer").to_string())
                         .cursor_text()
                         .disabled(self.pending_interaction_response.is_some())
                         .bg(colors.popover)
@@ -260,7 +260,7 @@ impl DesktopView {
     ) -> impl IntoElement {
         let choice_id = choice.id.clone();
         let label = if choice.recommended {
-            format!("{} (Recommended)", choice.label)
+            rust_i18n::t!("app.interaction.recommended", label = choice.label.as_str()).to_string()
         } else {
             choice.label.clone()
         };
@@ -271,7 +271,7 @@ impl DesktopView {
             && self.interaction_choice_ids.get(step_index).and_then(Option::as_deref) == Some(choice.id.as_str());
         let mut button = desktop_button(format!("choice-{}", choice.id))
             .accessibility_label(if selected {
-                format!("{label} (Selected)")
+                rust_i18n::t!("app.interaction.selected_label", label = label.as_str()).to_string()
             } else {
                 label.clone()
             })

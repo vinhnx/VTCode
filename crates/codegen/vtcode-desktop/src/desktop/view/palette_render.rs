@@ -237,9 +237,9 @@ impl DesktopView {
                         .label(label.clone())
                         .icon(IconName::Activity)
                         .tooltip(if enabled {
-                            format!("Disable {label} processing")
+                            rust_i18n::t!("app.palette.disable_processing", label = label.as_str()).to_string()
                         } else {
-                            format!("Enable {label} processing")
+                            rust_i18n::t!("app.palette.enable_processing", label = label.as_str()).to_string()
                         })
                         .outline()
                         .small()

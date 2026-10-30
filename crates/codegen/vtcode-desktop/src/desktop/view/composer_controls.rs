@@ -292,7 +292,7 @@ pub(super) fn processing_tier_badge(label: &str, cx: &App) -> AnyElement {
         .id("composer-model-speed")
         .test_support()
         .role(gpui_kit::Role::Label)
-        .aria_label(format!("Processing speed: {label}"))
+        .aria_label(rust_i18n::t!("app.composer.speed_aria", label = label).to_string())
         .flex()
         .flex_shrink_0()
         .items_center()
@@ -401,7 +401,7 @@ pub(super) fn model_options_header(
                 .id("model-effort-value")
                 .test_support()
                 .role(gpui_kit::Role::Label)
-                .aria_label(format!("Current reasoning effort: {effort}"))
+                .aria_label(rust_i18n::t!("app.composer.effort_aria", effort = effort).to_string())
                 .text_sm()
                 .text_color(colors.muted_foreground)
                 .child(capitalize_agent_label(effort)),

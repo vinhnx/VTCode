@@ -27,9 +27,9 @@ pub(super) fn format_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["bytes", "KB", "MB", "GB", "TB"];
     if bytes < 1024 {
         return if bytes == 1 {
-            "1 byte".to_string()
+            rust_i18n::t!("app.settings.storage.byte_one").to_string()
         } else {
-            format!("{bytes} bytes")
+            rust_i18n::t!("app.settings.storage.bytes_many", n = bytes).to_string()
         };
     }
     let unit = (bytes.ilog(1024) as usize).min(UNITS.len() - 1);
@@ -103,7 +103,7 @@ impl DesktopView {
             }
             Err(_) => {
                 self.storage.loading = false;
-                self.storage.error = Some("The local service returned an invalid storage summary.".into());
+                self.storage.error = Some(rust_i18n::t!("app.service.invalid_summary").to_string());
             }
         }
     }
@@ -115,7 +115,7 @@ impl DesktopView {
                 self.request_storage_summary(cx);
             }
             Err(_) => {
-                self.storage.error = Some("The local service returned an invalid delete result.".into());
+                self.storage.error = Some(rust_i18n::t!("app.service.invalid_delete").to_string());
             }
         }
     }
@@ -129,7 +129,7 @@ impl DesktopView {
             }
             Err(_) => {
                 self.storage.worktrees_loading = false;
-                self.storage.worktrees_error = Some("The local service returned an invalid worktree list.".into());
+                self.storage.worktrees_error = Some(rust_i18n::t!("app.service.invalid_worktrees").to_string());
             }
         }
     }
@@ -141,7 +141,7 @@ impl DesktopView {
                 self.request_storage_summary(cx);
             }
             Err(_) => {
-                self.storage.worktrees_error = Some("The local service returned an invalid remove result.".into());
+                self.storage.worktrees_error = Some(rust_i18n::t!("app.service.invalid_remove").to_string());
             }
         }
     }

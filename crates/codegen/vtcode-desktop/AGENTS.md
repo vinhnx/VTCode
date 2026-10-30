@@ -1,33 +1,34 @@
 # vtcode-desktop
 
-[Root AGENTS.md](../../../AGENTS.md) | macOS GPUI client for the local desktop protocol.
+[Root AGENTS.md](../AGENTS.md) | macOS-only (Apple silicon) GPUI Kit (`=0.8.0`) app; modules: `view/` (screens), `themes/` (tokens), `preferences/`, `transport.rs`, `localization/`.
 
-- Render on the UI thread; supervise transport asynchronously. Use GPUI's asynchronous `PathPromptOptions` picker.
-- `transcript.rs` owns rows/groups and queues measured-layout changes; `MessageScrollerState` owns virtual-list geometry. Hidden-only archive pages advance the cursor and keep earlier history reachable. Row roles/statuses are typed (`TranscriptRole`, `ActivityState::from_status`); cross-file strings live in `strings.rs`, test fixtures keep literals as oracles.
-- Use `vtcode-exec-events` runtime types; file changes use bounded `DiffCard` rows.
-  Inspector projections reuse live/restored rows; rebuild changes on upsert. Activity/output/tool-tail projections memoize per
-  (transcript revision, restored revision): mutate `restored_activity` only via the `*_restored_activity` helpers, and new
-  `Transcript` mutators that touch rows must bump the revision.
-- Menus and `view/shortcuts.rs` reuse typed actions; shortcut ids are a `CommandId` table shared with `view/shortcuts_render.rs` (staged draft + per-row capture + search). Menu-bar mode hides the last window instead of dropping its view/backend; native close and Cmd-W share the `menu_bar::should_hide` predicate. Keymap actions dispatch before element key handlers: intercept sheet `Cancel` via `on_action` (palette precedent), never `on_key_down`; render capture only while the pill holds focus. Buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.
-- Gate discovery on validated initialization; serialize session/model changes and capture first-message Send content.
-- Compact model picks use optional CLI ranking; full search uses the catalog.
-  Fast mode follows the validated CLI route and persists through the service.
-- Palettes retain `CommandState` and shared immutable entries; guard callbacks by originating entity.
-  Focus next frame and consume Cancel. Kit TabBar needs scoped focus and arrow/Home/End navigation; segmented selection is a canvas-colored pill on the track, hover shifts label color only.
-- Theme uses brand `primary`, hover `accent`, and shared `apply_theme`; Markdown blocks images and uses Kit `syntect` highlighting. Syntax *token* colors stay on the Kit mode default (`ThemeStyle` is unconstructible in Kit 0.8.0; pinned by `code_token_colors_follow_the_kit_mode_default`); only code-block surfaces follow the palette.
-- Localization uses app-owned `app` keys in `locales/ui.yml`; notify the view after locale changes.
-- Appearance scrolling locks axes; chain `.lock_scroll_axis()` before `.test_support()` (the test wrapper hides it). Typography follows active profiles, then becomes shared when separation is disabled.
-- Use `aa_muted` (captions/metadata only), `muted_text` (row descriptions/hints, 6:1 target), `label_foreground` (headings/labels), `faded_chrome` (quiet chrome icons, 3:1 floor), and `filled_button_foreground` over palette colors; tab labels use the dedicated `tab_foreground`/`tab_bar_segmented` tokens; never hardcode colors over a theme. Titles and body stay regular; semibold is reserved for small headings via `group_box_title`/`section_label` (Kit `GroupBox` titles render muted by default). Settings rows use `row_title`/`row_description` with `row_divider` separators. Compose new screens from `view/components.rs` builders (`settings_group_box`, `settings_row`, `settings_switch`, `centered_empty_state`, `scroll_column`/`scroll_column_flex`, `sheet_panel_height`, `desktop_selected`, `eyebrow_label`, `panel_header`); check there before adding render helpers.
-- GPUI interaction styles are single-assignment: an instance `.hover()` on a kit `Button` panics (`hover style already set`) because the component registers its own. Pick a variant with the wanted states (e.g., `.text()` for fill-free) instead of overriding.
-- Rich text needs readable accessibility nodes; `view/utilities.rs` reuses projections/actions
-  and never infers subagent state.
-- Transcript `notice` rows carry `NoticeSeverity` and render as plain severity rows (no bubble/Markdown/copy); message
-  actions reveal on hover in a fixed slot, with the palette copy command as the keyboard path.
-- `view/composer_controls.rs` owns anchored controls; the service validates CLI-discovered modes
-  and persists the CLI default. Save permission choices only after acknowledgement; restore before Send.
-- New `view/` splits use `use super::*` + `impl DesktopView`; cross-module items are `pub(super)`, test-only re-exports `#[cfg(test)]`. GUI tests live in `view/tests/<topic>.rs` (`use super::*;` only); shared helpers and `pub(super) use` imports stay in `tests/mod.rs`.
-- Rust 2024 render helpers in loops must return `AnyElement` when they capture `&mut Context`.
-- `/config` opens the dedicated page (search, icon rail without counts, value-first rows, trailing notes); deep-links resolve
-  path → group → search, runtime sections stay CLI. Catalog grouping is memoized per snapshot epoch + query (refresh on mutation); groups page at 20 rows with Show more. Search corpus/matching live in `view/config_search.rs` (haystacks precomputed per epoch). Sheet slide is wall-clock (sheet-click tests need reduce motion); opacity fades stay clickable.
-- Notification decisions needing the window run as pre-handlers in `process_drained_event`; `handle_backend_event` only stores state.
-- Unauthenticated services stay connected: submit is blocked with credential guidance while local commands still work. Static-key providers offer an in-app Settings secret form (`config/secret/store`, masked input wiped on send, form-scoped errors); login-flow providers keep Terminal/Reload guidance. Zen empty threads render `zen-welcome` (centered mark + one greeting line), never the full welcome.
+## Hard rules
+
+- WCAG AA 4.5:1 for foreground + every accent vs background in all themes (`every_theme_*` tests + `cargo nextest run -p vtcode-ui -E 'test(theme)'`); focus indicators get their own contrast check apart from text.
+- All user-facing strings localized (`rust_i18n::t!`, 20 locales, args match `%{...}` placeholders); locale data lives per-surface in `locales/app.<ns>.yml` (one line per key, `_version: 2` first line, no trailing whitespace in values); GUI tests use `#[gpui_kit::test]` with stable `ElementId`s, `lock_scroll_axis()` before `.test_support()`, and `set_reduce_motion(true)` for sheet-click flows (opacity fades stay clickable).
+- Every action keyboard-reachable with visible focus; overlays dismiss via `dismiss_overlay` paths and restore focus (`*_return_focus`), new overlays must also bind Escape on the topmost surface; icon-only controls carry an accessible name (+ tooltip when scope needs explaining); never encode meaning by color alone; Buttons for in-app commands (`primary` only for the default commitment, `.danger()` for destructive) with result labels (`Delete`, `Cancel`) and `Delete "Name"?` native confirms (`[Destructive, Cancel]`, `matches!(answer.await, Ok(0))`, untestable headless); `Switch` for immediately-applied settings.
+
+## Best practice
+
+- Compose from `view/components.rs` (`desktop_button`, `settings_row`, `settings_group_box`, `accessible_group_box`, `centered_empty_state`, `track_focus`, skeleton lines); rem scale (`text_sm`, `gap_2`, `p_4`) and component `Size` APIs over `px()` (pixels only for hairlines, platform insets, hit-test tolerances, and fixed pane/region geometry); `truncate()` long/dynamic text; mono font only for code/ids/shortcuts/aligned numbers; load the `gpui-kit` (coding guides) and `gpui-kit-design-guides` (design guides) skills via `read_skill` before UI work, follow their review checklists, and check `docs/development/desktop-component-review.md` before introducing a component (Applied/Retained/Not-needed decisions stand).
+- States visible and honest: distinct hover/focus/selected/disabled/loading; spinners in `muted_foreground`; skeletons only while genuinely loading; disable submission in flight; errors scoped near the action (`colors.danger`, `text_sm`); keep views free of service/runtime logic.
+- Thin response routers: method match arms delegate to `apply_*`/`fail_*` beside the feature's request builders; `fail_pending_navigation()` on async errors; confirm destructive service calls natively and enforce server-side (service validates, client guards).
+
+## Typography & accessibility
+
+- Hierarchy via `row_title`/`row_description`, `text_sm` body, `text_xs` metadata; `muted_text` for secondary info, `aa_muted` captions-only; semibold reserved for unread/active/emphasis; verify roles/labels in the test tree (`role()`, `label()`); container aria labels need `role(Group)`.
+- Type scales with the user's text-size choice: verify zoom at several base fonts (wrapping, truncation, pane minima, virtual-list measurement, focus-ring clearance); longer translations must not clip or shift sibling spines.
+
+## Color
+
+- Theme tokens only: no hex/`rgb()`/`hsla()` outside `themes/`; read `cx.theme()` by semantic role (`background`/`foreground`, `muted`, `primary`, `danger`/`warning`/`success` only for their meanings; `chart_*` for categorical segments); floors: secondary copy targets 6:1 where headroom allows, AA 4.5 enforced, chrome 3:1 (`faded_chrome`, `label_foreground`, `tab_foreground`).
+- Derive via `readable_semantic_color`, `readable_indicator_color`, `accessible_focus_color`, `filled_button_foreground`; verify light + dark, never assume fg/bg polarity; sRGB holds on Display P3 via macOS color management (wide-gamut authoring blocked on kit support; `every_theme_stays_within_srgb_gamut` guards it).
+
+## Performance
+
+- Memoize projections per revision/epoch (transcript revision, config catalog epoch, inspector); page long lists (20 rows + `Show more (N remaining)`); virtualize measured rows; remeasure only on typography/theme changes; blocking work via `background_spawn`; no I/O or unbounded loops in render fns.
+
+## Gotchas
+
+- Menu-bar close/Cmd-W share `menu_bar::should_hide` (objc2 AppKit bindings); cross-window refresh goes through `reload_views`; settings sheets swallow cmd-w.
+- Storage search keywords are plain substrings; storage mutations refetch usage and review protects the current session; shortcuts persist only on capture; transcript follows THREAD_ID ordering with role labels from `t!`.

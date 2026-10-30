@@ -17,7 +17,6 @@ use super::transcript::{DiffFileKind, Transcript, TranscriptItem};
 pub(super) const MAX_ACTIVITY_ROWS: usize = 300;
 const MAX_OUTPUT_LINES: usize = 1_000;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024;
-const OUTPUT_TRUNCATION_NOTICE: &str = "… Earlier output truncated; showing a bounded tail.\n";
 
 /// Selected inspector view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -39,13 +38,13 @@ impl InspectorTab {
         Self::Utilities,
     ];
 
-    pub(super) fn label(self) -> &'static str {
+    pub(super) fn label(self) -> String {
         match self {
-            Self::Changes => "Changes",
-            Self::Files => "Files",
-            Self::Activity => "Activity",
-            Self::Output => "Output",
-            Self::Utilities => "Utilities",
+            Self::Changes => rust_i18n::t!("app.inspector.tab_changes").to_string(),
+            Self::Files => rust_i18n::t!("app.inspector.tab_files").to_string(),
+            Self::Activity => rust_i18n::t!("app.inspector.tab_activity").to_string(),
+            Self::Output => rust_i18n::t!("app.inspector.tab_output").to_string(),
+            Self::Utilities => rust_i18n::t!("app.inspector.tab_utilities").to_string(),
         }
     }
 }
@@ -107,10 +106,15 @@ impl ActivityCounts {
     }
 
     pub(super) fn summary(self) -> String {
-        format!(
-            "{} running · {} done · {} failed · {} interrupted · {} other",
-            self.running, self.completed, self.failed, self.interrupted, self.other
+        rust_i18n::t!(
+            "app.inspector.activity_summary",
+            running = self.running,
+            done = self.completed,
+            failed = self.failed,
+            interrupted = self.interrupted,
+            other = self.other
         )
+        .to_string()
     }
 }
 
@@ -346,8 +350,9 @@ pub(super) fn output_tail(text: &SharedString) -> SharedString {
     if let Some(without_terminator) = tail.strip_suffix('\n') {
         tail = without_terminator;
     }
-    let mut rendered = String::with_capacity(OUTPUT_TRUNCATION_NOTICE.len().saturating_add(tail.len()));
-    rendered.push_str(OUTPUT_TRUNCATION_NOTICE);
+    let notice = rust_i18n::t!("app.inspector.truncation_notice").to_string();
+    let mut rendered = String::with_capacity(notice.len().saturating_add(tail.len()));
+    rendered.push_str(&notice);
     rendered.push_str(tail);
     rendered.into()
 }
@@ -489,6 +494,10 @@ fn preview_counts(preview: Option<&DiffFile>, incomplete: bool) -> (Option<u64>,
 mod tests {
     use super::*;
     use crate::desktop::transcript::{Transcript, TranscriptItem};
+
+    /// English truncation notice; behavioral tests pin this literally because
+    /// the global locale is shared across parallel tests.
+    const TRUNCATION_NOTICE_EN: &str = "… Earlier output truncated; showing a bounded tail.\n";
 
     fn diff_item(id: &str, patch: &str) -> TranscriptItem {
         let mut item =
@@ -783,7 +792,7 @@ mod tests {
             .join("\n")
             .into();
         let tail = output_tail(&long);
-        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE), "tail notes omitted output");
+        assert!(tail.starts_with(TRUNCATION_NOTICE_EN), "tail notes omitted output");
         assert!(tail.ends_with("line 1049"));
         assert_eq!(tail.lines().count(), MAX_OUTPUT_LINES + 1);
     }
@@ -795,7 +804,7 @@ mod tests {
 
         let over_limit: SharedString = format!("{}\n", vec!["line"; MAX_OUTPUT_LINES + 1].join("\n")).into();
         let tail = output_tail(&over_limit);
-        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE));
+        assert!(tail.starts_with(TRUNCATION_NOTICE_EN));
         assert_eq!(tail.lines().count(), MAX_OUTPUT_LINES + 1);
         assert!(tail.ends_with("line"));
     }
@@ -805,8 +814,8 @@ mod tests {
         let long_line: SharedString = format!("prefix\n{}", "界".repeat(MAX_OUTPUT_BYTES / 3 + 100)).into();
         let tail = output_tail(&long_line);
 
-        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE));
-        assert!(tail.len() <= MAX_OUTPUT_BYTES + OUTPUT_TRUNCATION_NOTICE.len());
+        assert!(tail.starts_with(TRUNCATION_NOTICE_EN));
+        assert!(tail.len() <= MAX_OUTPUT_BYTES + TRUNCATION_NOTICE_EN.len());
         assert!(tail.ends_with("界"));
         assert!(tail.is_char_boundary(tail.len()));
     }
@@ -816,8 +825,8 @@ mod tests {
         let long_line: SharedString = "x".repeat(MAX_OUTPUT_BYTES * 16).into();
         let tail = output_tail(&long_line);
 
-        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE));
-        assert_eq!(tail.len(), OUTPUT_TRUNCATION_NOTICE.len() + MAX_OUTPUT_BYTES);
+        assert!(tail.starts_with(TRUNCATION_NOTICE_EN));
+        assert_eq!(tail.len(), TRUNCATION_NOTICE_EN.len() + MAX_OUTPUT_BYTES);
         assert!(tail.ends_with(&"x".repeat(64)));
     }
 

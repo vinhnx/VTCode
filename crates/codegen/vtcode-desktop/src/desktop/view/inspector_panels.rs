@@ -2,9 +2,9 @@
 
 use super::*;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct ActivityChartDatum {
-    label: &'static str,
+    label: String,
     count: usize,
     state: ActivityState,
 }
@@ -244,7 +244,7 @@ impl DesktopView {
         if self.restored_activity_history_incomplete {
             pane = pane.child(div().px_3().pt_2().child(warning_alert(
                 "activity-history-warning",
-                PARTIAL_ACTIVITY_HISTORY_MESSAGE,
+                rust_i18n::t!("app.inspector.partial_activity_history").to_string(),
                 &colors,
             )));
         }
@@ -252,8 +252,8 @@ impl DesktopView {
         let Some(output) = output else {
             return pane
                 .child(empty_state(
-                    "No output yet",
-                    "Command and tool output will appear here while a turn runs.",
+                    rust_i18n::t!("app.inspector.empty_output_title").to_string(),
+                    rust_i18n::t!("app.inspector.empty_output_description").to_string(),
                     IconName::Terminal,
                 ))
                 .into_any_element();
@@ -291,15 +291,15 @@ impl DesktopView {
                         Tag::custom(colors.secondary, colors.muted_foreground, colors.border)
                             .small()
                             .rounded_full()
-                            .child("History"),
+                            .child(rust_i18n::t!("app.inspector.history_tag").to_string()),
                     )
                     .child(
                         desktop_button("output-follow-latest")
                             .icon(IconName::Activity)
                             .ghost()
                             .small()
-                            .accessibility_label("Follow latest output")
-                            .tooltip("Show the newest captured output")
+                            .accessibility_label(rust_i18n::t!("app.inspector.follow_latest").to_string())
+                            .tooltip(rust_i18n::t!("app.inspector.follow_latest_tooltip").to_string())
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.selected_output_id = None;
                                 cx.notify();
@@ -310,21 +310,21 @@ impl DesktopView {
                 header.child(
                     Tag::custom(colors.secondary, colors.foreground, colors.border)
                         .small()
-                        .child("Running"),
+                        .child(rust_i18n::t!("app.inspector.status_running").to_string()),
                 )
             })
             .child(
                 desktop_button("copy-output")
                     .icon(IconName::Copy)
                     .accessibility_label(if has_more_output {
-                        "Copy loaded output"
+                        rust_i18n::t!("app.inspector.copy_loaded").to_string()
                     } else {
-                        "Copy output"
+                        rust_i18n::t!("app.inspector.copy_output").to_string()
                     })
                     .tooltip(if has_more_output {
-                        "Copy loaded output with truncation notice"
+                        rust_i18n::t!("app.inspector.copy_loaded_notice").to_string()
                     } else {
-                        "Copy captured output"
+                        rust_i18n::t!("app.inspector.copy_captured").to_string()
                     })
                     .ghost()
                     .small()
@@ -347,16 +347,16 @@ impl DesktopView {
                 recovery = recovery.child(
                     desktop_button("load-more-output")
                         .label(if output_page_loading {
-                            "Loading captured output…"
+                            rust_i18n::t!("app.inspector.loading_output").to_string()
                         } else {
-                            "Load more captured output"
+                            rust_i18n::t!("app.inspector.load_more_output").to_string()
                         })
                         .ghost()
                         .small()
                         .accessibility_label(if output_page_loading {
-                            "Loading more captured output"
+                            rust_i18n::t!("app.inspector.loading_more_output").to_string()
                         } else {
-                            "Load more captured output"
+                            rust_i18n::t!("app.inspector.load_more_output").to_string()
                         })
                         .desktop_disabled(self.output_page_pending.is_some())
                         .on_click(cx.listener(move |view, _, _, cx| {
@@ -371,7 +371,7 @@ impl DesktopView {
                         .role(gpui_kit::Role::Status)
                         .text_xs()
                         .text_color(colors.muted_foreground)
-                        .child("Reading the next bounded page…"),
+                        .child(rust_i18n::t!("app.inspector.reading_next_page").to_string()),
                 );
             }
             if let Some(error) = output_page_error {
@@ -419,40 +419,44 @@ impl DesktopView {
             .gap_2()
             .p_3();
         if self.restored_activity_history_incomplete {
-            body = body.child(warning_alert("activity-history-warning", PARTIAL_ACTIVITY_HISTORY_MESSAGE, colors));
+            body = body.child(warning_alert(
+                "activity-history-warning",
+                rust_i18n::t!("app.inspector.partial_activity_history").to_string(),
+                colors,
+            ));
         }
         if activity.rows.is_empty() {
             return body
                 .child(empty_state(
-                    "No activity yet",
-                    "Follow tool calls and verification as VT Code works.",
+                    rust_i18n::t!("app.inspector.empty_activity_title").to_string(),
+                    rust_i18n::t!("app.inspector.empty_activity_description").to_string(),
                     IconName::Activity,
                 ))
                 .into_any_element();
         }
         let chart_data = [
             ActivityChartDatum {
-                label: "Running",
+                label: rust_i18n::t!("app.inspector.status_running").to_string(),
                 count: counts.running,
                 state: ActivityState::Running,
             },
             ActivityChartDatum {
-                label: "Done",
+                label: rust_i18n::t!("app.inspector.status_done").to_string(),
                 count: counts.completed,
                 state: ActivityState::Completed,
             },
             ActivityChartDatum {
-                label: "Failed",
+                label: rust_i18n::t!("app.inspector.status_failed").to_string(),
                 count: counts.failed,
                 state: ActivityState::Failed,
             },
             ActivityChartDatum {
-                label: "Interrupted",
+                label: rust_i18n::t!("app.inspector.status_interrupted").to_string(),
                 count: counts.interrupted,
                 state: ActivityState::Interrupted,
             },
             ActivityChartDatum {
-                label: "Other",
+                label: rust_i18n::t!("app.inspector.status_other").to_string(),
                 count: counts.other,
                 state: ActivityState::Other,
             },
@@ -467,14 +471,15 @@ impl DesktopView {
                 .id("activity-status-chart")
                 .test_support()
                 .role(gpui_kit::Role::Group)
-                .aria_label(format!(
-                    "Recent activity statuses: {summary}{}",
-                    if has_older_activity {
-                        "; older activity is not included"
+                .aria_label({
+                    let older = if has_older_activity {
+                        rust_i18n::t!("app.inspector.older_excluded").to_string()
                     } else {
-                        ""
-                    }
-                ))
+                        String::new()
+                    };
+                    rust_i18n::t!("app.inspector.statuses_label", summary = summary.as_str(), older = older.as_str())
+                        .to_string()
+                })
                 .w_full()
                 .h(px(148.))
                 .flex_shrink_0()
@@ -485,18 +490,18 @@ impl DesktopView {
                         .flex()
                         .justify_between()
                         .items_center()
-                        .child(row_title("Recent activity", colors))
+                        .child(row_title(rust_i18n::t!("app.inspector.recent_activity").to_string(), colors))
                         .child(
                             div()
                                 .text_xs()
                                 .text_color(colors.muted_foreground)
-                                .child(format!("{} shown", counts.total())),
+                                .child(rust_i18n::t!("app.inspector.shown_count", count = counts.total()).to_string()),
                         ),
                 )
                 .child(
                     div().flex_1().min_h_0().child(
                         BarChart::new(chart_data)
-                            .band(|datum| datum.label)
+                            .band(|datum| datum.label.clone())
                             .value(|datum| datum.count as f64)
                             .label(|datum| datum.count.to_string())
                             .alignment(BarAlignment::Left)
@@ -565,7 +570,7 @@ impl DesktopView {
                 .id("activity-rows")
                 .test_support()
                 .role(gpui_kit::Role::List)
-                .aria_label("Recent activity")
+                .aria_label(rust_i18n::t!("app.inspector.recent_activity").to_string())
                 .relative()
                 .w_full()
                 .flex_1()
@@ -586,8 +591,16 @@ impl DesktopView {
                                                 .icon(IconName::Terminal)
                                                 .ghost()
                                                 .small()
-                                                .accessibility_label(format!("View output for {output_title}"))
-                                                .tooltip("View captured output")
+                                                .accessibility_label(
+                                                    rust_i18n::t!(
+                                                        "app.inspector.view_output_for",
+                                                        title = output_title.as_str()
+                                                    )
+                                                    .to_string(),
+                                                )
+                                                .tooltip(
+                                                    rust_i18n::t!("app.inspector.view_captured_output").to_string(),
+                                                )
                                                 .on_click(move |_, window, app| {
                                                     if let Some(view) = view.upgrade() {
                                                         view.update(app, |view, cx| {

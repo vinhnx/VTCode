@@ -138,7 +138,7 @@ fn partial_history_warnings_remain_visible_when_no_rows_were_restored(cx: &mut T
         window.render_frame(cx);
         let warning = window.find("activity-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
-        assert_eq!(warning.label(), Some(super::super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
+        assert_eq!(warning.label(), Some("Saved tool history is partial. Some output may be missing or shortened."));
 
         view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Output);
         window.render_frame(cx);
@@ -149,7 +149,7 @@ fn partial_history_warnings_remain_visible_when_no_rows_were_restored(cx: &mut T
         window.render_frame(cx);
         let warning = window.find("review-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
-        assert_eq!(warning.label(), Some(super::super::PARTIAL_REVIEW_HISTORY_MESSAGE));
+        assert_eq!(warning.label(), Some("Saved change history is partial. Some historical patches are unavailable."));
 
         view.update(cx, |view, _| view.reset_session_state());
         window.render_frame(cx);

@@ -24,21 +24,30 @@ impl DesktopView {
             .flex_col()
             .gap_2()
             .child(
-                div().flex().flex_col().gap_1().child(div().text_sm().child("API key")).child(
-                    Input::new(&self.secret_input)
-                        .id("secret-input")
-                        .accessibility_id("secret-api-key")
-                        .aria_label("Provider API key")
-                        .small()
-                        .disabled(pending)
-                        .when(pending, |input| input.cursor_default())
-                        .when(!pending, |input| input.cursor_text())
-                        .w_full(),
-                ),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(div().text_sm().child(rust_i18n::t!("app.secrets.panel_title").to_string()))
+                    .child(
+                        Input::new(&self.secret_input)
+                            .id("secret-input")
+                            .accessibility_id("secret-api-key")
+                            .aria_label(rust_i18n::t!("app.secrets.provider_aria").to_string())
+                            .small()
+                            .disabled(pending)
+                            .when(pending, |input| input.cursor_default())
+                            .when(!pending, |input| input.cursor_text())
+                            .w_full(),
+                    ),
             )
             .child(
                 desktop_button("save-secret")
-                    .label(if pending { "Saving…" } else { "Save API key" })
+                    .label(if pending {
+                        rust_i18n::t!("app.secrets.saving").to_string()
+                    } else {
+                        rust_i18n::t!("app.secrets.save_key").to_string()
+                    })
                     .primary()
                     .small()
                     .desktop_disabled(!sendable)
@@ -50,7 +59,7 @@ impl DesktopView {
                 div()
                     .text_xs()
                     .text_color(colors.muted_foreground)
-                    .child(format!("Stored in secure storage on this device as {}.", info.env_var)),
+                    .child(rust_i18n::t!("app.secrets.stored_as", var = info.env_var.as_str()).to_string()),
             )
             .when_some(self.secret_editor_error.as_ref(), |form, error| {
                 form.child(
@@ -79,7 +88,7 @@ impl DesktopView {
         }
         let key = api_key.trim().to_string();
         if key.is_empty() {
-            self.secret_editor_error = Some("API key must not be empty.".into());
+            self.secret_editor_error = Some(rust_i18n::t!("app.secrets.empty_key").to_string());
             cx.notify();
             return;
         }
@@ -98,7 +107,7 @@ impl DesktopView {
             self.secret_save_pending = true;
             self.secret_editor_error = None;
             self.secret_input.update(cx, |state, cx| state.set_value("", window, cx));
-            self.status = "Saving API key…".into();
+            self.status = rust_i18n::t!("app.secrets.saving_status").to_string();
         } else {
             self.secret_editor_error = Some(REQUEST_QUEUE_FULL_MESSAGE.into());
         }
@@ -110,7 +119,7 @@ impl DesktopView {
         let stored = match serde_json::from_value::<protocol::SecretStoreResult>(result) {
             Ok(stored) => stored,
             Err(_) => {
-                self.secret_editor_error = Some("Invalid credential response. Try saving again.".into());
+                self.secret_editor_error = Some(rust_i18n::t!("app.secrets.invalid_response").to_string());
                 cx.notify();
                 return;
             }
@@ -126,7 +135,7 @@ impl DesktopView {
             .is_some_and(|configuration| configuration.provider == stored.configuration.provider);
         if !provider_matches {
             self.secret_editor_error = None;
-            self.status = "API key saved.".into();
+            self.status = rust_i18n::t!("app.secrets.saved").to_string();
             cx.notify();
             return;
         }
@@ -150,9 +159,9 @@ impl DesktopView {
             .as_ref()
             .is_some_and(|configuration| configuration.authenticated)
         {
-            "API key saved. Send a message to start.".into()
+            rust_i18n::t!("app.secrets.saved_send").to_string()
         } else {
-            "API key saved, but the provider still reports missing credentials.".into()
+            rust_i18n::t!("app.secrets.saved_missing").to_string()
         };
         cx.notify();
     }
@@ -160,17 +169,14 @@ impl DesktopView {
     pub(super) fn handle_secret_store_error(&mut self, error: String, cx: &mut Context<Self>) {
         self.secret_save_pending = false;
         self.secret_editor_error = Some(error);
-        self.status = "API key was not saved.".into();
+        self.status = rust_i18n::t!("app.secrets.not_saved").to_string();
         cx.notify();
     }
 
     pub(super) fn interrupt_secret_save(&mut self) {
         if self.secret_save_pending {
             self.secret_save_pending = false;
-            self.secret_editor_error = Some(
-                "The service disconnected while saving. The outcome is unknown; reload CLI settings before trying again."
-                    .into(),
-            );
+            self.secret_editor_error = Some(rust_i18n::t!("app.secrets.disconnected_while_saving").to_string());
         }
     }
 }

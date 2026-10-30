@@ -2,7 +2,7 @@
 use super::config_search::ConfigSearchCorpus;
 use super::configuration::{
     CONFIG_GROUP_PAGE_SIZE, ConfigCatalogGroup, ConfigValueKind, build_config_catalog_cache, config_group_icon,
-    value_summary,
+    config_target_label, value_summary,
 };
 use super::*;
 use gpui_kit::component::select::Select;
@@ -38,9 +38,15 @@ impl DesktopView {
             .or_else(|| groups.first().map(|group| &group.name))
             .cloned();
         let counts = if searching {
-            format!("{visible_count} of {total} match \"{query}\"")
+            rust_i18n::t!(
+                "app.configuration.match_summary",
+                visible = visible_count,
+                total = total,
+                query = query.as_str()
+            )
+            .to_string()
         } else {
-            format!("{editable_total} editable of {total} settings")
+            rust_i18n::t!("app.configuration.editable_count", editable = editable_total, total = total).to_string()
         };
 
         let mut header = div()
@@ -61,14 +67,14 @@ impl DesktopView {
                             .flex_1()
                             .min_w_0()
                             .small()
-                            .aria_label("Search configuration settings")
+                            .aria_label(rust_i18n::t!("app.configuration.search_label").to_string())
                             .prefix(Icon::new(IconName::Search).size_4())
                             .cleanable(true),
                     )
                     .child(
                         desktop_button("browse-cli-config")
-                            .label("Browse all settings…")
-                            .accessibility_label("Search and edit CLI configuration settings")
+                            .label(rust_i18n::t!("app.configuration.browse_all").to_string())
+                            .accessibility_label(rust_i18n::t!("app.configuration.browse_all_label").to_string())
                             .ghost()
                             .small()
                             .desktop_disabled(self.cli_config_settings.is_none() || !self.can_edit_cli_settings())
@@ -76,29 +82,32 @@ impl DesktopView {
                     )
                     .child(
                         desktop_button("reload-cli-config")
-                            .label("Reload")
+                            .label(rust_i18n::t!("app.configuration.reload").to_string())
                             .ghost()
                             .small()
-                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some(key_context::DESKTOP))
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.configuration.reload_tooltip").to_string(),
+                                &ReloadCliSettings,
+                                Some(key_context::DESKTOP),
+                            )
                             .desktop_disabled(!self.can_reload_cli_settings())
                             .dispatches_desktop_action(ReloadCliSettings, self.focus_handle.clone()),
                     ),
             );
         let targets = [
-            (protocol::ConfigTarget::User, "config-target-user", "User"),
-            (protocol::ConfigTarget::Workspace, "config-target-workspace", "Workspace"),
-            (protocol::ConfigTarget::Project, "config-target-project", "Project"),
+            (protocol::ConfigTarget::User, "config-target-user"),
+            (protocol::ConfigTarget::Workspace, "config-target-workspace"),
+            (protocol::ConfigTarget::Project, "config-target-project"),
         ]
         .into_iter()
-        .fold(div().flex().flex_wrap().items_center().gap_2().flex_shrink_0(), |row, (target, id, label)| {
+        .fold(div().flex().flex_wrap().items_center().gap_2().flex_shrink_0(), |row, (target, id)| {
             let selected = self.config_target == target;
+            let label = config_target_label(target);
+            let accessibility = write_target_accessibility_label(&label, selected);
             row.child(
                 desktop_button(id)
                     .label(label)
-                    .accessibility_label(format!(
-                        "Write CLI settings to {label} configuration{}",
-                        if selected { " (selected)" } else { "" }
-                    ))
+                    .accessibility_label(accessibility)
                     .desktop_selected(selected, &colors)
                     .small()
                     .desktop_disabled(!self.can_edit_cli_settings())
@@ -111,7 +120,7 @@ impl DesktopView {
                 .flex_wrap()
                 .items_center()
                 .gap_2()
-                .child(section_label("Write to", &colors))
+                .child(section_label(rust_i18n::t!("app.configuration.write_to").to_string(), &colors))
                 .child(targets)
                 .child(
                     div()
@@ -155,8 +164,8 @@ impl DesktopView {
         } else {
             match (self.cli_config_settings.as_ref(), selected.as_ref()) {
                 (None, _) if self.workspace.is_none() => self.render_config_content_frame(centered_empty_state(
-                    "Choose a workspace",
-                    "Choose a workspace to browse CLI configuration settings.",
+                    rust_i18n::t!("app.configuration.empty_workspace_title").to_string(),
+                    rust_i18n::t!("app.configuration.empty_workspace_description").to_string(),
                     IconName::Folder,
                 )),
                 (None, _) => self.render_config_content_frame(
@@ -172,7 +181,7 @@ impl DesktopView {
                             div()
                                 .text_sm()
                                 .text_color(colors.muted_foreground)
-                                .child("Loading shared CLI settings…"),
+                                .child(rust_i18n::t!("app.configuration.loading").to_string()),
                         )
                         .child(skeleton_line("config-loading-line-one", px(320.), cx))
                         .child(skeleton_line("config-loading-line-two", px(240.), cx)),
@@ -184,14 +193,14 @@ impl DesktopView {
                         .gap_3()
                         .child(
                             centered_empty_state(
-                                "No matching settings",
-                                "Try a different search or browse another group.",
+                                rust_i18n::t!("app.configuration.empty_search_title").to_string(),
+                                rust_i18n::t!("app.configuration.empty_search_hint").to_string(),
                                 IconName::Search,
                             )
                             .gap_3()
                             .child(
                                 desktop_button("clear-config-search")
-                                    .label("Clear search")
+                                    .label(rust_i18n::t!("app.configuration.clear_search").to_string())
                                     .ghost()
                                     .small()
                                     .on_click(
@@ -226,8 +235,18 @@ impl DesktopView {
                         list = list.child(
                             div().pt_2().child(
                                 desktop_button("config-show-more")
-                                    .label(format!("Show more ({} remaining)", row_count - shown))
-                                    .accessibility_label(format!("Show more settings, {shown} of {row_count} shown"))
+                                    .label(
+                                        rust_i18n::t!("app.configuration.show_more", remaining = row_count - shown)
+                                            .to_string(),
+                                    )
+                                    .accessibility_label(
+                                        rust_i18n::t!(
+                                            "app.configuration.show_more_label",
+                                            shown = shown,
+                                            total = row_count
+                                        )
+                                        .to_string(),
+                                    )
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(|view, _, _, cx| {
@@ -239,9 +258,9 @@ impl DesktopView {
                         );
                     }
                     let status = if row_count > shown {
-                        format!("Showing {shown} of {row_count} settings")
+                        rust_i18n::t!("app.configuration.showing_summary", shown = shown, count = row_count).to_string()
                     } else {
-                        format!("{row_count} settings")
+                        rust_i18n::t!("app.configuration.total_settings", count = row_count).to_string()
                     };
                     let mut group = div()
                         .flex()
@@ -281,7 +300,7 @@ impl DesktopView {
             .id("cli-config-page")
             .test_support()
             .role(gpui_kit::Role::Dialog)
-            .aria_label("VT Code configuration")
+            .aria_label(rust_i18n::t!("app.configuration.title").to_string())
             .track_focus(&self.settings_focus)
             .relative()
             .w_full()
@@ -318,7 +337,7 @@ impl DesktopView {
             .lock_scroll_axis()
             .test_support()
             .role(gpui_kit::Role::Navigation)
-            .aria_label("Configuration groups")
+            .aria_label(rust_i18n::t!("app.configuration.groups").to_string())
             .w_56()
             .flex_shrink_0()
             .min_h_0()
@@ -333,7 +352,7 @@ impl DesktopView {
             rail = rail.child(
                 desktop_button("config-category-curated")
                     .icon(config_group_icon(curated::CURATED_GROUP_NAME))
-                    .label(curated::CURATED_GROUP_NAME)
+                    .label(rust_i18n::t!("app.configuration.page_title").to_string())
                     .small()
                     .w_full()
                     .justify_start()
@@ -379,7 +398,7 @@ impl DesktopView {
                 div()
                     .text_lg()
                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .child("Model features"),
+                    .child(rust_i18n::t!("app.configuration.model_features").to_string()),
             )
             .child(self.render_curated_efforts_card(cx))
             .child(self.render_config_page_footer(cx))
@@ -404,15 +423,15 @@ impl DesktopView {
                         div()
                             .text_lg()
                             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                            .child("Configuration"),
+                            .child(rust_i18n::t!("app.configuration.page_title").to_string()),
                     )
-                    .child(row_description("Choose how VT Code works on your tasks", &colors)),
+                    .child(row_description(rust_i18n::t!("app.configuration.tagline").to_string(), &colors)),
             )
             .child(
                 desktop_button("open-config-file")
-                    .label("Open vtcode.toml")
+                    .label(rust_i18n::t!("app.configuration.open_file").to_string())
                     .icon(IconName::ExternalLink)
-                    .accessibility_label("Open the selected configuration file in the default editor")
+                    .accessibility_label(rust_i18n::t!("app.configuration.open_file_label").to_string())
                     .ghost()
                     .small()
                     .desktop_disabled(!can_open)
@@ -430,7 +449,11 @@ impl DesktopView {
             }
             card = card.child(self.render_curated_row(row, cx));
         }
-        accessible_group_box("curated-configuration-group", "Configuration overview", card)
+        accessible_group_box(
+            "curated-configuration-group",
+            rust_i18n::t!("app.configuration.overview_group").to_string(),
+            card,
+        )
     }
 
     fn render_curated_row(&self, row: &curated::CuratedRow, cx: &mut Context<Self>) -> AnyElement {
@@ -446,12 +469,15 @@ impl DesktopView {
                     .small()
                     .desktop_disabled(!self.can_select_session_options())
                     .on_click(cx.listener(|view, _, window, cx| view.open_permissions(window, cx)));
-                settings_row(row.title, row.description, control, &colors).into_any_element()
+                settings_row(row.title.as_str(), row.description.as_str(), control, &colors).into_any_element()
             }
             curated::CuratedRowKind::ConfigValue => {
                 let path = row.path.unwrap_or_default();
                 let setting = curated::find_setting(self.cli_config_settings.as_ref(), path);
-                let value = setting.map_or_else(|| "Unavailable".to_string(), curated::setting_display_value);
+                let value = setting.map_or_else(
+                    || rust_i18n::t!("app.configuration.unavailable").to_string(),
+                    curated::setting_display_value,
+                );
                 let editable = setting.is_some_and(|setting| setting.editable) && self.can_edit_cli_settings();
                 let path = path.to_string();
                 let control = desktop_button(format!("curated-{}", row.id))
@@ -464,7 +490,7 @@ impl DesktopView {
                     .on_click(cx.listener(move |view, _, window, cx| {
                         view.open_cli_config_editor(path.clone(), window, cx);
                     }));
-                settings_row(row.title, row.description, control, &colors).into_any_element()
+                settings_row(row.title.as_str(), row.description.as_str(), control, &colors).into_any_element()
             }
             curated::CuratedRowKind::NetworkToggle => {
                 let snapshot = self.cli_config_settings.as_ref();
@@ -478,18 +504,16 @@ impl DesktopView {
                     .small()
                     .checked(enabled)
                     .disabled(!available)
-                    .accessibility_label(row.title)
+                    .accessibility_label(row.title.as_str())
                     .tooltip(if blocked {
-                        "Blocked — change in the catalog".to_string()
-                    } else if enabled {
-                        "Turn off".to_string()
+                        rust_i18n::t!("app.configuration.blocked_in_catalog").to_string()
                     } else {
-                        "Turn on".to_string()
+                        switch_tooltip(enabled)
                     })
                     .on_click(cx.listener(move |view, enabled, _, cx| {
                         view.set_network_access(*enabled, cx);
                     }));
-                settings_row(row.title, row.description, control, &colors).into_any_element()
+                settings_row(row.title.as_str(), row.description.as_str(), control, &colors).into_any_element()
             }
             curated::CuratedRowKind::BoolToggle => {
                 let path = row.path.unwrap_or_default();
@@ -501,16 +525,12 @@ impl DesktopView {
                     .small()
                     .checked(enabled)
                     .disabled(!available)
-                    .accessibility_label(row.title)
-                    .tooltip(if enabled {
-                        "Turn off".to_string()
-                    } else {
-                        "Turn on".to_string()
-                    })
+                    .accessibility_label(row.title.as_str())
+                    .tooltip(switch_tooltip(enabled))
                     .on_click(cx.listener(move |view, enabled, _, cx| {
                         view.save_cli_config_value(path.clone(), Value::Bool(*enabled), cx);
                     }));
-                settings_row(row.title, row.description, control, &colors).into_any_element()
+                settings_row(row.title.as_str(), row.description.as_str(), control, &colors).into_any_element()
             }
         }
     }
@@ -518,19 +538,24 @@ impl DesktopView {
     fn render_curated_efforts_card(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let selected = self.preferences.available_efforts();
-        let mut card = settings_group_box("Available reasoning efforts", &colors).child(
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .child(div().flex_1().min_w_0().child(row_description(
-                    "Choose which reasoning effort levels appear in model controls. Availability varies by model.",
-                    &colors,
-                )))
-                .child(Tag::secondary().outline().small().child(format!("{} selected", selected.len()))),
-        );
+        let mut card = settings_group_box(rust_i18n::t!("app.configuration.available_efforts").to_string(), &colors)
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(div().flex_1().min_w_0().child(row_description(
+                        rust_i18n::t!("app.configuration.reasoning_effort_hint").to_string(),
+                        &colors,
+                    )))
+                    .child(
+                        Tag::secondary().outline().small().child(
+                            rust_i18n::t!("app.configuration.selected_count", count = selected.len()).to_string(),
+                        ),
+                    ),
+            );
         for level in vtcode_commons::reasoning::ReasoningEffortLevel::allowed_values() {
             let enabled = selected.iter().any(|entry| entry.as_str() == *level);
             let label = curated::humanize_config_value(level);
@@ -538,11 +563,13 @@ impl DesktopView {
             let switch = gpui_kit::component::switch::Switch::new(format!("curated-effort-{level}"))
                 .small()
                 .checked(enabled)
-                .accessibility_label(format!("{label} effort"))
+                .accessibility_label(
+                    rust_i18n::t!("app.configuration.effort_label", label = label.as_str()).to_string(),
+                )
                 .tooltip(if enabled {
-                    "Hide from model controls".to_string()
+                    rust_i18n::t!("app.configuration.hide_from_models").to_string()
                 } else {
-                    "Show in model controls".to_string()
+                    rust_i18n::t!("app.configuration.show_in_models").to_string()
                 })
                 .on_click(cx.listener(move |view, enabled, _, cx| {
                     view.set_available_effort(level.as_str(), *enabled, cx);
@@ -550,7 +577,11 @@ impl DesktopView {
             card = card.child(row_divider(&colors));
             card = card.child(settings_row(label, "", switch, &colors));
         }
-        accessible_group_box("curated-efforts-group", "Available reasoning efforts", card)
+        accessible_group_box(
+            "curated-efforts-group",
+            rust_i18n::t!("app.configuration.available_efforts").to_string(),
+            card,
+        )
     }
 
     /// Shared scroll frame for the configuration content column: one
@@ -578,7 +609,7 @@ impl DesktopView {
                     .flex_shrink_0()
                     .text_sm()
                     .text_color(colors.muted_foreground)
-                    .child("<unset>".to_string()),
+                    .child(rust_i18n::t!("app.configuration.unset").to_string()),
             );
         } else {
             header = header.child(
@@ -601,11 +632,7 @@ impl DesktopView {
                     .checked(enabled)
                     .disabled(!can_edit)
                     .accessibility_label(label.clone())
-                    .tooltip(if enabled {
-                        "Turn off".to_string()
-                    } else {
-                        "Turn on".to_string()
-                    })
+                    .tooltip(switch_tooltip(enabled))
                     .on_click(cx.listener(move |view, enabled, _, cx| {
                         view.save_cli_config_value(path.clone(), Value::Bool(*enabled), cx);
                     })),
@@ -614,8 +641,10 @@ impl DesktopView {
             let path = setting.path.clone();
             header = header.child(
                 desktop_button(format!("config-edit-{path}"))
-                    .label("Edit")
-                    .accessibility_label(format!("Edit {}", setting.path))
+                    .label(rust_i18n::t!("app.configuration.edit").to_string())
+                    .accessibility_label(
+                        rust_i18n::t!("app.configuration.edit_target", target = setting.path.as_str()).to_string(),
+                    )
                     .ghost()
                     .small()
                     .desktop_disabled(!can_edit)
@@ -624,14 +653,19 @@ impl DesktopView {
                     ),
             );
         } else {
-            header = header.child(Tag::secondary().outline().small().child("Reference only"));
+            header = header.child(
+                Tag::secondary()
+                    .outline()
+                    .small()
+                    .child(rust_i18n::t!("app.configuration.reference_only").to_string()),
+            );
         }
         let mut meta = setting.path.clone();
         if let Some(origin) = setting.origin.as_deref() {
-            meta.push_str(&format!(" · from {origin}"));
+            meta.push_str(rust_i18n::t!("app.configuration.origin_hint", origin = origin).as_ref());
         }
         if let Some(default) = setting.default_value.as_deref() {
-            meta.push_str(&format!(" · default {default}"));
+            meta.push_str(rust_i18n::t!("app.configuration.default_hint", value = default).as_ref());
         }
         let mut row = div()
             .flex()
@@ -651,28 +685,23 @@ impl DesktopView {
     /// destructive layer reset, so the page documents the CLI instead.
     fn render_config_page_footer(&self, cx: &Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let mut notes = vec![
-            "Saving uses VT Code's validated configuration writer and reloads the local CLI service. Higher-precedence settings can still override the selected layer."
-                .to_string(),
-        ];
+        let mut notes = vec![rust_i18n::t!("app.configuration.save_note").to_string()];
         if let Some(info) = self.service_info.as_ref() {
-            notes.insert(0, format!("Current version: {}", info.server_version));
+            notes.insert(
+                0,
+                rust_i18n::t!("app.configuration.current_version", version = info.server_version.as_str()).to_string(),
+            );
         }
         if let Some(snapshot) = self.cli_config_settings.as_ref() {
             if snapshot.omitted_sensitive > 0 {
-                notes.push(
-                    "Credential-bearing fields are excluded; manage credentials with `vtcode auth` or the configured environment variable."
-                        .to_string(),
-                );
+                notes.push(rust_i18n::t!("app.configuration.credential_note").to_string());
             }
             if snapshot.omitted_large > 0 || snapshot.omitted_limit > 0 {
-                notes.push("Some unusually large or numerous settings are omitted from this browser.".to_string());
+                notes.push(rust_i18n::t!("app.configuration.omitted_large_note").to_string());
             }
             let read_only = snapshot.settings.iter().filter(|setting| !setting.editable).count();
             if read_only > 0 {
-                notes.push(format!(
-                    "{read_only} documented schema entries are reference-only until they have a concrete value."
-                ));
+                notes.push(rust_i18n::t!("app.configuration.read_only_note", count = read_only).to_string());
             }
         }
         let mut footer = div()
@@ -692,7 +721,7 @@ impl DesktopView {
                 .test_support()
                 .text_xs()
                 .text_color(colors.muted_foreground)
-                .child("Reset a layer from the terminal with `vtcode config reset` (`--global` for user, `--project` for project)."),
+                .child(rust_i18n::t!("app.configuration.reset_hint").to_string()),
         );
         footer.into_any_element()
     }
@@ -703,21 +732,29 @@ impl DesktopView {
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());
         let editable_count =
             snapshot.map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| setting.editable).count());
-        let mut group = settings_group_box("CLI configuration", &cx.theme().colors);
-        group = group.child(div().text_sm().child(match snapshot {
-            Some(_) => format!("{editable_count} editable settings across {count} CLI config fields · values follow the active config layers"),
-            None if self.workspace.is_some() => "Loading shared CLI settings…".into(),
-            None => "Choose a workspace to browse CLI settings.".into(),
-        }));
+        let mut group =
+            settings_group_box(rust_i18n::t!("app.configuration.cli_configuration").to_string(), &cx.theme().colors);
+        group = group.child(
+            div().text_sm().child(match snapshot {
+                Some(_) => {
+                    rust_i18n::t!("app.configuration.editable_summary", editable = editable_count, count = count)
+                        .to_string()
+                }
+                None if self.workspace.is_some() => rust_i18n::t!("app.configuration.loading").to_string(),
+                None => rust_i18n::t!("app.configuration.choose_workspace").to_string(),
+            }),
+        );
 
         let target_buttons = [
-            (protocol::ConfigTarget::User, "User"),
-            (protocol::ConfigTarget::Workspace, "Workspace"),
-            (protocol::ConfigTarget::Project, "Project"),
+            protocol::ConfigTarget::User,
+            protocol::ConfigTarget::Workspace,
+            protocol::ConfigTarget::Project,
         ]
         .into_iter()
-        .fold(div().flex().flex_wrap().items_center().gap_2(), |row, (target, label)| {
+        .fold(div().flex().flex_wrap().items_center().gap_2(), |row, target| {
             let selected = self.config_target == target;
+            let label = config_target_label(target);
+            let accessibility = write_target_accessibility_label(&label, selected);
             row.child(
                 desktop_button(match target {
                     protocol::ConfigTarget::User => "config-target-user",
@@ -725,10 +762,7 @@ impl DesktopView {
                     protocol::ConfigTarget::Project => "config-target-project",
                 })
                 .label(label)
-                .accessibility_label(format!(
-                    "Write CLI settings to {label} configuration{}",
-                    if selected { " (selected)" } else { "" }
-                ))
+                .accessibility_label(accessibility)
                 .desktop_selected(selected, &colors)
                 .small()
                 .desktop_disabled(!self.can_edit_cli_settings())
@@ -738,30 +772,35 @@ impl DesktopView {
 
         group = group.child(target_buttons).child(
             desktop_button("browse-cli-config")
-                .label("Browse all settings…")
-                .accessibility_label("Search and edit CLI configuration settings")
+                .label(rust_i18n::t!("app.configuration.browse_all").to_string())
+                .accessibility_label(rust_i18n::t!("app.configuration.browse_all_label").to_string())
                 .ghost()
                 .desktop_disabled(snapshot.is_none() || !self.can_edit_cli_settings())
                 .on_click(cx.listener(|view, _, window, cx| view.open_cli_config_palette(window, cx))),
         );
 
-        let mut note = "Saving uses VT Code's validated configuration writer and reloads the local CLI service. Higher-precedence settings can still override the selected layer.".to_owned();
+        let mut note = rust_i18n::t!("app.configuration.save_note").to_string();
         if let Some(snapshot) = snapshot {
             if snapshot.omitted_sensitive > 0 {
-                note.push_str(" Credential-bearing fields are excluded; manage credentials with `vtcode auth` or the configured environment variable.");
+                note.push(' ');
+                note.push_str(rust_i18n::t!("app.configuration.credential_note").as_ref());
             }
             if snapshot.omitted_large > 0 || snapshot.omitted_limit > 0 {
-                note.push_str(" Some unusually large or numerous settings are omitted from this browser.");
+                note.push(' ');
+                note.push_str(rust_i18n::t!("app.configuration.omitted_large_note").as_ref());
             }
             let read_only = snapshot.settings.iter().filter(|setting| !setting.editable).count();
             if read_only > 0 {
-                note.push_str(&format!(
-                    " {read_only} documented schema entries are reference-only until they have a concrete value."
-                ));
+                note.push(' ');
+                note.push_str(rust_i18n::t!("app.configuration.read_only_note", count = read_only).as_ref());
             }
         }
         group = group.footer(note);
-        accessible_group_box("cli-configuration-group", "CLI configuration", group)
+        accessible_group_box(
+            "cli-configuration-group",
+            rust_i18n::t!("app.configuration.cli_configuration").to_string(),
+            group,
+        )
     }
 
     pub(super) fn render_cli_config_editor(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -770,12 +809,12 @@ impl DesktopView {
         };
         let colors = cx.theme().colors;
         let format_hint = match editor.kind {
-            ConfigValueKind::Boolean => "Boolean",
-            ConfigValueKind::String => "Text",
-            ConfigValueKind::Integer => "Whole number",
-            ConfigValueKind::Float => "Decimal number",
-            ConfigValueKind::Array => "JSON array",
-            ConfigValueKind::Object => "JSON object",
+            ConfigValueKind::Boolean => rust_i18n::t!("app.configuration.format_boolean").to_string(),
+            ConfigValueKind::String => rust_i18n::t!("app.configuration.format_text").to_string(),
+            ConfigValueKind::Integer => rust_i18n::t!("app.configuration.format_integer").to_string(),
+            ConfigValueKind::Float => rust_i18n::t!("app.configuration.format_float").to_string(),
+            ConfigValueKind::Array => rust_i18n::t!("app.configuration.format_array").to_string(),
+            ConfigValueKind::Object => rust_i18n::t!("app.configuration.format_object").to_string(),
         };
         div()
             .absolute()
@@ -791,7 +830,9 @@ impl DesktopView {
                     .lock_scroll_axis()
                     .test_support()
                     .role(gpui_kit::Role::Dialog)
-                    .aria_label(format!("Edit CLI setting {}", editor.path))
+                    .aria_label(
+                        rust_i18n::t!("app.configuration.edit_title_for", path = editor.path.as_str()).to_string(),
+                    )
                     .w(px(620.))
                     .max_w_full()
                     .max_h_full()
@@ -806,22 +847,25 @@ impl DesktopView {
                     .track_focus(&self.config_editor_focus)
                     .child(
                         DialogHeader::new()
-                            .child(DialogTitle::new().child("Edit CLI setting"))
+                            .child(DialogTitle::new().child(rust_i18n::t!("app.configuration.edit_title").to_string()))
                             .child(DialogDescription::new().child(editor.path.clone())),
                     )
                     .child(div().text_xs().text_color(colors.muted_foreground).child(
                         if editor.option_select.is_some() {
-                            "Choose one of the documented values.".to_string()
+                            rust_i18n::t!("app.configuration.choose_one_value").to_string()
                         } else {
-                            format_hint.to_string()
+                            format_hint
                         },
                     ))
                     .when_some(editor.option_select.as_ref(), |dialog, state| {
                         dialog.child(
                             Select::new(state)
                                 .id("cli-config-option-select")
-                                .placeholder("Choose a documented value")
-                                .accessibility_label(format!("Value for {}", editor.path))
+                                .placeholder(rust_i18n::t!("app.configuration.choose_value").to_string())
+                                .accessibility_label(
+                                    rust_i18n::t!("app.configuration.value_for", target = editor.path.as_str())
+                                        .to_string(),
+                                )
                                 .menu_max_h(px(320.))
                                 .w_full(),
                         )
@@ -829,7 +873,10 @@ impl DesktopView {
                     .when(editor.option_select.is_none(), |dialog| {
                         dialog.child(
                             Textarea::new(&self.config_value_input)
-                                .aria_label(format!("Value for {}", editor.path))
+                                .aria_label(
+                                    rust_i18n::t!("app.configuration.value_for", target = editor.path.as_str())
+                                        .to_string(),
+                                )
                                 .cursor_text()
                                 .bg(colors.popover)
                                 .rounded_md()
@@ -856,16 +903,19 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_button("cancel-cli-config-edit").label("Cancel").ghost().on_click(
-                                    cx.listener(|view, _, window, cx| view.close_cli_config_editor(window, cx)),
-                                ),
+                                desktop_button("cancel-cli-config-edit")
+                                    .label(rust_i18n::t!("app.configuration.cancel").to_string())
+                                    .ghost()
+                                    .on_click(
+                                        cx.listener(|view, _, window, cx| view.close_cli_config_editor(window, cx)),
+                                    ),
                             )
                             .child(
                                 desktop_button("save-cli-config-edit")
                                     .label(if self.config_write_pending {
-                                        "Saving…"
+                                        rust_i18n::t!("app.configuration.saving").to_string()
                                     } else {
-                                        "Save and reload"
+                                        rust_i18n::t!("app.configuration.save_reload").to_string()
                                     })
                                     .primary()
                                     .desktop_disabled(self.config_write_pending || !self.can_edit_cli_settings())
@@ -877,5 +927,22 @@ impl DesktopView {
                     .focus_trap("cli-config-editor-trap", &self.config_editor_focus),
             )
             .into_any_element()
+    }
+}
+
+fn write_target_accessibility_label(label: &str, selected: bool) -> String {
+    let suffix = if selected {
+        rust_i18n::t!("app.configuration.selected_suffix").to_string()
+    } else {
+        String::new()
+    };
+    rust_i18n::t!("app.configuration.write_target_label", label = label, suffix = suffix).to_string()
+}
+
+fn switch_tooltip(enabled: bool) -> String {
+    if enabled {
+        rust_i18n::t!("app.configuration.turn_off").to_string()
+    } else {
+        rust_i18n::t!("app.configuration.turn_on").to_string()
     }
 }

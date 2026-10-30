@@ -69,7 +69,7 @@ impl DesktopView {
                     self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                     self.fail_workspace_review("Local service disconnected.".into());
                     self.running = false;
-                    self.status = "Local service disconnected".to_string();
+                    self.status = rust_i18n::t!("app.service.disconnected").to_string();
                     changed = true;
                     break;
                 }
@@ -211,12 +211,12 @@ impl DesktopView {
                     if let Some(draft) = self.pending_submission.take() {
                         self.transcript.remove(&draft.echo_id);
                         self.first_submission = Some(draft);
-                        self.status = "Waiting for the startup decision before sending…".into();
+                        self.status = rust_i18n::t!("app.service.startup_wait").to_string();
                     }
                 } else {
                     self.recover_pending_submission(false);
-                    self.error = Some("Resolve the startup question before sending a message.".into());
-                    self.status = "Message not submitted".into();
+                    self.error = Some(rust_i18n::t!("app.service.startup_question").to_string());
+                    self.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
                 }
             }
             BackendEvent::InteractionResponded { identity, error } => {
@@ -232,7 +232,7 @@ impl DesktopView {
                 self.pending_interaction_response = None;
                 if let Some(error) = error {
                     self.error = Some(error);
-                    self.status = "The decision was not accepted. Review it and try again.".into();
+                    self.status = rust_i18n::t!("app.service.decision_rejected").to_string();
                 } else {
                     self.clear_pending_interaction();
                     self.invalidate_webmcp_status();
@@ -252,7 +252,7 @@ impl DesktopView {
                             Ok(()) => {}
                             Err(draft) => {
                                 self.retained_submission = Some(draft);
-                                self.status = "Message not submitted".into();
+                                self.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
                             }
                         }
                     }
@@ -334,7 +334,7 @@ impl DesktopView {
                     } else if method == protocol::method::TURN_CANCEL {
                         self.cancel_request_sent = false;
                     }
-                    self.status = "Service request failed".to_string();
+                    self.status = rust_i18n::t!("app.service.request_failed").to_string();
                     return;
                 }
                 let result = result.unwrap_or(Value::Null);
@@ -342,7 +342,9 @@ impl DesktopView {
                     protocol::method::WORKSPACE_REVIEW => {
                         match serde_json::from_value::<protocol::WorkspaceReviewResult>(result) {
                             Ok(snapshot) => self.accept_workspace_review(snapshot, cx),
-                            Err(_) => self.fail_workspace_review("Invalid Git review response.".into()),
+                            Err(_) => {
+                                self.fail_workspace_review(rust_i18n::t!("app.service.review_invalid").to_string())
+                            }
                         }
                     }
                     protocol::method::INITIALIZE => {
@@ -357,7 +359,7 @@ impl DesktopView {
                                         Some("The local CLI returned an invalid slash command catalog.".into());
                                 }
                                 self.service_info = Some(info);
-                                self.status = "Connected to the local VT Code service".to_string();
+                                self.status = rust_i18n::t!("app.service.connected_service").to_string();
                                 let mut discovery_queued = true;
                                 for method in [
                                     protocol::method::CONFIG_DISCOVER,
@@ -381,8 +383,8 @@ impl DesktopView {
                                 self.service_info = None;
                                 self.backend = None;
                                 self.fail_pending_navigation();
-                                self.error = Some("The local service returned an invalid or incompatible initialization response. Rebuild the desktop app and its bundled helper together.".to_string());
-                                self.status = "Could not initialize the local VT Code service".to_string();
+                                self.error = Some(rust_i18n::t!("app.service.invalid_init").to_string());
+                                self.status = rust_i18n::t!("app.service.init_failed").to_string();
                             }
                         }
                     }
@@ -419,7 +421,7 @@ impl DesktopView {
                     protocol::method::CONFIG_MODELS => {
                         match serde_json::from_value::<Vec<protocol::ModelInfo>>(result) {
                             Ok(models) => self.models = models,
-                            Err(_) => self.error = Some("The local service returned an invalid model catalog.".into()),
+                            Err(_) => self.error = Some(rust_i18n::t!("app.service.invalid_catalog").to_string()),
                         }
                     }
                     protocol::method::COMPOSER_RESOURCES => {
@@ -435,7 +437,7 @@ impl DesktopView {
                                 self.composer_resources = resources;
                                 self.resources_loaded = true;
                             }
-                            _ => self.error = Some("Invalid CLI resource catalog.".into()),
+                            _ => self.error = Some(rust_i18n::t!("app.service.invalid_resource_catalog").to_string()),
                         }
                     }
                     protocol::method::CONFIG_OPTIONS => match serde_json::from_value::<ConfigurationSnapshot>(result) {
@@ -454,12 +456,12 @@ impl DesktopView {
                             self.selected_session_id = None;
                             self.record_current_navigation();
                             self.configuration = Some(snapshot);
-                            self.status = "Runtime options updated. The next message starts a new session.".into();
+                            self.status = rust_i18n::t!("app.service.runtime_updated").to_string();
                         }
                         Err(_) => {
                             self.pending_permission_choice = None;
                             self.backend = None;
-                            self.error = Some("Invalid runtime options response. Reconnect before sending.".into());
+                            self.error = Some(rust_i18n::t!("app.service.invalid_runtime").to_string());
                         }
                     },
                     protocol::method::CONFIG_THEME => match serde_json::from_value::<ConfigurationSnapshot>(result) {
@@ -478,16 +480,16 @@ impl DesktopView {
                                 self.configuration = Some(snapshot);
                                 self.preferences.follow_cli_theme = Some(true);
                                 self.apply_theme_state(theme, None, cx);
-                                self.status = "CLI theme saved. The next message starts a new session.".into();
+                                self.status = rust_i18n::t!("app.service.theme_saved").to_string();
                             } else {
                                 self.backend = None;
-                                self.error = Some("The CLI returned an unsupported theme after saving.".into());
-                                self.status = "Could not apply CLI theme".into();
+                                self.error = Some(rust_i18n::t!("app.service.unsupported_theme").to_string());
+                                self.status = rust_i18n::t!("app.service.theme_failed").to_string();
                             }
                         }
                         Err(_) => {
                             self.backend = None;
-                            self.error = Some("Invalid CLI theme response. Reconnect before sending.".into());
+                            self.error = Some(rust_i18n::t!("app.service.invalid_theme").to_string());
                         }
                     },
                     protocol::method::CONFIG_SELECT => {
@@ -503,7 +505,7 @@ impl DesktopView {
                             .as_ref()
                             .map(|configuration| configuration.model.clone())
                             .unwrap_or_default();
-                        self.status = format!("Switched to {model}. Start a new session to use it.");
+                        self.status = rust_i18n::t!("app.service.switched_model", model = model.as_str()).to_string();
                     }
                     protocol::method::STORAGE_SUMMARY => self.apply_storage_summary(result),
                     protocol::method::SESSION_DELETE => self.apply_session_delete(result, cx),
@@ -519,7 +521,7 @@ impl DesktopView {
                                 });
                                 if has_invalid_session_id {
                                     self.fail_pending_navigation();
-                                    self.error = Some("The local service returned an invalid session list.".into());
+                                    self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
                                 } else {
                                     // Keep a locally derived title when the archive has
                                     // not persisted its own preview yet.
@@ -538,7 +540,7 @@ impl DesktopView {
                             }
                             Err(_) => {
                                 self.fail_pending_navigation();
-                                self.error = Some("The local service returned an invalid session list.".into());
+                                self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
                             }
                         }
                     }
@@ -552,18 +554,18 @@ impl DesktopView {
                             self.sessions.insert(0, session);
                             self.reset_session_state();
                             self.record_current_navigation();
-                            self.status = "Session ready. Submit a prompt to begin.".to_string();
+                            self.status = rust_i18n::t!("app.service.session_ready").to_string();
                             if let Some(draft) = first_submission {
                                 match self.enqueue_submission(draft, cx) {
                                     Ok(()) => self.pending_first_submission = true,
                                     Err(draft) => {
                                         self.retained_submission = Some(draft);
-                                        self.status = "Message not submitted".to_string();
+                                        self.status = rust_i18n::t!("app.composer.message_not_submitted").to_string();
                                     }
                                 }
                             }
                         } else {
-                            self.status = "Session creation failed".to_string();
+                            self.status = rust_i18n::t!("app.service.creation_failed").to_string();
                             self.retained_submission = first_submission;
                             self.error = Some(
                                 "The service returned an invalid session. Your message has not been submitted."
@@ -611,9 +613,9 @@ impl DesktopView {
                             if self.pending_submission.is_some() {
                                 self.recover_pending_submission(true);
                                 self.running = false;
-                                self.status = "Invalid turn acknowledgement".to_string();
+                                self.status = rust_i18n::t!("app.service.invalid_ack").to_string();
                             }
-                            self.error = Some("The service returned an invalid turn acknowledgement. Delivery could not be confirmed.".to_string());
+                            self.error = Some(rust_i18n::t!("app.service.invalid_ack_detail").to_string());
                             return;
                         };
                         // Lifecycle events can complete the turn before the request response arrives.
@@ -624,11 +626,11 @@ impl DesktopView {
                         self.pending_first_submission = false;
                         self.active_turn_id = Some(accepted.turn_id);
                         self.running = true;
-                        self.status = "Running".to_string();
+                        self.status = rust_i18n::t!("app.service.running").to_string();
                         self.try_send_pending_cancel();
                     }
                     protocol::method::TURN_CANCEL => {
-                        self.status = "Cancellation accepted; waiting for cleanup…".to_string();
+                        self.status = rust_i18n::t!("app.service.cancel_accepted").to_string();
                     }
                     _ => {}
                 }
@@ -649,10 +651,10 @@ impl DesktopView {
                         }) {
                             self.accept_workspace_review(snapshot, cx);
                         } else {
-                            self.fail_workspace_review("Invalid Git review response.".into());
+                            self.fail_workspace_review(rust_i18n::t!("app.service.review_invalid").to_string());
                         }
                     } else {
-                        self.fail_workspace_review("Invalid Git review response.".into());
+                        self.fail_workspace_review(rust_i18n::t!("app.service.review_invalid").to_string());
                     }
                     cx.notify();
                 }
@@ -666,7 +668,7 @@ impl DesktopView {
                 } else if let Some(result) = result {
                     self.begin_session_history_page(result, cx);
                 } else {
-                    self.fail_history_page("The local service returned an empty history response.".into(), cx);
+                    self.fail_history_page(rust_i18n::t!("app.service.empty_history").to_string(), cx);
                 }
             }
             BackendEvent::SessionOutputResponse { request_id, result, error } => {
@@ -740,7 +742,7 @@ impl DesktopView {
                 self.pending_interaction_response = None;
                 self.interaction = Some(interaction);
                 self.invalidate_webmcp_status();
-                self.status = "Waiting for your decision".to_string();
+                self.status = rust_i18n::t!("app.service.awaiting_decision").to_string();
             }
             BackendEvent::TurnStatus(status) => {
                 if !status.get(keys::SESSION_ID).and_then(Value::as_str).is_some_and(|session_id| {
@@ -758,7 +760,7 @@ impl DesktopView {
                 self.interrupt_cli_config_write();
                 self.interrupt_secret_save();
                 self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
-                self.fail_workspace_review("The local service exited before Git review completed.".into());
+                self.fail_workspace_review(rust_i18n::t!("app.service.review_exited").to_string());
                 self.clear_pending_interaction();
                 self.session_request = None;
                 self.pending_new_thread = false;
@@ -777,7 +779,7 @@ impl DesktopView {
                 if let Some(workspace) = self.pending_workspace.take() {
                     self.start_workspace(workspace, cx);
                 } else if authentication_required {
-                    self.status = "Provider credentials required".to_string();
+                    self.status = rust_i18n::t!("app.service.credentials_required").to_string();
                     let authentication_error = format!(
                         "VT Code could not authenticate the configured provider. In Terminal, run `vtcode auth` or `vtcode login <provider>`. {}",
                         service_reconnect_guidance(self.retained_submission.is_some())
@@ -788,13 +790,14 @@ impl DesktopView {
                     });
                 } else {
                     self.status = match status {
-                        Some(code) => format!("Local service exited with code {code}"),
-                        None => "Local service exited".to_string(),
+                        Some(code) => rust_i18n::t!("app.service.exited_code", code = code).to_string(),
+                        None => rust_i18n::t!("app.service.exited").to_string(),
                     };
-                    let reconnect_error = format!(
-                        "The local VT Code service disconnected. {}",
-                        service_reconnect_guidance(self.retained_submission.is_some())
-                    );
+                    let reconnect_error = rust_i18n::t!(
+                        "app.service.disconnected_detail",
+                        detail = service_reconnect_guidance(self.retained_submission.is_some())
+                    )
+                    .to_string();
                     self.error = Some(match self.error.take() {
                         Some(error) => format!("{error}\n\n{reconnect_error}"),
                         None => reconnect_error,
@@ -804,7 +807,7 @@ impl DesktopView {
             BackendEvent::LaunchFailed(error) => {
                 self.cancel_session_load_task();
                 self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
-                self.fail_workspace_review("The local service could not start.".into());
+                self.fail_workspace_review(rust_i18n::t!("app.service.review_no_start").to_string());
                 self.clear_pending_interaction();
                 self.session_request = None;
                 self.pending_new_thread = false;
@@ -852,7 +855,7 @@ impl DesktopView {
                 self.running = true;
                 self.active_turn_id = notification.turn_id;
                 self.set_selected_session_completed(false);
-                self.status = "Running".to_string();
+                self.status = rust_i18n::t!("app.service.running").to_string();
             }
             ThreadEvent::TurnCompleted(event) => {
                 self.pending_submission = None;
@@ -861,7 +864,7 @@ impl DesktopView {
                 self.active_turn_id = None;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
-                self.status = "Completed".to_string();
+                self.status = rust_i18n::t!("app.service.completed_status").to_string();
                 self.last_usage = Some(event.usage.clone());
                 self.set_selected_session_completed(true);
             }
@@ -885,7 +888,7 @@ impl DesktopView {
             ThreadEvent::Error(event) => {
                 self.transcript.push(TranscriptItem::notice(
                     format!("runtime-error-{}", uuid_like_id()),
-                    "Runtime error".into(),
+                    rust_i18n::t!("app.transcript.error_title").to_string().into(),
                     event.message.clone(),
                     NoticeSeverity::Error,
                 ));
@@ -929,13 +932,14 @@ impl DesktopView {
             ThreadEvent::AppSandboxDenied(event) => {
                 self.transcript.push(TranscriptItem::notice(
                     format!("app-sandbox-denied-{}", uuid_like_id()),
-                    "App UI refused".into(),
-                    format!(
-                        "{} offered app UI refused by the '{}' tier: {}",
-                        event.tool,
-                        event.tier,
-                        event.uris.join(", "),
-                    ),
+                    rust_i18n::t!("app.transcript.app_refused_title").to_string().into(),
+                    rust_i18n::t!(
+                        "app.transcript.app_refused_body",
+                        tool = event.tool.as_str(),
+                        tier = event.tier.as_str(),
+                        uris = event.uris.join(", ")
+                    )
+                    .to_string(),
                     NoticeSeverity::Warning,
                 ));
             }

@@ -15,9 +15,13 @@ use vtcode_desktop_protocol as protocol;
 use super::{DesktopButtonExt, DesktopView, desktop_button};
 
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
-const WEBMCP_COMMANDS_HELP: &str =
-    "Commands: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop.";
-const WEBMCP_CONNECT_USAGE: &str = "Usage: /webmcp connect [--replace] <exact-browser-origin>";
+/// Slash-parse failure: help text goes through the localized notice catalog,
+/// usage renders from the `app.webmcp` catalog at the call site.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WebmcpParseError {
+    CommandsHelp,
+    ConnectUsage,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum WebmcpNotice {
@@ -60,7 +64,7 @@ enum WebmcpCommand {
     Roots,
 }
 
-fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
+fn parse_command(input: &str) -> Option<Result<WebmcpCommand, WebmcpParseError>> {
     let input = input.trim();
     // The CLI dispatcher lowercases the command token, so `/WebMCP` must take
     // the same native path as `/webmcp`; otherwise pairing bypasses the
@@ -74,15 +78,15 @@ fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
         return None;
     }
     let command = parse_webmcp_slash_command(rest.trim()).map_err(|error| match error {
-        WebmcpSlashCommandParseError::UnknownCommand => WEBMCP_COMMANDS_HELP,
-        WebmcpSlashCommandParseError::InvalidConnectionArguments => WEBMCP_CONNECT_USAGE,
+        WebmcpSlashCommandParseError::UnknownCommand => WebmcpParseError::CommandsHelp,
+        WebmcpSlashCommandParseError::InvalidConnectionArguments => WebmcpParseError::ConnectUsage,
     });
     Some(command.and_then(|command| match command {
         WebmcpSlashCommand::Status => Ok(WebmcpCommand::Status),
         WebmcpSlashCommand::Help => Ok(WebmcpCommand::Help),
         WebmcpSlashCommand::Tools => Ok(WebmcpCommand::Tools),
         WebmcpSlashCommand::Roots => Ok(WebmcpCommand::Roots),
-        WebmcpSlashCommand::ConnectHelp => Err(WEBMCP_CONNECT_USAGE),
+        WebmcpSlashCommand::ConnectHelp => Err(WebmcpParseError::ConnectUsage),
         WebmcpSlashCommand::Connect { origin, replace } => Ok(WebmcpCommand::Pair { origin, replace }),
         WebmcpSlashCommand::Unpair => Ok(WebmcpCommand::Stop),
     }))
@@ -120,19 +124,16 @@ impl DesktopView {
         let command = match command {
             Ok(command) => command,
             Err(error) => {
-                self.error = Some(if error == WEBMCP_COMMANDS_HELP {
-                    WebmcpNotice::CommandsHelp.text()
-                } else {
-                    error.to_string()
+                self.error = Some(match error {
+                    WebmcpParseError::CommandsHelp => WebmcpNotice::CommandsHelp.text(),
+                    WebmcpParseError::ConnectUsage => rust_i18n::t!("app.webmcp.connect_usage").to_string(),
                 });
                 cx.notify();
                 return true;
             }
         };
         if !self.attachments.is_empty() {
-            self.error = Some(
-                "Run /webmcp commands without draft attachments; the attachments are still in the composer.".into(),
-            );
+            self.error = Some(rust_i18n::t!("app.webmcp.attachments_error").to_string());
             cx.notify();
             return true;
         }
@@ -181,9 +182,9 @@ impl DesktopView {
             .test_support()
             .role(gpui_kit::Role::Group)
             .aria_label(if origin_controls {
-                "WebMCP browser pairing"
+                rust_i18n::t!("app.webmcp.pairing_title").to_string()
             } else {
-                "WebMCP connection status"
+                rust_i18n::t!("app.webmcp.status_title").to_string()
             })
             .w_full()
             .min_w_0()
@@ -194,9 +195,9 @@ impl DesktopView {
             .bg(colors.secondary)
             .p_4()
             .child(div().font_semibold().child(if origin_controls {
-                "Pair a browser app"
+                rust_i18n::t!("app.webmcp.pair_app").to_string()
             } else {
-                "WebMCP connection"
+                rust_i18n::t!("app.webmcp.connection_title").to_string()
             }));
 
         if origin_controls {
@@ -205,7 +206,7 @@ impl DesktopView {
                     div()
                         .text_xs()
                         .text_color(colors.muted_foreground)
-                        .child("Pair a browser app with this workspace and the active VT Code session."),
+                        .child(rust_i18n::t!("app.webmcp.pair_description").to_string()),
                 )
                 .child(self.render_webmcp_origin_controls(configured_origins, busy, cx));
 
@@ -224,47 +225,76 @@ impl DesktopView {
                         .rounded_md()
                         .bg(colors.secondary)
                         .p_3()
-                        .child(div().text_sm().font_semibold().child("Pair this browser"))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_semibold()
+                                .child(rust_i18n::t!("app.webmcp.pair_browser").to_string()),
+                        )
+                        .child(
+                            div().text_xs().text_color(colors.muted_foreground).child(
+                                rust_i18n::t!(
+                                    "app.webmcp.pairing_expires",
+                                    origin = pairing.origin.as_str(),
+                                    secs = pairing.expires_in_secs
+                                )
+                                .to_string(),
+                            ),
+                        )
+                        .child(copy_value_row(
+                            rust_i18n::t!("app.webmcp.ws_url").to_string(),
+                            endpoint.clone(),
+                            "copy-webmcp-endpoint",
+                            cx,
+                        ))
+                        .child(copy_value_row(
+                            rust_i18n::t!("app.webmcp.onetime_code").to_string(),
+                            pairing_code.clone(),
+                            "copy-webmcp-code",
+                            cx,
+                        ))
                         .child(
                             div()
                                 .text_xs()
                                 .text_color(colors.muted_foreground)
-                                .child(format!("{} · expires in {} seconds", pairing.origin, pairing.expires_in_secs)),
-                        )
-                        .child(copy_value_row("WebSocket URL", endpoint.clone(), "copy-webmcp-endpoint", cx))
-                        .child(copy_value_row("One-time code", pairing_code.clone(), "copy-webmcp-code", cx))
-                        .child(div().text_xs().text_color(colors.muted_foreground).child(
-                            "In the browser app, open Settings → Connect to a local VT Code bridge and paste both values.",
-                        )),
+                                .child(rust_i18n::t!("app.webmcp.pairing_instructions").to_string()),
+                        ),
                 );
             }
         } else {
+            let connected = rust_i18n::t!("app.webmcp.connected_prefix").to_string();
             let status_label = match status {
                 Some(status)
                     if status.running
                         && (self.session_request.is_some() || self.running || self.interaction.is_some()) =>
                 {
-                    "Connected · the selected desktop session cannot accept a turn right now"
+                    format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_busy"))
                 }
-                Some(status) if status.running && busy => "Connected · checking desktop session availability",
+                Some(status) if status.running && busy => {
+                    format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_checking"))
+                }
                 Some(status) if status.running && self.webmcp_status_dirty => {
-                    "Connected · desktop session availability unavailable"
+                    format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_unavailable"))
                 }
-                Some(status) if status.running && status.turns_available => "Connected · desktop session ready",
+                Some(status) if status.running && status.turns_available => {
+                    format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_ready"))
+                }
                 Some(status) if status.running && status.session_id.is_some() => {
-                    "Connected · the selected desktop session cannot accept a turn right now"
+                    format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_busy"))
                 }
-                Some(status) if status.running => "Connected · select or create a desktop session for agent turns",
-                Some(_) => "Not connected",
-                None if busy => "Checking bridge state…",
-                None => "Bridge state unavailable",
+                Some(status) if status.running => {
+                    format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_select"))
+                }
+                Some(_) => rust_i18n::t!("app.webmcp.not_connected").to_string(),
+                None if busy => rust_i18n::t!("app.webmcp.checking_state").to_string(),
+                None => rust_i18n::t!("app.webmcp.state_unavailable").to_string(),
             };
             section = section
                 .child(
                     div()
                         .text_xs()
                         .text_color(colors.muted_foreground)
-                        .child("The browser app shares this workspace and the active VT Code session."),
+                        .child(rust_i18n::t!("app.webmcp.shares_description").to_string()),
                 )
                 .child(
                     div()
@@ -277,7 +307,7 @@ impl DesktopView {
                                 .id("webmcp-session-status")
                                 .test_support()
                                 .role(gpui_kit::Role::Status)
-                                .aria_label(status_label)
+                                .aria_label(status_label.clone())
                                 .min_w_0()
                                 .text_sm()
                                 .text_color(colors.foreground)
@@ -286,7 +316,7 @@ impl DesktopView {
                         .child(
                             desktop_button("refresh-webmcp-status")
                                 .icon(IconName::RefreshCw)
-                                .accessibility_label("Refresh WebMCP connection status")
+                                .accessibility_label(rust_i18n::t!("app.webmcp.refresh_status").to_string())
                                 .ghost()
                                 .small()
                                 .desktop_disabled(busy)
@@ -341,7 +371,7 @@ impl DesktopView {
                 .child(
                     Textarea::new(&self.webmcp_origin_input)
                         .accessibility_id("webmcp-origin")
-                        .aria_label("Browser app origin")
+                        .aria_label(rust_i18n::t!("app.webmcp.origin_aria").to_string())
                         .cursor_text()
                         .bg(colors.popover)
                         .w_full(),
@@ -358,7 +388,7 @@ impl DesktopView {
                 .child(
                     desktop_button("pair-webmcp")
                         .icon(IconName::ExternalLink)
-                        .label("Create pairing code")
+                        .label(rust_i18n::t!("app.webmcp.create_code").to_string())
                         .desktop_disabled(busy || origin.is_empty())
                         .on_click(cx.listener(move |view, _, _, cx| {
                             view.request_webmcp_pair(origin.clone(), false);
@@ -367,7 +397,7 @@ impl DesktopView {
                 )
                 .child(
                     desktop_button("open-webmcp-app")
-                        .label("Open browser app")
+                        .label(rust_i18n::t!("app.webmcp.open_app").to_string())
                         .ghost()
                         .on_click(|_, _, cx| cx.open_url(WEBMCP_APP_URL)),
                 )
@@ -375,7 +405,7 @@ impl DesktopView {
                     row.child(
                         desktop_button("stop-webmcp")
                             .icon(IconName::X)
-                            .label("Disconnect")
+                            .label(rust_i18n::t!("app.webmcp.disconnect").to_string())
                             .ghost()
                             .desktop_disabled(busy)
                             .on_click(cx.listener(|view, _, _, cx| {
@@ -515,7 +545,7 @@ impl DesktopView {
 }
 
 fn copy_value_row(
-    value_label: &'static str,
+    value_label: String,
     value: String,
     id: &'static str,
     cx: &mut Context<DesktopView>,
@@ -532,7 +562,7 @@ fn copy_value_row(
                 .w(px(96.))
                 .text_xs()
                 .text_color(cx.theme().colors.muted_foreground)
-                .child(value_label),
+                .child(value_label.clone()),
         )
         .child(
             div()
@@ -546,8 +576,8 @@ fn copy_value_row(
         .child(
             desktop_button(id)
                 .icon(IconName::Copy)
-                .accessibility_label(format!("Copy {value_label}"))
-                .tooltip(format!("Copy {value_label}"))
+                .accessibility_label(rust_i18n::t!("app.webmcp.copy_value", label = value_label.as_str()).to_string())
+                .tooltip(rust_i18n::t!("app.webmcp.copy_value", label = value_label.as_str()).to_string())
                 .ghost()
                 .small()
                 .on_click(move |_, window, cx| {

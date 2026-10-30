@@ -122,9 +122,12 @@ impl DesktopView {
                         .when_some(workspace_name, |title, name| {
                             title.child(
                                 desktop_button("welcome-workspace")
-                                    .accessibility_label(format!("Change workspace, current: {name}"))
+                                    .accessibility_label(
+                                        rust_i18n::t!("app.transcript.change_workspace", name = name.as_str())
+                                            .to_string(),
+                                    )
                                     .tooltip_with_action(
-                                        "Choose workspace",
+                                        rust_i18n::t!("app.transcript.choose_workspace").to_string(),
                                         &ChooseWorkspace,
                                         Some(key_context::DESKTOP),
                                     )
@@ -158,7 +161,7 @@ impl DesktopView {
                 .id("welcome")
                 .test_support()
                 .role(gpui_kit::Role::Group)
-                .aria_label("VT Code welcome")
+                .aria_label(rust_i18n::t!("app.transcript.welcome_label").to_string())
                 .size_full()
                 .child(
                     EmptyState::new()
@@ -230,8 +233,10 @@ impl DesktopView {
                 self.message_scroller.clone(),
                 cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
             )
-            .with_jump_button_label("Jump to latest message")
-            .with_jump_button_renderer(|button| button.accessibility_label("Jump to latest message"))
+            .with_jump_button_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
+            .with_jump_button_renderer(|button| {
+                button.accessibility_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
+            })
             // Row spacing is applied by render_transcript_row so collapsed tool
             // placeholders do not each reserve the scroller's default 32 px gap.
             .with_row_style(gpui_kit::StyleRefinement::default().pb_0())
@@ -244,7 +249,7 @@ impl DesktopView {
         };
         div()
             .id("transcript-scroll")
-            .aria_label("Conversation")
+            .aria_label(rust_i18n::t!("app.transcript.conversation_label").to_string())
             .role(gpui_kit::Role::Region)
             .test_support()
             .flex_1()
@@ -273,7 +278,7 @@ impl DesktopView {
             .id("zen-welcome")
             .test_support()
             .role(gpui_kit::Role::Group)
-            .aria_label("VT Code zen start")
+            .aria_label(rust_i18n::t!("app.transcript.zen_start_label").to_string())
             .size_full()
             .child(
                 EmptyState::new()
@@ -330,15 +335,15 @@ impl DesktopView {
     /// and thread header are hidden.
     pub(super) fn render_navigation_loading(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let label = match self.pending_navigation_direction() {
-            Some(NavigationDirection::Back) => "Navigating back…",
-            Some(NavigationDirection::Forward) => "Navigating forward…",
-            None => "Navigating…",
+            Some(NavigationDirection::Back) => rust_i18n::t!("app.transcript.navigating_back").to_string(),
+            Some(NavigationDirection::Forward) => rust_i18n::t!("app.transcript.navigating_forward").to_string(),
+            None => rust_i18n::t!("app.transcript.navigating").to_string(),
         };
         div()
             .id("navigation-loading")
             .test_support()
             .role(gpui_kit::Role::Status)
-            .aria_label(label)
+            .aria_label(label.clone())
             .w_full()
             .flex()
             .items_center()
@@ -490,8 +495,8 @@ impl DesktopView {
                                 slot.child(
                                     desktop_button(format!("copy-message-{}", item.id))
                                         .icon(IconName::Copy)
-                                        .accessibility_label("Copy message")
-                                        .tooltip("Copy message")
+                                        .accessibility_label(rust_i18n::t!("app.transcript.copy_message").to_string())
+                                        .tooltip(rust_i18n::t!("app.transcript.copy_message").to_string())
                                         .ghost()
                                         .xsmall()
                                         .tab_stop(false)
@@ -558,12 +563,14 @@ impl DesktopView {
             ActivityState::Other
         };
         let status_color = Self::activity_status_color(status, colors);
-        let mut label = format!("{} tool actions", summary.total);
+        let mut label = rust_i18n::t!("app.transcript.activity_total", total = summary.total).to_string();
         if running > 0 {
-            label.push_str(&format!(" · {running} running"));
+            label.push_str(" · ");
+            label.push_str(rust_i18n::t!("app.transcript.activity_running", count = running).as_ref());
         }
         if failed > 0 {
-            label.push_str(&format!(" · {failed} failed"));
+            label.push_str(" · ");
+            label.push_str(rust_i18n::t!("app.transcript.activity_failed", count = failed).as_ref());
         }
         desktop_button(format!("activity-group-{}", head.id))
             .child(
@@ -607,7 +614,14 @@ impl DesktopView {
                         .small(),
                     ),
             )
-            .accessibility_label(format!("{} {label}", if head.activity_expanded { "Collapse" } else { "Expand" }))
+            .accessibility_label(format!(
+                "{} {label}",
+                if head.activity_expanded {
+                    rust_i18n::t!("app.transcript.collapse")
+                } else {
+                    rust_i18n::t!("app.transcript.expand")
+                }
+            ))
             .toggled(head.activity_expanded)
             .ghost()
             .small()
@@ -630,19 +644,27 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let id = item.id.clone();
         let status = if item.has_activity_status {
-            item.text.lines().next().unwrap_or_default()
+            item.text.lines().next().unwrap_or_default().to_string()
         } else {
-            "Archived output"
+            rust_i18n::t!("app.transcript.archived_output").to_string()
         };
-        let state = ActivityState::from_status(status);
+        let state = ActivityState::from_status(&status);
         let status_color = Self::activity_status_color(state, colors);
         let mut panel = div().w_full().max_w(px(self.content_width())).flex().flex_col().gap_1().child(
             desktop_button(format!("tool-{}", item.id))
-                .accessibility_label(format!(
-                    "{} for {}, status: {status}",
-                    if item.expanded { "Hide details" } else { "Show details" },
-                    item.title
-                ))
+                .accessibility_label(
+                    rust_i18n::t!(
+                        "app.transcript.details_label",
+                        toggle = if item.expanded {
+                            rust_i18n::t!("app.transcript.hide_details").to_string()
+                        } else {
+                            rust_i18n::t!("app.transcript.show_details").to_string()
+                        },
+                        title = item.title.as_str(),
+                        status = status.as_str()
+                    )
+                    .to_string(),
+                )
                 .tooltip(format!("{} · {status}", item.title))
                 .ghost()
                 .small()
@@ -714,8 +736,11 @@ impl DesktopView {
                         div().flex().justify_end().child(
                             desktop_button(format!("copy-tool-output-{}", item.id))
                                 .icon(IconName::Copy)
-                                .accessibility_label(format!("Copy full output for {}", item.title))
-                                .tooltip("Copy full captured output")
+                                .accessibility_label(
+                                    rust_i18n::t!("app.transcript.copy_output_for", title = item.title.to_string())
+                                        .to_string(),
+                                )
+                                .tooltip(rust_i18n::t!("app.transcript.copy_full_output").to_string())
                                 .ghost()
                                 .xsmall()
                                 .on_click(move |_, window, app| {
@@ -757,11 +782,11 @@ impl DesktopView {
         };
         let id = item.id.clone();
         let status_label = if diff.failed {
-            "patch failed"
+            rust_i18n::t!("app.transcript.patch_failed").to_string()
         } else if diff.incomplete {
-            "preview incomplete"
+            rust_i18n::t!("app.transcript.preview_incomplete").to_string()
         } else {
-            "applied"
+            rust_i18n::t!("app.transcript.applied").to_string()
         };
         let toggle_id = id.clone();
         let mut stats = div().flex().items_center().gap_2().text_sm();
@@ -800,7 +825,11 @@ impl DesktopView {
             )
             .child(
                 desktop_button(format!("diff-{}", item.id))
-                    .label(if item.expanded { "Hide diff" } else { "Show diff" })
+                    .label(if item.expanded {
+                        rust_i18n::t!("app.transcript.hide_diff").to_string()
+                    } else {
+                        rust_i18n::t!("app.transcript.show_diff").to_string()
+                    })
                     .ghost()
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.transcript.toggle_diff(&toggle_id);
@@ -812,7 +841,7 @@ impl DesktopView {
             let copy_id = id.clone();
             header = header.child(
                 desktop_button(format!("copy-patch-{}", item.id))
-                    .label("Copy patch")
+                    .label(rust_i18n::t!("app.transcript.copy_patch").to_string())
                     .ghost()
                     .on_click(cx.listener(move |view, _, window, cx| {
                         let Some(patch) = view
@@ -860,7 +889,7 @@ impl DesktopView {
                 div()
                     .text_xs()
                     .text_color(colors.muted_foreground)
-                    .child("Some file previews were unavailable for this change set."),
+                    .child(rust_i18n::t!("app.transcript.previews_unavailable").to_string()),
             );
         }
 
@@ -923,7 +952,7 @@ impl DesktopView {
                         .px_2()
                         .text_xs()
                         .text_color(colors.muted_foreground)
-                        .child("Diff truncated after 2,000 lines. Use Copy patch for the full change."),
+                        .child(rust_i18n::t!("app.transcript.diff_truncated").to_string()),
                 );
             }
             body = body.child(diff_view);

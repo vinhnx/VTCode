@@ -179,3 +179,27 @@ pub(super) fn set_language(language: UiLanguage) {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_composer;
+#[cfg(test)]
+mod tests_configuration;
+#[cfg(test)]
+mod tests_inspector;
+#[cfg(test)]
+mod tests_locales;
+#[cfg(test)]
+mod tests_misc;
+#[cfg(test)]
+mod tests_navigation;
+#[cfg(test)]
+mod tests_service;
+#[cfg(test)]
+mod tests_session;
+#[cfg(test)]
+mod tests_shortcuts;
+#[cfg(test)]
+mod tests_transcript;
+#[cfg(test)]
+mod tests_webmcp;
+#[cfg(test)]
+mod tests_workspace;

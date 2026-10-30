@@ -25,7 +25,7 @@ impl Render for DesktopView {
             .id("workspace-surface")
             .test_support()
             .role(gpui_kit::Role::Group)
-            .aria_label("Conversation workspace")
+            .aria_label(rust_i18n::t!("app.navigation.conversation_workspace").to_string())
             .relative()
             .flex_1()
             .min_w_0()
