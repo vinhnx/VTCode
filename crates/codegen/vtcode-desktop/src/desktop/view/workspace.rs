@@ -343,6 +343,7 @@ impl DesktopView {
         }
         self.configuration = None;
         self.cli_config_settings = None;
+        self.config_catalog_cache = None;
         self.config_editor = None;
         self.config_editor_error = None;
         self.config_write_pending = false;

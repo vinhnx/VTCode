@@ -259,8 +259,9 @@ impl DesktopView {
             }
         });
         let config_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search settings…"));
-        let config_search_subscription = cx.subscribe_in(&config_search_input, window, |_, _, event, _, cx| {
+        let config_search_subscription = cx.subscribe_in(&config_search_input, window, |view, _, event, _, cx| {
             if matches!(event, InputEvent::Change) {
+                view.refresh_config_catalog(cx);
                 cx.notify();
             }
         });
@@ -400,6 +401,9 @@ impl DesktopView {
             update_status: None,
             update_request_pending: false,
             cli_config_settings: None,
+            config_catalog_cache: None,
+            config_catalog_epoch: 0,
+            config_visible_row_limit: configuration::CONFIG_GROUP_PAGE_SIZE,
             config_target: protocol::ConfigTarget::Workspace,
             config_search_input,
             _config_search_subscription: config_search_subscription,

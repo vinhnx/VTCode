@@ -391,7 +391,7 @@ impl DesktopView {
                         }
                     }
                     protocol::method::CONFIG_SETTINGS_READ => {
-                        self.handle_cli_config_read_response(result);
+                        self.handle_cli_config_read_response(result, cx);
                     }
                     protocol::method::CONFIG_SETTINGS_WRITE => {
                         self.handle_cli_config_write_response(result, cx);

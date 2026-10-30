@@ -25,7 +25,7 @@
   and persists the CLI default. Save permission choices only after acknowledgement; restore before Send.
 - New `view/` splits use `use super::*` + `impl DesktopView`; cross-module items are `pub(super)`, test-only re-exports `#[cfg(test)]`. GUI tests live in `view/tests/<topic>.rs` (`use super::*;` only); shared helpers and `pub(super) use` imports stay in `tests/mod.rs`.
 - Rust 2024 render helpers in loops must return `AnyElement` when they capture `&mut Context`.
-- `/config` opens the dedicated page (search, groups rail, value-first rows, trailing notes); deep-links resolve
-  path → group → search, runtime sections stay CLI. Sheet slide is wall-clock (sheet-click tests need reduce motion); opacity fades stay clickable.
+- `/config` opens the dedicated page (search, icon rail without counts, value-first rows, trailing notes); deep-links resolve
+  path → group → search, runtime sections stay CLI. Catalog grouping is memoized per snapshot epoch + query (refresh on mutation); groups page at 20 rows with Show more. Sheet slide is wall-clock (sheet-click tests need reduce motion); opacity fades stay clickable.
 - Notification decisions needing the window run as pre-handlers in `process_drained_event`; `handle_backend_event` only stores state.
 - Unauthenticated services stay connected: submit is blocked with credential guidance while local commands still work. Static-key providers offer an in-app Settings secret form (`config/secret/store`, masked input wiped on send, form-scoped errors); login-flow providers keep Terminal/Reload guidance. Zen empty threads render `zen-welcome` (centered mark + one greeting line), never the full welcome.

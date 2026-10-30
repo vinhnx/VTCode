@@ -171,7 +171,21 @@ impl DesktopView {
     pub(super) fn set_config_search_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.config_search_input
             .update(cx, |input, cx| input.set_value(query, window, cx));
+        self.refresh_config_catalog(cx);
         cx.notify();
+    }
+
+    /// Rebuild the memoized catalog grouping for the current search query and
+    /// reset row paging to the first page. Called on every snapshot/query
+    /// change: read responses, keystrokes via the search subscription, and
+    /// programmatic query sets.
+    pub(super) fn refresh_config_catalog(&mut self, cx: &App) {
+        let query = self.config_search_query(cx);
+        self.config_catalog_cache = self
+            .cli_config_settings
+            .as_ref()
+            .map(|snapshot| build_config_catalog_cache(snapshot, &query, self.config_catalog_epoch));
+        self.config_visible_row_limit = CONFIG_GROUP_PAGE_SIZE;
     }
 
     /// Resolve a `/config <target>` deep link against the loaded catalog.
@@ -495,16 +509,23 @@ impl DesktopView {
         }
     }
 
-    pub(super) fn handle_cli_config_read_response(&mut self, result: Value) {
+    pub(super) fn handle_cli_config_read_response(&mut self, result: Value, cx: &App) {
         match serde_json::from_value::<protocol::ConfigSettingsSnapshot>(result) {
             Ok(snapshot) => {
                 self.cli_config_settings = Some(snapshot);
+                self.config_catalog_epoch = self.config_catalog_epoch.wrapping_add(1);
+                // Keep the reader's page across reloads (post-write refresh
+                // included); new queries and group switches reset via refresh.
+                let limit = self.config_visible_row_limit;
+                self.refresh_config_catalog(cx);
+                self.config_visible_row_limit = limit.max(CONFIG_GROUP_PAGE_SIZE);
                 if let Some(notice) = self.config_write_notice.take() {
                     self.status = format!("{notice} Settings reloaded for the next session.");
                 }
             }
             Err(_) => {
                 self.cli_config_settings = None;
+                self.config_catalog_cache = None;
                 self.error = Some("The CLI returned an invalid settings catalog.".into());
             }
         }
@@ -537,6 +558,100 @@ fn target_label(target: protocol::ConfigTarget) -> &'static str {
 /// Curated CLI `/config` group, defaulting to the shared advanced bucket.
 pub(super) fn config_group_name(setting: &protocol::ConfigSetting) -> &str {
     setting.group.as_deref().unwrap_or("Advanced settings")
+}
+
+/// Catalog rows rendered per group before the "Show more" control. The
+/// catalog holds ~900 settings, so an unbounded group would build thousands
+/// of elements per render; paging keeps every frame under a fixed budget.
+/// Twenty rows cover roughly two viewports while keeping frames cheap.
+pub(super) const CONFIG_GROUP_PAGE_SIZE: usize = 20;
+
+/// One filtered catalog group. Snapshot indices keep the cache small and let
+/// render borrow current values without cloning settings.
+#[derive(Clone, Debug, Default)]
+pub(super) struct ConfigCatalogGroup {
+    pub(super) name: String,
+    pub(super) description: Option<String>,
+    pub(super) indices: Vec<usize>,
+}
+
+/// Memoized catalog grouping for one snapshot epoch plus search query.
+/// Rebuilt by `refresh_config_catalog` on every snapshot/query change so
+/// render skips the O(settings) scan on unrelated updates (hover, focus,
+/// target switches, editor open/close).
+#[derive(Clone, Debug, Default)]
+pub(super) struct ConfigCatalogCache {
+    pub(super) query: String,
+    pub(super) epoch: u64,
+    pub(super) groups: Vec<ConfigCatalogGroup>,
+    pub(super) total: usize,
+    pub(super) editable_total: usize,
+    pub(super) visible_count: usize,
+}
+
+impl ConfigCatalogCache {
+    pub(super) fn is_fresh(&self, query: &str, epoch: u64) -> bool {
+        self.epoch == epoch && self.query == query
+    }
+
+    pub(super) fn group(&self, name: &str) -> Option<&ConfigCatalogGroup> {
+        self.groups.iter().find(|group| group.name == name)
+    }
+}
+
+/// Pure grouping pass: filter by query, bucket by group name in catalog
+/// order, and precompute the header counts. Shared by the cache refresh and
+/// render's cold-start fallback so there is a single grouping code path.
+pub(super) fn build_config_catalog_cache(
+    snapshot: &protocol::ConfigSettingsSnapshot,
+    query: &str,
+    epoch: u64,
+) -> ConfigCatalogCache {
+    let terms = config_search_terms(query);
+    let mut grouped = std::collections::BTreeMap::<&str, Vec<usize>>::new();
+    for (index, setting) in snapshot.settings.iter().enumerate() {
+        if setting_matches_query(setting, &terms) {
+            grouped.entry(config_group_name(setting)).or_default().push(index);
+        }
+    }
+    let mut groups = Vec::with_capacity(grouped.len());
+    let mut visible_count = 0;
+    for (name, indices) in grouped {
+        visible_count += indices.len();
+        let description = indices
+            .iter()
+            .filter_map(|index| snapshot.settings.get(*index))
+            .find_map(|setting| setting.group_description.clone());
+        groups.push(ConfigCatalogGroup { name: name.to_owned(), description, indices });
+    }
+    let editable_total = snapshot.settings.iter().filter(|setting| setting.editable).count();
+    ConfigCatalogCache {
+        query: query.to_owned(),
+        epoch,
+        groups,
+        total: snapshot.settings.len(),
+        editable_total,
+        visible_count,
+    }
+}
+
+/// Rail icon per catalog group. Unknown groups (CLI additions, test fixtures)
+/// fall back to a neutral glyph so the rail never breaks.
+pub(super) fn config_group_icon(group: &str) -> IconName {
+    if group == curated::CURATED_GROUP_NAME {
+        return IconName::House;
+    }
+    match group {
+        "Model & Provider" => IconName::Bot,
+        "Agent & Automation" => IconName::RefreshCw,
+        "Approvals & Security" => IconName::ShieldCheck,
+        "Tools & Integrations" => IconName::Wrench,
+        "Context & Memory" => IconName::FileText,
+        "Interface & Terminal" => IconName::Terminal,
+        "Performance & Diagnostics" => IconName::Activity,
+        "Advanced settings" => IconName::Settings2,
+        _ => IconName::Ellipsis,
+    }
 }
 
 /// How a `/config <target>` deep link resolved against the loaded catalog.

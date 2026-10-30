@@ -1,6 +1,7 @@
 //! CLI configuration page, setting rows, and editor dialog renders.
 use super::configuration::{
-    ConfigValueKind, config_group_name, config_search_terms, setting_matches_query, value_summary,
+    CONFIG_GROUP_PAGE_SIZE, ConfigCatalogGroup, ConfigValueKind, build_config_catalog_cache, config_group_icon,
+    value_summary,
 };
 use super::*;
 use gpui_kit::component::select::Select;
@@ -9,29 +10,34 @@ impl DesktopView {
     pub(super) fn render_cli_config_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let query = self.config_search_query(cx);
-        let terms = config_search_terms(&query);
-        let mut groups = std::collections::BTreeMap::<String, Vec<&protocol::ConfigSetting>>::new();
-        if let Some(snapshot) = self.cli_config_settings.as_ref() {
-            for setting in &snapshot.settings {
-                if setting_matches_query(setting, &terms) {
-                    groups.entry(config_group_name(setting).to_owned()).or_default().push(setting);
-                }
+        let searching = !query.is_empty();
+        // The cache is fresh on every production path (refresh runs on each
+        // snapshot/query change); the cold-start fallback keeps direct
+        // snapshot swaps correct without a second grouping implementation.
+        let catalog_fallback;
+        let catalog = match self.config_catalog_cache.as_ref() {
+            Some(cached) if cached.is_fresh(&query, self.config_catalog_epoch) => Some(cached),
+            _ => {
+                catalog_fallback = self
+                    .cli_config_settings
+                    .as_ref()
+                    .map(|snapshot| build_config_catalog_cache(snapshot, &query, self.config_catalog_epoch));
+                catalog_fallback.as_ref()
             }
-        }
-        let (total, editable_total) = self.cli_config_settings.as_ref().map_or((0, 0), |snapshot| {
-            (snapshot.settings.len(), snapshot.settings.iter().filter(|setting| setting.editable).count())
-        });
-        let visible_count: usize = groups.values().map(Vec::len).sum();
+        };
+        let groups: &[ConfigCatalogGroup] = catalog.map_or(&[], |catalog| catalog.groups.as_slice());
+        let (total, editable_total, visible_count) =
+            catalog.map_or((0, 0, 0), |catalog| (catalog.total, catalog.editable_total, catalog.visible_count));
         let selected = self
             .config_page_group
             .as_ref()
-            .filter(|group| groups.contains_key(*group))
-            .or_else(|| groups.keys().next())
+            .filter(|group| groups.iter().any(|cached| &cached.name == *group))
+            .or_else(|| groups.first().map(|group| &group.name))
             .cloned();
-        let counts = if terms.is_empty() {
-            format!("{editable_total} editable of {total} settings")
-        } else {
+        let counts = if searching {
             format!("{visible_count} of {total} match \"{query}\"")
+        } else {
+            format!("{editable_total} editable of {total} settings")
         };
 
         let mut header = div()
@@ -125,14 +131,14 @@ impl DesktopView {
             );
         }
 
-        let curated_selected = terms.is_empty()
+        let curated_selected = !searching
             && self.cli_config_settings.is_some()
             && self
                 .config_page_group
                 .as_deref()
                 .is_none_or(|group| group == curated::CURATED_GROUP_NAME);
         let body = if curated_selected {
-            let rail = self.render_config_rail(&groups, Some(curated::CURATED_GROUP_NAME), true, cx);
+            let rail = self.render_config_rail(groups, Some(curated::CURATED_GROUP_NAME), true, cx);
             let content = self.render_config_content_frame(self.render_curated_configuration(cx));
             div()
                 .flex_1()
@@ -192,29 +198,65 @@ impl DesktopView {
                         )
                         .child(self.render_config_page_footer(cx)),
                 ),
-                (Some(_), Some(name)) => {
-                    let rail = self.render_config_rail(&groups, selected.as_deref(), terms.is_empty(), cx);
+                (Some(snapshot), Some(name)) => {
+                    let rail = self.render_config_rail(groups, selected.as_deref(), !searching, cx);
+                    let catalog_group = catalog.and_then(|catalog| catalog.group(name));
+                    let row_count = catalog_group.map_or(0, |group| group.indices.len());
+                    let limit = self.config_visible_row_limit.max(1);
                     let mut list = div().flex().flex_col();
-                    if let Some(settings) = groups.get(name) {
-                        for (index, setting) in settings.iter().enumerate() {
-                            if index > 0 {
+                    let mut shown = 0;
+                    if let Some(catalog_group) = catalog_group {
+                        for setting in catalog_group
+                            .indices
+                            .iter()
+                            .filter_map(|index| snapshot.settings.get(*index))
+                            .take(limit)
+                        {
+                            if shown > 0 {
                                 list = list.child(row_divider(&colors));
                             }
+                            shown += 1;
                             list = list.child(self.render_config_setting_row(setting, cx));
                         }
                     }
-                    let description = groups
-                        .get(name)
-                        .and_then(|settings| settings.iter().find_map(|setting| setting.group_description.as_ref()));
+                    if row_count > shown {
+                        list = list.child(
+                            div().pt_2().child(
+                                desktop_button("config-show-more")
+                                    .label(format!("Show more ({} remaining)", row_count - shown))
+                                    .accessibility_label(format!("Show more settings, {shown} of {row_count} shown"))
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(|view, _, _, cx| {
+                                        view.config_visible_row_limit =
+                                            view.config_visible_row_limit.saturating_add(CONFIG_GROUP_PAGE_SIZE);
+                                        cx.notify();
+                                    })),
+                            ),
+                        );
+                    }
+                    let status = if row_count > shown {
+                        format!("Showing {shown} of {row_count} settings")
+                    } else {
+                        format!("{row_count} settings")
+                    };
                     let mut group = div()
                         .flex()
                         .flex_col()
                         .gap_2()
                         .child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.clone()));
-                    if let Some(description) = description {
+                    if let Some(description) =
+                        catalog_group.and_then(|catalog_group| catalog_group.description.as_ref())
+                    {
                         group =
                             group.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
                     }
+                    group = group.child(
+                        div()
+                            .id("config-group-status")
+                            .test_support()
+                            .child(row_description(status, &colors)),
+                    );
                     group = group.child(list);
                     group = group.child(self.render_config_page_footer(cx));
                     let content = self.render_config_content_frame(group);
@@ -257,10 +299,12 @@ impl DesktopView {
     }
 
     /// Group navigation rail shared by the curated overview and the catalog.
-    /// The curated entry leads while the catalog is unfiltered.
+    /// The curated entry leads while the catalog is unfiltered. Entries show
+    /// an icon plus the group name; counts live in the content header so the
+    /// rail stays scannable.
     fn render_config_rail(
         &self,
-        groups: &std::collections::BTreeMap<String, Vec<&protocol::ConfigSetting>>,
+        groups: &[ConfigCatalogGroup],
         selected: Option<&str>,
         show_curated_entry: bool,
         cx: &mut Context<Self>,
@@ -285,6 +329,7 @@ impl DesktopView {
             let active = selected == Some(curated::CURATED_GROUP_NAME);
             rail = rail.child(
                 desktop_button("config-category-curated")
+                    .icon(config_group_icon(curated::CURATED_GROUP_NAME))
                     .label(curated::CURATED_GROUP_NAME)
                     .small()
                     .w_full()
@@ -292,22 +337,25 @@ impl DesktopView {
                     .desktop_selected(active, &colors)
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.config_page_group = Some(curated::CURATED_GROUP_NAME.to_string());
+                        view.config_visible_row_limit = CONFIG_GROUP_PAGE_SIZE;
                         cx.notify();
                     })),
             );
         }
-        for (group, settings) in groups {
-            let group = group.clone();
-            let active = selected == Some(group.as_str());
+        for group in groups {
+            let name = group.name.clone();
+            let active = selected == Some(name.as_str());
             rail = rail.child(
-                desktop_button(format!("config-category-{group}"))
-                    .label(format!("{group} ({})", settings.len()))
+                desktop_button(format!("config-category-{name}"))
+                    .icon(config_group_icon(&name))
+                    .label(name.clone())
                     .small()
                     .w_full()
                     .justify_start()
                     .desktop_selected(active, &colors)
                     .on_click(cx.listener(move |view, _, _, cx| {
-                        view.config_page_group = Some(group.clone());
+                        view.config_page_group = Some(name.clone());
+                        view.config_visible_row_limit = CONFIG_GROUP_PAGE_SIZE;
                         cx.notify();
                     })),
             );

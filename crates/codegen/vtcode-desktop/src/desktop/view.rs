@@ -446,6 +446,13 @@ struct DesktopView {
     update_status: Option<protocol::UpdateStatusSnapshot>,
     update_request_pending: bool,
     cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
+    /// Memoized catalog grouping; refreshed on every snapshot/query change.
+    /// `refresh_config_catalog` is the only writer besides tests.
+    config_catalog_cache: Option<configuration::ConfigCatalogCache>,
+    /// Bumped on each catalog snapshot so the cache cannot go stale.
+    config_catalog_epoch: u64,
+    /// Rows rendered for the selected group; the "Show more" control grows it.
+    config_visible_row_limit: usize,
     config_target: protocol::ConfigTarget,
     config_search_input: Entity<InputState>,
     _config_search_subscription: Subscription,
