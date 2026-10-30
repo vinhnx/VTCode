@@ -150,12 +150,6 @@ const WELCOME_COPY_COUNT: usize = 3;
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
 const CHANGE_ROW_HEIGHT: f32 = 28.;
-const REQUEST_QUEUE_FULL_MESSAGE: &str = "The local service request queue is full. Try again.";
-const UNSENT_MESSAGE_BLOCKS_SESSION_CHANGE: &str =
-    "Restore or dismiss the unsent message before changing sessions or models.";
-const THREAD_UNAVAILABLE_MESSAGE: &str = "This thread is no longer available in the selected workspace.";
-/// Display name for the local user in echo titles and message labels.
-const USER_DISPLAY_NAME: &str = "You";
 /// Palette panel id; the focus trap targets the same element.
 const COMMAND_PALETTE_ELEMENT_ID: &str = "command-palette";
 /// The single zen toggle slot: one title-bar trailing id shared by the
@@ -219,11 +213,11 @@ fn welcome_prompt(greeting: &str, action: &str, workspace_action: &str, workspac
     }
 }
 
-fn service_reconnect_guidance(has_retained_submission: bool) -> &'static str {
+fn service_reconnect_guidance(has_retained_submission: bool) -> String {
     if has_retained_submission {
-        "Restore or dismiss the retained message, then choose Reload CLI settings in Settings → VT Code to reconnect."
+        rust_i18n::t!("app.service.reconnect_with_draft").to_string()
     } else {
-        "Choose Reload CLI settings in Settings → VT Code to reconnect."
+        rust_i18n::t!("app.service.reconnect_plain").to_string()
     }
 }
 
@@ -618,7 +612,7 @@ fn workspace_picker_options() -> PathPromptOptions {
         files: false,
         directories: true,
         multiple: false,
-        prompt: Some("Choose workspace".into()),
+        prompt: Some(rust_i18n::t!("app.workspace.choose").to_string().into()),
     }
 }
 

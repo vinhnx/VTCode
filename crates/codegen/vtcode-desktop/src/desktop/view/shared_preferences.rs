@@ -36,7 +36,7 @@ impl DesktopView {
         let params = protocol::ThemePreferenceSelectParams { theme: cli_id.to_string() };
         if self.request(protocol::method::CONFIG_THEME, serde_json::json!(params)) {
             self.session_request = Some(protocol::method::CONFIG_THEME);
-            self.status = "Saving the selected theme to CLI configuration…".into();
+            self.status = rust_i18n::t!("app.settings.cli_sync.saving_theme").to_string();
             self.error = None;
         } else {
             self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
@@ -56,8 +56,7 @@ impl DesktopView {
 
     pub(super) fn reload_cli_settings(&mut self, cx: &mut Context<Self>) {
         if !self.can_reload_cli_settings() {
-            self.error =
-                Some("Finish the active operation or restore the unsent message before reloading CLI settings.".into());
+            self.error = Some(rust_i18n::t!("app.settings.cli_sync.reload_blocked").to_string());
             cx.notify();
             return;
         }
@@ -70,7 +69,7 @@ impl DesktopView {
                 self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
             } else {
                 self.pending_workspace = Some(workspace);
-                self.status = "Reloading CLI settings…".into();
+                self.status = rust_i18n::t!("app.settings.cli_sync.reloading").to_string();
             }
         } else {
             self.start_workspace(workspace, cx);
@@ -113,21 +112,18 @@ impl DesktopView {
         let sync_label = rust_i18n::t!("app.settings.cli_sync.sync_theme").to_string();
         let reload_label = rust_i18n::t!("app.settings.cli_sync.reload_settings").to_string();
         let use_theme_label = rust_i18n::t!("app.settings.cli_sync.use_theme").to_string();
-        let group = settings_group_box(
-            rust_i18n::t!("app.settings.cli_sync.group").to_string(),
-            &cx.theme().colors,
-        )
-        .child(div().text_sm().child(match theme.as_ref() {
-            Some(theme) => {
-                let mode = if follows {
-                    rust_i18n::t!("app.settings.cli_sync.following").to_string()
-                } else {
-                    rust_i18n::t!("app.settings.cli_sync.desktop_override").to_string()
-                };
-                rust_i18n::t!("app.settings.cli_sync.theme_status", theme = theme, mode = mode).to_string()
-            }
-            None => rust_i18n::t!("app.settings.cli_sync.disconnected").to_string(),
-        }))
+        let group = settings_group_box(rust_i18n::t!("app.settings.cli_sync.group").to_string(), &cx.theme().colors)
+            .child(div().text_sm().child(match theme.as_ref() {
+                Some(theme) => {
+                    let mode = if follows {
+                        rust_i18n::t!("app.settings.cli_sync.following").to_string()
+                    } else {
+                        rust_i18n::t!("app.settings.cli_sync.desktop_override").to_string()
+                    };
+                    rust_i18n::t!("app.settings.cli_sync.theme_status", theme = theme, mode = mode).to_string()
+                }
+                None => rust_i18n::t!("app.settings.cli_sync.disconnected").to_string(),
+            }))
             .child(
                 div()
                     .flex()
@@ -167,8 +163,8 @@ impl DesktopView {
                             })),
                     ),
             )
-            .footer("Sync saves the selected built-in theme through the CLI config writer; new CLI sessions use it. System Light/Dark sync as their per-mode default built-in theme. Reload reads all CLI configuration layers through a fresh local service. Reload starts a new conversation, keeps the editable draft and attached files, and leaves previous sessions in history.");
-        accessible_group_box("cli-preferences-group", "CLI preferences", group)
+            .footer(rust_i18n::t!("app.settings.cli_sync.footer").to_string());
+        accessible_group_box("cli-preferences-group", rust_i18n::t!("app.settings.cli_sync.group").to_string(), group)
     }
 
     pub(super) fn import_cli_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {

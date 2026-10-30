@@ -129,6 +129,10 @@ fn appearance_and_cli_sync_copy_is_localized_for_every_language() {
             "app.settings.cli_sync.desktop_override",
             "app.settings.cli_sync.disconnected",
             "app.settings.cli_sync.theme_unavailable",
+            "app.settings.cli_sync.saving_theme",
+            "app.settings.cli_sync.reload_blocked",
+            "app.settings.cli_sync.footer",
+            "app.settings.cli_sync.reloading",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

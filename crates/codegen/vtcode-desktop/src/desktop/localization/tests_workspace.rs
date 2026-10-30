@@ -16,6 +16,7 @@ fn workspace_flow_copy_is_localized_for_every_language() {
             "app.workspace.connect_failed",
             "app.workspace.starting_service",
             "app.workspace.startup_hint",
+            "app.workspace.thread_unavailable",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

@@ -50,7 +50,7 @@ impl DesktopView {
                         .await)
                 }
                 Ok(Ok(None)) => Ok((Vec::new(), false)),
-                Ok(Err(error)) => Err(format!("Unable to open the file picker: {error}")),
+                Ok(Err(error)) => Err(rust_i18n::t!("app.files.picker_failed", error = error.to_string()).to_string()),
                 Err(_) => Err(rust_i18n::t!("app.files.picker_disconnected").to_string()),
             };
             let _updated = view.update(cx, |view, cx| {

@@ -91,7 +91,7 @@ pub(super) fn background_agent_activity(window: &mut Window, activity: Backgroun
 /// the startup check is never silently dropped; backgrounded windows (or an
 /// explicit always-notify preference) get a system banner instead.
 pub(super) fn update_available(window: &mut Window, latest: &str, system: bool, cx: &mut App) {
-    let message = format!("VT Code {latest} is available. Check Settings for details.");
+    let message = rust_i18n::t!("app.notifications.update_available", latest = latest).to_string();
     let notification = Notification::info(message).title(app::NAME).id::<UpdateAvailableNotification>();
     if system {
         window.push_notification(notification.system(), cx);

@@ -793,9 +793,7 @@ impl DesktopView {
             ..Default::default()
         };
         if !self.session_option_is_current(&options) && !self.select_session_options(options, cx) {
-            self.error = Some(
-                "Could not restore this workspace's saved permission choice. Select it again before continuing.".into(),
-            );
+            self.error = Some(rust_i18n::t!("app.permissions.restore_failed").to_string());
         }
     }
 
@@ -909,7 +907,7 @@ impl DesktopView {
                 })
             })
             .map(capitalize_agent_label)
-            .unwrap_or_else(|| "Unavailable".to_string());
+            .unwrap_or_else(|| rust_i18n::t!("app.configuration.unavailable").to_string());
         desktop_button("composer-mode")
             .child(div().id("composer-mode-label").test_support().truncate().child(mode.clone()))
             .max_w(px(180.))

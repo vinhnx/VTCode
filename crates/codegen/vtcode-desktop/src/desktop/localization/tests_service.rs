@@ -57,6 +57,14 @@ fn service_copy_is_localized_for_every_language() {
             "app.service.invalid_worktrees",
             "app.service.invalid_remove",
             "app.service.invalid_updates",
+            "app.service.review_disconnected",
+            "app.service.interaction_cancelled",
+            "app.service.decision_accepted",
+            "app.service.invalid_slash_catalog",
+            "app.service.invalid_session",
+            "app.service.reconnect_with_draft",
+            "app.service.reconnect_plain",
+            "app.service.authentication_failed",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
@@ -73,5 +81,9 @@ fn service_copy_is_localized_for_every_language() {
         let detail =
             rust_i18n::t!("app.service.disconnected_detail", locale = locale, detail = "demo-detail").to_string();
         assert!(detail.contains("demo-detail"), "{locale}: {detail}");
+        let auth =
+            rust_i18n::t!("app.service.authentication_failed", locale = locale, detail = "demo-detail").to_string();
+        assert!(auth.contains("demo-detail"), "{locale}: {auth}");
+        assert!(auth.contains("vtcode auth"), "{locale}: {auth}");
     }
 }

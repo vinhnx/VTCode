@@ -157,7 +157,7 @@ impl DesktopView {
 
         if let Some(session_id) = target.session_id {
             if !self.sessions.iter().any(|session| session.session_id == session_id) {
-                self.error = Some(THREAD_UNAVAILABLE_MESSAGE.into());
+                self.error = Some(rust_i18n::t!("app.workspace.thread_unavailable").to_string());
                 cx.notify();
                 return;
             }
@@ -200,7 +200,7 @@ impl DesktopView {
             return;
         };
         if !self.sessions.iter().any(|session| session.session_id == session_id) {
-            self.error = Some(THREAD_UNAVAILABLE_MESSAGE.into());
+            self.error = Some(rust_i18n::t!("app.workspace.thread_unavailable").to_string());
             self.fail_pending_navigation();
             return;
         }

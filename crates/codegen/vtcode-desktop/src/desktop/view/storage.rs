@@ -33,13 +33,16 @@ pub(super) fn format_bytes(bytes: u64) -> String {
         };
     }
     let unit = (bytes.ilog(1024) as usize).min(UNITS.len() - 1);
+    #[expect(clippy::cast_possible_truncation, reason = "unit is clamped to 0..=4 by min() above")]
     let divisor = 1024u64.pow(unit as u32);
     let whole = bytes / divisor;
     let tenths = (bytes % divisor) * 10 / divisor;
+    #[expect(clippy::indexing_slicing, reason = "unit is clamped to UNITS indices by min() above")]
+    let suffix = UNITS[unit];
     if tenths == 0 {
-        format!("{whole} {}", UNITS[unit])
+        format!("{whole} {suffix}")
     } else {
-        format!("{whole}.{tenths} {}", UNITS[unit])
+        format!("{whole}.{tenths} {suffix}")
     }
 }
 
@@ -358,12 +361,14 @@ impl DesktopView {
                     .w_full()
                     .h_3()
                     .bg(colors.muted)
-                    .children(
-                        segments
-                            .into_iter()
-                            .filter(|(bytes, _)| *bytes > 0)
-                            .map(|(bytes, color)| div().h_full().w(relative(bytes as f32 / total as f32)).bg(color)),
-                    ),
+                    .children(segments.into_iter().filter(|(bytes, _)| *bytes > 0).map(|(bytes, color)| {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "f64 byte total intentionally narrows to f32 layout proportions"
+                        )]
+                        let proportion = bytes as f32 / total as f32;
+                        div().h_full().w(relative(proportion)).bg(color)
+                    })),
             )
             .child(
                 div().flex().flex_col().gap_1().children(

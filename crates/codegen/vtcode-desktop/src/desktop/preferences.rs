@@ -664,7 +664,7 @@ impl Preferences {
             Self::preferences_path().ok_or_else(|| rust_i18n::t!("app.errors.preferences_unavailable").to_string())?;
         let content = serde_json::to_vec_pretty(self).map_err(|error| error.to_string())?;
         vtcode_commons::VtCodePaths::write_private_file_atomic(path, &content)
-            .map_err(|error| format!("Could not save desktop preferences: {error}"))
+            .map_err(|error| rust_i18n::t!("app.errors.preferences_save_failed", error = error.to_string()).to_string())
     }
 }
 

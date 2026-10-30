@@ -109,14 +109,11 @@ impl DesktopView {
             json!({ keys::SESSION_ID: session_id, keys::PROMPT: draft.prompt, keys::ATTACHMENTS: draft.attachments });
         self.clear_error();
         if !request_fits_frame(protocol::method::TURN_SUBMIT, &params) {
-            self.error = Some(
-                "This prompt exceeds the 1 MiB request limit after JSON encoding. Shorten it or remove attachments."
-                    .to_string(),
-            );
+            self.error = Some(rust_i18n::t!("app.composer.prompt_too_long").to_string());
             return Err(draft);
         }
         if !self.request(protocol::method::TURN_SUBMIT, params) {
-            self.error = Some(REQUEST_QUEUE_FULL_MESSAGE.to_string());
+            self.error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
             return Err(draft);
         }
         if let Some(entry) = self
@@ -139,7 +136,7 @@ impl DesktopView {
         self.transcript.push(TranscriptItem::new(
             draft.echo_id.clone(),
             TranscriptRole::User.as_str().into(),
-            USER_DISPLAY_NAME.into(),
+            rust_i18n::t!("app.transcript.you").to_string().into(),
             echo,
         ));
         self.pending_submission = Some(draft);

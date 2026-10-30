@@ -109,7 +109,7 @@ impl DesktopView {
             self.secret_input.update(cx, |state, cx| state.set_value("", window, cx));
             self.status = rust_i18n::t!("app.secrets.saving_status").to_string();
         } else {
-            self.secret_editor_error = Some(REQUEST_QUEUE_FULL_MESSAGE.into());
+            self.secret_editor_error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
         }
         cx.notify();
     }

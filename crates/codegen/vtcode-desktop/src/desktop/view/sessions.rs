@@ -119,7 +119,7 @@ impl DesktopView {
             .flatten();
         if !self.session_change_allowed(reload_session_id) {
             if self.retained_submission.is_some() && self.session_change_idle() {
-                self.error = Some(UNSENT_MESSAGE_BLOCKS_SESSION_CHANGE.to_string());
+                self.error = Some(rust_i18n::t!("app.session.unsent_blocks_change").to_string());
                 cx.notify();
             }
             return false;
@@ -130,7 +130,7 @@ impl DesktopView {
             self.session_request = Some(method);
             self.status = rust_i18n::t!("app.session.updating_session").to_string();
         } else {
-            self.error = Some(REQUEST_QUEUE_FULL_MESSAGE.to_string());
+            self.error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
         }
         cx.notify();
         sent
@@ -139,7 +139,7 @@ impl DesktopView {
     pub(super) fn begin_new_thread(&mut self, cx: &mut Context<Self>) -> bool {
         if !self.session_change_allowed(None) {
             if self.retained_submission.is_some() && self.session_change_idle() {
-                self.error = Some(UNSENT_MESSAGE_BLOCKS_SESSION_CHANGE.into());
+                self.error = Some(rust_i18n::t!("app.session.unsent_blocks_change").to_string());
                 cx.notify();
             }
             return false;
@@ -208,7 +208,7 @@ impl DesktopView {
             self.history_page_loading = true;
             self.history_page_error = None;
         } else {
-            self.history_page_error = Some(REQUEST_QUEUE_FULL_MESSAGE.into());
+            self.history_page_error = Some(rust_i18n::t!("app.workspace.queue_full").to_string());
         }
         cx.notify();
     }
@@ -251,7 +251,7 @@ impl DesktopView {
             self.output_page_pending = Some(pending);
             self.output_page_error = None;
         } else {
-            self.output_page_error = Some((item_id.to_string(), REQUEST_QUEUE_FULL_MESSAGE.into()));
+            self.output_page_error = Some((item_id.to_string(), rust_i18n::t!("app.workspace.queue_full").to_string()));
         }
         cx.notify();
     }
@@ -692,7 +692,7 @@ pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHis
         .map(|message| {
             let SessionHistoryMessage { archive_index, role, text, .. } = message;
             let title = match TranscriptRole::from_str(&role) {
-                Some(TranscriptRole::User) => USER_DISPLAY_NAME.to_string(),
+                Some(TranscriptRole::User) => rust_i18n::t!("app.transcript.you").to_string(),
                 Some(TranscriptRole::Assistant) => app::NAME.to_string(),
                 Some(TranscriptRole::Tool) => rust_i18n::t!("app.transcript.tool_result").to_string(),
                 _ => role.clone(),

@@ -127,12 +127,15 @@ impl DesktopView {
                                         super::super::notifications::copied_to_clipboard(window, cx);
                                     }),
                             )
-                            .child(desktop_button("dismiss-retained-prompt").label("Dismiss").ghost().on_click(
-                                cx.listener(|view, _, _, cx| {
-                                    view.retained_submission = None;
-                                    cx.notify();
-                                }),
-                            )),
+                            .child(
+                                desktop_button("dismiss-retained-prompt")
+                                    .label(rust_i18n::t!("app.composer.dismiss").to_string())
+                                    .ghost()
+                                    .on_click(cx.listener(|view, _, _, cx| {
+                                        view.retained_submission = None;
+                                        cx.notify();
+                                    })),
+                            ),
                     ),
             );
         }

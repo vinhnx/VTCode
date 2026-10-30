@@ -41,6 +41,8 @@ fn composer_copy_is_localized_for_every_language() {
             "app.composer.speed_aria",
             "app.composer.effort_aria",
             "app.composer.attached_list",
+            "app.composer.prompt_too_long",
+            "app.composer.dismiss",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

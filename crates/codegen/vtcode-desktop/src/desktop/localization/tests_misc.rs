@@ -122,9 +122,16 @@ fn notifications_copy_is_localized_for_every_language() {
             "app.notifications.approval_waiting",
             "app.notifications.input_waiting",
             "app.notifications.service_disconnected",
+            "app.notifications.update_available",
         ],
         &[],
     );
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        let update =
+            rust_i18n::t!("app.notifications.update_available", locale = locale, latest = "v9.9.9").to_string();
+        assert!(update.contains("v9.9.9"), "{locale}: {update}");
+    }
 }
 
 #[test]
@@ -174,7 +181,9 @@ fn files_errors_copy_is_localized_for_every_language() {
             "app.files.open_failed",
             "app.files.attachments_workspace",
             "app.files.picker_disconnected",
+            "app.files.picker_failed",
             "app.errors.preferences_unavailable",
+            "app.errors.preferences_save_failed",
         ],
         &[],
     );
@@ -182,6 +191,11 @@ fn files_errors_copy_is_localized_for_every_language() {
         let locale = language.locale();
         let launch = rust_i18n::t!("app.files.launch_failed", locale = locale, error = "demo-error").to_string();
         assert!(launch.contains("demo-error"), "{locale}: {launch}");
+        let picker = rust_i18n::t!("app.files.picker_failed", locale = locale, error = "demo-error").to_string();
+        assert!(picker.contains("demo-error"), "{locale}: {picker}");
+        let prefs =
+            rust_i18n::t!("app.errors.preferences_save_failed", locale = locale, error = "demo-error").to_string();
+        assert!(prefs.contains("demo-error"), "{locale}: {prefs}");
         let detail = rust_i18n::t!("app.files.open_failed_detail", locale = locale, detail = "demo-detail").to_string();
         assert!(detail.contains("demo-detail"), "{locale}: {detail}");
     }
@@ -284,6 +298,7 @@ fn permissions_copy_is_localized_for_every_language() {
             "app.permissions.confirm_full_body",
             "app.permissions.enable_full",
             "app.permissions.save_failed",
+            "app.permissions.restore_failed",
         ],
         &[],
     );

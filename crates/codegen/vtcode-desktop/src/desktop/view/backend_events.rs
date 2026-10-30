@@ -67,7 +67,7 @@ impl DesktopView {
                     self.clear_pending_interaction();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
                     self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
-                    self.fail_workspace_review("Local service disconnected.".into());
+                    self.fail_workspace_review(rust_i18n::t!("app.service.review_disconnected").to_string());
                     self.running = false;
                     self.status = rust_i18n::t!("app.service.disconnected").to_string();
                     changed = true;
@@ -238,11 +238,10 @@ impl DesktopView {
                     self.invalidate_webmcp_status();
                     self.clear_error();
                     self.status = if identity.cancelled {
-                        "Interaction cancelled"
+                        rust_i18n::t!("app.service.interaction_cancelled").to_string()
                     } else {
-                        "Decision accepted"
-                    }
-                    .into();
+                        rust_i18n::t!("app.service.decision_accepted").to_string()
+                    };
                     if identity.turn_id == protocol::SESSION_START_TURN_ID
                         && self.selected_session_id.as_deref() == Some(identity.session_id.as_str())
                         && self.session_request.is_none()
@@ -355,8 +354,7 @@ impl DesktopView {
                                     self.slash_commands = info.slash_commands.clone();
                                 } else {
                                     self.slash_commands.clear();
-                                    self.error =
-                                        Some("The local CLI returned an invalid slash command catalog.".into());
+                                    self.error = Some(rust_i18n::t!("app.service.invalid_slash_catalog").to_string());
                                 }
                                 self.service_info = Some(info);
                                 self.status = rust_i18n::t!("app.service.connected_service").to_string();
@@ -567,10 +565,7 @@ impl DesktopView {
                         } else {
                             self.status = rust_i18n::t!("app.service.creation_failed").to_string();
                             self.retained_submission = first_submission;
-                            self.error = Some(
-                                "The service returned an invalid session. Your message has not been submitted."
-                                    .to_string(),
-                            );
+                            self.error = Some(rust_i18n::t!("app.service.invalid_session").to_string());
                         }
                     }
                     protocol::method::SESSION_CLOSE => {
@@ -590,11 +585,10 @@ impl DesktopView {
                             self.record_current_navigation();
                         }
                         self.status = if new_thread || pending_navigation.is_some() {
-                            "New thread ready. Submit a prompt to begin."
+                            rust_i18n::t!("app.session.thread_ready").to_string()
                         } else {
-                            "Session closed. Start a new session to continue."
-                        }
-                        .to_string();
+                            rust_i18n::t!("app.session.closed_new").to_string()
+                        };
                     }
                     protocol::method::SESSION_LOAD => {
                         self.refresh_session_options_after_full_access();
@@ -780,10 +774,11 @@ impl DesktopView {
                     self.start_workspace(workspace, cx);
                 } else if authentication_required {
                     self.status = rust_i18n::t!("app.service.credentials_required").to_string();
-                    let authentication_error = format!(
-                        "VT Code could not authenticate the configured provider. In Terminal, run `vtcode auth` or `vtcode login <provider>`. {}",
-                        service_reconnect_guidance(self.retained_submission.is_some())
-                    );
+                    let authentication_error = rust_i18n::t!(
+                        "app.service.authentication_failed",
+                        detail = service_reconnect_guidance(self.retained_submission.is_some())
+                    )
+                    .to_string();
                     self.error = Some(match self.error.take() {
                         Some(error) => format!("{error}\n\n{authentication_error}"),
                         None => authentication_error,
@@ -878,7 +873,7 @@ impl DesktopView {
                 self.transcript.append_text(
                     delta.item_id.clone(),
                     TranscriptRole::Assistant.as_str(),
-                    "Plan".into(),
+                    rust_i18n::t!("app.transcript.plan_title").to_string().into(),
                     &delta.delta,
                 );
             }

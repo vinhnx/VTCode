@@ -433,7 +433,11 @@ impl DesktopView {
 
         let colors = cx.theme().colors;
         let user = item.is_user();
-        let label = if user { USER_DISPLAY_NAME } else { item.title.as_str() };
+        let label = if user {
+            rust_i18n::t!("app.transcript.you").to_string()
+        } else {
+            item.title.to_string()
+        };
         let copy_text = item.text.clone();
         Message::new()
             .id(format!("message-{}", item.id))

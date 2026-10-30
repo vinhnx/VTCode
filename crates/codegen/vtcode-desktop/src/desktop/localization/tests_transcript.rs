@@ -56,6 +56,7 @@ fn transcript_copy_is_localized_for_every_language() {
             "app.transcript.collapse",
             "app.transcript.expand",
             "app.transcript.copy_output_for",
+            "app.transcript.you",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

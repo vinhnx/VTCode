@@ -23,6 +23,8 @@ fn session_copy_is_localized_for_every_language() {
             "app.session.loaded_prompt",
             "app.session.switching_model",
             "app.session.fallback_title",
+            "app.session.closed_new",
+            "app.session.unsent_blocks_change",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
