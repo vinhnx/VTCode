@@ -239,6 +239,15 @@ fn startup_policy_keeps_known_command_owned_paths_off_provider_runtime() {
         false,
         false,
     );
+    assert_policy(
+        Cli::parse_from(["vtcode", "check", "ast-grep"]),
+        StartupCommandKind::CommandOwned,
+        true,
+        false,
+        false,
+        false,
+        false,
+    );
 }
 
 #[test]

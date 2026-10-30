@@ -175,7 +175,8 @@ impl StartupPolicy {
                     | Commands::Schedule { .. }
                     | Commands::Update { .. }
                     | Commands::Dependencies { .. }
-                    | Commands::Secret { .. },
+                    | Commands::Secret { .. }
+                    | Commands::Check { .. },
                 ) => StartupCommandKind::CommandOwned,
                 None if args.full_auto.as_ref().is_some_and(|prompt| !prompt.trim().is_empty()) => {
                     StartupCommandKind::ToolCapable

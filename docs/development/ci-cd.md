@@ -90,7 +90,9 @@ GitHub Pages.
 ### hotpath Cloud benchmark (`hotpath-benchmark.yml`, `hotpath-relay.yml`)
 
 **Triggers:** push to `main` and every pull request; the relay runs on `workflow_run` of
-`Benchmark`, always from the default branch.
+`Benchmark`, always from the default branch. That trigger is otherwise banned by
+`check_workflow_security.sh`; the relay holds a scoped exception in
+`scripts/workflow_security_allowlist.txt` because it never checks out or runs PR code.
 
 **Jobs:** `upload` (push) builds `vtcode-ui`'s `tui_hotpath` example once with the `x-prod`
 profile and `--features profiling,hotpath-cloud,hotpath-callgrind`, runs it natively and then
