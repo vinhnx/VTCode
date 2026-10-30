@@ -178,7 +178,14 @@ impl DesktopView {
         focus_handle.focus(window, cx);
         let system_motion_baseline = preferences::system_motion_baseline(cx);
         preferences::apply_reduced_motion(preferences.reduced_motion, system_motion_baseline, cx);
-        let shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
+        let shortcut_capture_focus = cx.focus_handle().tab_stop(true);
+        let shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
+        let shortcut_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search shortcuts"));
+        let shortcut_search_subscription = cx.subscribe_in(&shortcut_search_input, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         let message_scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
         let file_tree = cx.new(|cx| TreeState::new(cx));
         let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
@@ -258,7 +265,11 @@ impl DesktopView {
             }
         });
         Self {
-            shortcut_inputs,
+            shortcut_draft,
+            shortcut_search_input,
+            _shortcut_search_subscription: shortcut_search_subscription,
+            shortcut_capture: None,
+            shortcut_capture_focus,
             shortcut_message: None,
             shortcuts_editing: false,
             default_code_font: typography::default_code_font(cx),

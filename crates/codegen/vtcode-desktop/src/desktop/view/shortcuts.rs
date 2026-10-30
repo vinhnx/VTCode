@@ -1,6 +1,5 @@
 //! Configurable desktop commands. Text editing and Kit focus bindings retain their own contexts.
 use super::*;
-use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::kbd::Kbd;
 use std::collections::{BTreeMap, HashSet};
 
@@ -9,7 +8,7 @@ use std::collections::{BTreeMap, HashSet};
 /// Ids persist in preferences (`Preferences::shortcuts`), so never rename an
 /// existing id: [`COMMANDS`] pins the full id table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum CommandId {
+pub(super) enum CommandId {
     Commands,
     ConversationSearch,
     NewSession,
@@ -43,7 +42,7 @@ enum CommandId {
 }
 
 impl CommandId {
-    const ALL: [Self; 30] = [
+    pub(super) const ALL: [Self; 30] = [
         Self::Commands,
         Self::ConversationSearch,
         Self::NewSession,
@@ -76,7 +75,7 @@ impl CommandId {
         Self::PreviousReviewFile,
     ];
 
-    const fn as_str(self) -> &'static str {
+    pub(super) const fn as_str(self) -> &'static str {
         match self {
             Self::Commands => "commands",
             Self::ConversationSearch => "conversation_search",
@@ -111,168 +110,199 @@ impl CommandId {
         }
     }
 
-    fn from_id(id: &str) -> Option<Self> {
+    pub(super) fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|known| id == known.as_str())
     }
 }
 
-/// One configurable desktop command: stable id, settings label, default binding.
+/// One configurable desktop command: stable id, settings label, description, default binding.
 #[derive(Clone, Copy, Debug)]
-struct ShortcutCommand {
-    id: CommandId,
-    label: &'static str,
-    default_binding: &'static str,
+pub(super) struct ShortcutCommand {
+    pub(super) id: CommandId,
+    pub(super) label: &'static str,
+    pub(super) description: &'static str,
+    pub(super) default_binding: &'static str,
 }
 
-const COMMANDS: [ShortcutCommand; 30] = [
+pub(super) const COMMANDS: [ShortcutCommand; 30] = [
     ShortcutCommand {
         id: CommandId::Commands,
         label: "Search commands",
+        description: "Search session commands, threads, and files from the palette",
         default_binding: "cmd-k",
     },
     ShortcutCommand {
         id: CommandId::ConversationSearch,
         label: "Find in conversation",
+        description: "Search loaded messages, activity, and output previews",
         default_binding: "cmd-shift-f",
     },
     ShortcutCommand {
         id: CommandId::NewSession,
         label: "New thread",
+        description: "Start a new thread in the current workspace",
         default_binding: "cmd-n",
     },
     ShortcutCommand {
         id: CommandId::CloseSession,
         label: "Close thread",
+        description: "Close the selected thread without starting a replacement",
         default_binding: "cmd-shift-w",
     },
     ShortcutCommand {
         id: CommandId::Workspace,
         label: "Choose workspace",
+        description: "Open the workspace picker",
         default_binding: "cmd-o",
     },
     ShortcutCommand {
         id: CommandId::Composer,
         label: "Focus composer",
+        description: "Focus the message input, dismissing supported overlays",
         default_binding: "cmd-l",
     },
     ShortcutCommand {
         id: CommandId::Sidebar,
         label: "Toggle navigation",
+        description: "Show or hide the navigation rail",
         default_binding: "cmd-b",
     },
     ShortcutCommand {
         id: CommandId::Inspector,
         label: "Toggle inspector",
+        description: "Show or hide the context inspector",
         default_binding: "cmd-shift-i",
     },
     ShortcutCommand {
         id: CommandId::ZenMode,
         label: "Toggle Zen mode",
+        description: "Enter or exit the distraction-free Zen layout",
         default_binding: "ctrl-cmd-z",
     },
     ShortcutCommand {
         id: CommandId::Cancel,
         label: "Cancel run",
+        description: "Cancel the active run",
         default_binding: "cmd-.",
     },
     ShortcutCommand {
         id: CommandId::Dismiss,
         label: "Dismiss overlay",
+        description: "Close the topmost overlay and restore focus",
         default_binding: "escape",
     },
     ShortcutCommand {
         id: CommandId::Settings,
         label: "Settings",
+        description: "Open Settings",
         default_binding: "cmd-,",
     },
     ShortcutCommand {
         id: CommandId::SettingsSearch,
         label: "Search settings and CLI config",
+        description: "Search settings categories and CLI config paths",
         default_binding: "cmd-f",
     },
     ShortcutCommand {
         id: CommandId::Model,
         label: "Choose model",
+        description: "Open the model picker",
         default_binding: "cmd-shift-m",
     },
     ShortcutCommand {
         id: CommandId::Permissions,
         label: "Command permissions",
+        description: "Open the command permission control",
         default_binding: "cmd-shift-p",
     },
     ShortcutCommand {
         id: CommandId::AgentMode,
         label: "Choose agent mode",
+        description: "Open the agent mode picker",
         default_binding: "cmd-shift-b",
     },
     ShortcutCommand {
         id: CommandId::AddContext,
         label: "Add files and more @",
+        description: "Open the composer file and mention search",
         default_binding: "cmd-shift-a",
     },
     ShortcutCommand {
         id: CommandId::StatusBar,
         label: "Toggle status bar",
+        description: "Show or hide the status bar",
         default_binding: "cmd-shift-s",
     },
     ShortcutCommand {
         id: CommandId::ReloadCliSettings,
         label: "Reload CLI settings",
+        description: "Restart the idle service and reload CLI configuration",
         default_binding: "cmd-shift-r",
     },
     ShortcutCommand {
         id: CommandId::SyncCliTheme,
         label: "Sync current theme to CLI",
+        description: "Save the selected theme through the CLI config writer",
         default_binding: "cmd-shift-t",
     },
     ShortcutCommand {
         id: CommandId::Utilities,
         label: "Open workspace utilities",
+        description: "Open the Utilities inspector tab",
         default_binding: "cmd-shift-u",
     },
     ShortcutCommand {
         id: CommandId::WorkspaceFiles,
         label: "Open workspace files",
+        description: "Open the workspace file browser",
         default_binding: "cmd-shift-e",
     },
     ShortcutCommand {
         id: CommandId::WorkspaceReview,
         label: "Review working tree",
+        description: "Open the working tree review snapshot",
         default_binding: "cmd-shift-g",
     },
     ShortcutCommand {
         id: CommandId::RefreshWorkspace,
         label: "Refresh current workspace view",
+        description: "Refresh the active workspace view",
         default_binding: "cmd-r",
     },
     ShortcutCommand {
         id: CommandId::NavigateBack,
         label: "Navigate back",
+        description: "Move back through workspace and thread history",
         default_binding: "cmd-[",
     },
     ShortcutCommand {
         id: CommandId::NavigateForward,
         label: "Navigate forward",
+        description: "Move forward through workspace and thread history",
         default_binding: "cmd-]",
     },
     ShortcutCommand {
         id: CommandId::NextReviewChange,
         label: "Next review change",
+        description: "Move to the next change in review",
         default_binding: "f7",
     },
     ShortcutCommand {
         id: CommandId::PreviousReviewChange,
         label: "Previous review change",
+        description: "Move to the previous change in review",
         default_binding: "shift-f7",
     },
     ShortcutCommand {
         id: CommandId::NextReviewFile,
         label: "Next changed file",
+        description: "Move to the next changed file in review",
         default_binding: "alt-f7",
     },
     ShortcutCommand {
         id: CommandId::PreviousReviewFile,
         label: "Previous changed file",
+        description: "Move to the previous changed file in review",
         default_binding: "alt-shift-f7",
     },
 ];
@@ -420,235 +450,45 @@ fn context_for(id: CommandId) -> &'static str {
     }
 }
 
-pub(super) fn inputs(
-    overrides: &BTreeMap<String, String>,
-    window: &mut Window,
-    cx: &mut Context<DesktopView>,
-) -> Vec<Entity<InputState>> {
+/// Full staged table: every command id maps to its override or default.
+/// Empty values unbind the command. The draft always carries all ids so
+/// staged edits validate and persist without re-merging defaults.
+pub(super) fn draft_from(overrides: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     COMMANDS
         .iter()
-        .map(|command| {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(
-                    overrides
-                        .get(command.id.as_str())
-                        .map(String::as_str)
-                        .unwrap_or(command.default_binding),
-                )
-            })
-        })
+        .map(|command| (command.id.as_str().to_string(), staged_value(overrides, command).to_string()))
         .collect()
 }
 
-impl DesktopView {
-    pub(super) fn shortcut_values(&self, cx: &App) -> BTreeMap<String, String> {
-        COMMANDS
-            .iter()
-            .zip(&self.shortcut_inputs)
-            .map(|(command, input)| (command.id.as_str().to_string(), input.read(cx).value().to_string()))
-            .collect()
-    }
-
-    pub(super) fn render_shortcuts(&self, window: &Window, cx: &Context<Self>) -> AnyElement {
-        let description = if self.shortcuts_editing {
-            "Change a binding or leave it empty to unbind it. Saved changes apply after restarting VT Code Desktop."
-        } else {
-            "Current desktop bindings. Select Edit shortcuts to customize them."
-        };
-        let cli_shortcuts_available = self
-            .configuration
-            .as_ref()
-            .and_then(|configuration| configuration.shared_ui.as_ref())
-            .is_some();
-        let import_button = desktop_button("import-cli-shortcuts")
-            .label("Import from CLI")
-            .ghost()
-            .desktop_disabled(!cli_shortcuts_available)
-            .on_click(cx.listener(|view, _, window, cx| view.import_cli_shortcuts(window, cx)));
-        let mut actions = div().flex().flex_wrap().gap_2();
-        if self.shortcuts_editing {
-            actions = actions
-                .child(desktop_button("save-shortcuts").label("Save").primary().on_click(cx.listener(
-                    |view, _, window, cx| {
-                        let candidate = view.shortcut_values(cx);
-                        match bindings(&candidate) {
-                            Ok(_) => {
-                                let mut preferences = view.preferences.clone();
-                                preferences.shortcuts = candidate;
-                                match preferences.try_save() {
-                                    Ok(()) => {
-                                        view.preferences = preferences;
-                                        view.shortcuts_editing = false;
-                                        view.settings_navigation_focus.focus(window, cx);
-                                        view.shortcut_message =
-                                            Some("Shortcuts saved. Restart VT Code Desktop to apply.".into());
-                                    }
-                                    Err(error) => view.shortcut_message = Some(error),
-                                }
-                            }
-                            Err(error) => view.shortcut_message = Some(error),
-                        }
-                        cx.notify();
-                    },
-                )))
-                .child(
-                    desktop_button("cancel-shortcuts")
-                        .label("Cancel")
-                        .ghost()
-                        .on_click(cx.listener(|view, _, window, cx| view.cancel_shortcut_edit(window, cx))),
-                )
-                .child(
-                    desktop_button("reset-shortcuts")
-                        .label("Reset defaults")
-                        .ghost()
-                        .on_click(cx.listener(|view, _, window, cx| view.reset_shortcuts(window, cx))),
-                );
-        } else {
-            actions = actions.child(
-                desktop_button("edit-shortcuts")
-                    .label("Edit shortcuts")
-                    .ghost()
-                    .on_click(cx.listener(|view, _, window, cx| view.begin_shortcut_edit(window, cx))),
-            );
-        }
-        actions = actions.child(import_button);
-
-        let mut group = settings_group_box("Keyboard shortcuts", &cx.theme().colors)
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().colors.muted_foreground)
-                    .child(description),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(div().font_medium().child("Desktop bindings"))
-                    .child(actions),
-            )
-            .children(COMMANDS.iter().zip(self.shortcut_inputs.iter()).map(|(command, input)| {
-                let value = input.read(cx).value().to_string();
-                let current_binding = active_binding(command.id, window);
-                let value_element = if self.shortcuts_editing {
-                    div()
-                        .child(
-                            Input::new(input)
-                                .w(px(220.))
-                                .max_w_full()
-                                .cursor_text()
-                                .bg(cx.theme().colors.popover)
-                                .id(format!("shortcut-input-{}", command.id.as_str()))
-                                .accessibility_id(format!("shortcut-{}", command.id.as_str()))
-                                .aria_label(format!("Shortcut for {}", command.label)),
-                        )
-                        .into_any_element()
-                } else {
-                    shortcut_badge(command.id, command.label, current_binding.as_ref())
-                };
-                let accessible_shortcut = if self.shortcuts_editing {
-                    shortcut_accessibility_value(&value)
-                } else {
-                    current_binding.as_ref().map(Kbd::format).unwrap_or_else(|| "not set".into())
-                };
-                div()
-                    .id(format!("shortcut-row-{}", command.id.as_str()))
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(format!("{}, shortcut {accessible_shortcut}", command.label))
-                    .w_full()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .py_1()
-                    .child(command.label)
-                    .child(value_element)
-            }))
-            .children(self.shortcut_message.as_ref().map(|message| {
-                div()
-                    .id("shortcut-status")
-                    .role(gpui_kit::Role::Status)
-                    .aria_label(message.clone())
-                    .text_sm()
-                    .child(message.clone())
-            }));
-
-        if self.shortcuts_editing {
-            group = group.child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().colors.muted_foreground)
-                    .child("Use cmd, ctrl, or alt with a key. Tab and Shift+Tab move between controls."),
-            );
-        }
-        accessible_group_box("keyboard-shortcuts-group", "Keyboard shortcuts", group)
-    }
-
-    fn begin_shortcut_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.shortcut_inputs = inputs(&self.preferences.shortcuts, window, cx);
-        self.shortcut_message = None;
-        self.shortcuts_editing = true;
-        if let Some(input) = self.shortcut_inputs.first().cloned() {
-            input.update(cx, |input, cx| input.focus(window, cx));
-        }
-        cx.notify();
-    }
-
-    fn cancel_shortcut_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.shortcut_inputs = inputs(&self.preferences.shortcuts, window, cx);
-        self.shortcut_message = None;
-        self.shortcuts_editing = false;
-        self.settings_navigation_focus.focus(window, cx);
-        cx.notify();
-    }
-
-    fn reset_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let mut preferences = self.preferences.clone();
-        preferences.shortcuts.clear();
-        if let Err(error) = preferences.try_save() {
-            self.shortcut_message = Some(error);
-            cx.notify();
-            return;
-        }
-        self.preferences = preferences;
-        self.shortcut_inputs = inputs(&BTreeMap::new(), window, cx);
-        self.shortcut_message = Some("Defaults saved. Restart VT Code Desktop to apply.".into());
-        self.shortcuts_editing = false;
-        self.settings_navigation_focus.focus(window, cx);
-        cx.notify();
-    }
+/// Staged binding for one command: the override when present, else the default.
+pub(super) fn staged_value<'a>(overrides: &'a BTreeMap<String, String>, command: &ShortcutCommand) -> &'a str {
+    overrides
+        .get(command.id.as_str())
+        .map(String::as_str)
+        .unwrap_or(command.default_binding)
 }
 
-fn active_binding(id: CommandId, window: &Window) -> Option<gpui_kit::Keystroke> {
-    let context = gpui_kit::KeyContext::parse(context_for(id)).ok()?;
-    let action = action(id);
-    window
-        .highest_precedence_binding_for_action_in_context(action.as_ref(), context)?
-        .keystrokes()
-        .first()
-        .map(|keystroke| gpui_kit::AsKeystroke::as_keystroke(keystroke).clone())
+/// Whether a command matches every search term across its label, description,
+/// and staged binding, mirroring the CLI config exact-terms filter.
+pub(super) fn shortcut_matches_query(command: &ShortcutCommand, staged: &str, terms: &[String]) -> bool {
+    if terms.is_empty() {
+        return true;
+    }
+    let haystack =
+        format!("{} {} {staged} {}", command.label, command.description, command.default_binding).to_lowercase();
+    terms.iter().all(|term| haystack.contains(term))
 }
 
-fn shortcut_badge(id: CommandId, label: &str, binding: Option<&gpui_kit::Keystroke>) -> AnyElement {
-    let badge = match binding {
-        Some(keystroke) => div().child(Kbd::new(keystroke.clone()).outline()),
-        None => div().text_xs().child("Not set"),
-    };
-    div()
-        .id(format!("shortcut-badge-{}", id.as_str()))
-        .test_support()
-        .role(gpui_kit::Role::Label)
-        .aria_label(format!("Shortcut for {label}: {}", binding.map(Kbd::format).unwrap_or_else(|| "not set".into())))
-        .child(badge)
-        .into_any_element()
+/// Bare-modifier key names reported by GPUI key events. Capture ignores them
+/// and keeps waiting for the completed chord instead of flashing a rejection.
+pub(super) fn is_modifier_key(key: &str) -> bool {
+    matches!(
+        key,
+        "shift" | "control" | "ctrl" | "alt" | "option" | "cmd" | "command" | "meta" | "function" | "fn" | "platform"
+    )
 }
 
-fn shortcut_accessibility_value(value: &str) -> String {
+pub(super) fn shortcut_accessibility_value(value: &str) -> String {
     if value.is_empty() {
         return "not set".into();
     }
@@ -761,5 +601,98 @@ mod tests {
         assert_eq!(CommandId::from_id("unknown"), None);
         assert_eq!(CommandId::from_id(""), None);
         assert_eq!(CommandId::from_id("Commands"), None);
+    }
+
+    #[test]
+    fn commands_carry_unique_labels_descriptions_and_parsable_defaults() {
+        use std::collections::HashSet;
+
+        let mut labels = HashSet::new();
+        for command in COMMANDS {
+            assert!(!command.label.is_empty(), "{:?} needs a label", command.id);
+            assert!(!command.description.is_empty(), "{:?} needs a description", command.id);
+            assert!(labels.insert(command.label), "duplicate label: {}", command.label);
+            assert!(
+                gpui_kit::Keystroke::parse(command.default_binding).is_ok(),
+                "{:?} default must parse: {}",
+                command.id,
+                command.default_binding
+            );
+        }
+    }
+
+    #[test]
+    fn draft_from_fills_defaults_and_keeps_overrides() {
+        let draft = draft_from(&BTreeMap::new());
+        assert_eq!(draft.len(), COMMANDS.len());
+        assert_eq!(draft.get("commands").map(String::as_str), Some("cmd-k"));
+        assert_eq!(draft.get("previous_review_file").map(String::as_str), Some("alt-shift-f7"));
+
+        let draft = draft_from(&BTreeMap::from([
+            ("commands".into(), "ctrl-shift-k".into()),
+            ("model".into(), String::new()),
+        ]));
+        assert_eq!(draft.len(), COMMANDS.len());
+        assert_eq!(draft.get("commands").map(String::as_str), Some("ctrl-shift-k"));
+        assert_eq!(draft.get("model").map(String::as_str), Some(""));
+        assert_eq!(draft.get("zen_mode").map(String::as_str), Some("ctrl-cmd-z"));
+
+        let zen = COMMANDS.iter().find(|command| command.id == CommandId::ZenMode).unwrap();
+        assert_eq!(staged_value(&BTreeMap::new(), zen), "ctrl-cmd-z");
+        let overrides = BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())]);
+        assert_eq!(staged_value(&overrides, zen), "ctrl-alt-z");
+    }
+
+    #[test]
+    fn shortcut_search_matches_label_description_and_binding() {
+        use super::super::configuration::config_search_terms;
+
+        let zen = COMMANDS.iter().find(|command| command.id == CommandId::ZenMode).unwrap();
+        let commands = COMMANDS.iter().find(|command| command.id == CommandId::Commands).unwrap();
+        let model = COMMANDS.iter().find(|command| command.id == CommandId::Model).unwrap();
+
+        assert!(shortcut_matches_query(zen, "ctrl-cmd-z", &[]));
+        // Label-only term: "zen" hits Zen mode, not the palette command.
+        let terms = config_search_terms("zen");
+        assert!(shortcut_matches_query(zen, "ctrl-cmd-z", &terms));
+        assert!(!shortcut_matches_query(commands, "cmd-k", &terms));
+        // Description-only term: "palette" hits Search commands, not Choose model.
+        let terms = config_search_terms("palette");
+        assert!(shortcut_matches_query(commands, "cmd-k", &terms));
+        assert!(!shortcut_matches_query(model, "cmd-shift-m", &terms));
+        // Every term must match: "toggle zen" hits Zen mode, "toggle palette" hits nothing.
+        let terms = config_search_terms("toggle zen");
+        assert!(shortcut_matches_query(zen, "ctrl-cmd-z", &terms));
+        assert!(!shortcut_matches_query(commands, "cmd-k", &terms));
+        let terms = config_search_terms("toggle palette");
+        assert!(!shortcut_matches_query(zen, "ctrl-cmd-z", &terms));
+        assert!(!shortcut_matches_query(commands, "cmd-k", &terms));
+        // Case-insensitive, and staged bindings match by their stored text.
+        let terms = config_search_terms("ZEN");
+        assert!(shortcut_matches_query(zen, "ctrl-cmd-z", &terms));
+        let terms = config_search_terms("ctrl-shift-k");
+        assert!(shortcut_matches_query(commands, "ctrl-shift-k", &terms));
+        assert!(!shortcut_matches_query(commands, "cmd-k", &terms));
+    }
+
+    #[test]
+    fn capture_ignores_bare_modifiers_but_keeps_real_keys() {
+        for key in [
+            "shift", "control", "ctrl", "alt", "option", "cmd", "command", "meta", "function", "fn", "platform",
+        ] {
+            assert!(is_modifier_key(key), "{key} must not commit a capture");
+        }
+        for key in ["a", ";", "escape", "enter", "space", "f7", "f12", "[", ",", "."] {
+            assert!(!is_modifier_key(key), "{key} must commit a capture attempt");
+        }
+    }
+
+    #[test]
+    fn captured_chords_round_trip_through_parse() {
+        for chord in ["cmd-shift-k", "ctrl-cmd-z", "escape", "f7", "alt-shift-f7", "cmd-["] {
+            let once = gpui_kit::Keystroke::parse(chord).unwrap().unparse();
+            let twice = gpui_kit::Keystroke::parse(&once).unwrap().unparse();
+            assert_eq!(twice, once, "{chord} must survive a capture round-trip");
+        }
     }
 }

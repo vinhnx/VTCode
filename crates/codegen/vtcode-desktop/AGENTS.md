@@ -6,7 +6,7 @@
 - `transcript.rs` owns rows/groups and queues measured-layout changes; `MessageScrollerState` owns virtual-list geometry. Hidden-only archive pages advance the cursor and keep earlier history reachable. Row roles/statuses are typed (`TranscriptRole`, `ActivityState::from_status`); cross-file strings live in `strings.rs`, test fixtures keep literals as oracles.
 - Use `vtcode-exec-events` runtime types; file changes use bounded `DiffCard` rows.
   Inspector projections reuse live/restored rows; rebuild changes on upsert.
-- Menus and `view/shortcuts.rs` reuse typed actions; shortcut ids are a private `CommandId` table. Buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.
+- Menus and `view/shortcuts.rs` reuse typed actions; shortcut ids are a `CommandId` table shared with `view/shortcuts_render.rs` (staged draft + per-row capture + search). Keymap actions dispatch before element key handlers: intercept sheet `Cancel` via `on_action` (palette precedent), never `on_key_down`; render capture only while the pill holds focus. Buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.
 - Gate discovery on validated initialization; serialize session/model changes and capture first-message Send content.
 - Compact model picks use optional CLI ranking; full search uses the catalog.
   Fast mode follows the validated CLI route and persists through the service.

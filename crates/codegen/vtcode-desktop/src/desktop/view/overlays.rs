@@ -126,8 +126,11 @@ impl DesktopView {
         }
         self.settings_open = false;
         self.config_page_open = false;
+        // Capture never survives the sheet, staged edits or not, so reopening never shows an
+        // armed pill without focus.
+        self.shortcut_capture = None;
         if self.shortcuts_editing {
-            self.shortcut_inputs = shortcuts::inputs(&self.preferences.shortcuts, window, cx);
+            self.shortcut_draft = shortcuts::draft_from(&self.preferences.shortcuts);
             self.shortcuts_editing = false;
             self.shortcut_message = None;
         }

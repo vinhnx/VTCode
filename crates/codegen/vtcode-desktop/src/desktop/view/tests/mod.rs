@@ -332,6 +332,7 @@ mod search_config;
 mod secret_store;
 mod service_navigation;
 mod sessions_startup;
+mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
 mod themes_transcript;

@@ -447,24 +447,33 @@ fn startup_collapses_panels_and_navigation_peek_is_transient(cx: &mut TestAppCon
 #[gpui_kit::test]
 fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
         select_settings_category(window, 2, cx);
-        window.click("edit-shortcuts", cx);
-        view.update(cx, |view, cx| {
-            view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("cmd-n", window, cx));
-        });
+        window.click("shortcut-edit-commands", cx);
         window.render_frame(cx);
-        focus_element_by_tab(window, "save-shortcuts", cx);
-        window.press("enter", cx);
+        assert!(view.read(cx).shortcut_capture.is_some(), "pencil click arms capture");
+        assert!(window.try_find("shortcut-capture-commands").is_some(), "armed capture mounts the pill");
+        assert!(
+            view.read(cx).shortcut_capture_focus.contains_focused(window, cx),
+            "beginning capture focuses the pill"
+        );
+        window.press("cmd-n", cx);
+        window.render_frame(cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already assigned"));
+        assert!(view.read(cx).shortcut_capture.is_some(), "rejected chords keep capturing");
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
-        view.update(cx, |view, cx| {
-            view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx))
-        });
+        window.press("ctrl-shift-k", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).shortcut_capture.is_none());
+        assert!(
+            view.read(cx).shortcut_search_input.read(cx).focus_handle(cx).is_focused(window),
+            "committing returns to search for the next row"
+        );
         focus_element_by_tab(window, "save-shortcuts", cx);
         window.press("enter", cx);
         assert_eq!(
@@ -475,11 +484,35 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             Some("ctrl-shift-k")
         );
         window.render_frame(cx);
-        window.click("edit-shortcuts", cx);
-        focus_element_by_tab(window, "reset-shortcuts", cx);
-        window.press("enter", cx);
-        assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
-        assert_eq!(view.read(cx).shortcut_inputs[0].read(cx).value(), "cmd-k");
+        window.click("reset-shortcuts", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).shortcut_draft.get("commands").map(String::as_str), Some("cmd-k"));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load()
+                .shortcuts
+                .get("commands")
+                .map(String::as_str),
+            Some("ctrl-shift-k"),
+            "reset stages without saving"
+        );
+        window.click("cancel-shortcuts", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).shortcut_draft.get("commands").map(String::as_str),
+            Some("ctrl-shift-k"),
+            "cancelling a staged reset keeps the saved binding"
+        );
+        window.click("reset-shortcuts", cx);
+        window.render_frame(cx);
+        window.click("save-shortcuts", cx);
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load()
+                .shortcuts
+                .get("commands")
+                .map(String::as_str),
+            Some("cmd-k")
+        );
+        assert_eq!(view.read(cx).shortcut_draft.get("commands").map(String::as_str), Some("cmd-k"));
     })
     .unwrap();
 }
@@ -518,42 +551,52 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         select_settings_category(window, 2, cx);
         assert!(window.try_find("keyboard-settings").is_some());
         assert_eq!(window.find("keyboard-shortcuts-group").role(), Some(gpui_kit::Role::Group));
-        let context = gpui_kit::KeyBindingContextPredicate::parse("VTCodeDesktop").unwrap();
-        let binding = gpui_kit::KeyBinding::load(
-            "ctrl-shift-k",
-            Box::new(super::super::OpenCommandPalette),
-            Some(context.into()),
-            false,
-            None,
-            &gpui_kit::DummyKeyboardMapper,
-        )
-        .unwrap();
-        cx.bind_keys([binding]);
-        window.render_frame(cx);
-        window.render_frame(cx);
         let expected_shortcut_label = format!(
             "Shortcut for Search commands: {}",
-            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("ctrl-shift-k").unwrap())
+            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("cmd-k").unwrap())
         );
         let shortcut = window.find("shortcut-badge-commands");
         assert_eq!(shortcut.role(), Some(gpui_kit::Role::Label));
         assert_eq!(shortcut.label(), Some(expected_shortcut_label.as_str()));
-        assert!(window.try_find("shortcut-input-commands").is_none(), "inputs stay hidden until edit mode");
+        assert!(window.try_find("shortcut-capture-commands").is_none(), "capture stays hidden until edit");
 
-        window.click("edit-shortcuts", cx);
+        window.click("shortcut-edit-commands", cx);
         window.render_frame(cx);
-        assert!(window.try_find("shortcut-input-commands").is_some());
+        assert!(window.try_find("shortcut-capture-commands").is_some());
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("shortcut-capture-commands").is_none());
+        assert!(window.try_find("keyboard-settings").is_some(), "escape cancels capture without dismissing settings");
+        assert!(
+            view.read(cx).shortcut_search_input.read(cx).focus_handle(cx).is_focused(window),
+            "cancelling returns to search for the next row"
+        );
+        assert_eq!(
+            view.read(cx).shortcut_draft.get("commands").map(String::as_str),
+            Some("cmd-k"),
+            "cancelling capture keeps the staged binding"
+        );
+
         view.update(cx, |view, cx| {
-            view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx));
+            view.shortcut_search_input
+                .update(cx, |input, cx| input.set_value("model picker", window, cx));
         });
+        window.render_frame(cx);
+        window.click("shortcut-remove-model", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("shortcut-badge-model").label(), Some("Shortcut for Choose model: not set"));
         window.click("cancel-shortcuts", cx);
         window.render_frame(cx);
-        assert!(window.try_find("shortcut-input-commands").is_none());
         assert_eq!(
-            crate::desktop::preferences::Preferences::load().shortcuts.get("commands"),
+            crate::desktop::preferences::Preferences::load().shortcuts.get("model"),
             None,
             "cancelling discards unsaved bindings"
         );
+        view.update(cx, |view, cx| {
+            view.shortcut_search_input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+        });
+        window.render_frame(cx);
         assert_eq!(window.find("shortcut-badge-commands").label(), Some(expected_shortcut_label.as_str()));
     })
     .unwrap();

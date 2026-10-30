@@ -17,10 +17,12 @@ icon_assets!(
         Leaf,
         Maximize2,
         MessageSquare,
+        Pencil,
         Shield,
         ShieldCheck,
         ShieldAlert,
         Terminal,
+        Trash,
         Wrench,
         X
     ]
@@ -85,6 +87,7 @@ mod tests {
         IconName::Minus,
         IconName::PanelLeft,
         IconName::PanelRight,
+        IconName::Pencil,
         IconName::Plus,
         IconName::RefreshCw,
         IconName::Search,
@@ -94,6 +97,7 @@ mod tests {
         IconName::ShieldAlert,
         IconName::Square,
         IconName::Terminal,
+        IconName::Trash,
         IconName::TriangleAlert,
         IconName::Wrench,
         IconName::X,

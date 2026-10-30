@@ -177,7 +177,7 @@ impl DesktopView {
             return;
         }
         let mut preferences = self.preferences.clone();
-        preferences.shortcuts = self.shortcut_values(cx);
+        preferences.shortcuts = self.shortcut_draft.clone();
         for (action, keys) in &shared.shortcuts {
             let _previous = preferences
                 .shortcuts
@@ -188,7 +188,8 @@ impl DesktopView {
             Ok(_) => match preferences.try_save() {
                 Err(error) => error,
                 Ok(()) => {
-                    self.shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
+                    self.shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
+                    self.shortcut_capture = None;
                     self.preferences = preferences;
                     self.shortcuts_editing = false;
                     self.settings_navigation_focus.focus(window, cx);

@@ -48,7 +48,8 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
                 }))
                 .unwrap(),
             );
-            view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx));
+            let _previous = view.shortcut_draft.insert("commands".into(), "ctrl-shift-k".into());
+            view.shortcuts_editing = true;
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
@@ -73,6 +74,11 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
         window.render_frame(cx);
         window.click("import-cli-shortcuts", cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("reserved"));
+        assert_eq!(
+            view.read(cx).shortcut_draft.get("cancel").map(String::as_str),
+            Some("ctrl-c"),
+            "a rejected import keeps the staged draft"
+        );
         assert_eq!(
             crate::desktop::preferences::Preferences::load()
                 .shortcuts

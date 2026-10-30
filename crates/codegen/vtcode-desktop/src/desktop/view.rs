@@ -109,6 +109,7 @@ mod sessions;
 mod settings;
 mod shared_preferences;
 mod shortcuts;
+mod shortcuts_render;
 mod submit;
 mod transcript_render;
 mod typography;
@@ -494,7 +495,11 @@ struct DesktopView {
     navigation_peek: bool,
     hovered_message: Option<String>,
     zen_mode: bool,
-    shortcut_inputs: Vec<Entity<InputState>>,
+    shortcut_draft: std::collections::BTreeMap<String, String>,
+    shortcut_search_input: Entity<InputState>,
+    _shortcut_search_subscription: Subscription,
+    shortcut_capture: Option<shortcuts::CommandId>,
+    shortcut_capture_focus: FocusHandle,
     shortcut_message: Option<String>,
     shortcuts_editing: bool,
     sidebar_width: f32,
