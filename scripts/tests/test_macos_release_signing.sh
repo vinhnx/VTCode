@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/macos-release-signing.sh
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/../macos-release-signing.sh"
 
 tmp=$(mktemp -d)
@@ -15,6 +15,8 @@ fail_test() {
     fail=1
 }
 
+# Invoked through the sourced macos-release-signing.sh under test.
+# shellcheck disable=SC2329
 uname() { printf '%s\n' "${TEST_UNAME:-Darwin}"; }
 
 unset VTCODE_MACOS_SIGNING_IDENTITY VTCODE_MACOS_NOTARY_PROFILE
@@ -25,6 +27,8 @@ else
     fail_test 'preflight should select unsigned packaging when signing credentials are absent'
 fi
 
+# Invoked through the sourced macos-release-signing.sh under test.
+# shellcheck disable=SC2329
 security() {
     if [[ "${TEST_IDENTITY_AVAILABLE:-1}" == "1" ]]; then
         printf '  1) ABCDEF "Developer ID Application: Test Developer (TEAMID)"\n'
@@ -34,11 +38,15 @@ security() {
     fi
 }
 
+# Invoked through the sourced macos-release-signing.sh under test.
+# shellcheck disable=SC2329
 codesign() {
     printf '%s\n' "$@" >>"$tmp/codesign-args"
     return "${TEST_CODESIGN_STATUS:-0}"
 }
 
+# Invoked through the sourced macos-release-signing.sh under test.
+# shellcheck disable=SC2329
 ditto() {
     if [[ "$1" != "-c" || "$2" != "-k" || "$3" != "--norsrc" \
         || "$4" != "--noextattr" || "$5" != "--noqtn" ]]; then
@@ -47,6 +55,8 @@ ditto() {
     cp "$6" "$7"
 }
 
+# Invoked through the sourced macos-release-signing.sh under test.
+# shellcheck disable=SC2329
 xcrun() {
     printf '%s\n' "$*" >>"$tmp/xcrun-args"
     if [[ "$1" == "notarytool" && "$2" == "history" ]]; then
@@ -59,6 +69,8 @@ xcrun() {
     return 2
 }
 
+# Invoked through the sourced macos-release-signing.sh under test.
+# shellcheck disable=SC2329
 spctl() {
     printf '%s\n' "$*" >>"$tmp/spctl-args"
     local assessed_binary

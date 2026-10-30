@@ -5,9 +5,8 @@ echo "Testing docs.rs fix for mcp-types build script..."
 
 # Test 1: Normal build (should generate files if not exists or in normal mode)
 echo "Test 1: Running normal build..."
-cd third-party/mcp-types
-cargo build --release
-if [ $? -eq 0 ]; then
+cd third-party/mcp-types || exit 1
+if cargo build --release; then
     echo "✓ Normal build succeeded"
 else
     echo "✗ Normal build failed"
@@ -16,8 +15,7 @@ fi
 
 # Test 2: Simulate docs.rs environment (should skip generation)
 echo "Test 2: Simulating docs.rs build..."
-DOCS_RS=1 cargo build --release
-if [ $? -eq 0 ]; then
+if DOCS_RS=1 cargo build --release; then
     echo "✓ docs.rs simulation succeeded (build script skipped file generation)"
 else
     echo "✗ docs.rs simulation failed"

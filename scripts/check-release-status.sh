@@ -3,6 +3,7 @@
 # Quick status checker for VT Code release assets
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 REPO="vinhnx/vtcode"

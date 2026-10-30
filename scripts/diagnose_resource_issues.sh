@@ -43,19 +43,19 @@ else
 
         if [[ "$OS" == "Darwin" ]]; then
             # macOS
-            ps -p $PID -o comm= -o rss= -o vsz= -o %cpu= | \
+            ps -p "$PID" -o comm= -o rss= -o vsz= -o %cpu= | \
             awk '{printf "  Command:     %s\n  Memory RSS:  %.1f MB\n  Memory VSZ:  %.1f MB\n  CPU:         %s%%\n", $1, $2/1024, $3/1024, $4}'
 
             # Get thread count
-            THREADS=$(ps -p $PID -o nlwp=)
+            THREADS=$(ps -p "$PID" -o nlwp=)
             echo "  Threads:     $THREADS"
         else
             # Linux
-            ps -p $PID -o comm= -o rss= -o vsz= -o %cpu= | \
+            ps -p "$PID" -o comm= -o rss= -o vsz= -o %cpu= | \
             awk '{printf "  Command:     %s\n  Memory RSS:  %.1f MB\n  Memory VSZ:  %.1f MB\n  CPU:         %s%%\n", $1, $2/1024, $3/1024, $4}'
 
             # Get thread count
-            THREADS=$(ps -p $PID -o nlwp= | xargs)
+            THREADS=$(ps -p "$PID" -o nlwp= | xargs)
             echo "  Threads:     $THREADS"
         fi
 
@@ -116,7 +116,6 @@ echo "Lines of code:  $RUST_LINES"
 # Workspace info
 if [[ -f "Cargo.toml" ]]; then
     WORKSPACES=$(grep -c '^\[workspace\]' Cargo.toml 2>/dev/null || echo 0)
-    MEMBERS=$(grep -c 'members' Cargo.toml 2>/dev/null || echo 0)
 
     if [[ $WORKSPACES -gt 0 ]]; then
         echo "Workspace:      Yes"
@@ -148,6 +147,8 @@ fi
 
 # Check for unbounded caches
 if grep -r 'HashMap::new()' --include="*.rs" . 2>/dev/null | grep -v test | grep -q .; then
+    # wc -l (not grep -c) keeps this pipeline exit-0 when nothing matches under set -e.
+    # shellcheck disable=SC2126
     HASHMAP_COUNT=$(grep -r 'HashMap::new()' --include="*.rs" . 2>/dev/null | grep -v test | wc -l)
     echo "[!]  Found $HASHMAP_COUNT unbounded HashMap allocations"
     echo "   → Consider adding size limits or TTL expiration"
@@ -155,6 +156,8 @@ if grep -r 'HashMap::new()' --include="*.rs" . 2>/dev/null | grep -v test | grep
 fi
 
 # Check for excessive cloning
+# wc -l (not grep -c) keeps this pipeline exit-0 when nothing matches under set -e.
+# shellcheck disable=SC2126
 CLONE_COUNT=$(grep -r '\.clone()' --include="*.rs" . 2>/dev/null | grep -v test | wc -l)
 if [[ $CLONE_COUNT -gt 100 ]]; then
     echo "[!]  Found $CLONE_COUNT .clone() calls"

@@ -7,8 +7,12 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+# Palette entries consumed by scripts that source this file (e.g. release-preflight.sh, check-release-status.sh).
+# shellcheck disable=SC2034
 PURPLE='\033[0;35m'
+# shellcheck disable=SC2034
 MAGENTA='\033[0;35m'
+# shellcheck disable=SC2034
 CYAN='\033[0;36m'
 NC='\033[0m'
 
@@ -83,7 +87,8 @@ get_current_version() {
     
     if [[ -z "$line" ]]; then
         # Try to find version in workspace members if not in root
-        local root_toml="$(dirname "${BASH_SOURCE[0]}")/../Cargo.toml"
+        local root_toml
+        root_toml="$(dirname "${BASH_SOURCE[0]}")/../Cargo.toml"
         if [[ -f "$root_toml" ]]; then
             line=$(grep '^version = ' "$root_toml" | head -1 2>/dev/null || echo "")
         fi
@@ -97,6 +102,7 @@ get_current_version() {
     if [[ -z "$line" ]]; then
         echo "0.82.1" # Fallback to latest known
     else
-        echo "${line#*\"}" | sed 's/\".*//'
+        local stripped="${line#*\"}"
+        echo "${stripped%%\"*}"
     fi
 }

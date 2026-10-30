@@ -21,6 +21,8 @@ forbidden_publication() {
 	return 99
 }
 cargo() { forbidden_publication; }
+# Tripwire: fails the test if the code under test publishes unexpectedly.
+# shellcheck disable=SC2329
 gh() { forbidden_publication; }
 curl() { forbidden_publication; }
 export -f cargo gh curl forbidden_publication
@@ -442,6 +444,8 @@ mkdir -p "$fixture_dir/uploads"
 : >"$fixture_dir/uploads/ok-a.bin"
 : >"$fixture_dir/uploads/sp ace.bin"
 : >"$fixture_dir/upload-calls"
+# Invoked through the sourced release script under test.
+# shellcheck disable=SC2329
 gh() {
 	printf '%s\n' "$(basename "$4")" >>"$fixture_dir/upload-calls"
 	return 0

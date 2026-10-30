@@ -12,6 +12,7 @@
 set -e
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,8 +25,14 @@ run_timings() {
     log_info "Generating cargo build timing report..."
     cargo build --timings
     
-    # Find and display the latest timing file
-    TIMING_FILE=$(ls -t target/cargo-timings/cargo-timing-*.html 2>/dev/null | head -1)
+    # Find and display the latest timing file (portable newest-file scan; macOS find has no -printf).
+    TIMING_FILE=""
+    for timing_candidate in target/cargo-timings/cargo-timing-*.html; do
+        [[ -f "$timing_candidate" ]] || continue
+        if [[ -z "$TIMING_FILE" || "$timing_candidate" -nt "$TIMING_FILE" ]]; then
+            TIMING_FILE="$timing_candidate"
+        fi
+    done
     if [ -n "$TIMING_FILE" ]; then
         log_info "Timing report: $TIMING_FILE"
         if command -v open &> /dev/null; then

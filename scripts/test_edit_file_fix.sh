@@ -100,8 +100,8 @@ echo ""
 echo "=== Summary of Fixes ==="
 echo ""
 echo "1. ✓ Fixed newline handling bug:"
-echo "   - Old: format!(\"{}\n{}\n{}\", before, replacement, after)"
-echo "   - New: [before_lines, replacement_lines, after_lines].join(\"\n\")"
+printf '%s\n' '   - Old: format!("{}\n{}\n{}", before, replacement, after)'
+printf '%s\n' '   - New: [before_lines, replacement_lines, after_lines].join("\n")'
 echo "   - Prevents extra blank lines at start/end of file"
 echo ""
 echo "2. ✓ Added multi-level fallback matching:"

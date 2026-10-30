@@ -16,6 +16,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 
 DRY_RUN=false
@@ -110,9 +111,14 @@ fi
 
 print_info "Generating grouped avatar HTML..."
 
+# Group buffers accumulated through append_line's indirect expansion (${!group_var}).
+# shellcheck disable=SC2034
 advisors_html=""
+# shellcheck disable=SC2034
 main_html=""
+# shellcheck disable=SC2034
 core_html=""
+# shellcheck disable=SC2034
 contributor_html=""
 
 append_line() {

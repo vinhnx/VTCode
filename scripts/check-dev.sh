@@ -19,6 +19,7 @@
 set -e
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Configuration
@@ -47,7 +48,8 @@ print_always() {
 
 # Timing helper
 print_timing() {
-	local end=$(date +%s)
+	local end
+	end=$(date +%s)
 	local duration=$((end - SCRIPT_START))
 	if [ $duration -lt 60 ]; then
 		echo ""
@@ -117,6 +119,8 @@ run_clippy() {
 	SCOPE_LABEL="$label"
 
 	print_status "Running clippy ($SCOPE_LABEL)..."
+	# Unquoted on purpose: cargo_verbosity prints one flag or nothing (which must vanish, not become "").
+	# shellcheck disable=SC2046
 	if cargo clippy --locked $(cargo_verbosity) "${scope_args[@]}" --all-targets --all-features -- -D warnings; then
 		print_success "No clippy warnings found!"
 		return 0
@@ -138,6 +142,8 @@ run_check() {
 	SCOPE_LABEL="$label"
 
 	print_status "Running cargo check ($SCOPE_LABEL)..."
+	# Unquoted on purpose: see run_clippy above.
+	# shellcheck disable=SC2046
 	if cargo check --locked $(cargo_verbosity) "${scope_args[@]}"; then
 		print_success "Compilation successful!"
 		return 0

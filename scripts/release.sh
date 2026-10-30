@@ -522,7 +522,7 @@ main() {
 		# man/). This only blocks if gen-man outlasts the builds; the
 		# release compiles keep running concurrently.
 		if wait "$pid_man" 2>/dev/null; then
-			print_info "Generated $(ls "$man_stage" 2>/dev/null | wc -l | tr -d ' ') man pages"
+			print_info "Generated $(find "$man_stage" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') man pages"
 		else
 			print_warning "Man page generation failed; archives will ship without man pages"
 		fi
@@ -755,9 +755,11 @@ main() {
 			fi
 			compat_assets+=("$compat_path")
 			(
-				create_compatibility_asset "$normal_archive" "$compat_path" &&
-					{ [[ "$ctarget" != *-apple-darwin ]] || verify_macos_release_binary "$compat_path"; } ||
+				if ! create_compatibility_asset "$normal_archive" "$compat_path"; then
 					touch "$compat_status_dir/$(basename "$compat_path").failed"
+				elif [[ "$ctarget" == *-apple-darwin ]] && ! verify_macos_release_binary "$compat_path"; then
+					touch "$compat_status_dir/$(basename "$compat_path").failed"
+				fi
 			) &
 			compat_pids+=($!)
 		done

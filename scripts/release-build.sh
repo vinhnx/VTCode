@@ -78,7 +78,9 @@ trigger_ci_builds() {
 					sleep 10
 					# Newest run of this workflow created after the dispatch
 					# above (ISO-8601 Zulu timestamps sort lexicographically).
-					run_id=$(gh run list --workflow build-linux-windows.yml --limit 5 --json databaseId,createdAt --jq --arg since "$trigger_time" '[.[] | select(.createdAt > $since)] | .[0].databaseId // empty' 2>/dev/null || true)
+					# $since is a jq variable, deliberately shielded from shell expansion.
+				# shellcheck disable=SC2016
+				run_id=$(gh run list --workflow build-linux-windows.yml --limit 5 --json databaseId,createdAt --jq --arg since "$trigger_time" '[.[] | select(.createdAt > $since)] | .[0].databaseId // empty' 2>/dev/null || true)
 					find_run_attempts=$((find_run_attempts + 1))
 				done
 

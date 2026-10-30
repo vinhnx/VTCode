@@ -18,10 +18,8 @@ TESTS_PASSED=0
 
 # Function to test blocked command
 test_blocked_command() {
-    local tool_name="$1"
     local test_name="$2"
     local command="$3"
-    local expected_error="$4"
 
     echo -e "\n${YELLOW}Testing: ${test_name}${NC}"
     TESTS_RUN=$((TESTS_RUN + 1))
@@ -38,7 +36,6 @@ test_blocked_command() {
 
 # Function to test allowed command
 test_allowed_command() {
-    local tool_name="$1"
     local test_name="$2"
     local command="$3"
 
@@ -87,7 +84,13 @@ echo -e "\nTesting Policy Integration"
 echo "=============================="
 
 # Test that tools integrate with policy system
-run_test "Policy system integration" "grep 'should_execute_tool' crates/codegen/vtcode-core/src/tools/registry.rs" "should_execute_tool"
+TESTS_RUN=$((TESTS_RUN + 1))
+if grep -rq 'should_execute_tool' crates/codegen/vtcode-core/src/tools/registry/ 2>/dev/null; then
+    echo -e "${GREEN}PASSED${NC} (policy integration present)"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo -e "${RED}✦ FAILED${NC} (should_execute_tool not found in tools registry)"
+fi
 
 echo -e "\n✦ Security Test Results"
 echo "========================"

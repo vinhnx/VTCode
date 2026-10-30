@@ -4,6 +4,8 @@
 
 set -e  # Exit on any error
 
+# Invoked through run_test's eval of its command strings (see below).
+# shellcheck disable=SC2329
 cargo_cmd() {
     env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo "$@"
 }
@@ -38,29 +40,6 @@ run_test() {
         echo "Command: $command"
         echo "Expected to contain: $expected_contains"
     fi
-}
-
-# Function to test tool directly (if binary exists)
-test_tool_directly() {
-    local tool_name="$1"
-    local test_input="$2"
-    local expected_contains="$3"
-
-    echo -e "\n${YELLOW}Testing $tool_name tool directly${NC}"
-
-    # Build and execute the tool through the binary
-    if cargo_cmd build --bin vtcode >/dev/null 2>&1; then
-        output=$(cargo_cmd run --quiet --bin vtcode -- "$tool_name" "$test_input" 2>/dev/null)
-        if echo "$output" | grep -q "$expected_contains"; then
-            echo -e "${GREEN}Tool output verified${NC}"
-            TESTS_PASSED=$((TESTS_PASSED + 1))
-        else
-            echo -e "${RED}✦ Unexpected tool output${NC}"
-        fi
-    else
-        echo -e "${RED}✦ Tool compilation failed${NC}"
-    fi
-    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 echo -e "\nTesting Tool Compilation"

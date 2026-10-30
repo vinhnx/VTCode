@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+# Work dir recorded for the EXIT trap (function locals are unset when it fires).
+VERIFY_HOMEBREW_TEMP_DIR=""
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -79,7 +82,8 @@ verify_checksums() {
     print_info "Verifying checksums against GitHub releases..."
 
     local formula_path="homebrew/vtcode.rb"
-    local version=$(grep 'version "' "$formula_path" | head -1 | sed 's/.*version "\([^"]*\)".*/\1/')
+    local version
+    version=$(grep 'version "' "$formula_path" | head -1 | sed 's/.*version "\([^"]*\)".*/\1/')
 
     if [ -z "$version" ]; then
         print_error "Could not extract version from formula"
@@ -99,7 +103,8 @@ verify_checksums() {
     # Get asset list
     print_info "Checking for binaries..."
 
-    local assets=$(gh release view "$version" --json assets --jq '.assets | length')
+    local assets
+    assets=$(gh release view "$version" --json assets --jq '.assets | length')
     print_info "Found $assets assets in release"
 
     if [ "$assets" -lt 4 ]; then
@@ -109,23 +114,28 @@ verify_checksums() {
     fi
 
     # Check for sha256 files
-    local sha256_count=$(gh release view "$version" --json assets --jq '.assets[] | select(.name | endswith(".sha256")) | .name' | wc -l || echo "0")
+    local sha256_count
+    sha256_count=$(gh release view "$version" --json assets --jq '.assets[] | select(.name | endswith(".sha256")) | .name' | wc -l || echo "0")
     print_info "Found $sha256_count checksum files"
 
     # Try to download and verify checksums
     if [ "$sha256_count" -gt 0 ]; then
         print_info "Downloading checksums from release..."
 
-        local temp_dir=$(mktemp -d)
-        trap "rm -rf $temp_dir" EXIT
+        local temp_dir
+        temp_dir=$(mktemp -d)
+        VERIFY_HOMEBREW_TEMP_DIR="$temp_dir"
+        trap 'rm -rf -- "${VERIFY_HOMEBREW_TEMP_DIR:?}"' EXIT
 
         if gh release download "$version" --dir "$temp_dir" --pattern "*.sha256" 2>/dev/null; then
             print_success "Downloaded checksum files"
 
             # Extract checksums from downloaded files
             for sha_file in "$temp_dir"/*.sha256; do
-                local filename=$(basename "$sha_file" .sha256)
-                local sha=$(cat "$sha_file" | awk '{print $1}')
+                local filename
+                filename=$(basename "$sha_file" .sha256)
+                local sha
+                sha=$(cat "$sha_file" | awk '{print $1}')
                 print_info "  $filename: $sha"
             done
         else

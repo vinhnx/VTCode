@@ -92,14 +92,14 @@ if [[ "$RUN_MSRV" == true ]]; then
 	# Verify all crates have rust-version set
 	MSRV_CHECK_PASSED=true
 
-	for cargo_toml in $(find . -name "Cargo.toml" -not -path "./target/*" -not -path "./.worktrees/*" -not -path "./.vtcode/*" -not -path "./patches/*" -not -path "./fuzz/*" -not -path "./extensions/*"); do
+	while IFS= read -r cargo_toml; do
 		if grep -q 'edition = "2024"' "$cargo_toml"; then
 			if ! grep -q 'rust-version' "$cargo_toml"; then
 				echo -e "${RED}✗ Missing rust-version in $cargo_toml${NC}"
 				MSRV_CHECK_PASSED=false
 			fi
 		fi
-	done
+	done < <(find . -name "Cargo.toml" -not -path "./target/*" -not -path "./.worktrees/*" -not -path "./.vtcode/*" -not -path "./patches/*" -not -path "./fuzz/*" -not -path "./extensions/*")
 
 	if [[ "$MSRV_CHECK_PASSED" == true ]]; then
 		echo -e "${GREEN}✓ All crates have rust-version specified${NC}"

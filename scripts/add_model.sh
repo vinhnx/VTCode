@@ -5,7 +5,6 @@
 set -e
 
 # Colors
-GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
@@ -13,16 +12,16 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}=== VT Code Model Addition Script ===${NC}\n"
 
 # Prompt for model details
-read -p "Model ID (e.g., gpt-5.4-nano): " MODEL_ID
-read -p "Display Name (e.g., GPT-5.4 Nano): " DISPLAY_NAME
-read -p "Provider (openai/anthropic/gemini): " PROVIDER
-read -p "Enum name (PascalCase, e.g., GPT54Nano): " ENUM_NAME
-read -p "Generation (e.g., 5.4): " GENERATION
-read -p "Context window (e.g., 100000): " CONTEXT
-read -p "Description: " DESCRIPTION
-read -p "Supports reasoning? (true/false): " REASONING
-read -p "Supports tool calls? (true/false): " TOOL_CALLS
-read -p "Input modalities (comma-separated, e.g., text or text,image): " INPUT_MODALITIES
+read -r -p "Model ID (e.g., gpt-5.4-nano): " MODEL_ID
+read -r -p "Display Name (e.g., GPT-5.4 Nano): " DISPLAY_NAME
+read -r -p "Provider (openai/anthropic/gemini): " PROVIDER
+read -r -p "Enum name (PascalCase, e.g., GPT54Nano): " ENUM_NAME
+read -r -p "Generation (e.g., 5.4): " GENERATION
+read -r -p "Context window (e.g., 100000): " CONTEXT
+read -r -p "Description: " DESCRIPTION
+read -r -p "Supports reasoning? (true/false): " REASONING
+read -r -p "Supports tool calls? (true/false): " TOOL_CALLS
+read -r -p "Input modalities (comma-separated, e.g., text or text,image): " INPUT_MODALITIES
 
 # Derive const name from MODEL_ID
 CONST_NAME=$(echo "$MODEL_ID" | tr '[:lower:]' '[:upper:]' | tr '.' '_' | tr '-' '_')

@@ -7,11 +7,13 @@ set -e
 
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 # Shared four-target Homebrew formula transformation.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/homebrew-formula.sh"
 # Shared macOS Developer ID signing and notarization helpers.
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/macos-release-signing.sh"
 
 # Stop `gh` from probing the terminal for its background color (OSC 11 +
@@ -26,7 +28,6 @@ export GH_SPINNER_DISABLED=${GH_SPINNER_DISABLED:-1}
 BUILD_TOOL="cargo"
 TARGET_ENV_ASSIGNMENTS=()
 DRY_RUN=false
-NO_WINDOWS_CROSS=false
 
 package_release_archive() {
     local target=$1
@@ -122,7 +123,8 @@ check_dependencies() {
 install_rust_targets() {
     print_info "Checking and installing required Rust targets..."
 
-    local targets=$(rustup target list --installed)
+    local targets
+    targets=$(rustup target list --installed)
 
     # macOS targets
     if ! echo "$targets" | grep -q "x86_64-apple-darwin"; then
@@ -671,7 +673,6 @@ main() {
             --only-upload) only_upload=true; shift ;;
             --only-homebrew) only_homebrew=true; shift ;;
             --notes-file) notes_file="$2"; shift 2 ;;
-            --no-windows-cross) NO_WINDOWS_CROSS=true; shift ;;
             --dry-run) DRY_RUN=true; shift ;;
             *) shift ;;
         esac

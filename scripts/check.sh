@@ -11,6 +11,7 @@
 set -e
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Configuration
@@ -18,7 +19,8 @@ SCRIPT_START=$(date +%s)
 
 # Timing helper
 print_timing() {
-    local end=$(date +%s)
+    local end
+    end=$(date +%s)
     local duration=$((end - SCRIPT_START))
     if [ $duration -lt 60 ]; then
         echo ""
@@ -83,7 +85,7 @@ run_vtcode_command() {
     fi
 
     if command -v cargo > /dev/null 2>&1 && [ -f "Cargo.toml" ]; then
-        RUSTC_WRAPPER= cargo run --quiet --bin vtcode -- "$@"
+        RUSTC_WRAPPER='' cargo run --quiet --bin vtcode -- "$@"
         return $?
     fi
 
@@ -490,7 +492,7 @@ case "${1:-}" in
         run_release_contract_tests
         ;;
     "miri")
-        run_miri
+        run_miri "${@:2}"
         ;;
     *)
         main

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # publish_extracted_crates.sh orchestrates the sequential publishes for the
@@ -235,14 +236,14 @@ fi
 
 run_cmd() {
 	echo "+ $*"
-	eval "$@"
+	"$@"
 }
 
 publish_cmd() {
 	local crate="$1"
 	local version="${CURRENT_VERSION}"
 	if [[ $DRY_RUN -eq 1 ]]; then
-		run_cmd "cargo publish --dry-run -p $crate"
+		run_cmd cargo publish --dry-run -p "$crate"
 		return 0
 	fi
 
@@ -310,7 +311,7 @@ publish_cmd() {
 
 		if [[ $is_transient -eq 0 ]]; then
 			print_error "cargo publish for ${crate} failed with non-transient error (exit ${last_status}) — not retrying."
-			return $last_status
+			return "$last_status"
 		fi
 
 		if [[ $attempt -lt $max_retries ]]; then
@@ -323,13 +324,13 @@ publish_cmd() {
 			fi
 		else
 			print_error "cargo publish for ${crate} failed after ${max_retries} attempts (last exit ${last_status})."
-			return $last_status
+			return "$last_status"
 		fi
 
 		attempt=$((attempt + 1))
 	done
 
-	return $last_status
+	return "$last_status"
 }
 
 wait_for_crates_io_version() {
@@ -395,7 +396,7 @@ generate_docs() {
 		echo "Skipping doc generation for ${crate}."
 		return
 	fi
-	run_cmd "cargo doc --no-deps -p ${crate}"
+	run_cmd cargo doc --no-deps -p "${crate}"
 }
 
 maybe_tag() {
@@ -412,7 +413,7 @@ maybe_tag() {
 		echo "Tag ${tag} already exists; skipping creation."
 		return
 	fi
-	run_cmd "git tag ${tag}"
+	run_cmd git tag "${tag}"
 }
 
 post_publish_follow_up() {
@@ -421,24 +422,24 @@ post_publish_follow_up() {
 		echo "[dry-run] Would run 'cargo update -p ${crate}' and 'cargo check -p ${crate}'."
 		return
 	fi
-	run_cmd "cargo update -p ${crate}"
+	run_cmd cargo update -p "${crate}"
 	if [[ $RUN_FOLLOW_UP -eq 1 ]]; then
-		run_cmd "cargo check -p ${crate}"
+		run_cmd cargo check -p "${crate}"
 	fi
 }
 
 if [[ $RUN_TESTS -eq 1 ]]; then
-	run_cmd "cargo fmt"
-	run_cmd "cargo clippy --all-targets --all-features"
-	run_cmd "cargo test --workspace"
-	run_cmd "cargo test --doc"
+	run_cmd cargo fmt
+	run_cmd cargo clippy --all-targets --all-features
+	run_cmd cargo test --workspace
+	run_cmd cargo test --doc
 fi
 
 for crate in "${CRATES[@]}"; do
 	generate_docs "$crate"
 	if [[ "$crate" == "vtcode-bash-runner" && $DRY_RUN -eq 0 ]]; then
 		echo "Re-running vtcode-bash-runner dry run now that vtcode-exec-events is published..."
-		run_cmd "cargo publish --dry-run -p vtcode-bash-runner"
+		run_cmd cargo publish --dry-run -p vtcode-bash-runner
 	fi
 	if ! publish_cmd "$crate"; then
 		print_error "Failed to publish ${crate} ${CURRENT_VERSION}. Aborting remaining publishes."

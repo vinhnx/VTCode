@@ -111,7 +111,11 @@ if create_compatibility_asset "$tmp/bad.tar.gz" "$tmp/should-not-exist" >/dev/nu
 else
     pass "missing binary rejected"
 fi
-[[ -e "$tmp/should-not-exist" ]] && fail_test "missing binary left output file" || pass "missing binary left no output"
+if [[ -e "$tmp/should-not-exist" ]]; then
+    fail_test "missing binary left output file"
+else
+    pass "missing binary left no output"
+fi
 
 # Multiple matching binaries.
 mkdir -p "$tmp/src4/a" "$tmp/src4/b"
@@ -216,8 +220,8 @@ normal_glob="$stage/vtcode-*.tar.gz $stage/vtcode-*.zip"
 # Simulate the two-phase upload the release script performs.
 # shellcheck disable=SC2086
 gh release upload "$version" $compat_glob --clobber
-# shellcheck disable=SC2086,SC2046
-gh release upload "$version" $(echo $normal_glob) --clobber
+# shellcheck disable=SC2086
+gh release upload "$version" $normal_glob --clobber
 
 first_compat_line=$(grep -n '\.tar\.gz\.compat' "$gh_calls" | head -1 | cut -d: -f1)
 first_normal_line=$(grep -nE '\.(tar\.gz|zip)([^.]|$)' "$gh_calls" \
@@ -236,6 +240,8 @@ echo "Testing upload_release_asset_with_retry..."
 sleep() { :; }
 retry_calls="$tmp/retry-calls"
 : >"$retry_calls"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     printf 'call\n' >>"$retry_calls"
     local remaining
@@ -281,6 +287,8 @@ echo "Testing download_ci_artifact_with_retry..."
 # succeeds, for any `gh` invocation including `run download`.
 download_calls="$tmp/download-calls"
 : >"$download_calls"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     printf 'call\n' >>"$download_calls"
     local remaining
@@ -332,6 +340,8 @@ echo "Testing ci_run_has_version_artifact / find_ci_run_for_version..."
 # each run's artifact names keyed by the run id in the artifacts URL.
 version_match_calls="$tmp/version-match-calls"
 : >"$version_match_calls"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     if [[ "$1" == "run" && "$2" == "list" ]]; then
         printf 'call\n' >>"$version_match_calls"
@@ -381,6 +391,8 @@ else
 fi
 
 # API failure must fail closed (never adopt an unverified run).
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() { return 1; }
 export -f gh
 if ci_run_has_version_artifact 100 "9.9.9" >/dev/null 2>&1; then
@@ -476,6 +488,8 @@ _saved_gh_token="${GH_TOKEN:-__unset__}"
 
 # Current auth already has push -> success, env tokens untouched.
 export GITHUB_TOKEN="pull-only-token"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     if [[ "$1" == "api" ]]; then
         printf 'true'
@@ -494,6 +508,8 @@ else
 fi
 
 # Env token is pull-only but stored credentials have push -> auto-unset.
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     if [[ "$1" == "api" ]]; then
         if [[ -n "${GITHUB_TOKEN:-}" || -n "${GH_TOKEN:-}" ]]; then
