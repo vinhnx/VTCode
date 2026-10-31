@@ -147,10 +147,7 @@ impl DesktopView {
             .configuration
             .as_ref()
             .is_some_and(|configuration| configuration.authenticated)
-            && self
-                .error
-                .as_deref()
-                .is_some_and(|error| error == provider_auth_guidance(self.configuration.as_ref()).as_str())
+            && self.error.as_deref().is_some_and(is_provider_auth_guidance)
         {
             self.clear_error();
         }

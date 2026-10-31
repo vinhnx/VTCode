@@ -4,10 +4,7 @@ impl DesktopView {
     pub(super) fn render_utilities(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let workspace = self
-            .workspace
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
+            .workspace_file_name()
             .unwrap_or_else(|| rust_i18n::t!("app.utilities.no_workspace").to_string());
         let totals = self.changes.totals();
         let change_accessibility_label = totals.map_or_else(

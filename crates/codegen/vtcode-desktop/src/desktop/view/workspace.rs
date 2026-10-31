@@ -14,6 +14,18 @@ impl DesktopView {
         self.preferences.recent_workspaces.clone()
     }
 
+    /// Short display name for the active workspace: the final path component
+    /// (lossy), or `None` when no workspace is set. Shared by the welcome,
+    /// composer, and utilities call sites; the sidebar, title bar, and status
+    /// bar keep their own `to_str` chains, which fall back to placeholders on
+    /// non-UTF8 paths instead of showing a lossy name.
+    pub(super) fn workspace_file_name(&self) -> Option<String> {
+        self.workspace
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+    }
+
     pub(super) fn choose_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.workspace_picker_open {
             return;

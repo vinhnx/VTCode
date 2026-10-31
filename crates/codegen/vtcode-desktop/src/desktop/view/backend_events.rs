@@ -385,12 +385,8 @@ impl DesktopView {
                         self.configuration = serde_json::from_value::<ConfigurationSnapshot>(result).ok();
                         self.sync_cli_theme(cx);
                         self.restore_workspace_permission(cx);
-                        if self
-                            .configuration
-                            .as_ref()
-                            .is_some_and(|configuration| !configuration.authenticated)
-                        {
-                            self.error = Some(provider_auth_guidance(self.configuration.as_ref()));
+                        if self.credentials_missing() {
+                            self.set_provider_auth_error();
                         }
                     }
                     protocol::method::CONFIG_SETTINGS_READ => {

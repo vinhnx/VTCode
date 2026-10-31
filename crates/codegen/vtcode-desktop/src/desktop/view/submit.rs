@@ -3,6 +3,18 @@
 use super::*;
 
 impl DesktopView {
+    /// Whether submission is blocked on missing provider credentials.
+    pub(super) fn credentials_missing(&self) -> bool {
+        self.configuration
+            .as_ref()
+            .is_some_and(|configuration| !configuration.authenticated)
+    }
+
+    /// Banner the credential-guidance error for the current configuration.
+    pub(super) fn set_provider_auth_error(&mut self) {
+        self.error = Some(provider_auth_guidance(self.configuration.as_ref()));
+    }
+
     pub(super) fn submit_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let prompt = self.composer.read(cx).value().to_string();
         let desktop_slash_action = composer_controls::desktop_slash_action(&prompt);
@@ -46,12 +58,8 @@ impl DesktopView {
         }
         // Local slash commands above stay available so the provider can be
         // switched; only turn submission needs credentials.
-        if self
-            .configuration
-            .as_ref()
-            .is_some_and(|configuration| !configuration.authenticated)
-        {
-            self.error = Some(provider_auth_guidance(self.configuration.as_ref()));
+        if self.credentials_missing() {
+            self.set_provider_auth_error();
             cx.notify();
             return;
         }
@@ -97,12 +105,8 @@ impl DesktopView {
         // A deferred first submission can outlive the configuration it was
         // written under; re-check so a revoked credential fails with guidance
         // instead of a doomed turn.
-        if self
-            .configuration
-            .as_ref()
-            .is_some_and(|configuration| !configuration.authenticated)
-        {
-            self.error = Some(provider_auth_guidance(self.configuration.as_ref()));
+        if self.credentials_missing() {
+            self.set_provider_auth_error();
             return Err(draft);
         }
         let params =

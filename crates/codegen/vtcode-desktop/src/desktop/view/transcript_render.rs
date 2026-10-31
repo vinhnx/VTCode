@@ -2,7 +2,36 @@
 
 use super::*;
 
+/// Owned welcome-screen text shared by the default and Zen empty states.
+struct WelcomeHeader {
+    copy: WelcomeCopy,
+    greeting: String,
+    workspace_name: Option<String>,
+    prompt: String,
+}
+
 impl DesktopView {
+    /// Welcome prelude both empty states render from; single owner so their copy cannot drift.
+    fn welcome_header(&self) -> WelcomeHeader {
+        let copy = welcome_copy(self.welcome_copy_index);
+        let greeting = welcome_greeting(self.welcome_period);
+        let workspace_name = self.workspace_file_name();
+        let prompt = welcome_prompt(&greeting, &copy.action, &copy.workspace_action, workspace_name.as_deref());
+        WelcomeHeader { copy, greeting, workspace_name, prompt }
+    }
+
+    /// "Open a workspace" action shared by both welcome empty states.
+    fn open_first_workspace_button(&self, call_to_action: String, cx: &mut Context<Self>) -> Button {
+        desktop_button("open-first-workspace")
+            .label(call_to_action.clone())
+            .accessibility_label(call_to_action)
+            .primary()
+            .desktop_disabled(
+                self.workspace_picker_open || !self.workspace_switch_idle() || self.retained_submission.is_some(),
+            )
+            .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx)))
+    }
+
     pub(super) fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
         self.transcript.upsert(TranscriptItem::new(
             id,
@@ -86,19 +115,12 @@ impl DesktopView {
                 .into_any_element()
         } else if empty_conversation && !self.zen_mode {
             let colors = cx.theme().colors;
-            let welcome_copy = welcome_copy(self.welcome_copy_index);
-            let greeting = welcome_greeting(self.welcome_period);
-            let workspace_name = self
-                .workspace
-                .as_ref()
-                .and_then(|path| path.file_name())
-                .map(|name| name.to_string_lossy().into_owned());
-            let prompt = welcome_prompt(
-                &greeting,
-                &welcome_copy.action,
-                &welcome_copy.workspace_action,
-                workspace_name.as_deref(),
-            );
+            let WelcomeHeader {
+                copy: welcome_copy,
+                greeting,
+                workspace_name,
+                prompt,
+            } = self.welcome_header();
             let title = EmptyTitle::new()
                 .text_size(gpui_kit::rems(1.75))
                 .font_weight(gpui_kit::FontWeight::NORMAL)
@@ -175,18 +197,8 @@ impl DesktopView {
                         .size_full()
                         .when(self.workspace.is_none(), |welcome| {
                             welcome.content(
-                                EmptyContent::new().child(
-                                    desktop_button("open-first-workspace")
-                                        .label(welcome_copy.call_to_action.clone())
-                                        .accessibility_label(welcome_copy.call_to_action)
-                                        .primary()
-                                        .desktop_disabled(
-                                            self.workspace_picker_open
-                                                || !self.workspace_switch_idle()
-                                                || self.retained_submission.is_some(),
-                                        )
-                                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
-                                ),
+                                EmptyContent::new()
+                                    .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx)),
                             )
                         }),
                 )
@@ -276,15 +288,7 @@ impl DesktopView {
     /// picker stays reachable through the primary action when none is set.
     fn render_zen_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let welcome_copy = welcome_copy(self.welcome_copy_index);
-        let greeting = welcome_greeting(self.welcome_period);
-        let workspace_name = self
-            .workspace
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned());
-        let prompt =
-            welcome_prompt(&greeting, &welcome_copy.action, &welcome_copy.workspace_action, workspace_name.as_deref());
+        let WelcomeHeader { copy: welcome_copy, prompt, .. } = self.welcome_header();
         div()
             .id("zen-welcome")
             .test_support()
@@ -316,18 +320,8 @@ impl DesktopView {
                     .size_full()
                     .when(self.workspace.is_none(), |welcome| {
                         welcome.content(
-                            EmptyContent::new().child(
-                                desktop_button("open-first-workspace")
-                                    .label(welcome_copy.call_to_action.clone())
-                                    .accessibility_label(welcome_copy.call_to_action)
-                                    .primary()
-                                    .desktop_disabled(
-                                        self.workspace_picker_open
-                                            || !self.workspace_switch_idle()
-                                            || self.retained_submission.is_some(),
-                                    )
-                                    .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
-                            ),
+                            EmptyContent::new()
+                                .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx)),
                         )
                     }),
             )

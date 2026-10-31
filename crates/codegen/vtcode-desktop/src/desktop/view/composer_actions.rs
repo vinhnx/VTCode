@@ -165,10 +165,7 @@ impl DesktopView {
     pub(super) fn render_workspace_picker(&self, cx: &mut Context<Self>) -> AnyElement {
         let current = self.workspace.as_ref().map(|path| path.display().to_string());
         let current_label = self
-            .workspace
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
+            .workspace_file_name()
             .unwrap_or_else(|| rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string());
         let recent = self.recent_workspaces();
         let disabled =

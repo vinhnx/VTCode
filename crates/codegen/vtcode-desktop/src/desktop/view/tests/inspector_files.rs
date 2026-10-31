@@ -348,3 +348,37 @@ fn diff_panes_group_the_file_list_above_the_viewer_with_a_divider(cx: &mut TestA
     })
     .unwrap();
 }
+
+#[test]
+fn file_tree_items_preserves_entry_order_at_every_level() {
+    use super::super::files::FileEntry;
+    use std::collections::HashSet;
+
+    // Deliberately unsorted: a dir before a file at root, reverse-alphabetical
+    // children below it. Levels must keep vec order, never sorted or map order.
+    let entries = vec![
+        FileEntry { rel_path: "b-dir".into(), depth: 0, is_dir: true },
+        FileEntry {
+            rel_path: "a-file.txt".into(),
+            depth: 0,
+            is_dir: false,
+        },
+        FileEntry {
+            rel_path: "b-dir/z-child.txt".into(),
+            depth: 1,
+            is_dir: false,
+        },
+        FileEntry {
+            rel_path: "b-dir/a-child.txt".into(),
+            depth: 1,
+            is_dir: false,
+        },
+    ];
+    let expanded = HashSet::from(["b-dir".to_string()]);
+    let items = super::super::file_tree_items(&entries, None, &expanded);
+    let root_ids: Vec<&str> = items.iter().map(|item| item.id.as_ref()).collect();
+    assert_eq!(root_ids, ["b-dir", "a-file.txt"]);
+    let dir_children: Vec<&str> = items[0].children.iter().map(|item| item.id.as_ref()).collect();
+    assert_eq!(dir_children, ["b-dir/z-child.txt", "b-dir/a-child.txt"]);
+    assert!(items[1].children.is_empty(), "files never recurse into children");
+}

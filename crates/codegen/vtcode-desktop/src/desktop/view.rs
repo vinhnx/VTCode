@@ -224,6 +224,18 @@ fn service_reconnect_guidance(has_retained_submission: bool) -> String {
     }
 }
 
+/// Leading sentence shared by both credential-guidance variants. The full
+/// sentences stay intact below (one localizable unit each); only this prefix
+/// is shared so [`is_provider_auth_guidance`] cannot drift from the generator.
+const PROVIDER_AUTH_GUIDANCE_PREFIX: &str = "No provider credentials are configured.";
+
+/// Whether an error banner shows credential guidance rather than an
+/// unrelated failure. A prefix match avoids rebuilding the guidance string
+/// just to compare; no other error uses this prefix.
+fn is_provider_auth_guidance(error: &str) -> bool {
+    error.starts_with(PROVIDER_AUTH_GUIDANCE_PREFIX)
+}
+
 /// Guidance shown while the service is connected but the active provider has
 /// no credentials. API-key providers offer an in-app Settings form (no reload
 /// needed after saving); login-flow providers still go through the Terminal.
@@ -234,11 +246,11 @@ fn provider_auth_guidance(configuration: Option<&ConfigurationSnapshot>) -> Stri
         .unwrap_or("vtcode auth");
     if configuration.and_then(|snapshot| snapshot.secret_store.as_ref()).is_some() {
         format!(
-            "No provider credentials are configured. Save your API key in Settings → VT Code → Provider to reconnect. Terminal alternative: run `{setup}`, then choose Reload CLI settings in Settings → VT Code."
+            "{PROVIDER_AUTH_GUIDANCE_PREFIX} Save your API key in Settings → VT Code → Provider to reconnect. Terminal alternative: run `{setup}`, then choose Reload CLI settings in Settings → VT Code."
         )
     } else {
         format!(
-            "No provider credentials are configured. In Terminal, run `{setup}`, then choose Reload CLI settings in Settings → VT Code to reconnect."
+            "{PROVIDER_AUTH_GUIDANCE_PREFIX} In Terminal, run `{setup}`, then choose Reload CLI settings in Settings → VT Code to reconnect."
         )
     }
 }
@@ -563,20 +575,39 @@ struct DesktopView {
 }
 
 fn file_tree_items(entries: &[FileEntry], parent: Option<&str>, expanded: &HashSet<String>) -> Vec<TreeItem> {
-    entries
-        .iter()
-        .filter(|entry| entry.rel_path.rsplit_once('/').map(|(parent, _)| parent) == parent)
-        .map(|entry| {
-            let children = if entry.is_dir {
-                file_tree_items(entries, Some(&entry.rel_path), expanded)
-            } else {
-                Vec::new()
-            };
-            TreeItem::new(entry.rel_path.clone(), entry.rel_path.clone())
-                .children(children)
-                .expanded(expanded.contains(&entry.rel_path))
-        })
-        .collect()
+    // Group once by parent directory so each level below walks only its own
+    // children instead of re-scanning every entry; pushes preserve entry
+    // order within each level, and output order never depends on map order.
+    let mut by_parent: HashMap<Option<&str>, Vec<&FileEntry>> = HashMap::new();
+    for entry in entries {
+        by_parent
+            .entry(entry.rel_path.rsplit_once('/').map(|(dir, _)| dir))
+            .or_default()
+            .push(entry);
+    }
+    file_tree_items_grouped(&by_parent, parent, expanded)
+}
+
+fn file_tree_items_grouped(
+    by_parent: &HashMap<Option<&str>, Vec<&FileEntry>>,
+    parent: Option<&str>,
+    expanded: &HashSet<String>,
+) -> Vec<TreeItem> {
+    by_parent.get(&parent).map_or_else(Vec::new, |children| {
+        children
+            .iter()
+            .map(|entry| {
+                let nested = if entry.is_dir {
+                    file_tree_items_grouped(by_parent, Some(&entry.rel_path), expanded)
+                } else {
+                    Vec::new()
+                };
+                TreeItem::new(entry.rel_path.clone(), entry.rel_path.clone())
+                    .children(nested)
+                    .expanded(expanded.contains(&entry.rel_path))
+            })
+            .collect()
+    })
 }
 
 fn find_file_tree_item<'a>(items: &'a [TreeItem], path: &str) -> Option<&'a TreeItem> {
