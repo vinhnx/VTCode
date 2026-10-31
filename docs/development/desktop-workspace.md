@@ -8,6 +8,8 @@ terminal presentation output to its protocol stream.
 The [GPUI Kit guide review](desktop-gpui-kit-review.md) records coverage of all 41 main guide topics,
 the applicable ownership/lifecycle improvements, and verification boundaries.
 
+![VT Code Desktop welcome view](../../resources/screenshots/vtcode-desktop.png)
+
 ## System requirements
 
 To run the app:

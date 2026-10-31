@@ -9,6 +9,8 @@
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
 
+<img src="./resources/screenshots/vtcode-desktop.png" alt="VT Code desktop app" width="800" />
+
 </div>
 
 ## Overview
