@@ -1,6 +1,23 @@
 use super::*;
 use gpui_kit::component::theme::ActiveTheme;
 
+/// The subtle-border contract: opaque, at the hairline floor on the panel
+/// seats it outlines most, and separated from every other fill it can sit on.
+fn assert_subtle_surface_borders(id: &str, colors: &ThemeColor) {
+    assert_eq!(colors.border.a, 1., "{id}: card and input borders must be opaque");
+    assert_eq!(colors.sidebar_border, colors.border, "{id}");
+    assert_eq!(colors.input, colors.border, "{id}");
+    for (name, fill) in [("panel", colors.secondary), ("group box", colors.group_box)] {
+        let ratio = contrast_ratio(colors.border, fill);
+        assert!(ratio >= 1.5, "{id}: border on {name} is invisible ({ratio:.2})");
+        assert!(ratio <= 2.5, "{id}: border on {name} is harsh, not subtle ({ratio:.2})");
+    }
+    for (name, fill) in [("canvas", colors.background), ("popover", colors.popover)] {
+        let ratio = contrast_ratio(colors.border, fill);
+        assert!(ratio >= 1.04, "{id}: border on {name} vanishes ({ratio:.2})");
+    }
+}
+
 #[gpui_kit::test]
 fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
@@ -17,9 +34,7 @@ fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mu
             );
             assert_eq!(base.tokens.colors.background, palette.background, "{}", palette.id);
             assert_eq!(base.tokens.colors.primary, palette.accent, "{}", palette.id);
-            assert_eq!(kit.colors.border.a, 0.);
-            assert_eq!(kit.colors.sidebar_border, kit.colors.border, "{}", palette.id);
-            assert_eq!(kit.colors.input.a, 0.);
+            assert_subtle_surface_borders(palette.id, &kit.colors);
             assert!(
                 contrast_ratio(kit.colors.background, kit.colors.tab_bar_segmented) >= 1.04,
                 "{}: selected segmented tabs must stand out from the track",
@@ -66,15 +81,13 @@ fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mu
 }
 
 #[gpui_kit::test]
-fn system_themes_hide_decorative_surface_borders(cx: &mut gpui_kit::TestAppContext) {
+fn system_themes_show_subtle_surface_borders(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID] {
             let _mode = apply_by_id(id, None, cx);
             let colors = cx.theme().colors;
-            assert_eq!(colors.border.a, 0., "{id}");
-            assert_eq!(colors.sidebar_border, colors.border, "{id}");
-            assert_eq!(colors.input.a, 0., "{id}");
+            assert_subtle_surface_borders(id, &colors);
             assert!(
                 contrast_ratio(colors.background, colors.tab_bar_segmented) >= 1.04,
                 "{id}: selected segmented tabs must stand out from the track"

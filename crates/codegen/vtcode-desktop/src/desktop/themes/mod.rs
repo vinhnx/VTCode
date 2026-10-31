@@ -217,14 +217,12 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
     match id {
         SYSTEM_LIGHT_ID => {
             Theme::change(ThemeMode::Light, window, cx);
-            apply_system_surface_borders(cx);
             normalize_system_interaction_colors(cx);
             cx.refresh_windows();
             ThemeMode::Light
         }
         SYSTEM_DARK_ID => {
             Theme::change(ThemeMode::Dark, window, cx);
-            apply_system_surface_borders(cx);
             normalize_system_interaction_colors(cx);
             cx.refresh_windows();
             ThemeMode::Dark
@@ -253,6 +251,7 @@ pub(super) fn apply_with_contrast(id: &str, contrast: u8, window: Option<&mut Wi
         };
         colors.foreground = mix(colors.foreground, target, f32::from(contrast.min(100)) / 100.0);
         apply_filled_surfaces(colors);
+        apply_surface_borders(colors);
         apply_unified_hover_surface(colors, hover_surface(colors.background, colors.foreground));
         colors.ring = accessible_focus_color(colors.primary, colors);
         colors.caret = accessible_focus_color(colors.primary, colors);
@@ -267,8 +266,8 @@ fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App
         let colors = &mut kit_theme.colors;
         colors.background = theme.background;
         colors.foreground = theme.foreground;
-        apply_surface_borders(colors);
         apply_filled_surfaces(colors);
+        apply_surface_borders(colors);
         colors.chart_2 = theme.secondary;
         colors.sidebar_primary = theme.accent;
         colors.sidebar_primary_foreground = filled_button_foreground(theme.accent);
@@ -312,6 +311,7 @@ fn normalize_system_interaction_colors(cx: &mut App) {
     Theme::update(cx, |kit_theme| {
         let colors = &mut kit_theme.colors;
         apply_filled_surfaces(colors);
+        apply_surface_borders(colors);
         let surface = hover_surface(colors.background, colors.foreground);
         apply_unified_hover_surface(colors, surface);
         colors.success = readable_semantic_color(colors.background, colors.foreground, colors.success);
@@ -324,15 +324,37 @@ fn normalize_system_interaction_colors(cx: &mut App) {
     });
 }
 
-fn apply_system_surface_borders(cx: &mut App) {
-    Theme::update(cx, |kit_theme| apply_surface_borders(&mut kit_theme.colors));
+/// Soft 1px outlines for cards, inputs, pills, and dividers: the faintest blend
+/// toward the foreground that stays visible on panel fills, derived the same
+/// way in light and dark modes. Runs after the fills so the border tracks the
+/// final panel tone; contrast tuning refreshes both together.
+fn apply_surface_borders(colors: &mut ThemeColor) {
+    colors.border = subtle_border(colors.secondary, colors.popover, colors.foreground);
+    colors.sidebar_border = colors.border;
+    colors.input = colors.border;
 }
 
-/// Keep decorative Kit outlines invisible; focus and validation use semantic colors.
-fn apply_surface_borders(colors: &mut ThemeColor) {
-    colors.border = colors.background.opacity(0.);
-    colors.sidebar_border = colors.border;
-    colors.input = colors.background.opacity(0.);
+/// Border tone that holds the hairline floor on panels and separation from
+/// raised fills: start from the panel-seat hairline, then step toward the
+/// foreground until popovers clear the floor too. Stepping up only grows the
+/// panel/canvas separation (contrast is monotonic along the blend), and the
+/// foreground itself always clears popover text AA, so this terminates.
+/// Requires the foreground to stand off the fills; every shipped theme keeps
+/// text AA, and the border contract test fails loud otherwise.
+fn subtle_border(secondary: Hsla, popover: Hsla, foreground: Hsla) -> Hsla {
+    const RAISED_FLOOR: f32 = 1.04;
+    let mut border = hairline(secondary, foreground);
+    for _ in 0..100 {
+        if contrast_ratio(border, popover) >= RAISED_FLOOR {
+            return border;
+        }
+        let next = mix(border, foreground, 0.05);
+        if next == border {
+            return border;
+        }
+        border = next;
+    }
+    border
 }
 
 /// Give panels and controls a visible neutral fill while keeping their text at

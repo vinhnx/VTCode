@@ -60,7 +60,7 @@ impl DesktopView {
 
     fn render_curated_overview_card(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let mut card = GroupBox::new().flex_shrink_0().fill();
+        let mut card = GroupBox::new().flex_shrink_0().fill().content_style(card_border_style(&colors));
         for (index, row) in curated::curated_rows().iter().enumerate() {
             if index > 0 {
                 card = card.child(row_divider(&colors));

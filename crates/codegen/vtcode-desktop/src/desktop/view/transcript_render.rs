@@ -468,6 +468,12 @@ impl DesktopView {
                         } else {
                             BubbleVariant::Ghost
                         })
+                        // Lists report marker-only intrinsic width (Kit lays item
+                        // text in a basis-zero `flex_1` column), so a shrink-to-fit
+                        // bubble collapses to a ~23px pill. Give list content the
+                        // definite width it needs; the 80% max keeps it trailing
+                        // and short non-list messages keep their pills.
+                        .when(user && item.has_list, |bubble| bubble.w_full())
                         .content(
                             BubbleContent::new()
                                 .rounded(px(18.))

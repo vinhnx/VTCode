@@ -205,10 +205,14 @@ impl DesktopView {
                         .w_full()
                         .flex()
                         .when(narrow, |row| row.flex_col())
-                        .gap_3()
+                        // Two gaps flank the divider, so each shrinks to 4px: the 9px
+                        // total keeps the content width at its pre-divider size while
+                        // the hairline owns the boundary.
+                        .gap_1()
                         .px_3()
                         .pb_3()
                         .child(self.render_settings_navigation(window, cx, narrow))
+                        .child(pane_divider("settings-pane-divider", !narrow, &colors))
                         .child(
                             div()
                                 .flex_1()
@@ -225,17 +229,18 @@ impl DesktopView {
         .into_any_element()
     }
 
-    /// Left navigation: shared search plus one button per settings page.
+    /// Left navigation: shared search plus one button per settings page,
+    /// grouped into desktop tabs and the CLI configuration entry.
     /// Buttons keep Kit Button keyboard handling; the panel fill is
     /// `secondary`, so selection uses `popover` (a `secondary` fill would
     /// be pixel-identical to the background).
     fn render_settings_navigation(&self, window: &Window, cx: &mut Context<Self>, narrow: bool) -> AnyElement {
         let colors = cx.theme().colors;
         let selected = self.settings_page_index();
-        let mut entries = Vec::with_capacity(SettingsTab::PAGE_COUNT);
+        let mut desktop_entries = Vec::with_capacity(SettingsTab::ALL.len());
         for (index, tab) in SettingsTab::ALL.iter().enumerate() {
             let active = index == selected;
-            entries.push(
+            desktop_entries.push(
                 desktop_button(format!("settings-nav-{tab:?}").to_lowercase())
                     .accessibility_label(tab.label())
                     .child(div().flex_1().min_w_0().truncate().child(tab.label()))
@@ -250,20 +255,44 @@ impl DesktopView {
         }
         let config_active = selected == SettingsTab::CONFIG_INDEX;
         let config_label = rust_i18n::t!("app.configuration.page_title").to_string();
-        entries.push(
-            desktop_button("settings-nav-configuration")
-                .accessibility_label(config_label.clone())
-                .child(div().flex_1().min_w_0().truncate().child(config_label))
-                .toggled(config_active)
-                .ghost()
-                .w_full()
-                .justify_start()
-                .when(config_active, |button| button.bg(colors.popover).text_color(colors.foreground))
-                .on_click(cx.listener(|view, _, window, cx| {
-                    view.select_settings_page(SettingsTab::CONFIG_INDEX, window, cx);
-                }))
-                .into_any_element(),
-        );
+        let config_entry = desktop_button("settings-nav-configuration")
+            .accessibility_label(config_label.clone())
+            .child(div().flex_1().min_w_0().truncate().child(config_label))
+            .toggled(config_active)
+            .ghost()
+            .w_full()
+            .justify_start()
+            .when(config_active, |button| button.bg(colors.popover).text_color(colors.foreground))
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.select_settings_page(SettingsTab::CONFIG_INDEX, window, cx);
+            }))
+            .into_any_element();
+        // Two groups mirror the settings search palette: the desktop tabs,
+        // then the CLI configuration entry behind a divider and header.
+        let entries = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(nav_group_header(
+                "settings-nav-group-settings",
+                rust_i18n::t!("app.settings.search.group_settings"),
+                &colors,
+            ))
+            .children(desktop_entries)
+            .child(
+                div()
+                    .id("settings-nav-group-divider")
+                    .test_support()
+                    .w_full()
+                    .child(row_divider(&colors)),
+            )
+            .child(nav_group_header(
+                "settings-nav-group-cli-config",
+                rust_i18n::t!("app.settings.search.group_cli_config"),
+                &colors,
+            ))
+            .child(config_entry);
         div()
             .id("settings-navigation")
             .test_support()
@@ -317,11 +346,7 @@ impl DesktopView {
                     .rounded_md()
                     .dispatches_desktop_action(OpenSettingsSearch, self.focus_handle.clone()),
             )
-            .child(scroll_column(
-                "settings-nav-list",
-                &self.settings_nav_scroll,
-                div().w_full().flex().flex_col().gap_1().children(entries),
-            ))
+            .child(scroll_column("settings-nav-list", &self.settings_nav_scroll, entries))
             .into_any_element()
     }
 
@@ -786,32 +811,29 @@ impl DesktopView {
             .child(accessible_group_box(
                 "local-service-settings-group",
                 rust_i18n::t!("app.settings.connections.local_service").to_string(),
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .outline()
-                    .title(group_box_title(
-                        rust_i18n::t!("app.settings.connections.local_service").to_string(),
-                        &cx.theme().colors,
-                    ))
-                    .child(
-                        div()
-                            .id("local-service-details")
-                            .test_support()
-                            .role(gpui_kit::Role::Group)
-                            .aria_label(rust_i18n::t!("app.settings.connections.local_service_details").to_string())
-                            .flex()
-                            .flex_col()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .id("local-service-status")
-                                    .test_support()
-                                    .role(gpui_kit::Role::Status)
-                                    .aria_label(service_status_label)
-                                    .child(service_status),
-                            )
-                            .child(service_details),
-                    ),
+                settings_group_box(
+                    rust_i18n::t!("app.settings.connections.local_service").to_string(),
+                    &cx.theme().colors,
+                )
+                .child(
+                    div()
+                        .id("local-service-details")
+                        .test_support()
+                        .role(gpui_kit::Role::Group)
+                        .aria_label(rust_i18n::t!("app.settings.connections.local_service_details").to_string())
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            div()
+                                .id("local-service-status")
+                                .test_support()
+                                .role(gpui_kit::Role::Status)
+                                .aria_label(service_status_label)
+                                .child(service_status),
+                        )
+                        .child(service_details),
+                ),
             ))
             .into_any_element()
     }

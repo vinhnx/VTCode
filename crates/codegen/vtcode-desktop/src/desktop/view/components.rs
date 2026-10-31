@@ -130,14 +130,25 @@ pub(super) fn panel_header(leading: impl IntoElement, trailing: impl IntoElement
         .child(trailing)
 }
 
-/// Pre-configured fill group box for settings sections. Callers chain
-/// `.child(...)`/`.footer(...)` as before. The local-service group keeps its
-/// bespoke `.outline()` chain; it is the only visible variant.
+/// Pre-configured bordered card for settings sections: the fill token plus the
+/// soft 1px theme border, with the title above the surface. Callers chain
+/// `.child(...)`/`.footer(...)` as before.
 pub(super) fn settings_group_box(
     title: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> GroupBox {
-    GroupBox::new().flex_shrink_0().fill().title(group_box_title(title, colors))
+    GroupBox::new()
+        .flex_shrink_0()
+        .fill()
+        .content_style(card_border_style(colors))
+        .title(group_box_title(title, colors))
+}
+
+/// 1px theme-border outline for a filled Kit `GroupBox` surface, giving cards
+/// the soft Codex-style outline. Applied through `content_style` so the title
+/// and footer keep their unboxed seats above and below the surface.
+pub(super) fn card_border_style(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::StyleRefinement {
+    gpui_kit::StyleRefinement::default().border_1().border_color(colors.border)
 }
 
 /// One settings row: title and description stacked left, a control pinned
@@ -201,6 +212,55 @@ pub(super) fn row_description(
 /// breathing room so it reads as a quiet hairline rather than a rule.
 pub(super) fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
     div().w_full().py_1().child(div().h(px(1.)).w_full().bg(colors.border))
+}
+
+/// 1px hairline between panes: vertical in side-by-side bodies, horizontal in
+/// stacked ones. The parent's gap supplies the breathing room; the line owns
+/// the boundary alone so adjacent regions never draw it twice. The stable id
+/// keeps pane geometry testable.
+pub(super) fn pane_divider(
+    id: impl Into<gpui_kit::ElementId>,
+    vertical: bool,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> AnyElement {
+    if vertical {
+        div()
+            .id(id)
+            .test_support()
+            .w(px(1.))
+            .flex_shrink_0()
+            .self_stretch()
+            .bg(colors.border)
+            .into_any_element()
+    } else {
+        div()
+            .id(id)
+            .test_support()
+            .h(px(1.))
+            .w_full()
+            .flex_shrink_0()
+            .bg(colors.border)
+            .into_any_element()
+    }
+}
+
+/// Navigation group header: an eyebrow label for a sidebar-like rail. Both the
+/// settings navigation and the configuration group rail are navigation chrome,
+/// not content sections, so they share this instead of sentence-case section
+/// labels. The inset matches small-button rails; medium-button labels start
+/// one step further in, as in the utilities pane.
+pub(super) fn nav_group_header(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl AsRef<str>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> AnyElement {
+    div()
+        .id(id)
+        .test_support()
+        .flex_shrink_0()
+        .px_2()
+        .child(eyebrow_label(text, colors))
+        .into_any_element()
 }
 
 /// Bordered section group for diff panes: quiet 1px `border`-token
@@ -536,9 +596,11 @@ pub(super) fn zen_fade_animation(theme: &Theme) -> Animation {
 pub(super) trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
-    /// Selected-option treatment: pressed-state metadata plus a secondary
-    /// fill when selected, quiet ghost otherwise. Only for options whose
-    /// selected paint is the default base + secondary fill; ghost-base
+    /// Selected-option treatment: pressed-state metadata plus a popover
+    /// fill when selected, quiet ghost otherwise. Every call site sits on a
+    /// `secondary`-equivalent surface (settings panel, group-box fill), where
+    /// a `secondary` fill would be pixel-identical to the background, so the
+    /// highlight uses `popover` like the settings navigation. Ghost-base
     /// (theme profiles, diff layout) and label-only (reduced motion)
     /// selections keep their bespoke chains.
     fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self;
@@ -555,8 +617,8 @@ impl DesktopButtonExt for Button {
 
     fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self {
         self.toggled(selected)
-            .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
-            .when(!selected, |button| button.ghost())
+            .ghost()
+            .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
     }
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
@@ -567,6 +629,20 @@ impl DesktopButtonExt for Button {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui_kit::test]
+    fn card_border_style_pins_a_1px_theme_border(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let colors = cx.theme().colors;
+            let style = card_border_style(&colors);
+            assert_eq!(style.border_color, Some(colors.border));
+            let widths = style.border_widths;
+            for width in [widths.top, widths.left, widths.bottom, widths.right] {
+                assert_eq!(width, Some(gpui_kit::AbsoluteLength::Pixels(px(1.))));
+            }
+        });
+    }
 
     #[test]
     fn overlay_title_inset_lands_titles_at_x84_and_clamps() {

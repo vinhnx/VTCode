@@ -156,7 +156,7 @@ impl DesktopView {
         let body = if curated_selected {
             let rail = self.render_config_rail(groups, Some(curated::CURATED_GROUP_NAME), true, false, wide, cx);
             let content = self.render_config_content_frame(self.render_curated_configuration(cx));
-            self.render_config_body(rail, content, wide)
+            self.render_config_body(rail, content, wide, &colors)
         } else {
             match (self.cli_config_settings.as_ref(), selected.as_ref()) {
                 (None, _) if self.workspace.is_none() => self.render_config_content_frame(centered_empty_state(
@@ -274,7 +274,7 @@ impl DesktopView {
                     group = group.child(list);
                     group = group.child(self.render_config_page_footer(cx));
                     let content = self.render_config_content_frame(group);
-                    self.render_config_body(rail, content, wide)
+                    self.render_config_body(rail, content, wide, &colors)
                 }
             }
         };
@@ -297,11 +297,14 @@ impl DesktopView {
     }
 
     /// Group navigation rail shared by the curated overview and the catalog.
-    /// The curated entry leads while the catalog is unfiltered. Entries show
-    /// an icon plus the group name; while searching they also carry their
-    /// match count so the result distribution reads at a glance. Wide viewports
-    /// get a vertical master-detail rail; narrow ones keep the horizontal
-    /// rail above the content.
+    /// The curated entry leads while the catalog is unfiltered, separated
+    /// from the catalog groups by a divider. Entries show an icon plus the
+    /// group name left-aligned on one spine (Kit `Button` centers its
+    /// built-in icon/label pair, so entries use a custom child); while
+    /// searching they also carry their match count so the result
+    /// distribution reads at a glance. Wide viewports get a vertical
+    /// master-detail rail under a group header; narrow ones keep the
+    /// horizontal rail above the content.
     fn render_config_rail(
         &self,
         groups: &[ConfigCatalogGroup],
@@ -324,12 +327,24 @@ impl DesktopView {
             .when(wide, |rail| rail.w(px(240.)).flex_col().overflow_y_scroll())
             .when(!wide, |rail| rail.w_full().flex_row().overflow_x_scroll())
             .gap_1();
+        if wide {
+            rail = rail.child(nav_group_header(
+                "config-rail-groups-label",
+                rust_i18n::t!("app.configuration.groups"),
+                &colors,
+            ));
+        }
         if show_curated_entry {
             let active = selected == Some(curated::CURATED_GROUP_NAME);
+            let label = rust_i18n::t!("app.configuration.page_title").to_string();
             rail = rail.child(
                 desktop_button("config-category-curated")
-                    .icon(config_group_icon(curated::CURATED_GROUP_NAME))
-                    .label(rust_i18n::t!("app.configuration.page_title").to_string())
+                    .accessibility_label(label.clone())
+                    .child(config_rail_entry_content(
+                        "config-category-label-curated",
+                        config_group_icon(curated::CURATED_GROUP_NAME),
+                        label,
+                    ))
                     .small()
                     .flex_shrink_0()
                     .when(wide, |button| button.w_full().justify_start())
@@ -341,6 +356,9 @@ impl DesktopView {
                     })),
             );
         }
+        if show_curated_entry && !groups.is_empty() {
+            rail = rail.child(pane_divider("config-rail-overview-divider", !wide, &colors));
+        }
         for group in groups {
             let name = group.name.clone();
             let active = selected == Some(name.as_str());
@@ -351,8 +369,12 @@ impl DesktopView {
             };
             rail = rail.child(
                 desktop_button(format!("config-category-{name}"))
-                    .icon(config_group_icon(&name))
-                    .label(label)
+                    .accessibility_label(label.clone())
+                    .child(config_rail_entry_content(
+                        format!("config-category-label-{name}"),
+                        config_group_icon(&name),
+                        label,
+                    ))
                     .small()
                     .flex_shrink_0()
                     .when(wide, |button| button.w_full().justify_start())
@@ -376,8 +398,15 @@ impl DesktopView {
 
     /// Master-detail body shared by the curated and catalog branches: the
     /// group rail sits beside the content on wide viewports and above it
-    /// on narrow ones.
-    fn render_config_body(&self, rail: impl IntoElement, content: impl IntoElement, wide: bool) -> AnyElement {
+    /// on narrow ones, with a hairline divider owning the boundary in both
+    /// orientations.
+    fn render_config_body(
+        &self,
+        rail: impl IntoElement,
+        content: impl IntoElement,
+        wide: bool,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> AnyElement {
         div()
             .flex_1()
             .min_h_0()
@@ -385,8 +414,12 @@ impl DesktopView {
             .flex()
             .when(wide, |body| body.flex_row())
             .when(!wide, |body| body.flex_col())
-            .gap_4()
+            // Two gaps flank the divider, so each shrinks to 8px: the 17px
+            // total preserves the content width while the hairline owns the
+            // boundary.
+            .gap_2()
             .child(rail)
+            .child(pane_divider("config-pane-divider", wide, colors))
             .child(content)
             .into_any_element()
     }
@@ -747,6 +780,23 @@ fn switch_tooltip(enabled: bool) -> String {
     } else {
         rust_i18n::t!("app.configuration.turn_on").to_string()
     }
+}
+
+/// Left-aligned rail entry content: the icon in a fixed-size slot plus a
+/// truncated label pinned to the leading edge, so every entry in a vertical
+/// rail shares one reading spine. Callers set the button's accessible name
+/// separately since the built-in `.label()` (and its screen-reader fallback)
+/// is unused.
+fn config_rail_entry_content(label_id: impl Into<gpui_kit::ElementId>, icon: IconName, label: String) -> AnyElement {
+    div()
+        .w_full()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(Icon::new(icon).small())
+        .child(div().id(label_id).test_support().flex_1().min_w_0().truncate().child(label))
+        .into_any_element()
 }
 
 mod curated_overview;
