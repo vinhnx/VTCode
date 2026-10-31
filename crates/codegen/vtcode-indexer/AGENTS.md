@@ -10,7 +10,7 @@
 
 ## Rules
 
-- `IndexStorage` trait is the persistence extension point. Implement for custom backends. `TraversalFilter` trait controls which files/dirs are indexed. `ConfigTraversalFilter` is default. Always skips `.env`, `.git`, `.DS_Store` — hardcoded in `should_index_file()`. `SimpleIndexerConfig` excludes `target/`, `node_modules/`, `.vtcode/index/` by default. Snapshot storage (`prefers_snapshot_persistence()`) writes a single `index.md` — legacy per-file `.md` entries are auto-cleaned. All snapshot/record writes go through `atomic_write` (canonical dir + exclusive tmp + rename); key-derived names must use `contained_record_path`, which rejects separators, `..`, and absolute keys.
+- `IndexStorage` trait is the persistence extension point. Implement for custom backends. `TraversalFilter` trait controls which files/dirs are indexed. `ConfigTraversalFilter` is default. Always skips `.env`, `.git`, `.DS_Store` — hardcoded in `should_index_file()`. `SimpleIndexerConfig` excludes `target/`, `node_modules/`, `.vtcode/index/` by default. Snapshot storage (`prefers_snapshot_persistence()`) writes a single `index.md` — legacy per-file `.md` entries are auto-cleaned; `snapshot.rs` parses it strictly (any deviation → empty cache) and `hydrate_from_snapshot()` feeds policy-filtered entries back so `index_directory` skips unchanged (size + second-granularity mtime) files and no-op snapshot rewrites. All snapshot/record writes go through `atomic_write` (canonical dir + exclusive tmp + rename); key-derived names must use `contained_record_path`, which rejects separators, `..`, and absolute keys.
 
 ## Testing
 

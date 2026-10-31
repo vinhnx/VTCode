@@ -670,3 +670,270 @@ fn markdown_store_rejects_symlinked_records_and_dirs() -> Result<()> {
     assert!(fs::read_dir(temp.path().join("elsewhere"))?.next().is_none());
     Ok(())
 }
+
+/// Snapshot storage that counts `persist_batch_refs` calls while delegating
+/// to the real markdown backend, so hydration can read the on-disk snapshot
+/// while the test observes rewrite attempts.
+#[derive(Clone, Default)]
+struct CountingSnapshotStorage {
+    persist_calls: Arc<Mutex<usize>>,
+}
+
+impl IndexStorage for CountingSnapshotStorage {
+    fn init(&self, index_dir: &Path) -> Result<()> {
+        MarkdownIndexStorage.init(index_dir)
+    }
+
+    fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()> {
+        MarkdownIndexStorage.persist(index_dir, entry)
+    }
+
+    fn prefers_snapshot_persistence(&self) -> bool {
+        true
+    }
+
+    fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
+        *self.persist_calls.lock().expect("lock poisoned") += 1;
+        MarkdownIndexStorage.persist_batch_refs(index_dir, entries)
+    }
+}
+
+fn counting_indexer(workspace: &Path, persist_calls: &Arc<Mutex<usize>>) -> SimpleIndexer {
+    let storage = CountingSnapshotStorage { persist_calls: Arc::clone(persist_calls) };
+    SimpleIndexer::new(workspace.to_path_buf()).with_storage(Arc::new(storage))
+}
+
+fn persist_call_count(persist_calls: &Arc<Mutex<usize>>) -> usize {
+    *persist_calls.lock().expect("lock poisoned")
+}
+
+fn snapshot_text(indexer: &SimpleIndexer) -> Result<String> {
+    Ok(fs::read_to_string(indexer.index_dir().join("index.md"))?)
+}
+
+#[test]
+fn hydrate_reuses_unchanged_entries_and_skips_snapshot_rewrite() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    fs::write(workspace.join("alpha.txt"), "alpha contents")?;
+    fs::write(workspace.join("beta.txt"), "beta contents")?;
+
+    let persist_calls = Arc::new(Mutex::new(0usize));
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 1);
+
+    // Second run over an unchanged workspace: hydration screens every file
+    // and the whole-snapshot rewrite is skipped entirely.
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 2);
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 1);
+
+    Ok(())
+}
+
+#[test]
+fn changed_file_size_is_rebuilt_and_repersisted() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    let alpha = workspace.join("alpha.txt");
+    fs::write(&alpha, "alpha contents")?;
+
+    let persist_calls = Arc::new(Mutex::new(0usize));
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 1);
+
+    fs::write(&alpha, "alpha contents extended")?;
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 1);
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 2);
+
+    let expected_hash = vtcode_commons::utils::calculate_sha256(b"alpha contents extended");
+    assert!(snapshot_text(&indexer)?.contains(&expected_hash));
+    Ok(())
+}
+
+#[test]
+fn deleted_file_is_pruned_and_repersisted() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    let beta = workspace.join("beta.txt");
+    fs::write(workspace.join("alpha.txt"), "alpha contents")?;
+    fs::write(&beta, "beta contents")?;
+
+    let persist_calls = Arc::new(Mutex::new(0usize));
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 1);
+
+    fs::remove_file(&beta)?;
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 2);
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 2);
+
+    assert!(!snapshot_text(&indexer)?.contains("beta.txt"));
+    let beta_key = workspace.join("beta.txt").to_string_lossy().into_owned();
+    assert!(
+        !indexer.content_cache.contains_key(beta_key.as_str()),
+        "content for the deleted file must be pruned"
+    );
+    Ok(())
+}
+
+#[test]
+fn binary_file_does_not_force_snapshot_rewrite() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    fs::write(workspace.join("alpha.txt"), "alpha contents")?;
+    fs::write(workspace.join("image.bin"), [0xFFu8, 0xFE, 0x00, 0xC3])?;
+
+    let persist_calls = Arc::new(Mutex::new(0usize));
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 1);
+
+    // The unindexable binary file produces no entry and must not force the
+    // snapshot rewrite on a quiet run.
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 1);
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 1);
+
+    Ok(())
+}
+
+#[test]
+fn tampered_snapshot_entries_are_policy_filtered() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+
+    let hash = "a".repeat(64);
+    let entry_block = |path: &str| {
+        format!(
+            "## {path}\n\n- **Path**: {path}\n- **Hash**: {hash}\n- **Modified**: 1735689600\n- **Size**: 42 \
+             bytes\n- **Language**: env\n- **Tags**: \n\n"
+        )
+    };
+    let snapshot = format!(
+        "# Workspace File Index\n\n- **Entries**: 1\n\n{}",
+        entry_block(&workspace.join(".env").to_string_lossy())
+    );
+    let index_dir = workspace.join(".vtcode").join("index");
+    fs::create_dir_all(&index_dir)?;
+    fs::write(index_dir.join("index.md"), snapshot)?;
+
+    let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 0);
+
+    Ok(())
+}
+
+#[test]
+fn corrupt_snapshot_falls_back_to_full_index() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    fs::write(workspace.join("alpha.txt"), "alpha contents")?;
+
+    let persist_calls = Arc::new(Mutex::new(0usize));
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    indexer.index_directory(workspace)?;
+
+    fs::write(indexer.index_dir().join("index.md"), "not a snapshot")?;
+    let mut indexer = counting_indexer(workspace, &persist_calls);
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 0);
+    indexer.index_directory(workspace)?;
+    assert_eq!(persist_call_count(&persist_calls), 2);
+    assert!(snapshot_text(&indexer)?.contains("alpha.txt"));
+
+    Ok(())
+}
+
+#[test]
+fn foreign_root_snapshot_entries_are_discarded() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+
+    let hash = "a".repeat(64);
+    let snapshot = format!(
+        "# Workspace File Index\n\n- **Entries**: 1\n\n## /opt/other/project/file.txt\n\n- **Path**: \
+         /opt/other/project/file.txt\n- **Hash**: {hash}\n- **Modified**: 1735689600\n- **Size**: 42 bytes\n- \
+         **Language**: txt\n- **Tags**: \n\n"
+    );
+    let index_dir = workspace.join(".vtcode").join("index");
+    fs::create_dir_all(&index_dir)?;
+    fs::write(index_dir.join("index.md"), snapshot)?;
+
+    let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 0);
+
+    Ok(())
+}
+
+#[test]
+fn parse_snapshot_round_trips_writer_format() {
+    let hash = "b".repeat(64);
+    let text = format!(
+        "# Workspace File Index\n\n- **Entries**: 2\n\n## /ws/one.txt\n\n- **Path**: /ws/one.txt\n- **Hash**: \
+         {hash}\n- **Modified**: 1735689600\n- **Size**: 12 bytes\n- **Language**: txt\n- **Tags**: \n\n## \
+         /ws/two.rs\n\n- **Path**: /ws/two.rs\n- **Hash**: {hash}\n- **Modified**: 1735689601\n- **Size**: 34 \
+         bytes\n- **Language**: rs\n- **Tags**: a, b\n\n"
+    );
+
+    let entries = snapshot::parse_snapshot(&text).expect("well-formed snapshot must parse");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].path, "/ws/one.txt");
+    assert_eq!(entries[0].hash, hash);
+    assert_eq!(entries[0].modified, 1_735_689_600);
+    assert_eq!(entries[0].size, 12);
+    assert_eq!(entries[0].language, "txt");
+    assert!(entries[0].tags.is_empty());
+    assert_eq!(entries[1].path, "/ws/two.rs");
+    assert_eq!(entries[1].size, 34);
+    assert_eq!(entries[1].tags, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn parse_snapshot_rejects_malformed_snapshots() {
+    let hash = "c".repeat(64);
+    let entry = |hash: &str| {
+        format!(
+            "## /ws/one.txt\n\n- **Path**: /ws/one.txt\n- **Hash**: {hash}\n- **Modified**: 1735689600\n- \
+             **Size**: 12 bytes\n- **Language**: txt\n- **Tags**: \n\n"
+        )
+    };
+
+    // Missing header.
+    assert!(snapshot::parse_snapshot(&format!("- **Entries**: 1\n\n{}", entry(&hash))).is_none());
+    // Entries count disagrees with the parsed blocks.
+    assert!(
+        snapshot::parse_snapshot(&format!("# Workspace File Index\n\n- **Entries**: 3\n\n{}", entry(&hash))).is_none()
+    );
+    // Hash is not a 64-hex digest.
+    assert!(
+        snapshot::parse_snapshot(&format!("# Workspace File Index\n\n- **Entries**: 1\n\n{}", entry("xyz"))).is_none()
+    );
+    // Size lacks the " bytes" suffix.
+    assert!(
+        snapshot::parse_snapshot(&format!(
+            "# Workspace File Index\n\n- **Entries**: 1\n\n{}",
+            entry(&hash).replace("12 bytes", "12")
+        ))
+        .is_none()
+    );
+}

@@ -20,9 +20,10 @@ pub mod file_search;
 pub mod markdown_store;
 
 mod atomic_write;
+mod snapshot;
 
 use anyhow::Result;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use ignore::{DirEntry, Walk};
 use rayon::prelude::*;
 use regex::Regex;
@@ -165,25 +166,7 @@ impl TraversalFilter for ConfigTraversalFilter {
     }
 
     fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
-        if !path.is_file() {
-            return false;
-        }
-
-        // Skip hidden files when configured.
-        if config.ignore_hidden && path.file_name().and_then(|n| n.to_str()).is_some_and(|s| s.starts_with('.')) {
-            return false;
-        }
-
-        // Always skip known sensitive files regardless of config.
-        if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
-            && (vtcode_commons::exclusions::is_sensitive_file(file_name)
-                || file_name == ".gitignore"
-                || file_name == ".git")
-        {
-            return false;
-        }
-
-        true
+        path.is_file() && has_indexable_file_name(path, config)
     }
 }
 
@@ -286,6 +269,21 @@ pub struct FileIndex {
     tags: Vec<String>,
 }
 
+impl FileIndex {
+    /// Crate-internal constructor so the snapshot parser (a sibling module)
+    /// can rebuild entries from disk; fields stay private to this module.
+    pub(crate) fn from_parts(
+        path: String,
+        hash: String,
+        modified: u64,
+        size: u64,
+        language: String,
+        tags: Vec<String>,
+    ) -> Self {
+        Self { path, hash, modified, size, language, tags }
+    }
+}
+
 /// Simple search result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
@@ -355,6 +353,31 @@ impl SimpleIndexer {
         self.storage.init(self.config.index_dir())
     }
 
+    /// Populate the index cache from the persisted snapshot so re-index runs
+    /// can skip unchanged files (see [`Self::index_directory`]). Entries
+    /// outside the workspace root, in excluded directories, or with hidden
+    /// or sensitive names are discarded so a tampered snapshot can never
+    /// surface files the indexer would refuse to index. Existence is
+    /// deliberately unchecked: the re-index diff needs deleted files'
+    /// entries to prune them. A missing or malformed snapshot leaves the
+    /// cache empty and never fails. Returns the hydrated count.
+    pub fn hydrate_from_snapshot(&mut self) -> usize {
+        let root = self.config.workspace_root().to_path_buf();
+        let mut hydrated = 0;
+        for entry in snapshot::load_snapshot_entries(self.config.index_dir()) {
+            let path = Path::new(&entry.path);
+            if path.starts_with(&root)
+                && (self.is_allowed_path(path) || !self.is_excluded_path(path))
+                && has_indexable_file_name(path, &self.config)
+            {
+                self.index_cache.insert(entry.path.clone(), entry);
+                hydrated += 1;
+            }
+        }
+        tracing::debug!(hydrated, total = self.index_cache.len(), "index cache hydrated from snapshot");
+        hydrated
+    }
+
     /// Get the workspace root path.
     pub fn workspace_root(&self) -> &Path {
         self.config.workspace_root()
@@ -400,32 +423,77 @@ impl SimpleIndexer {
     /// Index all files in directory recursively.
     /// Respects .gitignore, .ignore, and other ignore files.
     /// SECURITY: Always skips hidden files and sensitive data (.env, .git, etc.)
+    ///
+    /// Hydrated entries matching size and mtime are served without a read or
+    /// hash (see `cached_or_built_index`); an unchanged directory also skips
+    /// the whole-snapshot rewrite.
     pub fn index_directory(&mut self, dir_path: &Path) -> Result<()> {
         let walker = self.build_walker(dir_path);
 
         let mut entries = Vec::new();
+        let mut rebuilt_any = false;
 
         for entry in walker.filter_map(|e| e.ok()) {
             let path = entry.path();
 
             // Only index files, not directories
             if entry.file_type().is_some_and(|ft| ft.is_file())
-                && let Some(index) = self.build_file_index(path)?
+                && let Some(index) = self.cached_or_built_index(path, &mut rebuilt_any)?
             {
                 entries.push(index);
             }
         }
 
         if self.storage.prefers_snapshot_persistence() {
-            self.apply_snapshot_directory_update(dir_path, &entries)?;
-        } else {
-            entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-            self.storage.persist_batch(self.config.index_dir(), &entries)?;
+            if rebuilt_any || self.cached_subdirectory_differs(dir_path, &entries) {
+                self.apply_snapshot_directory_update(dir_path, &entries)?;
+            }
+            self.prune_orphaned_content(dir_path);
+            return Ok(());
         }
 
+        entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+        self.storage.persist_batch(self.config.index_dir(), &entries)?;
         self.replace_cached_entries(dir_path, &entries);
 
         Ok(())
+    }
+
+    /// Serve a cached [`FileIndex`] when size and mtime still match the
+    /// hydrated entry, avoiding a full read + SHA-256 per unchanged file;
+    /// otherwise build. Sets `rebuilt_any` when a file is built so the caller
+    /// can skip no-op snapshot rewrites (entry-set drops are caught by the
+    /// caller's directory diff). `modified` is second-granularity: a
+    /// same-second, same-size rewrite is picked up by the next run.
+    fn cached_or_built_index(&mut self, file_path: &Path, rebuilt_any: &mut bool) -> Result<Option<FileIndex>> {
+        let cache_key = file_path.to_string_lossy().into_owned();
+        if let Some(cached) = self.index_cache.get(cache_key.as_str())
+            && self.should_process_file_path(file_path)
+            && let Ok(metadata) = fs::metadata(file_path)
+            && let Ok(modified) = metadata.modified()
+            && let Ok(elapsed) = modified.duration_since(SystemTime::UNIX_EPOCH)
+            && elapsed.as_secs() == cached.modified
+            && metadata.len() == cached.size
+        {
+            return Ok(Some(cached.clone()));
+        }
+
+        let built = self.build_file_index(file_path)?;
+        *rebuilt_any |= built.is_some();
+        Ok(built)
+    }
+
+    /// Whether the walked entries differ from the cached entries under
+    /// `dir_path`. Deletions show up here; additions and content changes set
+    /// `rebuilt_any` in [`Self::cached_or_built_index`] instead.
+    fn cached_subdirectory_differs(&self, dir_path: &Path, entries: &[FileIndex]) -> bool {
+        let walked = entries.iter().map(|entry| entry.path.as_str()).collect::<HashSet<_>>();
+        self.index_cache
+            .keys()
+            .filter(|path| Path::new(path).starts_with(dir_path))
+            .map(String::as_str)
+            .collect::<HashSet<_>>()
+            != walked
     }
 
     /// Discover all files in directory recursively without indexing them.
@@ -744,6 +812,14 @@ impl SimpleIndexer {
             .extend(entries.iter().cloned().map(|entry| (entry.path.clone(), entry)));
     }
 
+    /// Drop content entries under `dir_path` without an index entry (deleted,
+    /// rejected, or unindexable); content for still-indexed files is kept so
+    /// searches avoid a disk read.
+    fn prune_orphaned_content(&mut self, dir_path: &Path) {
+        self.content_cache
+            .retain(|path, _| !Path::new(path).starts_with(dir_path) || self.index_cache.contains_key(path.as_str()));
+    }
+
     fn apply_snapshot_file_update(&mut self, cache_key: String, next_entry: Option<FileIndex>) -> Result<()> {
         let previous_entry = match next_entry {
             Some(entry) => self.index_cache.insert(cache_key.clone(), entry),
@@ -864,6 +940,20 @@ fn should_visit_entry(
 #[inline]
 fn calculate_hash(content: &str) -> String {
     vtcode_commons::utils::calculate_sha256(content.as_bytes())
+}
+
+/// Path-shape file policy shared by live filtering and snapshot hydration:
+/// hidden (when configured) and always-sensitive names are rejected without
+/// touching the filesystem, so hydration can reject tampered entries while
+/// leaving existence — and deletion detection — to the re-index diff.
+fn has_indexable_file_name(path: &Path, config: &SimpleIndexerConfig) -> bool {
+    let name = path.file_name().and_then(|name| name.to_str());
+    if config.ignore_hidden && name.is_some_and(|name| name.starts_with('.')) {
+        return false;
+    }
+    name.is_none_or(|name| {
+        !(vtcode_commons::exclusions::is_sensitive_file(name) || name == ".gitignore" || name == ".git")
+    })
 }
 
 fn write_markdown_entry(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {

@@ -48,6 +48,31 @@ indexer.index_directory(workspace_root.as_path())?;
 Any `IndexStorage` implementation is free to establish connections, emit telemetry, or fan out writes during `persist`
 as long as it surfaces errors through `anyhow::Result`.
 
+## Snapshot hydration and unchanged-file screening
+
+The default `MarkdownIndexStorage` persists the full index as a single `index.md` snapshot (published via atomic
+rename) after every indexing run. `SimpleIndexer::hydrate_from_snapshot` reads that snapshot back into the in-memory
+cache so repeat runs reuse previous work:
+
+- `index_directory` serves a cached `FileIndex` when a file's size and second-granularity modification time still match
+  the hydrated entry, skipping the per-file read and SHA-256 hash.
+- When nothing under the indexed directory changed, the whole-snapshot rewrite is skipped entirely.
+- Entries whose path lies outside the workspace root or violates the path policy (hidden, sensitive, or excluded
+  locations) are discarded, so a tampered snapshot can never surface files the indexer would refuse to index, and a
+  missing or malformed snapshot fails closed to an empty cache: the next run simply re-indexes everything. Entries for
+  files deleted since the snapshot are kept so the re-index diff can prune them.
+
+The screen's one blind spot is a same-second, same-size rewrite between runs, which the next run picks up. The index is
+advisory — agent-facing content search uses the ripgrep backend — so this trade-off is acceptable for `/init` re-runs.
+Call `hydrate_from_snapshot` after `init` and before the first `index_directory` on a fresh indexer:
+
+```rust
+let mut indexer = SimpleIndexer::new(workspace_root.clone());
+indexer.init()?;
+indexer.hydrate_from_snapshot();
+indexer.index_directory(workspace_root.as_path())?;
+```
+
 ## Tailoring traversal
 
 `TraversalFilter` implementors can short-circuit directory descent or file-level indexing. The default

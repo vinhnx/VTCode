@@ -26,6 +26,8 @@ pub(crate) async fn build_workspace_index(workspace: PathBuf) -> Result<()> {
     blocking_task("workspace indexing", move || -> Result<()> {
         let mut indexer = SimpleIndexer::new(workspace.clone());
         indexer.init()?;
+        let hydrated = indexer.hydrate_from_snapshot();
+        tracing::debug!(hydrated, "reusing indexed entries from previous snapshot");
         indexer.index_directory(&workspace)?;
         Ok(())
     })
