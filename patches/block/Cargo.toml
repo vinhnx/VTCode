@@ -1,0 +1,31 @@
+[package]
+name = "block"
+version = "0.1.6"
+authors = ["Steven Sheldon"]
+# PATCHED (vtcode): pin the implicit edition explicitly to silence the
+# `package.edition is unspecified` manifest note. Upstream has no edition
+# key, which also means 2015; no behavior change.
+edition = "2015"
+
+description = "Rust interface for Apple's C language extension of blocks."
+keywords = ["blocks", "osx", "ios", "objective-c"]
+readme = "README.md"
+repository = "http://github.com/SSheldon/rust-block"
+documentation = "http://ssheldon.github.io/rust-objc/block/"
+license = "MIT"
+
+exclude = [
+  ".gitignore",
+  ".travis.yml",
+  "travis_install.sh",
+  "travis_test.sh",
+  "tests-ios/**",
+]
+
+# PATCHED (vtcode): dropped upstream `[dev-dependencies.objc_test_utils]`
+# (`path = "test_utils"`). The published 0.1.6 crate does not ship that
+# directory, so the path is dangling; dev-deps of a [patch] crate are never
+# resolved for downstream builds, and the unit tests cannot link without it.
+
+# Intentionally excluded from the vtcode workspace: vendored [patch.crates-io] fork.
+[workspace]

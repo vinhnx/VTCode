@@ -193,6 +193,10 @@ crossterm = { path = "patches/crossterm" }
 # Patched mac-notification-sys 0.6.15: retryable set_application (see
 # patches/mac-notification-sys/PATCH.md).
 mac-notification-sys = { path = "patches/mac-notification-sys" }
+# Patched block 0.1.6: inhabited `c_void` extern static instead of uninhabited
+# `enum Class {}` (fixes `static_of_uninhabited_type` future-compat warning;
+# see patches/block/PATCH.md). Upstream is abandoned with no fixed release.
+block = { path = "patches/block" }
 vtcode-diff = { path = "crates/common/vtcode-diff" }
 vtcode-commons = { path = "crates/common/vtcode-commons" }
 vtcode-acp = { path = "crates/codegen/vtcode-acp" }
