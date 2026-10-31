@@ -34,39 +34,7 @@ if [[ "${1:-}" == "--verify" && "${last_arg}" == "${VTCODE_PACKAGE_TEST_FAIL_VER
 fi
 STUB
 
-cat >"${STUB_BIN}/sips" <<'STUB'
-#!/usr/bin/env bash
-set -euo pipefail
-output=""
-while (($#)); do
-    if [[ "$1" == "--out" ]]; then
-        output="$2"
-        shift 2
-    else
-        shift
-    fi
-done
-[[ -n "${output}" ]]
-: >"${output}"
-STUB
-
-cat >"${STUB_BIN}/iconutil" <<'STUB'
-#!/usr/bin/env bash
-set -euo pipefail
-output=""
-while (($#)); do
-    if [[ "$1" == "-o" ]]; then
-        output="$2"
-        shift 2
-    else
-        shift
-    fi
-done
-[[ -n "${output}" ]]
-: >"${output}"
-STUB
-
-chmod +x "${STUB_BIN}/cargo" "${STUB_BIN}/codesign" "${STUB_BIN}/sips" "${STUB_BIN}/iconutil"
+chmod +x "${STUB_BIN}/cargo" "${STUB_BIN}/codesign"
 printf 'custom target desktop binary\n' >"${RELEASE_DIR}/vtcode-desktop"
 printf 'custom target CLI helper\n' >"${RELEASE_DIR}/vtcode"
 chmod +x "${RELEASE_DIR}/vtcode-desktop" "${RELEASE_DIR}/vtcode"
@@ -83,6 +51,7 @@ SUCCESS_APP="${TEST_ROOT}/success/VT Code.app"
 [[ "$(cat "${SUCCESS_APP}/Contents/Helpers/vtcode")" == "custom target CLI helper" ]]
 cmp -s "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${SUCCESS_APP}/Contents/Resources/THIRD-PARTY-NOTICES"
 cmp -s "${ROOT_DIR}/LICENSE" "${SUCCESS_APP}/Contents/Resources/LICENSE"
+cmp -s "${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns" "${SUCCESS_APP}/Contents/Resources/VTCode.icns"
 grep -Fq -- "build --locked --release --manifest-path ${ROOT_DIR}/Cargo.toml -p vtcode -p vtcode-desktop" "${CARGO_LOG}"
 grep -Fq -- "--verify --deep --strict ${SUCCESS_APP}" "${CODESIGN_LOG}"
 printf 'PASS: custom Cargo target artifacts are packaged and the copied app is verified.\n'
@@ -95,3 +64,11 @@ if VTCODE_PACKAGE_TEST_FAIL_VERIFY_PATH="${FAILED_APP}" \
 fi
 grep -Fq -- "--verify --deep --strict ${FAILED_APP}" "${CODESIGN_LOG}"
 printf 'PASS: failed verification of the copied app fails packaging.\n'
+
+MISSING_ICON_APP="${TEST_ROOT}/missing-icon/VT Code.app"
+if VTCODE_PACKAGE_TEST_ICON_SOURCE="${TEST_ROOT}/no-such-icon.icns" \
+    "${ROOT_DIR}/scripts/package-desktop-macos.sh" "${MISSING_ICON_APP}" >/dev/null 2>&1; then
+    printf 'FAIL: missing bundle icon artwork must fail packaging.\n' >&2
+    exit 1
+fi
+printf 'PASS: missing bundle icon artwork fails packaging.\n'

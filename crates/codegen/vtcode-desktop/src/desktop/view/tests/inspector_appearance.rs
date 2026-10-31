@@ -690,6 +690,41 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
 }
 
 #[gpui_kit::test]
+fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppContext) {
+    use vtcode_commons::ui_protocol::AppIconPreference;
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        // The picker sits below reset-appearance; scroll it into view.
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("appearance-app-icon-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("app-icon-dynamic").label(), Some("Dynamic (selected)"));
+        window.within("settings-panel").click("app-icon-dark", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.app_icon(), AppIconPreference::Dark);
+        assert_eq!(window.find("app-icon-dark").label(), Some("Dark (selected)"));
+        assert_eq!(window.find("app-icon-dynamic").label(), Some("Dynamic"));
+        let saved = crate::desktop::preferences::Preferences::load();
+        assert_eq!(saved.app_icon(), AppIconPreference::Dark);
+        // Scroll back to the top, then to the reset row above the picker.
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(1600.))), cx);
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-640.))), cx);
+        window.within("settings-panel").click("reset-appearance", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.app_icon(), AppIconPreference::Dynamic);
+        let reset = crate::desktop::preferences::Preferences::load();
+        assert_eq!(reset.app_icon(), AppIconPreference::Dynamic);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

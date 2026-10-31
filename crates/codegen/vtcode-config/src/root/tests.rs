@@ -212,3 +212,30 @@ fn fullscreen_scroll_speed_is_clamped() {
         assert_eq!(UiFullscreenConfig::default().scroll_speed, 20);
     });
 }
+
+#[test]
+fn app_icon_defaults_to_dynamic_and_parses_each_variant() {
+    use vtcode_commons::ui_protocol::AppIconPreference;
+
+    assert_eq!(UiConfig::default().app_icon, AppIconPreference::Dynamic);
+    assert_eq!(toml::from_str::<UiConfig>("").unwrap().app_icon, AppIconPreference::Dynamic);
+    for (raw, expected) in [
+        ("light", AppIconPreference::Light),
+        ("dark", AppIconPreference::Dark),
+        ("dynamic", AppIconPreference::Dynamic),
+    ] {
+        let parsed: UiConfig = toml::from_str(&format!("app_icon = \"{raw}\"")).unwrap();
+        assert_eq!(parsed.app_icon, expected, "{raw}");
+        let round_trip = toml::to_string(&parsed).unwrap();
+        assert_eq!(toml::from_str::<UiConfig>(&round_trip).unwrap().app_icon, expected, "{raw}");
+    }
+}
+
+#[test]
+fn app_icon_unknown_value_parses_to_unknown_without_failing_load() {
+    use vtcode_commons::ui_protocol::AppIconPreference;
+
+    let parsed: UiConfig = toml::from_str("app_icon = \"holographic\"").unwrap();
+    assert_eq!(parsed.app_icon, AppIconPreference::Unknown);
+    assert_eq!(parsed.app_icon.id(), "dynamic");
+}

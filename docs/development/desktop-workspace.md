@@ -579,12 +579,15 @@ actions share one composer surface. Existing VT Code theme tokens drive all colo
 Collapsing navigation retains the active session, draft, and pane width for the
 current window. The toolbar remains available when navigation is collapsed.
 
-The toolbar and welcome logo embed `resources/icons/vtcode-profile-120.png`.
-macOS packaging generates `Contents/Resources/VTCode.icns` from the shared 512px
-artwork and declares it in `Info.plist`. The 1024px Retina slot is upscaled from
-that source; no checkout paths or external image requests are needed at runtime.
-The GPUI Kit asset source includes its default component icons and only the
-additional catalog icons referenced by the desktop UI.
+The toolbar and welcome logo embed `resources/icons/vtcode-app-dynamic-512.png`.
+macOS packaging installs the prebuilt `resources/icons/vtcode-app-dynamic.icns`
+as `Contents/Resources/VTCode.icns` and declares it in `Info.plist`; no
+checkout paths or external image requests are needed at runtime. The running
+app applies the saved Appearance picker selection (Dynamic/Light/Dark) to the
+Dock via `NSApplication.setApplicationIconImage`, resolving Dynamic against
+the active theme mode. The GPUI Kit asset source includes its default
+component icons and only the additional catalog icons referenced by the
+desktop UI.
 
 ### Appearance and typography
 

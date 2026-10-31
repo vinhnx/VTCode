@@ -62,6 +62,7 @@ use gpui_kit::{
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
+use vtcode_commons::ui_protocol::AppIconPreference;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
     ConfigurationSnapshot, InteractionChoice, InteractionRequest, InteractionResponse, InteractionStep,
@@ -69,6 +70,7 @@ use vtcode_desktop_protocol::{
     SessionOutputPage, SessionSummary, ThreadEventNotification,
 };
 
+use super::app_icon;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{markdown_style, render_markdown, render_markdown_with_style};

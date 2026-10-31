@@ -64,6 +64,31 @@ fn ui_language_round_trips_and_invalid_saved_values_preserve_other_preferences()
 }
 
 #[test]
+fn app_icon_round_trips_and_invalid_values_fall_back_to_dynamic() {
+    use vtcode_commons::ui_protocol::AppIconPreference;
+
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.app_icon(), AppIconPreference::Dynamic);
+
+    for preference in AppIconPreference::ALL {
+        let mut preferences = Preferences::default();
+        preferences.set_app_icon(preference);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(
+            serialized.contains(&format!("\"appIcon\":\"{}\"", preference.id())),
+            "saved id is stable for {preference:?}: {serialized}"
+        );
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.app_icon(), preference);
+    }
+
+    for raw in [r#"{"appIcon":""}"#, r#"{"appIcon":"twilight"}"#, r#"{"appIcon":null}"#] {
+        let loaded: Preferences = serde_json::from_str(raw).unwrap();
+        assert_eq!(loaded.app_icon(), AppIconPreference::Dynamic, "{raw}");
+    }
+}
+
+#[test]
 fn file_open_destination_round_trips_and_invalid_values_fall_back_to_viewer() {
     assert_eq!(FileOpenDestination::default(), FileOpenDestination::Viewer);
     let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();

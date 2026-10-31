@@ -43,7 +43,7 @@ if [[ ! "${MACOS_MAJOR}" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 15 )); then
     exit 1
 fi
 
-for tool in cargo codesign ditto sips iconutil plutil; do
+for tool in cargo codesign ditto plutil; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'Error: required packaging tool is missing: %s\n' "${tool}" >&2
         exit 1
@@ -70,43 +70,18 @@ install -m 755 "${RELEASE_DIR}/vtcode" "${CONTENTS}/Helpers/vtcode"
 install -m 644 "${ROOT_DIR}/LICENSE" "${CONTENTS}/Resources/LICENSE"
 install -m 644 "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${CONTENTS}/Resources/THIRD-PARTY-NOTICES"
 
-# Build the native icon from the same artwork embedded in the desktop logo.
-ICONSET="${TEMP_ROOT}/VTCode.iconset"
-mkdir -p "${ICONSET}"
-for size in 16 32 128 256 512; do
-    sips -z "${size}" "${size}" "${ROOT_DIR}/resources/icons/vtcode-profile-512.png" \
-        --out "${ICONSET}/icon_${size}x${size}.png" >/dev/null
-    retina_size=$((size * 2))
-    sips -z "${retina_size}" "${retina_size}" "${ROOT_DIR}/resources/icons/vtcode-profile-512.png" \
-        --out "${ICONSET}/icon_${size}x${size}@2x.png" >/dev/null
-done
-# iconutil's icns-write path is broken on some hosts (macOS 27 rejects even
-# previously working iconsets while the read path works). When the artwork is
-# intact but iconutil fails, reuse the icon from the newest prior bundle in
-# the output directory instead of aborting, and say so loudly. Without intact
-# artwork or a fallback icon the build still fails: never ship iconless.
-if ! iconutil -c icns "${ICONSET}" -o "${CONTENTS}/Resources/VTCode.icns" 2>/dev/null; then
-    if [[ "$(find "${ICONSET}" -name '*.png' | wc -l)" -ne 10 ]]; then
-        printf 'Error: icon artwork is incomplete; refusing icon fallback.\n' >&2
-        exit 1
-    fi
-    FALLBACK_ICON=""
-    FALLBACK_MTIME=0
-    for candidate in "${OUTPUT_PARENT}"/*.app/Contents/Resources/VTCode.icns; do
-        [[ -e "${candidate}" ]] || continue
-        mtime="$(stat -f '%m' "${candidate}")"
-        if (( mtime > FALLBACK_MTIME )); then
-            FALLBACK_MTIME="${mtime}"
-            FALLBACK_ICON="${candidate}"
-        fi
-    done
-    if [[ -z "${FALLBACK_ICON}" ]]; then
-        printf 'Error: iconutil failed and no prior-bundle VTCode.icns fallback exists in %s.\n' "${OUTPUT_PARENT}" >&2
-        exit 1
-    fi
-    printf 'Warning: iconutil failed on this host; reusing icon from %s.\n' "${FALLBACK_ICON}" >&2
-    cp "${FALLBACK_ICON}" "${CONTENTS}/Resources/VTCode.icns"
+# The bundle icon is the prebuilt Dynamic (split-tile) artwork: it reads in
+# both light and dark Finder treatments, matching the desktop picker's
+# default. The running app applies the saved Appearance selection
+# (Dynamic/Light/Dark) to the Dock at startup. Without the artwork the
+# build fails: never ship iconless. VTCODE_PACKAGE_TEST_ICON_SOURCE
+# overrides the artwork path for failure-path tests.
+ICON_SOURCE="${VTCODE_PACKAGE_TEST_ICON_SOURCE:-${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns}"
+if [[ ! -f "${ICON_SOURCE}" ]]; then
+    printf 'Error: bundle icon artwork is missing: %s\n' "${ICON_SOURCE}" >&2
+    exit 1
 fi
+install -m 644 "${ICON_SOURCE}" "${CONTENTS}/Resources/VTCode.icns"
 
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "${ROOT_DIR}/Cargo.toml" | head -n 1)"
 cat >"${CONTENTS}/Info.plist" <<PLIST

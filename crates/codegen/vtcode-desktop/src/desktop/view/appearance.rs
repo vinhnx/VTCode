@@ -295,7 +295,9 @@ impl DesktopView {
     }
 
     pub(super) fn apply_theme_state(&mut self, id: String, window: Option<&mut Window>, cx: &mut Context<Self>) {
-        self.theme_mode = themes::apply_with_contrast(&id, self.preferences.contrast(), window, cx);
+        let mode = themes::apply_with_contrast(&id, self.preferences.contrast(), window, cx);
+        let mode_changed = mode != self.theme_mode;
+        self.theme_mode = mode;
         let id = if themes::mode_for_id(&id) == Some(self.theme_mode) {
             id
         } else {
@@ -308,10 +310,98 @@ impl DesktopView {
             }
         }
         self.theme_id = id;
+        if mode_changed
+            && matches!(self.preferences.app_icon(), AppIconPreference::Dynamic | AppIconPreference::Unknown)
+        {
+            self.refresh_dock_icon();
+        }
         self.apply_typography(cx);
         self.transcript.remeasure();
         self.save_preferences();
         cx.notify();
+    }
+
+    pub(super) fn set_app_icon(&mut self, preference: AppIconPreference, cx: &mut Context<Self>) {
+        if self.preferences.app_icon() == preference {
+            return;
+        }
+        self.preferences.set_app_icon(preference);
+        self.refresh_dock_icon();
+        self.save_preferences();
+        cx.notify();
+    }
+
+    /// Re-apply the saved icon selection to the Dock. AppKit failures stay
+    /// silent: the bundle icon remains and the preference still applies on
+    /// future launches and theme-mode changes.
+    pub(super) fn refresh_dock_icon(&self) {
+        let _applied = app_icon::apply_dock_icon(app_icon::png_bytes(self.preferences.app_icon(), self.theme_mode));
+    }
+
+    fn render_app_icon_tile(&self, preference: AppIconPreference, cx: &Context<Self>) -> AnyElement {
+        let label = match preference {
+            AppIconPreference::Dynamic | AppIconPreference::Unknown => {
+                rust_i18n::t!("app.settings.appearance.app_icon_dynamic").to_string()
+            }
+            AppIconPreference::Light => rust_i18n::t!("app.settings.appearance.light").to_string(),
+            AppIconPreference::Dark => rust_i18n::t!("app.settings.appearance.dark").to_string(),
+        };
+        let active = self.preferences.app_icon() == preference;
+        let accessibility_label = if active {
+            format!("{label}{}", rust_i18n::t!("app.appearance.selected_suffix"))
+        } else {
+            label.clone()
+        };
+        desktop_button(format!("app-icon-{}", preference.id()))
+            .accessibility_label(accessibility_label)
+            .toggled(active)
+            .ghost()
+            .w(px(104.))
+            .flex_shrink_0()
+            .h(px(112.))
+            .p_2()
+            .when(active, |button| button.bg(cx.theme().colors.popover).text_color(cx.theme().colors.foreground))
+            .rounded_lg()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.set_app_icon(preference, cx);
+            }))
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_1()
+                    .child(app_icon_preview(preference, 64.))
+                    .child(
+                        div()
+                            .text_xs()
+                            .truncate()
+                            .when(active, |label| label.font_semibold())
+                            .child(label),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    pub(super) fn render_app_icon_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let title = rust_i18n::t!("app.settings.appearance.app_icon").to_string();
+        let theme = cx.theme();
+        let colors = &theme.colors;
+        let tiles = AppIconPreference::ALL
+            .into_iter()
+            .map(|preference| self.render_app_icon_tile(preference, cx))
+            .collect::<Vec<_>>();
+        accessible_group_box(
+            "appearance-app-icon-group",
+            title.clone(),
+            settings_group_box(title, colors)
+                .child(row_description(
+                    rust_i18n::t!("app.settings.appearance.app_icon_description").to_string(),
+                    colors,
+                ))
+                .child(div().flex().flex_wrap().items_start().gap_2().children(tiles)),
+        )
     }
 
     pub(super) fn apply_typography(&mut self, cx: &mut Context<Self>) {
@@ -826,11 +916,13 @@ impl DesktopView {
                     view.preferences.code_font_family = None;
                     view.preferences.ui_font_size = None;
                     view.preferences.code_font_size = None;
+                    view.preferences.app_icon = None;
                     view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
                     view.set_translucent_sidebar(false, window, cx);
                     view.reset_contrast(window, cx);
                     preferences::apply_reduced_motion(view.preferences.reduced_motion, view.system_motion_baseline, cx);
                     view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
+                    view.refresh_dock_icon();
                 })),
         );
         let files_group_title = rust_i18n::t!("app.settings.files.group").to_string();
@@ -848,6 +940,7 @@ impl DesktopView {
                 colors,
             )),
         ));
+        content = content.child(self.render_app_icon_settings(cx));
         content.child(self.render_contrast_settings(cx)).into_any_element()
     }
 }

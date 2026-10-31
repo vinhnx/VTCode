@@ -396,6 +396,8 @@ fn handle_jobs_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
 }
 
 fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    use vtcode_core::terminal_setup::terminals::iterm2::TerminalIconCommand;
+
     match args.trim().to_ascii_lowercase().as_str() {
         "" => Ok(SlashCommandOutcome::StartTerminalSetup),
         "install-iterm2-icon" => {
@@ -407,7 +409,20 @@ fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Res
             Ok(SlashCommandOutcome::Handled)
         }
         _ => {
-            renderer.line(MessageStyle::Error, "Usage: /terminal-setup [install-iterm2-icon|reset-iterm2-icon]")?;
+            match vtcode_core::terminal_setup::terminals::iterm2::parse_terminal_icon_command(args) {
+                Some(TerminalIconCommand::Show) => {
+                    vtcode_core::terminal_setup::terminals::iterm2::run_terminal_icon_show(renderer)?;
+                }
+                Some(TerminalIconCommand::Switch(preference)) => {
+                    vtcode_core::terminal_setup::terminals::iterm2::run_terminal_icon_switch(renderer, preference)?;
+                }
+                None => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Usage: /terminal-setup [install-iterm2-icon|reset-iterm2-icon|icon [light|dark|dynamic]]",
+                    )?;
+                }
+            }
             Ok(SlashCommandOutcome::Handled)
         }
     }

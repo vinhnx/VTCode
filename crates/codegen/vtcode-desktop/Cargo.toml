@@ -22,7 +22,7 @@ chrono = { workspace = true }
 dirs = { workspace = true }
 gpui-kit = { version = "=0.8.0", features = ["syntect"] }
 objc2 = "0.6.4"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSButton", "NSControl", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "objc2-core-foundation"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSButton", "NSControl", "NSImage", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "objc2-core-foundation"] }
 objc2-foundation = "0.3.2"
 plist = "1"
 pulldown-cmark = "0.13.4"

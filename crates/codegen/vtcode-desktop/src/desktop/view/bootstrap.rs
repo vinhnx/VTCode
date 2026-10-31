@@ -512,7 +512,7 @@ impl DesktopView {
         }
     }
 
-    /// Apply saved preferences: theme, pane widths, and inspector state.
+    /// Apply saved preferences: theme, app icon, pane widths, and inspector state.
     pub(super) fn load_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let preferences = self.preferences.clone();
         self.preferences.follow_cli_theme = Some(preferences.follow_cli_theme.unwrap_or(preferences.theme.is_none()));
@@ -523,6 +523,7 @@ impl DesktopView {
             self.theme_mode = themes::apply_with_contrast(&self.theme_id, preferences.contrast(), Some(window), cx);
         }
         self.apply_typography(cx);
+        self.refresh_dock_icon();
         self.sidebar_width = preferences.sidebar_width();
         self.inspector_width = preferences.inspector_width();
         self.inspector_open = false;

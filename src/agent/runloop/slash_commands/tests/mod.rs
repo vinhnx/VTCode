@@ -24,3 +24,4 @@ mod plan_webmcp_compact;
 mod registry_local;
 mod secret_vim;
 mod templates_review;
+mod terminal_icon;

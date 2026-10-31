@@ -425,6 +425,9 @@ pub(super) struct Preferences {
     pub code_font_size: Option<u8>,
     /// Selected theme id.
     pub theme: Option<String>,
+    /// Selected application-icon artwork id (`dynamic`/`light`/`dark`).
+    /// Unknown values fall back to `Dynamic` on read.
+    pub app_icon: Option<String>,
     /// Keep independent theme and typography choices for light and dark mode.
     pub separate_theme_profiles: bool,
     pub light_theme: Option<String>,
@@ -474,6 +477,14 @@ impl Preferences {
 
     pub(super) fn set_ui_language(&mut self, language: UiLanguage) {
         self.ui_language = Some(language.locale().to_owned());
+    }
+
+    pub(super) fn app_icon(&self) -> vtcode_commons::ui_protocol::AppIconPreference {
+        vtcode_commons::ui_protocol::AppIconPreference::from_id(self.app_icon.as_deref())
+    }
+
+    pub(super) fn set_app_icon(&mut self, preference: vtcode_commons::ui_protocol::AppIconPreference) {
+        self.app_icon = Some(preference.id().to_owned());
     }
 
     pub(super) fn file_open_destination(&self) -> FileOpenDestination {

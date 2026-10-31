@@ -310,8 +310,8 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!("donate", "Support the project by buying the author a coffee", "/donate", "support"),
     built_in_command_spec!(
         "terminal-setup",
-        "Configure terminal for VT Code (multiline, copy/paste, shell, themes)",
-        "/terminal-setup",
+        "Configure terminal for VT Code (multiline, copy/paste, shell, themes, tab icon)",
+        "/terminal-setup [install-iterm2-icon|reset-iterm2-icon|icon [light|dark|dynamic]]",
         "terminal"
     ),
     built_in_command_spec!(

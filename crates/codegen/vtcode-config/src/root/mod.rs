@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::accessibility::reduce_motion_preference;
 use crate::status_line::StatusLineConfig;
 use crate::terminal_title::TerminalTitleConfig;
+use vtcode_commons::ui_protocol::AppIconPreference;
 use vtcode_commons::ui_protocol::DiffPreviewMode;
 
 mod modes;
@@ -310,6 +311,13 @@ pub struct UiConfig {
     #[serde(default = "default_color_scheme_mode")]
     pub color_scheme_mode: ColorSchemeMode,
 
+    /// Application icon artwork variant for terminal tab icons and the desktop picker.
+    /// - "dynamic": Follow the active light/dark mode (default)
+    /// - "light": Always use the light-mode artwork
+    /// - "dark": Always use the dark-mode artwork
+    #[serde(default = "default_app_icon")]
+    pub app_icon: AppIconPreference,
+
     /// Terminal program status reports for the interactive TUI (on by default).
     #[serde(default)]
     pub program_status: UiProgramStatusConfig,
@@ -385,6 +393,10 @@ fn default_safe_colors_only() -> bool {
 
 fn default_color_scheme_mode() -> ColorSchemeMode {
     ColorSchemeMode::Auto
+}
+
+fn default_app_icon() -> AppIconPreference {
+    AppIconPreference::Dynamic
 }
 
 fn default_show_sidebar() -> bool {
@@ -562,6 +574,7 @@ impl Default for UiConfig {
             bold_is_bright: default_bold_is_bright(),
             safe_colors_only: default_safe_colors_only(),
             color_scheme_mode: default_color_scheme_mode(),
+            app_icon: default_app_icon(),
             program_status: UiProgramStatusConfig::default(),
             notifications: UiNotificationsConfig::default(),
             fullscreen: UiFullscreenConfig::default(),

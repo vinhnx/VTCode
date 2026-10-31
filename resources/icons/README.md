@@ -1,25 +1,56 @@
-# VT Code terminal profile icons
+# VT Code app and terminal profile icons
 
-Bundled profile/tab icons sourced from `vtchat_resources/v2_1`. Use the smallest icon that looks sharp; larger files are
-for app bundles only.
+Current artwork is the `vtcode-app-*` set (flat `V` mark): Light is a sand tile with a charcoal `V`, Dark is a
+charcoal tile with a warm-white `V`, and Dynamic is a diagonal split tile. Use the smallest icon that looks sharp;
+larger files are for app bundles and in-app display only.
 
-| File                     | Size          | Use                                                                           |
-| ------------------------ | ------------- | ----------------------------------------------------------------------------- |
-| `vtcode-profile-32.png`  | 32x32, 1.0K   | Tab bar / low-DPI profile icon. Default choice for most terminals.            |
-| `vtcode-profile-120.png` | 120x120, 4.6K | HiDPI profile icon (iTerm2 Retina, Terminal.app).                             |
-| `vtcode-profile-180.png` | 180x180, 7.5K | Cross-platform PNG fallback, incl. Windows Terminal `settings.json` `"icon"`. |
-| `vtcode-profile-512.png` | 512x512, 29K  | High-res / future app bundle only. Not for tabs.                              |
-| `vtcode.svg`             | vector, 474B  | Scalable source.                                                              |
-| `vtcode-mono.svg`        | vector, 647B  | Monochrome V mark (white on transparent) for program registries.              |
-| `vtcode-mono-32.png`     | 32x32, 574B   | Mono raster handoff for small icon tiles.                                     |
-| `vtcode-mono-120.png`    | 120x120, 1.8K | Mono raster handoff for HiDPI icon tiles.                                     |
+| File                          | Size          | Use                                                                                      |
+| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
+| `vtcode-app-light-128.png`    | 128x128, 1.2K | iTerm2 HiDPI profile artwork (light mode). Embedded by `vtcode-core/build.rs`.           |
+| `vtcode-app-dark-128.png`     | 128x128, 1.4K | iTerm2 HiDPI profile artwork (dark mode). Embedded by `vtcode-core/build.rs`.            |
+| `vtcode-app-dynamic-128.png`  | 128x128, 1.6K | Mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`).  |
+| `vtcode-app-light-512.png`    | 512x512, 2.3K | Desktop Dock artwork (light mode) and Appearance picker preview.                         |
+| `vtcode-app-dark-512.png`     | 512x512, 3.1K | Desktop Dock artwork (dark mode) and Appearance picker preview.                          |
+| `vtcode-app-dynamic-512.png`  | 512x512, 4.6K | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art.               |
+| `vtcode-app-dynamic.icns`     | 171K          | Prebuilt macOS bundle icon (installed as `VTCode.icns` by `package-desktop-macos.sh`).   |
+| `vtcode.svg`                  | vector, 474B  | Scalable source for docs.                                                                |
+| `vtcode-mark.svg`             | vector, 416B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
+| `vtcode-mono.svg`             | vector, 647B  | Monochrome V mark (white on transparent) for program registries.                         |
+| `vtcode-mono-32.png`          | 32x32, 574B   | Mono raster handoff for small icon tiles.                                                |
+| `vtcode-mono-120.png`         | 120x120, 1.8K | Mono raster handoff for HiDPI icon tiles.                                                |
 
-Artwork: yellow `V` mark sourced from `vtchat_resources/v2_1/logo_dark.png` (`logo_light.png` is byte-identical),
-downscaled per size. The mono files redraw the same LigatureSymbols OFL `V` path (`vtcode-mark.svg`) as a
-white-on-transparent single-color mark for dark terminal chrome; hosts tint or invert it for light surfaces.
+Legacy `vtcode-profile-*.png` files (yellow `V` mark from `vtchat_resources/v2_1`) remain for existing manual
+terminal setups but are no longer installed or embedded anywhere; new setups should use the `vtcode-app-*` set.
 
-The desktop welcome view draws the SVG's outline V in the active theme without the filled tile.
-The toolbar, application icon, and transcript retain the original profile artwork.
+## Variant selection
+
+`Dynamic` (default) follows the active light/dark mode; `Light`/`Dark` pin one artwork. Per the artwork notes,
+automatic switching selects Light or Dark art at runtime — the Dynamic split tile itself is only used where the
+context cannot switch (bundle icon, manual setups, picker preview).
+
+- Desktop: Settings → Appearance → App Icon picker (Dynamic/Light/Dark). The running app applies the selection to
+  the Dock via `NSApplication.setApplicationIconImage` at startup, on selection, and on theme-mode changes while
+  Dynamic is selected. Finder always shows the bundle (Dynamic) icon.
+- CLI: `ui.app_icon = "dynamic"|"light"|"dark"` in `vtcode.toml` (default `"dynamic"`). The iTerm2 tab icon
+  installer resolves Dynamic against the active CLI theme at startup and reinstalls on drift, so a theme-mode
+  change applies on the next launch. Switch immediately with `/terminal-setup icon light|dark|dynamic`.
+
+## Regenerating the bundle icon
+
+`vtcode-app-dynamic.icns` is prebuilt from the 1024px Dynamic source art. To rebuild after an artwork update:
+
+```bash
+mkdir VTCode.iconset
+for size in 16 32 128 256 512; do
+  sips -z "$size" "$size" VTCode-Dynamic-1024.png --out VTCode.iconset/icon_${size}x${size}.png
+  sips -z "$((size * 2))" "$((size * 2))" VTCode-Dynamic-1024.png --out VTCode.iconset/icon_${size}x${size}@2x.png
+done
+iconutil -c icns VTCode.iconset -o vtcode-app-dynamic.icns
+```
+
+`iconutil`'s icns-write path is broken on some hosts (macOS 27 rejects even previously working iconsets while
+the read path works); generate on a host where it succeeds and verify with
+`iconutil -c iconset vtcode-app-dynamic.icns -o /tmp/check.iconset`.
 
 ## Runtime behavior
 
@@ -49,9 +80,9 @@ Text `OSC 1`/`OSC 2` works everywhere. For a graphical icon, configure once per 
   notice). VT Code switches the session to the profile once at TUI startup, only when the file exists, and switches back
   to the session's original profile on exit — so the icon is shown only while the TUI runs. If a tab is already stuck
   showing the icon from an older build, run `/terminal-setup reset-iterm2-icon` in it or open a new tab.
-- iTerm2 (manual): Settings > Profiles > General > Icon, choose `vtcode-profile-120.png` (Retina) or
-  `vtcode-profile-32.png`.
-- Windows Terminal: set the profile `"icon"` to `resources/icons/vtcode-profile-180.png`.
+- iTerm2 (manual): Settings > Profiles > General > Icon, choose `vtcode-app-light-128.png` or
+  `vtcode-app-dark-128.png` to match the terminal theme (the automatic installer picks for you).
+- Windows Terminal: set the profile `"icon"` to `resources/icons/vtcode-app-dynamic-128.png`.
 - VS Code / Zed / Warp: these use theme/picker icons, not image files; keep the runtime `OSC 1`/`OSC 2` label and
   optionally reference `vtcode.svg` in docs.
 - Kitty / Ghostty / WezTerm / Alacritty / Terminal.app / Hyper / Tabby: window icons come from the OS app bundle; no

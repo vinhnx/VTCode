@@ -460,20 +460,21 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     // is non-critical, so it must not sit on the pre-TUI critical path.
     if startup_policy.run_interactive_maintenance() {
         let quiet = args.quiet;
-        tokio::task::spawn_blocking(
-            move || match vtcode_core::terminal_setup::terminals::iterm2::ensure_profile_icon() {
-                Ok(Some(report)) => {
-                    if !quiet {
-                        tracing::info!(
-                            profile = %report.profile_path.display(),
-                            "Installed VT Code iTerm2 tab icon profile"
-                        );
-                    }
+        let app_icon = startup.config.ui.app_icon;
+        tokio::task::spawn_blocking(move || match vtcode_core::terminal_setup::terminals::iterm2::ensure_profile_icon(
+            app_icon,
+        ) {
+            Ok(Some(report)) => {
+                if !quiet {
+                    tracing::info!(
+                        profile = %report.profile_path.display(),
+                        "Installed VT Code iTerm2 tab icon profile"
+                    );
                 }
-                Ok(None) => {}
-                Err(error) => tracing::debug!(error = %error, "iTerm2 tab icon install skipped"),
-            },
-        );
+            }
+            Ok(None) => {}
+            Err(error) => tracing::debug!(error = %error, "iTerm2 tab icon install skipped"),
+        });
     }
 
     let dispatch_result = cli::dispatch(&args, &startup, print_mode).await;
