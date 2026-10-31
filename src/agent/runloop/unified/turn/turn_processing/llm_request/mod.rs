@@ -128,6 +128,8 @@ pub(crate) async fn execute_llm_request(
         parallel_cfg_opt,
         false,
         None,
+        #[cfg(test)]
+        None,
     )
     .await
 }
@@ -153,6 +155,8 @@ impl TurnProcessingContext<'_> {
             parallel_cfg_opt,
             suppress_output,
             loop_tracker,
+            #[cfg(test)]
+            None,
         )
         .await
     }
@@ -168,6 +172,7 @@ async fn execute_llm_request_with_options_impl(
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
     suppress_output: bool,
     mut loop_tracker: Option<&mut LoopTracker>,
+    #[cfg(test)] request_messages_override: Option<Arc<Vec<uni::Message>>>,
 ) -> Result<(uni::LLMResponse, bool)> {
     let suppress_output = suppress_output || ctx.tool_registry.completion_verification_pending();
     let turn_snapshot = capture_turn_request_snapshot(ctx, active_model, tool_free_recovery);
@@ -199,6 +204,11 @@ async fn execute_llm_request_with_options_impl(
     tracing::debug!(target: "vtcode.response_latency", operation_id = ctx.handle.current_progress_operation().map(|op| op.id()),
         request_assembly_ms = assembly_started_at.elapsed().as_secs_f64() * 1000.0, step = step_count, "request assembled");
     let mut request = initial_request.request;
+    // Exercise defensive repair of an already assembled request in tests.
+    #[cfg(test)]
+    if let Some(messages) = request_messages_override {
+        request.messages = messages;
+    }
     let has_tools = initial_request.has_tools;
     let runtime_tools = initial_request.runtime_tools;
     let continuation_messages = initial_request.continuation_messages;
@@ -219,6 +229,7 @@ async fn execute_llm_request_with_options_impl(
     };
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
+    let mut provider_dispatches = 0usize;
     let mut stream_fallback_used = false;
     let mut compacted_tool_retry_used = false;
     let mut dropped_previous_response_id_for_retry = false;
@@ -257,6 +268,7 @@ async fn execute_llm_request_with_options_impl(
                     provider: &turn_snapshot.provider_name,
                     model: &active_model,
                     attempt: attempt + 1,
+                    provider_dispatches,
                     max_attempts: max_retries,
                     category: last_error_category.as_ref().map(|category| category.user_label()),
                     reason: last_error_preview.as_deref(),
@@ -356,6 +368,7 @@ async fn execute_llm_request_with_options_impl(
         }
 
         ctx.harness_state.reset_streamed_response_event_emitted();
+        provider_dispatches = provider_dispatches.saturating_add(1);
         let step_result = if use_streaming {
             let mut stream_bridge =
                 HarnessStreamingBridge::new(ctx.harness_emitter, &ctx.harness_state.turn_id.0, step_count, attempt + 1);
@@ -645,7 +658,6 @@ async fn execute_llm_request_with_options_impl(
                     ctx.tool_registry
                         .reconcile_source_projection_change(&request.messages, normalized.as_ref());
                     request.messages = Arc::new(normalized.into_owned());
-                    attempts_made = attempts_made.saturating_add(1);
                     tracing::warn!(
                         target: "vtcode.llm.retry",
                         "repaired provider-facing tool history; retrying unmatched-tool-result request once"
@@ -778,7 +790,7 @@ async fn execute_llm_request_with_options_impl(
     {
         last_error_preview = Some(compact_error_message(&err.to_string(), 180));
     }
-    if attempts_made > 1 {
+    if attempts_made > 1 || provider_dispatches > 1 {
         ctx.renderer
             .diagnostic(&retry::provider_retry_diagnostic(retry::ProviderRetryReport {
                 turn_id: &ctx.harness_state.turn_id.0,
@@ -786,6 +798,7 @@ async fn execute_llm_request_with_options_impl(
                 provider: &turn_snapshot.provider_name,
                 model: &active_model,
                 attempt: attempts_made,
+                provider_dispatches,
                 max_attempts: max_retries,
                 category: last_error_category.as_ref().map(|category| category.user_label()),
                 reason: last_error_preview.as_deref(),
@@ -802,6 +815,7 @@ async fn execute_llm_request_with_options_impl(
         &active_model,
         turn_snapshot.planning_active,
         attempts_made,
+        provider_dispatches,
         max_retries,
         llm_result.is_ok(),
         stream_fallback_used,
