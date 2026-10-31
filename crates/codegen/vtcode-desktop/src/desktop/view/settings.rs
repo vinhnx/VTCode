@@ -218,9 +218,6 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .border_1()
-                    .border_color(colors.border.opacity(0.))
-                    .focus_visible(|style| style.border_color(colors.ring))
                     .on_action(
                         cx.listener(|view, _: &NextSettingsTab, window, cx| view.cycle_settings_tab(true, window, cx)),
                     )
