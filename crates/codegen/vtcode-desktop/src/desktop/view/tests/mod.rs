@@ -370,6 +370,7 @@ fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
 }
 
 mod activity_settings;
+mod activity_summary;
 mod config_catalog;
 mod config_deep_links;
 mod config_sessions;

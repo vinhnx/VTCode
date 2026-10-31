@@ -18,7 +18,6 @@ use gpui_kit::component::attachment::{
 };
 use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
 use gpui_kit::component::button::{Button, ButtonVariants, Toggle, ToggleVariants};
-use gpui_kit::component::chart::BarChart;
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
 use gpui_kit::component::description_list::DescriptionList;
 use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
@@ -37,7 +36,6 @@ use gpui_kit::component::marker::{Marker, MarkerContent};
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
-use gpui_kit::component::plot::shape::BarAlignment;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::radio::Radio;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
@@ -155,7 +153,7 @@ const ZEN_CONTENT_WIDTH: f32 = 600.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const WELCOME_COPY_COUNT: usize = 3;
 
-const ACTIVITY_ROW_HEIGHT: f32 = 72.;
+const ACTIVITY_ROW_HEIGHT: f32 = 60.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
 const CHANGE_ROW_HEIGHT: f32 = 28.;
 /// Palette panel id; the focus trap targets the same element.

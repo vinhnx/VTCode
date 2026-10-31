@@ -2,11 +2,22 @@
 
 use super::*;
 
-#[derive(Clone)]
-struct ActivityChartDatum {
+/// One nonzero status line in the activity summary legend.
+struct ActivityLegendEntry {
+    state: ActivityState,
     label: String,
     count: usize,
-    state: ActivityState,
+}
+
+/// Stable per-status slug for activity-summary legend element ids.
+fn activity_state_slug(state: ActivityState) -> &'static str {
+    match state {
+        ActivityState::Running => "running",
+        ActivityState::Completed => "done",
+        ActivityState::Failed => "failed",
+        ActivityState::Interrupted => "interrupted",
+        ActivityState::Other => "other",
+    }
 }
 
 impl DesktopView {
@@ -455,38 +466,37 @@ impl DesktopView {
                 ))
                 .into_any_element();
         }
-        let chart_data = [
-            ActivityChartDatum {
+        let summary = counts.summary();
+        let legend = [
+            ActivityLegendEntry {
+                state: ActivityState::Running,
                 label: rust_i18n::t!("app.inspector.status_running").to_string(),
                 count: counts.running,
-                state: ActivityState::Running,
             },
-            ActivityChartDatum {
+            ActivityLegendEntry {
+                state: ActivityState::Completed,
                 label: rust_i18n::t!("app.inspector.status_done").to_string(),
                 count: counts.completed,
-                state: ActivityState::Completed,
             },
-            ActivityChartDatum {
+            ActivityLegendEntry {
+                state: ActivityState::Failed,
                 label: rust_i18n::t!("app.inspector.status_failed").to_string(),
                 count: counts.failed,
-                state: ActivityState::Failed,
             },
-            ActivityChartDatum {
+            ActivityLegendEntry {
+                state: ActivityState::Interrupted,
                 label: rust_i18n::t!("app.inspector.status_interrupted").to_string(),
                 count: counts.interrupted,
-                state: ActivityState::Interrupted,
             },
-            ActivityChartDatum {
+            ActivityLegendEntry {
+                state: ActivityState::Other,
                 label: rust_i18n::t!("app.inspector.status_other").to_string(),
                 count: counts.other,
-                state: ActivityState::Other,
             },
         ]
         .into_iter()
-        .filter(|datum| datum.count > 0)
+        .filter(|entry| entry.count > 0)
         .collect::<Vec<_>>();
-        let summary = counts.summary();
-        let chart_colors = *colors;
         body = body.child(
             div()
                 .id("activity-status-chart")
@@ -502,37 +512,61 @@ impl DesktopView {
                         .to_string()
                 })
                 .w_full()
-                .h(px(148.))
                 .flex_shrink_0()
                 .flex()
                 .flex_col()
+                .gap_2()
+                .rounded_md()
+                .border_1()
+                .border_color(colors.border)
+                .px_3()
+                .py_2()
                 .child(
                     div()
                         .flex()
-                        .justify_between()
                         .items_center()
-                        .child(row_title(rust_i18n::t!("app.inspector.recent_activity").to_string(), colors))
+                        .gap_2()
                         .child(
                             div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .child(row_title(rust_i18n::t!("app.inspector.recent_activity").to_string(), colors)),
+                        )
+                        .child(
+                            div()
+                                .flex_shrink_0()
                                 .text_xs()
                                 .text_color(colors.muted_foreground)
                                 .child(rust_i18n::t!("app.inspector.shown_count", count = counts.total()).to_string()),
                         ),
                 )
-                .child(
-                    div().flex_1().min_h_0().child(
-                        BarChart::new(chart_data)
-                            .band(|datum| datum.label.clone())
-                            .value(|datum| datum.count as f64)
-                            .label(|datum| datum.count.to_string())
-                            .alignment(BarAlignment::Left)
-                            .value_axis(false)
-                            .grid(false)
-                            .interactive(false)
-                            .appear(false)
-                            .fill(move |datum, _, _, _| Self::activity_status_color(datum.state, chart_colors)),
-                    ),
-                ),
+                .child(div().flex().flex_col().gap_1().children(legend.into_iter().map(|entry| {
+                    div()
+                        .id(format!("activity-summary-{}", activity_state_slug(entry.state)))
+                        .test_support()
+                        .aria_label(format!("{}: {}", entry.label, entry.count))
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .size(px(8.))
+                                .flex_shrink_0()
+                                .rounded_full()
+                                .bg(Self::activity_status_color(entry.state, *colors)),
+                        )
+                        .child(div().flex_1().min_w_0().truncate().text_sm().child(entry.label))
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .text_sm()
+                                .font_medium()
+                                .text_color(colors.foreground)
+                                .child(entry.count.to_string()),
+                        )
+                }))),
         );
 
         if has_older_activity {
@@ -715,7 +749,8 @@ impl DesktopView {
             .flex()
             .items_center()
             .gap_3()
-            .p_2()
+            .px_3()
+            .py_2()
             .rounded_lg()
             .bg(colors.secondary)
             .child(
@@ -726,7 +761,7 @@ impl DesktopView {
                     .size(px(28.))
                     .flex_shrink_0()
                     .rounded_full()
-                    .bg(colors.secondary)
+                    .bg(colors.popover)
                     .child(Self::render_activity_status_indicator(
                         "activity-indicator",
                         &row.id,
@@ -740,20 +775,12 @@ impl DesktopView {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .gap_1()
+                    .justify_center()
                     .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
-                    .child(
-                        div().flex().min_w_0().child(
-                            Tag::custom(colors.secondary, colors.foreground, colors.border)
-                                .small()
-                                .rounded_full()
-                                .max_w_full()
-                                .child(div().truncate().child(status)),
-                        ),
-                    ),
+                    .child(div().text_xs().truncate().text_color(themes::muted_text(&colors)).child(status)),
             );
         if let Some(output_action) = output_action {
-            row_element = row_element.child(output_action);
+            row_element = row_element.child(div().flex_shrink_0().child(output_action));
         }
         row_element
     }

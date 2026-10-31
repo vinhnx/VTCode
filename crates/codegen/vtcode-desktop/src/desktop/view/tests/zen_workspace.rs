@@ -342,7 +342,7 @@ fn activity_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext)
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(window.find("activity-tool-font-scale").bounds().size.height, px(108.));
+        assert_eq!(window.find("activity-tool-font-scale").bounds().size.height, px(90.));
     })
     .unwrap();
 }
