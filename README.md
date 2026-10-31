@@ -96,8 +96,6 @@ provider-specific instructions.
 > own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
 > [OAuth authentication](./docs/guides/oauth-authentication.md).
 
-<!-- -->
-
 > [!CAUTION]
 > Keep API keys out of Git and `vtcode.toml`. If you use a workspace `.env` file, make sure it is not committed.
 
@@ -180,8 +178,8 @@ Use `vtcode continue --session-id <id>` to fork an earlier session.
 
 ### The full VT Code engine in a native Mac app
 
-[![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](#desktop-app)
-[![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
+[![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](./docs/development/desktop-workspace.md)
+[![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](./docs/development/desktop-workspace.md)
 
 </div>
 
@@ -298,7 +296,7 @@ issue. Details: [security policy](./docs/SECURITY.md).
 
 ## Community
 
-VT Code is created and maintained by Vinh Nguyen with help from the community. You can contribute code,
+You can contribute code,
 fix docs, or report what broke in a release. You can also fork the repository and adapt it for your own use.
 
 - [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) - something looks off? Tell us,
@@ -389,7 +387,7 @@ figure it out together.
 
 ## Support VT Code
 
-VT Code is created by me and with help from the community. Consider supporting the development. Every bit helps. Thank you!
+Consider supporting VT Code development — every bit helps. Thank you!
 
 <div align="center">
 
