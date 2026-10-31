@@ -107,16 +107,61 @@ For information about VT Code's security architecture, please see our documentat
 
 ## Version Updates
 
-We regularly update dependencies and monitor for security vulnerabilities in our dependencies. To check for known
-vulnerabilities in Rust dependencies, you can run:
+We regularly update dependencies and monitor for security vulnerabilities in our dependencies. CI runs the
+[cargo-deny](https://embarkstudios.github.io/cargo-deny/) policy (`deny.toml`) on every pull request and weekly via
+`.github/workflows/deny.yml`: RustSec advisories and yanked crates fail the build, licenses/duplicates/sources are
+policy-checked. To run the same policy locally:
 
 ```bash
-# Install cargo-audit if you haven't already
-cargo install cargo-audit
+# Install cargo-deny if you haven't already
+brew install cargo-deny   # or: cargo install cargo-deny --locked
 
-# Audit dependencies for known vulnerabilities
+# Audit dependencies against the RustSec Advisory Database
+cargo deny --locked check
+
+# House shortcuts
+./scripts/check.sh deny        # same policy as CI
+./scripts/check-dev.sh --deny  # opt-in from the fast gate
+```
+
+cargo-audit remains available as a secondary lockfile-wide cross-check:
+
+```bash
+cargo install cargo-audit
 cargo audit
 ```
+
+### Auditing Shipped Binaries
+
+Release artifacts are built with [cargo-auditable](https://github.com/rust-secure-code/cargo-auditable): the exact
+dependency list is embedded into each binary as compressed, inert metadata (`.dep-v0` section, no runtime overhead).
+Anyone — including us — can scan a downloaded binary for known vulnerabilities without the source tree:
+
+```bash
+cargo install cargo-audit
+cargo audit bin path/to/vtcode        # RustSec scan of the binary itself
+```
+
+trivy (v0.31+), grype (v0.83+), and osv-scanner (v2.0.1+) read the same section, so container/distro scanners pick it
+up automatically. The GNU Linux, Windows, and macOS release builds embed the data; the `cross`-built musl/aarch64
+artifacts do not (cargo runs inside the cross container, so a custom image would be required).
+
+Embedded metadata records crate names and versions only (URLs/paths are redacted); it is an SBOM, not a
+supply-chain defense.
+
+### Dependency Publisher Review
+
+For periodic human review of _who_ you are trusting (crates.io publishers with push rights to every dependency), use
+[cargo supply-chain](https://github.com/rust-secure-code/cargo-supply-chain):
+
+```bash
+cargo install cargo-supply-chain
+cargo supply-chain update        # fetch crates.io daily dump once (large download)
+cargo supply-chain publishers    # list publishers across the dependency graph
+```
+
+This is an interactive audit tool, not a CI gate — run it when onboarding major new dependencies or during periodic
+security reviews.
 
 ## Contact
 

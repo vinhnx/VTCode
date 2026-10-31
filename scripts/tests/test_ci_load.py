@@ -46,6 +46,18 @@ class CiLoadTests(unittest.TestCase):
                 "aarch64-unknown-linux-gnu",
             ],
         )
+        # deny.toml audits every shipped target: the release build matrix must
+        # stay a subset of the cargo-deny [graph] targets (macOS targets come
+        # from desktop-macos.yml and scripts/release.sh, not this matrix).
+        graph_section = (
+            (ROOT / "deny.toml").read_text().split("[graph]", 1)[1].split("\n[", 1)[0]
+        )
+        deny_targets = set(re.findall(r'"([\w-]+)"', graph_section))
+        self.assertTrue(
+            set(targets).issubset(deny_targets),
+            f"deny.toml [graph] targets must cover the release build matrix; "
+            f"missing: {sorted(set(targets) - deny_targets)}",
+        )
         self.assertNotRegex(
             cross,
             r"^\s+needs:",
@@ -76,9 +88,15 @@ class CiLoadTests(unittest.TestCase):
         # GET .../actions/artifacts requires the `actions` scope.
         self.assertIn("actions: read", cross)
         self.assertIn("--target x86_64-pc-windows-msvc", windows)
-        self.assertNotIn(
-            "--frozen", windows.split("        run: cargo build", 1)[1].splitlines()[0]
-        )
+        # Release builds embed dependency audit data (cargo-auditable) and stay
+        # --locked, never --frozen: --frozen implies --offline, which breaks
+        # prefix-hit cache restores lacking index metadata.
+        self.assertIn("cargo auditable build --locked", native)
+        self.assertIn("cargo auditable build --locked", windows)
+        windows_build_line = windows.split("        run: cargo auditable build", 1)[
+            1
+        ].splitlines()[0]
+        self.assertNotIn("--frozen", windows_build_line)
         self.assertNotIn("mlugg/setup-zig", RELEASE)
         self.assertNotIn("  gen-man:", RELEASE)
 

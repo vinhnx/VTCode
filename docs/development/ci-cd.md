@@ -4,7 +4,9 @@ This document describes the CI/CD pipeline and code quality tools used in the vt
 
 ## GitHub Actions Workflows
 
-The project runs two GitHub Actions workflows.
+The project runs these GitHub Actions workflows: `build-linux-windows.yml` (release
+binaries), `webmcp.yml` (Pages deploy), `hotpath-benchmark.yml` + `hotpath-relay.yml`
+(benchmarks), `desktop-macos.yml` (desktop validation), and `deny.yml` (dependency audit).
 
 ### 1. Build Linux & Windows (`build-linux-windows.yml`)
 
@@ -67,10 +69,10 @@ gh workflow run build-linux-windows.yml --field tag=<tag> --field compiler_cache
 
 ### Man-page generation reference
 
-| Command | Output |
-| --- | --- |
-| `vtcode man` | Main page on stdout |
-| `vtcode man chat --output chat.1` | One command page in a file |
+| Command                                    | Output                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| `vtcode man`                               | Main page on stdout                                               |
+| `vtcode man chat --output chat.1`          | One command page in a file                                        |
 | `vtcode man --all-pages --output man/man1` | Main page and every visible top-level command page in a directory |
 
 `--all-pages` requires `--output` and conflicts with a single command name. Generation uses the same
@@ -219,6 +221,32 @@ prerequisite of the selected crate is missing from crates.io. The derivation is 
 python3 scripts/tests/test_publish_order.py
 ```
 
+### 4. Dependency audit (`deny.yml`)
+
+**Triggers:** pull requests and pushes to `main` touching any `Cargo.toml`/`Cargo.lock`/`deny.toml`
+or the workflow itself, a weekly schedule (Mondays 05:00 UTC, default branch only — re-audits the
+committed lockfile even when no PR touches it, so newly published advisories fail without a code
+change), and manual `workflow_dispatch`.
+
+**Jobs:** one `cargo-deny` job on `ubuntu-latest` runs `cargo-deny-action` (SHA-pinned) with
+`--locked`. The action provisions its own pinned toolchain inside its Docker image, so no
+`dtolnay/rust-toolchain` step is needed and no Cargo compilation cache is used — it only resolves
+the committed lockfile. Policy lives in `deny.toml` at the repo root; the same policy runs locally
+via `./scripts/check.sh deny` and opt-in via `./scripts/check-dev.sh --deny`.
+
+**Policy summary** (full rationale comments live in `deny.toml`):
+
+- **Advisories**: RustSec vulnerabilities and yanked crates fail the check. The ten unmaintained
+  advisories whose dependency chains are already at their latest upstream releases carry explicit
+  `ignore` entries with reasons (syntect → bincode/yaml-rust, image/exr → paste, notify-rust →
+  zvariant family, gpui/resvg stack) and must be re-evaluated when a parent crate releases.
+- **Licenses**: the allow list mirrors `about.toml` (`accepted`) so cargo-deny and THIRD-PARTY-NOTICES
+  generation share one policy; adding a license means updating both files.
+- **Bans**: duplicate crate versions warn (visible drift, non-blocking).
+- **Sources**: crates.io only; git dependencies must be explicitly allowed.
+- **Targets**: `[graph] targets` lists every shipped target triple (the release build matrix plus
+  macOS), so target-gated dependencies such as the notify-rust/clipboard stacks are always audited.
+
 ## Code Quality Tools
 
 ### rustfmt
@@ -315,6 +343,7 @@ Use the provided development check script to run the same checks locally:
 ./scripts/check.sh build    # Build project
 ./scripts/check.sh docs     # Generate docs
 ./scripts/check.sh unsafe-docs # Gate unsafe SAFETY/allowance + type-position contract docs
+./scripts/check.sh deny     # cargo-deny policy (RustSec advisories, licenses, bans, sources)
 ./scripts/check.sh contracts # Release-artifact contract tests
 ```
 
@@ -510,16 +539,53 @@ runtime benchmarks or from a shorter YAML file.
 
 ### Dependency Auditing
 
+The primary auditor is **cargo-deny** (policy in `deny.toml`, enforced in CI by `deny.yml` and
+locally by the check scripts). It covers RustSec advisories, yanked crates, license compliance,
+duplicate dependencies, and registry sources in one pass:
+
 ```bash
-# Install cargo-audit
-cargo install cargo-audit
+# Install cargo-deny
+brew install cargo-deny   # or: cargo install cargo-deny --locked
 
-# Run audit
-cargo audit
+# Run the full policy (advisories, licenses, bans, sources)
+cargo deny --locked check
 
-# Fix vulnerabilities
-cargo audit fix
+# House shortcuts
+./scripts/check.sh deny        # same policy as CI
+./scripts/check-dev.sh --deny  # opt-in from the fast gate
 ```
+
+RustSec vulnerabilities or a yanked crate fail the check. Unmaintained advisories that cannot be
+fixed from this repo (dependency chain already at the latest upstream release) carry explicit,
+reason-annotated `ignore` entries in `deny.toml`; each one names its blocking parent crate and must
+be re-evaluated when that parent releases. Adding a new dependency license means updating the
+`allow` list in `deny.toml` **and** the `accepted` list in `about.toml` — they mirror each other.
+
+**cargo-audit** remains available as a secondary, lockfile-wide cross-check (it scans raw lockfile
+entries that cargo-deny's graph resolution may not reach):
+
+```bash
+cargo install cargo-audit
+cargo audit
+cargo audit fix   # applies compatible version bumps when patched versions exist
+```
+
+### Binary Audit Data
+
+The release builds embed the dependency list into each binary via
+[cargo-auditable](https://github.com/rust-secure-code/cargo-auditable) (compressed `.dep-v0` section,
+no runtime overhead), so shipped artifacts can be scanned directly:
+
+```bash
+cargo audit bin target/release/vtcode   # RustSec scan of a shipped binary
+```
+
+The `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc` jobs in `build-linux-windows.yml` and the
+macOS builds in `scripts/release.sh` use `cargo auditable build`; `scripts/release.sh` falls back to
+a plain build with a warning when the tool is absent. The `cross`-built musl/aarch64 artifacts do not
+carry audit data — cross runs cargo inside its container, so injecting would require custom cross
+images (see the comment on the cross build step). Verify any artifact with `cargo audit bin` after
+building if the data matters for that channel.
 
 ### License Compliance
 

@@ -511,11 +511,22 @@ main() {
 		# .cargo/config.toml being present on the build machine.
 		# --locked ensures the Cargo.lock matches Cargo.toml so the size-optimized
 		# release profile is actually used.
+		# cargo-auditable embeds the dependency list into the binary (.dep-v0
+		# section) so shipped archives are scannable with `cargo audit bin`.
+		# Optional: without it, builds proceed unchanged and the artifacts just
+		# lack self-description.
+		local -a cargo_cmd=(build)
+		if command -v cargo-auditable > /dev/null 2>&1; then
+			cargo_cmd=(auditable build)
+			print_info "cargo-auditable detected: binaries will embed dependency audit data"
+		else
+			print_warning "cargo-auditable not installed; release binaries will not embed dependency audit data (cargo install cargo-auditable --locked)"
+		fi
 		env CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS="-C link-arg=-Wl,-dead_strip" \
-			cargo build --locked --profile release --target x86_64-apple-darwin --jobs 4 &>/dev/null &
+			cargo "${cargo_cmd[@]}" --locked --profile release --target x86_64-apple-darwin --jobs 4 &>/dev/null &
 		local pid_x86=$!
 		env CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS="-C link-arg=-Wl,-dead_strip" \
-			cargo build --locked --profile release --target aarch64-apple-darwin --jobs 4 &>/dev/null &
+			cargo "${cargo_cmd[@]}" --locked --profile release --target aarch64-apple-darwin --jobs 4 &>/dev/null &
 		local pid_arm=$!
 
 		# Man pages must be ready before packaging (every archive embeds

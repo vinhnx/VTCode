@@ -84,7 +84,7 @@ jobs:
           echo "::error::Tag ${{ inputs.tag }} does not exist after 120s" >&2
           exit 1
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 1
@@ -111,9 +111,17 @@ jobs:
         if: ${{ inputs.compiler_cache_pilot }}
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
 
+      # Embed the dependency list into the binary (.dep-v0 section) so shipped
+      # artifacts stay scannable with `cargo audit bin`, trivy, grype, and
+      # osv-scanner. Inert data section: no runtime overhead.
+      - name: Install cargo-auditable
+        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        with:
+          tool: cargo-auditable
+
       - name: Build with cargo (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: cargo build --locked --profile release-fast --target ${{ matrix.target }} --features allocator-jemalloc --jobs 4
+        run: cargo auditable build --locked --profile release-fast --target ${{ matrix.target }} --features allocator-jemalloc --jobs 4
         shell: bash
         env:
           # opt-level="z" is inherited from [profile.release] via release-fast.
@@ -259,7 +267,7 @@ jobs:
           echo "::error::Tag ${{ inputs.tag }} does not exist after 120s" >&2
           exit 1
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 1
@@ -288,6 +296,10 @@ jobs:
           tool: cross
 
       - name: Build with cross (${{ matrix.target }})
+        # No cargo-auditable here: cross runs cargo inside its container, so
+        # the host-side tool cannot inject the audit section (would need
+        # custom cross images). These artifacts are therefore not
+        # self-describing; the GNU/Windows/macOS builds are.
         run: cross build --locked --profile release-fast --target ${{ matrix.target }} ${{ endsWith(matrix.target, 'linux-gnu') && ' --features allocator-jemalloc' || '' }} --jobs 4
         shell: bash
         env:
@@ -412,7 +424,7 @@ jobs:
           echo "::error::Tag ${{ inputs.tag }} does not exist after 120s" >&2
           exit 1
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 1
@@ -433,13 +445,21 @@ jobs:
         if: ${{ inputs.compiler_cache_pilot }}
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
 
+      # Embed the dependency list into the binary (.dep-v0 section) so shipped
+      # artifacts stay scannable with `cargo audit bin`, trivy, grype, and
+      # osv-scanner. Inert data section: no runtime overhead.
+      - name: Install cargo-auditable
+        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        with:
+          tool: cargo-auditable
+
       - name: Build (x86_64-pc-windows-msvc)
         # --locked (not --frozen): --frozen implies --offline, and a
         # prefix-hit cache restore can lack index metadata for the current
         # lockfile ("no matching package ... found" with no network to heal).
         # --locked still pins the lockfile but permits downloads, matching
         # the Linux jobs. See run 38934744656 / job 117087298931.
-        run: cargo build --locked --profile release-fast-windows --target x86_64-pc-windows-msvc --jobs 4
+        run: cargo auditable build --locked --profile release-fast-windows --target x86_64-pc-windows-msvc --jobs 4
         shell: bash
 
       - name: Report compiler cache statistics
