@@ -1,6 +1,19 @@
 //! Workspace files: scanning, tree, attachments, and the preview overlay.
 
 use super::*;
+use gpui_kit::Action;
+
+#[derive(Action, Clone, PartialEq, Debug)]
+#[action(namespace = desktop, no_json)]
+pub(super) struct CopyFilePath {
+    pub path: gpui_kit::SharedString,
+}
+
+#[derive(Action, Clone, PartialEq, Debug)]
+#[action(namespace = desktop, no_json)]
+pub(super) struct OpenFilePath {
+    pub path: gpui_kit::SharedString,
+}
 
 struct FileScanCancellationGuard(Arc<AtomicBool>);
 
@@ -11,6 +24,17 @@ impl Drop for FileScanCancellationGuard {
 }
 
 impl DesktopView {
+    /// Copy one tree row's absolute path, falling back to the workspace
+    /// relative path when no workspace is set.
+    pub(super) fn copy_file_path(&self, rel_path: &str, cx: &mut App) {
+        let path = self
+            .workspace
+            .as_ref()
+            .map(|root| root.join(rel_path).display().to_string())
+            .unwrap_or_else(|| rel_path.to_string());
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(path));
+    }
+
     /// Pick workspace text files to attach to the next prompt.
     pub(super) fn attach_files(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         const MAX_ATTACHMENTS: usize = 5;
@@ -351,7 +375,7 @@ impl DesktopView {
             .items_center()
             .justify_center()
             .p_4()
-            .bg(colors.background.opacity(0.6))
+            .bg(modal_scrim(colors))
             .child(
                 div()
                     .id("file-preview")

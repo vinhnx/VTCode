@@ -442,7 +442,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                         .to_string()
                 })?,
             ];
-            if command.id == CommandId::SettingsSearch {
+            if command.id == CommandId::SettingsSearch || command.id == CommandId::Settings {
                 let context = gpui_kit::KeyBindingContextPredicate::parse(key_context::SETTINGS)
                     .map_err(|error| error.to_string())?;
                 bindings.push(
@@ -555,16 +555,21 @@ mod tests {
 
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 31);
+        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 32);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 30);
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 31);
         assert_eq!(
             bindings(&BTreeMap::from([("settings_search".into(), String::new())]))
                 .unwrap()
                 .len(),
-            29
+            30
+        );
+        assert_eq!(
+            bindings(&BTreeMap::from([("settings".into(), String::new())])).unwrap().len(),
+            30,
+            "unbinding Settings removes both its desktop and in-sheet bindings"
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
         for (action, key) in [

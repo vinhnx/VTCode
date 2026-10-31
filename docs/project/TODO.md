@@ -24,14 +24,6 @@ Then implement #1, run the minimum relevant checks with `cargo nextest`, `cargo 
 
 ---
 
-https://gpui-kit.com/component/chart/
-
----
-
-improve typography, text color in desktop app, especially headings and labels. reference codex: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-27 at 8.32.59 PM.png'. currently headings, labels are too faint. and not smooth enough. use gpui skills kit for guidance.
-
----
-
 Before adding another subagent ask what problem it's solving. A bloated system prompt is often the issue.
 
 Skills and tool search can fix that without splitting context across agents. My rule of thumb is to keep a subagent when the work is parallel, needs fresh context or one agent really can't pick the right tools.
@@ -41,39 +33,3 @@ Otherwise, fold it into the main loop, turn its prompt into a skill, run your ev
 https://claude.com/resources/articles/building-agents-when-to-fold-subagents-into-your-main-agent-loop
 
 ---
-
-also revise chat input styling to match CLI. or at least make it simple and minimal, distinct look. that should not feel familiar to the other desktop apps. have similar feels to CLI. follow its clean and minimal design yet still functional for a coding harness desktop class. keep spacing and alignment consistent.. use gpui skills kit for guidance.
-
----
-
-desktop: add this option '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.30.43 PM.png'
-
----
-
-desktop: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.32.02 PM.png'
-
----
-
-desktop: implement '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.36.32 PM.png'
-
----
-
-desktop: storage settings '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-29 at 9.37.08 PM.png'
-
----
-
-desktop and cli: implement P3 display color support if available
-
----
-
-check and optimize heavy computations and large components panels, especially for desktop app. consider lazy loading or memoization, paging.
-
----
-
-zen mode: simplify UI, hide distractions, allow to change models/effort and modes.
-
----
-
-desktop: add shimmer effect or loading placeholder while loading contents for better UX.
-
-also improve the chat loading experience. can we use tui-shimmer for that?

@@ -1,6 +1,7 @@
 //! Full-window thread browser: workspace-grouped triage over cached sessions.
 
 use super::*;
+use gpui_kit::component::menu::ContextMenuExt;
 
 /// One flattened browser row. Group headers stay interleaved with their
 /// sessions so a single uniform virtual list renders the whole browser.
@@ -96,8 +97,8 @@ impl DesktopView {
         let now = now_unix_secs();
         let rows = browser_rows(&self.sessions, current.as_deref());
         let sizes = self.browser_row_sizes.get(rows.len(), row_height);
-        let (primary, secondary, foreground, muted) =
-            (colors.primary, colors.secondary, colors.foreground, colors.muted_foreground);
+        let (primary, foreground, muted, popover) =
+            (colors.primary, colors.foreground, colors.muted_foreground, colors.popover);
         let row_colors = colors;
         let can_new_thread = self.session_change_allowed(None);
         let can_close_thread = self.selected_session_id.is_some() && can_new_thread;
@@ -162,6 +163,8 @@ impl DesktopView {
                                             meta.push_str(storage::format_bytes(size_bytes).as_str());
                                         }
                                         let enabled = view.session_change_allowed(Some(&session_id));
+                                        let menu_id = session_id.clone();
+                                        let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
                                         let accessible_label = if selected {
                                             rust_i18n::t!(
                                                 "app.navigation.current_thread_label",
@@ -224,8 +227,11 @@ impl DesktopView {
                                                         .desktop_disabled(!enabled)
                                                         .w_full()
                                                         .justify_start()
+                                                        // Popover, not secondary: the browser panel
+                                                        // itself is secondary, which would swallow
+                                                        // a same-token selection fill.
                                                         .when(selected, |button| {
-                                                            button.bg(secondary).text_color(foreground)
+                                                            button.bg(popover).text_color(foreground)
                                                         })
                                                         .on_click(cx.listener(move |this, _, window, cx| {
                                                             if this.load_session(session_id.clone(), cx) {
@@ -233,6 +239,9 @@ impl DesktopView {
                                                             }
                                                         })),
                                                 )
+                                                .context_menu(move |menu, _, _| {
+                                                    tabs::session_row_menu(menu, &menu_id, tabbed)
+                                                })
                                                 .into_any_element(),
                                         )
                                     }
@@ -249,7 +258,7 @@ impl DesktopView {
             .absolute()
             .inset_0()
             .p_6()
-            .bg(colors.background.opacity(0.85))
+            .bg(modal_scrim(&colors))
             .flex()
             .items_center()
             .justify_center()

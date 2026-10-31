@@ -480,7 +480,7 @@ impl DesktopView {
             .flex()
             .justify_center()
             .pt(gpui_kit::rems(5.625))
-            .bg(colors.background.opacity(0.4))
+            .bg(modal_scrim(&colors))
             .child(panel)
             .into_any_element()
     }

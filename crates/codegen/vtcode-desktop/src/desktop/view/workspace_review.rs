@@ -56,6 +56,10 @@ fn review_message(
 
 impl DesktopView {
     pub(super) fn open_workspace_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.review_open {
+            self.close_review(window, cx);
+            return;
+        }
         let Some(info) = self.service_info.as_ref().filter(|_| self.backend.is_some()) else {
             return;
         };

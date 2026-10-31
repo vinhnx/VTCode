@@ -537,6 +537,8 @@ impl DesktopView {
         }
         self.retained_submission = retained_submission;
         self.selected_session_id = Some(loaded.session.session_id.clone());
+        self.ensure_tab(loaded.session.session_id.clone());
+        self.background_activity_count = 0;
         if let Some(pending) = self.pending_navigation.take() {
             let _moved = self.navigation_history.navigate_to(pending.target_index);
         } else {

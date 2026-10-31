@@ -60,7 +60,7 @@ impl DesktopView {
                     .w_full()
                     .rounded_md()
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::hairline(colors.popover, colors.foreground))
                     .bg(colors.popover)
                     .px_3()
                     .py_2()
@@ -108,7 +108,7 @@ impl DesktopView {
                     .w_full()
                     .rounded_md()
                     .border_1()
-                    .border_color(colors.border)
+                    .border_color(themes::hairline(colors.popover, colors.foreground))
                     .bg(colors.popover)
                     .p_3()
                     .flex()
@@ -359,37 +359,29 @@ impl DesktopView {
                         }),
                     )
                     .child(
-                        div()
-                            .id("message-composer-frame")
-                            .test_support()
-                            .w_full()
-                            .min_w_0()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(colors.border)
-                            .bg(colors.popover)
-                            .child(
-                                InputGroup::new("message-composer")
-                                    .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
-                                    .w_full()
-                                    .rounded_md()
-                                    .border_0()
-                                    .focus_ring(false)
-                                    .p_2()
-                                    .when(self.zen_mode, |group| group.p_3())
-                                    .bg(colors.popover)
-                                    .input(input)
-                                    .addon(
-                                        InputGroupAddon::new("composer-prompt-marker")
-                                            .align(InputGroupAddonAlignment::InlineStart)
-                                            .child(div().text_color(colors.muted_foreground).child(">")),
-                                    )
-                                    .addon(
-                                        InputGroupAddon::new("composer-actions")
-                                            .align(InputGroupAddonAlignment::BlockEnd)
-                                            .child(buttons),
-                                    ),
-                            ),
+                        // CLI-minimal: no card, border, or tint (the CLI input
+                        // is a borderless block). The prompt marker and the
+                        // placeholder carry the input affordance instead.
+                        div().id("message-composer-frame").test_support().w_full().min_w_0().child(
+                            InputGroup::new("message-composer")
+                                .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
+                                .w_full()
+                                .border_0()
+                                .focus_ring(false)
+                                .p_2()
+                                .when(self.zen_mode, |group| group.p_3())
+                                .input(input)
+                                .addon(
+                                    InputGroupAddon::new("composer-prompt-marker")
+                                        .align(InputGroupAddonAlignment::InlineStart)
+                                        .child(div().text_color(colors.muted_foreground).child(">")),
+                                )
+                                .addon(
+                                    InputGroupAddon::new("composer-actions")
+                                        .align(InputGroupAddonAlignment::BlockEnd)
+                                        .child(buttons),
+                                ),
+                        ),
                     ),
             ),
         )

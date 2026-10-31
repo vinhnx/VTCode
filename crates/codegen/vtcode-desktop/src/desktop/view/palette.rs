@@ -82,8 +82,7 @@ pub(super) enum PaletteAction {
 impl DesktopView {
     /// Build and open the ⌘K command palette over the current state.
     pub(super) fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.palette.is_some() && self.palette_kind == PaletteKind::Commands {
-            self.close_palette(window, cx);
+        if self.toggle_palette_kind(PaletteKind::Commands, window, cx) {
             return;
         }
         let mut groups: Vec<(String, Vec<PaletteCommand>)> = Vec::new();
@@ -192,8 +191,7 @@ impl DesktopView {
         {
             return;
         }
-        if self.palette.is_some() && self.palette_kind == PaletteKind::ConversationSearch {
-            self.close_palette(window, cx);
+        if self.toggle_palette_kind(PaletteKind::ConversationSearch, window, cx) {
             return;
         }
 
@@ -310,6 +308,9 @@ impl DesktopView {
     }
 
     pub(super) fn open_model_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.toggle_palette_kind(PaletteKind::Models, window, cx) {
+            return;
+        }
         if !self.session_change_allowed(None) || self.attachments_picker_open {
             return;
         }
@@ -375,6 +376,22 @@ impl DesktopView {
                 .as_ref()
                 .is_some_and(|review| review.selected_file.as_deref() == Some(path)),
             _ => false,
+        }
+    }
+
+    /// Close the palette when the same kind is already open, so a second
+    /// click on its trigger dismisses it. Returns true when it closed.
+    pub(super) fn toggle_palette_kind(
+        &mut self,
+        kind: PaletteKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.palette.is_some() && self.palette_kind == kind {
+            self.close_palette(window, cx);
+            true
+        } else {
+            false
         }
     }
 

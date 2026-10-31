@@ -116,6 +116,7 @@ impl DesktopView {
         match serde_json::from_value::<protocol::SessionDeleteResult>(result) {
             Ok(outcome) => {
                 self.sessions.retain(|session| session.session_id != outcome.session_id);
+                self.remove_tab(&outcome.session_id);
                 self.request_storage_summary(cx);
             }
             Err(_) => {
@@ -168,6 +169,22 @@ impl DesktopView {
     fn back_to_storage_summary(&mut self, cx: &mut Context<Self>) {
         self.storage.view = StorageView::Summary;
         cx.notify();
+    }
+
+    /// Delete one thread from a context menu, reusing the storage review's
+    /// warning prompt so the destructive path stays confirm-gated everywhere.
+    pub(super) fn confirm_delete_thread(&self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let title = self
+            .sessions
+            .iter()
+            .find(|session| session.session_id == session_id)
+            .and_then(|session| session.title.clone());
+        self.confirm_delete_session(
+            session_id.to_string(),
+            session_display_title(session_id, title.as_deref()),
+            window,
+            cx,
+        );
     }
 
     fn confirm_delete_session(&self, session_id: String, title: String, window: &mut Window, cx: &mut Context<Self>) {

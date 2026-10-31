@@ -243,6 +243,14 @@ pub(super) fn settings_switch(
         )
 }
 
+/// Shared scrim behind every inline modal (palette, review, browser, file
+/// preview, config editor): the canvas at 85% so the background fades while
+/// staying faintly legible. One value for all five surfaces — tune here, not
+/// per surface. The settings sheet keeps Kit's own overlay token.
+pub(super) fn modal_scrim(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
+    colors.background.opacity(0.85)
+}
+
 /// Quiet full-width break between conversation turns on the canvas. The
 /// single-sided rhythm keeps the row compact: preceding rows already carry
 /// bottom padding, and user bubbles must start within 16px of their column.

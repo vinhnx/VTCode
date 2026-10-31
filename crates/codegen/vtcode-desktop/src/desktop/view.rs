@@ -119,6 +119,7 @@ mod shortcuts;
 mod shortcuts_render;
 mod storage;
 mod submit;
+mod tabs;
 mod transcript_render;
 mod typography;
 mod updates;
@@ -347,6 +348,10 @@ struct DesktopView {
     event_drain_task: Option<Task<()>>,
     sessions: Vec<SessionSummary>,
     selected_session_id: Option<String>,
+    /// Open-thread tabs in first-open order; selection stays in
+    /// `selected_session_id`. Tabs are window-local shortcuts — closing one
+    /// never touches server-side session state.
+    open_tabs: Vec<String>,
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
     message_scroller: Entity<MessageScrollerState>,
@@ -382,6 +387,10 @@ struct DesktopView {
     turn_content_seen: bool,
     status: String,
     ui_progress_active: bool,
+    /// Loading delegated/matrix tasks from the latest `matrix.updated`
+    /// snapshot. Feeds the shared loading model (`background`), mirroring the
+    /// CLI's local-agent loading count; reset on session switch and disconnect.
+    background_activity_count: usize,
     error: Option<String>,
     configuration: Option<ConfigurationSnapshot>,
     pending_permission_choice: Option<protocol::PermissionMode>,

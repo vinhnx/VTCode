@@ -371,6 +371,7 @@ fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
 
 mod activity_settings;
 mod config_catalog;
+mod config_deep_links;
 mod config_sessions;
 mod curated_config;
 mod files_webmcp;
@@ -381,6 +382,7 @@ mod mcp_app;
 mod notifications;
 mod option_popups;
 mod options_misc;
+mod overlay_toggles;
 mod review_output;
 mod search_config;
 mod secret_store;
@@ -391,6 +393,7 @@ mod slash_options;
 mod startup_interactions;
 mod storage_settings;
 mod themes_transcript;
+mod thread_tabs;
 mod turns_transcript;
 mod worktree_a11y;
 mod zen_options;

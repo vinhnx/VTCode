@@ -1,6 +1,7 @@
 //! Window chrome: pane resizing, sidebar, thread header, and toolbar.
 
 use super::*;
+use gpui_kit::component::menu::ContextMenuExt;
 
 /// Which divider is being dragged.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -334,6 +335,8 @@ impl DesktopView {
                                 .filter_map(|index| {
                                     let session = view.sessions.get(index)?;
                                     let session_id = session.session_id.clone();
+                                    let menu_id = session_id.clone();
+                                    let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
                                     let selected = view.selected_session_id.as_deref() == Some(&session_id);
                                     let label = session_display_title(&session_id, session.title.as_deref());
                                     let enabled = view.session_change_allowed(Some(&session_id));
@@ -379,6 +382,9 @@ impl DesktopView {
                                                         let _ = this.load_session(session_id.clone(), cx);
                                                     })),
                                             )
+                                            .context_menu(move |menu, _, _| {
+                                                tabs::session_row_menu(menu, &menu_id, tabbed)
+                                            })
                                             .into_any_element(),
                                     )
                                 })
@@ -658,13 +664,7 @@ impl DesktopView {
                             Some(key_context::DESKTOP),
                         )
                         .ghost()
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            if view.settings_open {
-                                view.close_settings(window, cx);
-                            } else {
-                                view.open_settings(window, cx);
-                            }
-                        })),
+                        .on_click(cx.listener(|view, _, window, cx| view.toggle_settings(window, cx))),
                 );
             if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
                 group = group.content(

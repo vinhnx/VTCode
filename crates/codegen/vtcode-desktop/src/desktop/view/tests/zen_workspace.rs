@@ -493,7 +493,7 @@ fn status_bar_announces_agent_state_changes(cx: &mut TestAppContext) {
         assert_eq!(status_bar.label(), Some("Status bar"));
         let status = window.find("agent-status");
         assert_eq!(status.role(), Some(gpui_kit::Role::Status));
-        assert_eq!(status.label(), Some("Agent: idle"));
+        assert_eq!(status.label(), Some("Agent: Idle"));
     })
     .unwrap();
 
@@ -506,7 +506,7 @@ fn status_bar_announces_agent_state_changes(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let status = window.find("agent-status");
         assert_eq!(status.role(), Some(gpui_kit::Role::Status));
-        assert_eq!(status.label(), Some("Agent: running"));
+        assert_eq!(status.label(), Some("Agent: Running"));
     })
     .unwrap();
 }

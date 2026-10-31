@@ -114,7 +114,7 @@ impl DesktopView {
             .items_center()
             .justify_between()
             .gap_3()
-            .py_2()
+            .py_1()
             .child(super::row_title(label.clone(), &cx.theme().colors))
             .child(
                 desktop_button(id)

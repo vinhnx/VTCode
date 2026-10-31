@@ -384,23 +384,15 @@ fn label_grade_text_stays_crisp_on_every_surface(cx: &mut gpui_kit::TestAppConte
             let _mode = apply_by_id(id, None, cx);
             let colors = cx.theme().colors;
             let sidebar = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
-            // Label-grade text targets 7:1, falling back to the palette
-            // foreground itself when a theme has no headroom above it.
+            // Label-grade text is full foreground on every fill: headings must
+            // never render dimmer than the body copy they introduce.
             // Resting tab labels are AA-grade instead (see the tab-state test):
             // dimming them leaves room for a visible hover/selected shift.
-            for (name, surface) in [
-                ("canvas", colors.background),
-                ("panel", colors.secondary),
-                ("popover", colors.popover),
-                ("sidebar", sidebar),
-            ] {
-                let foreground_ratio = contrast_ratio(colors.foreground, surface);
-                let ratio = contrast_ratio(label_foreground(&colors), surface);
-                assert!(
-                    ratio >= LABEL_CONTRAST || ratio >= foreground_ratio - 0.01,
-                    "{id}: section label contrast on {name} is {ratio:.2} (foreground {foreground_ratio:.2})"
-                );
-            }
+            assert_eq!(
+                label_foreground(&colors),
+                colors.foreground,
+                "{id}: section labels stay at full foreground (sidebar fill {sidebar:?})"
+            );
         }
     });
 }

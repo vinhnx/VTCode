@@ -120,8 +120,7 @@ impl SettingsTab {
 
 impl DesktopView {
     pub(super) fn open_settings_search_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.palette.is_some() && self.palette_kind == PaletteKind::SettingsSearch {
-            self.close_palette(window, cx);
+        if self.toggle_palette_kind(PaletteKind::SettingsSearch, window, cx) {
             return;
         }
 
@@ -227,6 +226,7 @@ impl DesktopView {
                     .on_action(cx.listener(|view, _: &OpenSettingsSearch, window, cx| {
                         view.open_settings_search_palette(window, cx)
                     }))
+                    .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.toggle_settings(window, cx)))
                     .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
                         view.select_settings_tab_from_keyboard(0, window, cx)
                     }))

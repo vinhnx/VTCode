@@ -10,7 +10,7 @@ impl DesktopView {
             turn: self.running,
             thinking: self.turn_awaiting_content(),
             progress: self.ui_progress_active,
-            ..Default::default()
+            background: self.background_activity_count > 0,
         }
         .is_active()
     }
@@ -131,6 +131,14 @@ impl DesktopView {
                 })
         });
         cx.notify();
+    }
+
+    pub(super) fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings_open {
+            self.close_settings(window, cx);
+        } else {
+            self.open_settings(window, cx);
+        }
     }
 
     pub(super) fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -271,6 +279,10 @@ impl DesktopView {
     }
 
     pub(super) fn open_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.review_open {
+            self.close_review(window, cx);
+            return;
+        }
         if self.change_viewer.is_none() {
             return;
         }
@@ -311,6 +323,10 @@ impl DesktopView {
     }
 
     pub(super) fn open_thread_browser(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.browser_open {
+            self.close_browser(window, cx);
+            return;
+        }
         if self.settings_open {
             self.close_settings(window, cx);
         }

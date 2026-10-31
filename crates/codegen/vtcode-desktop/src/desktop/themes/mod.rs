@@ -571,17 +571,12 @@ pub(super) fn filled_button_foreground(color: Hsla) -> Hsla {
     }
 }
 
-/// Minimum contrast for label-grade text: headings, tab labels, and section
-/// overlines sit between primary foreground and muted metadata.
-const LABEL_CONTRAST: f32 = 9.0;
-
-/// Label-grade text readable on every filled surface: the palette foreground
-/// blended toward the hardest surface (the raised popover fill) just until the
-/// 9:1 threshold holds. Background, panel, sidebar, and hover fills are all
-/// farther from the foreground, so the ratio only grows there. Returns the
-/// foreground untouched when even it cannot reach the threshold.
+/// Label-grade text: section headings, group titles, and overlines render at
+/// full palette foreground. Hierarchy comes from size, weight, and case —
+/// not from dimming — so headings never read fainter than the body copy they
+/// introduce, on any fill.
 pub(super) fn label_foreground(colors: &ThemeColor) -> Hsla {
-    text_at_contrast(colors.popover, colors.foreground, LABEL_CONTRAST)
+    colors.foreground
 }
 
 /// The softest text color that still meets WCAG AA against `background`:

@@ -572,7 +572,7 @@ impl DesktopView {
             .absolute()
             .inset_0()
             .p_6()
-            .bg(colors.background.opacity(0.85))
+            .bg(modal_scrim(&colors))
             .flex()
             .items_center()
             .justify_center()

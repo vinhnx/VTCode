@@ -309,3 +309,32 @@ fn search_corpus_tracks_epochs_and_matches_direct_filtering() {
         assert_eq!(cache.visible_count, expected.len(), "query {query:?}");
     }
 }
+
+#[gpui_kit::test]
+fn config_row_menu_copies_path_and_value(cx: &mut TestAppContext) {
+    use super::super::configuration::{CopyConfigPath, CopyConfigValue};
+
+    let (window, _) = open_paged_config(cx, paged_snapshot("tools", "Tools", 3), "Tools");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.right_click("config-row-tools.row_000", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("popup-menu").role(), Some(gpui_kit::Role::Menu), "right-click opens the setting menu");
+        window.press("escape", cx);
+        window.render_frame(cx);
+        window.dispatch_action(Box::new(CopyConfigPath { path: "tools.row_000".into() }), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("tools.row_000"));
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(CopyConfigValue { path: "tools.row_000".into() }), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("0"));
+}

@@ -2,9 +2,22 @@
 
 use super::config_search::{ConfigSearchCorpus, config_search_terms, haystack_matches_terms, setting_matches_query};
 use super::*;
+use gpui_kit::Action;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{SearchableVec, SelectState};
+
+#[derive(Action, Clone, PartialEq, Debug)]
+#[action(namespace = desktop, no_json)]
+pub(super) struct CopyConfigPath {
+    pub path: gpui_kit::SharedString,
+}
+
+#[derive(Action, Clone, PartialEq, Debug)]
+#[action(namespace = desktop, no_json)]
+pub(super) struct CopyConfigValue {
+    pub path: gpui_kit::SharedString,
+}
 
 #[derive(Clone, Debug)]
 pub(super) struct ConfigOption {
@@ -782,6 +795,71 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
     groups.into_iter().collect()
 }
 
+/// Applied-state of one catalog value, driving row emphasis: overridden
+/// values read semibold, effective defaults regular, unset muted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ConfigValueState {
+    Unset,
+    Default,
+    Overridden,
+}
+
+/// Classify a setting by provenance first, documented default second. A layer
+/// origin always means explicitly applied; without one, the value is at
+/// default only when no default is documented or it matches the documented
+/// JSON (with a plain-string fallback for unquoted documented strings).
+pub(super) fn config_value_state(setting: &protocol::ConfigSetting) -> ConfigValueState {
+    if setting.value.is_null() {
+        return ConfigValueState::Unset;
+    }
+    if setting.origin.as_deref().is_some_and(|origin| !origin.trim().is_empty()) {
+        return ConfigValueState::Overridden;
+    }
+    let at_default = setting.default_value.as_deref().is_none_or(|default| {
+        serde_json::from_str::<Value>(default).is_ok_and(|parsed| parsed == setting.value)
+            || matches!(&setting.value, Value::String(current) if current == default)
+    });
+    if at_default {
+        ConfigValueState::Default
+    } else {
+        ConfigValueState::Overridden
+    }
+}
+
+/// Provenance line shared by catalog and curated rows: the dotted path plus
+/// the origin and documented-default hints, so both surfaces name the same
+/// tier markers for one setting.
+pub(super) fn config_setting_meta(setting: &protocol::ConfigSetting) -> String {
+    let mut meta = setting.path.clone();
+    if let Some(origin) = setting.origin.as_deref() {
+        meta.push_str(rust_i18n::t!(i18n::CONFIGURATION_ORIGIN_HINT, origin = origin).as_ref());
+    }
+    if let Some(default) = setting.default_value.as_deref() {
+        meta.push_str(rust_i18n::t!(i18n::CONFIGURATION_DEFAULT_HINT, value = default).as_ref());
+    }
+    meta
+}
+
+impl DesktopView {
+    /// Copy one setting's dotted path for terminal and docs use.
+    pub(super) fn copy_config_path(&self, path: &str, cx: &mut App) {
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(path.to_string()));
+    }
+
+    /// Copy one setting's effective value as shown in its row. Missing rows
+    /// write nothing rather than a stale or empty string.
+    pub(super) fn copy_config_value(&self, path: &str, cx: &mut App) {
+        let value = self
+            .cli_config_settings
+            .as_ref()
+            .and_then(|snapshot| snapshot.settings.iter().find(|setting| setting.path == path))
+            .map(|setting| value_summary(&setting.value));
+        if let Some(value) = value {
+            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(value));
+        }
+    }
+}
+
 pub(super) fn value_summary(value: &Value) -> String {
     let rendered = match value {
         Value::Null => rust_i18n::t!(i18n::CONFIGURATION_UNSET).to_string(),
@@ -804,175 +882,4 @@ pub(super) fn value_summary(value: &Value) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        ConfigTargetResolution, ConfigValueKind, config_palette_groups, config_search_terms, resolve_config_target,
-        setting_matches_query,
-    };
-    use serde_json::json;
-
-    #[test]
-    fn config_editor_parses_strings_and_typed_json_without_coercion() {
-        assert_eq!(ConfigValueKind::String.parse("a \"quoted\" value"), Ok(json!("a \"quoted\" value")));
-        assert_eq!(ConfigValueKind::Integer.parse("42"), Ok(json!(42)));
-        assert!(ConfigValueKind::Integer.parse("4.2").is_err());
-        assert_eq!(ConfigValueKind::Float.parse("4.2"), Ok(json!(4.2)));
-        assert_eq!(ConfigValueKind::Array.parse("[\"a\", 2]"), Ok(json!(["a", 2])));
-        assert!(ConfigValueKind::Array.parse("{\"a\": 2}").is_err());
-        assert_eq!(ConfigValueKind::Object.parse("{\"enabled\": true}"), Ok(json!({"enabled": true})));
-    }
-
-    #[test]
-    fn config_editor_enforces_the_shared_cli_options() {
-        let editor = super::ConfigEditor {
-            path: "provider.openai.service_tier".into(),
-            kind: ConfigValueKind::String,
-            target: super::protocol::ConfigTarget::User,
-            expected_layer_version: None,
-            options: vec!["auto".into(), "fast".into()],
-            option_select: None,
-        };
-        assert_eq!(editor.parse("fast"), Ok(json!("fast")));
-        assert!(editor.parse("ultrafast").is_err());
-    }
-
-    #[test]
-    fn unset_documented_fields_keep_the_cli_type_and_read_only_schema_is_not_editable() {
-        let optional_string = super::protocol::ConfigSetting {
-            path: "provider.openai.service_tier".into(),
-            value: json!(null),
-            origin: None,
-            label: Some("Service tier".into()),
-            type_name: Some("Option<String>".into()),
-            default_value: Some("\"auto\"".into()),
-            description: Some("Choose a service tier.".into()),
-            options: vec!["auto".into(), "fast".into()],
-            group: Some("Model & Provider".into()),
-            group_description: None,
-            editable: true,
-        };
-        assert_eq!(ConfigValueKind::for_setting(&optional_string), Some(ConfigValueKind::String));
-        let optional_enum = super::protocol::ConfigSetting {
-            type_name: Some("ReasoningEffortLevel | null".into()),
-            options: vec!["low".into(), "high".into()],
-            ..optional_string.clone()
-        };
-        assert_eq!(ConfigValueKind::for_setting(&optional_enum), Some(ConfigValueKind::String));
-        let unknown_struct = super::protocol::ConfigSetting {
-            type_name: Some("PointConfig".into()),
-            options: Vec::new(),
-            ..optional_string.clone()
-        };
-        assert_eq!(ConfigValueKind::for_setting(&unknown_struct), None);
-
-        let read_only = super::protocol::ConfigSetting {
-            path: "mcp.providers.*.command".into(),
-            editable: false,
-            ..optional_string.clone()
-        };
-        let snapshot = super::protocol::ConfigSettingsSnapshot {
-            settings: vec![optional_string, read_only],
-            target_versions: Vec::new(),
-            omitted_sensitive: 0,
-            omitted_large: 0,
-            omitted_limit: 0,
-        };
-        let groups = config_palette_groups(&snapshot);
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].0, "Model & Provider");
-        assert_eq!(groups[0].1.len(), 1);
-        assert_eq!(groups[0].1[0].label, "Service tier");
-    }
-
-    fn deep_link_fixture() -> Vec<super::protocol::ConfigSetting> {
-        vec![
-            super::protocol::ConfigSetting {
-                path: "agent.default_model".into(),
-                value: json!("model-a"),
-                origin: Some("workspace".into()),
-                label: Some("Default model".into()),
-                type_name: Some("string".into()),
-                default_value: None,
-                description: Some("Model used for new conversations.".into()),
-                options: Vec::new(),
-                group: Some("Model & Provider".into()),
-                group_description: None,
-                editable: true,
-            },
-            super::protocol::ConfigSetting {
-                path: "provider.openai.service_tier".into(),
-                value: json!("auto"),
-                origin: Some("user".into()),
-                label: Some("Service tier".into()),
-                type_name: Some("string".into()),
-                default_value: Some("\"auto\"".into()),
-                description: Some("Choose the request service tier.".into()),
-                options: vec!["auto".into(), "fast".into()],
-                group: Some("Tools".into()),
-                group_description: None,
-                editable: true,
-            },
-        ]
-    }
-
-    #[test]
-    fn config_deep_links_prefer_exact_paths_then_groups_then_search() {
-        let settings = deep_link_fixture();
-        assert_eq!(
-            resolve_config_target(&settings, "agent.default_model"),
-            ConfigTargetResolution::Setting {
-                group: "Model & Provider".into(),
-                path: "agent.default_model".into(),
-            }
-        );
-        assert_eq!(
-            resolve_config_target(&settings, "  tools  "),
-            ConfigTargetResolution::Group { name: "Tools".into() }
-        );
-        // Paths are case-sensitive; groups are not. Near-misses fall
-        // through to search instead of selecting the wrong destination.
-        assert_eq!(
-            resolve_config_target(&settings, "Agent.Default_Model"),
-            ConfigTargetResolution::Search { query: "Agent.Default_Model".into() }
-        );
-        assert_eq!(resolve_config_target(&settings, "tool"), ConfigTargetResolution::Search { query: "tool".into() });
-        assert_eq!(
-            resolve_config_target(&settings, "agent.retries"),
-            ConfigTargetResolution::Search { query: "agent.retries".into() }
-        );
-        assert_eq!(
-            resolve_config_target(&[], "agent.default_model"),
-            ConfigTargetResolution::Search { query: "agent.default_model".into() }
-        );
-    }
-
-    #[test]
-    fn config_search_requires_every_term_across_documented_fields() {
-        let settings = deep_link_fixture();
-        let model = &settings[0];
-        let tier = &settings[1];
-        assert!(setting_matches_query(model, &config_search_terms("")));
-        for (setting, term) in [
-            (model, "agent.default_model"),
-            (model, "Default model"),
-            (model, "model-a"),
-            (model, "conversations"),
-            (model, "workspace"),
-            (model, "Model & Provider"),
-            (tier, "fast"),
-            (tier, "service tier"),
-            (tier, "\"auto\""),
-        ] {
-            assert!(
-                setting_matches_query(setting, &config_search_terms(term)),
-                "{term:?} must match its documented field"
-            );
-        }
-        // Every term must match: the tier row carries both "service" and
-        // "fast", while the model row carries neither "tier" term.
-        assert!(setting_matches_query(tier, &config_search_terms("service fast")));
-        assert!(!setting_matches_query(model, &config_search_terms("model zebra")));
-        assert!(!setting_matches_query(model, &config_search_terms("service")));
-        assert!(setting_matches_query(model, &config_search_terms("MODEL")));
-    }
-}
+mod tests;

@@ -269,6 +269,9 @@ impl DesktopView {
     }
 
     pub(super) fn open_add_context(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.toggle_palette_kind(PaletteKind::AddContext, window, cx) {
+            return;
+        }
         if self.workspace.is_none() || self.attachments_picker_open || self.session_request.is_some() {
             return;
         }
@@ -627,6 +630,9 @@ impl DesktopView {
     }
 
     pub(super) fn open_model_options(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.toggle_palette_kind(PaletteKind::ModelOptions, window, cx) {
+            return;
+        }
         if !self.session_change_allowed(None) || self.attachments_picker_open {
             return;
         }
@@ -822,6 +828,9 @@ impl DesktopView {
     }
 
     pub(super) fn open_permissions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.toggle_palette_kind(PaletteKind::Permissions, window, cx) {
+            return;
+        }
         if !self.can_select_session_options() {
             return;
         }
@@ -864,6 +873,9 @@ impl DesktopView {
     }
 
     pub(super) fn open_modes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.toggle_palette_kind(PaletteKind::Modes, window, cx) {
+            return;
+        }
         if !self.can_select_session_options() {
             return;
         }

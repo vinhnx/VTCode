@@ -125,6 +125,7 @@ impl DesktopView {
                 .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
         ));
         let directory_paths = self.file_directory_paths.clone();
+        let menu_directory_paths = directory_paths.clone();
         let file_tree = self.file_tree.clone();
         let weak_view = cx.entity().downgrade();
         if self.files.is_empty() && self.files_scan_cancel.is_some() {
@@ -182,50 +183,71 @@ impl DesktopView {
                     .on_action(
                         cx.listener(|this, _: &OpenSelectedFile, window, cx| this.open_selected_file(window, cx)),
                     )
-                    .child(Tree::new(&self.file_tree, move |_index, entry, selected, _window, app| {
-                        let rel_path = entry.item().id.to_string();
-                        let is_dir = directory_paths.contains(&rel_path);
-                        let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
-                        let icon = if is_dir {
-                            if entry.is_expanded() {
-                                IconName::FolderOpen
+                    .child(
+                        Tree::new(&self.file_tree, move |_index, entry, selected, _window, app| {
+                            let rel_path = entry.item().id.to_string();
+                            let is_dir = directory_paths.contains(&rel_path);
+                            let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
+                            let icon = if is_dir {
+                                if entry.is_expanded() {
+                                    IconName::FolderOpen
+                                } else {
+                                    IconName::FolderClosed
+                                }
                             } else {
-                                IconName::FolderClosed
+                                IconName::FileText
+                            };
+                            let tree = file_tree.clone();
+                            let view = weak_view.clone();
+                            let open_path = rel_path.clone();
+                            ListItem::new(format!("workspace-file-{rel_path}"))
+                                .selected(selected)
+                                .cursor_pointer()
+                                .accessibility_label(if is_dir {
+                                    rust_i18n::t!("app.files.folder_accessibility", path = rel_path.as_str())
+                                        .to_string()
+                                } else {
+                                    rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
+                                })
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_x_2()
+                                        .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
+                                        .child(div().text_sm().child(display_name)),
+                                )
+                                .on_click(move |_, window, app| {
+                                    tree.update(app, |tree, app| tree.focus(window, app));
+                                    if is_dir {
+                                        return;
+                                    }
+                                    if let Some(view) = view.upgrade() {
+                                        view.update(app, |view, cx| {
+                                            view.open_file_preview(open_path.clone(), window, cx);
+                                        });
+                                    }
+                                })
+                        })
+                        .context_menu({
+                            let directory_paths = menu_directory_paths.clone();
+                            move |_, entry, menu, _, _| {
+                                let rel_path = entry.item().id.to_string();
+                                let menu = menu.menu(
+                                    "Copy path",
+                                    Box::new(files_panel::CopyFilePath { path: rel_path.clone().into() }),
+                                );
+                                if directory_paths.contains(&rel_path) {
+                                    menu
+                                } else {
+                                    menu.menu(
+                                        "Open preview",
+                                        Box::new(files_panel::OpenFilePath { path: rel_path.clone().into() }),
+                                    )
+                                }
                             }
-                        } else {
-                            IconName::FileText
-                        };
-                        let tree = file_tree.clone();
-                        let view = weak_view.clone();
-                        let open_path = rel_path.clone();
-                        ListItem::new(format!("workspace-file-{rel_path}"))
-                            .selected(selected)
-                            .cursor_pointer()
-                            .accessibility_label(if is_dir {
-                                rust_i18n::t!("app.files.folder_accessibility", path = rel_path.as_str()).to_string()
-                            } else {
-                                rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
-                            })
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_x_2()
-                                    .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
-                                    .child(div().text_sm().child(display_name)),
-                            )
-                            .on_click(move |_, window, app| {
-                                tree.update(app, |tree, app| tree.focus(window, app));
-                                if is_dir {
-                                    return;
-                                }
-                                if let Some(view) = view.upgrade() {
-                                    view.update(app, |view, cx| {
-                                        view.open_file_preview(open_path.clone(), window, cx);
-                                    });
-                                }
-                            })
-                    })),
+                        }),
+                    ),
             );
         }
         body.into_any_element()

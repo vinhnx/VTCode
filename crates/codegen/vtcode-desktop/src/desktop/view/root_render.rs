@@ -27,6 +27,7 @@ impl Render for DesktopView {
             .h_full()
             .flex()
             .flex_col()
+            .when(!self.open_tabs.is_empty() && !self.zen_mode, |column| column.child(self.render_thread_tabs(cx)))
             .when(!self.transcript.is_empty() && !self.zen_mode && !self.pending_blank_transition(), |column| {
                 column.child(self.render_thread_header(cx.theme()))
             })
@@ -181,7 +182,31 @@ impl Render for DesktopView {
                     .on_action(cx.listener(|view, _: &OpenModePicker, window, cx| view.open_modes(window, cx)))
             })
             .on_action(cx.listener(|view, _: &OpenAddContext, window, cx| view.open_add_context(window, cx)))
-            .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.open_settings(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.toggle_settings(window, cx)))
+            .on_action(cx.listener(|view, action: &tabs::CloseThreadTab, _, cx| view.close_tab(&action.session_id, cx)))
+            .on_action(cx.listener(|view, action: &tabs::CloseOtherThreadTabs, _, cx| {
+                view.close_other_tabs(&action.session_id, cx)
+            }))
+            .on_action(
+                cx.listener(|view, action: &tabs::CopyThreadTitle, _, cx| {
+                    view.copy_thread_title(&action.session_id, cx)
+                }),
+            )
+            .on_action(cx.listener(|view, action: &tabs::DeleteThread, window, cx| {
+                view.confirm_delete_thread(&action.session_id, window, cx)
+            }))
+            .on_action(cx.listener(|view, action: &configuration::CopyConfigPath, _, cx| {
+                view.copy_config_path(&action.path, cx)
+            }))
+            .on_action(cx.listener(|view, action: &configuration::CopyConfigValue, _, cx| {
+                view.copy_config_value(&action.path, cx)
+            }))
+            .on_action(
+                cx.listener(|view, action: &files_panel::CopyFilePath, _, cx| view.copy_file_path(&action.path, cx)),
+            )
+            .on_action(cx.listener(|view, action: &files_panel::OpenFilePath, window, cx| {
+                view.open_file_preview(action.path.to_string(), window, cx)
+            }))
             .when(self.session_change_allowed(None), |body| {
                 body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_options(window, cx)))
             })

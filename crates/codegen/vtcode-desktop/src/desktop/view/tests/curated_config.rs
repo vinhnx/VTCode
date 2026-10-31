@@ -438,6 +438,44 @@ fn sandboxing_row_writes_the_toggled_value(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn curated_value_rows_show_origin_and_default_tiers(cx: &mut TestAppContext) {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            let mut snapshot = curated_snapshot();
+            for setting in &mut snapshot.settings {
+                if setting.path == "sandbox.default_policy" {
+                    setting.default_value = Some("\"workspace_write\"".into());
+                }
+                if setting.path == "tools.web_search.provider" {
+                    setting.origin = None;
+                }
+            }
+            view.cli_config_settings = Some(snapshot);
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        let sandbox = window.find("curated-meta-sandbox").label().unwrap_or_default().to_string();
+        assert!(sandbox.contains("sandbox.default_policy"), "path stays visible: {sandbox}");
+        assert!(sandbox.contains("workspace"), "origin tier stays visible: {sandbox}");
+        assert!(sandbox.contains("workspace_write"), "default tier stays visible: {sandbox}");
+        assert_eq!(
+            window.find("curated-meta-web-search").label(),
+            Some("tools.web_search.provider"),
+            "no provenance or default collapses to the bare path"
+        );
+        assert!(window.try_find("curated-meta-sandboxing").is_some(), "toggle rows carry tiers too");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn open_file_is_disabled_while_a_write_is_pending(cx: &mut TestAppContext) {
     let workspace = tempfile::tempdir().expect("workspace");
     let (window, view) = open_desktop(cx);

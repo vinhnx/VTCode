@@ -407,6 +407,61 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn inactive_system_swatch_carries_no_selection_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "ciapre");
+        assert_eq!(window.find("theme-system-light").label(), Some("System Light"));
+        assert_eq!(window.find("theme-system-light").checked(), Some(false));
+        let active_label = window.find("theme-ciapre").label().unwrap_or_default().to_string();
+        assert!(active_label.ends_with(" (active)"), "unexpected active label: {active_label}");
+        assert_eq!(window.find("theme-ciapre").checked(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        window.click("separate-theme-profiles", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("theme-catppuccin-latte-profile").label(), Some("Light"));
+        assert_eq!(window.find("theme-ciapre-profile").label(), Some("Dark"));
+        assert_eq!(window.find("theme-github-dark-profile").label(), None);
+        let strip = window.find("theme-list").bounds();
+        let swatch = window.find("theme-ciapre").bounds();
+        assert!(
+            swatch.bottom() <= strip.bottom(),
+            "caption lane must fit inside the strip: swatch={swatch:?} strip={strip:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn typography_rows_keep_a_compact_vertical_rhythm(cx: &mut TestAppContext) {
+    let (window, _) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        let ui = window.find("choose-ui-font").bounds();
+        let code = window.find("choose-code-font").bounds();
+        let gap = code.top() - ui.bottom();
+        assert!(gap < px(36.), "typography rows must sit close together: {gap:?}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 760., 700.);
     cx.update(|cx| cx.set_reduce_motion(true));

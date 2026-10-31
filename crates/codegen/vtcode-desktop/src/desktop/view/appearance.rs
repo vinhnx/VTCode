@@ -155,9 +155,9 @@ impl DesktopView {
             .and_then(|name| name.to_str())
             .unwrap_or("No workspace");
         let agent = if self.running {
-            ("Agent: running", colors.primary)
+            ("Agent: Running", colors.primary)
         } else {
-            ("Agent: idle", colors.muted_foreground)
+            ("Agent: Idle", colors.muted_foreground)
         };
         let configuration = self.configuration.as_ref();
         let provider_model = configuration
@@ -392,7 +392,7 @@ impl DesktopView {
                             })
                             .ghost()
                             .toggled(selected)
-                            .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                            .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
                             .on_click(cx.listener(move |view, _, _, cx| view.set_reduced_motion(preference, cx)))
                     })),
             )
@@ -425,7 +425,7 @@ impl DesktopView {
             .items_center()
             .justify_between()
             .gap_3()
-            .py_2()
+            .py_1()
             .child(
                 div()
                     .flex_1()
@@ -522,7 +522,19 @@ impl DesktopView {
         } else {
             ""
         };
-        let selected = !badge.is_empty();
+        // Only the active theme gets the filled highlight; profile themes keep a
+        // semibold label so a light/dark pair never reads as doubly selected.
+        // Profile assignments also get a visible caption: semibold alone is too
+        // quiet to explain which swatch a light/dark profile points at.
+        let badged = !badge.is_empty();
+        let mut caption = Vec::new();
+        if light_profile {
+            caption.push(rust_i18n::t!("app.settings.appearance.light").to_string());
+        }
+        if dark_profile {
+            caption.push(rust_i18n::t!("app.settings.appearance.dark").to_string());
+        }
+        let profile_caption = (!caption.is_empty()).then(|| caption.join(" · "));
         let id = format!("theme-{entry_id}");
         let swatch = div()
             .w_full()
@@ -534,6 +546,8 @@ impl DesktopView {
                     .h(px(40.))
                     .rounded_md()
                     .bg(background)
+                    .border_1()
+                    .border_color(themes::hairline(background, cx.theme().colors.foreground))
                     .p_1()
                     .flex()
                     .flex_col()
@@ -546,18 +560,30 @@ impl DesktopView {
                 div()
                     .text_xs()
                     .truncate()
-                    .when(selected, |label| label.font_semibold())
+                    .when(badged, |label| label.font_semibold())
                     .child(label.clone()),
+            )
+            .child(
+                div()
+                    .id(format!("theme-{entry_id}-profile"))
+                    .test_support()
+                    .h(px(20.))
+                    .text_xs()
+                    .truncate()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .when_some(profile_caption, |lane, caption| {
+                        lane.role(gpui_kit::Role::Label).aria_label(caption.clone()).child(caption)
+                    }),
             );
         desktop_button(id)
-            .accessibility_label(if selected { format!("{label} ({badge})") } else { label })
+            .accessibility_label(if badged { format!("{label} ({badge})") } else { label })
             .toggled(active)
             .ghost()
             .w(px(104.))
             .flex_shrink_0()
-            .h(px(80.))
+            .h(px(112.))
             .p_2()
-            .when(selected, |button| button.bg(cx.theme().colors.popover))
+            .when(active, |button| button.bg(cx.theme().colors.popover))
             .rounded_lg()
             .on_click(cx.listener(move |this, _, window, cx| {
                 let theme_id = entry.id();
@@ -649,8 +675,10 @@ impl DesktopView {
                                         )
                                         .toggled(selected)
                                         .ghost()
+                                        // Popover, not secondary: the sheet sits on the shared
+                                        // surface fill, which would swallow a secondary pill.
                                         .when(selected, |button| {
-                                            button.bg(colors.secondary).text_color(colors.foreground)
+                                            button.bg(colors.popover).text_color(colors.foreground)
                                         })
                                         .on_click(cx.listener(move |view, _, window, cx| {
                                             if view.theme_mode != mode {
@@ -702,7 +730,7 @@ impl DesktopView {
                             .w_full()
                             .min_w_0()
                             .flex_shrink_0()
-                            .h(px(96.))
+                            .h(px(128.))
                             .relative()
                             .child(
                                 div()
@@ -726,11 +754,8 @@ impl DesktopView {
                 typography.clone(),
                 settings_group_box(typography, colors)
                     .child(self.render_font_family(FontTarget::Ui, cx))
-                    .child(row_divider(colors))
                     .child(self.render_font_family(FontTarget::Code, cx))
-                    .child(row_divider(colors))
                     .child(self.render_font_size(false, cx))
-                    .child(row_divider(colors))
                     .child(self.render_font_size(true, cx))
                     .child(
                         div()

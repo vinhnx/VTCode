@@ -423,6 +423,51 @@ fn sync_cli_theme_maps_system_sentinels_to_builtin_defaults(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn file_tree_menu_copies_path_and_opens_preview(cx: &mut TestAppContext) {
+    use super::super::files_panel::{CopyFilePath, OpenFilePath};
+
+    let workspace = tempfile::TempDir::new().expect("temp workspace");
+    std::fs::write(workspace.path().join("README.md"), "# Notes").expect("write file");
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.refresh_files(cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("inspector-tabs").click(1usize, cx);
+        window.render_frame(cx);
+        window.right_click("workspace-file-README.md", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("popup-menu").role(), Some(gpui_kit::Role::Menu), "right-click opens the file menu");
+        window.press("escape", cx);
+        window.render_frame(cx);
+        window.dispatch_action(Box::new(CopyFilePath { path: "README.md".into() }), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let expected = workspace.path().join("README.md").display().to_string();
+    assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(expected.as_str()));
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(OpenFilePath { path: "README.md".into() }), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).file_preview.as_ref().unwrap().text, "# Notes");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temp workspace");
     std::fs::write(workspace.path().join("README.md"), "# Notes\n\nhello from the workspace").expect("write file");
