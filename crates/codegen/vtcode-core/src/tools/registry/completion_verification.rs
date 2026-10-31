@@ -20,6 +20,13 @@ struct VerifierEvidence {
     exit_code: Option<i64>,
 }
 
+impl VerifierEvidence {
+    /// Terminal exit-0 verdict recorded in the given mutation generation.
+    fn succeeded_in(&self, generation: u64) -> bool {
+        self.generation == generation && self.exit_code == Some(0)
+    }
+}
+
 struct RestoredToolCall<'a> {
     name: &'a str,
     args: Value,
@@ -149,12 +156,18 @@ impl CompletionVerification {
             return None;
         }
 
+        // Required identities cost a JSON build plus shell parsing each;
+        // compute once per pass instead of once per evidence entry below.
+        let required_identities: Vec<String> = self
+            .required_commands
+            .iter()
+            .map(|required| executed_command_identity(required))
+            .collect();
         let has_current_attempt = self.evidence.iter().any(|entry| {
             entry.generation == self.generation
-                && self.required_commands.iter().any(|required| {
-                    let required = executed_command_identity(required);
-                    required == command
-                        && command_covers_required(&entry.command, &required)
+                && required_identities.iter().any(|required| {
+                    *required == command
+                        && command_covers_required(&entry.command, required)
                         && (entry.attempt_active || entry.session_id.is_some() || entry.exit_code.is_some())
                 })
         });
@@ -175,7 +188,7 @@ impl CompletionVerification {
             .iter()
             .rev()
             .find(|entry| command_covers_required(&entry.command, &command))
-            .is_some_and(|entry| entry.generation == self.generation && entry.exit_code == Some(0))
+            .is_some_and(|entry| entry.succeeded_in(self.generation))
     }
 
     fn requires_command(&self, command: &str) -> bool {
@@ -185,6 +198,15 @@ impl CompletionVerification {
             .any(|required| command_covers_required(&command, &executed_command_identity(required)))
     }
 
+    /// True when every check obligation is satisfied in the current generation.
+    fn completion_checks_satisfied(&self) -> bool {
+        if self.required_commands.is_empty() {
+            self.evidence.back().is_some_and(|entry| entry.succeeded_in(self.generation))
+        } else {
+            self.required_commands.iter().all(|command| self.command_passed(command))
+        }
+    }
+
     fn pending(&self) -> bool {
         if !self.pending_mutation_sessions.is_empty() {
             return true;
@@ -192,13 +214,7 @@ impl CompletionVerification {
         if self.generation == 0 {
             return false;
         }
-        if !self.required_commands.is_empty() {
-            return self.required_commands.iter().any(|command| !self.command_passed(command));
-        }
-        !self
-            .evidence
-            .back()
-            .is_some_and(|entry| entry.generation == self.generation && entry.exit_code == Some(0))
+        !self.completion_checks_satisfied()
     }
 }
 
@@ -256,14 +272,7 @@ impl ToolRegistry {
     /// True when current-generation evidence satisfies every local obligation.
     pub fn has_current_completion_verification(&self) -> bool {
         let state = self.harness_context.completion_verification.lock();
-        let checks_passed = if state.required_commands.is_empty() {
-            state
-                .evidence
-                .back()
-                .is_some_and(|entry| entry.generation == state.generation && entry.exit_code == Some(0))
-        } else {
-            state.required_commands.iter().all(|command| state.command_passed(command))
-        };
+        let checks_passed = state.completion_checks_satisfied();
         !state.pending()
             && checks_passed
             && !state
