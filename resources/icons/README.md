@@ -6,13 +6,13 @@ larger files are for app bundles and in-app display only.
 
 | File                          | Size          | Use                                                                                      |
 | ----------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
-| `vtcode-app-light-128.png`    | 128x128, 1.2K | iTerm2 HiDPI profile artwork (light mode). Embedded by `vtcode-core/build.rs`.           |
-| `vtcode-app-dark-128.png`     | 128x128, 1.4K | iTerm2 HiDPI profile artwork (dark mode). Embedded by `vtcode-core/build.rs`.            |
-| `vtcode-app-dynamic-128.png`  | 128x128, 1.6K | Mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`).  |
-| `vtcode-app-light-512.png`    | 512x512, 2.3K | Desktop Dock artwork (light mode) and Appearance picker preview.                         |
-| `vtcode-app-dark-512.png`     | 512x512, 3.1K | Desktop Dock artwork (dark mode) and Appearance picker preview.                          |
-| `vtcode-app-dynamic-512.png`  | 512x512, 4.6K | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art.               |
-| `vtcode-app-dynamic.icns`     | 171K          | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26).    |
+| `vtcode-app-light-128.png`    | 128x128, 8.5K | iTerm2 HiDPI profile artwork (light mode). Embedded by `vtcode-core/build.rs`.           |
+| `vtcode-app-dark-128.png`     | 128x128, 8.3K | iTerm2 HiDPI profile artwork (dark mode). Embedded by `vtcode-core/build.rs`.            |
+| `vtcode-app-dynamic-128.png`  | 128x128, 8.6K | Mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`).  |
+| `vtcode-app-light-512.png`    | 512x512, 26K  | Desktop Dock artwork (light mode) and Appearance picker preview.                         |
+| `vtcode-app-dark-512.png`     | 512x512, 29K  | Desktop Dock artwork (dark mode) and Appearance picker preview.                          |
+| `vtcode-app-dynamic-512.png`  | 512x512, 30K  | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art.               |
+| `vtcode-app-dynamic.icns`     | 216K          | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26).    |
 | `AppIcon.icon/`               | 35K           | Layered Liquid Glass source: `icon.json` + `Assets/Foreground.png` (1024 V glyph mask).  |
 | `vtcode.svg`                  | vector, 245B  | Scalable source for docs.                                                                |
 | `vtcode-mark.svg`             | vector, 195B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
@@ -42,8 +42,10 @@ context cannot switch (bundle icon, manual setups, picker preview).
 `AppIcon.icon/` is a hand-authored Icon Composer bundle: sand/Charcoal `automatic-gradient` background
 fills (light/dark) plus one glass `V` glyph group with charcoal/cream fills and `tinted → automatic`
 specializations, so Tahoe composes Default/Dark/Clear/Tinted at display time. The glyph mask was
-extracted from the 1024px masters (geometry verified identical across variants); the OS applies its
-own squircle mask, so all art stays full-bleed opaque with no baked rounding or transparency.
+extracted from the 1024px masters (geometry verified identical across variants). Only this layered
+path is system-shaped: macOS clips neither `.icns` art nor `setApplicationIconImage` images, so the
+flat `vtcode-app-*` PNGs and the `.icns` fallback carry the rounded squircle with transparency baked
+in (full-bleed opaque squares render as squares in the Dock and Finder).
 
 Build and validate (requires Xcode CLT or full Xcode):
 
@@ -58,22 +60,25 @@ xcrun --sdk macosx assetutil --info /tmp/Assets.car  # Aqua + DarkAqua + Tintabl
 committed. The flattened `AppIcon.icns` that `actool` also emits carries only small slots, so it is
 not used as the fallback.
 
-## Regenerating the fallback icns
+## Regenerating the flat art and fallback icns
 
-`vtcode-app-dynamic.icns` is prebuilt from the 1024px Dynamic source art. To rebuild after an artwork update:
+After an artwork update, bake the squircle mask into all six `vtcode-app-*.png` files and stage the
+Dynamic iconset with `scripts/make-macos-app-icons.py` (requires Pillow), then build the fallback:
 
 ```bash
-mkdir VTCode.iconset
-for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" VTCode-Dynamic-1024.png --out VTCode.iconset/icon_${size}x${size}.png
-  sips -z "$((size * 2))" "$((size * 2))" VTCode-Dynamic-1024.png --out VTCode.iconset/icon_${size}x${size}@2x.png
-done
-iconutil -c icns VTCode.iconset -o vtcode-app-dynamic.icns
+python3 scripts/make-macos-app-icons.py \
+  --light /path/to/flat-light-1024.png \
+  --dark /path/to/flat-dark-1024.png \
+  --dynamic /path/to/flat-dynamic-1024.png
+iconutil -c icns /tmp/VTCode.iconset -o resources/icons/vtcode-app-dynamic.icns
+iconutil -c iconset resources/icons/vtcode-app-dynamic.icns -o /tmp/check.iconset
 ```
 
-`iconutil`'s icns-write path is broken on some hosts (macOS 27 rejects even previously working iconsets while
-the read path works); generate on a host where it succeeds and verify with
-`iconutil -c iconset vtcode-app-dynamic.icns -o /tmp/check.iconset`.
+Inputs may be any square PNG (flat or already masked); the script upscales to a 1024 working size,
+applies an antialiased superellipse mask, and downscales to the shipped sizes. The desktop
+`embedded_artwork_carries_macos_rounded_shape` test rejects full-bleed squares. `iconutil`'s icns-write
+path is broken on some hosts (older macOS 27 builds reject even previously working iconsets while the
+read path works); generate on a host where it succeeds (verified on macOS 27.0.1).
 
 ## Runtime behavior
 
