@@ -8,9 +8,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 use chrono::Timelike;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{
-    Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, Selectable, StyledExt, TextViewStyle,
-};
+use gpui_kit::base::{Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, StyledExt, TextViewStyle};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{

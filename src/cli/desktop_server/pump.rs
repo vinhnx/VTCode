@@ -269,11 +269,14 @@ pub(super) async fn publish_interaction(
             choices: step
                 .choices
                 .iter()
-                .map(|choice| InteractionChoice {
-                    id: choice.id.clone(),
-                    label: choice.label.clone(),
-                    description: choice.description.clone(),
-                    recommended: choice.label.to_ascii_lowercase().contains("recommended"),
+                .map(|choice| {
+                    let (label, recommended) = split_recommended_marker(&choice.label);
+                    InteractionChoice {
+                        id: choice.id.clone(),
+                        label,
+                        description: choice.description.clone(),
+                        recommended,
+                    }
                 })
                 .collect(),
             selected_choice_id: step.selected_choice_id.clone(),
@@ -326,4 +329,56 @@ pub(super) async fn respond_to_interaction(
     }
     let input = runtime.input.clone();
     dispatch_interaction_response(&mut state, &response, &choice_ids, &answer_texts, &input)
+}
+
+/// Split a service choice label into display text plus the recommended flag.
+///
+/// TUI rows embed the marker in the title (`Opt (Recommended)`); the desktop
+/// client renders its own localized marker from the flag, so the embedded
+/// copy is stripped to avoid showing it twice. Matching is
+/// case-insensitive, but only an exact trailing marker is stripped — a label
+/// that merely mentions the word keeps its full text.
+fn split_recommended_marker(label: &str) -> (String, bool) {
+    const MARKER: &str = " (recommended)";
+    let lower = label.to_ascii_lowercase();
+    let recommended = lower.contains("recommended");
+    if lower.ends_with(MARKER) {
+        // `to_ascii_lowercase` preserves byte length and the cut point
+        // precedes ASCII bytes, so it is always a char boundary.
+        let mut display = label.to_string();
+        display.truncate(label.len() - MARKER.len());
+        (display, true)
+    } else {
+        (label.to_string(), recommended)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_recommended_marker;
+
+    #[test]
+    fn recommended_marker_splits_suffix_and_flag() {
+        assert_eq!(
+            split_recommended_marker("Dependency-first slices (Recommended)"),
+            ("Dependency-first slices".to_string(), true)
+        );
+        assert_eq!(split_recommended_marker("1. Guided setup (recommended)"), ("1. Guided setup".to_string(), true));
+        assert_eq!(split_recommended_marker("Scope (RECOMMENDED)"), ("Scope".to_string(), true));
+    }
+
+    #[test]
+    fn recommended_marker_keeps_unmarked_and_mid_string_labels() {
+        assert_eq!(split_recommended_marker("User-flow slices"), ("User-flow slices".to_string(), false));
+        assert_eq!(
+            split_recommended_marker("Recommended actions overview"),
+            ("Recommended actions overview".to_string(), true)
+        );
+        assert_eq!(split_recommended_marker(""), ("".to_string(), false));
+    }
+
+    #[test]
+    fn recommended_marker_strip_is_char_boundary_safe() {
+        assert_eq!(split_recommended_marker("Tùy chọn phạm vi (Recommended)"), ("Tùy chọn phạm vi".to_string(), true));
+    }
 }

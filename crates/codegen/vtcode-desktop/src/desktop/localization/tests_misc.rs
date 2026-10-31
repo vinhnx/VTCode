@@ -59,7 +59,7 @@ fn interaction_copy_is_localized_for_every_language() {
             "app.interaction.next_question",
             "app.interaction.your_answer",
             "app.interaction.recommended",
-            "app.interaction.selected_label",
+            "app.interaction.choice_hint",
         ],
         &[],
     );
@@ -68,9 +68,6 @@ fn interaction_copy_is_localized_for_every_language() {
         let recommended =
             rust_i18n::t!("app.interaction.recommended", locale = locale, label = "demo-label").to_string();
         assert!(recommended.contains("demo-label"), "{locale}: {recommended}");
-        let selected =
-            rust_i18n::t!("app.interaction.selected_label", locale = locale, label = "demo-label").to_string();
-        assert!(selected.contains("demo-label"), "{locale}: {selected}");
         let step = rust_i18n::t!("app.interaction.step_fallback", locale = locale, n = 7).to_string();
         assert!(step.contains('7'), "{locale}: {step}");
         let counter = rust_i18n::t!("app.interaction.step_counter", locale = locale, n = 2, total = 9).to_string();
