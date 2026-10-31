@@ -460,29 +460,37 @@ impl DesktopView {
         )
     }
 
-    pub(super) fn render_toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let toolbar_surface =
             themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail;
+        // Fullscreen hides the traffic lights, so the leading cluster hugs the
+        // window edge; windowed mode keeps the 80px light clearance. The kit
+        // adds its own fullscreen pl_3 on the inner bar, which stacks here.
+        let leading_inset = |bar: TitleBar| {
+            if window.is_fullscreen() { bar.pl_3() } else { bar }
+        };
         // Both modes share one trailing toolbar container, so the zen toggle
         // keeps the same slot while the workspace zooms; it only fades and
         // repaints. The bar persists across modes, so its fade id is keyed by
         // mode: each toggle crossfades the whole bar between states.
         if self.zen_mode {
-            return TitleBar::new()
-                .w_full()
-                .h(px(TOOLBAR_HEIGHT))
-                .pr_3()
-                .border_b_0()
-                .bg(toolbar_surface)
-                .child(div().flex_1())
-                .child(self.render_header_actions(cx))
-                .with_animation(
-                    gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
-                    zen_fade_animation(cx.theme()),
-                    |el, delta| el.opacity(delta),
-                )
-                .into_any_element();
+            return leading_inset(
+                TitleBar::new()
+                    .w_full()
+                    .h(px(TOOLBAR_HEIGHT))
+                    .pr_3()
+                    .border_b_0()
+                    .bg(toolbar_surface)
+                    .child(div().flex_1())
+                    .child(self.render_header_actions(cx)),
+            )
+            .with_animation(
+                gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
+                zen_fade_animation(cx.theme()),
+                |el, delta| el.opacity(delta),
+            )
+            .into_any_element();
         }
         let navigation_visible = self.preferences.navigation_visible();
         let navigation_label = if navigation_visible {
@@ -506,88 +514,92 @@ impl DesktopView {
             .map_or_else(|| rust_i18n::t!("app.navigation.workspace_fallback").to_string(), str::to_string);
         // The leading cluster shares the trailing toolbar's compact size, so the
         // whole title bar is one band: same frame, same center line.
-        TitleBar::new()
-            .w_full()
-            .h(px(TOOLBAR_HEIGHT))
-            .pr_3()
-            .border_b_0()
-            .bg(toolbar_surface)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        desktop_button("navigate-back")
-                            .accessibility_label(if pending_back {
-                                rust_i18n::t!("app.navigation.back_navigating").to_string()
-                            } else {
-                                rust_i18n::t!("app.navigation.back").to_string()
-                            })
-                            .icon(IconName::ArrowLeft)
-                            .ghost()
-                            .small()
-                            .loading(pending_back)
-                            .tooltip_with_action(
-                                rust_i18n::t!("app.navigation.back").to_string(),
-                                &NavigateBack,
-                                Some(key_context::DESKTOP),
-                            )
-                            .desktop_disabled(
-                                !self.route_back_available() && !self.can_navigate_back() && !pending_back,
-                            )
-                            .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
-                    )
-                    .child(
-                        desktop_button("navigate-forward")
-                            .accessibility_label(if pending_forward {
-                                rust_i18n::t!("app.navigation.forward_navigating").to_string()
-                            } else {
-                                rust_i18n::t!("app.navigation.forward").to_string()
-                            })
-                            .icon(IconName::ArrowRight)
-                            .ghost()
-                            .small()
-                            .loading(pending_forward)
-                            .tooltip_with_action(
-                                rust_i18n::t!("app.navigation.forward").to_string(),
-                                &NavigateForward,
-                                Some(key_context::DESKTOP),
-                            )
-                            .desktop_disabled(
-                                !self.route_history.can_forward() && !self.can_navigate_forward() && !pending_forward,
-                            )
-                            .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
-                    )
-                    .child(
-                        desktop_button("toggle-sidebar")
-                            .accessibility_label(navigation_label.as_str())
-                            .toggled(navigation_visible && self.sidebar_open)
-                            .icon(navigation_icon)
-                            .ghost()
-                            .small()
-                            .tooltip_with_action(navigation_label, &ToggleSidebar, Some(key_context::DESKTOP))
-                            .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
-                    )
-                    .child(div().text_sm().font_semibold().child(app::NAME))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .text_color(theme.colors.foreground)
-                            .child(format!("/ {workspace}")),
-                    ),
-            )
-            .child(self.render_header_actions(cx))
-            .with_animation(
-                gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
-                zen_fade_animation(cx.theme()),
-                |el, delta| el.opacity(delta),
-            )
-            .into_any_element()
+        leading_inset(
+            TitleBar::new()
+                .w_full()
+                .h(px(TOOLBAR_HEIGHT))
+                .pr_3()
+                .border_b_0()
+                .bg(toolbar_surface)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap_3()
+                        .child(
+                            desktop_button("navigate-back")
+                                .accessibility_label(if pending_back {
+                                    rust_i18n::t!("app.navigation.back_navigating").to_string()
+                                } else {
+                                    rust_i18n::t!("app.navigation.back").to_string()
+                                })
+                                .icon(IconName::ArrowLeft)
+                                .ghost()
+                                .small()
+                                .loading(pending_back)
+                                .tooltip_with_action(
+                                    rust_i18n::t!("app.navigation.back").to_string(),
+                                    &NavigateBack,
+                                    Some(key_context::DESKTOP),
+                                )
+                                .desktop_disabled(
+                                    !self.route_back_available() && !self.can_navigate_back() && !pending_back,
+                                )
+                                .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
+                        )
+                        .child(
+                            desktop_button("navigate-forward")
+                                .accessibility_label(if pending_forward {
+                                    rust_i18n::t!("app.navigation.forward_navigating").to_string()
+                                } else {
+                                    rust_i18n::t!("app.navigation.forward").to_string()
+                                })
+                                .icon(IconName::ArrowRight)
+                                .ghost()
+                                .small()
+                                .loading(pending_forward)
+                                .tooltip_with_action(
+                                    rust_i18n::t!("app.navigation.forward").to_string(),
+                                    &NavigateForward,
+                                    Some(key_context::DESKTOP),
+                                )
+                                .desktop_disabled(
+                                    !self.route_history.can_forward()
+                                        && !self.can_navigate_forward()
+                                        && !pending_forward,
+                                )
+                                .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
+                        )
+                        .child(
+                            desktop_button("toggle-sidebar")
+                                .accessibility_label(navigation_label.as_str())
+                                .toggled(navigation_visible && self.sidebar_open)
+                                .icon(navigation_icon)
+                                .ghost()
+                                .small()
+                                .tooltip_with_action(navigation_label, &ToggleSidebar, Some(key_context::DESKTOP))
+                                .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
+                        )
+                        .child(div().text_sm().font_semibold().child(app::NAME))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .text_sm()
+                                .text_color(theme.colors.foreground)
+                                .child(format!("/ {workspace}")),
+                        ),
+                )
+                .child(self.render_header_actions(cx)),
+        )
+        .with_animation(
+            gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
+            zen_fade_animation(cx.theme()),
+            |el, delta| el.opacity(delta),
+        )
+        .into_any_element()
     }
 
     /// Trailing header actions shared by both modes. The toolbar container is

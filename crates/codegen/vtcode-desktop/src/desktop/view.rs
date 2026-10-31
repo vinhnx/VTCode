@@ -53,10 +53,11 @@ use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle,
-    Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent,
-    NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType,
-    Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, point, px, size,
+    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
+    FocusHandle, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent,
+    MouseUpEvent, NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription,
+    SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, img, point, px,
+    size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -86,14 +87,17 @@ use full_access_confirm::FullAccessConfirmState;
 use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
 use overlays::{Route, RouteHistory};
 
+mod about;
 mod app_icon_settings;
 mod appearance;
+mod attachment_picker;
 mod backend_events;
 mod bootstrap;
 mod browser;
 mod chrome;
 mod components;
 mod composer_actions;
+mod composer_attachments;
 mod composer_controls;
 mod composer_render;
 mod config_search;
@@ -329,7 +333,9 @@ actions!(
         QuitApplication,
         HideApplication,
         HideOtherApplications,
-        ShowAllApplications
+        ShowAllApplications,
+        AboutApplication,
+        OpenHelp
     ]
 );
 
@@ -420,6 +426,8 @@ struct DesktopView {
     pending_permission_choice: Option<protocol::PermissionMode>,
     full_access_confirm: Option<FullAccessConfirmState>,
     full_access_focus: FocusHandle,
+    about_open: bool,
+    about_focus: FocusHandle,
     service_info: Option<protocol::InitializeResult>,
     interaction: Option<InteractionRequest>,
     interaction_focus: FocusHandle,
@@ -539,7 +547,14 @@ struct DesktopView {
     secret_save_pending: bool,
     models: Vec<protocol::ModelInfo>,
     attachments: Vec<protocol::TurnAttachment>,
+    /// Decoded-ready thumbnails for image attachments, keyed by attach path.
+    attachment_thumbnails: HashMap<String, Arc<gpui_kit::Image>>,
     attachments_picker_open: bool,
+    attachment_picker: Option<attachment_picker::AttachmentPickerState>,
+    attachment_picker_focus: FocusHandle,
+    /// Mirrors `window.is_fullscreen()` for the native menu labels.
+    menus_show_exit_full_screen: bool,
+    picker_thumbnail_task: Option<Task<()>>,
     pending_submission: Option<SubmissionDraft>,
     pending_first_submission: bool,
     first_submission: Option<SubmissionDraft>,

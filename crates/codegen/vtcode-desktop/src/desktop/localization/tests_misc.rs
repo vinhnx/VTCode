@@ -180,6 +180,7 @@ fn files_errors_copy_is_localized_for_every_language() {
             "app.files.no_parent",
             "app.files.open_failed",
             "app.files.attachments_workspace",
+            "app.files.drop_to_attach",
             "app.files.picker_disconnected",
             "app.files.picker_failed",
             "app.errors.preferences_unavailable",
@@ -321,6 +322,7 @@ fn permissions_copy_is_localized_for_every_language() {
 fn menus_copy_is_localized_for_every_language() {
     assert_localized(
         &[
+            "app.menus.about",
             "app.menus.settings_menu",
             "app.menus.services",
             "app.menus.hide_app",
@@ -348,11 +350,14 @@ fn menus_copy_is_localized_for_every_language() {
             "app.menus.toggle_sidebar",
             "app.menus.cancel_run",
             "app.menus.enter_full_screen",
+            "app.menus.exit_full_screen",
             "app.menus.window_menu",
             "app.menus.show_app",
             "app.menus.minimize",
             "app.menus.zoom",
             "app.menus.close_window",
+            "app.menus.help_menu",
+            "app.menus.help_website",
         ],
         &[
             ("fr", "app.menus.services"),
@@ -364,8 +369,29 @@ fn menus_copy_is_localized_for_every_language() {
             ("it", "app.menus.zoom"),
             ("pt-BR", "app.menus.zoom"),
             ("nl", "app.menus.zoom"),
+            ("nl", "app.menus.help_menu"),
+            ("nl", "app.menus.help_website"),
         ],
     );
+}
+
+#[test]
+fn about_copy_is_localized_for_every_language() {
+    assert_localized(
+        &["app.about.version", "app.about.acknowledgments", "app.about.done"],
+        &[
+            // "Version" is the same word in these languages.
+            ("fr", "app.about.version"),
+            ("de", "app.about.version"),
+            ("sv", "app.about.version"),
+        ],
+    );
+    // The interpolated version number must survive translation.
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        let version = rust_i18n::t!("app.about.version", locale = locale, version = "1.2.3").to_string();
+        assert!(version.contains("1.2.3"), "{locale}: {version}");
+    }
 }
 
 #[test]

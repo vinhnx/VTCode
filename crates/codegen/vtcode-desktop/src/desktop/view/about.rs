@@ -1,0 +1,144 @@
+//! About dialog: branded app identity, version, and pointers into the project.
+//!
+//! Replaces the native About panel so the dialog shares the app's theme,
+//! typography, and overlay behavior (Escape dismissal, focus restore).
+use super::bootstrap::HELP_URL;
+use super::*;
+
+impl DesktopView {
+    pub(super) fn open_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.about_open = true;
+        self.about_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    pub(super) fn close_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.about_open {
+            return;
+        }
+        self.about_open = false;
+        self.focus_composer(window, cx);
+        cx.notify();
+    }
+
+    /// Third-party notices live in Settings → VT Code; route there and close.
+    fn open_acknowledgments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.about_open = false;
+        self.settings_tab = settings::SettingsTab::VtCode;
+        self.open_settings(window, cx);
+        cx.notify();
+    }
+
+    /// Centered brand card over the shared modal scrim: logo tile, name,
+    /// version chip, then project pointers. Escape dismisses (topmost layer).
+    pub(super) fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let hairline = || div().h(px(1.)).w_full().bg(themes::hairline(colors.popover, colors.foreground));
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_4()
+            .bg(modal_scrim(&colors))
+            .child(
+                div()
+                    .id("about-dialog")
+                    .test_support()
+                    .track_focus(&self.about_focus)
+                    .role(gpui_kit::Role::Dialog)
+                    .accessibility_id("about-dialog")
+                    .aria_label(rust_i18n::t!("app.menus.about").to_string())
+                    .w(px(420.))
+                    .max_w_full()
+                    .max_h_full()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_3()
+                    .rounded_md()
+                    .bg(colors.popover)
+                    .border_1()
+                    .border_color(colors.border)
+                    .shadow_md()
+                    .px_6()
+                    .pt_6()
+                    .pb_5()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(88.))
+                            .rounded_lg()
+                            .bg(colors.primary.opacity(0.08))
+                            .child(brand_logo(56.)),
+                    )
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_semibold()
+                            .text_color(colors.foreground)
+                            .child(app::NAME.to_string()),
+                    )
+                    .child(
+                        div()
+                            .id("about-version")
+                            .test_support()
+                            .rounded_full()
+                            .border_1()
+                            .border_color(colors.border)
+                            .px_2()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child(rust_i18n::t!("app.about.version", version = env!("CARGO_PKG_VERSION")).to_string()),
+                    )
+                    // HIG about windows carry the copyright line, kept small
+                    // and muted below the version.
+                    .child(
+                        div()
+                            .id("about-copyright")
+                            .test_support()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child("Copyright 2025 Vinh Nguyen"),
+                    )
+                    .child(hairline())
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .gap_2()
+                            .w_full()
+                            .child(
+                                desktop_button("about-acknowledgments")
+                                    .label(rust_i18n::t!("app.about.acknowledgments").to_string())
+                                    .ghost()
+                                    .on_click(cx.listener(|view, _, window, cx| {
+                                        view.open_acknowledgments(window, cx);
+                                    })),
+                            )
+                            .child(
+                                desktop_button("about-website")
+                                    .label(rust_i18n::t!("app.menus.help_website").to_string())
+                                    .ghost()
+                                    .on_click(cx.listener(|view, _, window, cx| {
+                                        view.close_about(window, cx);
+                                        cx.open_url(HELP_URL);
+                                    })),
+                            )
+                            .child(
+                                desktop_button("about-done")
+                                    .label(rust_i18n::t!("app.about.done").to_string())
+                                    .primary()
+                                    .on_click(cx.listener(|view, _, window, cx| {
+                                        view.close_about(window, cx);
+                                    })),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+}

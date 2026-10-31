@@ -125,7 +125,9 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Launch maximized | The main window opens zoomed (full-size) by default; unzooming persists, so the next launch restores the saved zoomed or windowed state. |
 | Connect to a workspace | Initialization validates the negotiated protocol before configuration and session discovery. Session commands and Send wait for this handshake; incompatible helpers disconnect with the initialization error preserved. |
 | Recover a disconnected service | Startup failures and unexpected local-service exits announce an accessible error and direct you to Settings → VT Code → Reload CLI settings. Pending interactions are dismissed when the service exits, so they cannot block recovery or carry answers into a later question. Repair provider credentials in Terminal when requested. If delivery was uncertain, restore or dismiss the retained message first; it is never resent automatically. |
-| Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
+| Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. The application menu adds About VT Code — a themed in-app dialog with the app icon, version chip, an Acknowledgments shortcut into Settings → VT Code, and a repository link — and Settings; the View menu adds Toggle Sidebar and Enter Full Screen (⌃⌘F) — the item reads Exit Full Screen while
+full screen is active; the Help menu opens the project repository. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
+| Use touch on a Mac | Touch-display Macs and Sidecar iPads work through the system's touch-to-mouse emulation, so no setup is needed: tap clicks, touch-and-drag drags panes, one-finger pan scrolls, and touch-and-hold opens the right-click menu. Pinch and rotate are not delivered to the app today. Pane resize handles have arrow-key equivalents (arrows move ±10, Shift+arrows ±50), so every touch path keeps a keyboard fallback. |
 | Navigate back or forward | Header arrows, ⌘[ / ⌘], trackpad swipe, and mouse back/forward buttons move through recent workspace/thread history. Trackpad swipes use macOS “Swipe between pages” gestures. While a navigation is in flight, the active arrow shows a loading spinner and a “Navigating back/forward…” status appears above the conversation. Cross-workspace navigation waits for the local service to reconnect before restoring the destination thread. If a saved thread is no longer available, Desktop keeps the destination workspace open without selecting a thread. |
 | Open Utilities | The Utilities inspector tab summarizes session changes, recent tool activity, and draft source attachments, with actions into Changes, Activity, Files, and previews. Press ⌘⇧U or use the navigation rail button to open it. |
 | Inspect tool activity | Expand a consecutive tool-action summary, then open an action for its bounded output excerpt. Copy full output from that action when you need its complete captured text. Running and failed counts remain visible while collapsed. |
@@ -155,8 +157,8 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Expand navigation | Appearance → Layout places navigation on the left or right (right by default), or hides it while keeping New Thread and Utilities in the header. The toolbar toggle or ⌘B shows/hides the rail; hover its project icon for a transient list, and leave navigation or press Escape to dismiss the peek. |
 | Browse threads | The rail's expand button or Command Palette → Browse threads opens the browser panel in the content slot beneath the persistent toolbar, over cached sessions grouped by workspace (current first) and sorted newest-first. Rows carry a compact recency and size lane; selecting a row loads the thread and returns to the workspace; the header also offers New thread and Close thread. The toolbar Back button, ⌘[, or Escape pops the panel (Forward reopens it); the header Close button dismisses it outright. Either way focus lands in the composer. |
 | Switch open threads | A tab strip above the conversation lists open threads in first-open order with per-tab close buttons and a New thread action. Selecting a tab loads that thread; closing the selected tab loads the nearest neighbor (next first, else previous), and a refused load keeps the tab so the selection stays reachable. Right-click a tab for Close tab, Close other tabs, or Copy thread title. |
-| Use right-click menus | Sidebar session rows, thread-browser rows, thread tabs, config rows, and file-tree rows offer right-click menus with the relevant actions: copy thread titles, config paths/values, or file paths; close tabs; open file previews; delete threads (confirm-gated — dispatching alone sends nothing). |
-| Focus the conversation | Zen mode starts active. Use the title-bar leaf toggle, the window-actions overflow menu, the command palette, or configurable Ctrl+⌘Z to toggle Zen mode. Zen hides the side panels, thread heading, full welcome view, status bar, and auxiliary composer controls while preserving the transcript, message input, model/mode/policy controls, and send/cancel action. Empty threads show a minimal centered brand mark with one greeting line instead of the full welcome view. One leaf toggle at the title-bar trailing edge enters and exits Zen: it keeps the same slot in both modes and only repaints, fading while Zen is active. The Zen composer is a narrower borderless prompt with roomier padding, and a quiet model, mode, and policy control cluster opposite a small send action, all on the same centered spine as the transcript. Toggles and returning chrome fade on a short theme transition that renders statically under reduced motion; the native title bar remains available for window controls. |
+| Use right-click menus | Sidebar session rows, thread-browser rows, thread tabs, config rows, and file-tree rows offer right-click menus with the relevant actions: copy thread titles, config paths/values, or file paths; close tabs; open file previews; delete threads (confirm-gated — dispatching alone sends nothing). File-tree rows also drag out: dropping one into Finder or an editor opens or copies the workspace file (directories included), with a file chip following the cursor while the drag is inside the window. |
+| Focus the conversation | Zen mode starts active. Use the title-bar leaf toggle, the window-actions overflow menu, the command palette, or configurable Ctrl+⌘Z to toggle Zen mode. Zen hides the side panels, thread heading, full welcome view, status bar, and auxiliary composer controls while preserving the transcript, message input, model/mode/policy controls, and send/cancel action; the conversation surface spans the window edge to edge beneath the title bar (no chrome inset, square corners). Empty threads show a minimal centered brand mark with one greeting line instead of the full welcome view. One leaf toggle at the title-bar trailing edge enters and exits Zen: it keeps the same slot in both modes and only repaints, fading while Zen is active. The Zen composer is a narrower borderless prompt with roomier padding, and a quiet model, mode, and policy control cluster opposite a small send action, all on the same centered spine as the transcript. Toggles and returning chrome fade on a short theme transition that renders statically under reduced motion; the native title bar remains available for window controls. |
 | Navigate settings | Settings opens as a panel in the content slot beneath the persistent toolbar, with left navigation over Appearance, Accessibility, Shortcuts, VT Code, Connections, Notifications, Storage, and CLI Configuration. The arrow keys move between pages; Home and End select the first and last. Each page scrolls independently so the title and navigation stay fixed; below 900px viewport width the sidebar collapses to its rail and the settings navigation stacks above the content. Back (toolbar button, ⌘[, or Escape) walks interior layers first — typed editor, shortcut capture, palette, config page to its tab — then pops the panel, and Forward reopens it; the header Close button dismisses the panel outright. Either way focus lands in the composer. |
 | Search settings and CLI config | ⌘F or the Settings search control filters settings categories and the loaded, bounded CLI config catalog. Selecting a category opens that page; selecting a config path opens its existing editor. Escape returns to Settings. |
 | Configure shortcuts | Settings → Shortcuts lists thirty main desktop commands with descriptions and GPUI Kit `Kbd` badges, filterable by an inline search. Each row captures a new chord by pressing keys or unbinds to Unassigned; invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Function keys are available for review navigation. Save/Cancel persists or discards staged edits and Reset all to defaults stages the defaults (Cancel recovers), applying on restart; Import from CLI reuses the configured interrupt/model bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
@@ -210,7 +212,11 @@ draft recovery retain their existing ownership and safeguards.
 
 ### Composer context and runtime controls
 
-**Add files and more @** (⌘⇧A) opens a filtered Kit Command popup above the composer. It includes the bounded
+**Add files** (the composer + button) opens a tabbed card picker anchored above the composer: the **VT Code**
+tab lays workspace files out as cards — image files show loaded thumbnails (bounded background batch) — and
+clicking a card attaches it, showing an attached state with a remove affordance; the **This computer** tab hands
+off to the native file picker. Escape closes the picker and restores composer focus. **Add files and more @**
+(⌘⇧A) opens a filtered Kit Command popup above the composer. It includes the bounded
 workspace file list, the existing native file picker, CLI skills, installed Agent Plugins, and native commands.
 Skills insert their explicit `$skill-name` mention. Plugins insert a plain-language request to use the installed
 plugin; this does not grant new access or install anything. Commands reuse the existing model, workspace,
@@ -218,7 +224,19 @@ inspector, file-refresh, and CLI slash-command actions. Typing `@` or a leading 
 without moving focus from the composer; file selection inserts a workspace-relative `@path`, while slash-command
 selection follows the CLI's Tab-complete and Enter-run behavior. No prompt is submitted automatically by the Add
 popup. File selection reuses workspace
-containment, UTF-8, 64 KiB, and five-file limits. Discovery uses shared CLI loaders on a blocking worker while
+containment, UTF-8, 64 KiB, and five-file limits. Images in the
+provider-supported set (png, jpeg, webp, gif) attach by path instead of inline text: composer chips show a
+cached thumbnail, the file preview renders the picture itself (read bound 16 MiB), and drag-out carries them
+to other apps. Binary formats no vision provider accepts (bmp, tiff) reject with a clear notice instead of
+reading as text. Every chip carries three actions —
+View (in-app preview overlay, images included), Open (the configured external editor), and Remove — and the
+Remove action drops the cached thumbnail with the chip. Dropping files from Finder anywhere onto the window attaches
+them through the same limits and notices — reads run on the background executor, duplicates are skipped, batches
+stop at the five-file limit, and files outside the workspace surface the boundary notice. Files copied to the
+clipboard (Finder or any app) paste as attachments inside the composer; pasting text still inserts text. While files hover the
+window, a full-window drop overlay lifts (light scrim, accent ring, and a localized "Drop files to attach them"
+pill) and unmounts entirely when no workspace is open; the Add popup remains the keyboard-reachable equivalent.
+Discovery uses shared CLI loaders on a blocking worker while
 idle, a three-second request deadline, bounded wire metadata, and the retained query state.
 
 The permission control (⌘⇧P) chooses **Ask before protected actions**, **Auto-approve commands**, or **Full access**. It
@@ -625,6 +643,12 @@ Turning the option off keeps the active profile's typography as the shared setti
 | Code font size | Monospace code surfaces; independent saved preference |
 | Separate light and dark modes | Stores independent themes and typography for each appearance |
 | Reset appearance to defaults | Restores the default theme, font families, and sizes; preserves workspaces, sessions, and pane widths |
+
+When no UI size is set, VT Code follows the macOS accessibility text setting
+(System Settings → Accessibility → Display → Text): the base scales with the
+system preference (clamped to the supported bounds) and re-applies at launch
+and whenever typography settings change. Choosing a size in Appearance pins
+that override.
 
 Existing preference files retain defaults for missing typography fields. Saved
 sizes survive theme selection and are clamped to the supported bounds when loaded.

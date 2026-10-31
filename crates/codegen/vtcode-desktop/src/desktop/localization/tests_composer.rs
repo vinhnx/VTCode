@@ -4,7 +4,7 @@ use super::UiLanguage;
 fn composer_copy_is_localized_for_every_language() {
     // Correct translations that are byte-identical to English. Each entry is
     // asserted equal (not skipped) so a stale entry fails instead of hiding.
-    const IDENTICAL_TO_ENGLISH: &[(&str, &str)] = &[];
+    const IDENTICAL_TO_ENGLISH: &[(&str, &str)] = &[("fr", "app.composer.attachment_image")];
     for language in UiLanguage::ALL {
         let locale = language.locale();
         for key in [
@@ -19,6 +19,10 @@ fn composer_copy_is_localized_for_every_language() {
             "app.composer.palette_group_files",
             "app.composer.palette_group_commands",
             "app.composer.attachments_limit",
+            "app.composer.attachment_image",
+            "app.composer.picker_this_computer",
+            "app.composer.view_attachment",
+            "app.composer.open_attachment",
             "app.composer.palette_group_effort",
             "app.composer.attach_files",
             "app.composer.choose_agent_mode",

@@ -20,35 +20,79 @@ impl DesktopView {
             panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(self.attachments.iter().map(
                 |attachment| {
                     let path = attachment.path.clone();
+                    let is_image = files::is_image_path(&attachment.path);
+                    let thumbnail = self.attachment_thumbnails.get(&path).cloned();
                     Attachment::new()
                         .small()
                         .w(px(230.))
-                        .media(AttachmentMedia::new().child(Icon::new(IconName::FileCode)))
+                        .media(AttachmentMedia::new().child({
+                            match thumbnail {
+                                Some(image) => {
+                                    img(image).size(px(40.)).rounded_sm().overflow_hidden().into_any_element()
+                                }
+                                None => Icon::new(if is_image {
+                                    IconName::FileImage
+                                } else {
+                                    IconName::FileCode
+                                })
+                                .into_any_element(),
+                            }
+                        }))
                         .content(
                             AttachmentContent::new()
                                 .title(AttachmentTitle::new(attachment.path.clone()))
-                                .description(AttachmentDescription::new(
+                                .description(AttachmentDescription::new(if is_image {
+                                    rust_i18n::t!("app.composer.attachment_image").to_string()
+                                } else {
                                     rust_i18n::t!("app.composer.attachment_file", bytes = attachment.text.len())
-                                        .to_string(),
-                                )),
+                                        .to_string()
+                                })),
                         )
                         .actions(
-                            AttachmentActions::new().child(
-                                desktop_button(opaque_path_element_id("remove-attachment", &path))
-                                    .icon(IconName::X)
-                                    .accessibility_label(
-                                        rust_i18n::t!(
-                                            "app.composer.remove_attachment",
-                                            path = attachment.path.as_str()
+                            AttachmentActions::new()
+                                .child({
+                                    let view_path = path.clone();
+                                    desktop_button(opaque_path_element_id("view-attachment", &path))
+                                        .icon(IconName::Eye)
+                                        .accessibility_label(rust_i18n::t!("app.composer.view_attachment").to_string())
+                                        .ghost()
+                                        .xsmall()
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.open_file_preview_overlay(view_path.clone(), window, cx);
+                                        }))
+                                })
+                                .child({
+                                    let open_path = path.clone();
+                                    let editor = self
+                                        .preferences
+                                        .file_open_destination()
+                                        .external_editor()
+                                        .unwrap_or(files::ExternalEditor::System);
+                                    desktop_button(opaque_path_element_id("open-attachment", &path))
+                                        .icon(IconName::ExternalLink)
+                                        .accessibility_label(rust_i18n::t!("app.composer.open_attachment").to_string())
+                                        .ghost()
+                                        .xsmall()
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.open_file_in_editor(&open_path, editor, window, cx);
+                                        }))
+                                })
+                                .child(
+                                    desktop_button(opaque_path_element_id("remove-attachment", &path))
+                                        .icon(IconName::X)
+                                        .accessibility_label(
+                                            rust_i18n::t!(
+                                                "app.composer.remove_attachment",
+                                                path = attachment.path.as_str()
+                                            )
+                                            .to_string(),
                                         )
-                                        .to_string(),
-                                    )
-                                    .ghost()
-                                    .xsmall()
-                                    .on_click(
-                                        cx.listener(move |this, _, _, cx| this.remove_attachment(path.clone(), cx)),
-                                    ),
-                            ),
+                                        .ghost()
+                                        .xsmall()
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| this.remove_attachment(path.clone(), cx)),
+                                        ),
+                                ),
                         )
                 },
             )));
@@ -90,10 +134,32 @@ impl DesktopView {
                     ),
             );
         }
+        let weak_view = cx.entity().downgrade();
         let input = Textarea::new(&self.composer)
             .accessibility_id("composer")
             .aria_label(rust_i18n::t!("app.composer.input_label").to_string())
             .cursor_text()
+            // Files copied in Finder arrive on the clipboard as
+            // `ExternalPaths`; pasting them attaches instead of letting the
+            // input insert raw paths. Plain text pastes fall through.
+            .on_paste(move |item, _, app| {
+                let paths: Vec<PathBuf> = item
+                    .entries()
+                    .iter()
+                    .filter_map(|entry| match entry {
+                        gpui_kit::ClipboardEntry::ExternalPaths(paths) => Some(paths.0.to_vec()),
+                        _ => None,
+                    })
+                    .flatten()
+                    .collect();
+                if paths.is_empty() {
+                    return false;
+                }
+                if let Some(view) = weak_view.upgrade() {
+                    view.update(app, |view, cx| view.attach_dropped_files(&paths, cx));
+                }
+                true
+            })
             .min_h(px(32.));
 
         if let Some(draft) = self.retained_submission.as_ref() {
@@ -209,12 +275,8 @@ impl DesktopView {
                         .child(
                             desktop_button("attach-files")
                                 .icon(IconName::Plus)
-                                .accessibility_label(rust_i18n::t!(i18n::COMPOSER_ADD_CONTEXT).to_string())
-                                .tooltip_with_action(
-                                    rust_i18n::t!(i18n::COMPOSER_ADD_CONTEXT).to_string(),
-                                    &OpenAddContext,
-                                    Some(key_context::DESKTOP),
-                                )
+                                .accessibility_label(rust_i18n::t!("app.composer.attach_files").to_string())
+                                .tooltip(rust_i18n::t!("app.composer.attach_files").to_string())
                                 .ghost()
                                 .small()
                                 .desktop_disabled(
@@ -222,7 +284,9 @@ impl DesktopView {
                                         || self.attachments_picker_open
                                         || self.session_request.is_some(),
                                 )
-                                .dispatches_desktop_action(OpenAddContext, self.focus_handle.clone()),
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_attachment_picker(window, cx);
+                                })),
                         )
                         .child(self.render_policy_button(cx)),
                 )
@@ -285,6 +349,11 @@ impl DesktopView {
             } else {
                 panel = panel.child(self.render_command_palette(state, window, cx));
             }
+        }
+        // The attachment picker is a composer-anchored popover, sibling to the
+        // palette popups so it docks above the input the same way.
+        if self.attachment_picker.is_some() {
+            panel = panel.child(self.render_attachment_picker(cx));
         }
         // Zen hides this row, except when no workspace is set yet: the picker is
         // the only visible path to choose one (the zen empty state has no workspace link).

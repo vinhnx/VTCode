@@ -18,7 +18,7 @@ fn command_palette_searches_all_loaded_sessions_and_workspace_files(cx: &mut Tes
             })
             .collect();
         view.files = (0..60)
-            .map(|index| super::super::FileEntry {
+            .map(|index| FileEntry {
                 rel_path: format!("src/generated-{index:02}.rs"),
                 depth: 1,
                 is_dir: false,

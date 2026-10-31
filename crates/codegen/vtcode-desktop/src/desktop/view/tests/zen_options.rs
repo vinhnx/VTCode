@@ -166,3 +166,32 @@ fn zen_composer_popups_stay_above_input_in_narrow_window(cx: &mut TestAppContext
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn zen_surface_spans_the_window_edge_to_edge(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // The suite baseline is normal mode; opt into zen for this comparison.
+    view.update(cx, |view, cx| {
+        view.zen_mode = true;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Zen runs the conversation flush beneath the title bar and out to the
+        // window edges: no chrome rhythm inset, square corners.
+        let surface = window.find("workspace-surface").bounds();
+        let title_bar = window.find("title-bar").bounds();
+        assert_eq!(surface.origin.y, title_bar.bottom(), "zen content hugs the title bar");
+        assert_eq!(surface.origin.x, px(0.), "zen content spans to the left edge");
+        // Exiting zen restores the windowed pane rhythm on every edge.
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        let windowed = window.find("workspace-surface").bounds();
+        assert_eq!(windowed.origin.y, title_bar.bottom() + px(12.), "windowed mode keeps the top rhythm");
+        assert!(windowed.origin.x > surface.origin.x, "windowed mode keeps the side rhythm");
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert!(!view.read(cx).zen_mode, "the toggle must have exited zen for the rhythm comparison");
+    });
+}

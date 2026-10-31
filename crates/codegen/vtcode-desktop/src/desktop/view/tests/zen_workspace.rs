@@ -356,8 +356,8 @@ fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut
         cx.notify();
     });
 
-    let alpha_id = super::super::opaque_path_element_id("recent-workspace-popover", "/project/alpha");
-    let beta_id = super::super::opaque_path_element_id("recent-workspace-popover", "/project/beta");
+    let alpha_id = opaque_path_element_id("recent-workspace-popover", "/project/alpha");
+    let beta_id = opaque_path_element_id("recent-workspace-popover", "/project/beta");
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.click("composer-workspace", cx);
@@ -384,8 +384,7 @@ fn selecting_a_recent_workspace_uses_the_existing_shutdown_transition(cx: &mut T
         cx.notify();
     });
 
-    let target_id =
-        super::super::opaque_path_element_id("recent-workspace-popover", &target_path.display().to_string());
+    let target_id = opaque_path_element_id("recent-workspace-popover", &target_path.display().to_string());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.click("composer-workspace", cx);

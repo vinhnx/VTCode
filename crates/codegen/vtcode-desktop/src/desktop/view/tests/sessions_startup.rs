@@ -518,7 +518,7 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
         });
         window.render_frame(cx);
         // Stable path IDs still target the same chip after the attachment order changes.
-        window.click(super::super::opaque_path_element_id("remove-attachment", "scratch.txt"), cx);
+        window.click(opaque_path_element_id("remove-attachment", "scratch.txt"), cx);
         assert_eq!(view.read(cx).attachments.len(), 1);
 
         window.click("send-prompt", cx);

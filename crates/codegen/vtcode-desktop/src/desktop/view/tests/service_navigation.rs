@@ -684,6 +684,7 @@ fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
         assert!(!view.swipe_navigation_allowed());
         view.route_history.dismiss_to_workspace();
         view.file_preview = Some(crate::desktop::files::FilePreview {
+            image: None,
             rel_path: "src/app.rs".into(),
             text: "preview".into(),
             truncated: false,

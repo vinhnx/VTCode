@@ -20,6 +20,42 @@ fn activity_state_slug(state: ActivityState) -> &'static str {
     }
 }
 
+/// A workspace entry being dragged out of the file tree.
+struct DragWorkspaceFile {
+    rel_path: String,
+    is_dir: bool,
+}
+
+/// Chip under the cursor while a workspace file drags toward another app.
+struct FileDragPreview {
+    name: String,
+    is_dir: bool,
+}
+
+impl Render for FileDragPreview {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let icon = if self.is_dir {
+            IconName::FolderClosed
+        } else {
+            IconName::FileText
+        };
+        div()
+            .flex()
+            .items_center()
+            .gap_x_2()
+            .rounded_md()
+            .bg(colors.popover)
+            .border_1()
+            .border_color(colors.border)
+            .shadow_md()
+            .px_3()
+            .py_1()
+            .child(Icon::new(icon).small().text_color(colors.muted_foreground))
+            .child(div().text_sm().text_color(colors.foreground).child(self.name.clone()))
+    }
+}
+
 impl DesktopView {
     /// Generation bump after in-place `restored_activity` edits that keep no
     /// helper (output-page appends); all other mutations go through the
@@ -139,6 +175,7 @@ impl DesktopView {
         let menu_directory_paths = directory_paths.clone();
         let file_tree = self.file_tree.clone();
         let weak_view = cx.entity().downgrade();
+        let drag_root = self.workspace.clone();
         if self.files.is_empty() && self.files_scan_cancel.is_some() {
             body = body.child(
                 div()
@@ -211,6 +248,7 @@ impl DesktopView {
                             let tree = file_tree.clone();
                             let view = weak_view.clone();
                             let open_path = rel_path.clone();
+                            let drag_root = drag_root.clone();
                             ListItem::new(format!("workspace-file-{rel_path}"))
                                 .selected(selected)
                                 .cursor_pointer()
@@ -228,6 +266,20 @@ impl DesktopView {
                                         .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
                                         .child(div().text_sm().child(display_name)),
                                 )
+                                // Dragging a row out of the window promotes the
+                                // drag to a native session, so the file can be
+                                // dropped into Finder or an editor.
+                                .on_drag(DragWorkspaceFile { rel_path: rel_path.clone(), is_dir }, |drag, _, _, cx| {
+                                    cx.new(|_| FileDragPreview {
+                                        name: drag.rel_path.rsplit('/').next().unwrap_or(&drag.rel_path).to_string(),
+                                        is_dir: drag.is_dir,
+                                    })
+                                })
+                                .external_drag_payload::<DragWorkspaceFile>(move |drag, _, _| {
+                                    drag_root.as_ref().and_then(|root| {
+                                        files::external_drag_payload(root, &drag.rel_path, drag.is_dir)
+                                    })
+                                })
                                 .on_click(move |_, window, app| {
                                     tree.update(app, |tree, app| tree.focus(window, app));
                                     if is_dir {

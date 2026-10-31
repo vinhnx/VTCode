@@ -153,10 +153,9 @@ impl DesktopView {
                     .child(
                         desktop_button(format!("thread-tab-{id}"))
                             .icon(IconName::MessageSquare)
-                            .label(title.clone())
                             .ghost()
                             .toggled(selected)
-                            .small()
+                            .with_size(gpui_kit::component::Size::Medium)
                             .flex_1()
                             .min_w_0()
                             .accessibility_label(if selected {
@@ -165,6 +164,13 @@ impl DesktopView {
                                 format!("Switch to thread: {title}")
                             })
                             .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                            // The label is a child so the tab can carry body-size
+                            // type: the kit's small/medium buttons pin text_sm,
+                            // which reads thin and small for a tab title on a
+                            // dark surface. Medium weight keeps the stems dense
+                            // (smoother at this size) while the color stays
+                            // inherited so hover/selected states keep working.
+                            .child(div().min_w_0().truncate().text_base().font_medium().child(title.clone()))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 let _ = this.load_session(select_id.clone(), cx);
                             })),

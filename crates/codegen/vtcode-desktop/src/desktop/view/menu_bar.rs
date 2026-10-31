@@ -1,4 +1,4 @@
-//! macOS status item and close-to-menu-bar lifecycle.
+//! macOS AppKit interop: status item and close-to-menu-bar lifecycle.
 use super::*;
 use gpui_kit::Global;
 #[cfg(not(test))]

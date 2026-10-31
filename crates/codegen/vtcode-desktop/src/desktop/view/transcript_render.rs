@@ -486,6 +486,13 @@ impl DesktopView {
                                         .role(gpui_kit::Role::Label)
                                         .aria_label(format!("{label}: {}", item.accessibility_text))
                                         .test_support()
+                                        // The kit bubble pins text_sm (14px); the
+                                        // message body is the primary content and
+                                        // reads at the user's full base size, which
+                                        // also rasterizes more smoothly at weight
+                                        // 400 on dark surfaces. Markdown inherits
+                                        // this ambient size; code keeps its own.
+                                        .text_base()
                                         .child(render_markdown_with_style(
                                             format!("markdown-{}", item.id),
                                             item.markdown.clone(),

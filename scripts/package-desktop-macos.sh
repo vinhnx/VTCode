@@ -123,6 +123,15 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
 PLIST
 plutil -lint "${CONTENTS}/Info.plist" >/dev/null
 
+# Touch on Mac: the GUI has no native touch handling below GPUI and relies on
+# AppKit's automatic touch-to-mouse emulation. Declaring NSIsTouchNative tells
+# macOS the app handles touches directly, which switches that emulation off and
+# makes every touch a no-op — the bundle must never ship the key.
+if plutil -extract NSIsTouchNative raw "${CONTENTS}/Info.plist" >/dev/null 2>&1; then
+    printf 'FAIL: Info.plist must not declare NSIsTouchNative; it disables the touch-to-mouse emulation the GUI relies on.\n' >&2
+    exit 1
+fi
+
 # Ad hoc signatures are for local development; they do not grant Developer ID trust.
 codesign --force --sign - "${CONTENTS}/Helpers/vtcode"
 codesign --force --sign - "${CONTENTS}/MacOS/vtcode-desktop"

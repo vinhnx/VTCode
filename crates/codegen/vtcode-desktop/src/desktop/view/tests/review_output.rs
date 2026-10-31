@@ -78,7 +78,7 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
             view.handle_backend_event(notification("edit", "src/app.rs", first), cx);
         });
         window.render_frame(cx);
-        window.click(super::super::opaque_path_element_id("change-row", "src/app.rs"), cx);
+        window.click(opaque_path_element_id("change-row", "src/app.rs"), cx);
         let viewer = view.read(cx).change_viewer.as_ref().unwrap().clone();
         viewer.update(cx, |viewer, cx| {
             viewer.set_mode(DiffMode::Split, cx);
@@ -92,15 +92,11 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         view.update(cx, |view, cx| view.handle_backend_event(notification("other", "docs/app.rs.bak", unrelated), cx));
         window.render_frame(cx);
         assert_eq!(
-            window
-                .find(super::super::opaque_path_element_id("change-row", "docs/app.rs.bak"))
-                .label(),
+            window.find(opaque_path_element_id("change-row", "docs/app.rs.bak")).label(),
             Some("Review docs/app.rs.bak")
         );
         assert_eq!(
-            window
-                .find(super::super::opaque_path_element_id("change-row", "src/app.rs"))
-                .label(),
+            window.find(opaque_path_element_id("change-row", "src/app.rs")).label(),
             Some("Review src/app.rs (selected)"),
             "a newly inserted row must not inherit an existing file's accessibility node"
         );
@@ -115,13 +111,13 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(latest));
         window
             .within("diff-review-panel")
-            .click(super::super::opaque_path_element_id("change-row", "docs/app.rs.bak"), cx);
+            .click(opaque_path_element_id("change-row", "docs/app.rs.bak"), cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("docs/app.rs.bak"));
         assert_eq!(view.read(cx).change_viewer.as_ref().unwrap().read(cx).mode(), DiffMode::Split);
         window
             .within("diff-review-panel")
-            .click(super::super::opaque_path_element_id("change-row", "src/app.rs"), cx);
+            .click(opaque_path_element_id("change-row", "src/app.rs"), cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/app.rs"));
         // A malformed replacement invalidates this item's preview rather than leaving a stale viewer.
@@ -201,7 +197,7 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
         let warning = window.find("review-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
         assert_eq!(warning.label(), Some("Saved change history is partial. Some historical patches are unavailable."));
-        window.click(super::super::opaque_path_element_id("change-row", "src/app.rs"), cx);
+        window.click(opaque_path_element_id("change-row", "src/app.rs"), cx);
         window.render_frame(cx);
         window.click("copy-change-patch", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch.as_str()));
@@ -249,7 +245,7 @@ fn changes_inspector_lists_structured_paths_without_diff_previews(cx: &mut TestA
             cx.notify();
         });
         window.render_frame(cx);
-        let row = window.find(super::super::opaque_path_element_id("change-row", "src/updated.rs"));
+        let row = window.find(opaque_path_element_id("change-row", "src/updated.rs"));
         assert_eq!(row.disabled(), Some(true));
         assert_eq!(row.label(), Some("Diff preview unavailable for src/updated.rs"));
         assert_eq!(window.find("previous-change-file").disabled(), Some(true));
@@ -298,12 +294,12 @@ fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: 
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let first_row = super::super::opaque_path_element_id("change-row", "src/file-0.rs");
-        let last_row = super::super::opaque_path_element_id("change-row", "src/file-119.rs");
+        let first_row = opaque_path_element_id("change-row", "src/file-0.rs");
+        let last_row = opaque_path_element_id("change-row", "src/file-119.rs");
         let list = window.find("change-list");
         assert_eq!(list.role(), Some(gpui_kit::Role::List));
         assert_eq!(list.label(), Some("Changed files"));
-        let first_item = window.find(super::super::opaque_path_element_id("change-list-item", "src/file-0.rs"));
+        let first_item = window.find(opaque_path_element_id("change-list-item", "src/file-0.rs"));
         assert_eq!(first_item.role(), Some(gpui_kit::Role::ListItem));
         assert_eq!(first_item.label(), Some("Modified src/file-0.rs, +1 −1"));
         assert_eq!(first_item.selected(), Some(false));
@@ -320,7 +316,7 @@ fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: 
         assert!(window.try_find(first_row).is_none(), "rows outside the selected range leave the UI tree");
         assert_eq!(
             window
-                .find(super::super::opaque_path_element_id("change-list-item", "src/file-119.rs"))
+                .find(opaque_path_element_id("change-list-item", "src/file-119.rs"))
                 .selected(),
             Some(true),
             "the selected state is exposed to assistive technology"

@@ -718,8 +718,8 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
 #[gpui_kit::test]
 fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let alpha_id = super::super::opaque_path_element_id("workspace", "/project/alpha");
-    let beta_id = super::super::opaque_path_element_id("workspace", "/project/beta");
+    let alpha_id = opaque_path_element_id("workspace", "/project/alpha");
+    let beta_id = opaque_path_element_id("workspace", "/project/beta");
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.workspace = Some(PathBuf::from("/project/alpha"));

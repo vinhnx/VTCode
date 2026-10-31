@@ -56,6 +56,9 @@ impl Render for DesktopView {
             .p_4()
             .bg(colors.background)
             .rounded_xl()
+            // Zen is the distraction-free surface: the card runs edge to edge,
+            // so square corners meet the title bar and window sides flush.
+            .when(self.zen_mode, |card| card.rounded_none())
             .child(conversation)
             .when(inspector_visible, |workspace| {
                 workspace.child(
@@ -83,6 +86,13 @@ impl Render for DesktopView {
             .id("pane-root")
             .test_support()
             .p_3()
+            // Fullscreen hides the native traffic lights and titlebar, so the
+            // chrome-side rhythm reads as a dead band; hug the panes to the
+            // toolbar there while windowed mode keeps the breathing room.
+            .when(window.is_fullscreen(), |pane| pane.pt_0())
+            // Zen is distraction-free: the conversation spans the window edge
+            // to edge beneath the title bar, with no chrome rhythm inset.
+            .when(self.zen_mode, |pane| pane.p_0())
             .flex_1()
             .min_h_0()
             .flex()
@@ -99,7 +109,7 @@ impl Render for DesktopView {
             .h_full()
             .flex()
             .flex_col()
-            .child(self.render_toolbar(cx))
+            .child(self.render_toolbar(window, cx))
             .child(content)
             .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)));
         let mut body = div()
@@ -117,6 +127,15 @@ impl Render for DesktopView {
                     }
                 }),
             )
+            // Whole-window drop target for external files (Finder → composer
+            // attachments). Gated on a workspace being open: a drop without
+            // one would no-op, so the affordance must not advertise it.
+            // Internal drags carry other payload types and never match.
+            .when(self.workspace.is_some(), |body| {
+                body.on_drop(
+                    cx.listener(|view, paths: &ExternalPaths, _, cx| view.attach_dropped_files(paths.paths(), cx)),
+                )
+            })
             .text_color(colors.foreground)
             .track_focus(&self.focus_handle)
             .when(!self.capture_suppresses_bindings(window), |body| body.key_context(key_context::DESKTOP))
@@ -224,6 +243,7 @@ impl Render for DesktopView {
             })
             .on_action(cx.listener(|view, _: &OpenAddContext, window, cx| view.open_add_context(window, cx)))
             .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.toggle_settings(window, cx)))
+            .on_action(cx.listener(|view, _: &AboutApplication, window, cx| view.open_about(window, cx)))
             .on_action(cx.listener(|view, action: &tabs::CloseThreadTab, _, cx| view.close_tab(&action.session_id, cx)))
             .on_action(cx.listener(|view, action: &tabs::CloseOtherThreadTabs, _, cx| {
                 view.close_other_tabs(&action.session_id, cx)
@@ -289,6 +309,58 @@ impl Render for DesktopView {
         if self.full_access_confirm.is_some() {
             body = body.child(self.render_full_access_confirm(cx));
         }
+        // About is the topmost modal: it opens from the application menu over
+        // any route, so it paints last and Escape dismisses it first.
+        if self.about_open {
+            body = body.child(self.render_about(cx));
+        }
+        // Drop affordance mounts above content but beneath the modals, and
+        // only where a drop can actually attach.
+        if self.workspace.is_some() {
+            body = body.child(render_drop_overlay(cx));
+        }
         body
     }
+}
+
+/// Full-window drop affordance: fully transparent while idle, and while
+/// external files hover the window the kit's `drag_over` refinement lifts it
+/// to a scrim with an accent ring and a labeled pill, so the target is
+/// explicit. Pure style — no state or listeners — and transparent hitboxes do
+/// not block the body drop listener or button hover beneath it.
+fn render_drop_overlay(cx: &Context<DesktopView>) -> AnyElement {
+    let colors = cx.theme().colors;
+    let scrim = colors.background.opacity(0.45);
+    div()
+        .id("drop-overlay")
+        .test_support()
+        .absolute()
+        .inset_0()
+        .opacity(0.)
+        .drag_over::<ExternalPaths>(move |style, _, _, _| style.opacity(1.).bg(scrim))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(div().absolute().inset_2().rounded_lg().border_2().border_color(colors.primary))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .rounded_md()
+                .bg(colors.popover)
+                .border_1()
+                .border_color(colors.border)
+                .shadow_md()
+                .px_4()
+                .py_2()
+                .child(Icon::new(IconName::FileUp).small().text_color(colors.primary))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.foreground)
+                        .child(rust_i18n::t!("app.files.drop_to_attach").to_string()),
+                ),
+        )
+        .into_any_element()
 }

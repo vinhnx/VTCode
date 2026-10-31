@@ -132,7 +132,7 @@ fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestApp
                 .update(cx, |input, cx| input.set_value("Keep\nthis\ndraft", window, cx));
         });
         window.render_frame(cx);
-        for button in ["attach-files", "composer-policy", "composer-mode", "pick-model"] {
+        for button in ["composer-policy", "composer-mode", "pick-model"] {
             window.click(button, cx);
             window.render_frame(cx);
             let popup = window.find("command-palette").bounds();
@@ -149,6 +149,19 @@ fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestApp
             assert!(view.read(cx).palette.is_none());
             assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "Keep\nthis\ndraft");
         }
+        // The attach button opens the tabbed picker; it aligns above the input
+        // exactly like the palette popups.
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        let picker = window.find("attachment-picker-trap").bounds();
+        let composer = window.find("composer-context").bounds();
+        assert!(picker.bottom() <= composer.top(), "attach picker must stay above the input");
+        assert!((picker.left() - composer.left()).abs() <= px(1.));
+        assert!(picker.left() >= px(12.) && picker.right() <= window.viewport_size().width - px(12.));
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none());
+        assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "Keep\nthis\ndraft");
     })
     .unwrap();
 }

@@ -25,14 +25,24 @@ impl Drop for FileScanCancellationGuard {
 
 impl DesktopView {
     /// Copy one tree row's absolute path, falling back to the workspace
-    /// relative path when no workspace is set.
+    /// relative path when no workspace is set. When the file exists on disk
+    /// the clipboard also carries a file entry, so pasting into the composer
+    /// attaches it — mirroring a Finder copy.
     pub(super) fn copy_file_path(&self, rel_path: &str, cx: &mut App) {
-        let path = self
-            .workspace
-            .as_ref()
-            .map(|root| root.join(rel_path).display().to_string())
-            .unwrap_or_else(|| rel_path.to_string());
-        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(path));
+        let absolute = self.workspace.as_ref().map(|root| root.join(rel_path).display().to_string());
+        let file_exists = absolute
+            .as_deref()
+            .is_some_and(|path| std::fs::metadata(path).is_ok_and(|meta| meta.is_file()));
+        let entries = match (file_exists, absolute.as_deref()) {
+            (true, Some(absolute)) => vec![
+                gpui_kit::ClipboardEntry::String(gpui_kit::ClipboardString::new(absolute.to_string())),
+                gpui_kit::ClipboardEntry::ExternalPaths(ExternalPaths([PathBuf::from(absolute)].into_iter().collect())),
+            ],
+            _ => vec![gpui_kit::ClipboardEntry::String(gpui_kit::ClipboardString::new(
+                absolute.unwrap_or_else(|| rel_path.to_string()),
+            ))],
+        };
+        cx.write_to_clipboard(gpui_kit::ClipboardItem { entries });
     }
 
     /// Pick workspace text files to attach to the next prompt.
@@ -117,6 +127,7 @@ impl DesktopView {
 
     pub(super) fn remove_attachment(&mut self, path: String, cx: &mut Context<Self>) {
         self.attachments.retain(|attachment| attachment.path != path);
+        let _ = self.attachment_thumbnails.remove(&path);
         cx.notify();
     }
 
@@ -234,6 +245,13 @@ impl DesktopView {
             self.open_file_in_editor(&rel_path, editor, window, cx);
             return;
         }
+        self.open_file_preview_overlay(rel_path, window, cx);
+    }
+
+    /// In-app preview overlay for one workspace file (text or image),
+    /// bypassing the external-editor preference — the composer chips' View
+    /// action uses this so viewing stays in-app regardless of configuration.
+    pub(super) fn open_file_preview_overlay(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
         if self.current_route() == Route::Review {
             self.close_review(window, cx);
         }
@@ -243,6 +261,45 @@ impl DesktopView {
         let Some(workspace) = self.workspace.clone() else {
             return;
         };
+        // Capture the restore target for both preview kinds, matching the text
+        // path, so Escape always returns focus to the opening surface.
+        if self.file_preview.is_none() {
+            self.preview_return_focus = window.focused(cx);
+        }
+        // Images take the image viewer: bounded bytes decode in the renderer,
+        // and text previews never apply.
+        if files::is_image_path(&rel_path) {
+            self.preview_task = Some(cx.spawn_in(window, async move |view, cx| {
+                let root = workspace.clone();
+                let path = rel_path.clone();
+                let image = cx.background_spawn(async move { files::read_image(&root, &path) }).await;
+                let _updated = view.update_in(cx, |view, window, cx| {
+                    if view.workspace.as_ref() != Some(&workspace) {
+                        return;
+                    }
+                    match image {
+                        Some(image) => {
+                            view.preview_editor_error = None;
+                            view.file_preview = Some(FilePreview {
+                                rel_path: rel_path.clone(),
+                                text: String::new(),
+                                truncated: false,
+                                image: Some(image),
+                            });
+                            view.preview_focus.focus(window, cx);
+                            view.clear_error();
+                        }
+                        None => {
+                            view.error = Some(
+                                rust_i18n::t!("app.files.preview_unavailable", path = rel_path.as_str()).to_string(),
+                            )
+                        }
+                    }
+                    cx.notify();
+                });
+            }));
+            return;
+        }
         if self.file_preview.is_none() {
             self.preview_return_focus = window.focused(cx);
         }
@@ -274,7 +331,7 @@ impl DesktopView {
     /// Open a file directly in an external editor without the preview overlay.
     /// Unlike the viewer path this never closes the review surface: an external
     /// launch is non-modal and must not destroy the user's open context.
-    fn open_file_in_editor(
+    pub(super) fn open_file_in_editor(
         &mut self,
         rel_path: &str,
         editor: files::ExternalEditor,
@@ -430,16 +487,20 @@ impl DesktopView {
                                     view.open_preview_in_editor(files::ExternalEditor::VsCode, window, cx)
                                 }),
                             ))
-                            .child(
-                                desktop_button("copy-preview")
-                                    .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
-                                    .ghost()
-                                    .small()
-                                    .on_click(move |_, window, app| {
-                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
-                                        super::super::notifications::copied_to_clipboard(window, app);
-                                    }),
-                            )
+                            .when(preview.image.is_none(), |header| {
+                                header.child(
+                                    desktop_button("copy-preview")
+                                        .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
+                                        .ghost()
+                                        .small()
+                                        .on_click(move |_, window, app| {
+                                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                                text.to_string(),
+                                            ));
+                                            super::super::notifications::copied_to_clipboard(window, app);
+                                        }),
+                                )
+                            })
                             .child(
                                 desktop_button("close-preview")
                                     .tooltip_with_action(
@@ -456,8 +517,27 @@ impl DesktopView {
                     .when_some(self.preview_editor_error.as_ref(), |panel, error| {
                         panel.child(warning_alert("preview-editor-error", error.clone(), colors))
                     })
-                    .child(
-                        div()
+                    .child(match preview.image.clone() {
+                        // Image previews render the picture itself; everything
+                        // else keeps the bounded mono text surface.
+                        Some(image) => div()
+                            .id("file-preview-body")
+                            .flex_1()
+                            .min_h_0()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .overflow_hidden()
+                            .p_3()
+                            .child(
+                                img(image)
+                                    .max_w_full()
+                                    .max_h_full()
+                                    .object_fit(gpui_kit::ObjectFit::Contain)
+                                    .rounded_md(),
+                            )
+                            .into_any_element(),
+                        None => div()
                             .id("file-preview-body")
                             .flex_1()
                             .min_h_0()
@@ -467,9 +547,10 @@ impl DesktopView {
                             .text_xs()
                             .font_family(mono)
                             .text_size(theme.mono_font_size)
-                            .child(preview.text.clone()),
-                    )
-                    .when(preview.truncated, |panel| {
+                            .child(preview.text.clone())
+                            .into_any_element(),
+                    })
+                    .when(preview.truncated && preview.image.is_none(), |panel| {
                         panel.child(
                             div()
                                 .px_3()

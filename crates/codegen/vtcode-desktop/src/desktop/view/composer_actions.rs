@@ -1,4 +1,4 @@
-//! Composer behavior: slash actions, suggestions, attachments, and session-option flows.
+//! Composer behavior: slash actions, suggestions, and session-option flows.
 use super::composer_controls::{
     ComposerTriggerKind, DesktopSlashAction, capitalize_agent_label, composer_trigger, effort_at, file_mention_token,
     position_at,
@@ -587,43 +587,6 @@ impl DesktopView {
         if self.composer.read(cx).focus_handle(cx).is_focused(window) {
             cx.on_next_frame(window, |view, window, cx| view.update_composer_suggestions(window, cx));
         }
-    }
-
-    pub(super) fn attach_context_file(&mut self, path: String, cx: &mut Context<Self>) {
-        if self.attachments_picker_open || self.session_request.is_some() {
-            return;
-        }
-        if self.attachments.len() >= 5 {
-            self.error = Some(rust_i18n::t!(i18n::COMPOSER_ATTACHMENTS_LIMIT, n = 5).to_string());
-            cx.notify();
-            return;
-        }
-        let Some(workspace) = self.workspace.clone() else {
-            return;
-        };
-        let session = self.selected_session_id.clone();
-        self.attachments_picker_open = true;
-        self.attachments_task = Some(cx.spawn(async move |view, cx| {
-            let root = workspace.clone();
-            let attachment = cx
-                .background_spawn(async move { files::read_attachment(&root, &root.join(path)) })
-                .await;
-            let _updated = view.update(cx, |view, cx| {
-                view.attachments_picker_open = false;
-                if view.workspace.as_ref() != Some(&workspace) || view.selected_session_id != session {
-                    return;
-                }
-                match attachment {
-                    Ok(attachment) if !view.attachments.iter().any(|existing| existing.path == attachment.path) => {
-                        view.attachments.push(attachment)
-                    }
-                    Ok(_) => {}
-                    Err(error) => view.error = Some(error),
-                }
-                cx.notify();
-            });
-        }));
-        cx.notify();
     }
 
     pub(super) fn open_model_options(&mut self, window: &mut Window, cx: &mut Context<Self>) {

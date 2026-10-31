@@ -659,12 +659,12 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         window.render_frame(cx);
         window.within("settings-panel").click("font-code-0", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).preferences.ui_font_size(), 17);
+        assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
         assert_eq!(view.read(cx).preferences.code_font_size(), 13);
         assert_eq!(cx.theme().font_size, px(17.));
         assert_eq!(cx.theme().mono_font_size, px(13.));
         let saved = crate::desktop::preferences::Preferences::load();
-        assert_eq!((saved.ui_font_size(), saved.code_font_size()), (17, 13));
+        assert_eq!((saved.typography_for(ThemeMode::Light).ui_font_size, saved.code_font_size()), (17, 13),);
         view.update(cx, |view, cx| {
             view.preferences.touch_workspace("/preserve-workspace");
             view.apply_theme("ciapre".into(), window, cx);
@@ -923,5 +923,72 @@ fn full_screen_toggle_flips_state_and_keeps_launch_bounds(cx: &mut TestAppContex
     cx.update_window(window, |_, window, cx| window.bounds_changed(cx)).unwrap();
     cx.update(|cx| {
         assert!(!view.read(cx).preferences.window_maximized(), "windowed state after full screen must persist again");
+    });
+}
+
+#[gpui_kit::test]
+fn full_screen_hugs_the_panes_to_the_toolbar(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Zen spans edge to edge by design, so measure the windowed pane rhythm:
+    // zen is the default and must be off for this comparison.
+    view.update(cx, |view, cx| {
+        view.zen_mode = false;
+        cx.notify();
+    });
+    let pane_top = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("workspace-surface").bounds().origin.y
+        })
+        .unwrap()
+    };
+    let windowed_top = pane_top(cx);
+    let back_x = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("navigate-back").bounds().origin.x
+        })
+        .unwrap()
+    };
+    let windowed_back_x = back_x(cx);
+    // Enter full screen: the deferred dispatch must settle before re-rendering,
+    // and the headless platform needs an explicit notify to run the new layout.
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    view.update(cx, |_, cx| cx.notify());
+    let fullscreen_top = pane_top(cx);
+    assert!(
+        windowed_top - fullscreen_top == px(12.),
+        "full screen must collapse the pane-root top padding (windowed {windowed_top}, fullscreen {fullscreen_top})"
+    );
+    // The hidden traffic lights free the leading cluster too: the nav arrows
+    // hug the window edge instead of keeping their light-clearance offset.
+    let fullscreen_back_x = back_x(cx);
+    assert!(
+        windowed_back_x >= px(80.) && windowed_back_x - fullscreen_back_x >= px(48.),
+        "full screen must collapse the toolbar light clearance (windowed {windowed_back_x}, fullscreen {fullscreen_back_x})"
+    );
+    // HIG: the View item reads Exit Full Screen while full screen is active.
+    // The headless platform fires bounds observers only on an explicit
+    // bounds-changed call (real macOS fires them on the transition itself).
+    cx.update_window(window, |_, window, cx| window.bounds_changed(cx)).unwrap();
+    cx.update(|cx| {
+        assert!(view.read(cx).menus_show_exit_full_screen, "menu labels must track full-screen state");
+    });
+    // Exiting restores the windowed rhythm exactly.
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    view.update(cx, |_, cx| cx.notify());
+    assert_eq!(pane_top(cx), windowed_top, "exiting full screen must restore the pane rhythm");
+    assert_eq!(back_x(cx), windowed_back_x, "exiting full screen must restore the leading cluster");
+    cx.update_window(window, |_, window, cx| window.bounds_changed(cx)).unwrap();
+    cx.update(|cx| {
+        assert!(!view.read(cx).menus_show_exit_full_screen, "exiting must restore the Enter Full Screen label");
     });
 }

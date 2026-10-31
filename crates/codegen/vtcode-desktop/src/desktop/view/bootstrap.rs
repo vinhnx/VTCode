@@ -1,6 +1,9 @@
 //! App startup: menus, keybindings, window reopen, construction, and preference persistence.
 use super::*;
 
+/// Documentation and issue tracker opened by the Help menu and About dialog.
+pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
+
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
     match shortcuts::bindings(&preferences.shortcuts) {
         Ok(bindings) => cx.bind_keys(bindings),
@@ -35,13 +38,29 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
 }
 
 pub(super) fn init_native_menus(cx: &mut App) {
+    register_global_actions(cx);
+    set_native_menus(cx, false);
+}
+
+/// Register the global action handlers backing native menu items. Called once
+/// at startup: `on_action` handlers accumulate, so re-registering on every
+/// menu rebuild would run actions (OpenHelp, ShowMainWindow) N+1 times.
+fn register_global_actions(cx: &mut App) {
     let _app = cx.on_action(|_: &QuitApplication, cx| cx.quit());
     let _app = cx.on_action(|_: &HideApplication, cx| cx.hide());
     let _app = cx.on_action(|_: &HideOtherApplications, cx| cx.hide_other_apps());
     let _app = cx.on_action(|_: &ShowAllApplications, cx| cx.unhide_other_apps());
     let _app = cx.on_action(|_: &ShowMainWindow, cx| show_main_window(cx));
+    let _app = cx.on_action(|_: &OpenHelp, cx| cx.open_url(HELP_URL));
+}
+
+/// (Re)install the native menus. Re-invoked when full-screen state changes so
+/// the View item reads Enter or Exit Full Screen as HIG requires.
+pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
     cx.set_menus([
         Menu::new(app::NAME).items([
+            MenuItem::action(rust_i18n::t!("app.menus.about").to_string(), AboutApplication),
+            MenuItem::separator(),
             MenuItem::action(rust_i18n::t!("app.menus.settings_menu").to_string(), OpenSettings),
             MenuItem::separator(),
             MenuItem::os_submenu(rust_i18n::t!("app.menus.services").to_string(), SystemMenuType::Services),
@@ -79,8 +98,15 @@ pub(super) fn init_native_menus(cx: &mut App) {
             MenuItem::separator(),
             // macOS convention: the full-screen toggle closes the View menu;
             // ⌃⌘F is the system-standard shortcut (HIG: full screen offers a
-            // distraction-free context).
-            MenuItem::action(rust_i18n::t!("app.menus.enter_full_screen").to_string(), ToggleFullScreen),
+            // distraction-free context). The label tracks the current state.
+            MenuItem::action(
+                if full_screen {
+                    rust_i18n::t!("app.menus.exit_full_screen").to_string()
+                } else {
+                    rust_i18n::t!("app.menus.enter_full_screen").to_string()
+                },
+                ToggleFullScreen,
+            ),
         ]),
         Menu::new(rust_i18n::t!("app.menus.window_menu").to_string()).items([
             MenuItem::action(rust_i18n::t!("app.menus.show_app").to_string(), ShowMainWindow),
@@ -88,6 +114,10 @@ pub(super) fn init_native_menus(cx: &mut App) {
             MenuItem::action(rust_i18n::t!("app.menus.zoom").to_string(), ZoomWindow),
             MenuItem::action(rust_i18n::t!("app.menus.close_window").to_string(), CloseWindow),
         ]),
+        Menu::new(rust_i18n::t!("app.menus.help_menu").to_string()).items([MenuItem::action(
+            rust_i18n::t!("app.menus.help_website").to_string(),
+            OpenHelp,
+        )]),
     ]);
 }
 
@@ -191,8 +221,9 @@ impl DesktopView {
                 .unwrap_or_else(|| view.focus_handle.clone());
             target.focus(window, cx);
         });
-        let window_bounds_subscription = cx.observe_window_bounds(window, |view, window, _| {
+        let window_bounds_subscription = cx.observe_window_bounds(window, |view, window, cx| {
             view.persist_window_maximized(window);
+            view.refresh_full_screen_menus(window, cx);
         });
         let welcome_activation_subscription = cx.observe_window_activation(window, |view, window, cx| {
             if window.is_window_active() {
@@ -358,6 +389,8 @@ impl DesktopView {
             pending_permission_choice: None,
             full_access_confirm: None,
             full_access_focus: cx.focus_handle(),
+            about_open: false,
+            about_focus: cx.focus_handle(),
             service_info: None,
             interaction: None,
             interaction_focus: cx.focus_handle(),
@@ -479,6 +512,11 @@ impl DesktopView {
             secret_save_pending: false,
             models: Vec::new(),
             attachments: Vec::new(),
+            attachment_thumbnails: HashMap::new(),
+            attachment_picker: None,
+            attachment_picker_focus: cx.focus_handle(),
+            menus_show_exit_full_screen: false,
+            picker_thumbnail_task: None,
             attachments_picker_open: false,
             pending_submission: None,
             pending_first_submission: false,

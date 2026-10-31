@@ -398,7 +398,7 @@ pub(super) fn brand_logo(size: f32) -> impl IntoElement {
             include_bytes!("../../../../../../resources/icons/vtcode-app-dynamic-512.png").to_vec(),
         ))
     });
-    gpui_kit::img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+    img(image.clone()).w(px(size)).h(px(size)).rounded_md()
 }
 
 /// Appearance-picker preview tile for one icon variant. Images are decoded
@@ -416,7 +416,7 @@ pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl
         AppIconPreference::Light => light,
         AppIconPreference::Dark => dark,
     };
-    gpui_kit::img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+    img(image.clone()).w(px(size)).h(px(size)).rounded_md()
 }
 
 pub(super) fn welcome_brand_mark(size: f32, color: gpui_kit::Hsla) -> impl IntoElement {

@@ -17,9 +17,10 @@ pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation
 pub(super) use super::{
     ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, Route,
     TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page, eyebrow_label, group_box_title,
-    restored_output_for_copy, row_title, scale_row_height_for_ui_font, section_label, workspace_picker_options,
+    opaque_path_element_id, restored_output_for_copy, row_title, scale_row_height_for_ui_font, section_label,
+    workspace_picker_options,
 };
-pub(super) use crate::desktop::files::ExternalEditor;
+pub(super) use crate::desktop::files::{ExternalEditor, FileEntry};
 pub(super) use crate::desktop::preferences::FileOpenDestination;
 pub(super) use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 pub(super) use crate::desktop::transcript::TranscriptItem;
@@ -400,12 +401,15 @@ fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
     })
 }
 
+mod about_dialog;
 mod activity_settings;
 mod activity_summary;
+mod attachment_picker;
 mod config_catalog;
 mod config_deep_links;
 mod config_sessions;
 mod curated_config;
+mod file_drop;
 mod files_webmcp;
 mod full_access_confirm;
 mod heading_tiers;

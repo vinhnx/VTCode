@@ -253,7 +253,7 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
             assert_eq!(view.changes.totals(), Some((80, 80)));
         });
         window.render_frame(cx);
-        window.click(super::super::opaque_path_element_id("change-row", "src/app.rs"), cx);
+        window.click(opaque_path_element_id("change-row", "src/app.rs"), cx);
         {
             let view = view.read(cx);
             assert_eq!(view.selected_change.as_deref(), Some("src/app.rs"));

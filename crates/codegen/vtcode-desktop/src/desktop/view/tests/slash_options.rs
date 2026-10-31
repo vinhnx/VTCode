@@ -133,7 +133,13 @@ fn add_popup_filters_cli_resources_and_inserts_a_skill_without_submitting(cx: &m
             view.backend = Some(BackendHandle { commands });
         });
         window.render_frame(cx);
-        window.click("attach-files", cx);
+        // The AddContext palette opens through its action; the attach button
+        // opens the tabbed card picker (covered in attachment_picker tests).
+        window.dispatch_action(Box::new(super::super::OpenAddContext), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Add files and more @"));
         view.update(cx, |view, cx| {
@@ -184,22 +190,22 @@ fn composer_supports_cli_file_mentions_and_slash_command_completion(cx: &mut Tes
             view.backend = Some(BackendHandle { commands });
             view.selected_session_id = Some("composer-session".into());
             view.files = vec![
-                crate::desktop::files::FileEntry {
+                FileEntry {
                     rel_path: "src/main.rs".into(),
                     depth: 1,
                     is_dir: false,
                 },
-                crate::desktop::files::FileEntry {
+                FileEntry {
                     rel_path: "docs/guide.md".into(),
                     depth: 1,
                     is_dir: false,
                 },
-                crate::desktop::files::FileEntry {
+                FileEntry {
                     rel_path: "docs/guide notes.md".into(),
                     depth: 1,
                     is_dir: false,
                 },
-                crate::desktop::files::FileEntry { rel_path: "src".into(), depth: 1, is_dir: true },
+                FileEntry { rel_path: "src".into(), depth: 1, is_dir: true },
             ];
             view.slash_commands = vec![
                 vtcode_desktop_protocol::SlashCommandInfo {
@@ -361,7 +367,7 @@ fn slash_files_opens_native_file_mentions_without_submitting_a_turn(cx: &mut Tes
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.files = vec![crate::desktop::files::FileEntry {
+            view.files = vec![FileEntry {
                 rel_path: "src/main.rs".into(),
                 depth: 1,
                 is_dir: false,

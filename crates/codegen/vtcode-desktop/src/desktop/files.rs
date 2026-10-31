@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use super::strings::bundle;
 
@@ -12,6 +13,8 @@ const MAX_ENTRIES: usize = 400;
 const MAX_DEPTH: usize = 8;
 /// Preview read bound; a `usize` so buffer sizing never truncates.
 const MAX_PREVIEW_BYTES: usize = 64 * 1024;
+/// Image read bound for thumbnails and the preview viewer.
+const MAX_IMAGE_BYTES: usize = 16 * 1024 * 1024;
 
 /// Directories that never carry interesting source and can be enormous.
 const SKIPPED_DIR_NAMES: &[&str] = &["target", "node_modules", ".git", ".venv", "dist", "build"];
@@ -38,10 +41,46 @@ pub(super) struct FileEntry {
 pub(super) struct FilePreview {
     /// Path relative to the workspace root.
     pub rel_path: String,
-    /// Decoded preview text.
+    /// Decoded preview text; empty for image previews.
     pub text: String,
     /// Whether the file is larger than the preview bound.
     pub truncated: bool,
+    /// Decoded-ready image bytes for image files; `None` for text previews.
+    pub image: Option<Arc<gpui_kit::Image>>,
+}
+
+/// Whether a workspace-relative path points at an image the app can render
+/// and the LLM providers accept: the commons allowlist (png/jpg/jpeg/gif/webp)
+/// is the single source of truth, mirroring `ContentPart::validate_image`.
+pub(super) fn is_image_path(rel_path: &str) -> bool {
+    vtcode_commons::image::has_supported_image_extension(Path::new(rel_path))
+}
+
+/// Map a provider-supported image extension to the renderer's decoders.
+fn image_format(rel_path: &str) -> Option<gpui_kit::ImageFormat> {
+    if !is_image_path(rel_path) {
+        return None;
+    }
+    let extension = rel_path.rsplit('.').next()?.to_ascii_lowercase();
+    match extension.as_str() {
+        "png" => Some(gpui_kit::ImageFormat::Png),
+        "jpg" | "jpeg" => Some(gpui_kit::ImageFormat::Jpeg),
+        "gif" => Some(gpui_kit::ImageFormat::Gif),
+        "webp" => Some(gpui_kit::ImageFormat::Webp),
+        _ => None,
+    }
+}
+
+/// Read a bounded image file for thumbnails and the preview viewer, returned
+/// ready for the renderer to decode.
+pub(super) fn read_image(root: &Path, rel_path: &str) -> Option<Arc<gpui_kit::Image>> {
+    let format = image_format(rel_path)?;
+    let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path)).ok()?;
+    let metadata = fs::metadata(&path).ok()?;
+    if !metadata.is_file() || metadata.len() as usize > MAX_IMAGE_BYTES {
+        return None;
+    }
+    Some(Arc::new(gpui_kit::Image::from_bytes(format, fs::read(&path).ok()?)))
 }
 
 /// List workspace entries breadth-first, skipping dependency and VCS
@@ -165,6 +204,7 @@ pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
         rel_path: rel_path.to_string(),
         text: text.to_string(),
         truncated,
+        image: None,
     })
 }
 
@@ -431,13 +471,41 @@ pub(super) fn write_test_bundle(root: &Path, name: &str, bundle_id: &str) {
     .expect("bundle plist");
 }
 
-/// Attach complete text only; the preview's truncation is never silently submitted.
+/// Payload the platform receives when a file-tree drag leaves the window and
+/// is promoted to a native session: the workspace entry as an absolute path,
+/// paired with its directory flag so Finder drops behave correctly.
+pub(super) fn external_drag_payload(
+    root: &Path,
+    rel_path: &str,
+    is_dir: bool,
+) -> Option<gpui_kit::ExternalDragPayload> {
+    if rel_path.is_empty() {
+        return None;
+    }
+    Some(gpui_kit::ExternalDragPayload::Files(gpui_kit::FileDragPaths::new([(root.join(rel_path), is_dir)])))
+}
+
+/// Attach complete text only; the preview's truncation is never silently
+/// submitted. Images attach by path alone (the agent reads them itself), so
+/// non-UTF-8 image formats are first-class attachments instead of rejections.
 pub(super) fn read_attachment(root: &Path, path: &Path) -> Result<vtcode_desktop_protocol::TurnAttachment, String> {
     let root = vtcode_commons::paths::canonicalize(root).map_err(|error| error.to_string())?;
     let resolved = vtcode_commons::paths::resolve_workspace_path(&root, path)
         .map_err(|_error| rust_i18n::t!("app.files.attachments_workspace").to_string())?;
     let relative = resolved.strip_prefix(&root).map_err(|error| error.to_string())?;
     let relative = relative.to_string_lossy().replace('\\', "/");
+    if is_image_path(&relative) {
+        return Ok(vtcode_desktop_protocol::TurnAttachment { path: relative, text: String::new() });
+    }
+    // Binary image formats no vision provider accepts are rejected up front
+    // instead of falling through to a text read that would produce mojibake.
+    let lower = relative.to_ascii_lowercase();
+    if vtcode_commons::image::UNSUPPORTED_BINARY_IMAGE_EXTENSIONS
+        .iter()
+        .any(|extension| lower.ends_with(&format!(".{extension}")))
+    {
+        return Err(format!("\"{relative}\" is a binary image format (BMP/TIFF) that the providers do not accept."));
+    }
     let preview = read_preview(&root, &relative)
         .filter(|preview| !preview.truncated)
         .ok_or_else(|| format!("“{relative}” must be a UTF-8 text file no larger than 64 KiB."))?;
@@ -450,6 +518,81 @@ mod tests {
 
     fn temp_workspace() -> tempfile::TempDir {
         tempfile::TempDir::new().expect("temp dir")
+    }
+
+    #[test]
+    fn image_paths_map_to_renderable_formats_only() {
+        for path in ["shot.png", "photo.JPG", "anim.gif", "render.webp"] {
+            assert!(is_image_path(path), "{path} must be an image");
+        }
+        // BMP/TIFF are binary image formats no vision provider accepts; they
+        // must not pass the image gate (read_attachment rejects them with a
+        // dedicated notice instead).
+        for path in [
+            "icon.ico",
+            "legacy.bmp",
+            "scan.tiff",
+            "notes.md",
+            "main.rs",
+            "archive.zip",
+            "noext",
+        ] {
+            assert!(!is_image_path(path), "{path} must not be an image");
+        }
+    }
+
+    #[test]
+    fn binary_image_formats_reject_with_a_clear_notice() {
+        let workspace = temp_workspace();
+        fs::write(workspace.path().join("legacy.bmp"), b"BM\x00binary").unwrap();
+        let error = read_attachment(workspace.path(), Path::new("legacy.bmp")).expect_err("bmp must reject");
+        assert!(error.contains("binary image format"), "the notice must name the binary-format rejection: {error}");
+    }
+
+    #[test]
+    fn image_attachments_carry_the_path_without_text_content() {
+        let workspace = temp_workspace();
+        let image = workspace.path().join("shot.png");
+        fs::write(&image, b"not-really-a-png").unwrap();
+        let attachment = read_attachment(workspace.path(), Path::new("shot.png")).expect("image attaches");
+        assert_eq!(attachment.path, "shot.png");
+        assert!(attachment.text.is_empty(), "images attach by path, never inline text");
+    }
+
+    #[test]
+    fn read_image_bounds_and_rejects_non_images() {
+        let workspace = temp_workspace();
+        let root = workspace.path();
+        fs::write(root.join("tiny.png"), [0x89, b'P', b'N', b'G']).unwrap();
+        let image = read_image(root, "tiny.png").expect("small image reads");
+        assert!(Arc::strong_count(&image) >= 1);
+
+        let big: Vec<u8> = vec![0u8; (MAX_IMAGE_BYTES as u64 + 1) as usize];
+        fs::write(root.join("huge.png"), &big).unwrap();
+        assert!(read_image(root, "huge.png").is_none(), "oversized images must not load");
+
+        assert!(read_image(root, "notes.txt").is_none(), "non-images have no format");
+        fs::write(root.join("notes.txt"), "text").unwrap();
+        assert!(read_image(root, "notes.txt").is_none(), "text files are not images");
+    }
+
+    #[test]
+    fn external_drag_payload_maps_workspace_entries_to_absolute_paths() {
+        let workspace = temp_workspace();
+        let root = workspace.path();
+        let paths = match external_drag_payload(root, "src/main.rs", false).expect("file payload") {
+            gpui_kit::ExternalDragPayload::Files(paths) => paths,
+        };
+        let entries = paths.entries();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0], (root.join("src/main.rs"), false));
+
+        let paths = match external_drag_payload(root, "src", true).expect("directory payload") {
+            gpui_kit::ExternalDragPayload::Files(paths) => paths,
+        };
+        assert_eq!(paths.entries()[0], (root.join("src"), true), "directory flag must be preserved");
+
+        assert!(external_drag_payload(root, "", false).is_none(), "empty paths must not drag");
     }
 
     #[test]

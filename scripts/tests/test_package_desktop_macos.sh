@@ -54,6 +54,11 @@ cmp -s "${ROOT_DIR}/LICENSE" "${SUCCESS_APP}/Contents/Resources/LICENSE"
 cmp -s "${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns" "${SUCCESS_APP}/Contents/Resources/VTCode.icns"
 [[ -f "${SUCCESS_APP}/Contents/Resources/Assets.car" ]]
 grep -Fq -- "<key>CFBundleIconName</key>" "${SUCCESS_APP}/Contents/Info.plist"
+if grep -Fq -- "<key>NSIsTouchNative</key>" "${SUCCESS_APP}/Contents/Info.plist"; then
+    printf 'FAIL: bundle declares NSIsTouchNative; that disables the touch-to-mouse emulation the GUI relies on.\n' >&2
+    exit 1
+fi
+printf 'PASS: bundle omits NSIsTouchNative, so system touch emulation stays active.\n'
 xcrun --sdk macosx assetutil --info "${SUCCESS_APP}/Contents/Resources/Assets.car" > "${TEST_ROOT}/asset-info.json"
 grep -Fq -- "NSAppearanceNameDarkAqua" "${TEST_ROOT}/asset-info.json"
 grep -Fq -- "ISAppearanceTintable" "${TEST_ROOT}/asset-info.json"

@@ -383,9 +383,25 @@ impl DesktopView {
         self.palette_groups.clear();
     }
 
+    /// Rebuild the native menus when full-screen state flips so the View item
+    /// reads Enter or Exit Full Screen (HIG). No-op while unchanged.
+    pub(super) fn refresh_full_screen_menus(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let full_screen = window.is_fullscreen();
+        if full_screen != self.menus_show_exit_full_screen {
+            self.menus_show_exit_full_screen = full_screen;
+            bootstrap::set_native_menus(cx, full_screen);
+        }
+    }
+
     pub(super) fn dismiss_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.full_access_confirm.is_some() {
+        // About is the topmost modal: it opens over any route from the
+        // application menu, so Escape dismisses it before other layers.
+        if self.about_open {
+            self.close_about(window, cx);
+        } else if self.full_access_confirm.is_some() {
             self.cancel_full_access_confirm(window, cx);
+        } else if self.attachment_picker.is_some() {
+            self.close_attachment_picker(window, cx);
         } else if self.go_route_back(window, cx) {
             // Panel-interior layers first (typed editor, capture, palette,
             // config page to its tab), then the previous history entry.

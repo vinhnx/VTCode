@@ -266,15 +266,15 @@ fn font_families_round_trip_independently_and_legacy_defaults_remain_optional() 
 #[test]
 fn font_sizes_default_clamp_and_round_trip_independently() {
     let old: Preferences = serde_json::from_str("{\"theme\":\"ciapre\"}").unwrap();
-    assert_eq!((old.ui_font_size(), old.code_font_size()), (16, 14));
+    assert_eq!((old.typography_for(ThemeMode::Light).ui_font_size, old.code_font_size()), (16, 14));
     let settings = Preferences {
         ui_font_size: Some(0),
         code_font_size: Some(255),
         ..old
     };
-    assert_eq!((settings.ui_font_size(), settings.code_font_size()), (14, 24));
+    assert_eq!((settings.typography_for(ThemeMode::Light).ui_font_size, settings.code_font_size()), (14, 24));
     let parsed: Preferences = serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
-    assert_eq!((parsed.ui_font_size(), parsed.code_font_size()), (14, 24));
+    assert_eq!((parsed.typography_for(ThemeMode::Light).ui_font_size, parsed.code_font_size()), (14, 24));
 }
 
 #[test]
@@ -344,7 +344,7 @@ fn theme_profiles_keep_typography_independent_and_merge_active_profile_on_disabl
 
     preferences.set_separate_theme_profiles(false, ThemeMode::Light);
     assert!(!preferences.separate_theme_profiles);
-    assert_eq!(preferences.ui_font_size(), 19);
+    assert_eq!(preferences.typography_for(ThemeMode::Light).ui_font_size, 19);
     assert_eq!(preferences.ui_font_family, None);
     assert_eq!(preferences.code_font_family.as_deref(), Some("Monaco"));
     assert!(preferences.light_typography.is_none() && preferences.dark_typography.is_none());
@@ -500,4 +500,19 @@ fn turn_completion_mode_parsing_is_case_insensitive_with_unfocused_fallback() {
     for saved in [None, Some(""), Some("sometimes")] {
         assert_eq!(TurnCompletionMode::from_saved(saved), TurnCompletionMode::Unfocused, "{saved:?}");
     }
+}
+
+#[test]
+fn ui_font_size_follows_the_system_scale_only_when_unset() {
+    // Test builds pin the system scale at 1.0 for determinism; the scale math
+    // itself is a pure function exercised here.
+    assert_eq!(scaled_ui_font_size(None, 1.0), 16);
+    // A larger accessibility text setting scales the unset baseline up.
+    assert_eq!(scaled_ui_font_size(None, 1.2), 19);
+    // The clamp bounds both directions of the system slider.
+    assert_eq!(scaled_ui_font_size(None, 1.5), MAX_UI_FONT_SIZE);
+    assert_eq!(scaled_ui_font_size(None, 0.5), MIN_UI_FONT_SIZE);
+    // An explicit user choice overrides the system scale, still clamped.
+    assert_eq!(scaled_ui_font_size(Some(18), 1.5), 18);
+    assert_eq!(scaled_ui_font_size(Some(12), 1.0), MIN_UI_FONT_SIZE);
 }

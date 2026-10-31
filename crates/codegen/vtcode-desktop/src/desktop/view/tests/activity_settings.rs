@@ -281,23 +281,17 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
             Some("Session changes: 0 files, 0 additions, 0 deletions")
         );
         assert_eq!(
-            window
-                .find(super::super::opaque_path_element_id("utilities-source", "src/main.rs"))
-                .label(),
+            window.find(opaque_path_element_id("utilities-source", "src/main.rs")).label(),
             Some("Open attached source: src/main.rs")
         );
         assert_eq!(
-            window
-                .find(super::super::opaque_path_element_id("utilities-source", "src/lib.rs"))
-                .label(),
+            window.find(opaque_path_element_id("utilities-source", "src/lib.rs")).label(),
             Some("Open attached source: src/lib.rs")
         );
         view.update(cx, |view, _| view.attachments.reverse());
         window.render_frame(cx);
         assert_eq!(
-            window
-                .find(super::super::opaque_path_element_id("utilities-source", "src/main.rs"))
-                .label(),
+            window.find(opaque_path_element_id("utilities-source", "src/main.rs")).label(),
             Some("Open attached source: src/main.rs"),
             "source identity follows its path after reordering"
         );

@@ -590,7 +590,18 @@ fn command_and_add_context_palettes_follow_the_selected_language(cx: &mut TestAp
 
         view.update(cx, |view, cx| view.close_palette(window, cx));
         window.render_frame(cx);
+        // The attach button opens the tabbed card picker.
         window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("picker-tab-workspace").is_some(), "attach opens the picker");
+        view.update(cx, |view, cx| view.close_attachment_picker(window, cx));
+        window.render_frame(cx);
+        // The AddContext palette remains reachable through its action (@ / ⌘⇧A).
+        window.dispatch_action(Box::new(super::super::OpenAddContext), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Añadir archivos y más @"));
         let palette_groups = view.read(cx).composer_resource_groups();

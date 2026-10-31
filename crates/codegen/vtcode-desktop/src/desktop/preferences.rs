@@ -5,6 +5,11 @@
 
 use std::path::PathBuf;
 
+#[cfg(not(test))]
+use objc2_app_kit::{NSFont, NSFontTextStyleBody};
+#[cfg(not(test))]
+use objc2_foundation::NSDictionary;
+
 use gpui_kit::SharedString;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::searchable_list::SearchableListItem;
@@ -28,6 +33,47 @@ pub(super) const MAX_PANE_WIDTH: f32 = 560.0;
 /// 10.5px, the smallest functional size on macOS.
 pub(super) const MIN_UI_FONT_SIZE: u8 = 14;
 pub(super) const MAX_UI_FONT_SIZE: u8 = 24;
+/// Baseline UI size when the user has not pinned one: follows the macOS
+/// accessibility text setting through [`system_text_scale`].
+const DEFAULT_UI_FONT_SIZE: u8 = 16;
+/// The macOS system default body size that the accessibility text slider
+/// scales away from (System Settings → Accessibility → Display → Text).
+#[cfg_attr(test, allow(dead_code))]
+const SYSTEM_BODY_FONT_SIZE: f32 = 13.0;
+
+/// The macOS accessibility text setting as a multiplier over the system
+/// default body size: 1.0 at the system default, larger when the user opted
+/// into bigger system text. An unset app size follows it; an explicit size
+/// overrides it. Applies at launch and whenever typography is re-applied.
+fn system_text_scale() -> f32 {
+    #[cfg(not(test))]
+    {
+        #[expect(
+            unsafe_code,
+            reason = "Reading the macOS accessibility text size requires the AppKit preferred-font query; \
+                it is a process-global main-thread lookup with default options"
+        )]
+        unsafe {
+            let font = NSFont::preferredFontForTextStyle_options(&NSFontTextStyleBody, &NSDictionary::dictionary());
+            ((font.pointSize() as f32) / SYSTEM_BODY_FONT_SIZE).clamp(1.0, 1.5)
+        }
+    }
+    #[cfg(test)]
+    {
+        1.0
+    }
+}
+
+/// Resolve the UI base size: an explicit user choice wins; an unset size
+/// follows the macOS accessibility text setting over the 16px baseline.
+fn scaled_ui_font_size(explicit: Option<u8>, system_scale: f32) -> u8 {
+    match explicit {
+        Some(size) => size.clamp(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE),
+        None => (f32::from(DEFAULT_UI_FONT_SIZE) * system_scale)
+            .round()
+            .clamp(f32::from(MIN_UI_FONT_SIZE), f32::from(MAX_UI_FONT_SIZE)) as u8,
+    }
+}
 /// Smallest mono size for diffs, code blocks, and terminal output.
 pub(super) const MIN_CODE_FONT_SIZE: u8 = 11;
 pub(super) const MAX_CODE_FONT_SIZE: u8 = 24;
@@ -495,9 +541,6 @@ impl Preferences {
         self.file_open_destination = Some(destination.id().to_owned());
     }
 
-    pub(super) fn ui_font_size(&self) -> u8 {
-        self.ui_font_size.unwrap_or(16).clamp(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE)
-    }
     pub(super) fn code_font_size(&self) -> u8 {
         self.code_font_size.unwrap_or(14).clamp(MIN_CODE_FONT_SIZE, MAX_CODE_FONT_SIZE)
     }
@@ -523,7 +566,7 @@ impl Preferences {
             Some(profile) => TypographySettings {
                 ui_font_family: profile.ui_font_family.as_deref(),
                 code_font_family: profile.code_font_family.as_deref(),
-                ui_font_size: profile.ui_font_size.unwrap_or(16).clamp(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE),
+                ui_font_size: scaled_ui_font_size(profile.ui_font_size, system_text_scale()),
                 code_font_size: profile
                     .code_font_size
                     .unwrap_or(14)
@@ -532,7 +575,7 @@ impl Preferences {
             None => TypographySettings {
                 ui_font_family: self.ui_font_family.as_deref(),
                 code_font_family: self.code_font_family.as_deref(),
-                ui_font_size: self.ui_font_size(),
+                ui_font_size: scaled_ui_font_size(self.ui_font_size, system_text_scale()),
                 code_font_size: self.code_font_size(),
             },
         }
