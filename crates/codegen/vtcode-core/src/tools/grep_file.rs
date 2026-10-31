@@ -346,7 +346,13 @@ impl GrepSearchManager {
             };
 
             // Cache the result if cache is available
-            if let Some(ref cache) = cache {
+            // Cache only results with real hits: a no-match query carries
+            // begin/end stream events but must stay uncached so it cannot
+            // serve a stale negative after files change (see
+            // [`GrepSearchCache::should_cache`]).
+            if let Some(ref cache) = cache
+                && GrepSearchCache::should_cache(&result)
+            {
                 cache.put(&input, result.clone());
             }
 
@@ -414,11 +420,13 @@ impl GrepSearchManager {
             total_matches: if truncated { Some(total_match_count) } else { None },
         };
 
-        // Cache every successful result, including empty matches: repeated
-        // no-match patterns are common, and each uncached miss re-spawns a
-        // full ripgrep traversal. Errors return `Err` above and never reach
-        // the cache.
-        self.cache.put(&input, result.clone());
+        // Cache only results with real hits (see
+        // [`GrepSearchCache::should_cache`]): a no-hit result still carries
+        // begin/end stream events, and caching it would serve stale
+        // negatives. Errors return `Err` above and never reach the cache.
+        if GrepSearchCache::should_cache(&result) {
+            self.cache.put(&input, result.clone());
+        }
 
         Ok(result)
     }
@@ -497,6 +505,54 @@ mod tests {
     use serde_json::json;
     use tempfile::TempDir;
     use tokio::io::BufReader;
+
+    #[tokio::test]
+    async fn perform_search_caches_matches_but_leaves_no_hit_results_uncached() {
+        let workspace = TempDir::new().expect("workspace");
+        std::fs::write(workspace.path().join("hit.rs"), "needle\n").expect("fixture");
+        let manager = GrepSearchManager::new(workspace.path().to_path_buf());
+
+        // Negative side: a no-match search returns Ok with ripgrep stream
+        // events (begin/end/summary) but no `match` records, and must leave
+        // the cache empty. The gate lives at the put sites, not only in
+        // `should_cache`, so pin the observable cache size across a repeated
+        // identical query.
+        let miss_input =
+            GrepSearchInput::with_defaults("absent-token".to_string(), workspace.path().to_string_lossy().into_owned());
+        let first_miss = manager.perform_search(miss_input.clone()).await.expect("no-match search");
+        assert!(
+            !first_miss
+                .matches
+                .iter()
+                .any(|entry| entry.get("type").and_then(Value::as_str) == Some("match")),
+            "a no-hit search must carry no match records, got: {:?}",
+            first_miss.matches
+        );
+        let second_miss = manager.perform_search(miss_input).await.expect("repeat no-match search");
+        assert!(
+            !second_miss
+                .matches
+                .iter()
+                .any(|entry| entry.get("type").and_then(Value::as_str) == Some("match"))
+        );
+        assert_eq!(
+            manager.cache.stats().0,
+            0,
+            "no-hit results must never be cached: a stale negative would hide new matches within the TTL window"
+        );
+
+        // Positive side: the same workspace caches the matching search.
+        let hit_input =
+            GrepSearchInput::with_defaults("needle".to_string(), workspace.path().to_string_lossy().into_owned());
+        let hit = manager.perform_search(hit_input).await.expect("matching search");
+        assert!(
+            hit.matches
+                .iter()
+                .any(|entry| entry.get("type").and_then(Value::as_str) == Some("match")),
+            "a hit search must carry at least one match record"
+        );
+        assert_eq!(manager.cache.stats().0, 1, "results with real matches are cached");
+    }
 
     #[tokio::test]
     async fn code_search_literal_stream_reaps_at_candidate_cap() {

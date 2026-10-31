@@ -94,16 +94,24 @@ impl GrepSearchCache {
         self.cache.insert(key, result, size_bytes);
     }
 
-    /// Check if this search should be cached.
+    /// Check if this search should be cached (only results with real hits).
     ///
-    /// Every successful result is cacheable, including empty matches: the
-    /// agent commonly retries near-identical patterns that match nothing,
-    /// and each uncached miss re-spawns a full ripgrep traversal over the
-    /// workspace. Errors and timeouts surface as `Err` upstream and never
-    /// reach the cache, and empty results share the same TTL window as
-    /// non-empty ones, so the staleness model is unchanged.
-    pub fn should_cache(_result: &GrepSearchResult) -> bool {
-        true
+    /// [`GrepSearchResult::matches`] holds raw ripgrep JSON stream events, so
+    /// a no-hit search is still non-empty: it carries the per-file
+    /// `begin`/`end` records and the final `summary`. Caching those would
+    /// turn every miss into a stale silent negative — the cache has no
+    /// file-change invalidation (TTL and LRU eviction only), so matches
+    /// created within the TTL window would stay hidden. Only searches with
+    /// at least one `match`-type event are cached: a stale positive at least
+    /// surfaces old hits the agent can notice when opening the file, while a
+    /// stale negative hides new ones with no signal. Repeated no-match
+    /// queries therefore re-run ripgrep — the accepted cost until the cache
+    /// gains a write-path invalidation hook.
+    pub fn should_cache(result: &GrepSearchResult) -> bool {
+        result
+            .matches
+            .iter()
+            .any(|entry| entry.get("type").and_then(serde_json::Value::as_str) == Some("match"))
     }
 
     /// Clear the cache
@@ -193,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_results_are_cached_for_repeated_no_match_queries() {
+    fn empty_results_are_not_cached_so_stale_negatives_cannot_mask_new_matches() {
         let cache = GrepSearchCache::new(10);
         let input = make_test_input("never-matches", "/path");
         let result = GrepSearchResult {
@@ -203,12 +211,37 @@ mod tests {
             total_matches: None,
         };
 
-        assert!(GrepSearchCache::should_cache(&result));
+        // The cache has no file-change invalidation (TTL/LRU only), so a
+        // cached miss would silently hide matches created inside the TTL
+        // window. A bare empty result must fail the caching gate.
+        assert!(!GrepSearchCache::should_cache(&result));
 
-        cache.put(&input, result);
-        let cached = cache.get(&input).expect("empty result must be served from cache");
-        assert!(cached.matches.is_empty());
-        assert!(!cached.truncated);
-        assert_eq!(cached.total_matches, None);
+        // A no-hit search is NOT empty: the backend keeps ripgrep's
+        // per-file begin/end (and summary) stream events in `matches`.
+        // Those alone must also fail the gate — this is the shape a real
+        // miss actually arrives in.
+        let no_hit_events = GrepSearchResult {
+            matches: vec![
+                serde_json::json!({"type": "begin", "data": {"path": {"text": "/ws/a.rs"}}}),
+                serde_json::json!({"type": "end", "data": {"path": {"text": "/ws/a.rs"}}}),
+            ],
+            ..result.clone()
+        };
+        assert!(!GrepSearchCache::should_cache(&no_hit_events));
+
+        // A result carrying at least one real `match` event stays cacheable
+        // and round-trips: the gate is match presence, not event count.
+        let with_matches = GrepSearchResult {
+            matches: vec![serde_json::json!({
+                "type": "match",
+                "data": {"path": {"text": "/ws/a.rs"}, "lines": {"text": "needle\n"}, "line_number": 1}
+            })],
+            ..result.clone()
+        };
+        assert!(GrepSearchCache::should_cache(&with_matches));
+
+        cache.put(&input, with_matches);
+        let cached = cache.get(&input).expect("result with a real match must be served from cache");
+        assert_eq!(cached.matches.len(), 1);
     }
 }
