@@ -201,7 +201,20 @@ run_workflow_security_lint() {
 # (now removed) ci.yml workflow, so keep them reachable from the local gate.
 run_release_contract_tests() {
     print_status "Running release contract tests..."
+    local failed=0
     if python3 scripts/tests/test_ci_load.py; then
+        print_success "CI-load contract tests passed."
+    else
+        print_error "CI-load contract tests failed."
+        failed=1
+    fi
+    if python3 scripts/tests/test_package_vtcode_companion.py; then
+        print_success "Companion packaging contract tests passed."
+    else
+        print_error "Companion packaging contract tests failed."
+        failed=1
+    fi
+    if [ "$failed" -eq 0 ]; then
         print_success "Release contract tests passed."
         return 0
     else
