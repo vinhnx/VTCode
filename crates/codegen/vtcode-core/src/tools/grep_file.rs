@@ -346,9 +346,7 @@ impl GrepSearchManager {
             };
 
             // Cache the result if cache is available
-            if let Some(ref cache) = cache
-                && GrepSearchCache::should_cache(&result)
-            {
+            if let Some(ref cache) = cache {
                 cache.put(&input, result.clone());
             }
 
@@ -416,10 +414,11 @@ impl GrepSearchManager {
             total_matches: if truncated { Some(total_match_count) } else { None },
         };
 
-        // Cache the result if it's worth caching (non-empty, successful)
-        if GrepSearchCache::should_cache(&result) {
-            self.cache.put(&input, result.clone());
-        }
+        // Cache every successful result, including empty matches: repeated
+        // no-match patterns are common, and each uncached miss re-spawns a
+        // full ripgrep traversal. Errors return `Err` above and never reach
+        // the cache.
+        self.cache.put(&input, result.clone());
 
         Ok(result)
     }

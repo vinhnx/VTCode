@@ -94,9 +94,16 @@ impl GrepSearchCache {
         self.cache.insert(key, result, size_bytes);
     }
 
-    /// Check if this search should be cached (only cache successful, non-empty results)
-    pub fn should_cache(result: &GrepSearchResult) -> bool {
-        !result.matches.is_empty()
+    /// Check if this search should be cached.
+    ///
+    /// Every successful result is cacheable, including empty matches: the
+    /// agent commonly retries near-identical patterns that match nothing,
+    /// and each uncached miss re-spawns a full ripgrep traversal over the
+    /// workspace. Errors and timeouts surface as `Err` upstream and never
+    /// reach the cache, and empty results share the same TTL window as
+    /// non-empty ones, so the staleness model is unchanged.
+    pub fn should_cache(_result: &GrepSearchResult) -> bool {
+        true
     }
 
     /// Clear the cache
@@ -183,5 +190,25 @@ mod tests {
         assert_eq!(cached.query, result.query);
         assert_eq!(cached.matches.len(), result.matches.len());
         assert_eq!(cached.truncated, result.truncated);
+    }
+
+    #[test]
+    fn empty_results_are_cached_for_repeated_no_match_queries() {
+        let cache = GrepSearchCache::new(10);
+        let input = make_test_input("never-matches", "/path");
+        let result = GrepSearchResult {
+            query: "never-matches".to_string(),
+            matches: vec![],
+            truncated: false,
+            total_matches: None,
+        };
+
+        assert!(GrepSearchCache::should_cache(&result));
+
+        cache.put(&input, result);
+        let cached = cache.get(&input).expect("empty result must be served from cache");
+        assert!(cached.matches.is_empty());
+        assert!(!cached.truncated);
+        assert_eq!(cached.total_matches, None);
     }
 }
