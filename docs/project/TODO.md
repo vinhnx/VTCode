@@ -31,3 +31,9 @@ improve with more refined UI and design but keep it simple and user-friendly.
 ---
 
 implement simple markdown files viewer support for desktop app
+
+---
+
+benchmark VT Code https://chatgpt.com/c/6ae5d291-8374-83ec-a83d-e075e1804da5
+
+---
