@@ -426,9 +426,10 @@ they can reach provider registration. This prevents repository configuration fro
 authentication (`auth.command`).
 
 It also rejects repository-controlled `provider_overrides.<name>.base_url` and `.api_key_env` values, which could
-redirect model requests or select credentials from an environment variable. Origin checks still apply when
-`workspace.use_root_config` discards lower layers. System/user config, explicitly selected config files, and explicit
-runtime overrides remain trusted opt-in paths.
+redirect model requests or select credentials from an environment variable, and repository-controlled
+`auth.copilot.command`, which launches the child process used for GitHub Copilot authentication. Origin checks still
+apply when `workspace.use_root_config` discards lower layers. System/user config, explicitly selected config files, and
+explicit runtime overrides remain trusted opt-in paths.
 
 Normal startup and live reload can repair legacy repository files produced by older full-config writes: only the
 protected provider fields are removed atomically before strict loading is retried. Malformed or symlinked files are

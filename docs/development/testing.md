@@ -98,10 +98,10 @@ CARGO_INCREMENTAL=1 cargo nextest run --profile quick
 ./scripts/check-dev.sh --test
 ```
 
-The `quick` and `ci` profiles are optional workspace configuration. The check scripts use those profiles when available
-and fall back to Nextest's `default` profile when a local checkout does not provide them; a missing profile must not
-prevent the checks from running. `check-dev.sh --changed` performs its own changed-package filtering because Nextest
-does not provide Cargo's `--changed --since` selection flags.
+The `quick` and `ci` profiles ship with the repository in `.config/nextest.toml`. The check scripts still use those
+profiles only when available and fall back to Nextest's `default` profile when a local checkout does not provide them;
+a missing profile must not prevent the checks from running. `check-dev.sh --changed` performs its own changed-package
+filtering because Nextest does not provide Cargo's `--changed --since` selection flags.
 
 The fast gate runs Cargo checks, Clippy, changed-package metadata, and Nextest with `--locked`; verification never
 updates `Cargo.lock`. Tests require `cargo-nextest` and fail if the selected suite contains no tests. A successful

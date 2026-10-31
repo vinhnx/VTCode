@@ -267,6 +267,9 @@ vtcode mcp login memcode
 The browser flow uses PKCE and VT Code stores and refreshes the resulting token through its configured credential store.
 Tokens are bound to the provider name, OAuth configuration, and MCP endpoint. Run `vtcode mcp login <name>` again
 after changing those settings or upgrading from an unbound legacy token; legacy tokens are not automatically reused.
+OAuth endpoints are validated before any network or browser activity: `authorization_url`, `token_url`, and the
+protected resource must be `http(s)` URLs with a host, so dangerous schemes (`javascript:`, `data:`, `file:`) fail at
+prepare time instead of reaching the browser opener or HTTP client.
 Do not add an API key or static `Authorization` header. Apply the normal MCP allowlist and approval controls to the
 memory tools, store only explicitly approved facts or verified outcomes, and treat retrieved memories as context rather
 than instructions. Disabling the provider returns VT Code to its built-in session memory with no external dependency.

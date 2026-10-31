@@ -133,7 +133,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Scroll upward | Tail following pauses; returning to the bottom resumes it. Older rows evicted by the history bound preserve the remaining reader anchor. |
 | Send a prompt | Enter submits the composer draft; Shift+Enter inserts a newline. Send creates a session automatically when none is selected, then submits the exact captured prompt and attachments. A newer draft typed while creation is pending stays in the composer. |
 | Use CLI composer completions | Typing `@` at a token boundary opens filtered workspace-file mentions; selecting one inserts `@path` into the draft and leaves file loading to the shared runtime. A leading `/` opens commands from the CLI's visible slash-command catalog. Up/Down changes the highlighted command, Tab completes without submitting, and Enter completes the selected command and sends it through the normal desktop turn path. Email addresses and package-manager scopes such as `npm install @types/node` do not open file mentions. |
-| Run CLI slash commands | Desktop uses VT Code's shared slash-command dispatcher for runtime, workspace, safety, integration, history, and auth commands. Exact native equivalents route `/new`, `/exit`, `/stop`, `/files [filter]`, `/history`, `/model`, `/fast`, `/mode`, `/theme`, `/config`, `/splash`, and `/help` into desktop session controls, palettes, or settings; `/config` opens the dedicated configuration page, and `/config <group or path>` deep-links into it while anything else becomes a search query. The runtime-owned `/config` sections (`reset`, `clear`, `checkup`, `doctor`, `memory`, `tasks`, `jobs`, `log`, `subprocess`, `notify`) stay with the CLI runtime, as do `/settings` arguments outside the known Settings tabs. `/splash` opens Connections and refreshes WebMCP status; CLI `/splash` reports its own workspace, session, tool registry, and listener without exposing pairing codes. `/files` opens the filtered `@` file picker, and `/history` restores a recent user prompt from the selected thread without submitting it. Terminal-only commands (`/terminal-setup`, `/statusline`, `/title`, `/vim`) are omitted from Desktop suggestions. Commands without a native equivalent continue through the shared CLI runtime and its bridged choice dialogs. |
+| Run CLI slash commands | Desktop uses VT Code's shared slash-command dispatcher for runtime, workspace, safety, integration, history, and auth commands. Exact native equivalents route `/new`, `/exit`, `/stop`, `/files [filter]`, `/history`, `/model`, `/fast`, `/mode`, `/theme`, `/config`, `/splash`, and `/help` into desktop session controls, palettes, or settings. Matching mirrors the CLI dispatcher: the command token is case-insensitive (`/NEW`), and the argument-less commands (`/new`, `/exit`, `/stop`, `/model`) route natively even with trailing text. `/config` opens the dedicated configuration page, and `/config <group or path>` deep-links into it while anything else becomes a search query. The runtime-owned `/config` sections (`reset`, `clear`, `checkup`, `doctor`, `memory`, `tasks`, `jobs`, `log`, `subprocess`, `notify`) stay with the CLI runtime, as do `/settings` arguments outside the known Settings tabs. `/splash` opens Connections and refreshes WebMCP status; CLI `/splash` reports its own workspace, session, tool registry, and listener without exposing pairing codes. `/files` opens the filtered `@` file picker, and `/history` restores a recent user prompt from the selected thread without submitting it. Terminal-only commands (`/terminal-setup`, `/statusline`, `/title`, `/vim`) are omitted from Desktop suggestions. Commands without a native equivalent continue through the shared CLI runtime and its bridged choice dialogs. |
 | Recover a submission | The app retains the submitted prompt and attachments until acknowledgement. A rejected request offers Restore draft, Copy prompt, and Dismiss; restoration requires an empty composer so newer work is preserved. A disconnect before acknowledgement warns that delivery is uncertain. Recovery never resends automatically. |
 | Attach files | "+ Attach" opens a native multi-select picker limited to workspace UTF-8 text files (at most 5 per prompt, 64 KiB each). Oversized files are rejected rather than silently truncated. Send waits for attachment loading. Chips above the composer remove items; the transcript echoes attached paths. |
 | Switch models | The composer's Model button opens a searchable kit Command picker, grouped by provider. Search names, providers, or exact IDs; rows show context token counts and preselect the current model, including configured models outside the built-in catalog. Arrow keys and Enter choose a model through `config/select`. Choosing the current model preserves the session. Escape clears a nonempty query, then dismisses without changes. |
@@ -219,11 +219,11 @@ popup. File selection reuses workspace
 containment, UTF-8, 64 KiB, and five-file limits. Discovery uses shared CLI loaders on a blocking worker while
 idle, a three-second request deadline, bounded wire metadata, and the retained query state.
 
-The permission control (⌘⇧P) chooses **Ask before protected actions**, **Auto-approve commands**, or **Full access**. It controls the
-CLI's command confirmation flag. Ask and Auto are saved per recent workspace in Desktop preferences and restored
-after service initialization; Full access is session-only. Full access disables the process sandbox and approves
-promptable tool calls; configured denials and hard safety blocks still apply, and direct file tools can retain their
-workspace boundaries. The CLI equivalent is `vtcode --full-access`. Ask is a confirmation policy,
+The permission control (⌘⇧P) chooses **Ask before protected actions**, **Auto-approve commands**, or **Full access**. It
+controls the CLI's command confirmation flag. Ask and Auto are saved per recent workspace in Desktop preferences and
+restored after service initialization; Full access is session-only. Full access disables the process sandbox and
+approves promptable tool calls; configured denials and hard safety blocks still apply, and direct file tools can retain
+their workspace boundaries. The CLI equivalent is `vtcode --full-access`. Ask is a confirmation policy,
 separate from the agent mode. **Mode** (⌘⇧B) lists the CLI-discovered primary
 agents (Build, Plan, Auto, Duck, Coordinator, and custom primary agents) and uses the CLI's primary-agent configuration
 and planning entry point. Mode changes save `default_primary_agent` through the shared layered CLI config writer.
@@ -299,8 +299,9 @@ environment variables for credentials. Large values and catalogs beyond the UI b
 Settings. A successful write restarts the local service to reload all CLI layers while retaining the draft, attached
 files, and history. If a higher-precedence layer still overrides the saved value, Settings reports that after
 reloading. The page opens on a curated Configuration overview (sandboxing, approval policy, sandbox settings,
-network access, web search, output detail, reasoning display) plus a Model features card that chooses which reasoning effort levels
-appear in model controls; every row reuses the same typed editors, palette, and validated writer as the catalog.
+network access, web search, output detail, reasoning display) plus a Model features card that chooses which reasoning
+effort levels appear in model controls; every row reuses the same typed editors, palette, and validated writer as the
+catalog.
 Open vtcode.toml opens the selected layer file in the default editor through a service-side `config/openFile`
 call (protocol 1.22), which creates a never-written layer file first; the service resolves the path itself, so no
 filesystem path crosses the protocol. The effort picker is a desktop preference (`availableEfforts`): it filters the
@@ -417,9 +418,11 @@ role, content, and duplicate occurrence so bounded-history shifts do not transfe
 
 ## Themes
 
-The desktop ships a curated port of the VT Code TUI theme registry — **Ciapre** (the default), Ciapre Dark and
-Ciapre Blue, Solarized Dark/Light/HC, Gruvbox Dark/Light, Dracula, GitHub Dark/Light, Atom One Dark/Light,
-Tomorrow Night, Catppuccin Latte/Mocha, plus the kit's System Light/Dark bases. A theme sets background,
+The desktop builds its theme catalog from the full shared VT Code theme registry (`available_themes()` in
+`vtcode-ui`), so every CLI built-in theme — **Ciapre** (the default), the Ciapre variants, Solarized, Gruvbox,
+Catppuccin, Nord, Vitesse, Tomorrow, and the rest of the registry — is selectable on desktop, alongside the kit's
+System Light/Dark bases. The catalog is not enumerated here; see the [color guidelines](../guides/COLOR_GUIDELINES.md)
+for the registry list and the desktop↔CLI sync rules. A theme sets background,
 foreground, accent, danger, and warning; border, muted text, and panel colors are derived from the palette.
 Muted text is binary-searched to the WCAG AA 4.5:1 threshold and filled controls pick white/black text at the
 equal-contrast crossover; both are enforced by tests. The choice persists in preferences.
@@ -503,6 +506,9 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `workspace/review` | Capture bounded Git changes against HEAD or an unborn branch’s empty tree, with optional untracked text previews. |
 | `session/list`, `session/create`, `session/load`, `session/history`, `session/close` | List up to 200 recent archives for the active workspace, create sessions, restore durable messages, canonical change reviews, activity, and captured output, and page backward through archived conversation messages. |
 | `session/output/read` | Page one bounded spooled tool-output blob by cursor without re-running the tool. |
+| `storage/summary` | Measure on-disk usage with bounded walks: session archives, managed worktrees, per-workspace memory stores, and the rest of the state directory; session archives and worktrees also report entry counts. |
+| `session/delete` | Delete one archived session by ID after validating the archive path; the selected (active) session is protected and the request fails. |
+| `worktree/list`, `worktree/remove` | List managed `.vtcode/worktrees/` checkouts with their HEAD and dirty flag, or remove one by name. |
 | `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `composer/resources` | List bounded CLI-safe resource tokens for composer file and mention autocomplete. |
@@ -799,7 +805,10 @@ particularly `a11y.rs` and `popover.rs`. Applied stable roles/labels, retained e
 and anchored/deferred popovers using the APIs actually available through pinned GPUI Kit 0.8.0.
 These are original VT Code integrations; no main-branch APIs or example implementation were copied.
 
-Desktop `/config` opens a dedicated configuration page grouped by the shared CLI catalog. Choose a category to inspect effective values and their source, use **Browse all settings** to search editable entries, and select User, Workspace, or Project as the write target. Changes use the CLI validated writer and reload the service; documented reference-only entries and omitted sensitive or oversized values are identified in the page.
+Desktop `/config` opens a dedicated configuration page grouped by the shared CLI catalog. Choose a category to inspect
+effective values and their source, use **Browse all settings** to search editable entries, and select User, Workspace,
+or Project as the write target. Changes use the CLI validated writer and reload the service; documented reference-only
+entries and omitted sensitive or oversized values are identified in the page.
 
 The 2026-10-28 revision keeps that catalog but rebuilds the page as a
 master-detail surface: an inline search field filters every group, the

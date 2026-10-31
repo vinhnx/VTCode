@@ -49,8 +49,11 @@ Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-The installer also attempts to add the optional `ripgrep` and `ast-grep` search tools. To manage installation
-yourself, use Homebrew or Cargo:
+The installer also attempts to add the optional `ripgrep` and `ast-grep` search tools. On macOS 15+ it also builds the
+VT Code desktop app from source at the installed release tag and installs it to `~/Applications` (best-effort: a missing
+toolchain or failed build only warns, so the CLI install never breaks). Pass `--without-desktop` to skip it or
+`--with-desktop` to fail hard when unavailable; see the [installer guide](./docs/installation/NATIVE_INSTALLERS.md).
+To manage installation yourself, use Homebrew or Cargo:
 
 ```bash
 brew trust vinhnx/tap

@@ -179,6 +179,11 @@ cargo test --workspace
 cargo clippy && cargo fmt --check && cargo check
 ```
 
+Both gates enforce the tracked-file length ceiling: no tracked text file may exceed 1000 lines
+(`python3 scripts/check_file_length.py --mode enforce`). Generated or vendored outliers are parked in
+`scripts/file_length_allowlist.txt` as `glob=MAX_LINES`; first-party source is never allowlisted without a split plan.
+If your change pushes a file over the ceiling, split it instead of extending the allowlist.
+
 ## Submitting Changes
 
 ### Pull Request Process

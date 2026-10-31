@@ -20,9 +20,9 @@ const REFRESH_SKEW_SECS: u64 = 60;
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct McpOAuthConfig {
-    /// OAuth authorization endpoint.
+    /// OAuth authorization endpoint. Must be an http(s) URL with a host.
     pub authorization_url: String,
-    /// OAuth token endpoint.
+    /// OAuth token endpoint. Must be an http(s) URL with a host.
     pub token_url: String,
     /// OAuth client identifier.
     pub client_id: String,

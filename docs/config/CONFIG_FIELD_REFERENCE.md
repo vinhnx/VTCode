@@ -456,7 +456,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.providers[].name` | `string` | yes | `-` | Provider name (used for identification) |
 | `mcp.providers[].oauth` | `McpOAuthConfig \| null` | no | `null` | Optional OAuth configuration for providers that issue bearer tokens dynamically. |
 | `mcp.providers[].oauth.audience` | `null \| string` | no | `null` | Optional audience/resource hint sent with the auth and token requests. |
-| `mcp.providers[].oauth.authorization_url` | `string` | no | `""` | OAuth authorization endpoint. |
+| `mcp.providers[].oauth.authorization_url` | `string` | no | `""` | OAuth authorization endpoint. Must be an http(s) URL with a host. |
 | `mcp.providers[].oauth.callback_port` | `integer` | no | `8768` | Local callback server port. |
 | `mcp.providers[].oauth.client_id` | `string` | no | `""` | OAuth client identifier. |
 | `mcp.providers[].oauth.credentials_store_mode` | `string` | no | `"file"` | Credential storage backend for this provider's token. |
@@ -467,7 +467,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.providers[].oauth.flow_timeout_secs` | `integer` | no | `300` | Browser-flow timeout in seconds. |
 | `mcp.providers[].oauth.scopes` | `array` | no | `[]` | Requested scopes. |
 | `mcp.providers[].oauth.scopes[]` | `string` | no | `-` | - |
-| `mcp.providers[].oauth.token_url` | `string` | no | `""` | OAuth token endpoint. |
+| `mcp.providers[].oauth.token_url` | `string` | no | `""` | OAuth token endpoint. Must be an http(s) URL with a host. |
 | `mcp.providers[].protocol_version` | `string` | no | `"2025-11-25"` | Protocol version |
 | `mcp.providers[].startup_timeout_ms` | `integer \| null` | no | `null` | Startup timeout in milliseconds for this provider |
 | `mcp.providers[].working_directory` | `null \| string` | no | `null` | Working directory for the command |
@@ -881,7 +881,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.suppress_when_focused` | `boolean` | no | `true` | Suppress notifications while terminal focus is active. |
 | `ui.notifications.tool_failure` | `boolean` | no | `false` | Notify when a tool call fails. |
 | `ui.notifications.tool_success` | `boolean` | no | `false` | Notify on successful tool calls. |
-| `ui.program_status.enabled` | `boolean` | no | `false` | Emit OSC 7501 status reports on the interactive TUI terminal stream. |
+| `ui.program_status.enabled` | `boolean` | no | `true` | Emit OSC 7501 status reports on the interactive TUI terminal stream. |
 | `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden"). Options: "always", "toggle", "hidden". |
 | `ui.reasoning_visible_default` | `boolean` | no | `true` | Default visibility for reasoning when display mode is "toggle" |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while reduce_motion_mode is enabled. Screen reader mode still disables progress animation. |

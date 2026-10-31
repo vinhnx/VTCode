@@ -112,7 +112,9 @@ Repository-controlled configuration is not trusted to introduce provider executi
 config loading, VT Code rejects any non-empty `custom_providers` value whose winning origin is a workspace or project
 layer. This includes custom provider `auth.command`, which can launch a child process with the user's process
 privileges. The loader rejects `provider_overrides.<name>.base_url` and `.api_key_env` from those layers as well,
-preventing a repository from redirecting model traffic or selecting a credential environment variable.
+preventing a repository from redirecting model traffic or selecting a credential environment variable. A
+repository-controlled `auth.copilot.command` — the child process launched for GitHub Copilot authentication — is
+rejected for the same reason.
 
 The check runs before provider validation and registration, and `workspace.use_root_config` cannot bypass it. Keep
 command-backed providers and endpoint/credential overrides in system or user configuration, or pass a file explicitly

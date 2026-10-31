@@ -142,8 +142,10 @@ bold_is_bright = true
 ## Available Themes
 
 VT Code includes light and dark themes. Run `/theme` to browse them (the picker shows each id and its
-light/dark scheme). The longbridge/gpui-kit theme sets listed below are shared with the GPUI desktop client, so the
-same theme id renders the same palette in the terminal and in the desktop app.
+light/dark scheme). The tables below cover the hand-curated entries; the authoritative catalog is the theme registry
+(`available_themes()` in `vtcode-ui`), which also registers the longbridge/gpui-kit sets and additional classic schemes
+(Dracula, GitHub, Atom One, Tomorrow, Nord, Material, Spacegray, and more). The gpui-kit sets are shared with the GPUI
+desktop client, so the same theme id renders the same palette in the terminal and in the desktop app.
 
 | Theme                        | Mode  | Description                       |
 | ---------------------------- | ----- | --------------------------------- |
