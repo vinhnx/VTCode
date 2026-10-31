@@ -12,7 +12,8 @@ larger files are for app bundles and in-app display only.
 | `vtcode-app-light-512.png`    | 512x512, 2.3K | Desktop Dock artwork (light mode) and Appearance picker preview.                         |
 | `vtcode-app-dark-512.png`     | 512x512, 3.1K | Desktop Dock artwork (dark mode) and Appearance picker preview.                          |
 | `vtcode-app-dynamic-512.png`  | 512x512, 4.6K | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art.               |
-| `vtcode-app-dynamic.icns`     | 171K          | Prebuilt macOS bundle icon (installed as `VTCode.icns` by `package-desktop-macos.sh`).   |
+| `vtcode-app-dynamic.icns`     | 171K          | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26).    |
+| `AppIcon.icon/`               | 35K           | Layered Liquid Glass source: `icon.json` + `Assets/Foreground.png` (1024 V glyph mask).  |
 | `vtcode.svg`                  | vector, 474B  | Scalable source for docs.                                                                |
 | `vtcode-mark.svg`             | vector, 416B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
 | `vtcode-mono.svg`             | vector, 647B  | Monochrome V mark (white on transparent) for program registries.                         |
@@ -35,7 +36,28 @@ context cannot switch (bundle icon, manual setups, picker preview).
   installer resolves Dynamic against the active CLI theme at startup and reinstalls on drift, so a theme-mode
   change applies on the next launch. Switch immediately with `/terminal-setup icon light|dark|dynamic`.
 
-## Regenerating the bundle icon
+## Liquid Glass bundle icon (macOS 26+)
+
+`AppIcon.icon/` is a hand-authored Icon Composer bundle: sand/Charcoal `automatic-gradient` background
+fills (light/dark) plus one glass `V` glyph group with charcoal/cream fills and `tinted → automatic`
+specializations, so Tahoe composes Default/Dark/Clear/Tinted at display time. The glyph mask was
+extracted from the 1024px masters (geometry verified identical across variants); the OS applies its
+own squircle mask, so all art stays full-bleed opaque with no baked rounding or transparency.
+
+Build and validate (requires Xcode CLT or full Xcode):
+
+```bash
+scripts/build-app-icon.sh resources/icons/AppIcon.icon /tmp/Assets.car
+xcrun --sdk macosx assetutil --info /tmp/Assets.car  # Aqua + DarkAqua + Tintable appearances
+```
+
+`package-desktop-macos.sh` builds this into `Contents/Resources/Assets.car` and sets
+`CFBundleIconName=AppIcon`; `CFBundleIconFile=VTCode.icns` remains the pre-Tahoe fallback.
+`Assets.car` is a build artifact (~1.6MB, mostly pre-composited appearance renditions) and is not
+committed. The flattened `AppIcon.icns` that `actool` also emits carries only small slots, so it is
+not used as the fallback.
+
+## Regenerating the fallback icns
 
 `vtcode-app-dynamic.icns` is prebuilt from the 1024px Dynamic source art. To rebuild after an artwork update:
 

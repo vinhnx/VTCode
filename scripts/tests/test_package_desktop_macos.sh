@@ -52,6 +52,11 @@ SUCCESS_APP="${TEST_ROOT}/success/VT Code.app"
 cmp -s "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${SUCCESS_APP}/Contents/Resources/THIRD-PARTY-NOTICES"
 cmp -s "${ROOT_DIR}/LICENSE" "${SUCCESS_APP}/Contents/Resources/LICENSE"
 cmp -s "${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns" "${SUCCESS_APP}/Contents/Resources/VTCode.icns"
+[[ -f "${SUCCESS_APP}/Contents/Resources/Assets.car" ]]
+grep -Fq -- "<key>CFBundleIconName</key>" "${SUCCESS_APP}/Contents/Info.plist"
+xcrun --sdk macosx assetutil --info "${SUCCESS_APP}/Contents/Resources/Assets.car" > "${TEST_ROOT}/asset-info.json"
+grep -Fq -- "NSAppearanceNameDarkAqua" "${TEST_ROOT}/asset-info.json"
+grep -Fq -- "ISAppearanceTintable" "${TEST_ROOT}/asset-info.json"
 grep -Fq -- "build --locked --release --manifest-path ${ROOT_DIR}/Cargo.toml -p vtcode -p vtcode-desktop" "${CARGO_LOG}"
 grep -Fq -- "--verify --deep --strict ${SUCCESS_APP}" "${CODESIGN_LOG}"
 printf 'PASS: custom Cargo target artifacts are packaged and the copied app is verified.\n'

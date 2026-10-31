@@ -581,13 +581,16 @@ current window. The toolbar remains available when navigation is collapsed.
 
 The toolbar and welcome logo embed `resources/icons/vtcode-app-dynamic-512.png`.
 macOS packaging installs the prebuilt `resources/icons/vtcode-app-dynamic.icns`
-as `Contents/Resources/VTCode.icns` and declares it in `Info.plist`; no
-checkout paths or external image requests are needed at runtime. The running
-app applies the saved Appearance picker selection (Dynamic/Light/Dark) to the
-Dock via `NSApplication.setApplicationIconImage`, resolving Dynamic against
-the active theme mode. The GPUI Kit asset source includes its default
-component icons and only the additional catalog icons referenced by the
-desktop UI.
+as `Contents/Resources/VTCode.icns` (pre-Tahoe fallback) and compiles
+`resources/icons/AppIcon.icon` into `Contents/Resources/Assets.car`, declaring
+`CFBundleIconFile` and `CFBundleIconName=AppIcon` in `Info.plist`; no checkout
+paths or external image requests are needed at runtime. On macOS 26+ the OS
+composes the layered Liquid Glass Default/Dark/Clear/Tinted appearances from
+the catalog at display time. The running app applies the saved Appearance
+picker selection (Dynamic/Light/Dark) to the Dock via
+`NSApplication.setApplicationIconImage`, resolving Dynamic against the active
+theme mode. The GPUI Kit asset source includes its default component icons and
+only the additional catalog icons referenced by the desktop UI.
 
 ### Appearance and typography
 

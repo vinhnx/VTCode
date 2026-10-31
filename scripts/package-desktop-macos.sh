@@ -43,7 +43,7 @@ if [[ ! "${MACOS_MAJOR}" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 15 )); then
     exit 1
 fi
 
-for tool in cargo codesign ditto plutil; do
+for tool in cargo codesign ditto plutil xcrun; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'Error: required packaging tool is missing: %s\n' "${tool}" >&2
         exit 1
@@ -83,6 +83,13 @@ if [[ ! -f "${ICON_SOURCE}" ]]; then
 fi
 install -m 644 "${ICON_SOURCE}" "${CONTENTS}/Resources/VTCode.icns"
 
+# Liquid Glass catalog for macOS 26+: layered Default/Dark/Tinted appearances
+# composed by the OS at display time. Older systems ignore Assets.car and use
+# the icns fallback above.
+"${ROOT_DIR}/scripts/build-app-icon.sh" \
+    "${ROOT_DIR}/resources/icons/AppIcon.icon" \
+    "${CONTENTS}/Resources/Assets.car"
+
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "${ROOT_DIR}/Cargo.toml" | head -n 1)"
 cat >"${CONTENTS}/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -99,6 +106,8 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
     <string>VT Code</string>
     <key>CFBundleIconFile</key>
     <string>VTCode.icns</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
