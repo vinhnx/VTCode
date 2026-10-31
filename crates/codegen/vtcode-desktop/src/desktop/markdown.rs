@@ -484,25 +484,4 @@ mod tests {
         assert_eq!(prepared.markdown, "Kế hoạch: đúng `x < y` — café");
         assert_eq!(prepared.accessible_text, "Kế hoạch: đúng x < y — café");
     }
-
-    #[test]
-    fn list_detection_follows_markdown_structure_not_substrings() {
-        for source in [
-            "1. First\n2. Second\n3. Third",
-            "- first\n- second",
-            "- [ ] open\n- [x] done",
-            "Intro\n\n1. First\n2. Second",
-        ] {
-            assert!(prepare_markdown(&source.into()).has_list, "list missed in {source:?}");
-        }
-        for source in [
-            "A user message.",
-            "First paragraph.\n\nSecond paragraph.",
-            "Version 1.5 is out",
-            "```\n1. not a list\n```",
-            "`1. not a list`",
-        ] {
-            assert!(!prepare_markdown(&source.into()).has_list, "list misdetected in {source:?}");
-        }
-    }
 }

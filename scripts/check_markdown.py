@@ -9,6 +9,21 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 EXCLUDED_FILES = {"docs/project/TODO.md"}
 EXCLUDED_PARTS = {"fixtures", "snapshots", "embedded_assets_source"}
+MARKDOWNLINT_CLI2_VERSION = "0.23.3"
+
+
+def linter_command() -> list[str]:
+    """Build the pinned linter invocation, preferring the local install.
+
+    `npm install` provides `markdownlint-cli2` under `node_modules`, which keeps
+    the check offline-capable and avoids a registry fetch on every run. When the
+    local package is absent (e.g. CI without a Node setup step), fall back to a
+    pinned `npx` fetch so the same linter version still runs.
+    """
+    pinned = f"markdownlint-cli2@{MARKDOWNLINT_CLI2_VERSION}"
+    if (ROOT / "node_modules" / "markdownlint-cli2" / "package.json").is_file():
+        return ["npx", "--no-install", "--loglevel=error", pinned, "--config", ".markdownlint-cli2.jsonc"]
+    return ["npx", "--yes", "--loglevel=error", pinned, "--config", ".markdownlint-cli2.jsonc"]
 
 
 def is_maintained_markdown(path: str) -> bool:
@@ -45,7 +60,7 @@ def main() -> int:
         return 0
     if not files:
         parser.error("No maintained Markdown files selected")
-    command = ["npx", "--yes", "--loglevel=error", "markdownlint-cli2@0.23.3", "--config", ".markdownlint-cli2.jsonc"]
+    command = linter_command()
     if args.fix:
         command.append("--fix")
     command.extend(":" + path for path in files)

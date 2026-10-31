@@ -276,7 +276,7 @@ impl DesktopView {
         if !self.can_edit_cli_settings() {
             return;
         }
-        if self.route != Route::Settings {
+        if self.current_route() != Route::Settings {
             self.open_settings(window, cx);
         }
         let Some(setting) = self

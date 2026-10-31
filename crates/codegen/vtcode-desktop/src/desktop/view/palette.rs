@@ -402,13 +402,13 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.route == Route::Review && kind != PaletteKind::ReviewFiles {
+        if self.current_route() == Route::Review && kind != PaletteKind::ReviewFiles {
             self.close_review(window, cx);
         }
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
-        if self.route == Route::Settings && kind != PaletteKind::SettingsSearch {
+        if self.current_route() == Route::Settings && kind != PaletteKind::SettingsSearch {
             self.close_settings(window, cx);
         }
         self.palette_return_focus = window.focused(cx);
@@ -485,8 +485,14 @@ impl DesktopView {
         }
         self.close_palette(window, cx);
         match action {
-            PaletteAction::NewSession => self.create_session(cx),
-            PaletteAction::CloseSession => self.close_session(cx),
+            PaletteAction::NewSession => {
+                self.close_active_route(window, cx);
+                self.create_session(cx);
+            }
+            PaletteAction::CloseSession => {
+                self.close_active_route(window, cx);
+                self.close_session(cx);
+            }
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.open_conversation_search(session_id, window, cx);
             }
@@ -641,7 +647,7 @@ impl DesktopView {
             PaletteAction::CloseSession => self.selected_session_id.is_some() && self.session_change_allowed(None),
             PaletteAction::LoadSession(session_id) => self.session_change_allowed(Some(session_id)),
             PaletteAction::SelectWorkspaceReviewFile(_) => {
-                self.route == Route::Review
+                self.current_route() == Route::Review
                     && self.workspace_review.as_ref().is_some_and(|review| review.viewer.is_some())
             }
             PaletteAction::ChooseWorkspace => {

@@ -294,14 +294,11 @@ fn thread_browser_groups_current_workspace_first_at_full_window_size(cx: &mut Te
         let dialog = window.find("thread-browser");
         assert_eq!(dialog.role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(dialog.label(), Some("Browse threads"));
+        assert_panel_embeds(window, "thread-browser");
         let bounds = dialog.bounds();
         assert!(
-            bounds.left() < px(100.) && bounds.top() < px(100.),
-            "dialog starts near the window edge: {bounds:?}"
-        );
-        assert!(
-            bounds.right() > viewport.width - px(100.) && bounds.bottom() > viewport.height - px(100.),
-            "dialog spans nearly the full window: {bounds:?} in {viewport:?}"
+            bounds.bottom() > viewport.height - px(100.),
+            "dialog spans nearly the full window height: {bounds:?} in {viewport:?}"
         );
         assert_eq!(window.find("thread-browser-list").role(), Some(gpui_kit::Role::List));
 
@@ -476,7 +473,7 @@ fn thread_browser_and_settings_stay_mutually_exclusive(cx: &mut TestAppContext) 
         view.update(cx, |view, cx| view.open_thread_browser(window, cx));
         window.render_frame(cx);
         assert!(window.try_find("thread-browser").is_some());
-        assert!(view.read(cx).route != Route::Settings, "browser replaces settings");
+        assert!(view.read(cx).current_route() != Route::Settings, "browser replaces settings");
     })
     .unwrap();
 }
@@ -610,7 +607,7 @@ fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mu
         window.render_frame(cx);
         select_settings_category(window, 4, cx);
 
-        assert!(view.read(cx).route == Route::Settings, "the Settings shortcut opens the dialog");
+        assert!(view.read(cx).current_route() == Route::Settings, "the Settings shortcut opens the dialog");
         assert_eq!(window.find_all("webmcp-status").len(), 1);
         assert_eq!(window.find_all("webmcp-pairing").len(), 1);
         assert_eq!(window.find_all("refresh-webmcp-status").len(), 1);

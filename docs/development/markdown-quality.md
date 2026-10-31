@@ -1,8 +1,11 @@
 # Markdown Quality
 
 Run `python3 scripts/check_markdown.py` locally and in CI. It uses
-`markdownlint-cli2@0.23.3` and requires Node.js 22 or newer. Use `--list` to inspect
-the selected paths, or `--fix` to apply supported formatting fixes.
+`markdownlint-cli2@0.23.3` and requires Node.js 22 or newer. Run `npm install`
+once so the pinned linter is available locally (a `devDependencies` entry);
+without the local install the script falls back to a pinned `npx` fetch, which
+needs network access. Use `--list` to inspect the selected paths, or `--fix` to
+apply supported formatting fixes.
 
 Normal checks report the selected file count, diagnostics, and exit status without
 repeating the entire path list. Use `--list` when the full file inventory is needed.

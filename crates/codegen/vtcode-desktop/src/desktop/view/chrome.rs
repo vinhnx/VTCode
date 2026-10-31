@@ -378,8 +378,10 @@ impl DesktopView {
                                                             .bg(cx.theme().colors.secondary)
                                                             .text_color(cx.theme().colors.foreground)
                                                     })
-                                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                                        let _ = this.load_session(session_id.clone(), cx);
+                                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                                        if this.load_session(session_id.clone(), cx) {
+                                                            this.close_active_route(window, cx);
+                                                        }
                                                     })),
                                             )
                                             .context_menu(move |menu, _, _| {
@@ -533,7 +535,9 @@ impl DesktopView {
                                 &NavigateBack,
                                 Some(key_context::DESKTOP),
                             )
-                            .desktop_disabled(!self.can_navigate_back() && !pending_back)
+                            .desktop_disabled(
+                                !self.route_back_available() && !self.can_navigate_back() && !pending_back,
+                            )
                             .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
                     )
                     .child(
@@ -552,7 +556,9 @@ impl DesktopView {
                                 &NavigateForward,
                                 Some(key_context::DESKTOP),
                             )
-                            .desktop_disabled(!self.can_navigate_forward() && !pending_forward)
+                            .desktop_disabled(
+                                !self.route_history.can_forward() && !self.can_navigate_forward() && !pending_forward,
+                            )
                             .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
                     )
                     .child(
@@ -651,7 +657,7 @@ impl DesktopView {
                             Some(key_context::DESKTOP),
                         )
                         .ghost()
-                        .desktop_disabled(self.workspace.is_none())
+                        .desktop_disabled(self.workspace.is_none() || self.current_route() != Route::Workspace)
                         .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
                 )
                 .child(

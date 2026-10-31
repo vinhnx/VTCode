@@ -262,8 +262,24 @@ pub(super) fn settings_switch(
         )
 }
 
-/// Left inset starting a flush-top overlay title past the floating traffic
-/// lights (lights end ~x78; titles start at x84) at any UI scale.
+/// Route container shared by the settings, browser, and review pages:
+/// centers the max-width panel in the content slot beneath the persistent
+/// toolbar, which owns the traffic-light clearance. Titles keep their own
+/// horizontal inset via [`overlay_title_inset`].
+pub(super) fn route_page(panel: impl IntoElement) -> impl IntoElement {
+    div()
+        .flex_1()
+        .min_w_0()
+        .h_full()
+        .px_6()
+        .pb_6()
+        .flex()
+        .justify_center()
+        .child(div().w_full().h_full().max_w(px(1500.)).child(panel))
+}
+
+/// Left inset starting a route-page title past the floating traffic lights
+/// (lights end ~x78; titles start at x84) at any UI scale.
 /// `chrome_rems` sums the rem-scaled chrome before the title: backdrop side
 /// margin plus header side padding (settings/browser: 1.5 + 0.75; review:
 /// 1.5 + 1.0).

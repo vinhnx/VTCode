@@ -613,8 +613,9 @@ impl DesktopView {
         self.selected_change = None;
         self.change_viewer = None;
         self.change_viewer_dirty = false;
-        if self.route == Route::Review {
-            self.route = Route::Workspace;
+        if self.current_route() == Route::Review {
+            self.teardown_current_route();
+            self.route_history.dismiss_to_workspace();
         }
         self.workspace_review = None;
         self.last_usage = None;

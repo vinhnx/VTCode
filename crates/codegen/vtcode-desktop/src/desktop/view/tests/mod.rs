@@ -179,6 +179,37 @@ fn focus_element_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mu
     panic!("Tab did not reach focusable element {id}");
 }
 
+/// Embedded-panel contract: the toolbar persists above every panel, visible
+/// navigation sits beside it, and the panel stays inside the viewport.
+fn assert_panel_embeds(window: &mut gpui_kit::Window, panel_id: &'static str) {
+    let panel = window.find(panel_id).bounds();
+    let viewport = window.viewport_size();
+    let toolbar = window.find("title-bar").bounds();
+    assert!(
+        panel.origin.y >= toolbar.bottom(),
+        "{panel_id} sits below the persistent toolbar: panel={panel:?}, toolbar={toolbar:?}"
+    );
+    if let Some(navigation) = window.try_find("primary-navigation") {
+        let rail = navigation.bounds();
+        assert!(
+            panel.origin.x >= rail.right() || panel.right() <= rail.left(),
+            "{panel_id} sits beside the persistent navigation: panel={panel:?}, rail={rail:?}"
+        );
+    }
+    assert!(
+        panel.origin.x + panel.size.width <= viewport.width && panel.origin.y + panel.size.height <= viewport.height,
+        "{panel_id} stays inside the viewport: panel={panel:?}, viewport={viewport:?}"
+    );
+    let chrome = window
+        .try_find("primary-navigation")
+        .map(|navigation| navigation.bounds().size.width)
+        .unwrap_or(px(0.));
+    assert!(
+        panel.size.width >= viewport.width - chrome - px(100.),
+        "{panel_id} fills the content slot: panel={panel:?}, viewport={viewport:?}"
+    );
+}
+
 fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mut gpui_kit::App) {
     window.press("home", cx);
     window.render_frame(cx);
@@ -375,7 +406,6 @@ mod config_catalog;
 mod config_deep_links;
 mod config_sessions;
 mod curated_config;
-mod diff_cards;
 mod files_webmcp;
 mod full_access_confirm;
 mod heading_tiers;

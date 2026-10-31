@@ -6,9 +6,9 @@ impl DesktopView {
         self.set_inspector_tab(InspectorTab::Utilities, cx);
     }
 
-    pub(super) fn render_navigation(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_navigation(&mut self, narrow_panel: bool, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let expanded = self.sidebar_open || self.navigation_peek;
+        let expanded = (self.sidebar_open || self.navigation_peek) && !narrow_panel;
         let navigation_on_right = self.preferences.navigation_on_right();
         let utilities_selected = self.inspector_open && self.inspector_tab == InspectorTab::Utilities;
         let rail = div()
@@ -102,7 +102,7 @@ impl DesktopView {
                         &OpenThreadBrowser,
                         Some(key_context::DESKTOP),
                     )
-                    .when(self.route == Route::Browser, |button| {
+                    .when(self.current_route() == Route::Browser, |button| {
                         button.bg(colors.secondary).text_color(colors.foreground)
                     })
                     .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone()),
@@ -140,6 +140,7 @@ impl DesktopView {
         let can_new = self.session_change_allowed(None);
         let can_close = self.selected_session_id.is_some() && self.session_change_allowed(None);
         let has_workspace = self.workspace.is_some();
+        let panel_open = self.current_route() != Route::Workspace;
         desktop_button(id)
             .icon(IconName::Ellipsis)
             .ghost()
@@ -162,7 +163,7 @@ impl DesktopView {
                 .menu_with_disabled(
                     rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
                     Box::new(ToggleInspector),
-                    !has_workspace,
+                    !has_workspace || panel_open,
                 )
                 .menu(rust_i18n::t!("app.navigation.toggle_zen_mode").to_string(), Box::new(ToggleZenMode))
                 .menu(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(), Box::new(OpenCommandPalette))

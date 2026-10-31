@@ -21,6 +21,11 @@ impl Render for DesktopView {
         let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
         let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;
         let navigation_on_right = self.preferences.navigation_on_right();
+        // Compact layout: an open panel yields the sidebar to its rail so the
+        // embedded slot stays usable. The preference is untouched, so the
+        // sidebar returns when the panel closes or the window widens.
+        let narrow_panel =
+            window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT) && self.current_route() != Route::Workspace;
         let conversation = div()
             .flex_1()
             .min_w_0()
@@ -62,6 +67,18 @@ impl Render for DesktopView {
                         .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
                 )
             });
+        // Route panels embed in the content slot beneath the persistent
+        // toolbar: chrome stays mounted and the panel inherits the pane
+        // rhythm instead of taking over the window.
+        // Route panels embed in the content slot beneath the persistent
+        // toolbar: chrome stays mounted and the panel inherits the pane
+        // rhythm instead of taking over the window.
+        let center: AnyElement = match self.current_route() {
+            Route::Workspace => workspace.into_any_element(),
+            Route::Settings => self.render_settings_page(window, cx),
+            Route::Browser => self.render_thread_browser(cx),
+            Route::Review => self.render_change_review(cx),
+        };
         let content = div()
             .id("pane-root")
             .test_support()
@@ -72,7 +89,7 @@ impl Render for DesktopView {
             .when(!self.preferences.translucent_sidebar || !navigation_visible, |pane| {
                 pane.bg(chrome_background(&colors))
             })
-            .child(workspace);
+            .child(center);
         // Navigation sits beside this column instead of below the toolbar,
         // so the sidebar spans the full window height.
         let main = div()
@@ -104,10 +121,16 @@ impl Render for DesktopView {
             .track_focus(&self.focus_handle)
             .when(!self.capture_suppresses_bindings(window), |body| body.key_context(key_context::DESKTOP))
             .when(self.session_change_allowed(None), |body| {
-                body.on_action(cx.listener(|view, _: &NewSession, _, cx| view.create_session(cx)))
+                body.on_action(cx.listener(|view, _: &NewSession, window, cx| {
+                    view.close_active_route(window, cx);
+                    view.create_session(cx);
+                }))
             })
             .when(self.selected_session_id.is_some() && self.session_change_allowed(None), |body| {
-                body.on_action(cx.listener(|view, _: &CloseSession, _, cx| view.close_session(cx)))
+                body.on_action(cx.listener(|view, _: &CloseSession, window, cx| {
+                    view.close_active_route(window, cx);
+                    view.close_session(cx);
+                }))
             })
             .when(
                 self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open,
@@ -127,15 +150,20 @@ impl Render for DesktopView {
                 view.navigation_peek = false;
                 cx.notify();
             }))
-            .on_action(cx.listener(|view, _: &NavigateBack, _, cx| view.navigate_back(cx)))
-            .on_action(cx.listener(|view, _: &NavigateForward, _, cx| view.navigate_forward(cx)))
+            .on_action(cx.listener(|view, _: &NavigateBack, window, cx| {
+                // Route steps win while a panel owns the content slot; session
+                // history resumes once the route cursor cannot move.
+                if !view.go_route_back(window, cx) {
+                    view.navigate_back(cx);
+                }
+            }))
+            .on_action(cx.listener(|view, _: &NavigateForward, window, cx| {
+                if !view.go_route_forward(window, cx) {
+                    view.navigate_forward(cx);
+                }
+            }))
             .on_action(cx.listener(|view, _: &RouteBack, window, cx| {
-                if view.route == Route::Settings {
-                    // Editor-first, mirroring `dismiss_overlay` order.
-                    view.close_settings_surface(window, cx);
-                } else if view.route != Route::Workspace {
-                    view.close_active_route(window, cx);
-                } else {
+                if !view.go_route_back(window, cx) {
                     cx.propagate();
                 }
             }))
@@ -164,7 +192,10 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, _: &FocusComposer, window, cx| view.activate_composer(window, cx)))
             .when(self.workspace.is_some(), |body| {
                 body.on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
-                    .on_action(cx.listener(|view, _: &OpenUtilities, _, cx| view.open_utilities(cx)))
+                    .on_action(cx.listener(|view, _: &OpenUtilities, window, cx| {
+                        view.close_active_route(window, cx);
+                        view.open_utilities(cx);
+                    }))
                     .on_action(cx.listener(|view, _: &OpenWorkspaceFiles, window, cx| {
                         view.focus_workspace_files(window, cx);
                     }))
@@ -222,46 +253,34 @@ impl Render for DesktopView {
             })
             .on_action(cx.listener(|_, _: &CloseWindow, window, cx| menu_bar::close_or_hide(window, cx)))
             .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
-            .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()));
-        match self.route {
-            Route::Workspace => {
-                if navigation_visible {
-                    let navigation = self.render_navigation(cx);
-                    let sidebar = div().relative().h_full().flex_shrink_0();
-                    let sidebar = if navigation_on_right {
-                        sidebar
-                            .when(self.sidebar_open, |sidebar| {
-                                sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
-                            })
-                            .child(navigation)
-                    } else {
-                        sidebar.child(navigation).when(self.sidebar_open, |sidebar| {
-                            sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
-                        })
-                    };
-                    if navigation_on_right {
-                        body = body.child(main).child(sidebar);
-                    } else {
-                        body = body.child(sidebar).child(main);
-                    }
-                } else {
-                    body = body.child(main);
-                }
+            .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()))
+            .on_action(cx.listener(|_, _: &ToggleFullScreen, window, _| window.toggle_fullscreen()));
+        if navigation_visible {
+            let navigation = self.render_navigation(narrow_panel, cx);
+            let sidebar = div().relative().h_full().flex_shrink_0();
+            let sidebar = if navigation_on_right {
+                sidebar
+                    .when(self.sidebar_open && !narrow_panel, |sidebar| {
+                        sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                    })
+                    .child(navigation)
+            } else {
+                sidebar.child(navigation).when(self.sidebar_open && !narrow_panel, |sidebar| {
+                    sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                })
+            };
+            if navigation_on_right {
+                body = body.child(main).child(sidebar);
+            } else {
+                body = body.child(sidebar).child(main);
             }
-            Route::Settings => {
-                body = body.child(self.render_settings_page(window, cx));
-            }
-            Route::Browser => {
-                body = body.child(self.render_thread_browser(cx));
-            }
-            Route::Review => {
-                body = body.child(self.render_change_review(cx));
-            }
+        } else {
+            body = body.child(main);
         }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
         }
-        if !(self.route == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch)
+        if !(self.current_route() == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch)
             && !self.palette_kind.is_composer_popup()
             && let Some(state) = self.palette.clone()
         {

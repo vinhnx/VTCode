@@ -84,6 +84,87 @@ fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
+fn user_bubble_grows_with_multiline_content_without_clipping(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1600., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.transcript.push(TranscriptItem::new(
+                "user-single".into(),
+                "user".into(),
+                "You".into(),
+                "A user message.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "user-paragraphs".into(),
+                "user".into(),
+                "You".into(),
+                "First paragraph with enough text to fill the bubble.\n\nSecond paragraph with enough text to fill the bubble.\n\nThird paragraph with enough text to fill the bubble.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "user-list".into(),
+                "user".into(),
+                "You".into(),
+                "1. First item with enough text to read clearly\n2. Second item with enough text to read clearly\n3. Third item with enough text to read clearly".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "assistant-paragraphs".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "First paragraph with enough text to fill the bubble.\n\nSecond paragraph with enough text to fill the bubble.\n\nThird paragraph with enough text to fill the bubble.".into(),
+            ));
+        });
+        window.render_frame(cx);
+
+        let single = window.find("message-body-user-single").bounds();
+        let paragraphs = window.find("message-body-user-paragraphs").bounds();
+        let list = window.find("message-body-user-list").bounds();
+        let assistant = window.find("message-body-assistant-paragraphs").bounds();
+        let column = window.find("transcript-content-user-paragraphs").bounds();
+
+        // Vertical growth: three paragraphs carry two extra body lines plus two
+        // 1rem paragraph gaps over a single line (~77px at default metrics);
+        // half of that proves the bubble was not clipped to its first line.
+        assert!(
+            paragraphs.size.height - single.size.height > px(40.),
+            "multi-paragraph user bubble must grow vertically: single={single:?} paragraphs={paragraphs:?}"
+        );
+        // Three list items carry two extra lines (~45px); same half-margin rule.
+        assert!(
+            list.size.height - single.size.height > px(30.),
+            "multi-line list user bubble must grow vertically: single={single:?} list={list:?}"
+        );
+        // Asymmetric control: the narrower user bubble wraps at least as much
+        // as the full-width assistant rendering of identical text, never less.
+        assert!(
+            paragraphs.size.height >= assistant.size.height - px(1.),
+            "user bubble must show at least the assistant's full height: user={paragraphs:?} assistant={assistant:?}"
+        );
+        // No min-content collapse: a healthy bubble far exceeds the ~80px wide
+        // "1." pill from the clipped screenshot.
+        assert!(
+            paragraphs.size.width > px(120.),
+            "multi-paragraph user bubble must not collapse horizontally: {paragraphs:?}"
+        );
+        assert!(
+            list.size.width > px(120.),
+            "multi-line list user bubble must not collapse horizontally: {list:?}"
+        );
+        // Existing invariants preserved: trailing alignment plus containment.
+        assert!(
+            paragraphs.right() <= column.right() + px(1.),
+            "bubble text remains inside the conversation column: body={paragraphs:?} column={column:?}"
+        );
+        assert!(
+            paragraphs.left() > assistant.left(),
+            "user bubbles align to the trailing edge: user={paragraphs:?} assistant={assistant:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn file_tasks_discard_obsolete_workspace_and_preview_results(cx: &mut TestAppContext) {
     let first = tempfile::TempDir::new().unwrap();
     let second = tempfile::TempDir::new().unwrap();
@@ -534,7 +615,7 @@ fn webmcp_connect_command_issues_a_pair_request_without_starting_an_agent_turn(c
                 state.set_value("/webmcp connect https://vtcode.vinhnx.chatgpt.site", window, cx)
             });
             view.submit_prompt(window, cx);
-            assert!(view.route == Route::Settings);
+            assert!(view.current_route() == Route::Settings);
             assert!(!view.running);
             assert!(view.composer.read(cx).value().is_empty());
         });
@@ -636,7 +717,7 @@ fn splash_command_opens_connection_status_and_refreshes_webmcp(cx: &mut TestAppC
             view.backend = Some(BackendHandle { commands });
             view.composer.update(cx, |state, cx| state.set_value("/splash", window, cx));
             view.submit_prompt(window, cx);
-            assert!(view.route == Route::Settings);
+            assert!(view.current_route() == Route::Settings);
             assert_eq!(view.settings_tab, super::super::settings::SettingsTab::Connections);
             assert!(!view.running, "a diagnostics command must not start an agent turn");
         });
@@ -687,7 +768,7 @@ fn webmcp_tools_and_roots_commands_show_shared_guidance_without_backend_requests
             view.composer
                 .update(cx, |state, cx| state.set_value("/webmcp tools", window, cx));
             view.submit_prompt(window, cx);
-            assert!(view.route == Route::Settings);
+            assert!(view.current_route() == Route::Settings);
             assert!(!view.running);
             assert_eq!(
                 view.webmcp_notice.as_ref().unwrap().text(),

@@ -264,7 +264,7 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         let viewer = view.read(cx).change_viewer.as_ref().unwrap().clone();
         window.click("expand-change-review", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Review);
+        assert!(view.read(cx).current_route() == Route::Review);
         assert_eq!(window.find("diff-review-panel").role(), Some(gpui_kit::Role::Dialog));
         assert!(view.read(cx).review_focus.contains_focused(window, cx));
         window.within("diff-review-panel").click("review-split", cx);
@@ -284,16 +284,20 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         assert!(view.read(cx).review_focus.contains_focused(window, cx));
         window.press("escape", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Review);
+        assert!(view.read(cx).current_route() != Route::Review);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/app.rs"));
         window.click("expand-change-review", cx);
         window.render_frame(cx);
         window.click("close-diff-review", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Review);
+        assert!(view.read(cx).current_route() != Route::Review);
         window.click("expand-change-review", cx);
         window.render_frame(cx);
-        assert!(window.within("diff-review-panel").find("change-diff-view").bounds().size.width > px(900.));
+        assert_panel_embeds(window, "diff-review-panel");
+        let panel = window.find("diff-review-panel").bounds();
+        let diff = window.within("diff-review-panel").find("change-diff-view").bounds();
+        assert!(diff.size.width > px(400.), "expanded review keeps a usable diff width: {diff:?} in {panel:?}");
+        assert!(diff.right() >= panel.right() - px(60.), "diff view fills the panel width: {diff:?} in {panel:?}");
         assert!(window.within("diff-review-panel").find("change-diff-view").bounds().size.height > px(400.));
         let viewport = window.within("diff-review-panel").find("change-diff-view").bounds();
         window.scroll("change-diff-view", gpui_kit::ScrollDelta::Lines(point(0., -100.)), cx);
@@ -306,12 +310,12 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         view.update(cx, |view, cx| {
             view.reset_session_state();
             view.restore_focus_after_review_close(window, cx);
-            assert!(view.route != Route::Review);
+            assert!(view.current_route() != Route::Review);
             assert!(!view.review_focus.contains_focused(window, cx));
             assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
         });
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Review);
+        assert!(view.read(cx).current_route() != Route::Review);
         assert!(view.read(cx).change_viewer.is_none());
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
     })

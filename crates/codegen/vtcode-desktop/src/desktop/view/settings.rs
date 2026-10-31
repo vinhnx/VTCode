@@ -163,72 +163,73 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!(i18n::SETTINGS_TITLE).to_string();
         let content = self.render_settings_content(window, cx);
-        div()
-            .flex_1()
-            .min_w_0()
-            .h_full()
-            .px_6()
-            .pb_6()
-            .flex()
-            .justify_center()
-            .child(
-                div().w_full().h_full().max_w(px(1500.)).child(
+        // Compact layout below the shared breakpoint (see
+        // NARROW_PANEL_BREAKPOINT): the nav stacks above the content and
+        // shares the height, mirroring the config rail breakpoint.
+        let narrow = window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT);
+        route_page(
+            div()
+                .id("settings-panel")
+                .test_support()
+                .track_focus(&self.settings_focus)
+                .role(gpui_kit::Role::Dialog)
+                .aria_label(title.clone())
+                .relative()
+                .size_full()
+                .flex()
+                .flex_col()
+                .rounded_xl()
+                .bg(colors.secondary)
+                .text_sm()
+                .child(panel_header(
                     div()
-                        .id("settings-panel")
-                        .test_support()
-                        .track_focus(&self.settings_focus)
-                        .role(gpui_kit::Role::Dialog)
-                        .aria_label(title.clone())
-                        .relative()
-                        .size_full()
+                        .text_lg()
+                        .font_semibold()
+                        .pl(overlay_title_inset(cx.theme().font_size, 2.25))
+                        .child(div().id("settings-title").test_support().child(title)),
+                    // Generic "Close" word shared across panels (owned by the browser surface).
+                    desktop_button("settings-dismiss")
+                        .icon(IconName::X)
+                        .accessibility_label(rust_i18n::t!("app.browser.close").to_string())
+                        .tooltip(rust_i18n::t!("app.browser.close").to_string())
+                        .ghost()
+                        .small()
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.close_settings(window, cx);
+                        })),
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
                         .flex()
-                        .flex_col()
-                        .rounded_xl()
-                        .bg(colors.secondary)
-                        .text_sm()
-                        .child(panel_header(
-                            div()
-                                .text_lg()
-                                .font_semibold()
-                                .pl(overlay_title_inset(cx.theme().font_size, 2.25))
-                                .child(div().id("settings-title").test_support().child(title)),
-                            desktop_button("settings-dismiss")
-                                .icon(IconName::ArrowLeft)
-                                .accessibility_label(rust_i18n::t!("app.navigation.back").to_string())
-                                .tooltip_with_action(
-                                    rust_i18n::t!("app.navigation.back").to_string(),
-                                    &RouteBack,
-                                    Some(key_context::DESKTOP),
-                                )
-                                .ghost()
-                                .small()
-                                .on_click(cx.listener(|view, _, window, cx| {
-                                    view.close_settings_surface(window, cx);
-                                })),
-                        ))
+                        .when(narrow, |row| row.flex_col())
+                        .gap_3()
+                        .px_3()
+                        .pb_3()
+                        .child(self.render_settings_navigation(window, cx, narrow))
                         .child(
                             div()
                                 .flex_1()
+                                .min_w_0()
                                 .min_h_0()
-                                .w_full()
                                 .flex()
-                                .gap_3()
-                                .px_3()
-                                .pb_3()
-                                .child(self.render_settings_navigation(window, cx))
-                                .child(div().flex_1().min_w_0().min_h_0().flex().flex_col().child(content)),
-                        )
-                        .when(self.config_editor.is_some(), |panel| panel.child(self.render_cli_config_editor(cx))),
-                ),
-            )
-            .into_any_element()
+                                .flex_col()
+                                .when(narrow, |content| content.w_full())
+                                .child(content),
+                        ),
+                )
+                .when(self.config_editor.is_some(), |panel| panel.child(self.render_cli_config_editor(cx))),
+        )
+        .into_any_element()
     }
 
     /// Left navigation: shared search plus one button per settings page.
     /// Buttons keep Kit Button keyboard handling; the panel fill is
     /// `secondary`, so selection uses `popover` (a `secondary` fill would
     /// be pixel-identical to the background).
-    fn render_settings_navigation(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_settings_navigation(&self, window: &Window, cx: &mut Context<Self>, narrow: bool) -> AnyElement {
         let colors = cx.theme().colors;
         let selected = self.settings_page_index();
         let mut entries = Vec::with_capacity(SettingsTab::PAGE_COUNT);
@@ -276,6 +277,7 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_2()
+            .when(narrow, |nav| nav.w_full().flex_1().min_h_0())
             .on_action(cx.listener(|view, _: &NextSettingsTab, window, cx| view.cycle_settings_tab(true, window, cx)))
             .on_action(
                 cx.listener(|view, _: &PreviousSettingsTab, window, cx| view.cycle_settings_tab(false, window, cx)),

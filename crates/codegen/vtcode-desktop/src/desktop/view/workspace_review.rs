@@ -56,7 +56,7 @@ fn review_message(
 
 impl DesktopView {
     pub(super) fn open_workspace_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.route == Route::Review {
+        if self.current_route() == Route::Review {
             self.close_review(window, cx);
             return;
         }

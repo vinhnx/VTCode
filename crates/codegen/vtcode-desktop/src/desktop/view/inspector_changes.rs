@@ -115,11 +115,8 @@ impl DesktopView {
                             .child(
                                 desktop_tab_bar("inspector-tabs")
                                     // Five tabs share a narrow rail, so the inspector keeps the
-                                    // compact size; settings uses the medium default. The
-                                    // overflow menu keeps clipped tabs reachable by mouse when
-                                    // the rail narrows below the tabs' natural width.
+                                    // compact size; settings uses the medium default.
                                     .small()
-                                    .menu(true)
                                     .track_scroll(&self.inspector_tabs_scroll)
                                     .selected_index(
                                         InspectorTab::ALL
@@ -159,7 +156,7 @@ impl DesktopView {
         colors: &gpui_kit::component::theme::ThemeColor,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if self.route == Route::Review {
+        if self.current_route() == Route::Review {
             return div()
                 .p_4()
                 .text_sm()
@@ -230,12 +227,6 @@ impl DesktopView {
         }
 
         let totals = self.changes.totals();
-        let file_total = self.changes.entries().len();
-        let count_label = if file_total == 1 {
-            rust_i18n::t!("app.inspector.file_count", count = file_total).to_string()
-        } else {
-            rust_i18n::t!("app.inspector.files_count", count = file_total).to_string()
-        };
         let files_header = panel_header(
             div()
                 .flex()
@@ -244,14 +235,7 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .text_xs()
-                .child(
-                    div()
-                        .id("inspector-changes-summary")
-                        .test_support()
-                        .role(gpui_kit::Role::Status)
-                        .aria_label(count_label.clone())
-                        .child(count_label),
-                )
+                .child(rust_i18n::t!("app.inspector.files_count", count = self.changes.entries().len()).to_string())
                 .when_some(totals, |summary, (additions, deletions)| {
                     summary
                         .child(div().text_color(colors.success).child(format!("+{additions}")))
@@ -579,75 +563,53 @@ impl DesktopView {
         } else {
             rust_i18n::t!("app.workspace_review.session_description").to_string()
         };
-        div()
-            .flex_1()
-            .min_w_0()
-            .h_full()
-            .px_6()
-            .pb_6()
-            .flex()
-            .justify_center()
-            .child(
-                div().w_full().h_full().max_w(px(1500.)).child(
+        route_page(
+            div()
+                .id("diff-review-panel")
+                .test_support()
+                .track_focus(&self.review_focus)
+                .role(gpui_kit::Role::Dialog)
+                .aria_label(title.clone())
+                .key_context(key_context::DIFF_REVIEW)
+                .size_full()
+                .flex()
+                .flex_col()
+                .rounded_xl()
+                .bg(colors.secondary)
+                .on_action(cx.listener(|view, _: &NextReviewChange, _, cx| view.navigate_review_change(true, cx)))
+                .on_action(cx.listener(|view, _: &PreviousReviewChange, _, cx| view.navigate_review_change(false, cx)))
+                .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_workspace_review_file(true, cx)))
+                .on_action(
+                    cx.listener(|view, _: &PreviousReviewFile, _, cx| view.navigate_workspace_review_file(false, cx)),
+                )
+                .child(
                     div()
-                        .id("diff-review-panel")
-                        .test_support()
-                        .track_focus(&self.review_focus)
-                        .role(gpui_kit::Role::Dialog)
-                        .aria_label(title.clone())
-                        .key_context(key_context::DIFF_REVIEW)
-                        .size_full()
                         .flex()
-                        .flex_col()
-                        .rounded_xl()
-                        .bg(colors.secondary)
-                        .on_action(
-                            cx.listener(|view, _: &NextReviewChange, _, cx| view.navigate_review_change(true, cx)),
-                        )
-                        .on_action(
-                            cx.listener(|view, _: &PreviousReviewChange, _, cx| view.navigate_review_change(false, cx)),
-                        )
-                        .on_action(
-                            cx.listener(|view, _: &NextReviewFile, _, cx| {
-                                view.navigate_workspace_review_file(true, cx)
-                            }),
-                        )
-                        .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| {
-                            view.navigate_workspace_review_file(false, cx)
-                        }))
+                        .items_center()
+                        .justify_between()
+                        .px_4()
+                        .pl(overlay_title_inset(cx.theme().font_size, 2.5))
+                        .py_3()
                         .child(
                             div()
                                 .flex()
-                                .items_center()
-                                .justify_between()
-                                .px_4()
-                                .pl(overlay_title_inset(cx.theme().font_size, 2.5))
-                                .py_3()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_1()
-                                        .child(div().text_lg().font_semibold().child(title))
-                                        .child(div().text_xs().text_color(colors.muted_foreground).child(description)),
-                                )
-                                .child(
-                                    desktop_button("close-diff-review")
-                                        .icon(IconName::ArrowLeft)
-                                        .accessibility_label(rust_i18n::t!("app.navigation.back").to_string())
-                                        .tooltip_with_action(
-                                            rust_i18n::t!("app.navigation.back").to_string(),
-                                            &RouteBack,
-                                            Some(key_context::DESKTOP),
-                                        )
-                                        .ghost()
-                                        .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
-                                ),
+                                .flex_col()
+                                .gap_1()
+                                .child(div().text_lg().font_semibold().child(title))
+                                .child(div().text_xs().text_color(colors.muted_foreground).child(description)),
                         )
-                        .child(content),
-                ),
-            )
-            .into_any_element()
+                        .child(
+                            desktop_button("close-diff-review")
+                                .icon(IconName::X)
+                                .accessibility_label(rust_i18n::t!("app.workspace_review.close_review").to_string())
+                                .tooltip(rust_i18n::t!("app.workspace_review.close_review").to_string())
+                                .ghost()
+                                .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
+                        ),
+                )
+                .child(content),
+        )
+        .into_any_element()
     }
 
     fn navigate_review_change(&self, next: bool, cx: &mut Context<Self>) {

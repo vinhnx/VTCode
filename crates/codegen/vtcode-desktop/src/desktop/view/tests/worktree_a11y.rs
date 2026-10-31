@@ -245,7 +245,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         });
         window.click("refresh-workspace-review", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Review);
+        assert!(view.read(cx).current_route() == Route::Review);
         assert_eq!(window.find("diff-review-panel").label(), Some("Working tree review"));
         assert_eq!(window.find("refresh-workspace-review").disabled(), Some(true));
         let loading = window.find("workspace-review-loading");
@@ -297,7 +297,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
             // Session projection invalidation cannot close a Git review.
             view.change_viewer_dirty = true;
             view.refresh_selected_change(cx);
-            assert!(view.route == Route::Review);
+            assert!(view.current_route() == Route::Review);
         });
         window.render_frame(cx);
         let layout_options = window.find("workspace-review-layout-options");
@@ -305,7 +305,13 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(layout_options.label(), Some("Diff layout"));
         assert_eq!(window.find("workspace-review-unified").checked(), Some(true));
         assert_eq!(window.find("workspace-review-split").checked(), Some(false));
-        assert!(window.find("workspace-review-diff").bounds().size.width > px(900.));
+        let panel = window.find("diff-review-panel").bounds();
+        let diff = window.find("workspace-review-diff").bounds();
+        assert!(diff.size.width > px(400.), "workspace review keeps a usable diff width: {diff:?} in {panel:?}");
+        assert!(
+            diff.right() >= panel.right() - px(60.),
+            "diff view fills the panel width: {diff:?} in {panel:?}"
+        );
         let summary = window.find("workspace-review-summary");
         assert_eq!(summary.role(), Some(gpui_kit::Role::Status));
         assert_eq!(summary.label(), Some("2 files changed · +2 · −2"));
@@ -390,7 +396,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert!(view.read(cx).review_focus.contains_focused(window, cx));
         window.press("escape", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Review);
+        assert!(view.read(cx).current_route() != Route::Review);
         assert!(!view.read(cx).review_focus.contains_focused(window, cx));
         assert!(view.read(cx).workspace_review.is_none());
         view.update(cx, |view, cx| {
@@ -470,7 +476,7 @@ fn working_tree_review_distinguishes_partial_clean_and_unavailable_snapshots(cx:
             assert!(!view.workspace_review.as_ref().unwrap().pending);
             view.reset_session_state();
             assert!(view.workspace_review.is_none());
-            assert!(view.route != Route::Review);
+            assert!(view.current_route() != Route::Review);
         });
     })
     .unwrap();
@@ -514,7 +520,7 @@ fn working_tree_review_searches_changed_files_without_closing_the_review(cx: &mu
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Review);
+        assert!(view.read(cx).current_route() == Route::Review);
         assert_eq!(window.find("command-palette").label(), Some("Choose changed file"));
         window.within("command-palette").input("b.rs", cx);
         window.render_frame(cx);
@@ -532,7 +538,10 @@ fn working_tree_review_searches_changed_files_without_closing_the_review(cx: &mu
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none());
-        assert!(view.read(cx).route == Route::Review, "Escape dismisses the picker before the underlying review");
+        assert!(
+            view.read(cx).current_route() == Route::Review,
+            "Escape dismisses the picker before the underlying review"
+        );
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
 
         window.click("workspace-review-current-file", cx);
@@ -548,7 +557,7 @@ fn working_tree_review_searches_changed_files_without_closing_the_review(cx: &mu
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let review = view.read(cx);
-        assert!(review.route == Route::Review);
+        assert!(review.current_route() == Route::Review);
         assert!(review.palette.is_none());
         assert_eq!(review.workspace_review.as_ref().unwrap().selected_file.as_deref(), Some("b.rs"));
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 2 of 2 · b.rs"));

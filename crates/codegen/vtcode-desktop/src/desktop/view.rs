@@ -84,7 +84,7 @@ use super::transport::{
 };
 use full_access_confirm::FullAccessConfirmState;
 use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
-use overlays::Route;
+use overlays::{Route, RouteHistory};
 
 mod app_icon_settings;
 mod appearance;
@@ -142,7 +142,6 @@ use components::*;
 use inspector_changes::*;
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
-#[cfg(test)]
 use runtime_items::*;
 use sessions::*;
 use typography::FontTarget;
@@ -270,6 +269,12 @@ const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
 /// Window toolbar height. Left-side navigation content starts below this
 /// line so it clears the macOS traffic lights while the sidebar surface
 /// itself still spans the full window height.
+///
+/// Compact layout breakpoint: below this viewport width, open panels collapse
+/// the sidebar to its rail and settings stacks its navigation above the
+/// content. The embedded slot cannot hold full chrome plus side-by-side
+/// panels below ~900px (sidebar ~320 + settings nav 240 + readable rows).
+const NARROW_PANEL_BREAKPOINT: f32 = 900.;
 const TOOLBAR_HEIGHT: f32 = 48.;
 
 actions!(
@@ -299,6 +304,7 @@ actions!(
         ToggleSidebar,
         ToggleZenMode,
         ToggleStatusBar,
+        ToggleFullScreen,
         ReloadCliSettings,
         SyncCliTheme,
         NextInspectorTab,
@@ -459,7 +465,7 @@ struct DesktopView {
     selected_change: Option<String>,
     change_viewer: Option<Entity<DiffState>>,
     change_viewer_dirty: bool,
-    route: Route,
+    route_history: RouteHistory,
     workspace_review: Option<WorkspaceReviewState>,
     review_focus: FocusHandle,
     browser_focus: FocusHandle,

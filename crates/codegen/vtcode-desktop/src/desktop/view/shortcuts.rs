@@ -404,6 +404,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                 "cmd-h",
                 "alt-cmd-h",
                 "cmd-shift-n",
+                "ctrl-cmd-f",
                 "cmd-c",
                 "cmd-x",
                 "cmd-v",

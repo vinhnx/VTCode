@@ -3,6 +3,7 @@
 from contextlib import redirect_stdout
 import importlib.util
 import io
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -66,9 +67,12 @@ class MarkdownSelectionTests(unittest.TestCase):
 class MarkdownInvocationTests(unittest.TestCase):
     def test_linter_exit_status_is_preserved_with_a_bounded_summary(self):
         files = ["README.md", "docs/another guide.md"]
+        base = ["npx", "--no-install", "--loglevel=error", "markdownlint-cli2@0.23.3",
+                "--config", ".markdownlint-cli2.jsonc"]
         for exit_code, status in [(0, "passed"), (1, "failed (exit 1)"), (2, "failed (exit 2)")]:
             with self.subTest(exit_code=exit_code), \
                     mock.patch.object(module, "tracked_markdown", return_value=files), \
+                    mock.patch.object(module, "linter_command", return_value=list(base)), \
                     mock.patch.object(sys, "argv", ["check_markdown.py"]), \
                     mock.patch.object(module.subprocess, "run", return_value=subprocess.CompletedProcess([], exit_code)) as run:
                 output = io.StringIO()
@@ -90,6 +94,39 @@ class MarkdownInvocationTests(unittest.TestCase):
                 self.assertEqual(module.main(), 0)
             self.assertEqual(output.getvalue(), "README.md\ndocs/guide.md\n")
             run.assert_not_called()
+
+
+class LinterCommandTests(unittest.TestCase):
+    def test_local_install_uses_no_install_with_the_pinned_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / "node_modules" / "markdownlint-cli2" / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text('{"name": "markdownlint-cli2", "version": "0.23.3"}\n')
+            with mock.patch.object(module, "ROOT", root):
+                self.assertEqual(module.linter_command(), [
+                    "npx", "--no-install", "--loglevel=error",
+                    "markdownlint-cli2@0.23.3", "--config", ".markdownlint-cli2.jsonc",
+                ])
+
+    def test_missing_local_install_falls_back_to_a_pinned_fetch(self):
+        expected = [
+            "npx", "--yes", "--loglevel=error",
+            "markdownlint-cli2@0.23.3", "--config", ".markdownlint-cli2.jsonc",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(module, "ROOT", root):
+                with self.subTest(case="no node_modules"):
+                    self.assertEqual(module.linter_command(), expected)
+                (root / "node_modules" / "markdownlint-cli2").mkdir(parents=True)
+                with self.subTest(case="partial install without package.json"):
+                    self.assertEqual(module.linter_command(), expected)
+
+    def test_pinned_version_matches_package_json(self):
+        package_json = Path(module.__file__).parents[1] / "package.json"
+        dev_dependencies = json.loads(package_json.read_text())["devDependencies"]
+        self.assertEqual(dev_dependencies["markdownlint-cli2"], module.MARKDOWNLINT_CLI2_VERSION)
 
 
 if __name__ == "__main__":

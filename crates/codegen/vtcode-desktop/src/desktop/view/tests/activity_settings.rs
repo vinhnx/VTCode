@@ -615,7 +615,7 @@ fn settings_page_and_categories_fit_a_narrow_window(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         let panel = window.find("settings-panel").bounds();
         let viewport = window.viewport_size();
-        assert_eq!(panel.origin.y, px(0.), "settings page attaches to the window top edge: panel={panel:?}");
+        assert_panel_embeds(window, "settings-panel");
         let title = window.find("settings-title").bounds();
         assert!(title.origin.x >= px(78.), "settings title clears the floating traffic lights: title={title:?}");
         assert!(
@@ -640,10 +640,27 @@ fn settings_page_and_categories_fit_a_narrow_window(cx: &mut TestAppContext) {
         assert!(content.origin.x >= panel.origin.x);
         assert!(content.origin.x + content.size.width <= panel.origin.x + panel.size.width);
         assert!(
-            navigation.origin.x + navigation.size.width <= content.origin.x,
-            "navigation sits beside content: navigation={navigation:?}, content={content:?}"
+            navigation.bottom() <= content.top(),
+            "narrow windows stack navigation above content: navigation={navigation:?}, content={content:?}"
         );
         assert!(window.try_find("keyboard-settings").is_some());
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(1280.), px(900.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let panel = window.find("settings-panel").bounds();
+        let navigation = window.find("settings-navigation").bounds();
+        let content = window.find("settings-content").bounds();
+        assert!(
+            navigation.origin.x + navigation.size.width <= content.origin.x,
+            "wide windows sit navigation beside content: navigation={navigation:?}, content={content:?}"
+        );
+        assert!(
+            content.origin.x + content.size.width <= panel.origin.x + panel.size.width,
+            "wide content stays inside the panel: content={content:?}, panel={panel:?}"
+        );
     })
     .unwrap();
 }
@@ -692,15 +709,12 @@ fn settings_page_tracks_window_width_after_open(cx: &mut TestAppContext) {
     cx.simulate_window_resize(window, size(px(600.), px(700.)));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert_panel_embeds(window, "settings-panel");
         let panel = window.find("settings-panel").bounds();
         let viewport = window.viewport_size();
         assert!(
             panel.origin.x + panel.size.width <= viewport.width,
             "settings page follows the resized viewport: panel={panel:?}, viewport={viewport:?}"
-        );
-        assert!(
-            panel.size.width > viewport.width - px(100.),
-            "settings page keeps using the resized viewport: panel={panel:?}, viewport={viewport:?}"
         );
     })
     .unwrap();
@@ -797,7 +811,7 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
         });
         window.render_frame(cx);
         window.click("open-settings", cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(view.read(cx).composer.read(cx).value(), "first\nsecond\nthird\nfourth\nfifth");
     })
     .unwrap();
@@ -900,7 +914,7 @@ fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppCon
 
         window.click("settings-nav-configuration", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert!(view.read(cx).config_page_open);
         assert!(window.try_find("cli-config-page").is_some());
         assert!(window.try_find("appearance-settings").is_none());
@@ -948,16 +962,16 @@ fn settings_toggle_reaches_the_open_page_from_the_keyboard(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         // The fullscreen page covers the toolbar, so the toggle path while
         // open is the keyboard binding (reachable now that no sheet layer
         // sits between the page and the body actions).
         window.press("cmd-,", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Settings);
+        assert!(view.read(cx).current_route() != Route::Settings);
         window.press("cmd-,", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
     })
     .unwrap();
 }

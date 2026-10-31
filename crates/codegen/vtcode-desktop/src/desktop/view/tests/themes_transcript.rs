@@ -355,7 +355,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
 
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit the Light appearance profile (selected)"));
         assert_eq!(window.find("edit-dark-profile").label(), Some("Edit the Dark appearance profile"));
         assert_eq!(window.find("edit-light-profile").checked(), Some(true));
@@ -369,7 +369,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
         window.click("edit-dark-profile", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
         assert_eq!(cx.theme().font_size, px(16.));
         window.click("edit-light-profile", cx);
@@ -584,18 +584,20 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
 
-        // Diffs show by default: the patch view renders with no click, and the
-        // copy action works straight away.
-        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "diff cards start expanded");
-        assert!(
-            window.try_find("diff-lines-change-1").is_some(),
-            "the patch view renders without expanding the card"
-        );
+        // Expanding the card exposes the patch text and the copy action.
+        window.click("diff-change-1", cx);
         window.click("copy-patch-change-1", cx);
         assert!(
             cx.read_from_clipboard().unwrap().text().unwrap().contains("+new line"),
             "copy patch must copy the raw unified diff"
         );
+        view.read(cx)
+            .transcript
+            .get(0)
+            .unwrap()
+            .expanded
+            .then_some(())
+            .expect("diff expanded");
 
         let updated_patch = "@@ -1 +1 @@\n-old line\n+latest line\n";
         view.update(cx, |view, cx| {
@@ -615,20 +617,12 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
             );
             cx.notify();
         });
-        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "a patch update preserves the expanded card");
         window.click("copy-patch-change-1", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(updated_patch));
 
-        // Collapsing hides the patch view but keeps the card; expanding shows
-        // it again.
+        // Collapsing again hides the patch view but keeps the card.
         window.click("diff-change-1", cx);
-        window.render_frame(cx);
         assert!(!view.read(cx).transcript.get(0).unwrap().expanded);
-        assert!(window.try_find("diff-lines-change-1").is_none(), "collapsing the card hides the patch view");
-        window.click("diff-change-1", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).transcript.get(0).unwrap().expanded);
-        assert!(window.try_find("diff-lines-change-1").is_some(), "re-expanding the card shows the patch view again");
     })
     .unwrap();
 }

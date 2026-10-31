@@ -64,7 +64,7 @@ impl DesktopView {
             }
             DesktopSlashAction::Configuration(target) => {
                 self.clear_submitted_command(window, cx);
-                if self.route == Route::Settings {
+                if self.current_route() == Route::Settings {
                     self.close_settings(window, cx);
                 }
                 self.config_page_open = true;

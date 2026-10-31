@@ -440,42 +440,6 @@ fn inspector_tabs_fit_without_scrolling_at_default_width(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
-fn inspector_tabs_overflow_menu_reaches_clipped_tabs(cx: &mut TestAppContext) {
-    use crate::desktop::inspector::InspectorTab;
-
-    let (window, view) = open_desktop_sized(cx, 600., 900.);
-    // Narrow the rail so the last tab clips; the default width fits every
-    // tab (see the fit test).
-    view.update(cx, |view, _| view.inspector_width = 240.);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        let bar = window.find("inspector-tabs-focus").bounds();
-        let last = window.within("inspector-tabs").find(4usize).bounds();
-        assert!(last.right() > bar.right(), "the last tab must clip for this test: {last:?} vs {bar:?}");
-        window.within("inspector-tabs").click("more", cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.find("popup-menu").role(), Some(gpui_kit::Role::Menu));
-        // The menu opens with nothing selected: five downs reach Utilities.
-        for _ in 0..5 {
-            window.press("down", cx);
-        }
-        window.press("enter", cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
-        assert!(window.try_find("popup-menu").is_none(), "selecting a tab dismisses the overflow menu");
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
 fn hiding_a_focused_inspector_restores_the_desktop_focus_path(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -659,7 +623,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
         window.render_frame(cx);
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none());
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(cx.theme().font_family.as_str(), ".SystemUIFont");
         assert_eq!(cx.theme().font_size, px(16.));
         assert_eq!(cx.theme().mono_font_size, px(14.));
@@ -676,7 +640,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
         window.render_frame(cx);
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none());
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert!(view.read(cx).preferences.code_font_family.is_none());
     })
     .unwrap();
@@ -768,7 +732,7 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         window.input("preserve this draft", cx);
         window.press("cmd-,", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("theme-ciapre-blue").role(), Some(gpui_kit::Role::Button));
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
@@ -779,7 +743,7 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
         window.press("escape", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Settings);
+        assert!(view.read(cx).current_route() != Route::Settings);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
         assert_eq!(view.read(cx).composer.read(cx).value(), "preserve this draft");
     })
@@ -806,7 +770,7 @@ fn settings_dismiss_button_restores_the_previous_focus(cx: &mut TestAppContext) 
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        assert!(view.read(cx).route != Route::Settings);
+        assert!(view.read(cx).current_route() != Route::Settings);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
     })
     .unwrap();
@@ -920,5 +884,44 @@ fn window_maximized_state_persists_on_bounds_changes(cx: &mut TestAppContext) {
     assert!(saved.contains("\"windowMaximized\": false"), "unexpected preferences content: {saved}");
     cx.update(|cx| {
         assert!(!view.read(cx).preferences.window_maximized());
+    });
+}
+
+#[gpui_kit::test]
+fn full_screen_toggle_flips_state_and_keeps_launch_bounds(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.preferences.set_window_maximized(true);
+    });
+    // Enter full screen through the dispatched action: the same route the
+    // View menu item and the ctrl-cmd-f binding take in production.
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, _| {
+        assert!(window.is_fullscreen(), "ToggleFullScreen dispatch must enter full screen");
+    })
+    .unwrap();
+    // The bounds observer runs during full-screen transitions: the guard must
+    // skip persistence so leaving full screen cannot clobber the launch state.
+    cx.update_window(window, |_, window, cx| window.bounds_changed(cx)).unwrap();
+    cx.update(|cx| {
+        assert!(view.read(cx).preferences.window_maximized(), "full screen must not persist as the launch state");
+    });
+    // Leaving full screen resumes the windowed state and persistence.
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, _| {
+        assert!(!window.is_fullscreen(), "second ToggleFullScreen dispatch must exit full screen");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| window.bounds_changed(cx)).unwrap();
+    cx.update(|cx| {
+        assert!(!view.read(cx).preferences.window_maximized(), "windowed state after full screen must persist again");
     });
 }

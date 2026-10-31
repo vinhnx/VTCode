@@ -40,6 +40,9 @@ impl DesktopView {
             cx.notify();
             return;
         }
+        // Panels stay out of the way of a workspace switch: the native picker
+        // floats above everything, and the new workspace lands on a clean page.
+        self.close_active_route(window, cx);
 
         self.workspace_picker_open = true;
         let paths = cx.prompt_for_paths(workspace_picker_options());
@@ -120,7 +123,7 @@ impl DesktopView {
     /// guard so a swipe over an open palette, settings, preview, or review
     /// cannot navigate the background underneath it.
     pub(super) fn swipe_navigation_allowed(&self) -> bool {
-        self.route == Route::Workspace
+        self.current_route() == Route::Workspace
             && self.palette.is_none()
             && !self.config_page_open
             && self.config_editor.is_none()
@@ -232,6 +235,7 @@ impl DesktopView {
     }
 
     pub(super) fn select_workspace_from_ui(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_active_route(window, cx);
         self.select_workspace_with_invalid_path_feedback(path, true, cx);
         self.restore_focus_after_review_close(window, cx);
     }

@@ -227,11 +227,11 @@ fn escape_closes_cli_config_editor_before_the_settings_page(cx: &mut TestAppCont
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).config_editor.is_none());
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
         window.press("escape", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Settings);
+        assert!(view.read(cx).current_route() != Route::Settings);
     })
     .unwrap();
 }
@@ -278,26 +278,26 @@ fn settings_surface_close_clears_the_editor_first_and_never_during_a_write(cx: &
         // A write in flight pins the editor: backdrop/dismiss must wait.
         view.update(cx, |view, cx| {
             view.config_write_pending = true;
-            view.close_settings_surface(window, cx);
+            assert!(view.go_route_back(window, cx));
         });
         window.render_frame(cx);
         assert!(view.read(cx).config_editor.is_some());
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
 
         // Idle editor closes first, settings stays for the next decision.
         view.update(cx, |view, cx| {
             view.config_write_pending = false;
-            view.close_settings_surface(window, cx);
+            assert!(view.go_route_back(window, cx));
         });
         window.render_frame(cx);
         assert!(view.read(cx).config_editor.is_none());
         assert!(window.try_find("cancel-cli-config-edit").is_none());
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
 
-        // With no editor, the same path closes the page.
-        view.update(cx, |view, cx| view.close_settings_surface(window, cx));
+        // With no editor, the same path backs out of the page.
+        view.update(cx, |view, cx| assert!(view.go_route_back(window, cx)));
         window.render_frame(cx);
-        assert!(view.read(cx).route != Route::Settings);
+        assert!(view.read(cx).current_route() != Route::Settings);
     })
     .unwrap();
 }

@@ -207,6 +207,10 @@ fn curated_effort_switch_updates_the_saved_selection(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
+        // The efforts group sits below the fold in the embedded slot; scroll
+        // it into view like a user would before interacting.
+        window.scroll("cli-config-page-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))), cx);
+        window.render_frame(cx);
         assert_eq!(window.find("curated-effort-low").checked(), Some(true));
         window.click("curated-effort-low", cx);
         window.render_frame(cx);

@@ -14,6 +14,7 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
     cx.bind_keys([
         KeyBinding::new("cmd-w", CloseWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-m", MinimizeWindow, Some(key_context::DESKTOP)),
+        KeyBinding::new("ctrl-cmd-f", ToggleFullScreen, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-shift-n", ShowMainWindow, None),
         KeyBinding::new("cmd-q", QuitApplication, None),
         KeyBinding::new("cmd-h", HideApplication, None),
@@ -71,9 +72,15 @@ pub(super) fn init_native_menus(cx: &mut App) {
             MenuItem::action(rust_i18n::t!("app.menus.find_conversation").to_string(), OpenConversationSearch),
             MenuItem::action(rust_i18n::t!("app.menus.focus_composer").to_string(), FocusComposer),
             MenuItem::action(rust_i18n::t!("app.menus.toggle_inspector").to_string(), ToggleInspector),
+            MenuItem::action(rust_i18n::t!("app.menus.toggle_sidebar").to_string(), ToggleSidebar),
             MenuItem::action(rust_i18n::t!("app.menus.toggle_zen").to_string(), ToggleZenMode),
             MenuItem::separator(),
             MenuItem::action(rust_i18n::t!("app.menus.cancel_run").to_string(), CancelRun),
+            MenuItem::separator(),
+            // macOS convention: the full-screen toggle closes the View menu;
+            // ⌃⌘F is the system-standard shortcut (HIG: full screen offers a
+            // distraction-free context).
+            MenuItem::action(rust_i18n::t!("app.menus.enter_full_screen").to_string(), ToggleFullScreen),
         ]),
         Menu::new(rust_i18n::t!("app.menus.window_menu").to_string()).items([
             MenuItem::action(rust_i18n::t!("app.menus.show_app").to_string(), ShowMainWindow),
@@ -396,7 +403,7 @@ impl DesktopView {
             selected_change: None,
             change_viewer: None,
             change_viewer_dirty: false,
-            route: Route::Workspace,
+            route_history: RouteHistory::new(),
             workspace_review: None,
             review_focus: cx.focus_handle().tab_stop(true),
             browser_focus: cx.focus_handle().tab_stop(true),

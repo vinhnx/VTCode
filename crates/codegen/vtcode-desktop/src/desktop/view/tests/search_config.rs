@@ -124,7 +124,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
         window.render_frame(cx);
         window.press("cmd-f", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert!(window.within("settings-panel").try_find("command-palette").is_some());
         assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("command-palette").label(), Some("Search settings and CLI config"));
@@ -156,7 +156,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Appearance);
 
         window.click("settings-filter-search", cx);
@@ -183,7 +183,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).config_editor.is_some(), "selecting a CLI setting opens its editor");
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
     })
     .unwrap();
 }
@@ -235,7 +235,7 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
             assert!(view.handle_desktop_slash_action(action, window, cx));
         });
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).current_route() == Route::Settings);
         assert!(view.read(cx).config_page_open);
         assert!(window.try_find("cli-config-page").is_some());
         assert!(window.try_find("config-category-curated").is_some());
@@ -264,7 +264,10 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).route == Route::Settings, "closing the settings browser returns to its parent panel");
+        assert!(
+            view.read(cx).current_route() == Route::Settings,
+            "closing the settings browser returns to its parent panel"
+        );
         assert!(view.read(cx).palette.is_none());
     })
     .unwrap();
@@ -272,10 +275,11 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
 
 #[gpui_kit::test]
 fn cli_config_page_keeps_header_fixed_while_catalog_scrolls_in_short_windows(cx: &mut TestAppContext) {
-    // 560px tall matches the sibling short-window fixture: the unified page
-    // carries a header plus side navigation, so the old 400px height leaves
-    // no room for the catalog once the inflexible header and rail lay out.
-    let (window, view) = open_desktop_sized(cx, 600., 560.);
+    // 800px tall leaves room for the catalog once the inflexible chrome lays
+    // out: the embedded page stacks toolbar, status bar, settings nav, config
+    // header, and rail above the rows, which starves them at the 560px
+    // sibling fixture under a large UI font.
+    let (window, view) = open_desktop_sized(cx, 600., 800.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {

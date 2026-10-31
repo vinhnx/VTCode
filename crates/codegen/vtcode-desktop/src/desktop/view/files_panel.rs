@@ -167,7 +167,7 @@ impl DesktopView {
     }
 
     pub(super) fn refresh_workspace_view(&mut self, cx: &mut Context<Self>) {
-        if self.route == Route::Review {
+        if self.current_route() == Route::Review {
             self.refresh_workspace_review(cx);
         } else {
             self.refresh_files(cx);
@@ -234,10 +234,10 @@ impl DesktopView {
             self.open_file_in_editor(&rel_path, editor, window, cx);
             return;
         }
-        if self.route == Route::Review {
+        if self.current_route() == Route::Review {
             self.close_review(window, cx);
         }
-        if self.route == Route::Browser {
+        if self.current_route() == Route::Browser {
             self.close_browser(window, cx);
         }
         let Some(workspace) = self.workspace.clone() else {

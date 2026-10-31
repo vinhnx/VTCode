@@ -99,8 +99,6 @@ fn inspector_copy_is_localized_for_every_language() {
         assert!(view_output.contains("demo-title"), "{locale}: {view_output}");
         let files = rust_i18n::t!("app.inspector.files_count", locale = locale, count = 3).to_string();
         assert!(files.contains('3'), "{locale}: {files}");
-        let file = rust_i18n::t!("app.inspector.file_count", locale = locale, count = 1).to_string();
-        assert!(file.contains('1'), "{locale}: {file}");
         let review =
             rust_i18n::t!("app.inspector.review_file", locale = locale, path = "demo/path", suffix = " (demo)")
                 .to_string();

@@ -254,83 +254,69 @@ impl DesktopView {
                 .child(Scrollbar::vertical(&self.browser_scroll))
                 .into_any_element()
         };
-        div()
-            .flex_1()
-            .min_w_0()
-            .h_full()
-            .px_6()
-            .pb_6()
-            .flex()
-            .justify_center()
-            .child(
-                div().w_full().h_full().max_w(px(1500.)).child(
+        route_page(
+            div()
+                .id("thread-browser")
+                .test_support()
+                .track_focus(&self.browser_focus)
+                .role(gpui_kit::Role::Dialog)
+                .aria_label(title.clone())
+                .size_full()
+                .flex()
+                .flex_col()
+                .rounded_xl()
+                .bg(colors.secondary)
+                .child(panel_header(
                     div()
-                        .id("thread-browser")
-                        .test_support()
-                        .track_focus(&self.browser_focus)
-                        .role(gpui_kit::Role::Dialog)
-                        .aria_label(title.clone())
-                        .size_full()
+                        .text_lg()
+                        .font_semibold()
+                        .pl(overlay_title_inset(cx.theme().font_size, 2.25))
+                        .child(title),
+                    div()
                         .flex()
-                        .flex_col()
-                        .rounded_xl()
-                        .bg(colors.secondary)
-                        .child(panel_header(
-                            div()
-                                .text_lg()
-                                .font_semibold()
-                                .pl(overlay_title_inset(cx.theme().font_size, 2.25))
-                                .child(title),
-                            div()
-                                .flex()
-                                .flex_shrink_0()
-                                .items_center()
-                                .gap_1()
-                                .child(
-                                    desktop_button("browser-new-session")
-                                        .tooltip_with_action(
-                                            rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
-                                            &NewSession,
-                                            Some(key_context::DESKTOP),
-                                        )
-                                        .label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
-                                        .icon(IconName::Plus)
-                                        .ghost()
-                                        .small()
-                                        .desktop_disabled(!can_new_thread)
-                                        .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
+                        .flex_shrink_0()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            desktop_button("browser-new-session")
+                                .tooltip_with_action(
+                                    rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
+                                    &NewSession,
+                                    Some(key_context::DESKTOP),
                                 )
-                                .child(
-                                    desktop_button("browser-close-session")
-                                        .tooltip_with_action(
-                                            rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string(),
-                                            &CloseSession,
-                                            Some(key_context::DESKTOP),
-                                        )
-                                        .label(rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string())
-                                        .ghost()
-                                        .small()
-                                        .desktop_disabled(!can_close_thread)
-                                        .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
+                                .label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
+                                .icon(IconName::Plus)
+                                .ghost()
+                                .small()
+                                .desktop_disabled(!can_new_thread)
+                                .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
+                        )
+                        .child(
+                            desktop_button("browser-close-session")
+                                .tooltip_with_action(
+                                    rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string(),
+                                    &CloseSession,
+                                    Some(key_context::DESKTOP),
                                 )
-                                .child(
-                                    desktop_button("browser-dismiss")
-                                        .icon(IconName::ArrowLeft)
-                                        .accessibility_label(rust_i18n::t!("app.navigation.back").to_string())
-                                        .tooltip_with_action(
-                                            rust_i18n::t!("app.navigation.back").to_string(),
-                                            &RouteBack,
-                                            Some(key_context::DESKTOP),
-                                        )
-                                        .ghost()
-                                        .small()
-                                        .on_click(cx.listener(|view, _, window, cx| view.close_browser(window, cx))),
-                                ),
-                        ))
-                        .child(div().flex_1().min_h_0().w_full().flex().flex_col().px_3().pb_3().child(content)),
-                ),
-            )
-            .into_any_element()
+                                .label(rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string())
+                                .ghost()
+                                .small()
+                                .desktop_disabled(!can_close_thread)
+                                .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
+                        )
+                        .child(
+                            desktop_button("browser-dismiss")
+                                .icon(IconName::X)
+                                .accessibility_label(rust_i18n::t!("app.browser.close").to_string())
+                                .tooltip(rust_i18n::t!("app.browser.close").to_string())
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(|view, _, window, cx| view.close_browser(window, cx))),
+                        ),
+                ))
+                .child(div().flex_1().min_h_0().w_full().flex().flex_col().px_3().pb_3().child(content)),
+        )
+        .into_any_element()
     }
 }
 
