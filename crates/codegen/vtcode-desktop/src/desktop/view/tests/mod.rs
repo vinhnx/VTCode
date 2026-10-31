@@ -15,7 +15,7 @@ pub(super) use serde_json::json;
 
 pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation};
 pub(super) use super::{
-    ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK,
+    ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, Route,
     TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page, eyebrow_label, group_box_title,
     restored_output_for_copy, row_title, scale_row_height_for_ui_font, section_label, workspace_picker_options,
 };
@@ -377,6 +377,7 @@ mod curated_config;
 mod files_webmcp;
 mod heading_tiers;
 mod inspector_appearance;
+mod inspector_files;
 mod loading_lifecycle;
 mod mcp_app;
 mod notifications;

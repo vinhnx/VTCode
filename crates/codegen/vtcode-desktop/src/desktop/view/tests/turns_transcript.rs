@@ -103,12 +103,21 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
             window.render_frame(cx);
             assert_eq!(view.read(cx).preferences.ui_language(), language);
             assert_eq!(window.find("settings-panel").label(), Some(title));
-            if let Some(new_session) = new_session {
-                assert_eq!(window.find("new-session").label(), Some(new_session));
-            }
             assert_eq!(window.find("ui-language-select").value(), Some(language.label()));
         })
         .unwrap();
+        if let Some(new_session) = new_session {
+            // Routes unmount the workspace, so go back to observe its relocalized chrome,
+            // then reopen settings for the next locale (scroll offset is retained).
+            cx.update_window(window, |_, window, cx| {
+                window.press("escape", cx);
+                window.render_frame(cx);
+                assert_eq!(window.find("new-session").label(), Some(new_session));
+                view.update(cx, |view, cx| view.open_settings(window, cx));
+                window.render_frame(cx);
+            })
+            .unwrap();
+        }
         assert_eq!(crate::desktop::preferences::Preferences::load().ui_language(), language);
     }
 

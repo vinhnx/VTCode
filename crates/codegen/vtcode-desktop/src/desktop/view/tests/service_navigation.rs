@@ -435,7 +435,7 @@ fn workspace_shortcuts_match_navigation_and_review_controls(cx: &mut TestAppCont
 
         window.press("cmd-shift-g", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).review_open);
+        assert!(view.read(cx).route == Route::Review);
         assert!(view.read(cx).workspace_review.is_some());
 
         window.press("cmd-r", cx);
@@ -674,15 +674,15 @@ fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         assert!(view.swipe_navigation_allowed());
-        view.settings_open = true;
+        view.route = Route::Settings;
         assert!(!view.swipe_navigation_allowed());
-        view.settings_open = false;
+        view.route = Route::Workspace;
         view.config_page_open = true;
         assert!(!view.swipe_navigation_allowed());
         view.config_page_open = false;
-        view.review_open = true;
+        view.route = Route::Review;
         assert!(!view.swipe_navigation_allowed());
-        view.review_open = false;
+        view.route = Route::Workspace;
         view.file_preview = Some(crate::desktop::files::FilePreview {
             rel_path: "src/app.rs".into(),
             text: "preview".into(),

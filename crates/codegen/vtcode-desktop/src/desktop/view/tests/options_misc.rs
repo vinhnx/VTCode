@@ -348,8 +348,8 @@ fn thread_browser_row_load_selects_thread_and_closes(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn thread_browser_dismiss_button_closes_and_restores_focus(cx: &mut TestAppContext) {
-    let (window, _view) = open_desktop(cx);
+fn thread_browser_dismiss_button_closes_and_focuses_composer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         focus_element_by_tab(window, "nav-browse-threads", cx);
         window.click("nav-browse-threads", cx);
@@ -359,14 +359,17 @@ fn thread_browser_dismiss_button_closes_and_restores_focus(cx: &mut TestAppConte
         window.click("browser-dismiss", cx);
         window.render_frame(cx);
         assert!(window.try_find("thread-browser").is_none());
-        assert_eq!(window.find("nav-browse-threads").focused(), Some(true));
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "closing the route lands focus deterministically in the composer"
+        );
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn thread_browser_escape_restores_rail_button_focus(cx: &mut TestAppContext) {
-    let (window, _view) = open_desktop(cx);
+fn thread_browser_escape_focuses_composer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         focus_element_by_tab(window, "nav-browse-threads", cx);
         window.click("nav-browse-threads", cx);
@@ -377,7 +380,10 @@ fn thread_browser_escape_restores_rail_button_focus(cx: &mut TestAppContext) {
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(window.try_find("thread-browser").is_none());
-        assert_eq!(window.find("nav-browse-threads").focused(), Some(true));
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "escape from the route lands focus deterministically in the composer"
+        );
     })
     .unwrap();
 }
@@ -470,7 +476,7 @@ fn thread_browser_and_settings_stay_mutually_exclusive(cx: &mut TestAppContext) 
         view.update(cx, |view, cx| view.open_thread_browser(window, cx));
         window.render_frame(cx);
         assert!(window.try_find("thread-browser").is_some());
-        assert!(!view.read(cx).settings_open, "browser replaces settings");
+        assert!(view.read(cx).route != Route::Settings, "browser replaces settings");
     })
     .unwrap();
 }
@@ -492,7 +498,7 @@ fn thread_browser_replaces_command_palette(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn thread_browser_from_palette_returns_focus_to_trigger_on_escape(cx: &mut TestAppContext) {
+fn thread_browser_from_palette_focuses_composer_on_escape(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         focus_element_by_tab(window, "nav-browse-threads", cx);
@@ -525,10 +531,9 @@ fn thread_browser_from_palette_returns_focus_to_trigger_on_escape(cx: &mut TestA
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(window.try_find("thread-browser").is_none());
-        assert_eq!(
-            window.find("nav-browse-threads").focused(),
-            Some(true),
-            "escape returns focus through the palette to its trigger"
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "escape from the palette-opened route lands focus deterministically in the composer"
         );
     })
     .unwrap();
@@ -564,7 +569,7 @@ fn trackpad_swipe_over_open_browser_does_not_navigate(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(window.try_find("thread-browser").is_some());
         window.click_with_options(
-            "pane-root",
+            "thread-browser",
             ClickOptions::new().with_button(MouseButton::Navigate(NavigationDirection::Back)),
             cx,
         );
@@ -605,7 +610,7 @@ fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mu
         window.render_frame(cx);
         select_settings_category(window, 4, cx);
 
-        assert!(view.read(cx).settings_open, "the Settings shortcut opens the dialog");
+        assert!(view.read(cx).route == Route::Settings, "the Settings shortcut opens the dialog");
         assert_eq!(window.find_all("webmcp-status").len(), 1);
         assert_eq!(window.find_all("webmcp-pairing").len(), 1);
         assert_eq!(window.find_all("refresh-webmcp-status").len(), 1);

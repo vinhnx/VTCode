@@ -108,13 +108,11 @@ impl DesktopView {
     /// guard so a swipe over an open palette, settings, preview, or review
     /// cannot navigate the background underneath it.
     pub(super) fn swipe_navigation_allowed(&self) -> bool {
-        self.palette.is_none()
-            && !self.settings_open
+        self.route == Route::Workspace
+            && self.palette.is_none()
             && !self.config_page_open
             && self.config_editor.is_none()
             && self.file_preview.is_none()
-            && !self.review_open
-            && !self.browser_open
     }
 
     pub(super) fn navigate_back(&mut self, cx: &mut Context<Self>) {

@@ -102,7 +102,9 @@ impl DesktopView {
                         &OpenThreadBrowser,
                         Some(key_context::DESKTOP),
                     )
-                    .when(self.browser_open, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                    .when(self.route == Route::Browser, |button| {
+                        button.bg(colors.secondary).text_color(colors.foreground)
+                    })
                     .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone()),
             )
             .into_any_element();

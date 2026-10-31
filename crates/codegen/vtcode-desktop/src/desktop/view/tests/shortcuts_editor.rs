@@ -71,7 +71,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already assigned"));
         assert!(view.read(cx).shortcut_capture.is_some(), "rejections keep capturing");
-        assert_eq!(view.read(cx).sidebar_open, sidebar_open, "captured chords stay inert inside the settings sheet");
+        assert_eq!(view.read(cx).sidebar_open, sidebar_open, "captured chords stay inert inside settings");
         window.press("left", cx);
         window.render_frame(cx);
         assert!(window.try_find("keyboard-settings").is_some(), "arrows never navigate away mid-capture");

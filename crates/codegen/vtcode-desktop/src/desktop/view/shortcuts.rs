@@ -569,7 +569,7 @@ mod tests {
         assert_eq!(
             bindings(&BTreeMap::from([("settings".into(), String::new())])).unwrap().len(),
             30,
-            "unbinding Settings removes both its desktop and in-sheet bindings"
+            "unbinding Settings removes both its desktop and in-settings bindings"
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
         for (action, key) in [

@@ -124,7 +124,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
         window.render_frame(cx);
         window.press("cmd-f", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert!(window.within("settings-panel").try_find("command-palette").is_some());
         assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("command-palette").label(), Some("Search settings and CLI config"));
@@ -156,7 +156,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Appearance);
 
         window.click("settings-filter-search", cx);
@@ -183,7 +183,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).config_editor.is_some(), "selecting a CLI setting opens its editor");
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
     })
     .unwrap();
 }
@@ -235,7 +235,7 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
             assert!(view.handle_desktop_slash_action(action, window, cx));
         });
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert!(view.read(cx).config_page_open);
         assert!(window.try_find("cli-config-page").is_some());
         assert!(window.try_find("config-category-curated").is_some());
@@ -264,7 +264,7 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open, "closing the settings browser returns to its parent panel");
+        assert!(view.read(cx).route == Route::Settings, "closing the settings browser returns to its parent panel");
         assert!(view.read(cx).palette.is_none());
     })
     .unwrap();
@@ -272,7 +272,10 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
 
 #[gpui_kit::test]
 fn cli_config_page_keeps_header_fixed_while_catalog_scrolls_in_short_windows(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 600., 400.);
+    // 560px tall matches the sibling short-window fixture: the unified page
+    // carries a header plus side navigation, so the old 400px height leaves
+    // no room for the catalog once the inflexible header and rail lay out.
+    let (window, view) = open_desktop_sized(cx, 600., 560.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
@@ -338,11 +341,59 @@ fn cli_config_page_keeps_header_fixed_while_catalog_scrolls_in_short_windows(cx:
 }
 
 #[gpui_kit::test]
+fn config_rail_sits_beside_content_when_wide_and_above_when_narrow(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1200., 800.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            let settings = (0..6)
+                .map(|index| {
+                    config_page_setting(
+                        &format!("agent.setting_{index}"),
+                        json!(format!("value-{index}")),
+                        "Model & Provider",
+                    )
+                })
+                .collect();
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings,
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        let rail = window.find("config-rail").bounds();
+        let content = window.find("cli-config-page-content").bounds();
+        assert!(
+            rail.origin.x + rail.size.width <= content.origin.x + px(1.),
+            "wide viewports put the rail beside the content: rail={rail:?} content={content:?}"
+        );
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(600.), px(700.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let rail = window.find("config-rail").bounds();
+        let content = window.find("cli-config-page-content").bounds();
+        assert!(
+            rail.origin.y + rail.size.height <= content.origin.y + px(1.),
+            "narrow viewports stack the rail above the content: rail={rail:?} content={content:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn config_boolean_switch_writes_the_toggled_value_in_both_directions(cx: &mut TestAppContext) {
     let workspace = tempfile::tempdir().expect("workspace");
     let (window, view) = open_desktop(cx);
-    // The sheet slides in on a wall-clock animation; reduce motion so the
-    // trailing row controls land inside the viewport on the first frame.
+    // Reduce motion so trailing row controls land inside the viewport on
+    // the first frame instead of mid-fade.
     cx.update(|cx| cx.set_reduce_motion(true));
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {

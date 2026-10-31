@@ -538,15 +538,15 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         window.press("end", cx);
         window.render_frame(cx);
         window.render_frame(cx);
+        assert!(window.try_find("cli-config-page").is_some());
+        assert_eq!(window.find("settings-nav-configuration").checked(), Some(true));
+        assert_eq!(window.find("settings-nav-appearance").checked(), Some(false));
+        assert_eq!(view.read(cx).settings_page_index(), 7);
+        window.press("left", cx);
+        window.render_frame(cx);
         assert!(window.try_find("storage-settings").is_some());
-        assert_eq!(window.within("settings-tabs").find(6usize).selected(), Some(true));
-        let scroll = &view.read(cx).settings_tabs_scroll;
-        let offset = scroll.offset().x;
-        assert!(
-            horizontal_scroll_item_is_visible(scroll, 6),
-            "End reveals the selected settings category; scroll offset={offset:?}"
-        );
-        assert!(offset < px(0.), "narrow settings tabs must scroll to the selected category");
+        assert_eq!(window.find("settings-nav-storage").checked(), Some(true));
+        assert!(window.try_find("cli-config-page").is_none());
 
         select_settings_category(window, 2, cx);
         assert!(window.try_find("keyboard-settings").is_some());
@@ -603,7 +603,7 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
 }
 
 #[gpui_kit::test]
-fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext) {
+fn settings_page_and_categories_fit_a_narrow_window(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 700.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
@@ -613,22 +613,23 @@ fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext)
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
-        let sheet = window.find("sheet-content").bounds();
         let panel = window.find("settings-panel").bounds();
         let viewport = window.viewport_size();
+        assert_eq!(panel.origin.y, px(0.), "settings page attaches to the window top edge: panel={panel:?}");
+        let title = window.find("settings-title").bounds();
+        assert!(title.origin.x >= px(78.), "settings title clears the floating traffic lights: title={title:?}");
         assert!(
-            sheet.origin.x >= px(0.) && sheet.origin.y >= px(0.),
-            "settings sheet starts outside viewport: sheet={sheet:?}, viewport={viewport:?}"
+            panel.origin.x >= px(0.) && panel.origin.y >= px(0.),
+            "settings page starts outside viewport: panel={panel:?}, viewport={viewport:?}"
         );
         assert!(
-            sheet.origin.x + sheet.size.width <= viewport.width,
-            "settings sheet exceeds viewport width: sheet={sheet:?}, viewport={viewport:?}"
+            panel.origin.x + panel.size.width <= viewport.width,
+            "settings page exceeds viewport width: panel={panel:?}, viewport={viewport:?}"
         );
         assert!(
-            sheet.origin.y + sheet.size.height <= viewport.height,
-            "settings sheet exceeds viewport height: sheet={sheet:?}, viewport={viewport:?}"
+            panel.origin.y + panel.size.height <= viewport.height,
+            "settings page exceeds viewport height: panel={panel:?}, viewport={viewport:?}"
         );
-        assert!(panel.size.width <= sheet.size.width);
 
         select_settings_category(window, 2, cx);
         window.render_frame(cx);
@@ -638,13 +639,17 @@ fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext)
         assert!(navigation.origin.x + navigation.size.width <= panel.origin.x + panel.size.width);
         assert!(content.origin.x >= panel.origin.x);
         assert!(content.origin.x + content.size.width <= panel.origin.x + panel.size.width);
+        assert!(
+            navigation.origin.x + navigation.size.width <= content.origin.x,
+            "navigation sits beside content: navigation={navigation:?}, content={content:?}"
+        );
         assert!(window.try_find("keyboard-settings").is_some());
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn settings_tab_bar_stays_fixed_while_settings_content_scrolls(cx: &mut TestAppContext) {
+fn settings_navigation_stays_fixed_while_settings_content_scrolls(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 560.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
@@ -658,11 +663,11 @@ fn settings_tab_bar_stays_fixed_while_settings_content_scrolls(cx: &mut TestAppC
         select_settings_category(window, 2, cx);
         window.render_frame(cx);
 
-        let sheet = window.find("sheet-content").bounds();
         let panel = window.find("settings-panel").bounds();
+        let viewport = window.viewport_size();
         assert!(
-            panel.origin.y + panel.size.height <= sheet.origin.y + sheet.size.height,
-            "large UI typography should keep settings within the sheet: panel={panel:?}, sheet={sheet:?}"
+            panel.origin.y + panel.size.height <= viewport.height,
+            "large UI typography should keep settings within the viewport: panel={panel:?}, viewport={viewport:?}"
         );
         let navigation_before = window.find("settings-navigation").bounds();
         window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
@@ -676,7 +681,7 @@ fn settings_tab_bar_stays_fixed_while_settings_content_scrolls(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn settings_sheet_tracks_window_width_after_open(cx: &mut TestAppContext) {
+fn settings_page_tracks_window_width_after_open(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 1_100., 900.);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
@@ -687,9 +692,16 @@ fn settings_sheet_tracks_window_width_after_open(cx: &mut TestAppContext) {
     cx.simulate_window_resize(window, size(px(600.), px(700.)));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let sheet = window.find("sheet-content").bounds();
+        let panel = window.find("settings-panel").bounds();
         let viewport = window.viewport_size();
-        assert_eq!(sheet.size.width, viewport.width - px(24.), "sheet width follows the resized viewport");
+        assert!(
+            panel.origin.x + panel.size.width <= viewport.width,
+            "settings page follows the resized viewport: panel={panel:?}, viewport={viewport:?}"
+        );
+        assert!(
+            panel.size.width > viewport.width - px(100.),
+            "settings page keeps using the resized viewport: panel={panel:?}, viewport={viewport:?}"
+        );
     })
     .unwrap();
 }
@@ -702,6 +714,7 @@ fn native_titlebar_is_transparent_and_kit_owns_dragging() {
     let titlebar = options.titlebar.unwrap();
     assert!(titlebar.appears_transparent);
     assert_eq!(titlebar.traffic_light_position, Some(point(px(12.), px(17.))));
+    assert_eq!(options.window_min_size, Some(size(px(600.), px(560.))));
 }
 
 #[gpui_kit::test]
@@ -784,7 +797,7 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
         });
         window.render_frame(cx);
         window.click("open-settings", cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert_eq!(view.read(cx).composer.read(cx).value(), "first\nsecond\nthird\nfourth\nfifth");
     })
     .unwrap();
@@ -865,16 +878,86 @@ fn connections_terminal_row_copies_the_resume_command(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn settings_toolbar_button_closes_an_open_sheet(cx: &mut TestAppContext) {
+fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        for id in [
+            "settings-nav-appearance",
+            "settings-nav-accessibility",
+            "settings-nav-shortcuts",
+            "settings-nav-vtcode",
+            "settings-nav-connections",
+            "settings-nav-notifications",
+            "settings-nav-storage",
+            "settings-nav-configuration",
+        ] {
+            assert!(window.try_find(id).is_some(), "{id} missing from settings navigation");
+        }
+        assert_eq!(window.find("settings-nav-configuration").label(), Some("Configuration"));
+
+        window.click("settings-nav-configuration", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).route == Route::Settings);
+        assert!(view.read(cx).config_page_open);
+        assert!(window.try_find("cli-config-page").is_some());
+        assert!(window.try_find("appearance-settings").is_none());
+
+        // Forward wrap: configuration (last) -> appearance (first).
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).config_page_open);
+        assert!(window.try_find("appearance-settings").is_some());
+        assert_eq!(window.find("settings-nav-appearance").checked(), Some(true));
+
+        // Backward wrap: appearance (first) -> configuration (last).
+        window.press("left", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_page_open);
+        assert!(window.try_find("cli-config-page").is_some());
+
+        // Clicking a tab leaves the configuration page.
+        window.click("settings-nav-storage", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).config_page_open);
+        assert!(window.try_find("storage-settings").is_some());
+        assert_eq!(window.find("settings-nav-storage").checked(), Some(true));
+        assert_eq!(window.find("settings-nav-configuration").checked(), Some(false));
+
+        // Up and Down alias the vertical movement and wrap at both ends.
+        window.press("down", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_page_open);
+        window.press("down", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("appearance-settings").is_some());
+        window.press("up", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_page_open);
+        assert_eq!(window.find("settings-nav-configuration").checked(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_toggle_reaches_the_open_page_from_the_keyboard(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
-        window.click("open-settings", cx);
+        assert!(view.read(cx).route == Route::Settings);
+        // The fullscreen page covers the toolbar, so the toggle path while
+        // open is the keyboard binding (reachable now that no sheet layer
+        // sits between the page and the body actions).
+        window.press("cmd-,", cx);
         window.render_frame(cx);
-        assert!(!view.read(cx).settings_open);
+        assert!(view.read(cx).route != Route::Settings);
+        window.press("cmd-,", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).route == Route::Settings);
     })
     .unwrap();
 }

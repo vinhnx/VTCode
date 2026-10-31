@@ -534,7 +534,7 @@ fn webmcp_connect_command_issues_a_pair_request_without_starting_an_agent_turn(c
                 state.set_value("/webmcp connect https://vtcode.vinhnx.chatgpt.site", window, cx)
             });
             view.submit_prompt(window, cx);
-            assert!(view.settings_open);
+            assert!(view.route == Route::Settings);
             assert!(!view.running);
             assert!(view.composer.read(cx).value().is_empty());
         });
@@ -636,7 +636,7 @@ fn splash_command_opens_connection_status_and_refreshes_webmcp(cx: &mut TestAppC
             view.backend = Some(BackendHandle { commands });
             view.composer.update(cx, |state, cx| state.set_value("/splash", window, cx));
             view.submit_prompt(window, cx);
-            assert!(view.settings_open);
+            assert!(view.route == Route::Settings);
             assert_eq!(view.settings_tab, super::super::settings::SettingsTab::Connections);
             assert!(!view.running, "a diagnostics command must not start an agent turn");
         });
@@ -687,7 +687,7 @@ fn webmcp_tools_and_roots_commands_show_shared_guidance_without_backend_requests
             view.composer
                 .update(cx, |state, cx| state.set_value("/webmcp tools", window, cx));
             view.submit_prompt(window, cx);
-            assert!(view.settings_open);
+            assert!(view.route == Route::Settings);
             assert!(!view.running);
             assert_eq!(
                 view.webmcp_notice.as_ref().unwrap().text(),

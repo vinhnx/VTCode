@@ -27,6 +27,14 @@ impl SettingsTab {
         Self::Storage,
     ];
 
+    /// Index of the CLI configuration entry in the unified settings
+    /// navigation: it follows every `SettingsTab` instead of swapping the
+    /// whole surface through `config_page_open` alone.
+    pub(super) const CONFIG_INDEX: usize = Self::ALL.len();
+
+    /// Tabs plus the configuration entry.
+    pub(super) const PAGE_COUNT: usize = Self::ALL.len() + 1;
+
     fn label(self) -> String {
         match self {
             Self::Appearance => rust_i18n::t!("app.settings.tab.appearance"),
@@ -147,13 +155,190 @@ impl DesktopView {
         self.show_palette(PaletteKind::SettingsSearch, groups, window, cx);
     }
 
-    pub(super) fn render_settings_tabs(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    /// Unified full-screen settings: left navigation over the seven tabs
+    /// plus the CLI configuration entry, right content for the selection.
+    /// The dialog identity stays `Settings` in every language so reopening
+    /// and assistive technology see one stable surface.
+    pub(super) fn render_settings_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let panel_height = sheet_panel_height(window, cx);
-        let selected_index = SettingsTab::ALL
-            .iter()
-            .position(|tab| *tab == self.settings_tab)
-            .unwrap_or_default();
+        let title = rust_i18n::t!(i18n::SETTINGS_TITLE).to_string();
+        let content = self.render_settings_content(window, cx);
+        div()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .px_6()
+            .pb_6()
+            .flex()
+            .justify_center()
+            .child(
+                div().w_full().h_full().max_w(px(1500.)).child(
+                    div()
+                        .id("settings-panel")
+                        .test_support()
+                        .track_focus(&self.settings_focus)
+                        .role(gpui_kit::Role::Dialog)
+                        .aria_label(title.clone())
+                        .relative()
+                        .size_full()
+                        .flex()
+                        .flex_col()
+                        .rounded_xl()
+                        .bg(colors.secondary)
+                        .text_sm()
+                        .child(panel_header(
+                            div()
+                                .text_lg()
+                                .font_semibold()
+                                .pl(overlay_title_inset(cx.theme().font_size, 2.25))
+                                .child(div().id("settings-title").test_support().child(title)),
+                            desktop_button("settings-dismiss")
+                                .icon(IconName::ArrowLeft)
+                                .accessibility_label(rust_i18n::t!("app.navigation.back").to_string())
+                                .tooltip_with_action(
+                                    rust_i18n::t!("app.navigation.back").to_string(),
+                                    &RouteBack,
+                                    Some(key_context::DESKTOP),
+                                )
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.close_settings_surface(window, cx);
+                                })),
+                        ))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_h_0()
+                                .w_full()
+                                .flex()
+                                .gap_3()
+                                .px_3()
+                                .pb_3()
+                                .child(self.render_settings_navigation(window, cx))
+                                .child(div().flex_1().min_w_0().min_h_0().flex().flex_col().child(content)),
+                        )
+                        .when(self.config_editor.is_some(), |panel| panel.child(self.render_cli_config_editor(cx))),
+                ),
+            )
+            .into_any_element()
+    }
+
+    /// Left navigation: shared search plus one button per settings page.
+    /// Buttons keep Kit Button keyboard handling; the panel fill is
+    /// `secondary`, so selection uses `popover` (a `secondary` fill would
+    /// be pixel-identical to the background).
+    fn render_settings_navigation(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let selected = self.settings_page_index();
+        let mut entries = Vec::with_capacity(SettingsTab::PAGE_COUNT);
+        for (index, tab) in SettingsTab::ALL.iter().enumerate() {
+            let active = index == selected;
+            entries.push(
+                desktop_button(format!("settings-nav-{tab:?}").to_lowercase())
+                    .accessibility_label(tab.label())
+                    .child(div().flex_1().min_w_0().truncate().child(tab.label()))
+                    .toggled(active)
+                    .ghost()
+                    .w_full()
+                    .justify_start()
+                    .when(active, |button| button.bg(colors.popover).text_color(colors.foreground))
+                    .on_click(cx.listener(move |view, _, window, cx| view.select_settings_page(index, window, cx)))
+                    .into_any_element(),
+            );
+        }
+        let config_active = selected == SettingsTab::CONFIG_INDEX;
+        let config_label = rust_i18n::t!("app.configuration.page_title").to_string();
+        entries.push(
+            desktop_button("settings-nav-configuration")
+                .accessibility_label(config_label.clone())
+                .child(div().flex_1().min_w_0().truncate().child(config_label))
+                .toggled(config_active)
+                .ghost()
+                .w_full()
+                .justify_start()
+                .when(config_active, |button| button.bg(colors.popover).text_color(colors.foreground))
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.select_settings_page(SettingsTab::CONFIG_INDEX, window, cx);
+                }))
+                .into_any_element(),
+        );
+        div()
+            .id("settings-navigation")
+            .test_support()
+            .track_focus(&self.settings_navigation_focus)
+            .when(!self.capture_suppresses_bindings(window), |nav| nav.key_context(key_context::SETTINGS))
+            .role(gpui_kit::Role::Group)
+            .aria_label(rust_i18n::t!("app.settings.categories").to_string())
+            .aria_description(rust_i18n::t!("app.settings.categories_navigation_hint").to_string())
+            .w(px(240.))
+            .flex_shrink_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .on_action(cx.listener(|view, _: &NextSettingsTab, window, cx| view.cycle_settings_tab(true, window, cx)))
+            .on_action(
+                cx.listener(|view, _: &PreviousSettingsTab, window, cx| view.cycle_settings_tab(false, window, cx)),
+            )
+            .on_action(
+                cx.listener(|view, _: &OpenSettingsSearch, window, cx| view.open_settings_search_palette(window, cx)),
+            )
+            .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.toggle_settings(window, cx)))
+            .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
+                view.select_settings_page_from_keyboard(0, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
+                view.select_settings_page_from_keyboard(SettingsTab::PAGE_COUNT - 1, window, cx)
+            }))
+            .child(
+                desktop_button("settings-filter-search")
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(Icon::new(IconName::Search))
+                            .child(rust_i18n::t!("app.settings.search.button").to_string()),
+                    )
+                    .accessibility_label(rust_i18n::t!("app.settings.search.button").to_string())
+                    .tooltip_with_action(
+                        rust_i18n::t!(i18n::SETTINGS_SEARCH_TITLE).to_string(),
+                        &OpenSettingsSearch,
+                        Some(key_context::DESKTOP),
+                    )
+                    .ghost()
+                    .small()
+                    .w_full()
+                    .justify_start()
+                    .bg(colors.secondary)
+                    .rounded_md()
+                    .dispatches_desktop_action(OpenSettingsSearch, self.focus_handle.clone()),
+            )
+            .child(scroll_column(
+                "settings-nav-list",
+                &self.settings_nav_scroll,
+                div().w_full().flex().flex_col().gap_1().children(entries),
+            ))
+            .into_any_element()
+    }
+
+    /// Right content for the selected page. The settings search palette
+    /// renders here while the navigation stays visible; selecting a tab
+    /// clears the configuration page and vice versa.
+    fn render_settings_content(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        if self.palette_kind == PaletteKind::SettingsSearch
+            && let Some(state) = self.palette.clone()
+        {
+            return self.render_command_palette(state, window, cx);
+        }
+        if self.config_page_open {
+            // Side-by-side rail and rows need room for both navigations plus
+            // readable rows (settings nav 240 + chrome + config rail 240 +
+            // ~320 row minimum); narrower windows stack the rail above.
+            let wide = window.viewport_size().width >= px(960.);
+            return self.render_cli_config_page(wide, cx);
+        }
         let content = match self.settings_tab {
             SettingsTab::Appearance => self.render_appearance_settings(cx),
             SettingsTab::Accessibility => self.render_accessibility_settings(cx),
@@ -167,112 +352,7 @@ impl DesktopView {
             SettingsTab::Notifications => self.render_notification_settings(cx),
             SettingsTab::Storage => self.render_storage_settings(cx),
         };
-
-        if self.palette_kind == PaletteKind::SettingsSearch
-            && let Some(state) = self.palette.clone()
-        {
-            return div()
-                .id("settings-panel")
-                .track_focus(&self.settings_focus)
-                .test_support()
-                .role(gpui_kit::Role::Dialog)
-                .aria_label(rust_i18n::t!(i18n::SETTINGS_TITLE).to_string())
-                .w_full()
-                .h(panel_height)
-                .p_6()
-                .child(self.render_command_palette(state, window, cx))
-                .into_any_element();
-        }
-
-        let mut panel = div()
-            .id("settings-panel")
-            .lock_scroll_axis()
-            .track_focus(&self.settings_focus)
-            .test_support()
-            .role(gpui_kit::Role::Dialog)
-            .aria_label(rust_i18n::t!(i18n::SETTINGS_TITLE).to_string())
-            .relative()
-            .w_full()
-            .h(panel_height)
-            .min_w_0()
-            .min_h_0()
-            .overflow_hidden()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .p_6()
-            .text_sm()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(
-                div()
-                    .id("settings-navigation")
-                    .test_support()
-                    .track_focus(&self.settings_navigation_focus)
-                    .key_context(key_context::SETTINGS)
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(rust_i18n::t!("app.settings.categories").to_string())
-                    .aria_description(rust_i18n::t!("app.settings.categories_navigation_hint").to_string())
-                    .w_full()
-                    .flex_shrink_0()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .on_action(
-                        cx.listener(|view, _: &NextSettingsTab, window, cx| view.cycle_settings_tab(true, window, cx)),
-                    )
-                    .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
-                        view.cycle_settings_tab(false, window, cx)
-                    }))
-                    .on_action(cx.listener(|view, _: &OpenSettingsSearch, window, cx| {
-                        view.open_settings_search_palette(window, cx)
-                    }))
-                    .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.toggle_settings(window, cx)))
-                    .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
-                        view.select_settings_tab_from_keyboard(0, window, cx)
-                    }))
-                    .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
-                        view.select_settings_tab_from_keyboard(SettingsTab::ALL.len().saturating_sub(1), window, cx)
-                    }))
-                    .child(
-                        desktop_button("settings-filter-search")
-                            .child(
-                                div()
-                                    .w_full()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(Icon::new(IconName::Search))
-                                    .child(rust_i18n::t!("app.settings.search.button").to_string()),
-                            )
-                            .accessibility_label(rust_i18n::t!("app.settings.search.button").to_string())
-                            .tooltip_with_action(
-                                rust_i18n::t!(i18n::SETTINGS_SEARCH_TITLE).to_string(),
-                                &OpenSettingsSearch,
-                                Some(key_context::DESKTOP),
-                            )
-                            .ghost()
-                            .small()
-                            .w_full()
-                            .justify_start()
-                            .bg(colors.secondary)
-                            .rounded_md()
-                            .dispatches_desktop_action(OpenSettingsSearch, self.focus_handle.clone()),
-                    )
-                    .child(
-                        desktop_tab_bar("settings-tabs")
-                            .track_scroll(&self.settings_tabs_scroll)
-                            .selected_index(selected_index)
-                            .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                view.select_settings_tab(*index, window, cx)
-                            }))
-                            .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()))),
-                    ),
-            )
-            .child(scroll_column("settings-content", &self.settings_scroll, content));
-        if self.config_editor.is_some() {
-            panel = panel.child(self.render_cli_config_editor(cx));
-        }
-        panel.into_any_element()
+        scroll_column("settings-content", &self.settings_scroll, content).into_any_element()
     }
 
     pub(super) fn set_ui_language(&mut self, language: UiLanguage, window: &mut Window, cx: &mut Context<Self>) {
@@ -734,22 +814,44 @@ impl DesktopView {
             .into_any_element()
     }
 
-    fn select_settings_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        self.update_settings_tab(index, false, window, cx);
+    /// Navigation index of the visible page: the tab position, or the
+    /// trailing configuration entry while the config page is open.
+    pub(super) fn settings_page_index(&self) -> usize {
+        if self.config_page_open {
+            return SettingsTab::CONFIG_INDEX;
+        }
+        SettingsTab::ALL
+            .iter()
+            .position(|tab| *tab == self.settings_tab)
+            .unwrap_or_default()
     }
 
-    fn select_settings_tab_from_keyboard(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        self.update_settings_tab(index, true, window, cx);
+    fn select_settings_page(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_settings_page(index, false, window, cx);
     }
 
-    fn update_settings_tab(&mut self, index: usize, reveal: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn select_settings_page_from_keyboard(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_settings_page(index, true, window, cx);
+    }
+
+    fn update_settings_page(&mut self, index: usize, reveal: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if index == SettingsTab::CONFIG_INDEX {
+            self.config_page_open = true;
+            if reveal {
+                self.settings_nav_scroll.scroll_to_item(index);
+            }
+            self.settings_navigation_focus.focus(window, cx);
+            cx.notify();
+            return;
+        }
         if let Some(tab) = SettingsTab::ALL.get(index) {
             self.settings_tab = *tab;
+            self.config_page_open = false;
             if *tab == SettingsTab::Storage {
                 self.maybe_request_storage_summary(cx);
             }
             if reveal {
-                self.settings_tabs_scroll.scroll_to_item(index);
+                self.settings_nav_scroll.scroll_to_item(index);
             }
             self.settings_navigation_focus.focus(window, cx);
             cx.notify();
@@ -757,16 +859,13 @@ impl DesktopView {
     }
 
     fn cycle_settings_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let count = SettingsTab::ALL.len();
-        let current = SettingsTab::ALL
-            .iter()
-            .position(|tab| *tab == self.settings_tab)
-            .unwrap_or_default();
+        let count = SettingsTab::PAGE_COUNT;
+        let current = self.settings_page_index();
         let index = if forward {
             (current + 1) % count
         } else {
             (current + count - 1) % count
         };
-        self.select_settings_tab_from_keyboard(index, window, cx);
+        self.select_settings_page_from_keyboard(index, window, cx);
     }
 }

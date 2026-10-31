@@ -623,7 +623,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
         window.render_frame(cx);
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none());
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert_eq!(cx.theme().font_family.as_str(), ".SystemUIFont");
         assert_eq!(cx.theme().font_size, px(16.));
         assert_eq!(cx.theme().mono_font_size, px(14.));
@@ -640,7 +640,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
         window.render_frame(cx);
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none());
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert!(view.read(cx).preferences.code_font_family.is_none());
     })
     .unwrap();
@@ -697,7 +697,7 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         window.input("preserve this draft", cx);
         window.press("cmd-,", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("theme-ciapre-blue").role(), Some(gpui_kit::Role::Button));
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
@@ -708,7 +708,7 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
         window.press("escape", cx);
         window.render_frame(cx);
-        assert!(!view.read(cx).settings_open);
+        assert!(view.read(cx).route != Route::Settings);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
         assert_eq!(view.read(cx).composer.read(cx).value(), "preserve this draft");
     })
@@ -716,7 +716,7 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn settings_sheet_close_button_restores_the_previous_focus(cx: &mut TestAppContext) {
+fn settings_dismiss_button_restores_the_previous_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
@@ -728,15 +728,14 @@ fn settings_sheet_close_button_restores_the_previous_focus(cx: &mut TestAppConte
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
-        assert!(window.within("sheet-content").find("close").visible());
-        window.within("sheet-content").click("close", cx);
+        assert!(window.within("settings-panel").find("settings-dismiss").visible());
+        window.within("settings-panel").click("settings-dismiss", cx);
         window.render_frame(cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        assert!(!window.has_active_sheet(cx), "sheet close button did not close the Kit sheet");
-        assert!(!view.read(cx).settings_open);
+        assert!(view.read(cx).route != Route::Settings);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
     })
     .unwrap();

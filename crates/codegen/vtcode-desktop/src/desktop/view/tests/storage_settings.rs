@@ -58,27 +58,25 @@ fn open_storage_tab(
     })
     .unwrap();
     cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| settle_settings_sheet(window, cx))
+    cx.update_window(window, |_, window, cx| settle_settings_page(window, cx))
         .unwrap();
     (window, view, requests)
 }
 
-/// Guard that the reopened settings sheet sits fully on-screen. Callers enable
-/// reduce-motion so the slide-in completes instantly; without it, headless
-/// frames advance the enter-animation slowly and right-edge clicks land
-/// outside the viewport mid-flight (fresh snapshots still report visible()).
-fn settle_settings_sheet(window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
+/// Guard that the reopened settings page sits fully on-screen after one
+/// frame settles fades and scroll geometry.
+fn settle_settings_page(window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
     window.render_frame(cx);
     let viewport = window.viewport_size();
     let panel = window.find("settings-panel").bounds();
     assert!(
         panel.origin.x + panel.size.width <= viewport.width,
-        "reopened sheet sits fully on-screen: {panel:?} in {viewport:?}"
+        "reopened page sits fully on-screen: {panel:?} in {viewport:?}"
     );
 }
 
 #[gpui_kit::test]
-fn storage_tab_bar_navigation_requests_summary_once(cx: &mut TestAppContext) {
+fn storage_keyboard_navigation_requests_summary_once(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
     cx.update_window(window, |_, window, cx| {
@@ -102,7 +100,7 @@ fn storage_tab_bar_navigation_requests_summary_once(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn storage_reopened_sheet_settles_fully_on_screen(cx: &mut TestAppContext) {
+fn storage_reopened_page_settles_fully_on_screen(cx: &mut TestAppContext) {
     let (window, view, _requests) = open_storage_tab(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);

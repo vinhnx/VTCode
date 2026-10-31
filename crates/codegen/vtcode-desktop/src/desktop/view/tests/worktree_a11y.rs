@@ -245,7 +245,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         });
         window.click("refresh-workspace-review", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).review_open);
+        assert!(view.read(cx).route == Route::Review);
         assert_eq!(window.find("diff-review-panel").label(), Some("Working tree review"));
         assert_eq!(window.find("refresh-workspace-review").disabled(), Some(true));
         let loading = window.find("workspace-review-loading");
@@ -297,7 +297,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
             // Session projection invalidation cannot close a Git review.
             view.change_viewer_dirty = true;
             view.refresh_selected_change(cx);
-            assert!(view.review_open);
+            assert!(view.route == Route::Review);
         });
         window.render_frame(cx);
         let layout_options = window.find("workspace-review-layout-options");
@@ -390,7 +390,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert!(view.read(cx).review_focus.contains_focused(window, cx));
         window.press("escape", cx);
         window.render_frame(cx);
-        assert!(!view.read(cx).review_open);
+        assert!(view.read(cx).route != Route::Review);
         assert!(!view.read(cx).review_focus.contains_focused(window, cx));
         assert!(view.read(cx).workspace_review.is_none());
         view.update(cx, |view, cx| {
@@ -470,7 +470,7 @@ fn working_tree_review_distinguishes_partial_clean_and_unavailable_snapshots(cx:
             assert!(!view.workspace_review.as_ref().unwrap().pending);
             view.reset_session_state();
             assert!(view.workspace_review.is_none());
-            assert!(!view.review_open);
+            assert!(view.route != Route::Review);
         });
     })
     .unwrap();
@@ -514,7 +514,7 @@ fn working_tree_review_searches_changed_files_without_closing_the_review(cx: &mu
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
-        assert!(view.read(cx).review_open);
+        assert!(view.read(cx).route == Route::Review);
         assert_eq!(window.find("command-palette").label(), Some("Choose changed file"));
         window.within("command-palette").input("b.rs", cx);
         window.render_frame(cx);
@@ -532,7 +532,7 @@ fn working_tree_review_searches_changed_files_without_closing_the_review(cx: &mu
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none());
-        assert!(view.read(cx).review_open, "Escape dismisses the picker before the underlying review");
+        assert!(view.read(cx).route == Route::Review, "Escape dismisses the picker before the underlying review");
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
 
         window.click("workspace-review-current-file", cx);
@@ -548,7 +548,7 @@ fn working_tree_review_searches_changed_files_without_closing_the_review(cx: &mu
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let review = view.read(cx);
-        assert!(review.review_open);
+        assert!(review.route == Route::Review);
         assert!(review.palette.is_none());
         assert_eq!(review.workspace_review.as_ref().unwrap().selected_file.as_deref(), Some("b.rs"));
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 2 of 2 · b.rs"));
@@ -757,22 +757,25 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
 fn navigation_position_switch_moves_the_expanded_panel_and_persists(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
+        // Routes unmount the workspace, so measure the initial layout before opening settings.
+        view.update(cx, |view, _| {
             view.sidebar_open = true;
-            view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
-        window.render_frame(cx);
-
-        assert!(view.read(cx).preferences.navigation_on_right(), "navigation defaults to the right");
-        assert_eq!(window.find("navigation-on-right").checked(), Some(true));
         let initial_navigation = window.find("primary-navigation").bounds();
         let initial_workspace = window.find("workspace-surface").bounds();
         let initial_panel = window.find("project-thread-sidebar").bounds();
         let initial_rail_button = window.find("nav-home").bounds();
         assert!(initial_workspace.right() < initial_navigation.left());
         assert!(initial_panel.right() < initial_rail_button.left());
+
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        window.render_frame(cx);
+
+        assert!(view.read(cx).preferences.navigation_on_right(), "navigation defaults to the right");
+        assert_eq!(window.find("navigation-on-right").checked(), Some(true));
 
         window.click("navigation-on-right", cx);
         window.render_frame(cx);

@@ -167,7 +167,7 @@ impl DesktopView {
     }
 
     pub(super) fn refresh_workspace_view(&mut self, cx: &mut Context<Self>) {
-        if self.review_open {
+        if self.route == Route::Review {
             self.refresh_workspace_review(cx);
         } else {
             self.refresh_files(cx);
@@ -234,10 +234,10 @@ impl DesktopView {
             self.open_file_in_editor(&rel_path, editor, window, cx);
             return;
         }
-        if self.review_open {
+        if self.route == Route::Review {
             self.close_review(window, cx);
         }
-        if self.browser_open {
+        if self.route == Route::Browser {
             self.close_browser(window, cx);
         }
         let Some(workspace) = self.workspace.clone() else {
@@ -272,7 +272,7 @@ impl DesktopView {
     }
 
     /// Open a file directly in an external editor without the preview overlay.
-    /// Unlike the viewer path this never closes the review sheet: an external
+    /// Unlike the viewer path this never closes the review surface: an external
     /// launch is non-modal and must not destroy the user's open context.
     fn open_file_in_editor(
         &mut self,
@@ -374,7 +374,9 @@ impl DesktopView {
             .flex()
             .items_center()
             .justify_center()
-            .p_4()
+            .px_4()
+            .pb_4()
+            .pt(px(40.))
             .bg(modal_scrim(colors))
             .child(
                 div()

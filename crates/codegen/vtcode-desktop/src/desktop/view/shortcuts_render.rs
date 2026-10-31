@@ -7,7 +7,7 @@ impl DesktopView {
         let colors = &cx.theme().colors;
         // Capture is live only while the pill holds focus. Tab and click-away move focus
         // elsewhere without touching state, so the pill renders exactly when armed and focused;
-        // every exit path (commit, cancel, save, reset, import, sheet close) clears the arm.
+        // every exit path (commit, cancel, save, reset, import, page close) clears the arm.
         let pill_focused = self.shortcut_capture_focus.is_focused(window);
         let description = if self.shortcuts_editing {
             rust_i18n::t!("app.shortcuts.unsaved_description").to_string()
@@ -139,10 +139,20 @@ impl DesktopView {
         cx.notify();
     }
 
-    fn cancel_shortcut_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Entered from the pill's Cancel action and its Escape key branch. Keymap actions dispatch
-        // before element key handlers, so stopping here is what keeps the sheet's own Escape
-        // handling from closing Settings underneath the capture.
+    /// True while the capture pill holds focus: bound chords must reach the
+    /// pill's validator raw instead of firing desktop actions. Renders omit
+    /// their key contexts in this state, which restores the inertness the
+    /// old settings sheet layer provided (global bindings like Cancel still
+    /// match, exactly as they did inside the sheet).
+    pub(super) fn capture_suppresses_bindings(&self, window: &Window) -> bool {
+        self.shortcut_capture.is_some() && self.shortcut_capture_focus.is_focused(window)
+    }
+
+    pub(super) fn cancel_shortcut_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Entered from dismiss_overlay ordering, the pill's Cancel action,
+        // and its Escape key branch. Keymap actions dispatch before element
+        // key handlers, so stopping here is what keeps dismissal from
+        // closing Settings underneath the capture.
         cx.stop_propagation();
         self.shortcut_capture = None;
         self.shortcut_message = None;
@@ -164,9 +174,10 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // Desktop-context chords are inert inside the settings sheet layer, and the sheet's
-        // own Cancel action is intercepted on the pill below. Stopping here keeps the keystroke
-        // from reaching ancestor key handlers and text input.
+        // Desktop-context chords reach in-tree settings, and dismiss_overlay
+        // ordering cancels an armed capture before closing the page; the
+        // pill's own Cancel action stays as a fallback. Stopping here keeps
+        // the keystroke from reaching ancestor key handlers and text input.
         cx.stop_propagation();
         if event.keystroke.key.as_str() == "escape" {
             self.cancel_shortcut_capture(window, cx);

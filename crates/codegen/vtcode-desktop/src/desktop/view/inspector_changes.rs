@@ -156,7 +156,7 @@ impl DesktopView {
         colors: &gpui_kit::component::theme::ThemeColor,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if self.review_open {
+        if self.route == Route::Review {
             return div()
                 .p_4()
                 .text_sm()
@@ -227,7 +227,7 @@ impl DesktopView {
         }
 
         let totals = self.changes.totals();
-        body = body.child(panel_header(
+        let files_header = panel_header(
             div()
                 .flex()
                 .flex_1()
@@ -283,7 +283,7 @@ impl DesktopView {
                         .desktop_disabled(self.changes.preview_count() < 2)
                         .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
                 ),
-        ));
+        );
 
         let change_row_height = scale_row_height_for_ui_font(CHANGE_ROW_HEIGHT, cx.theme().font_size);
         let change_sizes = self.change_row_sizes.get(self.changes.entries().len(), change_row_height);
@@ -298,134 +298,127 @@ impl DesktopView {
             list_height = change_row_height;
         }
         let change_row_colors = *colors;
-        body = body.child(
-            div()
-                .id("change-list")
-                .test_support()
-                .role(gpui_kit::Role::List)
-                .aria_label(rust_i18n::t!("app.inspector.changed_files").to_string())
-                .relative()
-                .w_full()
-                .h(px(list_height))
-                .max_h(px(max_height))
-                .min_h_0()
-                .overflow_hidden()
-                .child(
-                    v_virtual_list(
-                        cx.entity(),
-                        "change-virtual-list",
-                        change_sizes,
-                        move |view, visible_range, _, cx| {
-                            visible_range
-                                .filter_map(|index| {
-                                    let entry = view.changes.entries().get(index)?;
-                                    let path = entry.path.clone();
-                                    let selected = view.selected_change.as_deref() == Some(entry.path.as_str());
-                                    let preview_available = view.changes.has_preview(&path);
-                                    let file_summary = match (entry.additions, entry.deletions) {
-                                        (Some(additions), Some(deletions)) => format!("+{additions} −{deletions}"),
-                                        _ if entry.preview_incomplete => {
-                                            rust_i18n::t!("app.inspector.partial_diff").to_string()
-                                        }
-                                        _ => rust_i18n::t!("app.inspector.preview_unavailable").to_string(),
-                                    };
-                                    let kind_label = match entry.kind {
-                                        DiffFileKind::Add => ("A", change_row_colors.success),
-                                        DiffFileKind::Delete => ("D", change_row_colors.danger),
-                                        DiffFileKind::Update => ("M", change_row_colors.muted_foreground),
-                                    };
-                                    let kind_name = match entry.kind {
-                                        DiffFileKind::Add => rust_i18n::t!("app.inspector.kind_added").to_string(),
-                                        DiffFileKind::Delete => rust_i18n::t!("app.inspector.kind_deleted").to_string(),
-                                        DiffFileKind::Update => {
-                                            rust_i18n::t!("app.inspector.kind_modified").to_string()
-                                        }
-                                    };
-                                    let row_accessibility_label = format!("{kind_name} {path}, {file_summary}");
-                                    Some(
+        let change_list = div()
+            .id("change-list")
+            .test_support()
+            .role(gpui_kit::Role::List)
+            .aria_label(rust_i18n::t!("app.inspector.changed_files").to_string())
+            .relative()
+            .w_full()
+            .h(px(list_height))
+            .max_h(px(max_height))
+            .min_h_0()
+            .overflow_hidden()
+            .child(
+                v_virtual_list(cx.entity(), "change-virtual-list", change_sizes, move |view, visible_range, _, cx| {
+                    visible_range
+                        .filter_map(|index| {
+                            let entry = view.changes.entries().get(index)?;
+                            let path = entry.path.clone();
+                            let selected = view.selected_change.as_deref() == Some(entry.path.as_str());
+                            let preview_available = view.changes.has_preview(&path);
+                            let file_summary = match (entry.additions, entry.deletions) {
+                                (Some(additions), Some(deletions)) => format!("+{additions} −{deletions}"),
+                                _ if entry.preview_incomplete => {
+                                    rust_i18n::t!("app.inspector.partial_diff").to_string()
+                                }
+                                _ => rust_i18n::t!("app.inspector.preview_unavailable").to_string(),
+                            };
+                            let kind_label = match entry.kind {
+                                DiffFileKind::Add => ("A", change_row_colors.success),
+                                DiffFileKind::Delete => ("D", change_row_colors.danger),
+                                DiffFileKind::Update => ("M", change_row_colors.muted_foreground),
+                            };
+                            let kind_name = match entry.kind {
+                                DiffFileKind::Add => rust_i18n::t!("app.inspector.kind_added").to_string(),
+                                DiffFileKind::Delete => rust_i18n::t!("app.inspector.kind_deleted").to_string(),
+                                DiffFileKind::Update => rust_i18n::t!("app.inspector.kind_modified").to_string(),
+                            };
+                            let row_accessibility_label = format!("{kind_name} {path}, {file_summary}");
+                            Some(
+                                div()
+                                    .id(opaque_path_element_id("change-list-item", &path))
+                                    .test_support()
+                                    .role(gpui_kit::Role::ListItem)
+                                    .aria_label(row_accessibility_label)
+                                    .aria_position_in_set(index + 1)
+                                    .aria_size_of_set(view.changes.entries().len())
+                                    .aria_selected(selected)
+                                    .h(px(change_row_height))
+                                    .w_full()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .px_3()
+                                    .rounded_md()
+                                    .when(selected, |row| row.bg(change_row_colors.secondary))
+                                    .child(
                                         div()
-                                            .id(opaque_path_element_id("change-list-item", &path))
-                                            .test_support()
-                                            .role(gpui_kit::Role::ListItem)
-                                            .aria_label(row_accessibility_label)
-                                            .aria_position_in_set(index + 1)
-                                            .aria_size_of_set(view.changes.entries().len())
-                                            .aria_selected(selected)
-                                            .h(px(change_row_height))
-                                            .w_full()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .px_3()
-                                            .rounded_md()
-                                            .when(selected, |row| row.bg(change_row_colors.secondary))
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_semibold()
-                                                    .w(px(14.))
-                                                    .text_color(kind_label.1)
-                                                    .child(kind_label.0),
-                                            )
-                                            .child(div().flex_1().min_w_0().text_sm().truncate().child(path.clone()))
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(change_row_colors.muted_foreground)
-                                                    .child(file_summary),
-                                            )
-                                            .child(
-                                                desktop_button(opaque_path_element_id("change-row", &path))
-                                                    .icon(IconName::ChevronRight)
-                                                    .accessibility_label({
-                                                        let suffix = if selected {
-                                                            rust_i18n::t!("app.inspector.selected_suffix").to_string()
-                                                        } else {
-                                                            String::new()
-                                                        };
-                                                        if preview_available {
-                                                            rust_i18n::t!(
-                                                                "app.inspector.review_file",
-                                                                path = path.as_str(),
-                                                                suffix = suffix.as_str()
-                                                            )
-                                                            .to_string()
-                                                        } else {
-                                                            rust_i18n::t!(
-                                                                "app.inspector.preview_unavailable_for",
-                                                                path = path.as_str(),
-                                                                suffix = suffix.as_str()
-                                                            )
-                                                            .to_string()
-                                                        }
-                                                    })
-                                                    .tooltip(if preview_available {
-                                                        path.clone()
-                                                    } else {
-                                                        rust_i18n::t!(
-                                                            "app.inspector.preview_unavailable_for",
-                                                            path = path.as_str(),
-                                                            suffix = ""
-                                                        )
-                                                        .to_string()
-                                                    })
-                                                    .ghost()
-                                                    .small()
-                                                    .desktop_disabled(!preview_available)
-                                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                                        this.select_change(path.clone(), cx)
-                                                    })),
-                                            )
-                                            .into_any_element(),
+                                            .text_xs()
+                                            .font_semibold()
+                                            .w(px(14.))
+                                            .text_color(kind_label.1)
+                                            .child(kind_label.0),
                                     )
-                                })
-                                .collect::<Vec<_>>()
-                        },
-                    )
-                    .track_scroll(&self.change_list_scroll),
-                )
-                .child(Scrollbar::vertical(&self.change_list_scroll)),
-        );
+                                    .child(div().flex_1().min_w_0().text_sm().truncate().child(path.clone()))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(change_row_colors.muted_foreground)
+                                            .child(file_summary),
+                                    )
+                                    .child(
+                                        desktop_button(opaque_path_element_id("change-row", &path))
+                                            .icon(IconName::ChevronRight)
+                                            .accessibility_label({
+                                                let suffix = if selected {
+                                                    rust_i18n::t!("app.inspector.selected_suffix").to_string()
+                                                } else {
+                                                    String::new()
+                                                };
+                                                if preview_available {
+                                                    rust_i18n::t!(
+                                                        "app.inspector.review_file",
+                                                        path = path.as_str(),
+                                                        suffix = suffix.as_str()
+                                                    )
+                                                    .to_string()
+                                                } else {
+                                                    rust_i18n::t!(
+                                                        "app.inspector.preview_unavailable_for",
+                                                        path = path.as_str(),
+                                                        suffix = suffix.as_str()
+                                                    )
+                                                    .to_string()
+                                                }
+                                            })
+                                            .tooltip(if preview_available {
+                                                path.clone()
+                                            } else {
+                                                rust_i18n::t!(
+                                                    "app.inspector.preview_unavailable_for",
+                                                    path = path.as_str(),
+                                                    suffix = ""
+                                                )
+                                                .to_string()
+                                            })
+                                            .ghost()
+                                            .small()
+                                            .desktop_disabled(!preview_available)
+                                            .on_click(
+                                                cx.listener(move |this, _, _, cx| this.select_change(path.clone(), cx)),
+                                            ),
+                                    )
+                                    .into_any_element(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .track_scroll(&self.change_list_scroll),
+            )
+            .child(Scrollbar::vertical(&self.change_list_scroll));
+        body = body
+            .child(diff_pane_group(div().w_full().flex().flex_col().child(files_header).child(change_list), colors));
 
         // Full syntax-highlighted diff of the selected file.
         if let (Some(path), Some(viewer)) = (self.selected_change.clone(), self.change_viewer.clone()) {
@@ -545,7 +538,9 @@ impl DesktopView {
                             .text_color(diff_foreground),
                     ),
             );
-            body = body.child(viewer_panel);
+            body = body
+                .child(row_divider(colors))
+                .child(diff_pane_group(viewer_panel, colors).flex_1());
         }
         body.into_any_element()
     }
@@ -569,79 +564,72 @@ impl DesktopView {
             rust_i18n::t!("app.workspace_review.session_description").to_string()
         };
         div()
-            .absolute()
-            .inset_0()
-            .p_6()
-            .bg(modal_scrim(&colors))
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .px_6()
+            .pb_6()
             .flex()
-            .items_center()
             .justify_center()
-            .on_mouse_down(MouseButton::Left, cx.listener(|view, _, window, cx| view.close_review(window, cx)))
             .child(
-                div()
-                    .w_full()
-                    .h_full()
-                    .max_w(px(1500.))
-                    .child(
-                        div()
-                            .id("diff-review-panel")
-                            .test_support()
-                            .role(gpui_kit::Role::Dialog)
-                            .aria_label(title.clone())
-                            .key_context(key_context::DIFF_REVIEW)
-                            .size_full()
-                            .flex()
-                            .flex_col()
-                            .rounded_xl()
-                            .bg(colors.secondary)
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .on_action(
-                                cx.listener(|view, _: &NextReviewChange, _, cx| view.navigate_review_change(true, cx)),
-                            )
-                            .on_action(cx.listener(|view, _: &PreviousReviewChange, _, cx| {
-                                view.navigate_review_change(false, cx)
-                            }))
-                            .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| {
+                div().w_full().h_full().max_w(px(1500.)).child(
+                    div()
+                        .id("diff-review-panel")
+                        .test_support()
+                        .track_focus(&self.review_focus)
+                        .role(gpui_kit::Role::Dialog)
+                        .aria_label(title.clone())
+                        .key_context(key_context::DIFF_REVIEW)
+                        .size_full()
+                        .flex()
+                        .flex_col()
+                        .rounded_xl()
+                        .bg(colors.secondary)
+                        .on_action(
+                            cx.listener(|view, _: &NextReviewChange, _, cx| view.navigate_review_change(true, cx)),
+                        )
+                        .on_action(
+                            cx.listener(|view, _: &PreviousReviewChange, _, cx| view.navigate_review_change(false, cx)),
+                        )
+                        .on_action(
+                            cx.listener(|view, _: &NextReviewFile, _, cx| {
                                 view.navigate_workspace_review_file(true, cx)
-                            }))
-                            .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| {
-                                view.navigate_workspace_review_file(false, cx)
-                            }))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .px_4()
-                                    .py_3()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().text_lg().font_semibold().child(title))
-                                            .child(
-                                                div().text_xs().text_color(colors.muted_foreground).child(description),
-                                            ),
-                                    )
-                                    .child(
-                                        desktop_button("close-diff-review")
-                                            .icon(IconName::X)
-                                            .accessibility_label(
-                                                rust_i18n::t!("app.workspace_review.close_review").to_string(),
-                                            )
-                                            .tooltip_with_action(
-                                                rust_i18n::t!("app.workspace_review.close_review").to_string(),
-                                                &DismissOverlay,
-                                                Some(key_context::DESKTOP),
-                                            )
-                                            .ghost()
-                                            .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
-                                    ),
-                            )
-                            .child(content),
-                    )
-                    .focus_trap("diff-review-trap", &self.review_focus),
+                            }),
+                        )
+                        .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| {
+                            view.navigate_workspace_review_file(false, cx)
+                        }))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .px_4()
+                                .pl(overlay_title_inset(cx.theme().font_size, 2.5))
+                                .py_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(div().text_lg().font_semibold().child(title))
+                                        .child(div().text_xs().text_color(colors.muted_foreground).child(description)),
+                                )
+                                .child(
+                                    desktop_button("close-diff-review")
+                                        .icon(IconName::ArrowLeft)
+                                        .accessibility_label(rust_i18n::t!("app.navigation.back").to_string())
+                                        .tooltip_with_action(
+                                            rust_i18n::t!("app.navigation.back").to_string(),
+                                            &RouteBack,
+                                            Some(key_context::DESKTOP),
+                                        )
+                                        .ghost()
+                                        .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
+                                ),
+                        )
+                        .child(content),
+                ),
             )
             .into_any_element()
     }

@@ -141,7 +141,7 @@ pub(super) fn settings_group_box(
 }
 
 /// One settings row: title and description stacked left, a control pinned
-/// right. The row wraps so the control drops below the text in narrow sheets.
+/// right. The row wraps so the control drops below the text in narrow pages.
 pub(super) fn settings_row(
     title: impl Into<gpui_kit::SharedString>,
     description: impl Into<gpui_kit::SharedString>,
@@ -203,6 +203,25 @@ pub(super) fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> im
     div().w_full().py_1().child(div().h(px(1.)).w_full().bg(colors.border))
 }
 
+/// Bordered section group for diff panes: quiet 1px `border`-token
+/// containment at the nested-card tier, so the file list and the diff read
+/// as two grouped panes with [`row_divider`] between them. Returns `Div`
+/// so callers can chain sizing.
+pub(super) fn diff_pane_group(
+    child: impl IntoElement,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> gpui_kit::Div {
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .min_h_0()
+        .rounded_md()
+        .border_1()
+        .border_color(colors.border)
+        .child(child)
+}
+
 /// Trailing settings control pairing a right-aligned label with a switch.
 ///
 /// The fixed-width lane keeps every row's toggle on one trailing spine while
@@ -243,10 +262,19 @@ pub(super) fn settings_switch(
         )
 }
 
+/// Left inset starting a flush-top overlay title past the floating traffic
+/// lights (lights end ~x78; titles start at x84) at any UI scale.
+/// `chrome_rems` sums the rem-scaled chrome before the title: backdrop side
+/// margin plus header side padding (settings/browser: 1.5 + 0.75; review:
+/// 1.5 + 1.0).
+pub(super) fn overlay_title_inset(ui_font_size: Pixels, chrome_rems: f32) -> Pixels {
+    (px(84.) - ui_font_size * chrome_rems).max(px(0.))
+}
+
 /// Shared scrim behind every inline modal (palette, review, browser, file
-/// preview, config editor): the canvas at 85% so the background fades while
-/// staying faintly legible. One value for all five surfaces — tune here, not
-/// per surface. The settings sheet keeps Kit's own overlay token.
+/// preview, config editor, settings): the canvas at 85% so the background
+/// fades while staying faintly legible. One value for all six surfaces —
+/// tune here, not per surface.
 pub(super) fn modal_scrim(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
     colors.background.opacity(0.85)
 }
@@ -399,15 +427,7 @@ pub(super) fn centered_empty_state(
         .child(empty_state(title, description, icon))
 }
 
-/// Usable height for a settings-sheet page: the viewport minus the sheet
-/// chrome and the font-scaled title row, with 8px beneath it so only the
-/// content region scrolls.
-pub(super) fn sheet_panel_height(window: &Window, cx: &App) -> Pixels {
-    let sheet_header_height = cx.theme().font_size * 2.5;
-    (window.viewport_size().height - cx.theme().sheet.margin_top - sheet_header_height - px(8.)).max(px(0.))
-}
-
-/// Scrollable settings-sheet content column: axis-locked vertical scroll
+/// Scrollable settings content column: axis-locked vertical scroll
 /// with a themed scrollbar.
 pub(super) fn scroll_column(id: &'static str, scroll: &ScrollHandle, child: impl IntoElement) -> impl IntoElement {
     scroll_column_inner(id, scroll, child, false)
@@ -507,5 +527,22 @@ impl DesktopButtonExt for Button {
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
         self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overlay_title_inset_lands_titles_at_x84_and_clamps() {
+        // Default scale: 84 - 16 * 2.25 = 48.
+        assert_eq!(overlay_title_inset(px(16.), 2.25), px(48.));
+        // Large type shrinks the inset so the title stays put: 84 - 24 * 2.25 = 30.
+        assert_eq!(overlay_title_inset(px(24.), 2.25), px(30.));
+        // Wider header padding needs less inset: 84 - 16 * 2.5 = 44.
+        assert_eq!(overlay_title_inset(px(16.), 2.5), px(44.));
+        // Beyond the lights row the inset clamps instead of going negative.
+        assert_eq!(overlay_title_inset(px(48.), 2.25), px(0.));
     }
 }

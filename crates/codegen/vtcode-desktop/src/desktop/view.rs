@@ -83,6 +83,7 @@ use super::transport::{
     request_fits_frame,
 };
 use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
+use overlays::Route;
 
 mod appearance;
 mod backend_events;
@@ -277,6 +278,7 @@ actions!(
         RefreshWorkspace,
         NavigateBack,
         NavigateForward,
+        RouteBack,
         ToggleInspector,
         ToggleSidebar,
         ToggleZenMode,
@@ -439,13 +441,10 @@ struct DesktopView {
     selected_change: Option<String>,
     change_viewer: Option<Entity<DiffState>>,
     change_viewer_dirty: bool,
-    review_open: bool,
+    route: Route,
     workspace_review: Option<WorkspaceReviewState>,
     review_focus: FocusHandle,
-    review_return_focus: Option<FocusHandle>,
-    browser_open: bool,
     browser_focus: FocusHandle,
-    browser_return_focus: Option<FocusHandle>,
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,
@@ -461,12 +460,11 @@ struct DesktopView {
     resources_loading: bool,
     resources_loaded: bool,
     palette_groups: PaletteGroups,
-    settings_open: bool,
     config_page_open: bool,
     config_page_group: Option<String>,
     theme_scroll: ScrollHandle,
     settings_scroll: ScrollHandle,
-    settings_tabs_scroll: ScrollHandle,
+    settings_nav_scroll: ScrollHandle,
     config_rail_scroll: ScrollHandle,
     utilities_scroll: ScrollHandle,
     output_scroll: ScrollHandle,
@@ -482,7 +480,6 @@ struct DesktopView {
     settings_focus: FocusHandle,
     settings_navigation_focus: FocusHandle,
     settings_tab: settings::SettingsTab,
-    settings_return_focus: Option<FocusHandle>,
     storage: storage::StorageState,
     webmcp_status: Option<protocol::WebmcpBridgeStatus>,
     webmcp_pairing: Option<protocol::WebmcpPairResult>,
@@ -671,6 +668,12 @@ fn desktop_window_options() -> WindowOptions {
     if let Some(titlebar) = options.titlebar.as_mut() {
         titlebar.traffic_light_position = Some(point(px(12.), px(17.)));
     }
+    // Smallest geometry that keeps every surface non-degenerate: 600x560 is
+    // the smallest headless-tested size with all suites green, while 400px
+    // tall provably starves flex content (the config header plus rail alone
+    // exceed the row). The platform enforces this; headless tests may still
+    // open smaller windows to stress overflow paths.
+    options.window_min_size = Some(size(px(600.), px(560.)));
     options
 }
 

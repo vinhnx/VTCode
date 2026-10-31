@@ -355,7 +355,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
 
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit the Light appearance profile (selected)"));
         assert_eq!(window.find("edit-dark-profile").label(), Some("Edit the Dark appearance profile"));
         assert_eq!(window.find("edit-light-profile").checked(), Some(true));
@@ -369,7 +369,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
         window.click("edit-dark-profile", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
         assert_eq!(cx.theme().font_size, px(16.));
         window.click("edit-light-profile", cx);
@@ -383,7 +383,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(view.read(cx).preferences.light_theme.as_deref(), Some("solarized-light"));
 
-        window.within("sheet-content").click("close", cx);
+        window.within("settings-panel").click("settings-dismiss", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.run_palette_action(super::super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);

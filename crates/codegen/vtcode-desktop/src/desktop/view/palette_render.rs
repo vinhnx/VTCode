@@ -414,7 +414,7 @@ impl DesktopView {
                 });
             });
 
-        if self.settings_open && self.palette_kind == PaletteKind::SettingsSearch {
+        if self.route == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch {
             return div()
                 .id(COMMAND_PALETTE_ELEMENT_ID)
                 .test_support()

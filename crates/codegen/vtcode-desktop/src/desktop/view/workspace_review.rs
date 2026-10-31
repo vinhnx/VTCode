@@ -17,7 +17,7 @@ use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
 use super::{
     DesktopButtonExt, DesktopView, NextReviewFile, PaletteAction, PaletteKind, PreviousReviewFile, RefreshWorkspace,
-    command, desktop_button, empty_state, shimmer_label, uuid_like_id, warning_alert,
+    Route, command, desktop_button, empty_state, shimmer_label, uuid_like_id, warning_alert,
 };
 use crate::desktop::strings::{i18n, key_context, keys};
 
@@ -56,7 +56,7 @@ fn review_message(
 
 impl DesktopView {
     pub(super) fn open_workspace_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.review_open {
+        if self.route == Route::Review {
             self.close_review(window, cx);
             return;
         }

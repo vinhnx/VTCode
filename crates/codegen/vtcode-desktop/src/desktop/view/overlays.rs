@@ -1,7 +1,19 @@
-//! Overlay and chrome state: focus, settings sheet, palette, file preview,
-//! review surface, and inspector/zen view-mode toggles.
+//! Overlay and chrome state: focus, full-window routes, palette, file
+//! preview, and inspector/zen view-mode toggles.
 
 use super::*;
+
+/// Full-window route. Exactly one is active at a time; transient overlays
+/// (palette, pickers, file preview, config editor, shortcut capture) layer
+/// above whichever route is active.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum Route {
+    #[default]
+    Workspace,
+    Settings,
+    Browser,
+    Review,
+}
 
 impl DesktopView {
     pub(super) fn global_loading_active(&self) -> bool {
@@ -20,23 +32,26 @@ impl DesktopView {
     }
 
     pub(super) fn activate_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.review_open {
-            self.close_review(window, cx);
-        }
-        if self.settings_open {
-            self.close_settings(window, cx);
-        }
+        self.close_active_route(window, cx);
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
-        if self.browser_open {
-            self.close_browser(window, cx);
-        }
         self.focus_composer(window, cx);
         cx.notify();
+    }
+
+    /// Close whichever non-workspace route is active, running its teardown
+    /// (state cleanup + focus restore). No-op on the workspace route.
+    pub(super) fn close_active_route(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.route {
+            Route::Settings => self.close_settings(window, cx),
+            Route::Browser => self.close_browser(window, cx),
+            Route::Review => self.close_review(window, cx),
+            Route::Workspace => {}
+        }
     }
 
     /// Persist the native zoomed state when it changes. Fullscreen is not
@@ -64,77 +79,29 @@ impl DesktopView {
     }
 
     pub(super) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings_open {
+        if self.route == Route::Settings {
             return;
         }
-        if self.review_open {
-            self.close_review(window, cx);
-        }
+        self.close_active_route(window, cx);
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
-        if self.browser_open {
-            self.close_browser(window, cx);
-        }
-        if !self.settings_open {
-            self.settings_return_focus = window.focused(cx);
-        }
-        self.settings_open = true;
+        self.route = Route::Settings;
         if self.settings_tab == settings::SettingsTab::Storage {
             self.maybe_request_storage_summary(cx);
         }
-        let settings_view = cx.entity().clone();
-        let close_view = settings_view.clone();
-        let initial_focus = std::cell::Cell::new(true);
-        let settings_navigation_focus = self.settings_navigation_focus.clone();
-        window.open_sheet_at(gpui_kit::component::Placement::Right, cx, move |sheet, window, cx| {
-            if initial_focus.replace(false) {
-                settings_navigation_focus.focus(window, cx);
-            }
-            // The Kit builder runs again as the window resizes; keep the sheet
-            // within the current viewport instead of retaining its opening width.
-            let is_config_page = settings_view.read(cx).config_page_open;
-            let max_width = if is_config_page { px(1200.) } else { px(860.) };
-            let sheet_width = (window.viewport_size().width.min(max_width) - px(24.)).max(px(0.));
-            let content = settings_view.update(cx, |view, cx| {
-                if view.config_page_open {
-                    view.render_cli_config_page(window, cx)
-                } else {
-                    view.render_settings_tabs(window, cx)
-                }
-            });
-            let on_close_view = close_view.clone();
-            let sheet_title = if is_config_page {
-                rust_i18n::t!(i18n::PALETTE_TITLE_CONFIGURATION).to_string()
-            } else {
-                rust_i18n::t!(i18n::SETTINGS_TITLE).to_string()
-            };
-            sheet
-                .title(
-                    DialogTitle::new().text_lg().child(
-                        div()
-                            .id("settings-sheet-heading")
-                            .test_support()
-                            .role(gpui_kit::Role::Label)
-                            .aria_label(sheet_title.clone())
-                            .child(sheet_title),
-                    ),
-                )
-                .size(sheet_width)
-                .p_0()
-                .child(content)
-                .on_close(move |_, window, cx| {
-                    on_close_view.update(cx, |view, cx| view.handle_settings_sheet_close(window, cx));
-                })
-        });
+        // The page is a full-window route (see root_render), so opening only
+        // moves focus; body-level actions stay reachable, unlike the former
+        // sheet.
+        self.settings_navigation_focus.focus(window, cx);
         cx.notify();
     }
 
     pub(super) fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings_open {
+        if self.route == Route::Settings {
             self.close_settings(window, cx);
         } else {
             self.open_settings(window, cx);
@@ -142,23 +109,36 @@ impl DesktopView {
     }
 
     pub(super) fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if window.has_active_sheet(cx) {
-            window.close_sheet(cx);
+        self.finish_settings_close(window, cx);
+    }
+
+    /// Back-button close: an open typed editor closes first (unless a
+    /// write is in flight), mirroring `dismiss_overlay` order so a stray
+    /// click never discards an edit.
+    pub(super) fn close_settings_surface(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.config_editor.is_some() {
+            if !self.config_write_pending {
+                self.config_editor = None;
+                self.config_editor_error = None;
+                self.config_editor_return_focus = None;
+                cx.notify();
+            }
+            return;
         }
         self.finish_settings_close(window, cx);
     }
 
     fn finish_settings_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.settings_open {
+        if self.route != Route::Settings {
             return;
         }
-        self.settings_open = false;
+        self.route = Route::Workspace;
         if self.palette_kind == PaletteKind::SettingsSearch && self.palette.is_some() {
             self.clear_palette_state();
             self.palette_return_focus = None;
         }
         self.config_page_open = false;
-        // Capture never survives the sheet, staged edits or not, so reopening never shows an
+        // Capture never survives the page, staged edits or not, so reopening never shows an
         // armed pill without focus.
         self.shortcut_capture = None;
         if self.shortcuts_editing {
@@ -166,29 +146,9 @@ impl DesktopView {
             self.shortcuts_editing = false;
             self.shortcut_message = None;
         }
-        if let Some(focus) = self.settings_return_focus.take() {
-            focus.focus(window, cx);
-        } else {
-            self.focus_composer(window, cx);
-        }
+        // See close_browser: route close always lands in the composer.
+        self.focus_composer(window, cx);
         cx.notify();
-    }
-
-    fn handle_settings_sheet_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.config_editor.is_none() {
-            self.finish_settings_close(window, cx);
-            return;
-        }
-
-        if !self.config_write_pending {
-            self.config_editor = None;
-            self.config_editor_error = None;
-            self.config_editor_return_focus = None;
-        }
-        let settings_return_focus = self.settings_return_focus.take();
-        self.settings_open = false;
-        self.open_settings(window, cx);
-        self.settings_return_focus = settings_return_focus;
     }
 
     pub(super) fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
@@ -260,17 +220,21 @@ impl DesktopView {
     pub(super) fn dismiss_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.config_editor.is_some() {
             self.close_cli_config_editor(window, cx);
+        } else if self.shortcut_capture.is_some() {
+            // The armed capture pill is settings-interior, like the config
+            // editor: Escape cancels the capture before it may close the
+            // page. (Settings is a route, so the body's DismissOverlay
+            // binding wins over the pill's own Cancel action.)
+            self.cancel_shortcut_capture(window, cx);
         } else if self.navigation_peek {
             self.navigation_peek = false;
             cx.notify();
-        } else if self.settings_open {
+        } else if self.route == Route::Settings {
             self.close_settings(window, cx);
         } else if self.palette.is_some() {
             self.close_palette(window, cx);
-        } else if self.browser_open {
-            self.close_browser(window, cx);
-        } else if self.review_open {
-            self.close_review(window, cx);
+        } else if self.route != Route::Workspace {
+            self.close_active_route(window, cx);
         } else if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         } else {
@@ -279,7 +243,7 @@ impl DesktopView {
     }
 
     pub(super) fn open_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.review_open {
+        if self.route == Route::Review {
             self.close_review(window, cx);
             return;
         }
@@ -291,76 +255,55 @@ impl DesktopView {
     }
 
     pub(super) fn show_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings_open {
-            self.close_settings(window, cx);
-        }
+        self.close_active_route(window, cx);
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
-        if self.browser_open {
-            self.close_browser(window, cx);
-        }
-        if !self.review_open {
-            self.review_return_focus = window.focused(cx);
-        }
-        self.review_open = true;
+        self.route = Route::Review;
         self.review_focus.focus(window, cx);
         cx.notify();
     }
 
     pub(super) fn close_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.review_open = false;
+        self.route = Route::Workspace;
         self.workspace_review = None;
-        if let Some(focus) = self.review_return_focus.take() {
-            focus.focus(window, cx);
-        } else {
-            self.focus_composer(window, cx);
-        }
+        // See close_browser: route close always lands in the composer.
+        self.focus_composer(window, cx);
         cx.notify();
     }
 
     pub(super) fn open_thread_browser(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.browser_open {
+        if self.route == Route::Browser {
             self.close_browser(window, cx);
             return;
         }
-        if self.settings_open {
-            self.close_settings(window, cx);
-        }
+        self.close_active_route(window, cx);
         if self.palette.is_some() {
             self.close_palette(window, cx);
-        }
-        if self.review_open {
-            self.close_review(window, cx);
         }
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
-        if !self.browser_open {
-            self.browser_return_focus = window.focused(cx);
-        }
-        self.browser_open = true;
+        self.route = Route::Browser;
         self.browser_focus.focus(window, cx);
         cx.notify();
     }
 
     pub(super) fn close_browser(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.browser_open = false;
-        if let Some(focus) = self.browser_return_focus.take() {
-            focus.focus(window, cx);
-        } else {
-            self.focus_composer(window, cx);
-        }
+        self.route = Route::Workspace;
+        // Routes unmount the workspace, so Kit keyed focus handles captured
+        // at open time go stale; like closing an editor tab, Back always
+        // lands focus deterministically in the composer.
+        self.focus_composer(window, cx);
         cx.notify();
     }
 
     /// Return focus when a state transition removes the focused review surface.
     pub(super) fn restore_focus_after_review_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.review_open && self.review_focus.contains_focused(window, cx) {
-            self.review_return_focus = None;
+        if self.route != Route::Review && self.review_focus.contains_focused(window, cx) {
             self.focus_composer(window, cx);
         }
     }

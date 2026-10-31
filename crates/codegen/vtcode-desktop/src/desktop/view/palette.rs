@@ -370,7 +370,7 @@ impl DesktopView {
                 };
                 family.as_deref() == selected
             }
-            PaletteAction::SelectSettingsTab(tab) => self.settings_tab == *tab,
+            PaletteAction::SelectSettingsTab(tab) => !self.config_page_open && self.settings_tab == *tab,
             PaletteAction::SelectWorkspaceReviewFile(path) => self
                 .workspace_review
                 .as_ref()
@@ -402,13 +402,13 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.review_open && kind != PaletteKind::ReviewFiles {
+        if self.route == Route::Review && kind != PaletteKind::ReviewFiles {
             self.close_review(window, cx);
         }
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
-        if self.settings_open && kind != PaletteKind::SettingsSearch {
+        if self.route == Route::Settings && kind != PaletteKind::SettingsSearch {
             self.close_settings(window, cx);
         }
         self.palette_return_focus = window.focused(cx);
@@ -537,6 +537,7 @@ impl DesktopView {
             PaletteAction::SelectFont { target, family } => self.select_font(target, family, cx),
             PaletteAction::SelectSettingsTab(tab) => {
                 self.settings_tab = tab;
+                self.config_page_open = false;
                 if tab == settings::SettingsTab::Storage {
                     self.maybe_request_storage_summary(cx);
                 }
@@ -660,7 +661,8 @@ impl DesktopView {
             PaletteAction::CloseSession => self.selected_session_id.is_some() && self.session_change_allowed(None),
             PaletteAction::LoadSession(session_id) => self.session_change_allowed(Some(session_id)),
             PaletteAction::SelectWorkspaceReviewFile(_) => {
-                self.review_open && self.workspace_review.as_ref().is_some_and(|review| review.viewer.is_some())
+                self.route == Route::Review
+                    && self.workspace_review.as_ref().is_some_and(|review| review.viewer.is_some())
             }
             PaletteAction::ChooseWorkspace => {
                 self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open

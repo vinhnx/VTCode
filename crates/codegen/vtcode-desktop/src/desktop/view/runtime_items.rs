@@ -158,8 +158,8 @@ impl DesktopView {
         } else {
             self.selected_change = None;
             self.change_viewer = None;
-            if self.workspace_review.is_none() {
-                self.review_open = false;
+            if self.workspace_review.is_none() && self.route == Route::Review {
+                self.route = Route::Workspace;
             }
         }
     }

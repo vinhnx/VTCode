@@ -613,9 +613,10 @@ impl DesktopView {
         self.selected_change = None;
         self.change_viewer = None;
         self.change_viewer_dirty = false;
-        self.review_open = false;
+        if self.route == Route::Review {
+            self.route = Route::Workspace;
+        }
         self.workspace_review = None;
-        self.review_return_focus = None;
         self.last_usage = None;
         self.finished_turn_id = None;
         self.clear_pending_interaction();

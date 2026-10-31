@@ -675,7 +675,7 @@ impl DesktopView {
                                         )
                                         .toggled(selected)
                                         .ghost()
-                                        // Popover, not secondary: the sheet sits on the shared
+                                        // Popover, not secondary: the panel sits on the shared
                                         // surface fill, which would swallow a secondary pill.
                                         .when(selected, |button| {
                                             button.bg(colors.popover).text_color(colors.foreground)

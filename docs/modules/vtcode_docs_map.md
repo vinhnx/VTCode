@@ -1143,7 +1143,8 @@ below based on the topic area.
 
 - **File**: `docs/modules/vtcode_indexer.md`
   - **Content**: VT Code Indexer
-  - **Topics**: Core concepts, Customizing persistence, Tailoring traversal, End-to-end example
+  - **Topics**: Core concepts, Customizing persistence, Snapshot hydration and unchanged-file screening, Tailoring
+    traversal, End-to-end example
   - **User Questions**: "What can you tell me about VT Code Indexer?", "How does Core concepts work?", "How does
     Customizing persistence work?"
 

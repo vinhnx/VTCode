@@ -203,14 +203,14 @@ fn native_edit_and_settings_menus_operate_on_the_focused_composer(cx: &mut TestA
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         assert_eq!(window.find("settings-panel").label(), Some("Settings"));
         window.press("escape", cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        assert!(!view.read(cx).settings_open);
+        assert!(view.read(cx).route != Route::Settings);
         window.press("cmd-,", cx);
     })
     .unwrap();

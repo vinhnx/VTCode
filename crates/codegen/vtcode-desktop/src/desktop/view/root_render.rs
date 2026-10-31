@@ -102,7 +102,7 @@ impl Render for DesktopView {
             )
             .text_color(colors.foreground)
             .track_focus(&self.focus_handle)
-            .key_context(key_context::DESKTOP)
+            .when(!self.capture_suppresses_bindings(window), |body| body.key_context(key_context::DESKTOP))
             .when(self.session_change_allowed(None), |body| {
                 body.on_action(cx.listener(|view, _: &NewSession, _, cx| view.create_session(cx)))
             })
@@ -129,6 +129,16 @@ impl Render for DesktopView {
             }))
             .on_action(cx.listener(|view, _: &NavigateBack, _, cx| view.navigate_back(cx)))
             .on_action(cx.listener(|view, _: &NavigateForward, _, cx| view.navigate_forward(cx)))
+            .on_action(cx.listener(|view, _: &RouteBack, window, cx| {
+                if view.route == Route::Settings {
+                    // Editor-first, mirroring `dismiss_overlay` order.
+                    view.close_settings_surface(window, cx);
+                } else if view.route != Route::Workspace {
+                    view.close_active_route(window, cx);
+                } else {
+                    cx.propagate();
+                }
+            }))
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|view, _, _, cx| {
@@ -213,38 +223,45 @@ impl Render for DesktopView {
             .on_action(cx.listener(|_, _: &CloseWindow, window, cx| menu_bar::close_or_hide(window, cx)))
             .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
             .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()));
-        if navigation_visible {
-            let navigation = self.render_navigation(cx);
-            let sidebar = div().relative().h_full().flex_shrink_0();
-            let sidebar = if navigation_on_right {
-                sidebar
-                    .when(self.sidebar_open, |sidebar| {
-                        sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
-                    })
-                    .child(navigation)
-            } else {
-                sidebar.child(navigation).when(self.sidebar_open, |sidebar| {
-                    sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
-                })
-            };
-            if navigation_on_right {
-                body = body.child(main).child(sidebar);
-            } else {
-                body = body.child(sidebar).child(main);
+        match self.route {
+            Route::Workspace => {
+                if navigation_visible {
+                    let navigation = self.render_navigation(cx);
+                    let sidebar = div().relative().h_full().flex_shrink_0();
+                    let sidebar = if navigation_on_right {
+                        sidebar
+                            .when(self.sidebar_open, |sidebar| {
+                                sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                            })
+                            .child(navigation)
+                    } else {
+                        sidebar.child(navigation).when(self.sidebar_open, |sidebar| {
+                            sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                        })
+                    };
+                    if navigation_on_right {
+                        body = body.child(main).child(sidebar);
+                    } else {
+                        body = body.child(sidebar).child(main);
+                    }
+                } else {
+                    body = body.child(main);
+                }
             }
-        } else {
-            body = body.child(main);
+            Route::Settings => {
+                body = body.child(self.render_settings_page(window, cx));
+            }
+            Route::Browser => {
+                body = body.child(self.render_thread_browser(cx));
+            }
+            Route::Review => {
+                body = body.child(self.render_change_review(cx));
+            }
         }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
         }
-        if self.review_open {
-            body = body.child(self.render_change_review(cx));
-        }
-        if self.browser_open {
-            body = body.child(self.render_thread_browser(cx));
-        }
-        if !(self.settings_open && self.palette_kind == PaletteKind::SettingsSearch)
+        if !(self.route == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch)
             && !self.palette_kind.is_composer_popup()
             && let Some(state) = self.palette.clone()
         {

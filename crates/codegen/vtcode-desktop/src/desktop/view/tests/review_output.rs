@@ -88,7 +88,7 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         assert!(selection.is_some());
         window.click("expand-change-review", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).review_open);
+        assert!(view.read(cx).route == Route::Review);
         view.update(cx, |view, cx| view.handle_backend_event(notification("other", "docs/app.rs.bak", unrelated), cx));
         window.render_frame(cx);
         assert_eq!(
@@ -130,14 +130,14 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
             let _batch_full = view.drain_events(window, cx);
             assert!(view.selected_change.is_none());
             assert!(view.change_viewer.is_none());
-            assert!(!view.review_open);
+            assert!(view.route != Route::Review);
             assert!(!view.review_focus.contains_focused(window, cx));
             assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
         });
         assert!(view.read(cx).selected_change.is_none());
         assert!(view.read(cx).change_viewer.is_none());
         window.render_frame(cx);
-        assert!(!view.read(cx).review_open);
+        assert!(view.read(cx).route != Route::Review);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
     })
     .unwrap();
@@ -207,7 +207,7 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch.as_str()));
         window.click("expand-change-review", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).review_open);
+        assert!(view.read(cx).route == Route::Review);
         window.click("review-split", cx);
         window.render_frame(cx);
         window.render_frame(cx);

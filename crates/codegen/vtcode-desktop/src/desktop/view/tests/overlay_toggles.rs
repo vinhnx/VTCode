@@ -12,14 +12,14 @@ fn second_trigger_closes_settings_browser_and_same_kind_palettes(cx: &mut TestAp
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).settings_open);
+        assert!(view.read(cx).route == Route::Settings);
         window.dispatch_action(Box::new(super::super::OpenSettings), cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(!view.read(cx).settings_open, "second Settings action must close the sheet");
+        assert!(view.read(cx).route != Route::Settings, "second Settings action must close the page");
     })
     .unwrap();
 
@@ -31,14 +31,14 @@ fn second_trigger_closes_settings_browser_and_same_kind_palettes(cx: &mut TestAp
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).browser_open);
+        assert!(view.read(cx).route == Route::Browser);
         window.dispatch_action(Box::new(super::super::OpenThreadBrowser), cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(!view.read(cx).browser_open, "second browser action must close the browser");
+        assert!(view.read(cx).route != Route::Browser, "second browser action must close the browser");
 
         view.update(cx, |view, cx| view.open_command_palette(window, cx));
         window.render_frame(cx);
@@ -65,6 +65,40 @@ fn second_trigger_closes_settings_browser_and_same_kind_palettes(cx: &mut TestAp
         let state = view.read(cx);
         assert!(state.palette.is_some());
         assert!(state.palette_kind == super::super::PaletteKind::Models, "switching kinds must replace the palette");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn route_back_key_returns_to_workspace_and_focuses_composer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::OpenSettings), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).route == Route::Settings);
+        window.press("cmd-[", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).route == Route::Workspace, "cmd-[ must go back to the workspace");
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "route back lands focus in the composer"
+        );
+        // On the workspace route cmd-[ propagates instead of acting.
+        window.press("cmd-[", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).route == Route::Workspace);
     })
     .unwrap();
 }

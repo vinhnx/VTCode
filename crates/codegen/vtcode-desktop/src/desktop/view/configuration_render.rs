@@ -9,7 +9,10 @@ use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::select::Select;
 
 impl DesktopView {
-    pub(super) fn render_cli_config_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    /// Configuration content for the settings page: fixed header plus the
+    /// group rail and scrolling rows. The settings shell owns the dialog
+    /// role, focus tracking, and the typed editor overlay.
+    pub(super) fn render_cli_config_page(&self, wide: bool, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let query = self.config_search_query(cx);
         let searching = !query.is_empty();
@@ -151,18 +154,9 @@ impl DesktopView {
                 .as_deref()
                 .is_none_or(|group| group == curated::CURATED_GROUP_NAME);
         let body = if curated_selected {
-            let rail = self.render_config_rail(groups, Some(curated::CURATED_GROUP_NAME), true, false, cx);
+            let rail = self.render_config_rail(groups, Some(curated::CURATED_GROUP_NAME), true, false, wide, cx);
             let content = self.render_config_content_frame(self.render_curated_configuration(cx));
-            div()
-                .flex_1()
-                .min_h_0()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_4()
-                .child(rail)
-                .child(content)
-                .into_any_element()
+            self.render_config_body(rail, content, wide)
         } else {
             match (self.cli_config_settings.as_ref(), selected.as_ref()) {
                 (None, _) if self.workspace.is_none() => self.render_config_content_frame(centered_empty_state(
@@ -209,7 +203,7 @@ impl DesktopView {
                         .child(self.render_config_page_footer(cx)),
                 ),
                 (Some(snapshot), Some(name)) => {
-                    let rail = self.render_config_rail(groups, selected.as_deref(), !searching, searching, cx);
+                    let rail = self.render_config_rail(groups, selected.as_deref(), !searching, searching, wide, cx);
                     let catalog_group = catalog.and_then(|catalog| catalog.group(name));
                     let row_count = catalog_group.map_or(0, |group| group.indices.len());
                     let limit = self.config_visible_row_limit.max(1);
@@ -280,55 +274,41 @@ impl DesktopView {
                     group = group.child(list);
                     group = group.child(self.render_config_page_footer(cx));
                     let content = self.render_config_content_frame(group);
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .gap_4()
-                        .child(rail)
-                        .child(content)
-                        .into_any_element()
+                    self.render_config_body(rail, content, wide)
                 }
             }
         };
 
-        let panel_height = sheet_panel_height(window, cx);
-        let mut panel = div()
+        div()
             .id("cli-config-page")
             .test_support()
-            .role(gpui_kit::Role::Dialog)
+            .role(gpui_kit::Role::Group)
             .aria_label(rust_i18n::t!("app.configuration.title").to_string())
-            .track_focus(&self.settings_focus)
-            .relative()
-            .w_full()
-            .h(panel_height)
+            .flex_1()
             .min_h_0()
+            .min_w_0()
             .overflow_hidden()
             .flex()
             .flex_col()
             .gap_4()
-            .p_6()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(header)
-            .child(body);
-        if self.config_editor.is_some() {
-            panel = panel.child(self.render_cli_config_editor(cx));
-        }
-        panel.into_any_element()
+            .child(body)
+            .into_any_element()
     }
 
     /// Group navigation rail shared by the curated overview and the catalog.
     /// The curated entry leads while the catalog is unfiltered. Entries show
     /// an icon plus the group name; while searching they also carry their
-    /// match count so the result distribution reads at a glance.
+    /// match count so the result distribution reads at a glance. Wide viewports
+    /// get a vertical master-detail rail; narrow ones keep the horizontal
+    /// rail above the content.
     fn render_config_rail(
         &self,
         groups: &[ConfigCatalogGroup],
         selected: Option<&str>,
         show_curated_entry: bool,
         searching: bool,
+        wide: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = cx.theme().colors;
@@ -338,12 +318,11 @@ impl DesktopView {
             .test_support()
             .role(gpui_kit::Role::Navigation)
             .aria_label(rust_i18n::t!("app.configuration.groups").to_string())
-            .w_full()
             .flex_shrink_0()
             .track_scroll(&self.config_rail_scroll)
-            .overflow_x_scroll()
             .flex()
-            .flex_row()
+            .when(wide, |rail| rail.w(px(240.)).flex_col().overflow_y_scroll())
+            .when(!wide, |rail| rail.w_full().flex_row().overflow_x_scroll())
             .gap_1();
         if show_curated_entry {
             let active = selected == Some(curated::CURATED_GROUP_NAME);
@@ -353,6 +332,7 @@ impl DesktopView {
                     .label(rust_i18n::t!("app.configuration.page_title").to_string())
                     .small()
                     .flex_shrink_0()
+                    .when(wide, |button| button.w_full().justify_start())
                     .desktop_selected(active, &colors)
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.config_page_group = Some(curated::CURATED_GROUP_NAME.to_string());
@@ -375,6 +355,7 @@ impl DesktopView {
                     .label(label)
                     .small()
                     .flex_shrink_0()
+                    .when(wide, |button| button.w_full().justify_start())
                     .desktop_selected(active, &colors)
                     .on_click(cx.listener(move |view, _, _, cx| {
                         view.config_page_group = Some(name.clone());
@@ -391,6 +372,23 @@ impl DesktopView {
     /// states, and trailing notes share the remaining height.
     fn render_config_content_frame(&self, child: impl IntoElement) -> AnyElement {
         scroll_column_flex("cli-config-page-content", &self.settings_scroll, child).into_any_element()
+    }
+
+    /// Master-detail body shared by the curated and catalog branches: the
+    /// group rail sits beside the content on wide viewports and above it
+    /// on narrow ones.
+    fn render_config_body(&self, rail: impl IntoElement, content: impl IntoElement, wide: bool) -> AnyElement {
+        div()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .flex()
+            .when(wide, |body| body.flex_row())
+            .when(!wide, |body| body.flex_col())
+            .gap_4()
+            .child(rail)
+            .child(content)
+            .into_any_element()
     }
 
     /// One value-first setting row: title and live value on stable lanes,
