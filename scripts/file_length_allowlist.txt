@@ -45,12 +45,3 @@ docs/development/refactor-scan-2026-10-04.md=1_200
 
 # Sample skill asset shipped for ast-grep workflows and tests.
 crates/codegen/vtcode-skills/src/skills/assets/samples/ast-grep/SKILL.md=2_000
-
-# --- First-party source over the ceiling: temporary caps, split planned. ---
-# Each entry below is tech debt. Split the file, then remove the entry.
-
-# Desktop protocol contract; split messages/codecs per domain.
-crates/common/vtcode-desktop-protocol/src/lib.rs=1_050
-
-# Desktop preferences UI; split panes/widgets per settings section.
-crates/codegen/vtcode-desktop/src/desktop/preferences.rs=1_050
