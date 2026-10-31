@@ -174,6 +174,39 @@ vtcode trajectory
 
 Use `vtcode continue --session-id <id>` to fork an earlier session.
 
+## Desktop app
+
+<div align="center">
+
+### The full VT Code engine in a native Mac app
+
+[![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](#desktop-app)
+[![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
+
+</div>
+
+The GUI talks to a matching local service binary while the unified runloop still owns providers, tool policy,
+sandboxing, and sessions: everything the CLI does, behind a native interface. The installer builds the app
+from source into `~/Applications` by default (`--without-desktop` skips it).
+
+> [!NOTE]
+> Local builds are signed ad hoc. Approve the first launch with Right-click > Open, or allow VTCode once in
+> Settings > Privacy & Security.
+
+<details>
+<summary>Build and launch from source</summary>
+
+```sh
+cargo build --locked -p vtcode
+cargo run --locked -p vtcode-desktop
+```
+
+Prefer an installed app? Run `scripts/package-desktop-macos.sh` (needs a macOS 15+ build host and Xcode
+command line tools) — full requirements live in the
+[desktop workspace guide](./docs/development/desktop-workspace.md).
+
+</details>
+
 ## Documentation
 
 Guides grouped by task. The full catalog lives in the [documentation index](./docs/INDEX.md), the
@@ -183,6 +216,7 @@ none are required for the quick start.
 ### Get started
 
 - [Installation](./docs/installation/README.md) and [getting started](./docs/user-guide/getting-started.md)
+- [Desktop app](./docs/development/desktop-workspace.md) for the native macOS GUI
 - [Providers](./docs/providers/PROVIDER_GUIDES.md) and [OAuth login](./docs/guides/oauth-authentication.md)
 - [FAQ](./docs/FAQ.md) and [compatibility](./docs/COMPATIBILITY.md)
 
