@@ -2,21 +2,49 @@
 
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
-<p>Open-source coding agent</p>
+<h3>Open-source coding agent</h3>
+
+<p>
+  <strong>Terminal-first. Desktop-ready.</strong><br />
+  <sub>Explore, plan, edit, and verify — with the model you choose.</sub>
+</p>
 
 [![Rust](https://img.shields.io/badge/rust-1.99.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-30363D?style=flat-square)](#license)
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
 
-<img src="./resources/screenshots/vtcode-desktop.png" alt="VT Code desktop app" width="800" />
+> [!TIP]
+> **New: native macOS app** — the full VT Code engine behind a premium desktop interface.
+> [Jump to the desktop app](#desktop-app) or read the
+> [desktop workspace guide](./docs/development/desktop-workspace.md).
+
+[![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](#desktop-app)
+[![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
+
+<p>
+  <a href="#desktop-app">
+    <img src="./resources/screenshots/vtcode-desktop.png" width="100%"
+      alt="VT Code desktop app — native macOS interface backed by the full VT Code engine" />
+  </a>
+</p>
+<sub><a href="#desktop-app"><strong>VT Code Desktop</strong></a> — click to learn more</sub>
+
+<p>
+  <img src="./resources/screenshots/vtcode-cli-tui.gif" width="39%"
+    alt="Terminal TUI demo: launch, ask, stream the reply, exit" />
+  <img src="./resources/screenshots/vtcode-cli-ask.gif" width="58%"
+    alt="One-shot ask demo: a single tool-free terminal reply" /><br />
+  <sub>Terminal TUI &nbsp;·&nbsp; One-shot ask</sub>
+</p>
 
 </div>
 
 ## Overview
 
-VT Code runs in your terminal and works on your repository: explore, plan, edit, and verify with the model you
-choose. It owns context, tool calls, and execution policy, so long tasks stay auditable and resumable.
+VT Code works on your repository from your terminal or its native macOS app: explore, plan, edit, and verify
+with the model you choose. It owns context, tool calls, and execution policy, so long tasks stay auditable and
+resumable.
 
 | At a glance      | What you get                                                                         |
 | ---------------- | ------------------------------------------------------------------------------------ |
@@ -85,11 +113,10 @@ vtcode init                # scaffolds config + AGENTS.md; review before committ
 vtcode secret add openai   # stores your OpenAI API key in secure storage
 ```
 
-Replace `openai` with your provider. `vtcode secret add` uses secure storage (OS keyring or encrypted file). You can
-also set credentials in environment variables or a workspace `.env` file, or use `vtcode login` if your provider has a
-supported login flow. See
-[Getting started](./docs/user-guide/getting-started.md) and [Provider guides](./docs/providers/PROVIDER_GUIDES.md) for
-provider-specific instructions.
+Replace `openai` with your provider. `vtcode secret add` uses secure storage (OS keyring or encrypted file). You
+can also set credentials in environment variables or a workspace `.env` file, or use `vtcode login` if your provider
+has a supported login flow. See [Getting started](./docs/user-guide/getting-started.md) and
+[Provider guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific instructions.
 
 > [!NOTE]
 > ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow; prefer your
@@ -181,18 +208,22 @@ Use `vtcode continue --session-id <id>` to fork an earlier session.
 [![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](./docs/development/desktop-workspace.md)
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](./docs/development/desktop-workspace.md)
 
+<p>
+  <sub>Everything the CLI does — providers, tool policy, sandboxing, sessions — behind a native interface.</sub>
+</p>
+
 </div>
 
 The GUI talks to a matching local service binary while the unified runloop still owns providers, tool policy,
-sandboxing, and sessions: everything the CLI does, behind a native interface. The installer builds the app
-from source into `~/Applications` by default (`--without-desktop` skips it).
+sandboxing, and sessions. The installer builds the app from source into `~/Applications` by default
+(`--without-desktop` skips it).
 
 > [!NOTE]
 > Local builds are signed ad hoc. Approve the first launch with Right-click > Open, or allow VTCode once in
 > Settings > Privacy & Security.
 
 <details>
-<summary>Build and launch from source</summary>
+<summary><strong>Build and launch from source</strong></summary>
 
 ```sh
 cargo build --locked -p vtcode
@@ -296,8 +327,8 @@ issue. Details: [security policy](./docs/SECURITY.md).
 
 ## Community
 
-You can contribute code,
-fix docs, or report what broke in a release. You can also fork the repository and adapt it for your own use.
+You can contribute code, fix docs, or report what broke in a release. You can also fork the repository and
+adapt it for your own use.
 
 - [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) - something looks off? Tell us,
   and include `vtcode trajectory` output if you can.
@@ -398,13 +429,17 @@ Consider supporting VT Code development — every bit helps. Thank you!
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnz?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
 
-## Thank you!
+## Thank you
 
-<a href="https://www.star-history.com/?repos=vinhnx%2FVTCode&type=timeline&legend=top-left">
+<a
+  href="https://www.star-history.com/?repos=vinhnx%2FVTCode&type=timeline&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)"
+     srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)"
+     srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
+   <img alt="Star History Chart"
+     src="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
  </picture>
 </a>
 
