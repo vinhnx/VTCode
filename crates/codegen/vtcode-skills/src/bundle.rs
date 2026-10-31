@@ -14,6 +14,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 use vtcode_commons::canonicalize;
+use vtcode_commons::safe_archive_relative_path;
 
 /// Maximum compressed bundle size (50 MB)
 const MAX_BUNDLE_SIZE: usize = 50 * 1024 * 1024;
@@ -179,17 +180,18 @@ fn extract_zip_safely(zip_bytes: &[u8], dest: &Path) -> Result<()> {
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).with_context(|| format!("reading zip entry {i}"))?;
-        let raw_name = file.name().to_string();
+        let raw_name = file
+            .name()
+            .with_context(|| format!("zip entry {i} has a non-UTF-8 name"))?
+            .into_owned();
 
-        if raw_name.contains("..") {
-            bail!("Path traversal detected in zip entry: {raw_name}");
+        let safe_name = safe_archive_relative_path(Path::new(&raw_name))
+            .with_context(|| format!("Path traversal detected in zip entry: {raw_name}"))?;
+        if safe_name.as_os_str().is_empty() {
+            continue;
         }
 
-        let out_path = dest.join(&raw_name);
-
-        if !out_path.starts_with(dest) {
-            bail!("Zip entry escapes destination: {}", out_path.display());
-        }
+        let out_path = dest.join(safe_name);
 
         if file.is_dir() {
             fs::create_dir_all(&out_path).with_context(|| format!("creating dir {}", out_path.display()))?;
@@ -484,7 +486,27 @@ mod tests {
         let bytes = zip_bytes(&[("/abs.txt", b"pwned")]);
         let temp = tempfile::tempdir().expect("tempdir");
         let err = extract_zip_safely(&bytes, temp.path()).expect_err("absolute path must fail");
-        assert!(err.to_string().contains("escapes destination"), "unexpected error: {err}");
+        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn extract_rejects_mid_path_traversal() {
+        let bytes = zip_bytes(&[("skills/../../evil.txt", b"pwned")]);
+        let temp = tempfile::tempdir().expect("tempdir");
+        let err = extract_zip_safely(&bytes, temp.path()).expect_err("mid-path traversal must fail");
+        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
+        assert!(!temp.path().join("evil.txt").exists());
+    }
+
+    #[test]
+    fn extract_accepts_dot_dot_inside_a_single_component() {
+        // `..` inside one component is a legitimate file name, not traversal;
+        // the substring check this replaced used to reject it.
+        let bytes = zip_bytes(&[("v1..2/README.md", b"body")]);
+        let temp = tempfile::tempdir().expect("tempdir");
+        extract_zip_safely(&bytes, temp.path()).expect("dot-dot component must extract");
+
+        assert_eq!(fs::read(temp.path().join("v1..2/README.md")).expect("read"), b"body");
     }
 
     #[test]

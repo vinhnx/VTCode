@@ -10,6 +10,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 use tempfile::{NamedTempFile, TempDir};
 use vtcode_commons::VtCodePaths;
+use vtcode_commons::safe_archive_relative_path;
 use vtcode_commons::walk::build_walker_single_threaded;
 use zip::ZipArchive;
 
@@ -78,7 +79,12 @@ fn extract_archive(archive_name: &str, archive_bytes: &[u8], destination: &Path)
             let mut file = archive
                 .by_index(index)
                 .with_context(|| format!("Failed to read {archive_name} entry {index}"))?;
-            let outpath = destination.join(file.mangled_name());
+            let out_name = file
+                .mangled_name()
+                .with_context(|| format!("Failed to read {archive_name} entry {index}: invalid name"))?;
+            let out_name = safe_archive_relative_path(&out_name)
+                .with_context(|| format!("Failed to read {archive_name} entry {index}: unsafe path"))?;
+            let outpath = destination.join(out_name);
 
             if file.is_dir() {
                 fs::create_dir_all(&outpath).with_context(|| format!("Failed to create {}", outpath.display()))?;
