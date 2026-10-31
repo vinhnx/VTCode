@@ -88,6 +88,7 @@ use full_access_confirm::FullAccessConfirmState;
 use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
 use overlays::Route;
 
+mod app_icon_settings;
 mod appearance;
 mod backend_events;
 mod bootstrap;
