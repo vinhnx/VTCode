@@ -108,12 +108,13 @@ updates `Cargo.lock`. Tests require `cargo-nextest` and fail if the selected sui
 `--changed` selection with no changed packages explicitly skips testing; metadata failures fail the gate instead.
 Install the runner with `cargo install cargo-nextest --locked`.
 
-| Fast gate | Command | Test selection |
-| --- | --- | --- |
-| Checks and lints | `./scripts/check-dev.sh` | Tests excluded |
-| Checks, lints, and tests | `./scripts/check-dev.sh --test` | Quick profile when configured, otherwise default |
-| Changed packages | `./scripts/check-dev.sh --changed` | Changed packages in the selected scope |
-| Full workspace | `./scripts/check-dev.sh --workspace --test` | All workspace packages |
+| Fast gate                | Command                                     | Test selection                                                                              |
+| ------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Checks and lints         | `./scripts/check-dev.sh`                    | Tests excluded                                                                              |
+| Checks, lints, and tests | `./scripts/check-dev.sh --test`             | Quick profile when configured, otherwise default                                            |
+| Changed packages         | `./scripts/check-dev.sh --changed`          | Changed packages in the selected scope                                                      |
+| Full workspace           | `./scripts/check-dev.sh --workspace --test` | All workspace packages                                                                      |
+| Dependency audit         | `./scripts/check-dev.sh --deny`             | Tests excluded; runs `cargo deny --locked check` (network-bound on first advisory-DB fetch) |
 
 Run the script regressions with `python3 -m unittest discover -s scripts/tests -p 'test_check_dev.py'`.
 
@@ -324,8 +325,8 @@ Located in `tests/integration_tests.rs`:
 ```rust
 #[cfg(test)]
 mod integration_tests {
-    use vtcode::tools::ToolRegistry;
     use serde_json::json;
+    use vtcode::tools::ToolRegistry;
 
     #[tokio::test]
     async fn test_tool_integration() {
@@ -354,7 +355,7 @@ runs, `black_box` outputs, `iter_batched` independence except explicit `cache_hi
 to hit a goal).
 
 ```rust
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 fn benchmark_function(c: &mut Criterion) {
     // Benchmark setup and execution
@@ -566,13 +567,13 @@ name: Tests
 on: [push, pull_request]
 
 jobs:
-    test:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-            - uses: dtolnay/rust-toolchain@stable
-            - run: cargo nextest run
-            - run: cargo bench
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo nextest run
+      - run: cargo bench
 ```
 
 ### Test Coverage

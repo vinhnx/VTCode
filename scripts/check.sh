@@ -113,7 +113,7 @@ run_rustfmt() {
 # Run clippy
 run_clippy() {
     print_status "Running clippy..."
-    if cargo clippy --workspace --all-targets --all-features -- -D warnings; then
+    if cargo clippy --locked --workspace --all-targets --all-features -- -D warnings; then
         print_success "No clippy warnings found!"
         return 0
     else
@@ -298,6 +298,8 @@ run_unsafe_docs_gate() {
     fi
 }
 
+# run_cargo_deny is provided by scripts/common.sh (shared with check-dev.sh).
+
 run_agent_legibility_checks() {
     print_status "Running agent legibility checks (warn mode)..."
     if python3 scripts/check_agent_legibility.py --mode warn; then
@@ -406,6 +408,7 @@ main() {
     run_zen_governance || ((failed_checks++))
     run_file_length_gate || ((failed_checks++))
     run_unsafe_docs_gate || ((failed_checks++))
+    run_cargo_deny || ((failed_checks++))
     run_agent_legibility_checks || ((failed_checks++))
     run_ast_grep_scan || ((failed_checks++))
     run_clippy || ((failed_checks++))
@@ -478,6 +481,7 @@ case "${1:-}" in
         echo "  zen     - Run Zen governance checks (warn mode)"
         echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
         echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"
+        echo "  deny    - Audit dependencies with cargo-deny (RustSec advisories, licenses, bans, sources)"
         echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
         echo "  help    - Show this help message"
         echo ""
@@ -491,6 +495,9 @@ case "${1:-}" in
         ;;
     "unsafe-docs")
         run_unsafe_docs_gate
+        ;;
+    "deny")
+        run_cargo_deny required
         ;;
     "legibility")
         run_agent_legibility_checks

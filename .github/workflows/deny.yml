@@ -1,0 +1,56 @@
+name: Dependency audit
+
+# RustSec advisories, license compliance, duplicate deps, and crate sources are
+# checked by cargo-deny using the policy in deny.toml at the repo root. The
+# weekly schedule keeps auditing the lockfile even when no PR touches it, so a
+# newly published advisory against an already-locked dependency fails here
+# without any code change. Note: schedule events always run on the default
+# branch and ignore path filters.
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - ".github/workflows/deny.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - ".github/workflows/deny.yml"
+  schedule:
+    # Every Monday 05:00 UTC.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    name: Cargo deny check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # cargo-deny-action provisions its own pinned Rust toolchain inside its
+      # Docker image; no dtolnay/rust-toolchain step is needed here.
+      # --locked keeps cargo-deny from re-resolving Cargo.lock during graph
+      # generation, so the audit always reflects the committed lockfile.
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+          arguments: --locked

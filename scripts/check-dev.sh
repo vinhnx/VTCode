@@ -30,6 +30,7 @@ RUN_WORKSPACE=false
 RUN_EXTRA_LINTS=false
 RUN_CHANGED=false
 QUIET=false
+RUN_DENY=false
 SCOPE_LABEL="default-members"
 
 # Quiet-aware status printer: progress banners are suppressed in quiet mode.
@@ -325,6 +326,8 @@ run_shell_scripts_lint() {
 	fi
 }
 
+# run_cargo_deny is provided by scripts/common.sh (shared with check.sh).
+
 print_usage() {
 	echo "VT Code Fast Development Check Script"
 	echo ""
@@ -343,6 +346,8 @@ print_usage() {
 	echo "  --changed, -c       Only run tests in crates changed since HEAD~1 (implies --test)"
 	echo "  --quiet, -q         Suppress progress banners and cargo noise; errors and"
 	echo "                      the final summary still print (agent/CI friendly)"
+	echo "  --deny, -d          Also run cargo-deny (RustSec advisories, licenses, bans,"
+	echo "                      sources; network-bound on first advisory-DB fetch)"
 	echo "  --help, -h          Show this help message"
 	echo ""
 	echo "Examples:"
@@ -378,6 +383,10 @@ main() {
 			;;
 		--quiet | -q)
 			QUIET=true
+			shift
+			;;
+		--deny | -d)
+			RUN_DENY=true
 			shift
 			;;
 		--help | -h)
@@ -428,6 +437,12 @@ main() {
 
 	# Always run shell script syntax check (fast, no extra deps)
 	run_shell_scripts_lint || ((FAILED_CHECKS++))
+
+	# Run dependency audit if requested (network-bound on first run); the
+	# explicit flag hard-requires the tool rather than skipping.
+	if [ "$RUN_DENY" = true ]; then
+		run_cargo_deny required || ((FAILED_CHECKS++))
+	fi
 
 	# Run tests if requested (always last, as they're the slowest)
 	if [ "$RUN_TESTS" = true ]; then

@@ -25,6 +25,7 @@ relevant details for your test configuration.
 - [ ] Linting: `cargo clippy`
 - [ ] Formatting: `cargo fmt`
 - [ ] Build: `cargo build`
+- [ ] Dependency audit: `./scripts/check.sh deny` (required when `Cargo.toml`/`Cargo.lock` changed)
 
 **Test Configuration**:
 

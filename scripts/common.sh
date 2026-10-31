@@ -106,3 +106,30 @@ get_current_version() {
         echo "${stripped%%\"*}"
     fi
 }
+
+# Audit dependencies against the RustSec Advisory Database plus license, ban,
+# and source policy via cargo-deny (policy in deny.toml). CI runs the same
+# policy in .github/workflows/deny.yml. Needs network access on first run to
+# fetch the advisory DB, then uses the local cache. Shared by check.sh (full
+# gate) and check-dev.sh (--deny opt-in); print_status/print_success come from
+# this file or the caller's quiet-aware overrides.
+# Pass "required" to fail instead of skipping when cargo-deny is not installed
+# (explicit `deny` subcommand / --deny flag), mirroring run_ast_grep_scan.
+run_cargo_deny() {
+    local require_binary="${1:-optional}"
+    if [ "$require_binary" != "required" ]; then
+        if ! command -v cargo-deny > /dev/null 2>&1; then
+            print_warning "cargo-deny is not available. Skipping dependency audit (CI enforces the same policy via .github/workflows/deny.yml). Install it with 'brew install cargo-deny' or 'cargo install cargo-deny --locked'."
+            return 0
+        fi
+    fi
+    print_status "Running cargo-deny (RustSec advisories, licenses, bans, sources)..."
+    # --locked is a global cargo-deny flag and must precede the subcommand.
+    if cargo deny --locked check; then
+        print_success "cargo-deny checks passed!"
+        return 0
+    else
+        print_error "cargo-deny found policy violations. Bump the offending dependency or justify an ignore in deny.toml."
+        return 1
+    fi
+}
