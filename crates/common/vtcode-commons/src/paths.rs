@@ -16,5 +16,5 @@ pub use containment::{
     validate_no_escaping_symlink_ancestors, workspace_relative_display,
 };
 pub use normalize::{expand_tilde, file_name_from_path, normalize_ascii_identifier, normalize_path};
-pub use safety::{is_safe_relative_path, validate_path_safety};
+pub use safety::{is_safe_relative_path, safe_archive_relative_path, validate_path_safety};
 pub use scopes::{PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths};

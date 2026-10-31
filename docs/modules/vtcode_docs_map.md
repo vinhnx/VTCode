@@ -479,9 +479,10 @@ below based on the topic area.
 
 - **File**: `docs/development/terminal-program-status.md`
   - **Content**: Terminal program status
-  - **Topics**: Adoption and existing telemetry, Lifecycle, Ownership and privacy, Verification
+  - **Topics**: Adoption and existing telemetry, Terminal pane icons (Rex/Ghostty), Lifecycle, Ownership and privacy,
+    Verification
   - **User Questions**: "What can you tell me about Terminal program status?", "How does Adoption and existing telemetry
-    work?", "How does Lifecycle work?"
+    work?", "How does Terminal pane icons (Rex/Ghostty) work?"
 
 - **File**: `docs/development/grep-tool-guide.md`
   - **Content**: Text Search Guide

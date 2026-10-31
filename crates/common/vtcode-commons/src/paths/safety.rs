@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use std::path::{Component, Path, PathBuf};
 
 /// Check if a path string is a safe relative path (no traversal, no absolute).
 pub fn is_safe_relative_path(path: &str) -> bool {
@@ -86,4 +87,86 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
 
 fn matches_critical_prefix(path: &str, prefix: &str) -> bool {
     path == prefix || path.strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Validate an archive entry name and return it as a destination-relative path.
+///
+/// Lexical only (no filesystem access): rejects absolute paths, Windows
+/// prefixes, and parent components (`..`), and collapses `.` components.
+/// Unlike a substring check for `..`, legitimate names such as
+/// `v1..2/README.md` are accepted. An empty result means the name resolves to
+/// the extraction destination itself (e.g. `.`); callers decide whether to
+/// skip or reject that.
+///
+/// # Errors
+///
+/// Returns an error when the name contains a component that would escape the
+/// extraction destination.
+pub fn safe_archive_relative_path(name: &Path) -> Result<PathBuf> {
+    let mut safe = PathBuf::new();
+    for component in name.components() {
+        match component {
+            Component::Normal(part) => safe.push(part),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                bail!("unsafe archive path ('..' escapes destination): {}", name.display());
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                bail!("unsafe archive path (absolute): {}", name.display());
+            }
+        }
+    }
+    Ok(safe)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_nested_relative_names() {
+        assert_eq!(safe_archive_relative_path(Path::new("a/b/c.txt")).expect("safe"), PathBuf::from("a/b/c.txt"));
+    }
+
+    #[test]
+    fn collapses_current_dir_components() {
+        assert_eq!(
+            safe_archive_relative_path(Path::new("./nested/./file.txt")).expect("safe"),
+            PathBuf::from("nested/file.txt")
+        );
+    }
+
+    #[test]
+    fn accepts_dot_dot_inside_a_single_component() {
+        // Substring `..` checks reject this legitimate name; component
+        // analysis must accept it.
+        assert_eq!(
+            safe_archive_relative_path(Path::new("v1..2/README.md")).expect("safe"),
+            PathBuf::from("v1..2/README.md")
+        );
+    }
+
+    #[test]
+    fn rejects_parent_components() {
+        let err = safe_archive_relative_path(Path::new("../../etc/passwd")).expect_err("traversal");
+        assert!(err.to_string().contains("unsafe archive path"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn rejects_absolute_names() {
+        let err = safe_archive_relative_path(Path::new("/abs.txt")).expect_err("absolute");
+        assert!(err.to_string().contains("unsafe archive path"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn resolves_bare_current_dir_to_empty() {
+        assert!(safe_archive_relative_path(Path::new(".")).expect("safe").as_os_str().is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_windows_prefixes() {
+        let err = safe_archive_relative_path(Path::new("C:\\evil.txt")).expect_err("prefix");
+        assert!(err.to_string().contains("unsafe archive path"), "unexpected error: {err}");
+    }
 }
