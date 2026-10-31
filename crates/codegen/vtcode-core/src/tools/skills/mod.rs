@@ -2,6 +2,7 @@ use crate::config::ConfigManager;
 use crate::config::ToolDocumentationMode;
 use crate::config::types::CapabilityLevel;
 use crate::llm::provider::ToolDefinition;
+use crate::metrics::MetricsCollector;
 use crate::skills::cli_bridge::CliToolConfig;
 use crate::skills::command_skills::merge_built_in_command_skill_metadata;
 use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
@@ -112,12 +113,19 @@ impl SkillToolSessionRuntime {
 
         if !self.tool_registry.has_tool(skill_name.as_str()).await {
             self.tool_registry
-                .register_tool(build_traditional_skill_tool_registration(&skill, self.fork_executor.clone()))
+                .register_tool(build_traditional_skill_tool_registration_with_metrics(
+                    &skill,
+                    self.fork_executor.clone(),
+                    Some(self.tool_registry.metrics_collector()),
+                ))
                 .await
                 .with_context(|| format!("failed to register skill tool '{skill_name}'"))?;
             self.refresh_tool_snapshot("load_skill").await;
         }
 
+        self.tool_registry
+            .metrics_collector()
+            .record_skill_created(skill_name.clone(), skill.variety.as_str().to_string());
         active_skills.write().await.insert(skill_name, skill);
         Ok(SkillActivationState::Activated)
     }
@@ -132,7 +140,13 @@ impl SkillToolSessionRuntime {
         if unregistered {
             self.refresh_tool_snapshot("unload_skill").await;
         }
-        Ok(removed || unregistered)
+        let settled = removed || unregistered;
+        if settled {
+            self.tool_registry
+                .metrics_collector()
+                .record_skill_deleted(skill_name.to_string());
+        }
+        Ok(settled)
     }
 
     async fn refresh_tool_snapshot(&self, reason: &'static str) {
@@ -161,20 +175,39 @@ impl SkillToolSessionRuntime {
     }
 }
 
-fn build_skill_tool_adapter(skill: Skill, fork_executor: Option<Arc<dyn ForkSkillExecutor>>) -> SkillToolAdapter {
-    if skill.manifest.context.as_deref() == Some("fork") {
+fn build_skill_tool_adapter(
+    skill: Skill,
+    fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
+    metrics: Option<Arc<MetricsCollector>>,
+) -> SkillToolAdapter {
+    let adapter = if skill.manifest.context.as_deref() == Some("fork") {
         match fork_executor {
             Some(executor) => SkillToolAdapter::with_fork_executor(skill, executor),
             None => SkillToolAdapter::new(skill),
         }
     } else {
         SkillToolAdapter::new(skill)
+    };
+    match metrics {
+        Some(collector) => adapter.with_metrics(collector),
+        None => adapter,
     }
 }
 
 pub fn build_traditional_skill_tool_registration(
     skill: &Skill,
     fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
+) -> ToolRegistration {
+    build_traditional_skill_tool_registration_with_metrics(skill, fork_executor, None)
+}
+
+/// Builds a traditional skill tool registration, attaching `metrics` to the
+/// adapter (and its native factory rebuilds) so executions feed the skill
+/// health report. `None` runs executions unrecorded.
+pub fn build_traditional_skill_tool_registration_with_metrics(
+    skill: &Skill,
+    fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
+    metrics: Option<Arc<MetricsCollector>>,
 ) -> ToolRegistration {
     let metadata = ToolMetadata::default()
         .with_description(skill.description())
@@ -185,13 +218,14 @@ pub fn build_traditional_skill_tool_registration(
     // Traditional skills already flow through shared fork executors, so keep
     // the trait-object bridge here and let the native CGP factory handle the
     // ownership-first path when runtime mode is known.
-    let adapter: Arc<dyn Tool> = Arc::new(build_skill_tool_adapter(skill.clone(), fork_executor.clone()));
+    let adapter: Arc<dyn Tool> =
+        Arc::new(build_skill_tool_adapter(skill.clone(), fork_executor.clone(), metrics.clone()));
     let native_skill = skill.clone();
     let native_fork_executor = fork_executor;
 
     ToolRegistration::from_tool_with_metadata(skill.name().to_string(), CapabilityLevel::Basic, adapter, metadata)
         .with_native_cgp_factory(native_cgp_tool_factory(move || {
-            build_skill_tool_adapter(native_skill.clone(), native_fork_executor.clone())
+            build_skill_tool_adapter(native_skill.clone(), native_fork_executor.clone(), metrics.clone())
         }))
 }
 

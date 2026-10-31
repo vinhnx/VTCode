@@ -434,3 +434,53 @@ async fn skill_executor_forces_final_synthesis_after_max_iterations() {
     assert_eq!(result, "finalized after max iterations");
     assert_eq!(*tool_calls.lock().expect("tool calls mutex"), MAX_SKILL_LLM_ITERATIONS);
 }
+
+#[tokio::test]
+async fn test_skill_adapter_records_success_and_failure_executions() {
+    let collector = Arc::new(MetricsCollector::new());
+    collector.record_skill_created("test-skill".to_string(), "agent_skill".to_string());
+    collector.record_skill_created("fork-skill".to_string(), "agent_skill".to_string());
+
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("skill");
+    let adapter = SkillToolAdapter::new(skill).with_metrics(Arc::clone(&collector));
+    adapter.execute(json!({})).await.expect("in-LM execution succeeds");
+
+    let fork_manifest = SkillManifest {
+        name: "fork-skill".to_string(),
+        description: "Fork skill".to_string(),
+        context: Some("fork".to_string()),
+        ..Default::default()
+    };
+    let fork_skill = Skill::new(fork_manifest, PathBuf::from("/tmp"), "# Fork".to_string()).expect("fork skill");
+    let fork_adapter = SkillToolAdapter::new(fork_skill).with_metrics(Arc::clone(&collector));
+    assert!(fork_adapter.execute(json!({})).await.is_err(), "fork skill without an executor must fail");
+
+    let snapshot = collector.get_skill_metrics();
+    let success = snapshot.skill_stats.get("test-skill").expect("success stats");
+    assert_eq!(success.execution_count, 1);
+    assert_eq!(success.success_count, 1);
+    let failure = snapshot.skill_stats.get("fork-skill").expect("failure stats");
+    assert_eq!(failure.execution_count, 1);
+    assert_eq!(failure.success_count, 0);
+}
+
+#[tokio::test]
+async fn test_skill_adapter_without_metrics_runs_unrecorded() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("skill");
+
+    let adapter = SkillToolAdapter::new(skill);
+    let result = adapter.execute(json!({})).await.expect("unmetered execution succeeds");
+    assert_eq!(result["skill_name"], "test-skill");
+}

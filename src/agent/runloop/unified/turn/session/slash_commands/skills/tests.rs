@@ -12,7 +12,7 @@ use vtcode_core::core::agent::config::{RuntimeModelSelection, build_runtime_agen
 use vtcode_core::skills::{Skill, SkillManifest};
 use vtcode_core::tools::ToolRegistry;
 
-use super::{configured_tool_profile, skill_invocation_status_message, skill_runtime_for_session};
+use super::outcome::{configured_tool_profile, skill_invocation_status_message, skill_runtime_for_session};
 
 #[test]
 fn skill_runtime_profile_comes_from_effective_config() {

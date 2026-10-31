@@ -8,7 +8,7 @@
 //! hanging the suite.
 
 use super::handlers::{
-    handle_clear_screen, handle_oauth_login, handle_open_donate_links, handle_show_log_viewer,
+    handle_clear_screen, handle_manage_skills, handle_oauth_login, handle_open_donate_links, handle_show_log_viewer,
     handle_show_memory_config, handle_show_permissions, handle_show_settings_reset, handle_show_transcript_stats,
     handle_start_mode_palette,
 };
@@ -214,4 +214,23 @@ async fn headless_config_log_names_the_terminal_alternative() {
         "log viewer",
     )
     .await;
+}
+
+#[tokio::test]
+async fn headless_skills_doctor_renders_populated_report_without_waiting() {
+    use crate::agent::runloop::SkillCommandAction;
+
+    let mut harness = HeadlessHarness::new().await;
+    {
+        let ctx = harness.ctx();
+        let collector = ctx.tool_registry.metrics_collector();
+        collector.record_skill_created("drill".to_string(), "agent_skill".to_string());
+        collector.record_skill_execution("drill".to_string(), 42, true);
+    }
+    expect_continue(
+        timeout(HEADLESS_TEST_TIMEOUT, handle_manage_skills(harness.ctx(), SkillCommandAction::Doctor)).await,
+        "/skills doctor",
+    )
+    .await;
+    assert!(harness.palette_state().is_none(), "/skills doctor must not park modal state");
 }

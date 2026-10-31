@@ -198,7 +198,7 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!(
         "skills",
         "Open interactive skills manager (usage: /skills, /skills manager)",
-        "/skills [manager|list|search|create|load|unload|info|use|validate|package|regenerate-index|help]",
+        "/skills [manager|list|search|create|load|unload|info|use|validate|package|regenerate-index|doctor|help]",
         "tools"
     ),
     built_in_command_spec!(

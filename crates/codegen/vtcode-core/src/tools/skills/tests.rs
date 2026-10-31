@@ -175,6 +175,49 @@ async fn traditional_skill_registration_schema_includes_empty_properties() {
 }
 
 #[tokio::test]
+async fn skill_activation_lifecycle_tracks_metrics() {
+    let temp_dir = TempDir::new().expect("temp dir");
+    write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+
+    let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+    let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
+        EnhancedSkill::Traditional(skill) => *skill,
+        _ => panic!("expected traditional skill"),
+    };
+
+    let registry = Arc::new(ToolRegistry::new(temp_dir.path().to_path_buf()).await);
+    let active_skills = Arc::new(RwLock::new(HashMap::new()));
+    let runtime = SkillToolSessionRuntime::new(
+        Arc::clone(&registry),
+        None,
+        ToolDocumentationMode::Full,
+        ToolModelCapabilities::default(),
+        None,
+    );
+
+    assert!(matches!(
+        runtime.activate_skill(&active_skills, skill).await.expect("activate"),
+        SkillActivationState::Activated
+    ));
+    let tracked = registry.metrics_collector().get_skill_metrics();
+    let stats = tracked.skill_stats.get(DEMO_SKILL_TOOL_NAME).expect("created entry");
+    assert_eq!(stats.language, "agent_skill");
+    assert_eq!(stats.execution_count, 0);
+    assert_eq!(tracked.active_skills, 1);
+
+    assert!(
+        runtime
+            .deactivate_skill(&active_skills, DEMO_SKILL_TOOL_NAME)
+            .await
+            .expect("deactivate"),
+        "deactivation settles the skill"
+    );
+    let after = registry.metrics_collector().get_skill_metrics();
+    assert!(!after.skill_stats.contains_key(DEMO_SKILL_TOOL_NAME));
+    assert_eq!(after.active_skills, 0);
+}
+
+#[tokio::test]
 async fn load_skill_notifies_when_tool_snapshot_changes() {
     let temp_dir = TempDir::new().expect("temp dir");
     let skill_name = DEMO_SKILL_TOOL_NAME;

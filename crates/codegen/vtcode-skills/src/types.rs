@@ -25,6 +25,18 @@ pub enum SkillVariety {
     BuiltIn,
 }
 
+impl SkillVariety {
+    /// Stable snake_case label for listings and metrics.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SkillVariety::AgentSkill => "agent_skill",
+            SkillVariety::SystemUtility => "system_utility",
+            SkillVariety::BuiltIn => "built_in",
+        }
+    }
+}
+
 /// Network access policy for a skill
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillNetworkPolicy {
@@ -753,5 +765,12 @@ mod tests {
         assert!(size_of::<Option<Box<SkillNetworkPolicy>>>() < size_of::<Option<SkillNetworkPolicy>>());
         assert!(size_of::<Option<Box<SkillPermissionProfile>>>() < size_of::<Option<SkillPermissionProfile>>());
         assert!(size_of::<Option<Box<SkillFileSystemPermissions>>>() < size_of::<Option<SkillFileSystemPermissions>>());
+    }
+
+    #[test]
+    fn skill_variety_labels_match_serde_snake_case() {
+        assert_eq!(SkillVariety::AgentSkill.as_str(), "agent_skill");
+        assert_eq!(SkillVariety::SystemUtility.as_str(), "system_utility");
+        assert_eq!(SkillVariety::BuiltIn.as_str(), "built_in");
     }
 }
