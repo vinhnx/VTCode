@@ -329,6 +329,35 @@ Authorization = "Bearer token"
     }
 
     #[test]
+    fn test_mcp_provider_config_http_minimal_fields_from_toml() {
+        // Minimal HTTP provider (only `name`, `enabled`, `endpoint`) — the
+        // shape repository `vtcode.toml` provider entries use. Locks in the
+        // serde defaults for every omitted field so config loading cannot
+        // silently start requiring them. Oracles are hardcoded, not the
+        // `default_*` helpers, so a helper regression cannot mask itself.
+        let toml_str = r#"
+name = "cve-now"
+enabled = true
+endpoint = "https://mcp.cve.now/mcp"
+"#;
+        let provider: McpProviderConfig = toml::from_str(toml_str).expect("minimal http provider must parse");
+
+        assert_eq!(provider.name, "cve-now");
+        assert!(provider.enabled);
+        match provider.transport {
+            McpTransportConfig::Http(http) => {
+                assert_eq!(http.endpoint, "https://mcp.cve.now/mcp");
+                assert_eq!(http.protocol_version, "2025-11-25");
+                assert_eq!(http.handshake, McpHttpHandshakeMode::Legacy);
+                assert!(http.oauth.is_none());
+                assert!(http.http_headers.is_empty());
+                assert!(http.env_http_headers.is_empty());
+            }
+            McpTransportConfig::Stdio(_) => panic!("expected HTTP transport"),
+        }
+    }
+
+    #[test]
     fn test_mcp_provider_config_stdio_transport_from_toml() {
         let toml_str = r#"
 name = "time"
