@@ -2,11 +2,9 @@
 
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
-<h3>Open-source coding agent</h3>
-
 <p>
-  <strong>Terminal-first. Desktop-ready.</strong><br />
-  <sub>Explore, plan, edit, and verify — with the model you choose.</sub>
+  <sub>Terminal-first. Desktop-ready.</sub><br />
+  <sub>Explore, plan, edit, and verify; all with the model you choose.</sub>
 </p>
 
 [![Rust](https://img.shields.io/badge/rust-1.99.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
@@ -15,7 +13,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
 
 > [!TIP]
-> **New: native macOS app** — the full VT Code engine behind a premium desktop interface.
+> **New: native macOS app:** the full VT Code engine behind a premium desktop interface.
 > [Jump to the desktop app](#desktop-app) or read the
 > [desktop workspace guide](./docs/development/desktop-workspace.md).
 
@@ -25,10 +23,10 @@
 <p>
   <a href="#desktop-app">
     <img src="./resources/screenshots/vtcode-desktop.png" width="100%"
-      alt="VT Code desktop app — native macOS interface backed by the full VT Code engine" />
+      alt="VT Code desktop app: native macOS interface backed by the full VT Code engine" />
   </a>
 </p>
-<sub><a href="#desktop-app"><strong>VT Code Desktop</strong></a> — click to learn more</sub>
+<sub><a href="#desktop-app"><strong>VT Code Desktop</strong></a>: click to learn more</sub>
 
 <p>
   <img src="./resources/screenshots/vtcode-cli-tui.gif" width="39%"
@@ -209,7 +207,7 @@ Use `vtcode continue --session-id <id>` to fork an earlier session.
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](./docs/development/desktop-workspace.md)
 
 <p>
-  <sub>Everything the CLI does — providers, tool policy, sandboxing, sessions — behind a native interface.</sub>
+  <sub>Everything the CLI does: providers, tool policy, sandboxing, sessions, behind a native interface.</sub>
 </p>
 
 </div>
@@ -231,7 +229,7 @@ cargo run --locked -p vtcode-desktop
 ```
 
 Prefer an installed app? Run `scripts/package-desktop-macos.sh` (needs a macOS 15+ build host and Xcode
-command line tools) — full requirements live in the
+command line tools). Full requirements live in the
 [desktop workspace guide](./docs/development/desktop-workspace.md).
 
 </details>
@@ -418,7 +416,7 @@ figure it out together.
 
 ## Support VT Code
 
-Consider supporting VT Code development — every bit helps. Thank you!
+Consider supporting VT Code development. Every bit helps. Thank you!
 
 <div align="center">
 
@@ -433,7 +431,8 @@ Consider supporting VT Code development — every bit helps. Thank you!
 
 <a
   href="https://www.star-history.com/?repos=vinhnx%2FVTCode&type=timeline&legend=top-left">
- <picture>
+<picture>
+
    <source media="(prefers-color-scheme: dark)"
      srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&theme=dark&legend=top-left" />
    <source media="(prefers-color-scheme: light)"
