@@ -6,11 +6,16 @@
 //! its metadata cache from the previous run and skip re-reading unchanged
 //! files. Parsing is strict and fail-closed: any deviation from the writer's
 //! format discards the whole snapshot, and a full re-index rebuilds it.
+//!
+//! The path-shape policy shared by hydration filtering (and live traversal)
+//! also lives here, so every snapshot entry is screened by the same
+//! predicates the walker applies to real files.
 
 use std::fs;
 use std::path::Path;
 
 use crate::FileIndex;
+use crate::SimpleIndexerConfig;
 use crate::atomic_write;
 
 /// Name of the snapshot record inside the index directory.
@@ -89,4 +94,33 @@ fn bullet_value<'a>(line: &'a str, name: &str) -> Option<&'a str> {
     let rest = line.strip_prefix("- **")?;
     let (field_name, value) = rest.split_once("**: ")?;
     (field_name == name).then_some(value)
+}
+
+/// Path-shape file policy shared by live filtering and snapshot hydration:
+/// hidden (when configured) and always-sensitive names are rejected without
+/// touching the filesystem, so hydration can reject tampered entries while
+/// leaving existence — and deletion detection — to the re-index diff.
+pub(crate) fn has_indexable_file_name(path: &Path, config: &SimpleIndexerConfig) -> bool {
+    let name = path.file_name().and_then(|name| name.to_str());
+    if config.ignore_hidden && name.is_some_and(|name| name.starts_with('.')) {
+        return false;
+    }
+    name.is_none_or(|name| {
+        !(vtcode_commons::exclusions::is_sensitive_file(name) || name == ".gitignore" || name == ".git")
+    })
+}
+
+/// Whether `path` contains a `..` segment. Lexical [`Path::starts_with`]
+/// treats `..` as an ordinary component, so `<root>/../outside` passes a
+/// root-prefix check while resolving outside the root. Snapshot hydration
+/// rejects such entries so the containment filter is sound; the check is
+/// component-based so names that merely contain dots (for example
+/// `file..txt`) still pass.
+///
+/// Rejection (rather than normalize-then-check) is deliberate: snapshot
+/// paths are writer-produced and never contain `..`, and cache keys must
+/// match walker output exactly, so a normalized key could never hit anyway.
+pub(crate) fn has_parent_reference(path: &Path) -> bool {
+    path.components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
 }

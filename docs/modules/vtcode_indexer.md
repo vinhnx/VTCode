@@ -57,10 +57,10 @@ cache so repeat runs reuse previous work:
 - `index_directory` serves a cached `FileIndex` when a file's size and second-granularity modification time still match
   the hydrated entry, skipping the per-file read and SHA-256 hash.
 - When nothing under the indexed directory changed, the whole-snapshot rewrite is skipped entirely.
-- Entries whose path lies outside the workspace root or violates the path policy (hidden, sensitive, or excluded
-  locations) are discarded, so a tampered snapshot can never surface files the indexer would refuse to index, and a
-  missing or malformed snapshot fails closed to an empty cache: the next run simply re-indexes everything. Entries for
-  files deleted since the snapshot are kept so the re-index diff can prune them.
+- Entries whose path lies outside the workspace root, contains `..` segments, or violates the path policy (hidden,
+  sensitive, or excluded locations) are discarded, so a tampered snapshot can never surface files the indexer would
+  refuse to index, and a missing or malformed snapshot fails closed to an empty cache: the next run simply re-indexes
+  everything. Entries for files deleted since the snapshot are kept so the re-index diff can prune them.
 
 The screen's one blind spot is a same-second, same-size rewrite between runs, which the next run picks up. The index is
 advisory — agent-facing content search uses the ripgrep backend — so this trade-off is acceptable for `/init` re-runs.

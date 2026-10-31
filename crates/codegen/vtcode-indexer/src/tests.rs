@@ -886,6 +886,48 @@ fn foreign_root_snapshot_entries_are_discarded() -> Result<()> {
 }
 
 #[test]
+fn dotdot_snapshot_entries_are_discarded() -> Result<()> {
+    let temp = tempdir()?;
+    let workspace = temp.path();
+    let root = workspace.to_string_lossy().into_owned();
+
+    // Both escapes pass a lexical root-prefix check (`<root>/..` still
+    // starts with `<root>`), so only the parent-reference guard rejects
+    // them. `file..txt` carries dots without a `..` segment and must pass,
+    // proving the check is component-based rather than a substring match.
+    let escape = format!("{root}/../escape.txt");
+    let nested_escape = format!("{root}/sub/../../nested-escape.txt");
+    let dotted = format!("{root}/file..txt");
+
+    let hash = "a".repeat(64);
+    let entry_block = |path: &str| {
+        format!(
+            "## {path}\n\n- **Path**: {path}\n- **Hash**: {hash}\n- **Modified**: 1735689600\n- **Size**: 42 \
+             bytes\n- **Language**: txt\n- **Tags**: \n\n"
+        )
+    };
+    let snapshot = format!(
+        "# Workspace File Index\n\n- **Entries**: 3\n\n{}{}{}",
+        entry_block(&escape),
+        entry_block(&nested_escape),
+        entry_block(&dotted)
+    );
+    let index_dir = workspace.join(".vtcode").join("index");
+    fs::create_dir_all(&index_dir)?;
+    fs::write(index_dir.join("index.md"), snapshot)?;
+
+    let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+    indexer.init()?;
+    assert_eq!(indexer.hydrate_from_snapshot(), 1);
+
+    let cached = indexer.all_files();
+    assert_eq!(cached, vec![dotted]);
+    assert!(indexer.find_files("escape")?.is_empty());
+
+    Ok(())
+}
+
+#[test]
 fn parse_snapshot_round_trips_writer_format() {
     let hash = "b".repeat(64);
     let text = format!(

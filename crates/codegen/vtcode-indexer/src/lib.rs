@@ -166,7 +166,7 @@ impl TraversalFilter for ConfigTraversalFilter {
     }
 
     fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
-        path.is_file() && has_indexable_file_name(path, config)
+        path.is_file() && snapshot::has_indexable_file_name(path, config)
     }
 }
 
@@ -355,20 +355,21 @@ impl SimpleIndexer {
 
     /// Populate the index cache from the persisted snapshot so re-index runs
     /// can skip unchanged files (see [`Self::index_directory`]). Entries
-    /// outside the workspace root, in excluded directories, or with hidden
-    /// or sensitive names are discarded so a tampered snapshot can never
-    /// surface files the indexer would refuse to index. Existence is
-    /// deliberately unchecked: the re-index diff needs deleted files'
-    /// entries to prune them. A missing or malformed snapshot leaves the
-    /// cache empty and never fails. Returns the hydrated count.
+    /// outside the workspace root, in excluded directories, with hidden
+    /// or sensitive names, or with `..` segments are discarded so a tampered
+    /// snapshot can never surface files the indexer would refuse to index.
+    /// Existence is deliberately unchecked: the re-index diff needs deleted
+    /// files' entries to prune them. A missing or malformed snapshot leaves
+    /// the cache empty and never fails. Returns the hydrated count.
     pub fn hydrate_from_snapshot(&mut self) -> usize {
         let root = self.config.workspace_root().to_path_buf();
         let mut hydrated = 0;
         for entry in snapshot::load_snapshot_entries(self.config.index_dir()) {
             let path = Path::new(&entry.path);
             if path.starts_with(&root)
+                && !snapshot::has_parent_reference(path)
                 && (self.is_allowed_path(path) || !self.is_excluded_path(path))
-                && has_indexable_file_name(path, &self.config)
+                && snapshot::has_indexable_file_name(path, &self.config)
             {
                 self.index_cache.insert(entry.path.clone(), entry);
                 hydrated += 1;
@@ -940,20 +941,6 @@ fn should_visit_entry(
 #[inline]
 fn calculate_hash(content: &str) -> String {
     vtcode_commons::utils::calculate_sha256(content.as_bytes())
-}
-
-/// Path-shape file policy shared by live filtering and snapshot hydration:
-/// hidden (when configured) and always-sensitive names are rejected without
-/// touching the filesystem, so hydration can reject tampered entries while
-/// leaving existence — and deletion detection — to the re-index diff.
-fn has_indexable_file_name(path: &Path, config: &SimpleIndexerConfig) -> bool {
-    let name = path.file_name().and_then(|name| name.to_str());
-    if config.ignore_hidden && name.is_some_and(|name| name.starts_with('.')) {
-        return false;
-    }
-    name.is_none_or(|name| {
-        !(vtcode_commons::exclusions::is_sensitive_file(name) || name == ".gitignore" || name == ".git")
-    })
 }
 
 fn write_markdown_entry(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
