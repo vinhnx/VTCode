@@ -14,14 +14,15 @@ larger files are for app bundles and in-app display only.
 | `vtcode-app-dynamic-512.png`  | 512x512, 4.6K | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art.               |
 | `vtcode-app-dynamic.icns`     | 171K          | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26).    |
 | `AppIcon.icon/`               | 35K           | Layered Liquid Glass source: `icon.json` + `Assets/Foreground.png` (1024 V glyph mask).  |
-| `vtcode.svg`                  | vector, 474B  | Scalable source for docs.                                                                |
-| `vtcode-mark.svg`             | vector, 416B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
-| `vtcode-mono.svg`             | vector, 647B  | Monochrome V mark (white on transparent) for program registries.                         |
-| `vtcode-mono-32.png`          | 32x32, 574B   | Mono raster handoff for small icon tiles.                                                |
-| `vtcode-mono-120.png`         | 120x120, 1.8K | Mono raster handoff for HiDPI icon tiles.                                                |
+| `vtcode.svg`                  | vector, 245B  | Scalable source for docs.                                                                |
+| `vtcode-mark.svg`             | vector, 195B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
+| `vtcode-mono.svg`             | vector, 195B  | Monochrome V mark (white on transparent) for program registries.                         |
+| `vtcode-mono-32.png`          | 32x32, 308B   | Mono raster handoff for small icon tiles.                                                |
+| `vtcode-mono-120.png`         | 120x120, 827B | Mono raster handoff for HiDPI icon tiles.                                                |
 
-Legacy `vtcode-profile-*.png` files (yellow `V` mark from `vtchat_resources/v2_1`) remain for existing manual
-terminal setups but are no longer installed or embedded anywhere; new setups should use the `vtcode-app-*` set.
+The legacy `vtcode-profile-*.png` set (yellow `V` mark from `vtchat_resources/v2_1`) was removed; the
+companion plugin now vendors `vtcode-app-dynamic-512.png` as its logo/composer icon, and new manual terminal
+setups should use the `vtcode-app-*` set.
 
 ## Variant selection
 

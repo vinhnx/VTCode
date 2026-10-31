@@ -136,9 +136,9 @@ separate. The creator confirmed free/open-source operation without plugin
 payments and availability in all supported countries.
 
 The logo and composer use an unchanged copy of
-`resources/icons/vtcode-profile-512.png` (512×512, 29,619 bytes) in both appearances.
+`resources/icons/vtcode-app-dynamic-512.png` (512×512, 4,730 bytes) in both appearances.
 The gallery uses the supplied `resources/logo/vtcode_5.png` CLI branding banner
-(1774×887, 9,508 bytes), not a runtime screenshot. The manifest includes refined
+(1774×887, 8,043 bytes), not a runtime screenshot. The manifest includes refined
 descriptions, three starter prompts, release notes, and five positive plus three
 negative draft review cases. Legal URLs, a demo link, and verified organization
 eligibility remain absent rather than fabricated.

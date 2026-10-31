@@ -9,7 +9,7 @@ For the runtime contract and pilot evidence, see the
 
 Display the product as **VT Code Companion**. Keep `vtcode-companion` as the
 package/skill identifier and `vtcode` for the CLI. The square logo/composer icon
-copies `resources/icons/vtcode-profile-512.png`; the supplied banner copies
+copies `resources/icons/vtcode-app-dynamic-512.png`; the supplied banner copies
 `resources/logo/vtcode_5.png`. Both are included unchanged in the package. The
 banner is branding artwork, not a screenshot proving a working host workflow.
 

@@ -245,7 +245,7 @@ class CompanionPackageTests(unittest.TestCase):
                 resources = PACKAGE.ROOT / "resources"
                 self.assertEqual(
                     archive.read("assets/icon.png"),
-                    (resources / "icons/vtcode-profile-512.png").read_bytes(),
+                    (resources / "icons/vtcode-app-dynamic-512.png").read_bytes(),
                 )
                 self.assertEqual(
                     archive.read("assets/banner.png"),
