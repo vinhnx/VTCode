@@ -5,6 +5,13 @@
 //! variants pin their artwork, while `Dynamic` follows the active theme
 //! mode (per the artwork README, automatic switching selects Light or Dark
 //! art at runtime; the split tile only previews the `Dynamic` option).
+//!
+//! Shape contract: macOS clips neither `.icns` art nor
+//! `setApplicationIconImage` images to the system icon shape, so the
+//! embedded PNGs must carry the rounded squircle with transparency baked in
+//! (see `scripts/make-macos-app-icons.py`). Full-bleed opaque squares render
+//! as squares in the Dock; the `embedded_artwork_carries_macos_rounded_shape`
+//! test pins both sides of that boundary.
 
 use gpui_kit::component::theme::ThemeMode;
 use vtcode_commons::ui_protocol::AppIconPreference;
@@ -80,6 +87,36 @@ mod tests {
         assert_ne!(LIGHT_PNG, DARK_PNG);
         assert_ne!(LIGHT_PNG, DYNAMIC_PNG);
         assert_ne!(DARK_PNG, DYNAMIC_PNG);
+    }
+
+    #[test]
+    fn embedded_artwork_carries_macos_rounded_shape() {
+        // Stock inset geometry: the 824/1024 content box leaves 50px
+        // transparent margins at 512, so corners AND edge midpoints are clear
+        // (fails on full-bleed squares, which also render oversized), while
+        // just-inside points, a near-corner interior point, and the center
+        // stay opaque (fails on over-aggressive masks or mostly-transparent
+        // art).
+        for png in [LIGHT_PNG, DARK_PNG, DYNAMIC_PNG] {
+            let art = image::load_from_memory(png).expect("artwork must decode").to_rgba8();
+            assert_eq!((art.width(), art.height()), (512, 512));
+            let last = 511;
+            for (x, y) in [
+                (0, 0),
+                (last, 0),
+                (0, last),
+                (last, last),
+                (256, 0),
+                (0, 256),
+                (last, 256),
+                (256, last),
+            ] {
+                assert!(art.get_pixel(x, y)[3] < 16, "margin ({x}, {y}) must be transparent");
+            }
+            for (x, y) in [(256, 64), (64, 256), (447, 256), (256, 447), (100, 100), (256, 256)] {
+                assert!(art.get_pixel(x, y)[3] > 240, "interior ({x}, {y}) must stay opaque");
+            }
+        }
     }
 
     #[test]

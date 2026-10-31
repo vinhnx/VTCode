@@ -39,6 +39,7 @@ vtcode-ui = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 gpui-kit = { version = "=0.8.0", features = ["test-support"] }
+image = { workspace = true }
 tempfile = { workspace = true }
 vtcode-config = { workspace = true }
 
