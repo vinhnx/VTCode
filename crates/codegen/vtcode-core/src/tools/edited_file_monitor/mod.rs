@@ -650,6 +650,16 @@ impl EditedFileMonitor {
 
     fn process_path_change(&self, path: PathBuf) -> Result<()> {
         let tracked_path = normalize_event_path(&path);
+
+        // Screen before snapshotting: watched parents observe every sibling
+        // (build output, logs), so untracked events previously paid a full
+        // read + SHA256 just to be discarded below. A file that becomes
+        // tracked concurrently establishes its own baseline via `track_read`,
+        // so skipping this event for it loses nothing.
+        if !self.inner.state.lock().tracked_files.contains_key(&tracked_path) {
+            return Ok(());
+        }
+
         let snapshot = snapshot_path_sync(&tracked_path)
             .with_context(|| format!("Failed to snapshot externally modified file {}", tracked_path.display()))?;
 

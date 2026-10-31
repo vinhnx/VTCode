@@ -229,6 +229,40 @@ async fn stale_path_queries_expose_external_change_without_clearing_state() -> R
 }
 
 #[tokio::test]
+async fn untracked_event_leaves_no_tracked_state() -> Result<()> {
+    let temp = TempDir::new()?;
+    let sibling = temp.path().join("untracked.log");
+    std::fs::write(&sibling, "build output\n")?;
+    let monitor = EditedFileMonitor::new();
+
+    // No `track_read` — the path was never read or written by the agent, so
+    // the event must be dropped before any file snapshot is taken.
+    monitor.debug_process_path_change(&sibling).await?;
+
+    assert!(monitor.tracked_paths().is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn untracked_sibling_event_does_not_block_tracked_processing() -> Result<()> {
+    let temp = TempDir::new()?;
+    let file = temp.path().join("tracked.txt");
+    let sibling = temp.path().join("untracked.log");
+    std::fs::write(&file, "before\n")?;
+    std::fs::write(&sibling, "build output\n")?;
+    let monitor = EditedFileMonitor::new();
+
+    monitor.track_read(&file).await?;
+    monitor.debug_process_path_change(&sibling).await?;
+    assert!(monitor.tracked_path_freshness().iter().all(|entry| !entry.is_stale));
+
+    std::fs::write(&file, "external\n")?;
+    monitor.debug_process_path_change(&file).await?;
+    assert_eq!(monitor.stale_tracked_paths().len(), 1);
+    Ok(())
+}
+
+#[tokio::test]
 async fn override_requires_matching_approved_snapshot() -> Result<()> {
     let temp = TempDir::new()?;
     let file = temp.path().join("sample.txt");
