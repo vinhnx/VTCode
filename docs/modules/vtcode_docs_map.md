@@ -479,8 +479,8 @@ below based on the topic area.
 
 - **File**: `docs/development/terminal-program-status.md`
   - **Content**: Terminal program status
-  - **Topics**: Adoption and existing telemetry, Terminal pane icons (Rex/Ghostty), Lifecycle, Ownership and privacy,
-    Verification
+  - **Topics**: Adoption and existing telemetry, Terminal pane icons (Rex/Ghostty), iTerm2 session status (OSC 21337),
+    Lifecycle, Ownership and privacy
   - **User Questions**: "What can you tell me about Terminal program status?", "How does Adoption and existing telemetry
     work?", "How does Terminal pane icons (Rex/Ghostty) work?"
 

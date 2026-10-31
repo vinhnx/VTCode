@@ -7,6 +7,12 @@ fn enabled() -> ProgramStatus {
     status
 }
 
+fn enabled_iterm2() -> ProgramStatus {
+    let mut status = enabled();
+    status.iterm21337 = true;
+    status
+}
+
 fn child(id: &str, kind: LocalAgentKind, state: ProgramState, updated_at: i64) -> LocalAgentEntry {
     LocalAgentEntry {
         id: id.into(),
@@ -422,4 +428,49 @@ fn program_status_task_progress_emits_determinate_working_only() {
     assert_eq!(status.desired()[&status.parent].progress, Some(40));
     status.apply(ProgramStatusUpdate::Progress { percent: None });
     assert_eq!(status.desired()[&status.parent].progress, None);
+}
+
+#[test]
+fn program_status_iterm21337_follows_parent_and_dedups() {
+    let mut status = enabled_iterm2();
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    let wire = String::from_utf8(output).unwrap();
+    assert!(wire.contains("\x1b]21337;status=Idle;indicator=#00d75f;"), "{wire:?}");
+    // Unchanged state re-emits nothing.
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(output.is_empty());
+    // Blocked switches the pill and carries the generic wait label.
+    status.apply(ProgramStatusUpdate::Wait { token: 1, kind: InteractionKind::Permission });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    let wire = String::from_utf8(output).unwrap();
+    assert!(wire.contains("status=Waiting;indicator=#5f87ff;"), "{wire:?}");
+    assert!(wire.contains(";detail=Waiting for permission\x07"), "{wire:?}");
+}
+
+#[test]
+fn program_status_iterm21337_clears_when_parent_is_gone() {
+    let mut status = enabled_iterm2();
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(String::from_utf8(output).unwrap().contains("\x1b]21337;status=Idle;"));
+    status.apply(ProgramStatusUpdate::Configure { enabled: false });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(
+        String::from_utf8(output)
+            .unwrap()
+            .contains("\x1b]21337;status=;indicator=;status-color=;detail=\x07")
+    );
+}
+
+#[test]
+fn program_status_iterm21337_stays_silent_without_direct_iterm2() {
+    let mut status = enabled();
+    assert!(!status.iterm21337);
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(!String::from_utf8(output).unwrap().contains("21337"));
 }

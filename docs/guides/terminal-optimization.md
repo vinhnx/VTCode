@@ -66,21 +66,22 @@ suppresses only the install notice.
 
 ## Program Status
 
-If your terminal supports the [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status),
-enable live working, permission/question/authentication wait, and completion indicators in `vtcode.toml`:
+VT Code reports live working, permission/question/authentication wait, and completion indicators through the
+[Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status) (`app=vtcode`). Reporting is
+on by default and applies only to interactive sessions with terminal-connected stdin, stdout, and stderr; terminals
+that do not know the sequence ignore it, and pre-0.54 VTE parsers are skipped. Rex renders the records as tab/pane
+status (working spinner, blocked badges, completion marks); Ghostty implements the same protocol. Other terminals
+and multiplexer/SSH combinations need their own compatibility checks. VT Code sends generic labels without prompts, commands, paths,
+or credentials. Set `enabled = false` to disable reporting and clear the current session's owned records; valid
+live reloads apply both changes:
 
 ```toml
 [ui.program_status]
-enabled = true
+enabled = false
 ```
 
-Reporting is opt-in and applies only to interactive sessions with terminal-connected stdin, stdout, and stderr.
-Rex documents support; other terminals and multiplexer/SSH combinations need their own compatibility checks.
-VT Code sends generic labels without prompts, commands, paths, or credentials. Set `enabled = false` to disable
-reporting and clear the current session's owned records; valid live reloads apply both changes.
-
 Status indicators and `[ui.notifications]` are independent. If your terminal also creates notifications from status
-changes, choose your notification preferences in the terminal and VT Code to avoid duplicate alerts. Enabling status
+changes, choose your notification preferences in the terminal and VT Code to avoid duplicate alerts. Status reporting
 does not change either notification policy. See the [lifecycle and privacy guide](../development/terminal-program-status.md).
 
 ## Line Break Options

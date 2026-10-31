@@ -10,9 +10,13 @@ for app bundles only.
 | `vtcode-profile-180.png` | 180x180, 7.5K | Cross-platform PNG fallback, incl. Windows Terminal `settings.json` `"icon"`. |
 | `vtcode-profile-512.png` | 512x512, 29K  | High-res / future app bundle only. Not for tabs.                              |
 | `vtcode.svg`             | vector, 474B  | Scalable source.                                                              |
+| `vtcode-mono.svg`        | vector, 647B  | Monochrome V mark (white on transparent) for program registries.              |
+| `vtcode-mono-32.png`     | 32x32, 574B   | Mono raster handoff for small icon tiles.                                     |
+| `vtcode-mono-120.png`    | 120x120, 1.8K | Mono raster handoff for HiDPI icon tiles.                                     |
 
 Artwork: yellow `V` mark sourced from `vtchat_resources/v2_1/logo_dark.png` (`logo_light.png` is byte-identical),
-downscaled per size.
+downscaled per size. The mono files redraw the same LigatureSymbols OFL `V` path (`vtcode-mark.svg`) as a
+white-on-transparent single-color mark for dark terminal chrome; hosts tint or invert it for light surfaces.
 
 The desktop welcome view draws the SVG's outline V in the active theme without the filled tile.
 The toolbar, application icon, and transcript retain the original profile artwork.
@@ -22,6 +26,15 @@ The toolbar, application icon, and transcript retain the original profile artwor
 VT Code sets both the terminal icon label (`OSC 1`) and window title (`OSC 2`) to the same sanitized status text on
 every title update. This keeps the built-in profile/tab icon label in sync on emulators that distinguish icon from
 title, instead of relying on `OSC 0` aliasing.
+
+## Program registries (Rex/Ghostty)
+
+Rex renders OSC 7501 records (`app=vtcode`, on by default) as tab/pane status chrome with no per-terminal
+install; Ghostty implements the same protocol. The provider icon tile itself comes from each terminal's
+built-in program registry keyed by that `app` id, so a `vtcode` tile appears only after the terminal maps it.
+The `vtcode-mono.*` files above are the registration artwork for that upstream request; see
+[Terminal pane icons](../../docs/development/terminal-program-status.md#terminal-pane-icons-rexghostty) for the
+full spec. No escape sequence can set registry artwork from the CLI side.
 
 ## Manual graphical icon setup
 

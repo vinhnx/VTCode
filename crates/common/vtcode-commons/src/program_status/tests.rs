@@ -74,3 +74,100 @@ fn program_status_limits_and_injection() {
     assert!(encode_report(&id128, ProgramState::Idle, None, None, "", "").is_ok());
     assert!(encode_report(&(id128 + "d"), ProgramState::Idle, None, None, "", "").is_err());
 }
+
+#[test]
+fn program_status_vte_gate_checks_both_sides_of_the_safe_boundary() {
+    assert!(!vte_version_allows_unknown_osc(Some("5399")));
+    assert!(vte_version_allows_unknown_osc(Some("5400")));
+    assert!(!vte_version_allows_unknown_osc(Some("0")));
+    assert!(vte_version_allows_unknown_osc(Some("7600")));
+}
+
+#[test]
+fn program_status_vte_gate_treats_missing_or_garbled_versions_as_safe() {
+    assert!(vte_version_allows_unknown_osc(None));
+    for raw in ["", "  ", "not-a-version", "-1", "54.0", "99999999999999999999"] {
+        assert!(vte_version_allows_unknown_osc(Some(raw)), "{raw:?} must allow emission");
+    }
+    assert!(vte_version_allows_unknown_osc(Some("  5400  ")));
+    assert!(!vte_version_allows_unknown_osc(Some("  5399  ")));
+}
+
+#[test]
+fn program_status_iterm21337_mapping_covers_every_state() {
+    use ProgramState::{Blocked, Clear, Done, Error, Idle, Working};
+    assert_eq!(iterm21337_status(Idle), ("Idle", "#00d75f"));
+    assert_eq!(iterm21337_status(Working), ("Working", "#ff9500"));
+    assert_eq!(iterm21337_status(Blocked), ("Waiting", "#5f87ff"));
+    for finished in [Done, Error, Clear] {
+        assert_eq!(iterm21337_status(finished), ("Idle", "#00d75f"), "{finished:?} reads as idle");
+    }
+}
+
+#[test]
+fn program_status_iterm21337_exact_wire_and_clear() {
+    assert_eq!(
+        encode_iterm21337(ProgramState::Working, "Running tools"),
+        "\x1b]21337;status=Working;indicator=#ff9500;status-color=;detail=Running tools\x07"
+    );
+    assert_eq!(
+        encode_iterm21337(ProgramState::Blocked, "Waiting for permission"),
+        "\x1b]21337;status=Waiting;indicator=#5f87ff;status-color=;detail=Waiting for permission\x07"
+    );
+    assert_eq!(clear_iterm21337(), "\x1b]21337;status=;indicator=;status-color=;detail=\x07");
+}
+
+#[test]
+fn program_status_iterm21337_detail_cannot_reshape_the_sequence() {
+    let wire = encode_iterm21337(ProgramState::Working, "a;b\\c\x1bd\x7fe");
+    assert!(wire.ends_with(";detail=a\\;b\\\\cde\x07"), "{wire:?}");
+    let long = "x".repeat(300);
+    let wire = encode_iterm21337(ProgramState::Idle, &long);
+    let detail = wire.split(";detail=").nth(1).unwrap().strip_suffix('\x07').unwrap();
+    assert_eq!(detail.chars().count(), 200);
+}
+
+#[test]
+fn program_status_iterm21337_gate_needs_direct_iterm2_only() {
+    assert!(should_emit_iterm21337(true, false, false));
+    assert!(!should_emit_iterm21337(false, false, false));
+    assert!(!should_emit_iterm21337(true, true, false));
+    assert!(!should_emit_iterm21337(true, false, true));
+    assert!(!should_emit_iterm21337(true, true, true));
+}
+
+#[test]
+fn program_status_iterm21337_live_gate_follows_the_environment() {
+    let env = crate::env_lock::lock();
+    let previous_iterm = std::env::var_os("ITERM_SESSION_ID");
+    let previous_tmux = std::env::var_os("TMUX");
+    let previous_sty = std::env::var_os("STY");
+    env.set_var("ITERM_SESSION_ID", "w0t0p0:AAAA");
+    env.remove_var("TMUX");
+    env.remove_var("STY");
+    assert!(should_emit_iterm21337_now());
+    env.set_var("TMUX", "/tmp/tmux-501/default,123,0");
+    assert!(!should_emit_iterm21337_now());
+    env.remove_var("TMUX");
+    env.set_var("STY", "1234.pts-0.host");
+    assert!(!should_emit_iterm21337_now());
+    env.remove_var("STY");
+    env.remove_var("ITERM_SESSION_ID");
+    assert!(!should_emit_iterm21337_now());
+    env.restore_var("ITERM_SESSION_ID", previous_iterm);
+    env.restore_var("TMUX", previous_tmux);
+    env.restore_var("STY", previous_sty);
+}
+
+#[test]
+fn program_status_vte_live_gate_follows_the_environment() {
+    let env = crate::env_lock::lock();
+    let previous = std::env::var_os("VTE_VERSION");
+    env.set_var("VTE_VERSION", "4600");
+    assert!(!vte_allows_unknown_osc());
+    env.set_var("VTE_VERSION", "7600");
+    assert!(vte_allows_unknown_osc());
+    env.remove_var("VTE_VERSION");
+    assert!(vte_allows_unknown_osc());
+    env.restore_var("VTE_VERSION", previous);
+}

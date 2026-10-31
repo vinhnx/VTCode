@@ -310,7 +310,7 @@ pub struct UiConfig {
     #[serde(default = "default_color_scheme_mode")]
     pub color_scheme_mode: ColorSchemeMode,
 
-    /// Opt-in terminal program status reports for the interactive TUI.
+    /// Terminal program status reports for the interactive TUI (on by default).
     #[serde(default)]
     pub program_status: UiProgramStatusConfig,
 
@@ -396,6 +396,10 @@ fn default_dim_completed_todos() -> bool {
 }
 
 fn default_message_block_spacing() -> bool {
+    true
+}
+
+fn default_program_status_enabled() -> bool {
     true
 }
 
@@ -573,11 +577,18 @@ impl Default for UiConfig {
 
 /// Terminal Program Status Protocol preferences.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct UiProgramStatusConfig {
     /// Emit OSC 7501 status reports on the interactive TUI terminal stream.
+    #[serde(default = "default_program_status_enabled")]
     pub enabled: bool,
+}
+
+impl Default for UiProgramStatusConfig {
+    fn default() -> Self {
+        Self { enabled: default_program_status_enabled() }
+    }
 }
 
 /// Chat configuration

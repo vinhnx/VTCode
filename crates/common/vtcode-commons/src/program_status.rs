@@ -108,6 +108,91 @@ fn encode_text(text: &str, limit: usize) -> Result<String> {
     Ok(STANDARD.encode(text))
 }
 
+/// Minimum `VTE_VERSION` whose parser safely ignores unknown OSC sequences.
+///
+/// Older VTE-based terminals may mishandle unrecognized OSC bytes, so
+/// default-on emission skips them. Gate adapted from Codex
+/// (`codex-rs/tui/src/terminal_program_status.rs`, openai/codex#52725,
+/// Apache-2.0): absent or unparsable versions are treated as safe.
+pub const MIN_VTE_VERSION_WITH_SAFE_OSC: u32 = 5400;
+
+/// Pure gate: whether a `VTE_VERSION` value permits unknown-OSC emission.
+pub fn vte_version_allows_unknown_osc(raw: Option<&str>) -> bool {
+    let Some(raw) = raw else {
+        return true;
+    };
+    match raw.trim().parse::<u32>() {
+        Ok(version) => version >= MIN_VTE_VERSION_WITH_SAFE_OSC,
+        Err(_) => true,
+    }
+}
+
+/// Live gate combining [`vte_version_allows_unknown_osc`] with the process environment.
+pub fn vte_allows_unknown_osc() -> bool {
+    vte_version_allows_unknown_osc(std::env::var("VTE_VERSION").ok().as_deref())
+}
+
+/// Maximum `detail` characters in an iTerm2 session-status report.
+const MAX_ITERM21337_DETAIL_CHARS: usize = 200;
+
+/// iTerm2 session-status (OSC 21337) label and indicator for a terminal state.
+///
+/// Finished states read as idle, as does `Clear` (defensive: callers clear via
+/// the empty report instead); only the label/color pair travels. Mapping
+/// adapted from Codex (`codex-rs/tui/src/terminal_program_status.rs`,
+/// openai/codex#52725, Apache-2.0).
+pub fn iterm21337_status(state: ProgramState) -> (&'static str, &'static str) {
+    match state {
+        ProgramState::Idle | ProgramState::Done | ProgramState::Error | ProgramState::Clear => ("Idle", "#00d75f"),
+        ProgramState::Working => ("Working", "#ff9500"),
+        ProgramState::Blocked => ("Waiting", "#5f87ff"),
+    }
+}
+
+/// Encode an iTerm2 session-status report for a direct iTerm2 session.
+///
+/// `detail` is sanitized: controls are stripped, output is bounded, and `;`
+/// / `\` are backslash-escaped so the payload cannot reshape the sequence.
+pub fn encode_iterm21337(state: ProgramState, detail: &str) -> String {
+    let (label, indicator) = iterm21337_status(state);
+    format!(
+        "\x1b]21337;status={label};indicator={indicator};status-color=;detail={}\x07",
+        sanitize_iterm21337_detail(detail)
+    )
+}
+
+/// Encode the empty iTerm2 session-status report that clears a previous one.
+pub fn clear_iterm21337() -> String {
+    "\x1b]21337;status=;indicator=;status-color=;detail=\x07".to_string()
+}
+
+fn sanitize_iterm21337_detail(detail: &str) -> String {
+    let mut clean = String::with_capacity(detail.len());
+    for ch in detail.chars().filter(|ch| !ch.is_control()).take(MAX_ITERM21337_DETAIL_CHARS) {
+        if matches!(ch, ';' | '\\') {
+            clean.push('\\');
+        }
+        clean.push(ch);
+    }
+    clean
+}
+
+/// Pure gate: 21337 is iTerm2-proprietary, so only direct iTerm2 sessions
+/// (no multiplexer or GNU screen between the program and the emulator).
+pub fn should_emit_iterm21337(iterm_session: bool, tmux_session: bool, screen_session: bool) -> bool {
+    iterm_session && !tmux_session && !screen_session
+}
+
+/// Live gate combining [`should_emit_iterm21337`] with `ITERM_SESSION_ID` /
+/// `TMUX` / `STY` detection.
+pub fn should_emit_iterm21337_now() -> bool {
+    should_emit_iterm21337(
+        std::env::var("ITERM_SESSION_ID").is_ok(),
+        std::env::var("TMUX").is_ok(),
+        std::env::var("STY").is_ok(),
+    )
+}
+
 /// Encode a complete replacement record. An explicit owned ID is mandatory;
 /// callers cannot accidentally clear the terminal's root or unrelated records.
 ///

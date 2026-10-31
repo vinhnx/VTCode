@@ -3,14 +3,14 @@ use serial_test::serial;
 use vtcode_commons::ui_protocol::ThinkingBlockState;
 
 #[test]
-fn program_status_defaults_opt_in_and_round_trip() {
-    assert!(!UiConfig::default().program_status.enabled);
-    assert!(!toml::from_str::<UiConfig>("").unwrap().program_status.enabled);
-    assert!(!toml::from_str::<UiConfig>("[program_status]").unwrap().program_status.enabled);
-    let enabled: UiConfig = toml::from_str("[program_status]\nenabled = true").unwrap();
-    assert!(enabled.program_status.enabled);
-    let serialized = toml::to_string(&enabled).unwrap();
-    assert!(toml::from_str::<UiConfig>(&serialized).unwrap().program_status.enabled);
+fn program_status_defaults_on_and_round_trip() {
+    assert!(UiConfig::default().program_status.enabled);
+    assert!(toml::from_str::<UiConfig>("").unwrap().program_status.enabled);
+    assert!(toml::from_str::<UiConfig>("[program_status]").unwrap().program_status.enabled);
+    let disabled: UiConfig = toml::from_str("[program_status]\nenabled = false").unwrap();
+    assert!(!disabled.program_status.enabled);
+    let serialized = toml::to_string(&disabled).unwrap();
+    assert!(!toml::from_str::<UiConfig>(&serialized).unwrap().program_status.enabled);
     assert!(toml::from_str::<UiConfig>("[program_status]\nenabled = 'true'").is_err());
 }
 
