@@ -40,7 +40,7 @@ fn verifier_batch(messages: &[uni::Message], start: usize) -> Option<VerifierBat
     let [call] = assistant.tool_calls.as_deref()? else {
         return None;
     };
-    if call.id != HARNESS_AUTO_VERIFY_CALL_ID {
+    if call.id != HARNESS_AUTO_VERIFY_CALL_ID && !call.id.starts_with(&format!("{HARNESS_AUTO_VERIFY_CALL_ID}-")) {
         return None;
     }
     let function = call.function.as_ref()?;
@@ -52,8 +52,7 @@ fn verifier_batch(messages: &[uni::Message], start: usize) -> Option<VerifierBat
     };
     let response_index = assistant_index.checked_add(1)?;
     let response = messages.get(response_index)?;
-    if response.role != uni::MessageRole::Tool || response.tool_call_id.as_deref() != Some(HARNESS_AUTO_VERIFY_CALL_ID)
-    {
+    if response.role != uni::MessageRole::Tool || response.tool_call_id.as_deref() != Some(call.id.as_str()) {
         return None;
     }
     let result: serde_json::Value = serde_json::from_str(&response.content.as_text()).ok()?;
@@ -297,12 +296,37 @@ mod tests {
                 .unwrap()
                 .contains("distinct middle evidence")
         );
-        assert!(!vtcode_core::core::agent::state::request_history_needs_normalization(&projected));
+        let normalized = vtcode_core::core::agent::state::normalize_history_for_request(&projected);
+        assert!(!vtcode_core::core::agent::state::request_history_needs_normalization(&normalized));
         assert_eq!(history, original);
         let once = projected.clone();
         project_runtime_history(&mut projected, false, false);
         assert_eq!(projected, once, "projection must be idempotent");
         assert!(serde_json::to_vec(&projected).unwrap().len() * 20 < serde_json::to_vec(&history).unwrap().len());
+    }
+
+    #[test]
+    fn verifier_wait_projection_compacts_distinct_harness_call_ids() {
+        let mut history = verifier_messages("owned-a", true, "launch", None);
+        history.extend(verifier_messages("owned-a", false, "middle", None));
+        history.extend(verifier_messages("owned-a", false, "finished", Some(0)));
+        let mut sequence = 0;
+        let mut current_id = String::new();
+        for message in &mut history {
+            if let Some(calls) = message.tool_calls.as_mut() {
+                current_id = format!("harness-auto-verify-{sequence}");
+                sequence += 1;
+                calls[0].id = current_id.clone();
+            } else if message.role == uni::MessageRole::Tool {
+                message.tool_call_id = Some(current_id.clone());
+            }
+        }
+        project_runtime_history(&mut history, false, false);
+        assert_eq!(history.len(), 5);
+        let terminal: serde_json::Value = serde_json::from_str(&history.last().unwrap().content.as_text()).unwrap();
+        assert_eq!(terminal["exit_code"], 0);
+        assert_eq!(terminal["output"], "finished");
+        assert_eq!(terminal["prior_harness_wait_output"], "middle");
     }
 
     #[test]

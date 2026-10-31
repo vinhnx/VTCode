@@ -117,7 +117,7 @@ async fn passing_local_check_accepts_external_limitation_without_another_recover
         message.tool_calls.as_ref().is_some_and(|calls| {
             calls
                 .iter()
-                .any(|call| call.id == super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID)
+                .any(|call| call.id.starts_with(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID))
         })
     }));
 }
@@ -319,7 +319,7 @@ async fn yielded_verifier_announces_once_while_preserving_real_waits_and_one_fin
         .iter()
         .flat_map(|message| message.tool_calls.iter().flatten())
         .filter(|call| {
-            call.id == super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID
+            call.id.starts_with(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID)
                 && call.function.as_ref().is_some_and(|function| function.name == "write_stdin")
         })
         .count();

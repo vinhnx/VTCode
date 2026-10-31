@@ -152,6 +152,9 @@ fn unmatched_tool_result_error_requires_the_specific_bad_request_shape() {
         "Merge Gateway error (400 Bad Request): unmatched tool result for call_123"
     ));
     assert!(is_unmatched_tool_result_error("HTTP 400: tool_result is not associated with an earlier tool call"));
+    assert!(is_unmatched_tool_result_error(
+        "Duplicate tool response for tool_call_id='harness-auto-verify'. Each tool_call must have exactly one matching tool response"
+    ));
     assert!(!is_unmatched_tool_result_error("Merge Gateway error (400 Bad Request): invalid model"));
     assert!(!is_unmatched_tool_result_error("Merge Gateway error (500): unmatched tool result"));
 }

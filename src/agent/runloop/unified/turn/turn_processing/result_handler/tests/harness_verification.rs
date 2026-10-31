@@ -202,7 +202,7 @@ async fn harness_required_verifiers_report_progress_and_finish_without_repeating
         .iter()
         .filter_map(|message| message.tool_calls.as_ref())
         .flatten()
-        .filter(|call| call.id == super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID)
+        .filter(|call| call.id.starts_with(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID))
         .count();
     assert_eq!(calls, 2, "completion must reuse both passes without a third verifier");
 }
@@ -366,13 +366,24 @@ async fn harness_waits_for_a_running_verifier_instead_of_starting_another() {
         .iter()
         .filter_map(|message| message.tool_calls.as_ref())
         .flatten()
-        .filter(|call| call.id == "harness-auto-verify")
+        .filter(|call| call.id.starts_with("harness-auto-verify-"))
         .collect();
     assert!(calls.len() >= 2, "the yielded check needs fresh repeated waits");
+    assert_eq!(
+        calls
+            .iter()
+            .map(|call| &call.id)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        calls.len()
+    );
     assert!(
         !ctx.working_history
             .iter()
-            .filter(|message| message.tool_call_id.as_deref() == Some("harness-auto-verify"))
+            .filter(|message| message
+                .tool_call_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with("harness-auto-verify-")))
             .any(|message| serde_json::from_str::<serde_json::Value>(&message.content.as_text())
                 .ok()
                 .is_some_and(

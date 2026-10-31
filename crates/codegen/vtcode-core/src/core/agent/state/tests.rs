@@ -150,16 +150,17 @@ fn request_normalization_reused_ids_match_causally_preceding_batches() {
         make_tool_response("reused", "duplicate result"),
     ]);
     let normalized = normalize_history_for_request_shared(Arc::clone(&messages));
-    assert_eq!(
-        normalized.as_ref(),
-        &vec![
-            make_tool_call("reused", "read_file"),
-            make_tool_response("reused", "first result"),
-            make_tool_call("reused", "write_file"),
-            make_tool_response("reused", "second result"),
-            Message::user("interleaved".to_string()),
-        ]
-    );
+    assert_eq!(normalized.len(), 5);
+    let first_id = &normalized[0].tool_calls.as_ref().unwrap()[0].id;
+    let second_id = &normalized[2].tool_calls.as_ref().unwrap()[0].id;
+    assert_eq!(first_id, "reused");
+    assert_ne!(first_id, second_id);
+    assert_eq!(normalized[1].tool_call_id.as_ref(), Some(first_id));
+    assert_eq!(normalized[1].content.as_text(), "first result");
+    assert_eq!(normalized[3].tool_call_id.as_ref(), Some(second_id));
+    assert_eq!(normalized[3].content.as_text(), "second result");
+    assert_eq!(normalized[4], Message::user("interleaved".to_string()));
+    assert!(Arc::ptr_eq(&normalized, &normalize_history_for_request_shared(Arc::clone(&normalized))));
     assert_eq!(messages.len(), 7);
     assert_eq!(messages[0].content.as_text(), "early result");
 }
@@ -619,4 +620,155 @@ fn clear_old_tool_results_clear_tool_inputs_covers_freeform_text() {
         .expect("call preserved");
     assert_eq!(call.text.as_deref(), Some(CLEARED_TOOL_INPUT_PLACEHOLDER));
     assert!(call.thought_signature.is_none());
+}
+
+#[test]
+fn request_normalization_repairs_legacy_verifier_pairs_without_mutating_history() {
+    let source = Arc::new(vec![
+        make_tool_call("harness-auto-verify", "exec_command"),
+        make_tool_response("harness-auto-verify", "running"),
+        make_tool_call("ordinary", "read_file"),
+        make_tool_response("ordinary", "ordinary result"),
+        make_tool_call("harness-auto-verify", "write_stdin"),
+        make_tool_response("harness-auto-verify", "still running"),
+        make_tool_call("harness-auto-verify", "write_stdin"),
+        make_tool_response("harness-auto-verify", "exit 0"),
+    ]);
+    let before = source.as_ref().clone();
+    let repaired = normalize_history_for_request_shared(Arc::clone(&source));
+    let ids: Vec<_> = [0, 4, 6]
+        .into_iter()
+        .map(|i| repaired[i].tool_calls.as_ref().unwrap()[0].id.clone())
+        .collect();
+    assert_eq!(ids.iter().collect::<std::collections::HashSet<_>>().len(), 3);
+    for (index, expected) in [(1, "running"), (5, "still running"), (7, "exit 0")] {
+        assert_eq!(
+            repaired[index].tool_call_id.as_deref(),
+            Some(repaired[index - 1].tool_calls.as_ref().unwrap()[0].id.as_str())
+        );
+        assert_eq!(repaired[index].content.as_text(), expected);
+    }
+    assert_eq!(repaired[2], before[2]);
+    assert_eq!(repaired[3], before[3]);
+    assert_eq!(source.as_ref(), &before);
+    assert!(Arc::ptr_eq(&repaired, &normalize_history_for_request_shared(Arc::clone(&repaired))));
+}
+
+#[test]
+fn request_normalization_repairs_reused_ids_in_mixed_batches_without_collisions() {
+    let source = Arc::new(vec![
+        Message::assistant_with_tools(
+            String::new(),
+            vec![
+                crate::llm::provider::ToolCall::function("reused".into(), "read_file".into(), "{}".into()),
+                crate::llm::provider::ToolCall::function("other".into(), "read_file".into(), "{}".into()),
+            ],
+        ),
+        make_tool_response("other", "other result"),
+        make_tool_response("reused", "first result"),
+        make_tool_call("vtcode-repaired-tool-call-0", "read_file"),
+        make_tool_response("vtcode-repaired-tool-call-0", "reserved result"),
+        make_tool_call("reused", "write_file"),
+        make_tool_response("reused", "second result"),
+    ]);
+    let original = source.as_ref().clone();
+    let repaired = normalize_history_for_request_shared(Arc::clone(&source));
+    let first = &repaired[0].tool_calls.as_ref().unwrap()[0].id;
+    let second = &repaired[5].tool_calls.as_ref().unwrap()[0].id;
+    assert_ne!(first, second);
+    assert_ne!(first, "vtcode-repaired-tool-call-0");
+    assert_ne!(second, "vtcode-repaired-tool-call-0");
+    assert_eq!(repaired[1].tool_call_id.as_deref(), Some("other"));
+    assert_eq!(repaired[1].content.as_text(), "other result");
+    assert_eq!(repaired[2].tool_call_id.as_ref(), Some(first));
+    assert_eq!(repaired[2].content.as_text(), "first result");
+    assert_eq!(repaired[3], original[3]);
+    assert_eq!(repaired[4], original[4]);
+    assert_eq!(repaired[6].tool_call_id.as_ref(), Some(second));
+    assert_eq!(repaired[6].content.as_text(), "second result");
+    assert_eq!(source.as_ref(), &original);
+    assert!(Arc::ptr_eq(&repaired, &normalize_history_for_request_shared(Arc::clone(&repaired))));
+}
+
+#[test]
+fn request_normalization_never_misattributed_concurrent_duplicate_call_results() {
+    let source = Arc::new(vec![
+        Message::assistant_with_tools(
+            String::new(),
+            vec![
+                crate::llm::provider::ToolCall::function(
+                    "same".into(),
+                    "read_file".into(),
+                    "{\"path\":\"alpha\"}".into(),
+                ),
+                crate::llm::provider::ToolCall::function(
+                    "same".into(),
+                    "exec_command".into(),
+                    "{\"cmd\":\"cargo check\"}".into(),
+                ),
+            ],
+        ),
+        make_tool_response("same", "exit 0"),
+        make_tool_response("same", "file contents"),
+        Message::user("continue".into()),
+    ]);
+    let before = source.as_ref().clone();
+    let normalized = normalize_history_for_request_shared(Arc::clone(&source));
+    assert_eq!(normalized.len(), 4);
+    let calls = normalized[0].tool_calls.as_ref().unwrap();
+    assert_ne!(calls[0].id, calls[1].id);
+    for index in 0..2 {
+        assert_eq!(normalized[index + 1].tool_call_id.as_deref(), Some(calls[index].id.as_str()));
+        assert!(normalized[index + 1].content.as_text().contains("cannot be safely assigned"));
+        assert!(!normalized[index + 1].content.as_text().contains("exit 0"));
+    }
+    assert_eq!(normalized[3], before[3]);
+    assert_eq!(source.as_ref(), &before);
+    assert!(Arc::ptr_eq(&normalized, &normalize_history_for_request_shared(Arc::clone(&normalized))));
+}
+
+#[test]
+fn request_normalization_preserves_prior_result_before_overlapping_duplicate_calls() {
+    let source = Arc::new(vec![
+        make_tool_call("same", "first"),
+        make_tool_response("same", "first evidence"),
+        make_tool_call("same", "second"),
+        make_tool_call("same", "third"),
+        make_tool_response("same", "ambiguous A"),
+        make_tool_response("same", "ambiguous B"),
+    ]);
+    let normalized = normalize_history_for_request_shared(Arc::clone(&source));
+    assert_eq!(normalized.len(), 6);
+    assert_eq!(normalized[1].content.as_text(), "first evidence");
+    assert!(normalized[3].content.as_text().contains("cannot be safely assigned"));
+    assert!(normalized[5].content.as_text().contains("cannot be safely assigned"));
+    assert!(Arc::ptr_eq(&normalized, &normalize_history_for_request_shared(Arc::clone(&normalized))));
+}
+
+#[test]
+fn request_normalization_replaces_each_repeated_empty_call_id() {
+    let source = vec![make_tool_call("", "first"), make_tool_call("", "second")];
+    let normalized = normalize_history_for_request(&source);
+    let first = &normalized[0].tool_calls.as_ref().unwrap()[0].id;
+    let second = &normalized[2].tool_calls.as_ref().unwrap()[0].id;
+    assert!(!first.is_empty());
+    assert!(!second.is_empty());
+    assert_ne!(first, second);
+    assert_eq!(normalized[1].tool_call_id.as_ref(), Some(first));
+    assert_eq!(normalized[3].tool_call_id.as_ref(), Some(second));
+}
+
+#[test]
+fn request_normalization_repairs_single_empty_call_id_and_drops_unmatched_output() {
+    let original = vec![
+        make_tool_call("", "read_file"),
+        make_tool_response("", "unattributed output"),
+    ];
+    let normalized = normalize_history_for_request(&original);
+    let id = &normalized[0].tool_calls.as_ref().unwrap()[0].id;
+    assert!(!id.is_empty());
+    assert_eq!(normalized[1].tool_call_id.as_ref(), Some(id));
+    assert!(normalized[1].content.as_text().contains("empty ID"));
+    assert!(!request_history_needs_normalization(&normalized));
+    assert_eq!(original[1].content.as_text(), "unattributed output");
 }

@@ -442,3 +442,24 @@ fn verification_labels_follow_python_and_uv_execution_targets() {
         );
     }
 }
+
+#[tokio::test]
+async fn duplicate_id_repair_preserves_existing_source_inspection_evidence() {
+    let (dir, registry) = fixture().await;
+    let mut history = Vec::new();
+    expose(&registry, &mut history, "reused", "sample.md", 1, 1).await;
+    history.extend(pair(
+        "reused",
+        tools::EXEC_COMMAND,
+        &json!({"cmd":"echo later"}),
+        &json!({"output":"later","exit_code":0}),
+    ));
+    let projected = crate::core::agent::state::normalize_history_for_request(&history);
+    registry.reconcile_source_inspection(&projected);
+    let result = registry
+        .edit_file(json!({"path":"sample.md","old_str":"alpha","new_str":"verified"}))
+        .await
+        .unwrap();
+    assert!(result.get("error").is_none(), "{result}");
+    assert_eq!(std::fs::read_to_string(dir.path().join("sample.md")).unwrap(), "verified\nbeta\ngamma\ndelta\n");
+}

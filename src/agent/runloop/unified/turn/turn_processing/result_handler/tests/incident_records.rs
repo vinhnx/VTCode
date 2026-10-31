@@ -112,7 +112,7 @@ async fn incident_plan_handoff_executes_bare_verifier_and_publishes_once() {
         .working_history
         .iter()
         .flat_map(|m| m.tool_calls.iter().flatten())
-        .filter(|call| call.id == super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID)
+        .filter(|call| call.id.starts_with(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID))
         .collect();
     assert_eq!(calls.len(), 1);
     assert!(!calls[0].function.as_ref().unwrap().arguments.contains('`'));
@@ -170,8 +170,12 @@ async fn tracker_polling_runs_missing_verifier_then_can_complete_without_more_li
         TurnHandlerOutcome::Continue
     ));
     let ctx = backing.turn_processing_context();
-    assert!(ctx.working_history.iter().any(|m| m.role == uni::MessageRole::Tool
-        && m.tool_call_id.as_deref() == Some(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID)));
+    assert!(ctx.working_history.iter().any(|m| {
+        m.role == uni::MessageRole::Tool
+            && m.tool_call_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID))
+    }));
     let done = ctx
         .tool_registry
         .execute_tool(
@@ -222,11 +226,11 @@ async fn tracker_polling_stops_when_verification_is_disabled_or_correction_is_ig
             }
         }
         let ctx = backing.turn_processing_context();
-        assert!(
-            !ctx.working_history
-                .iter()
-                .any(|m| m.tool_call_id.as_deref() == Some(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID))
-        );
+        assert!(!ctx.working_history.iter().any(|m| {
+            m.tool_call_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID))
+        }));
         assert_eq!(ctx.tool_registry.completion_verification_pending(), pending);
     }
 }
@@ -289,7 +293,10 @@ async fn unrelated_passing_verifiers_cannot_starve_the_required_check() {
     assert_eq!(
         ctx.working_history
             .iter()
-            .filter(|m| m.tool_call_id.as_deref() == Some(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID))
+            .filter(|m| m
+                .tool_call_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with(super::super::helpers::HARNESS_AUTO_VERIFY_CALL_ID)))
             .count(),
         1
     );

@@ -38,6 +38,9 @@ pub(super) fn is_previous_response_chain_error(message: &str) -> bool {
 /// fail-fast path.
 pub(crate) fn is_unmatched_tool_result_error(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
+    if lower.contains("duplicate tool response") && lower.contains("tool_call_id") {
+        return true;
+    }
     let is_bad_request = lower.contains("400")
         && (lower.contains("bad request")
             || lower.contains("http 400")

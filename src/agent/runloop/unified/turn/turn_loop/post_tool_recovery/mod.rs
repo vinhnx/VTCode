@@ -165,7 +165,7 @@ fn maybe_recover_after_post_tool_llm_failure_with_progress(
         }
         renderer.line(
             MessageStyle::Warning,
-            "The provider rejected an unmatched tool result after one bounded history repair; the turn is paused for resume.",
+            "The provider rejected tool history after a bounded repair check; the turn is paused for resume.",
         )?;
         return Ok(PostToolFailureRecovery::StopAfterDirective);
     }
@@ -767,7 +767,7 @@ pub(super) async fn dispatch_post_tool_failure(ctx: PostToolRecoveryContext<'_>)
         ensure_post_tool_resume_directive(working_history);
         renderer.line(
             MessageStyle::Warning,
-            "The provider rejected an unmatched tool result after one bounded history repair; the turn is blocked for resume.",
+            "The provider rejected tool history after a bounded repair check; the turn is blocked for resume.",
         )?;
         return Ok(PostToolFailureAction::Break(TurnLoopResult::Blocked {
             reason: Some(UNMATCHED_TOOL_RESULT_BLOCK_REASON.to_string()),

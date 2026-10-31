@@ -728,7 +728,7 @@ async fn retained_completion_runs_missing_checks_and_publishes_once_without_mode
             .iter()
             .filter_map(|m| m.tool_calls.as_ref())
             .flatten()
-            .filter(|call| call.id == "harness-auto-verify")
+            .filter(|call| call.id.starts_with("harness-auto-verify-"))
             .collect();
         assert_eq!(commands.len(), 2);
         let events = fs::read_to_string(harness_path).unwrap();

@@ -204,12 +204,20 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
 
 const REQUEST_HISTORY_CANCELLATION_RESULT: &str =
     "canceled: no tool result was recorded; this bounded placeholder preserves the tool-call protocol.";
+const REQUEST_HISTORY_AMBIGUOUS_RESULT: &str = "unattributed: multiple outstanding tool calls shared an ID, so their recorded results cannot be safely assigned; original results remain in session history.";
+const REQUEST_HISTORY_EMPTY_ID_RESULT: &str = "unattributed: the tool call had an empty ID, so no result can be safely matched; original history remains available.";
+
+#[derive(Debug)]
+struct MatchedRequestToolResult {
+    message_index: usize,
+    call_index: usize,
+}
 
 #[derive(Debug)]
 struct RequestToolBatch {
     assistant_index: usize,
     matched_calls: Vec<bool>,
-    result_indices: Vec<usize>,
+    results: Vec<MatchedRequestToolResult>,
 }
 
 #[derive(Debug, Default)]
@@ -218,21 +226,24 @@ struct RequestHistoryAnalysis {
     batch_by_assistant_index: HashMap<usize, usize>,
     result_batch_by_index: HashMap<usize, usize>,
     invalid_result_indices: HashSet<usize>,
+    duplicate_call_ids: HashSet<String>,
+    has_empty_call_id: bool,
+    ambiguous_calls: HashSet<(usize, usize)>,
 }
 
 impl RequestHistoryAnalysis {
     fn needs_repair(&self) -> bool {
-        if !self.invalid_result_indices.is_empty() {
+        if !self.invalid_result_indices.is_empty() || !self.duplicate_call_ids.is_empty() || self.has_empty_call_id {
             return true;
         }
 
         self.batches.iter().any(|batch| {
             batch.matched_calls.iter().any(|matched| !matched)
                 || batch
-                    .result_indices
+                    .results
                     .iter()
                     .enumerate()
-                    .any(|(offset, &result_index)| result_index != batch.assistant_index + offset + 1)
+                    .any(|(offset, result)| result.message_index != batch.assistant_index + offset + 1)
         })
     }
 }
@@ -256,13 +267,20 @@ fn analyze_request_history(messages: &[Message]) -> RequestHistoryAnalysis {
         analysis.batches.push(RequestToolBatch {
             assistant_index: message_index,
             matched_calls,
-            result_indices: Vec::new(),
+            results: Vec::new(),
         });
 
         for (call_index, call) in tool_calls.iter().enumerate() {
+            analysis.has_empty_call_id |= call.id.is_empty();
             calls_by_id.entry(call.id.as_str()).or_default().push((batch_index, call_index));
         }
     }
+
+    analysis.duplicate_call_ids = calls_by_id
+        .iter()
+        .filter(|(_, calls)| calls.len() > 1)
+        .map(|(id, _)| (*id).to_owned())
+        .collect();
 
     for (message_index, message) in messages.iter().enumerate() {
         let has_tool_call_id = message.tool_call_id.is_some();
@@ -286,18 +304,29 @@ fn analyze_request_history(messages: &[Message]) -> RequestHistoryAnalysis {
             continue;
         };
 
-        let Some(&(batch_index, call_index)) = candidates.iter().rev().find(|&&(batch_index, call_index)| {
+        let mut eligible = candidates.iter().copied().filter(|&(batch_index, call_index)| {
             analysis.batches[batch_index].assistant_index < message_index
                 && !analysis.batches[batch_index].matched_calls[call_index]
-        }) else {
-            // This includes results that arrived before their call and duplicate
-            // results after the call has already been matched.
+        });
+        let Some((batch_index, call_index)) = eligible.next() else {
+            // Results before their call and repeated results have no match.
             analysis.invalid_result_indices.insert(message_index);
             continue;
         };
+        if let Some(second) = eligible.next() {
+            // Concurrent calls with the same ID are indistinguishable. Never
+            // attach an observed result to a guessed call or credit it as proof.
+            analysis.ambiguous_calls.insert((batch_index, call_index));
+            analysis.ambiguous_calls.insert(second);
+            analysis.ambiguous_calls.extend(eligible);
+            analysis.invalid_result_indices.insert(message_index);
+            continue;
+        }
 
         analysis.batches[batch_index].matched_calls[call_index] = true;
-        analysis.batches[batch_index].result_indices.push(message_index);
+        analysis.batches[batch_index]
+            .results
+            .push(MatchedRequestToolResult { message_index, call_index });
         analysis.result_batch_by_index.insert(message_index, batch_index);
     }
 
@@ -316,7 +345,9 @@ pub fn request_history_needs_normalization(messages: &[Message]) -> bool {
 /// tool-call batch followed immediately by its matching results.
 ///
 /// The rebuild is request-scoped and idempotent: orphaned, causally early, and
-/// duplicate results are omitted; missing calls receive a bounded cancellation
+/// duplicate results are omitted; repeated call IDs are replaced along with
+/// their matching result IDs, while ambiguous concurrent results are not
+/// attributed to a guessed call; missing calls receive a bounded cancellation
 /// result; and messages interleaved between a call batch and its results move
 /// after the complete batch. A clean input is returned unchanged; repairs use
 /// copy-on-write and never mutate the source history.
@@ -327,6 +358,12 @@ pub fn normalize_history_for_request_shared(messages: Arc<Vec<Message>>) -> Arc<
     }
 
     let mut normalized = Vec::with_capacity(messages.len());
+    let mut used_ids: HashSet<String> = messages
+        .iter()
+        .flat_map(|message| message.tool_calls.iter().flatten().map(|call| call.id.clone()))
+        .collect();
+    let mut next_repaired_id = 0usize;
+    let mut seen_duplicate_ids = HashSet::new();
     for (message_index, message) in messages.iter().enumerate() {
         if analysis.invalid_result_indices.contains(&message_index)
             || analysis.result_batch_by_index.contains_key(&message_index)
@@ -340,14 +377,55 @@ pub fn normalize_history_for_request_shared(messages: Arc<Vec<Message>>) -> Arc<
         };
 
         let batch = &analysis.batches[batch_index];
-        normalized.push(message.clone());
-        for &result_index in &batch.result_indices {
-            normalized.push(messages[result_index].clone());
+        let mut assistant = message.clone();
+        for call in assistant.tool_calls.iter_mut().flatten() {
+            if call.id.is_empty()
+                || (analysis.duplicate_call_ids.contains(&call.id) && !seen_duplicate_ids.insert(call.id.clone()))
+            {
+                let prefix = if call.id == "harness-auto-verify" || call.id.starts_with("harness-auto-verify-") {
+                    "harness-auto-verify-repaired"
+                } else {
+                    "vtcode-repaired-tool-call"
+                };
+                loop {
+                    let candidate = format!("{prefix}-{next_repaired_id}");
+                    next_repaired_id += 1;
+                    if used_ids.insert(candidate.clone()) {
+                        call.id = candidate;
+                        break;
+                    }
+                }
+            }
         }
-        for (call, matched) in message.tool_calls.iter().flatten().zip(&batch.matched_calls) {
+        for matched_result in &batch.results {
+            let mut result = messages[matched_result.message_index].clone();
+            if let Some(call) = assistant
+                .tool_calls
+                .as_ref()
+                .and_then(|calls| calls.get(matched_result.call_index))
+            {
+                result.tool_call_id = Some(call.id.clone());
+            }
+            normalized.push(result);
+        }
+        let result_start = normalized.len() - batch.results.len();
+        normalized.insert(result_start, assistant.clone());
+        for (call_index, (call, matched)) in assistant.tool_calls.iter().flatten().zip(&batch.matched_calls).enumerate()
+        {
             if !matched {
-                normalized
-                    .push(Message::tool_response(call.id.clone(), REQUEST_HISTORY_CANCELLATION_RESULT.to_owned()));
+                let result = if message
+                    .tool_calls
+                    .as_ref()
+                    .and_then(|calls| calls.get(call_index))
+                    .is_some_and(|call| call.id.is_empty())
+                {
+                    REQUEST_HISTORY_EMPTY_ID_RESULT
+                } else if analysis.ambiguous_calls.contains(&(batch_index, call_index)) {
+                    REQUEST_HISTORY_AMBIGUOUS_RESULT
+                } else {
+                    REQUEST_HISTORY_CANCELLATION_RESULT
+                };
+                normalized.push(Message::tool_response(call.id.clone(), result.to_owned()));
             }
         }
     }

@@ -328,11 +328,8 @@ pub(crate) async fn execute_harness_auto_verification(
         )));
     }
 
-    let raw_call = uni::ToolCall::function(
-        helpers::HARNESS_AUTO_VERIFY_CALL_ID.to_string(),
-        tool_name.to_string(),
-        args.to_string(),
-    );
+    let call_id = format!("{}-{}", helpers::HARNESS_AUTO_VERIFY_CALL_ID, uuid::Uuid::new_v4());
+    let raw_call = uni::ToolCall::function(call_id.clone(), tool_name.to_string(), args.to_string());
     let synthetic = PreparedAssistantToolCall::new(raw_call);
     if synthetic.args().is_none() {
         // We built the JSON above; absence means a serialization regression.
@@ -374,12 +371,9 @@ pub(crate) async fn execute_harness_auto_verification(
         } else if t_ctx_inner.repeated_tool_attempts.verification_is_pending() {
             // Count only an observed non-zero exit. Policy/preflight rejections
             // and missing results are not executed verification failures.
-            if let Some(response_text) = last_tool_response_text(
-                t_ctx_inner.ctx.working_history,
-                helpers::HARNESS_AUTO_VERIFY_CALL_ID,
-                history_len_before_assistant,
-            )
-            .filter(|text| verifier_response_has_nonzero_exit(text))
+            if let Some(response_text) =
+                last_tool_response_text(t_ctx_inner.ctx.working_history, &call_id, history_len_before_assistant)
+                    .filter(|text| verifier_response_has_nonzero_exit(text))
             {
                 let failures = t_ctx_inner
                     .ctx
@@ -415,11 +409,7 @@ pub(crate) async fn execute_harness_auto_verification(
     }
 
     if let Some(session_id) = repeated_tool_attempts.pending_verifier_session_id.as_deref() {
-        let response = last_tool_response_text(
-            ctx.working_history,
-            helpers::HARNESS_AUTO_VERIFY_CALL_ID,
-            history_len_before_assistant,
-        );
+        let response = last_tool_response_text(ctx.working_history, &call_id, history_len_before_assistant);
         if !response
             .as_deref()
             .is_some_and(|text| verifier_response_is_running_session(text, session_id))

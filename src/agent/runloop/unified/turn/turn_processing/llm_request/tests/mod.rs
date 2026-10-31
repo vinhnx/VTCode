@@ -11,6 +11,7 @@ struct ScriptedProvider {
     supports_streaming: bool,
     recorded_previous_response_ids: Arc<Mutex<Vec<Option<String>>>>,
     outcomes: Mutex<VecDeque<ScriptedProviderOutcome>>,
+    recorded_messages: Option<Arc<Mutex<Vec<Vec<uni::Message>>>>>,
     resume_wake: Option<ResumeWake>,
 }
 
@@ -41,8 +42,14 @@ impl ScriptedProvider {
             supports_streaming: false,
             recorded_previous_response_ids,
             outcomes: Mutex::new(VecDeque::from(outcomes)),
+            recorded_messages: None,
             resume_wake: None,
         }
+    }
+
+    fn with_recorded_messages(mut self, messages: Arc<Mutex<Vec<Vec<uni::Message>>>>) -> Self {
+        self.recorded_messages = Some(messages);
+        self
     }
 
     fn with_streaming(mut self, supports_streaming: bool) -> Self {
@@ -70,6 +77,13 @@ impl uni::LLMProvider for ScriptedProvider {
             .lock()
             .expect("previous_response_id recorder")
             .push(request.previous_response_id.clone());
+
+        if let Some(messages) = &self.recorded_messages {
+            messages
+                .lock()
+                .expect("request recorder")
+                .push(request.messages.as_ref().clone());
+        }
 
         if let Some(wake) = &self.resume_wake {
             wake.entered.notify_one();

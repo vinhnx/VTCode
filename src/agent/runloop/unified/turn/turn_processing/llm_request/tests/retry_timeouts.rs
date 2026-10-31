@@ -33,6 +33,83 @@ async fn unmatched_tool_result_noop_repair_fails_closed_without_repeating_the_re
     assert_eq!(recorded_previous_response_ids.lock().expect("provider calls").len(), 1);
 }
 #[tokio::test]
+async fn duplicate_tool_response_stops_each_user_attempt_without_automatic_retries() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let error = || {
+        ScriptedProviderOutcome::Error(uni::LLMError::Provider {
+            message: "Duplicate tool response for tool_call_id='harness-auto-verify'".to_string(),
+            metadata: None,
+        })
+    };
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let provider = ScriptedProvider::new(
+        "meta",
+        false,
+        Arc::clone(&calls),
+        vec![
+            error(),
+            error(),
+            ScriptedProviderOutcome::Success { content: Some("recovered"), request_id: None },
+        ],
+    )
+    .with_recorded_messages(Arc::clone(&requests));
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+    *ctx.provider_client = Box::new(provider);
+    for result in ["running", "exit 0"] {
+        ctx.working_history.push(uni::Message::assistant_with_tools(
+            String::new(),
+            vec![uni::ToolCall::function(
+                "harness-auto-verify".into(),
+                "write_stdin".into(),
+                "{}".into(),
+            )],
+        ));
+        ctx.working_history
+            .push(uni::Message::tool_response("harness-auto-verify".into(), result.into()));
+    }
+    let original = ctx.working_history.clone();
+    assert!(
+        execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None)
+            .await
+            .is_err()
+    );
+    assert_eq!(calls.lock().expect("provider calls").len(), 1);
+    assert!(
+        execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None)
+            .await
+            .is_err()
+    );
+    assert_eq!(calls.lock().expect("provider calls").len(), 2);
+    let recovered = execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None)
+        .await
+        .unwrap();
+    assert_eq!(recovered.0.content.as_deref(), Some("recovered"));
+    assert_eq!(calls.lock().expect("provider calls").len(), 3);
+    assert_eq!(&ctx.working_history[..original.len()], original.as_slice());
+    let requests = requests.lock().expect("request recorder");
+    assert_eq!(requests.len(), 3);
+    for request in requests.iter() {
+        let calls: Vec<_> = request
+            .iter()
+            .filter_map(|message| message.tool_calls.as_ref())
+            .flatten()
+            .collect();
+        let results: Vec<_> = request
+            .iter()
+            .filter(|message| message.role == uni::MessageRole::Tool)
+            .collect();
+        assert_eq!(calls.len(), 2);
+        assert_ne!(calls[0].id, calls[1].id);
+        assert_eq!(results.len(), 2);
+        for (index, expected) in ["running", "exit 0"].into_iter().enumerate() {
+            assert_eq!(results[index].tool_call_id.as_deref(), Some(calls[index].id.as_str()));
+            assert_eq!(results[index].content.as_text(), expected);
+        }
+    }
+}
+
+#[tokio::test]
 async fn misconfiguration_after_tool_result_skips_post_tool_retry() {
     let recorded_previous_response_ids = Arc::new(Mutex::new(Vec::new()));
     let provider = ScriptedProvider::new(
