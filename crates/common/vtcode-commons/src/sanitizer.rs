@@ -4,6 +4,7 @@
 //! - OpenAI API keys (`sk-...`)
 //! - AWS Access Key IDs (`AKIA...`)
 //! - GitHub App installation tokens (`ghs_...`, including ~520-char stateless JWTs)
+//! - Other GitHub token prefixes (`ghp_`/`gho_`/`ghu_`/`ghr_`/`github_pat_...`)
 //! - Bearer tokens (`Bearer ...`)
 //! - Generic secret assignments (`api_key=...`, `password:...`, etc.)
 //!
@@ -29,6 +30,14 @@ static AWS_ACCESS_KEY_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex
 /// `ghs_[A-Za-z0-9\.\-_]{36,}` matches both legacy opaque tokens (~40 chars)
 /// and stateless JWT-format tokens (~520 chars, two dots).
 static GITHUB_APP_TOKEN_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"ghs_[A-Za-z0-9.\-_]{36,}"));
+
+/// Remaining GitHub token family: personal (`ghp_`), OAuth (`gho_`),
+/// user-to-server (`ghu_`), and refresh (`ghr_`) tokens share the classic
+/// 36+ char suffix shape; fine-grained PATs use the distinctive
+/// `github_pat_` prefix with a 22+ char suffix. Same opaque-string
+/// treatment as `ghs_`: redact on prefix alone, without length oracles.
+static GITHUB_TOKEN_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r"(?:gh[pour]_[A-Za-z0-9.\-_]{36,}|github_pat_[A-Za-z0-9.\-_]{22,})"));
 
 /// Bearer token pattern: "Bearer " followed by token characters
 static BEARER_TOKEN_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"(?i)\bBearer\s+[A-Za-z0-9.\-_]{16,}\b"));
@@ -119,14 +128,15 @@ pub fn redact_secrets(input: String) -> String {
     let r1 = OPENAI_KEY_REGEX.replace_all(&input, "[REDACTED_SECRET]");
     let r2 = AWS_ACCESS_KEY_ID_REGEX.replace_all(&r1, "[REDACTED_SECRET]");
     let r3 = GITHUB_APP_TOKEN_REGEX.replace_all(&r2, "[REDACTED_SECRET]");
-    let r4 = BEARER_TOKEN_REGEX.replace_all(&r3, "Bearer [REDACTED_SECRET]");
-    let r5 = SECRET_ASSIGNMENT_REGEX.replace_all(&r4, "$1$2$3[REDACTED_SECRET]");
+    let r4 = GITHUB_TOKEN_REGEX.replace_all(&r3, "[REDACTED_SECRET]");
+    let r5 = BEARER_TOKEN_REGEX.replace_all(&r4, "Bearer [REDACTED_SECRET]");
+    let r6 = SECRET_ASSIGNMENT_REGEX.replace_all(&r5, "$1$2$3[REDACTED_SECRET]");
     // `into_owned` clones only when the final result is `Borrowed` (no regex
     // matched at all); when any redaction occurred it moves the owned string
     // without an extra allocation. Do NOT short-circuit on `Cow::Borrowed` —
     // the final Cow is `Borrowed` whenever the *last* regex doesn't match,
     // even if earlier regexes did, which would silently discard redactions.
-    r5.into_owned()
+    r6.into_owned()
 }
 
 /// Redact secrets and return a bounded, UTF-8-safe provider diagnostic.
@@ -263,6 +273,35 @@ mod tests {
         let exact = format!("ghs_{}", "a".repeat(36));
         assert_eq!(redact_secrets(format!("saw {short} here")), format!("saw {short} here"));
         assert_eq!(redact_secrets(format!("saw {exact} here")), "saw [REDACTED_SECRET] here");
+    }
+
+    #[test]
+    fn redacts_github_token_family_besides_app_tokens() {
+        // Fixtures are assembled at runtime so scans do not flag them.
+        for prefix in ["ghp_", "gho_", "ghu_", "ghr_"] {
+            let token = format!("{prefix}{}", "e".repeat(36));
+            let output = redact_secrets(format!("pasted {token} in chat"));
+            assert_eq!(output, "pasted [REDACTED_SECRET] in chat", "{prefix}");
+            assert!(!output.contains(token.as_str()));
+        }
+        let fine_grained = format!("github_pat_{}", "f".repeat(22));
+        let output = redact_secrets(format!("pasted {fine_grained} in chat"));
+        assert_eq!(output, "pasted [REDACTED_SECRET] in chat");
+        assert!(!output.contains(fine_grained.as_str()));
+    }
+
+    #[test]
+    fn github_token_family_thresholds_match_app_token_policy() {
+        // `gh?_` prefixes need a 36+ char suffix, `github_pat_` needs 22+;
+        // shorter lookalikes (docs, placeholders) must survive.
+        let short_classic = format!("ghp_{}", "a".repeat(35));
+        let exact_classic = format!("ghp_{}", "a".repeat(36));
+        assert_eq!(redact_secrets(format!("saw {short_classic} here")), format!("saw {short_classic} here"));
+        assert_eq!(redact_secrets(format!("saw {exact_classic} here")), "saw [REDACTED_SECRET] here");
+        let short_pat = format!("github_pat_{}", "a".repeat(21));
+        let exact_pat = format!("github_pat_{}", "a".repeat(22));
+        assert_eq!(redact_secrets(format!("saw {short_pat} here")), format!("saw {short_pat} here"));
+        assert_eq!(redact_secrets(format!("saw {exact_pat} here")), "saw [REDACTED_SECRET] here");
     }
 
     #[test]
