@@ -232,7 +232,7 @@ async fn coordinator_selection_restricts_request_tools_and_restores_build_guidan
     }
     let coordinator_prompt = system_prompt_text(&coordinated.request);
     assert!(coordinator_prompt.contains("## Coordinator Role"));
-    assert!(!coordinator_prompt.contains("keep small tasks and verification in the main thread"));
+    assert!(!coordinator_prompt.contains("Prefer skills and tool search"));
 
     backing.select_primary_agent_from_specs(&specs, "build");
     let built = {
@@ -245,5 +245,5 @@ async fn coordinator_selection_restricts_request_tools_and_restores_build_guidan
     assert!(request_tool_names(&built.request).contains(&"exec_command".to_string()));
     let build_prompt = system_prompt_text(&built.request);
     assert!(!build_prompt.contains("## Coordinator Role"));
-    assert!(build_prompt.contains("keep small tasks and verification in the main thread"));
+    assert!(build_prompt.contains("Prefer skills and tool search"));
 }

@@ -343,7 +343,7 @@ async fn test_coordinator_role_presence_and_budget_in_default_and_minimal() {
         assert!(result.starts_with("# VT Code (Coordinator mode)"));
         assert!(result.contains("Delegate all shell execution, file changes, and verification"));
         assert!(result.contains("while the matrix is idle"));
-        assert!(!result.contains("keep small tasks and verification in the main thread"));
+        assert!(!result.contains("Prefer skills and tool search"));
         assert_eq!(result.matches("## Coordinator Role").count(), 1);
         let max_tokens = match mode {
             SystemPromptMode::Minimal => 1150,
@@ -362,10 +362,10 @@ fn test_coordinator_guidance_follows_active_selection_and_preserves_sections() {
     assert_eq!(prompt, before_reapplying);
     assert_eq!(prompt.matches("## Coordinator Role").count(), 1);
     assert!(prompt.contains("- asymmetric sentinel"));
-    assert!(!prompt.contains("keep small tasks and verification in the main thread"));
+    assert!(!prompt.contains("Prefer skills and tool search"));
     apply_coordinator_role_guidance(&mut prompt, false);
     assert!(!prompt.contains("## Coordinator Role"));
-    assert!(prompt.contains("keep small tasks and verification in the main thread"));
+    assert!(prompt.contains("Prefer skills and tool search"));
     assert!(prompt.contains("- asymmetric sentinel"));
 }
 #[test]
@@ -381,6 +381,8 @@ fn test_estimate_token_count() {
     // Same budgets as the dedicated token-count tests above.
     // Minimal raised from 665 for the reuse-reads runtime guidance bullet (measured 688).
     // Raised to 725 for the hypothesis-loop runtime bullet (measured 710).
-    assert!(minimal_tokens <= 870, "Minimal prompt tokens: {minimal_tokens}");
-    assert!(default_tokens <= 1210, "Default prompt tokens: {default_tokens}");
+    // Raised to 890/1220 for the fold-by-default delegation rule naming the three
+    // keep-conditions (measured 878 minimal).
+    assert!(minimal_tokens <= 890, "Minimal prompt tokens: {minimal_tokens}");
+    assert!(default_tokens <= 1220, "Default prompt tokens: {default_tokens}");
 }

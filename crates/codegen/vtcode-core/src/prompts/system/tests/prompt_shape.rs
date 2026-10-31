@@ -128,7 +128,8 @@ async fn test_minimal_mode_selection() {
     // Char bound is a smoke check only; tokens are authoritative.
     // Includes direct patch calls and bounded context-mismatch recovery.
     // Raised from 3700 for the reuse-reads and exact-whitespace patch-copy guidance (measured 3917).
-    assert!(result.len() < 4700, "Minimal mode should produce <4.7K chars (was {} chars)", result.len());
+    // Raised from 4700 for the fold-by-default delegation rule (measured 4719).
+    assert!(result.len() < 4780, "Minimal mode should produce <4.78K chars (was {} chars)", result.len());
     assert!(result.contains("VT Code") || result.contains("VT Code"), "Should contain VT Code identifier");
 }
 #[tokio::test]
@@ -147,9 +148,10 @@ async fn test_default_prompt_selection() {
     // Includes patch recovery guidance; token tests stay authoritative.
     // Raised from 5400 for the reuse-reads runtime guidance bullet (measured 5496).
     // Named HOVER guidance measures 5616 bytes; retain a narrow byte allowance.
+    // Raised from 6350 for the fold-by-default delegation rule (measured 6375).
     assert!(
-        result.len() <= 6350,
-        "Default mode should stay sparse with runtime guidance (<=6350 bytes, was {} bytes)",
+        result.len() <= 6450,
+        "Default mode should stay sparse with runtime guidance (<=6450 bytes, was {} bytes)",
         result.len()
     );
     assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
@@ -383,5 +385,6 @@ fn test_minimal_prompt_token_count() {
     // Includes direct patch calls and one bounded context-mismatch recovery read.
     // Raised from 665 for the reuse-reads runtime guidance bullet (measured 688).
     // Raised to 725 for the hypothesis-loop runtime bullet (measured 710).
-    assert!(approx_tokens <= 870, "Minimal prompt should stay compact, got ~{approx_tokens}");
+    // Raised to 890 for the fold-by-default delegation rule (measured 878).
+    assert!(approx_tokens <= 890, "Minimal prompt should stay compact, got ~{approx_tokens}");
 }

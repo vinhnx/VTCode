@@ -63,7 +63,7 @@ fn universal_rules_have_one_home_across_composed_prompt_sections() {
         "accumulated output never exhausts tool access",
         "additional_permissions",
         "bypass safeguards",
-        "Delegate only sizeable",
+        "Prefer skills and tool search",
         "Across compaction",
     ];
 

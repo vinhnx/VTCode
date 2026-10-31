@@ -4,7 +4,10 @@ use super::*;
 fn test_default_prompt_token_count() {
     let approx_tokens = estimate_token_count(default_system_prompt());
     // Includes direct patch calls and one bounded context-mismatch recovery read.
-    assert!(approx_tokens <= 1210, "Default prompt should stay compact, got ~{approx_tokens}");
+    // Raised from 1210: the delegation rule now names the three keep-conditions
+    // (parallel, discardable fresh-context, tool-choice conflicts) so subagents
+    // fold into skills and tool search by default.
+    assert!(approx_tokens <= 1220, "Default prompt should stay compact, got ~{approx_tokens}");
 }
 #[tokio::test]
 async fn test_default_live_prompt_budget_with_instruction_inline() {
@@ -324,12 +327,18 @@ fn test_prompts_encode_explicit_delegation_contract() {
     let prompt = default_system_prompt();
 
     assert!(
-        prompt.contains("keep small tasks and verification in the main thread"),
-        "Default prompt should keep control on the main thread"
+        prompt.contains("Prefer skills and tool search"),
+        "Default prompt should prefer folded skills and tool search over subagents"
     );
     assert!(
-        prompt.contains("Delegate only sizeable, independent work to subagents"),
-        "Default prompt should restrict delegation to sizeable independent work"
+        prompt.contains(
+            "delegate only sizeable parallel work, discardable fresh-context tasks, or tool-choice conflicts to subagents"
+        ),
+        "Default prompt should restrict delegation to parallel, discardable-context, or tool-choice-conflict work"
+    );
+    assert!(
+        prompt.contains("and keep verification here. Trust task status."),
+        "Default prompt should keep verification on the main thread"
     );
     assert!(
         prompt
@@ -340,7 +349,7 @@ fn test_prompts_encode_explicit_delegation_contract() {
     // covers only how to brief and reuse.
     assert!(!prompt.contains("reserve them for work like"), "Default prompt should not restate when to delegate");
     assert!(
-        minimal_system_prompt().contains("Delegate only sizeable, independent work to subagents"),
+        minimal_system_prompt().contains("Prefer skills and tool search"),
         "Minimal prompt should preserve the delegation contract"
     );
 }
