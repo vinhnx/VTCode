@@ -375,6 +375,7 @@ mod config_catalog;
 mod config_deep_links;
 mod config_sessions;
 mod curated_config;
+mod diff_cards;
 mod files_webmcp;
 mod full_access_confirm;
 mod heading_tiers;

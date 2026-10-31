@@ -24,6 +24,14 @@ fn tool_and_diff_rows_skip_unused_markdown_projections() {
 }
 
 #[test]
+fn new_diff_rows_start_expanded_while_other_roles_start_collapsed() {
+    assert!(item(1, "diff", "patch").expanded);
+    for role in ["user", "assistant", "tool", "notice", "system"] {
+        assert!(!item(1, role, "text").expanded, "{role} rows start collapsed");
+    }
+}
+
+#[test]
 fn unchanged_message_snapshots_skip_projection_and_layout_work() {
     let mut transcript = Transcript::default();
     transcript.push(item(1, "assistant", "A **stable** response."));
@@ -42,6 +50,25 @@ fn unchanged_message_snapshots_skip_projection_and_layout_work() {
 
     transcript.upsert(item(1, "assistant", "A **changed** response."));
     assert_eq!(transcript.get(0).unwrap().markdown.as_str(), "A **changed** response.");
+}
+
+#[test]
+fn metadata_only_upserts_clone_render_projections_without_repreparing() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "assistant", "A response.\n\n- kept"));
+
+    // Same text and role but a new title: content changed, so the row is
+    // replaced and the projections must be cloned, not recomputed or dropped.
+    let mut retitled = item(1, "assistant", "A response.\n\n- kept");
+    retitled.title = "Retitled".into();
+    retitled.markdown = "unexpected projection".into();
+    retitled.has_list = false;
+    transcript.upsert(retitled);
+
+    let stored = transcript.get(0).unwrap();
+    assert_eq!(stored.title.as_str(), "Retitled");
+    assert_eq!(stored.markdown.as_str(), "A response.\n\n- kept");
+    assert!(stored.has_list);
 }
 
 #[test]

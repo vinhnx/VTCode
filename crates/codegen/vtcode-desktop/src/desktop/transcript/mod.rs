@@ -129,6 +129,10 @@ pub(super) struct TranscriptItem {
     pub text: SharedString,
     pub markdown: SharedString,
     pub accessibility_text: SharedString,
+    /// Whether the prepared Markdown contains a list. Lists need a definite
+    /// bubble width (see `PreparedMarkdown::has_list`); kept beside the other
+    /// render projections so every prepare/clone path carries it together.
+    pub has_list: bool,
     pub expanded: bool,
     /// Shared expansion state copied to each row so virtualized rendering stays constant-time.
     pub activity_expanded: bool,
@@ -263,6 +267,7 @@ impl TranscriptItem {
     pub fn new(id: String, role: String, title: SharedString, text: String) -> Self {
         let text = SharedString::from(text);
         let is_tool = role == TranscriptRole::Tool.as_str();
+        let is_diff = role == TranscriptRole::Diff.as_str();
         let activity_group_summary = if is_tool {
             ActivityGroupSummary::for_status(ToolActivityStatus::from_text(&text))
         } else {
@@ -277,7 +282,10 @@ impl TranscriptItem {
             text,
             markdown: SharedString::default(),
             accessibility_text: SharedString::default(),
-            expanded: false,
+            has_list: false,
+            // Diff cards show their patch by default; tool rows stay collapsed
+            // until opened. Upserts preserve the live toggle state either way.
+            expanded: is_diff,
             activity_expanded: false,
             activity_grouped: false,
             activity_group_head: false,
@@ -292,6 +300,7 @@ impl TranscriptItem {
         if self.is_tool() || self.is_diff() {
             self.markdown = SharedString::default();
             self.accessibility_text = SharedString::default();
+            self.has_list = false;
             return;
         }
         // Notices render as plain severity text: error bodies must not
@@ -299,12 +308,14 @@ impl TranscriptItem {
         if self.is_notice() {
             self.markdown = SharedString::default();
             self.accessibility_text.clone_from(&self.text);
+            self.has_list = false;
             return;
         }
 
         let prepared = prepare_markdown(&self.text);
         self.markdown = prepared.markdown;
         self.accessibility_text = prepared.accessible_text;
+        self.has_list = prepared.has_list;
     }
 }
 
@@ -609,6 +620,7 @@ impl Transcript {
             } else if !role_changed {
                 item.markdown.clone_from(&existing.markdown);
                 item.accessibility_text.clone_from(&existing.accessibility_text);
+                item.has_list = existing.has_list;
             }
             item.expanded = existing.expanded;
             item.activity_expanded = existing.activity_expanded;

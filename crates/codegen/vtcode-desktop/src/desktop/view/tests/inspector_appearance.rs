@@ -440,6 +440,42 @@ fn inspector_tabs_fit_without_scrolling_at_default_width(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn inspector_tabs_overflow_menu_reaches_clipped_tabs(cx: &mut TestAppContext) {
+    use crate::desktop::inspector::InspectorTab;
+
+    let (window, view) = open_desktop_sized(cx, 600., 900.);
+    // Narrow the rail so the last tab clips; the default width fits every
+    // tab (see the fit test).
+    view.update(cx, |view, _| view.inspector_width = 240.);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let bar = window.find("inspector-tabs-focus").bounds();
+        let last = window.within("inspector-tabs").find(4usize).bounds();
+        assert!(last.right() > bar.right(), "the last tab must clip for this test: {last:?} vs {bar:?}");
+        window.within("inspector-tabs").click("more", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("popup-menu").role(), Some(gpui_kit::Role::Menu));
+        // The menu opens with nothing selected: five downs reach Utilities.
+        for _ in 0..5 {
+            window.press("down", cx);
+        }
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
+        assert!(window.try_find("popup-menu").is_none(), "selecting a tab dismisses the overflow menu");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn hiding_a_focused_inspector_restores_the_desktop_focus_path(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

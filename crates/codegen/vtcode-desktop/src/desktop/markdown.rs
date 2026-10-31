@@ -10,6 +10,11 @@ use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 pub(super) struct PreparedMarkdown {
     pub markdown: SharedString,
     pub accessible_text: SharedString,
+    /// Whether the source contains a Markdown list. Kit lays list-item text out
+    /// in a `flex_1` (basis-zero) column, so a list reports marker-only
+    /// intrinsic width and a shrink-to-fit bubble collapses around it. Callers
+    /// give list content a definite bubble width instead.
+    pub has_list: bool,
 }
 
 /// Transcript body leading. 1.6 matches Kit's own fenced-code default
@@ -22,9 +27,13 @@ const _: () = assert!(TRANSCRIPT_LINE_HEIGHT >= 1.5, "WCAG 1.4.8 needs at least 
 pub(super) fn prepare_markdown(source: &SharedString) -> PreparedMarkdown {
     let mut sanitized = String::new();
     let mut accessible_text = String::new();
+    let mut has_list = false;
     let mut retained_start = 0;
     for (event, range) in Parser::new(source).into_offset_iter() {
         append_accessible_text(&mut accessible_text, &event);
+        if matches!(event, Event::Start(Tag::List(_))) {
+            has_list = true;
+        }
         if matches!(event, Event::Html(_) | Event::InlineHtml(_)) {
             let Some(retained) = source.get(retained_start..range.start) else {
                 return invalid_markdown();
@@ -45,6 +54,7 @@ pub(super) fn prepare_markdown(source: &SharedString) -> PreparedMarkdown {
     PreparedMarkdown {
         markdown,
         accessible_text: accessible_text.trim().to_string().into(),
+        has_list,
     }
 }
 
@@ -53,6 +63,7 @@ fn invalid_markdown() -> PreparedMarkdown {
     PreparedMarkdown {
         markdown: message.clone(),
         accessible_text: message,
+        has_list: false,
     }
 }
 
@@ -472,5 +483,26 @@ mod tests {
         let prepared = prepare_markdown(&source.into());
         assert_eq!(prepared.markdown, "Kế hoạch: đúng `x < y` — café");
         assert_eq!(prepared.accessible_text, "Kế hoạch: đúng x < y — café");
+    }
+
+    #[test]
+    fn list_detection_follows_markdown_structure_not_substrings() {
+        for source in [
+            "1. First\n2. Second\n3. Third",
+            "- first\n- second",
+            "- [ ] open\n- [x] done",
+            "Intro\n\n1. First\n2. Second",
+        ] {
+            assert!(prepare_markdown(&source.into()).has_list, "list missed in {source:?}");
+        }
+        for source in [
+            "A user message.",
+            "First paragraph.\n\nSecond paragraph.",
+            "Version 1.5 is out",
+            "```\n1. not a list\n```",
+            "`1. not a list`",
+        ] {
+            assert!(!prepare_markdown(&source.into()).has_list, "list misdetected in {source:?}");
+        }
     }
 }

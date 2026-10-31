@@ -142,6 +142,7 @@ use components::*;
 use inspector_changes::*;
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
+#[cfg(test)]
 use runtime_items::*;
 use sessions::*;
 use typography::FontTarget;

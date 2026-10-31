@@ -584,20 +584,18 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
 
-        // Expanding the card exposes the patch text and the copy action.
-        window.click("diff-change-1", cx);
+        // Diffs show by default: the patch view renders with no click, and the
+        // copy action works straight away.
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "diff cards start expanded");
+        assert!(
+            window.try_find("diff-lines-change-1").is_some(),
+            "the patch view renders without expanding the card"
+        );
         window.click("copy-patch-change-1", cx);
         assert!(
             cx.read_from_clipboard().unwrap().text().unwrap().contains("+new line"),
             "copy patch must copy the raw unified diff"
         );
-        view.read(cx)
-            .transcript
-            .get(0)
-            .unwrap()
-            .expanded
-            .then_some(())
-            .expect("diff expanded");
 
         let updated_patch = "@@ -1 +1 @@\n-old line\n+latest line\n";
         view.update(cx, |view, cx| {
@@ -617,12 +615,20 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
             );
             cx.notify();
         });
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "a patch update preserves the expanded card");
         window.click("copy-patch-change-1", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(updated_patch));
 
-        // Collapsing again hides the patch view but keeps the card.
+        // Collapsing hides the patch view but keeps the card; expanding shows
+        // it again.
         window.click("diff-change-1", cx);
+        window.render_frame(cx);
         assert!(!view.read(cx).transcript.get(0).unwrap().expanded);
+        assert!(window.try_find("diff-lines-change-1").is_none(), "collapsing the card hides the patch view");
+        window.click("diff-change-1", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded);
+        assert!(window.try_find("diff-lines-change-1").is_some(), "re-expanding the card shows the patch view again");
     })
     .unwrap();
 }

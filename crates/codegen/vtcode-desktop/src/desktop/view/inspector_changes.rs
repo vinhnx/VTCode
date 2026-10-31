@@ -115,8 +115,11 @@ impl DesktopView {
                             .child(
                                 desktop_tab_bar("inspector-tabs")
                                     // Five tabs share a narrow rail, so the inspector keeps the
-                                    // compact size; settings uses the medium default.
+                                    // compact size; settings uses the medium default. The
+                                    // overflow menu keeps clipped tabs reachable by mouse when
+                                    // the rail narrows below the tabs' natural width.
                                     .small()
+                                    .menu(true)
                                     .track_scroll(&self.inspector_tabs_scroll)
                                     .selected_index(
                                         InspectorTab::ALL
@@ -227,6 +230,12 @@ impl DesktopView {
         }
 
         let totals = self.changes.totals();
+        let file_total = self.changes.entries().len();
+        let count_label = if file_total == 1 {
+            rust_i18n::t!("app.inspector.file_count", count = file_total).to_string()
+        } else {
+            rust_i18n::t!("app.inspector.files_count", count = file_total).to_string()
+        };
         let files_header = panel_header(
             div()
                 .flex()
@@ -235,7 +244,14 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .text_xs()
-                .child(rust_i18n::t!("app.inspector.files_count", count = self.changes.entries().len()).to_string())
+                .child(
+                    div()
+                        .id("inspector-changes-summary")
+                        .test_support()
+                        .role(gpui_kit::Role::Status)
+                        .aria_label(count_label.clone())
+                        .child(count_label),
+                )
                 .when_some(totals, |summary, (additions, deletions)| {
                     summary
                         .child(div().text_color(colors.success).child(format!("+{additions}")))
