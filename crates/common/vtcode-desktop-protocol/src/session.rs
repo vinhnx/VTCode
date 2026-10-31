@@ -66,6 +66,11 @@ pub struct SessionOptionsSelectParams {
     pub reasoning_effort: Option<String>,
     /// Select the CLI's fast processing tier for a compatible route.
     pub fast_mode: Option<bool>,
+    /// One-shot attestation that the user completed the Full access
+    /// confirmation dialog (risk disclosure + explicit acknowledge) for this
+    /// request. Required when `permission_mode` is `FullAccess`; never
+    /// persisted, never merged into stored session options.
+    pub full_access_confirmed: Option<bool>,
 }
 
 /// Persist a built-in CLI theme selected in Desktop.

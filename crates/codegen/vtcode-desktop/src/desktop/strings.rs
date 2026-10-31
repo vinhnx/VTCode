@@ -107,6 +107,14 @@ pub(super) mod i18n {
     pub const PALETTE_HISTORY_LOADING: &str = "app.palette.history.loading";
     pub const PALETTE_SECTIONS_VTCODE_COMMANDS: &str = "app.palette.sections.vtcode_commands";
     pub const PALETTE_TITLE_CONFIGURATION: &str = "app.palette.title.configuration";
+    pub const PERMISSIONS_CONFIRM_ACKNOWLEDGE: &str = "app.permissions.confirm_full_acknowledge";
+    pub const PERMISSIONS_CONFIRM_FILES_BODY: &str = "app.permissions.confirm_full_files_body";
+    pub const PERMISSIONS_CONFIRM_FILES_TITLE: &str = "app.permissions.confirm_full_files_title";
+    pub const PERMISSIONS_CONFIRM_NETWORK_BODY: &str = "app.permissions.confirm_full_network_body";
+    pub const PERMISSIONS_CONFIRM_NETWORK_TITLE: &str = "app.permissions.confirm_full_network_title";
+    pub const PERMISSIONS_CONFIRM_RISK: &str = "app.permissions.confirm_full_risk";
+    pub const PERMISSIONS_CONFIRM_TERMINAL_BODY: &str = "app.permissions.confirm_full_terminal_body";
+    pub const PERMISSIONS_CONFIRM_TERMINAL_TITLE: &str = "app.permissions.confirm_full_terminal_title";
     pub const QUEUE_FULL: &str = "app.workspace.queue_full";
     pub const REQUEST_QUEUE_UNAVAILABLE: &str = "app.errors.request_queue_unavailable";
     pub const SESSION_FALLBACK_TITLE: &str = "app.session.fallback_title";
@@ -147,7 +155,7 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 48] = [
+        const KEYS: [&str; 56] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
@@ -181,6 +189,14 @@ mod tests {
             i18n::PALETTE_HISTORY_LOADING,
             i18n::PALETTE_SECTIONS_VTCODE_COMMANDS,
             i18n::PALETTE_TITLE_CONFIGURATION,
+            i18n::PERMISSIONS_CONFIRM_ACKNOWLEDGE,
+            i18n::PERMISSIONS_CONFIRM_FILES_BODY,
+            i18n::PERMISSIONS_CONFIRM_FILES_TITLE,
+            i18n::PERMISSIONS_CONFIRM_NETWORK_BODY,
+            i18n::PERMISSIONS_CONFIRM_NETWORK_TITLE,
+            i18n::PERMISSIONS_CONFIRM_RISK,
+            i18n::PERMISSIONS_CONFIRM_TERMINAL_BODY,
+            i18n::PERMISSIONS_CONFIRM_TERMINAL_TITLE,
             i18n::QUEUE_FULL,
             i18n::REQUEST_QUEUE_UNAVAILABLE,
             i18n::SESSION_FALLBACK_TITLE,

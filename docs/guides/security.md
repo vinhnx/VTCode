@@ -201,7 +201,8 @@ hook content of its own.
 
 Full access is an explicit, session-only opt-in: start with `vtcode --full-access`, pick
 **Full access** in `/permissions`, or choose it in the Desktop permission control. It disables the process sandbox for
-shell execution and automatically approves promptable calls, after a confirmation step that explains the risk.
+shell execution and automatically approves promptable calls, after a confirmation step that discloses the granted
+access (files, terminal, network) and requires an explicit risk acknowledgement.
 
 Retained restrictions:
 

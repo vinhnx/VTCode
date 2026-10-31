@@ -221,7 +221,9 @@ idle, a three-second request deadline, bounded wire metadata, and the retained q
 
 The permission control (⌘⇧P) chooses **Ask before protected actions**, **Auto-approve commands**, or **Full access**. It
 controls the CLI's command confirmation flag. Ask and Auto are saved per recent workspace in Desktop preferences and
-restored after service initialization; Full access is session-only. Full access disables the process sandbox and
+restored after service initialization; Full access is session-only. Choosing Full access opens a confirmation modal
+listing the granted access; Confirm stays disabled until the risk checkbox is checked, and the request carries a
+one-shot attestation the CLI service enforces. Full access disables the process sandbox and
 approves promptable tool calls; configured denials and hard safety blocks still apply, and direct file tools can retain
 their workspace boundaries. The CLI equivalent is `vtcode --full-access`. Ask is a confirmation policy,
 separate from the agent mode. **Mode** (⌘⇧B) lists the CLI-discovered primary

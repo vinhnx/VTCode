@@ -267,6 +267,9 @@ impl Render for DesktopView {
         {
             body = body.child(self.render_command_palette(state, window, cx));
         }
+        if self.full_access_confirm.is_some() {
+            body = body.child(self.render_full_access_confirm(cx));
+        }
         body
     }
 }

@@ -132,14 +132,18 @@ fn permission_choices(active: bool, confirm: bool) -> TransientRequest {
         return TransientRequest::List(ListOverlayRequest {
             title: "Enable Full access?".into(),
             lines: vec![
-                "When VT Code runs with Full access, it can access any file on your computer and run commands with network access, without routine approval.".into(),
-                "Exercise caution: this significantly increases the risk of data loss, leaks, or unexpected behavior. Explicit denials and hard safety blocks remain active.".into(),
+                "Tasks can perform the following actions without asking for your approval each time:".into(),
+                "Files and folders: read, create, change, and delete accessible files.".into(),
+                "Terminal commands: run commands, install software, or change system settings.".into(),
+                "Network and apps: access the network, send data, and use connected apps.".into(),
+                "These actions may cause data loss or disclosure. Enable only for tasks you trust. Explicit denials and hard safety blocks remain active.".into(),
+                "You can switch to another permission mode at any time.".into(),
             ],
             footer_hint: Some("Esc cancels".into()),
             items: vec![
                 ui_list::action(
-                    "Yes, continue anyway",
-                    "Apply Full access for this session",
+                    "Enable Full access",
+                    "I understand the risks and take responsibility for my data security",
                     None,
                     Tone::Warning,
                     Some(InlineListSelection::ConfigAction("confirm".into())),
@@ -486,15 +490,25 @@ mod tests {
         assert_eq!(request.items.len(), 2);
         assert_eq!(selected_action(&request.selected), "cancel");
 
-        let confirm = item_by_title(&request.items, "Yes, continue anyway");
+        let confirm = item_by_title(&request.items, "Enable Full access");
         assert_eq!(confirm.badge_tone, Tone::Warning);
-        assert_eq!(confirm.subtitle.as_deref(), Some("Apply Full access for this session"));
-        assert!(request.lines.iter().any(|line| line.contains("data loss")));
-        assert!(
-            request
-                .lines
-                .iter()
-                .any(|line| line.contains("Explicit denials and hard safety blocks remain active"))
+        assert_eq!(
+            confirm.subtitle.as_deref(),
+            Some("I understand the risks and take responsibility for my data security")
         );
+        for expected in [
+            "without asking for your approval",
+            "Files and folders:",
+            "Terminal commands:",
+            "Network and apps:",
+            "data loss",
+            "Explicit denials and hard safety blocks remain active",
+            "switch to another permission mode at any time",
+        ] {
+            assert!(
+                request.lines.iter().any(|line| line.contains(expected)),
+                "confirm dialog must disclose: {expected}"
+            );
+        }
     }
 }

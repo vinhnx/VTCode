@@ -82,6 +82,7 @@ use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, launch_backend,
     request_fits_frame,
 };
+use full_access_confirm::FullAccessConfirmState;
 use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
 use overlays::Route;
 
@@ -99,6 +100,7 @@ mod configuration;
 mod configuration_render;
 mod curated;
 mod files_panel;
+mod full_access_confirm;
 mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
@@ -408,6 +410,8 @@ struct DesktopView {
     error: Option<String>,
     configuration: Option<ConfigurationSnapshot>,
     pending_permission_choice: Option<protocol::PermissionMode>,
+    full_access_confirm: Option<FullAccessConfirmState>,
+    full_access_focus: FocusHandle,
     service_info: Option<protocol::InitializeResult>,
     interaction: Option<InteractionRequest>,
     interaction_focus: FocusHandle,

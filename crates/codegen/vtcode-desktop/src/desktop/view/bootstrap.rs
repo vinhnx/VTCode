@@ -349,6 +349,8 @@ impl DesktopView {
             error: None,
             configuration: None,
             pending_permission_choice: None,
+            full_access_confirm: None,
+            full_access_focus: cx.focus_handle(),
             service_info: None,
             interaction: None,
             interaction_focus: cx.focus_handle(),

@@ -218,7 +218,9 @@ impl DesktopView {
     }
 
     pub(super) fn dismiss_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.config_editor.is_some() {
+        if self.full_access_confirm.is_some() {
+            self.cancel_full_access_confirm(window, cx);
+        } else if self.config_editor.is_some() {
             self.close_cli_config_editor(window, cx);
         } else if self.shortcut_capture.is_some() {
             // The armed capture pill is settings-interior, like the config

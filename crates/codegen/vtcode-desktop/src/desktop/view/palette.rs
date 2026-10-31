@@ -548,30 +548,10 @@ impl DesktopView {
             PaletteAction::EditConfigSetting(path) => self.open_cli_config_editor(path, window, cx),
             PaletteAction::SelectSessionOptions(options) => {
                 if options.permission_mode == Some(protocol::PermissionMode::FullAccess)
+                    && options.full_access_confirmed != Some(true)
                     && !self.session_option_is_current(&options)
                 {
-                    let workspace = self.workspace.clone();
-                    let title = rust_i18n::t!("app.permissions.confirm_full_title").to_string();
-                    let detail = rust_i18n::t!("app.permissions.confirm_full_body").to_string();
-                    let enable = rust_i18n::t!("app.permissions.enable_full").to_string();
-                    let cancel = rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string();
-                    let answer = window.prompt(
-                        gpui_kit::PromptLevel::Warning,
-                        &title,
-                        Some(detail.as_str()),
-                        &[enable.as_str(), cancel.as_str()],
-                        cx,
-                    );
-                    cx.spawn(async move |view, cx| {
-                        if matches!(answer.await, Ok(0)) {
-                            let _updated = view.update(cx, |view, cx| {
-                                if view.workspace == workspace {
-                                    let _selected = view.select_session_options(options, cx);
-                                }
-                            });
-                        }
-                    })
-                    .detach();
+                    self.open_full_access_confirm(options, window, cx);
                 } else {
                     let _selected = self.select_session_options(options, cx);
                 }

@@ -33,6 +33,11 @@ pub(super) fn validate(
     if params.fast_mode.is_some() && !fast_mode_supported {
         bail!("fast processing is not supported by the selected provider/model route");
     }
+    // The confirmation dialog is client UI; the attestation is enforced here
+    // so a request that skips the dialog cannot enable Full access.
+    if params.permission_mode == Some(PermissionMode::FullAccess) && params.full_access_confirmed != Some(true) {
+        bail!("confirm the Full access risk disclosure before enabling Full access");
+    }
     if params == &SessionOptionsSelectParams::default() {
         bail!("choose a runtime option to change");
     }
@@ -114,6 +119,7 @@ mod tests {
             mode: Some("plan".into()),
             reasoning_effort: None,
             fast_mode: None,
+            full_access_confirmed: None,
         };
         assert!(skip_confirmations(&options, false));
         let full = SessionOptionsSelectParams {
@@ -162,5 +168,38 @@ mod tests {
         let fast = SessionOptionsSelectParams { fast_mode: Some(true), ..Default::default() };
         assert!(validate(&fast, "openai", "gpt-6.1-sol", false, &vtcode_config::builtin_subagents()).is_err());
         assert!(validate(&fast, "openai", "gpt-6.1-sol", true, &vtcode_config::builtin_subagents()).is_ok());
+    }
+
+    #[test]
+    fn desktop_options_require_confirmation_attestation_for_full_access() {
+        let modes = vtcode_config::builtin_subagents();
+        let unattested = SessionOptionsSelectParams {
+            permission_mode: Some(PermissionMode::FullAccess),
+            ..Default::default()
+        };
+        assert!(validate(&unattested, "openai", "gpt-5", false, &modes).is_err());
+        let declined = SessionOptionsSelectParams {
+            permission_mode: Some(PermissionMode::FullAccess),
+            full_access_confirmed: Some(false),
+            ..Default::default()
+        };
+        assert!(validate(&declined, "openai", "gpt-5", false, &modes).is_err());
+        let attested = SessionOptionsSelectParams {
+            permission_mode: Some(PermissionMode::FullAccess),
+            full_access_confirmed: Some(true),
+            ..Default::default()
+        };
+        assert!(validate(&attested, "openai", "gpt-5", false, &modes).is_ok());
+        // The attestation is one-shot: merges never carry it into stored options.
+        let mut stored = SessionOptionsSelectParams::default();
+        merge(&mut stored, attested);
+        assert_eq!(stored.permission_mode, Some(PermissionMode::FullAccess));
+        assert_eq!(stored.full_access_confirmed, None);
+        // Other modes are unaffected by the gate.
+        let ask = SessionOptionsSelectParams {
+            permission_mode: Some(PermissionMode::Ask),
+            ..Default::default()
+        };
+        assert!(validate(&ask, "openai", "gpt-5", false, &modes).is_ok());
     }
 }
