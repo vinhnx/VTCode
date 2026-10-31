@@ -1,7 +1,10 @@
 //! Tool discovery caching system for MCP to avoid redundant tool searches
 //!
 //! This module provides multi-level caching for MCP tool discovery with
-//! bloom filters for fast negative lookups and LRU cache for positive results.
+//! bloom filters for fast exact-name negative lookups and an LRU cache for
+//! positive results. The bloom filter only screens exact tool names; fuzzy
+//! discovery keywords are never screened against it because its definitive
+//! "no" does not extend to fuzzy matching.
 
 use lru::LruCache;
 use rustc_hash::FxHashMap;
@@ -14,51 +17,80 @@ use super::McpToolInfo;
 use super::tool_discovery::DetailLevel;
 
 /// Bloom filter for fast negative lookups (tool doesn't exist)
+///
+/// Probabilistic set membership: `contains` returning `false` is definitive
+/// (the item was never inserted), while `true` means "maybe" (bounded
+/// false-positive rate). The definitive-no guarantee only covers exact
+/// membership of previously inserted items, so the filter must only screen
+/// exact tool names — never fuzzy or transformed queries such as prefixes,
+/// substrings, or keyword variants.
 #[derive(Clone)]
 pub struct BloomFilter {
-    /// Bit array for the filter
-    bits: Vec<bool>,
+    /// Packed bit array: bit `i` lives in `bits[i / WORD_BITS]`.
+    bits: Vec<u64>,
     /// Number of hash functions
     num_hashes: usize,
-    /// Size of the bit array
+    /// Size of the bit array in bits
     size: usize,
 }
 
 impl BloomFilter {
+    /// Bits per storage word.
+    const WORD_BITS: usize = 64;
+
     fn new(expected_items: usize, false_positive_rate: f64) -> Self {
         let expected_items = expected_items.max(1);
         let size = Self::optimal_size(expected_items, false_positive_rate).max(1);
         let num_hashes = Self::optimal_num_hashes(size, expected_items).max(1);
 
-        Self { bits: vec![false; size], num_hashes, size }
+        Self {
+            bits: vec![0; size.div_ceil(Self::WORD_BITS)],
+            num_hashes,
+            size,
+        }
     }
 
     /// Add an item to the bloom filter
     fn insert(&mut self, item: &str) {
-        for i in 0..self.num_hashes {
-            let hash = self.hash(item, i);
-            let index = hash % self.size;
-            if let Some(bit) = self.bits.get_mut(index) {
-                *bit = true;
+        for index in Self::indices(item, self.num_hashes, self.size) {
+            if let Some(word) = self.bits.get_mut(index / Self::WORD_BITS) {
+                *word |= 1u64 << (index % Self::WORD_BITS);
             }
         }
     }
 
     /// Check if an item might be in the set
     fn contains(&self, item: &str) -> bool {
-        for i in 0..self.num_hashes {
-            let hash = self.hash(item, i);
-            let index = hash % self.size;
-            if !self.bits.get(index).copied().unwrap_or(false) {
-                return false;
-            }
-        }
-        true
+        Self::indices(item, self.num_hashes, self.size).all(|index| {
+            self.bits
+                .get(index / Self::WORD_BITS)
+                .is_some_and(|word| word & (1u64 << (index % Self::WORD_BITS)) != 0)
+        })
+    }
+
+    /// Derive the bit indices for `item` from a single hash pass
+    /// (Kirsch–Mitzenmacher): `index_i = (base + i * step) % size`, with
+    /// `step` forced odd so consecutive hash functions never alias onto one
+    /// bit sequence. Indices are deterministic in the item, which preserves
+    /// the no-false-negatives guarantee; truncating the hash halves to
+    /// `usize` is harmless for hash-derived values, and the modulo bounds
+    /// every index to the filter size.
+    fn indices(item: &str, num_hashes: usize, size: usize) -> impl Iterator<Item = usize> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        item.hash(&mut hasher);
+        let hash = hasher.finish();
+        let base = (hash >> 32) as usize;
+        let step = ((hash & 0xffff_ffff) as usize) | 1;
+
+        (0..num_hashes).map(move |i| base.wrapping_add(i.wrapping_mul(step)) % size)
     }
 
     /// Clear the bloom filter
     pub fn clear(&mut self) {
-        self.bits.fill(false);
+        self.bits.fill(0);
     }
 
     /// Calculate optimal size for bloom filter
@@ -87,17 +119,6 @@ impl BloomFilter {
     fn optimal_num_hashes(size: usize, expected_items: usize) -> usize {
         let num_hashes = (size as f64 / expected_items as f64) * 2.0_f64.ln();
         num_hashes.max(0.0).ceil() as usize
-    }
-
-    /// Simple hash function for bloom filter
-    fn hash(&self, item: &str, seed: usize) -> usize {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        item.hash(&mut hasher);
-        seed.hash(&mut hasher);
-        usize::try_from(hasher.finish()).unwrap_or(usize::MAX)
     }
 }
 
@@ -174,7 +195,14 @@ impl ToolDiscoveryCache {
         }
     }
 
-    /// Check if a tool might exist (fast negative lookup)
+    /// Check if a tool with this exact name might exist (fast negative lookup)
+    ///
+    /// `false` is definitive: no tool with this exact name was ever inserted,
+    /// so the caller can skip the real lookup. `true` may be a false positive
+    /// and must fall through to the authoritative check. Only exact tool
+    /// names may be screened here — the filter cannot answer fuzzy queries
+    /// (prefixes, substrings, keyword variants), and screening those would
+    /// produce false negatives.
     pub fn might_have_tool(&self, tool_name: &str) -> bool {
         match self.inner.read() {
             Ok(inner) => inner.bloom_filter.contains(tool_name),
@@ -379,6 +407,13 @@ impl CachedToolDiscovery {
     }
 
     /// Search for tools with multi-level caching
+    ///
+    /// The keyword is matched fuzzily (prefix, substring, description, and
+    /// similarity scoring in `perform_search`), so the bloom filter
+    /// must not screen it: its definitive "no" only holds for exact
+    /// membership of inserted tool names, and filtering non-name keywords
+    /// here would discard results the fuzzy search would find. Repeated
+    /// queries are instead short-circuited by the LRU detailed cache.
     pub fn search_tools(
         &self,
         provider_name: &str,
@@ -386,11 +421,6 @@ impl CachedToolDiscovery {
         detail_level: DetailLevel,
         all_tools: Vec<McpToolInfo>,
     ) -> Arc<Vec<ToolDiscoveryResult>> {
-        // Check bloom filter first (fast negative lookup)
-        if !self.cache.might_have_tool(keyword) && !keyword.is_empty() {
-            return Arc::new(Vec::new());
-        }
-
         // Check detailed cache
         if let Some(cached) = self.cache.get_cached_discovery(provider_name, keyword, detail_level) {
             return cached;
@@ -514,6 +544,87 @@ mod tests {
         assert!(filter.contains("tool2"));
         assert!(filter.contains("tool3"));
         assert!(!filter.contains("tool4"));
+    }
+
+    #[test]
+    fn bloom_filter_has_no_false_negatives() {
+        let mut filter = BloomFilter::new(1_000, 0.01);
+        let inserted: Vec<String> = (0..1_000).map(|i| format!("tool-{i}")).collect();
+
+        for name in &inserted {
+            filter.insert(name);
+        }
+
+        for name in &inserted {
+            assert!(filter.contains(name), "inserted item {name} must never be reported absent");
+        }
+    }
+
+    #[test]
+    fn bloom_filter_clear_resets_membership() {
+        let mut filter = BloomFilter::new(1_000, 0.01);
+
+        filter.insert("tool-a");
+        filter.clear();
+
+        // Every bit is zero after clear, so even false positives are impossible.
+        assert!(!filter.contains("tool-a"));
+        assert!(!filter.contains("tool-b"));
+    }
+
+    #[test]
+    fn bloom_filter_false_positive_rate_stays_near_target() {
+        let mut filter = BloomFilter::new(10_000, 0.01);
+        for i in 0..10_000 {
+            filter.insert(&format!("tool-{i}"));
+        }
+
+        let probes = 100_000u64;
+        let false_positives = (0..probes).filter(|i| filter.contains(&format!("absent-{i}"))).count();
+        let observed = false_positives as f64 / probes as f64;
+        assert!(
+            observed <= 0.02,
+            "observed false-positive rate {observed} exceeded 2x the 1% target ({false_positives}/{probes})"
+        );
+    }
+
+    #[test]
+    fn bloom_filter_sizing_matches_reference_formulas() {
+        // Worked example from the bloom-filter reference (samwho.dev/bloom-filters):
+        // 1,000,000 items at a 1-in-a-million false-positive rate fit in ~3.59 MB.
+        assert_eq!(BloomFilter::optimal_size(1_000_000, 1e-6), 28_755_176);
+        assert_eq!(BloomFilter::optimal_num_hashes(28_755_176, 1_000_000), 20);
+    }
+
+    #[test]
+    fn bloom_filter_packs_bits_into_words() {
+        let filter = BloomFilter::new(1_000, 0.01);
+
+        // m = ceil(-n * ln(p) / ln(2)^2) = 9,586 bits, packed into 150 u64
+        // words instead of 9,586 one-byte bools.
+        assert_eq!(filter.size, 9_586);
+        assert_eq!(filter.bits.len(), 150);
+        assert_eq!(filter.num_hashes, 7);
+    }
+
+    #[test]
+    fn search_tools_returns_fuzzy_matches_for_non_name_keywords() {
+        let discovery = CachedToolDiscovery::new(10);
+        let tools = vec![McpToolInfo {
+            name: "read_file".to_string(),
+            description: "Read a file".to_string(),
+            provider: "test".to_string(),
+            input_schema: serde_json::json!({}),
+            output_schema: None,
+            ui: None,
+            visibility: crate::types::McpToolVisibility::default(),
+        }];
+
+        // "read" is not an exact tool name, so a name-membership bloom screen
+        // would definitively reject it and discard the prefix match below.
+        let results = discovery.search_tools("test_provider", "read", DetailLevel::Full, tools);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results.first().map(|result| result.tool.name.as_str()), Some("read_file"));
     }
 
     #[test]
