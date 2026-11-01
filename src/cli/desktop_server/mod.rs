@@ -823,6 +823,25 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                     bail!("selected session runtime has stopped");
                 }
             }
+            // Outside the duplicate-cancel gate: a flagged re-send after a
+            // plain stop must still discard, and the discard is idempotent.
+            if params.clear_queue {
+                let status = {
+                    let mut state = context.state.lock().await;
+                    // The lock was released for the runloop signal above, so
+                    // the session may have moved on; teardown already owns
+                    // that queue.
+                    if state.session_id.as_deref() != Some(params.session_id.as_str()) || state.queue.is_empty() {
+                        None
+                    } else {
+                        state.queue.clear();
+                        Some(state.queue_status(&params.session_id))
+                    }
+                };
+                if let Some(status) = status {
+                    publish_queue_status_sync(&context.notifications, &status);
+                }
+            }
             Ok((json!({ "cancelRequested": true }), false))
         }
         method::TURN_QUEUE_TAKE_LATEST => {

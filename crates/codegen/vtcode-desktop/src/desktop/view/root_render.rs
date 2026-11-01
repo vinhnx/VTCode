@@ -154,16 +154,16 @@ impl Render for DesktopView {
             .text_color(colors.foreground)
             .track_focus(&self.focus_handle)
             .when(!self.capture_suppresses_bindings(window), |body| body.key_context(key_context::DESKTOP))
-            .when(self.session_change_allowed(None), |body| {
+            .when(self.new_thread_available(), |body| {
                 body.on_action(cx.listener(|view, _: &NewSession, window, cx| {
                     view.close_active_route(window, cx);
-                    view.create_session(cx);
+                    let _ = view.create_session_from_ui(window, cx);
                 }))
             })
-            .when(self.selected_session_id.is_some() && self.session_change_allowed(None), |body| {
+            .when(self.selected_session_id.is_some() && self.new_thread_available(), |body| {
                 body.on_action(cx.listener(|view, _: &CloseSession, window, cx| {
                     view.close_active_route(window, cx);
-                    view.close_session(cx);
+                    let _ = view.close_session_from_ui(window, cx);
                 }))
             })
             .when(
@@ -260,9 +260,11 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, _: &OpenAddContext, window, cx| view.open_add_context(window, cx)))
             .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.toggle_settings(window, cx)))
             .on_action(cx.listener(|view, _: &AboutApplication, window, cx| view.open_about(window, cx)))
-            .on_action(cx.listener(|view, action: &tabs::CloseThreadTab, _, cx| view.close_tab(&action.session_id, cx)))
-            .on_action(cx.listener(|view, action: &tabs::CloseOtherThreadTabs, _, cx| {
-                view.close_other_tabs(&action.session_id, cx)
+            .on_action(cx.listener(|view, action: &tabs::CloseThreadTab, window, cx| {
+                view.close_tab(&action.session_id, window, cx)
+            }))
+            .on_action(cx.listener(|view, action: &tabs::CloseOtherThreadTabs, window, cx| {
+                view.close_other_tabs(&action.session_id, window, cx)
             }))
             .on_action(
                 cx.listener(|view, action: &tabs::CopyThreadTitle, _, cx| {
@@ -324,6 +326,9 @@ impl Render for DesktopView {
         }
         if self.full_access_confirm.is_some() {
             body = body.child(self.render_full_access_confirm(cx));
+        }
+        if self.running_confirm.is_some() {
+            body = body.child(self.render_running_confirm(cx));
         }
         // About is the topmost modal: it opens from the application menu over
         // any route, so it paints last and Escape dismisses it first.

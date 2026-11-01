@@ -132,11 +132,14 @@ fn tab_context_menu_offers_close_and_copy(cx: &mut TestAppContext) {
     .unwrap();
 
     // Menu items dispatch tab-scoped payload actions.
-    view.update(cx, |view, cx| {
-        view.close_other_tabs("thread-b", cx);
-        assert_eq!(view.open_tabs.as_slice(), ["thread-b"]);
-        assert_eq!(view.selected_session_id.as_deref(), Some("thread-b"));
-    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.close_other_tabs("thread-b", window, cx);
+            assert_eq!(view.open_tabs.as_slice(), ["thread-b"]);
+            assert_eq!(view.selected_session_id.as_deref(), Some("thread-b"));
+        });
+    })
+    .unwrap();
     cx.update_window(window, |_, window, cx| {
         window.dispatch_action(Box::new(CopyThreadTitle { session_id: "thread-b".into() }), cx);
     })

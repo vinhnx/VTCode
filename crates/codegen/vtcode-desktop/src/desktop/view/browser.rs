@@ -100,7 +100,7 @@ impl DesktopView {
         let (primary, foreground, muted, popover) =
             (colors.primary, colors.foreground, colors.muted_foreground, colors.popover);
         let row_colors = colors;
-        let can_new_thread = self.session_change_allowed(None);
+        let can_new_thread = self.new_thread_available();
         let can_close_thread = self.selected_session_id.is_some() && can_new_thread;
         let content = if self.sessions.is_empty() {
             empty_state(
@@ -162,10 +162,14 @@ impl DesktopView {
                                             }
                                             meta.push_str(storage::format_bytes(size_bytes).as_str());
                                         }
-                                        let enabled = view.session_change_allowed(Some(&session_id));
+                                        let enabled = view.load_session_available(&session_id);
+                                        let running = view.is_session_running(&session_id);
                                         let menu_id = session_id.clone();
                                         let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
-                                        let accessible_label = if selected {
+                                        let accessible_label = if running {
+                                            rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = label.as_str())
+                                                .to_string()
+                                        } else if selected {
                                             rust_i18n::t!(
                                                 "app.navigation.current_thread_label",
                                                 thread = label.as_str()
@@ -208,6 +212,12 @@ impl DesktopView {
                                                                         .text_sm()
                                                                         .child(label),
                                                                 )
+                                                                .when(running, |row| {
+                                                                    row.child(running_indicator(
+                                                                        format!("browser-session-running-{session_id}"),
+                                                                        &row_colors,
+                                                                    ))
+                                                                })
                                                                 .when(!meta.is_empty(), |row| {
                                                                     row.child(
                                                                         div()
@@ -234,7 +244,8 @@ impl DesktopView {
                                                             button.bg(popover).text_color(foreground)
                                                         })
                                                         .on_click(cx.listener(move |this, _, window, cx| {
-                                                            if this.load_session(session_id.clone(), cx) {
+                                                            if this.load_session_from_ui(session_id.clone(), window, cx)
+                                                            {
                                                                 this.close_browser(window, cx);
                                                             }
                                                         })),

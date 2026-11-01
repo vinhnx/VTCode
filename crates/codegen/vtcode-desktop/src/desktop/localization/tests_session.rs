@@ -25,6 +25,16 @@ fn session_copy_is_localized_for_every_language() {
             "app.session.fallback_title",
             "app.session.closed_new",
             "app.session.unsent_blocks_change",
+            "app.session.running_thread_label",
+            "app.session.running_switch_title",
+            "app.session.running_switch_new_body",
+            "app.session.running_switch_load_body",
+            "app.session.running_switch_close_body",
+            "app.session.running_switch_queue_warning",
+            "app.session.running_switch_stop",
+            "app.session.running_switch_stopping",
+            "app.session.running_switch_failed",
+            "app.session.delete_selected_blocked",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

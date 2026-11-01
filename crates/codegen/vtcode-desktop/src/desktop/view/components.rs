@@ -579,6 +579,22 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer()
 }
 
+/// Running-turn marker shared by every thread surface (tab strip, sidebar,
+/// browser, compact header): a muted spinner under a caller-owned stable id.
+/// The owning button already names the running state for assistive tech, so
+/// the marker itself stays decorative.
+pub(super) fn running_indicator(
+    id: impl Into<gpui_kit::ElementId>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> AnyElement {
+    div()
+        .id(id)
+        .test_support()
+        .flex_shrink_0()
+        .child(Spinner::new().xsmall().color(colors.muted_foreground))
+        .into_any_element()
+}
+
 /// The single zen toggle: docked in the title bar normally, floating above
 /// the content in zen mode. Enter and exit share id, size, and variant; only
 /// the icon paint, label, and mount point change.

@@ -67,8 +67,9 @@ impl DesktopView {
 
     /// Close one tab. Closing the selected tab loads the nearest remaining
     /// neighbor (next first, else previous); when the load is refused the tab
-    /// stays so the selection remains reachable.
-    pub(super) fn close_tab(&mut self, session_id: &str, cx: &mut Context<Self>) {
+    /// stays so the selection remains reachable. Mid-turn the neighbor switch
+    /// confirms first and the tab untabs once the deferred load is sent.
+    pub(super) fn close_tab(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
         let position = self.open_tabs.iter().position(|tab| tab == session_id);
         if self.selected_session_id.as_deref() == Some(session_id)
             && let Some(index) = position
@@ -85,10 +86,21 @@ impl DesktopView {
                 }
                 previous = Some(tab.clone());
             }
-            if let Some(neighbor) = next.or(previous)
-                && !self.load_session(neighbor, cx)
-            {
-                return;
+            if let Some(neighbor) = next.or(previous) {
+                if !self.session_change_allowed(Some(&neighbor)) && self.running_switch_available() {
+                    self.open_running_confirm(
+                        RunningSwitchIntent::LoadSession {
+                            target: neighbor,
+                            untab: vec![session_id.to_string()],
+                        },
+                        window,
+                        cx,
+                    );
+                    return;
+                }
+                if !self.load_session(neighbor, cx) {
+                    return;
+                }
             }
         }
         self.remove_tab(session_id);
@@ -96,12 +108,30 @@ impl DesktopView {
     }
 
     /// Close every tab except one, selecting it when it is not already.
-    pub(super) fn close_other_tabs(&mut self, session_id: &str, cx: &mut Context<Self>) {
+    /// Mid-turn the selection switch confirms first and the other tabs untab
+    /// once the deferred load is sent.
+    pub(super) fn close_other_tabs(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
         if !self.open_tabs.iter().any(|tab| tab == session_id) {
             return;
         }
-        if self.selected_session_id.as_deref() != Some(session_id) && !self.load_session(session_id.to_string(), cx) {
-            return;
+        if self.selected_session_id.as_deref() != Some(session_id) {
+            if !self.session_change_allowed(Some(session_id)) && self.running_switch_available() {
+                let untab = self
+                    .open_tabs
+                    .iter()
+                    .filter(|tab| tab.as_str() != session_id)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                self.open_running_confirm(
+                    RunningSwitchIntent::LoadSession { target: session_id.to_string(), untab },
+                    window,
+                    cx,
+                );
+                return;
+            }
+            if !self.load_session(session_id.to_string(), cx) {
+                return;
+            }
         }
         self.open_tabs.retain(|tab| tab == session_id);
         cx.notify();
@@ -140,6 +170,7 @@ impl DesktopView {
             let id = session_id.clone();
             let title = self.tab_title(&id);
             let selected = self.selected_session_id.as_deref() == Some(id.as_str());
+            let running = self.is_session_running(&id);
             let select_id = id.clone();
             let close_id = id.clone();
             let menu_id = id.clone();
@@ -159,7 +190,9 @@ impl DesktopView {
                             .with_size(gpui_kit::component::Size::Medium)
                             .flex_1()
                             .min_w_0()
-                            .accessibility_label(if selected {
+                            .accessibility_label(if running {
+                                rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = title.as_str()).to_string()
+                            } else if selected {
                                 format!("Current thread: {title}")
                             } else {
                                 format!("Switch to thread: {title}")
@@ -172,8 +205,11 @@ impl DesktopView {
                             // (smoother at this size) while the color stays
                             // inherited so hover/selected states keep working.
                             .child(div().min_w_0().truncate().text_base().font_medium().child(title.clone()))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                let _ = this.load_session(select_id.clone(), cx);
+                            .when(running, |button| {
+                                button.child(running_indicator(format!("thread-tab-running-{id}"), &colors))
+                            })
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let _ = this.load_session_from_ui(select_id.clone(), window, cx);
                             })),
                     )
                     .child(
@@ -182,8 +218,8 @@ impl DesktopView {
                             .ghost()
                             .xsmall()
                             .accessibility_label(format!("Close tab {title}"))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.close_tab(&close_id, cx);
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.close_tab(&close_id, window, cx);
                             })),
                     )
                     .context_menu(move |menu, _, _| {
@@ -205,8 +241,10 @@ impl DesktopView {
                     .small()
                     .accessibility_label("New thread")
                     .tooltip("New thread")
-                    .desktop_disabled(!self.session_change_allowed(None))
-                    .on_click(cx.listener(|this, _, _, cx| this.create_session(cx))),
+                    .desktop_disabled(!self.new_thread_available())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        let _ = this.create_session_from_ui(window, cx);
+                    })),
             )
             .into_any_element()
     }

@@ -96,6 +96,10 @@ impl DesktopView {
         }
     }
 
+    /// History navigation deliberately stays on the idle-only gate: routing it
+    /// through the running-switch modal would entangle `pending_navigation`
+    /// with the armed wait, so mid-turn history stays parked (pre-existing
+    /// behavior, kept).
     pub(super) fn can_navigate_back(&self) -> bool {
         self.navigation_history.back_index().is_some()
             && self.pending_navigation.is_none()
@@ -376,6 +380,9 @@ impl DesktopView {
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;
+        // Explicit though reset_session_state above already interrupts: the
+        // armed wait must never survive a workspace start by ordering luck.
+        self.interrupt_armed_running_switch();
         self.running = false;
         self.error = None;
         self.status = rust_i18n::t!("app.workspace.starting_service").to_string();

@@ -97,11 +97,12 @@ fn status_menu_availability_matches_main_menu_gating(cx: &mut TestAppContext) {
             assert!(action.is_allowed(cx), "{action:?} must be enabled when idle");
         }
     });
-    // A running turn blocks session and workspace changes only.
+    // A running turn blocks workspace changes; New Session reroutes through
+    // the stop-then-proceed confirm instead of going dark.
     view.update(cx, |view, _| view.running = true);
     render(cx);
     cx.update(|cx| {
-        assert!(!NewSession.is_allowed(cx));
+        assert!(NewSession.is_allowed(cx));
         assert!(!OpenWorkspace.is_allowed(cx));
         assert!(OpenSettings.is_allowed(cx) && About.is_allowed(cx));
     });

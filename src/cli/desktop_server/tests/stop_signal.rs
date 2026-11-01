@@ -8,6 +8,7 @@ use std::sync::Arc;
 struct StopHarness {
     context: ServiceContext,
     input: mpsc::UnboundedReceiver<InlineEvent>,
+    notifications: mpsc::Receiver<protocol::Notification>,
     ctrl_c: Arc<CtrlCState>,
     notify: Arc<Notify>,
     stop: StopHandleSlot,
@@ -21,7 +22,7 @@ impl StopHarness {
         // the filesystem, so no tempdir guard is needed.
         let workspace = std::env::temp_dir().join("vtcode-stop-signal-test");
         let startup = test_startup_context(&workspace);
-        let (context, _) = test_service_context(startup, workspace);
+        let (context, notifications) = test_service_context(startup, workspace);
         let (input_sender, input) = mpsc::unbounded_channel();
         let (exit_sender, exit) = oneshot::channel();
         let runtime_task = tokio::spawn(std::future::pending::<()>());
@@ -43,6 +44,7 @@ impl StopHarness {
         Self {
             context,
             input,
+            notifications,
             ctrl_c: Arc::new(CtrlCState::new()),
             notify: Arc::new(Notify::new()),
             stop,
@@ -62,6 +64,27 @@ impl StopHarness {
             method: protocol::method::TURN_CANCEL.into(),
             params: json!({ "sessionId": session_id, "turnId": turn_id }),
         }
+    }
+
+    fn cancel_and_clear_request(&self, session_id: &str, turn_id: &str) -> Request {
+        Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::Number(2),
+            method: protocol::method::TURN_CANCEL.into(),
+            params: json!({ "sessionId": session_id, "turnId": turn_id, "clearQueue": true }),
+        }
+    }
+
+    fn queue_depths(&mut self) -> Vec<usize> {
+        let mut depths = Vec::new();
+        while let Ok(notification) = self.notifications.try_recv() {
+            if notification.method == protocol::method::TURN_QUEUE_STATUS
+                && let Some(depth) = notification.params.get("queueDepth").and_then(Value::as_u64)
+            {
+                depths.push(depth as usize);
+            }
+        }
+        depths
     }
 }
 
@@ -156,6 +179,66 @@ async fn duplicate_turn_cancel_sends_nothing_more() {
         .expect("duplicate cancel accepted");
     assert_eq!(result["cancelRequested"], true);
     assert!(harness.input.try_recv().is_err(), "a duplicate cancel must not re-queue");
+}
+
+#[tokio::test]
+async fn flagged_cancel_discards_queued_turns_and_reports_empty_queue() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    for prompt in ["queued one", "queued two"] {
+        let accepted = enqueue_turn(
+            &harness.context.state,
+            &harness.context.notifications,
+            "session",
+            prompt.into(),
+            Vec::new(),
+            EnqueueMode::Queueable { batchable: false },
+        )
+        .await
+        .expect("queued submit accepted");
+        assert!(accepted.queued);
+    }
+    assert_eq!(harness.queue_depths(), [1, 2]);
+    let request = harness.cancel_and_clear_request("session", "turn-1");
+    let (result, _) = handle_request(&harness.context, &request)
+        .await
+        .expect("flagged cancel accepted");
+    assert_eq!(result["cancelRequested"], true);
+    assert!(harness.ctrl_c.is_cancel_requested(), "the discard rides a real stop");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    assert!(harness.context.state.lock().await.queue.is_empty(), "flagged cancel clears the queue");
+    assert_eq!(harness.queue_depths(), [0], "clients reconcile from the empty snapshot");
+    let mut state = harness.context.state.lock().await;
+    state.active_turn_id = None;
+    assert!(state.pop_next_queued_turn().is_none(), "no auto-dispatch follows the discard");
+}
+
+#[tokio::test]
+async fn plain_cancel_preserves_queued_turns_for_auto_dispatch() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let accepted = enqueue_turn(
+        &harness.context.state,
+        &harness.context.notifications,
+        "session",
+        "queued prompt".into(),
+        Vec::new(),
+        EnqueueMode::Queueable { batchable: false },
+    )
+    .await
+    .expect("queued submit accepted");
+    assert!(accepted.queued);
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("plain cancel accepted");
+    {
+        let mut state = harness.context.state.lock().await;
+        assert_eq!(state.queue.len(), 1, "a plain stop keeps the queue (TUI parity)");
+        assert!(state.pop_next_queued_turn().is_none(), "the live turn still owns the slot");
+        state.active_turn_id = None;
+        let drained = state.pop_next_queued_turn().expect("queued batch dispatches after release");
+        assert_eq!(state.active_turn_id.as_deref(), Some(drained.turn_id.as_str()));
+    }
+    assert_eq!(harness.queue_depths(), [1], "no discard snapshot on a plain stop");
 }
 
 #[tokio::test]

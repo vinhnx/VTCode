@@ -403,7 +403,7 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
         };
         assert_eq!(method, expected);
         if method == vtcode_desktop_protocol::method::TURN_CANCEL {
-            assert_eq!(params, json!({ "sessionId": "session", "turnId": "turn" }));
+            assert_eq!(params, json!({ "sessionId": "session", "turnId": "turn", "clearQueue": false }));
         }
     }
     assert!(requests.try_recv().is_err(), "active work blocks session changes for shortcuts too");

@@ -164,7 +164,7 @@ impl DesktopView {
 
     /// Focus the entry point of a route: the panel focus for panels, the
     /// composer for the workspace.
-    fn focus_route(&mut self, route: Route, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn focus_route(&mut self, route: Route, window: &mut Window, cx: &mut Context<Self>) {
         match route {
             Route::Settings => self.settings_navigation_focus.focus(window, cx),
             Route::Browser => self.browser_focus.focus(window, cx),
@@ -407,6 +407,9 @@ impl DesktopView {
         if self.about_open {
             self.disarm_double_escape();
             self.close_about(window, cx);
+        } else if self.running_confirm.is_some() {
+            self.disarm_double_escape();
+            self.cancel_running_confirm(window, cx);
         } else if self.full_access_confirm.is_some() {
             self.disarm_double_escape();
             self.cancel_full_access_confirm(window, cx);

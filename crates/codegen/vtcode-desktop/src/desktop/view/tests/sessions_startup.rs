@@ -138,8 +138,8 @@ fn native_session_menu_uses_live_action_availability_and_existing_requests(cx: &
             cx.notify();
         });
         window.render_frame(cx);
-        assert!(!window.is_action_available(menu_action(cx, "File", "New Session").as_ref(), cx));
-        assert!(!window.is_action_available(menu_action(cx, "File", "Close Session").as_ref(), cx));
+        assert!(window.is_action_available(menu_action(cx, "File", "New Session").as_ref(), cx));
+        assert!(window.is_action_available(menu_action(cx, "File", "Close Session").as_ref(), cx));
         assert!(window.is_action_available(menu_action(cx, "View", "Cancel Run").as_ref(), cx));
         window.dispatch_action(menu_action(cx, "View", "Cancel Run"), cx);
     })
@@ -149,7 +149,7 @@ fn native_session_menu_uses_live_action_availability_and_existing_requests(cx: &
         panic!("cancel request")
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
-    assert_eq!(params, json!({ "sessionId": "menu-session", "turnId": "menu-turn" }));
+    assert_eq!(params, json!({ "sessionId": "menu-session", "turnId": "menu-turn", "clearQueue": false }));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.running = false;

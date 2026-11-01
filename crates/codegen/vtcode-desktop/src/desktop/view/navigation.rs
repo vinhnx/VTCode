@@ -65,7 +65,7 @@ impl DesktopView {
                             &NewSession,
                             Some(key_context::DESKTOP),
                         )
-                        .desktop_disabled(!self.session_change_allowed(None))
+                        .desktop_disabled(!self.new_thread_available())
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
             })
@@ -137,8 +137,8 @@ impl DesktopView {
             .into_any_element()
     }
     pub(super) fn render_chrome_menu(&self, id: &'static str, label: String) -> AnyElement {
-        let can_new = self.session_change_allowed(None);
-        let can_close = self.selected_session_id.is_some() && self.session_change_allowed(None);
+        let can_new = self.new_thread_available();
+        let can_close = self.selected_session_id.is_some() && self.new_thread_available();
         let has_workspace = self.workspace.is_some();
         let panel_open = self.current_route() != Route::Workspace;
         desktop_button(id)

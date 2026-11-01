@@ -250,7 +250,7 @@ impl DesktopView {
                         .icon(IconName::Plus)
                         .ghost()
                         .flex_1()
-                        .desktop_disabled(!self.session_change_allowed(None))
+                        .desktop_disabled(!self.new_thread_available())
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .child(
@@ -263,7 +263,7 @@ impl DesktopView {
                         .icon(IconName::X)
                         .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_CLOSE_THREAD).to_string())
                         .ghost()
-                        .desktop_disabled(self.selected_session_id.is_none() || !self.session_change_allowed(None))
+                        .desktop_disabled(self.selected_session_id.is_none() || !self.new_thread_available())
                         .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
                 ),
         );
@@ -339,7 +339,8 @@ impl DesktopView {
                                     let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
                                     let selected = view.selected_session_id.as_deref() == Some(&session_id);
                                     let label = session_display_title(&session_id, session.title.as_deref());
-                                    let enabled = view.session_change_allowed(Some(&session_id));
+                                    let running = view.is_session_running(&session_id);
+                                    let enabled = view.load_session_available(&session_id);
                                     Some(
                                         div()
                                             .id(format!("session-row-{session_id}"))
@@ -353,7 +354,13 @@ impl DesktopView {
                                             .w_full()
                                             .child(
                                                 desktop_button(format!("session-{session_id}"))
-                                                    .accessibility_label(if selected {
+                                                    .accessibility_label(if running {
+                                                        rust_i18n::t!(
+                                                            i18n::SESSION_RUNNING_THREAD_LABEL,
+                                                            thread = label.as_str()
+                                                        )
+                                                        .to_string()
+                                                    } else if selected {
                                                         rust_i18n::t!(
                                                             "app.navigation.current_thread_label",
                                                             thread = label
@@ -368,6 +375,12 @@ impl DesktopView {
                                                         selected,
                                                         session_primary,
                                                     ))
+                                                    .when(running, |button| {
+                                                        button.child(running_indicator(
+                                                            format!("session-running-{session_id}"),
+                                                            &cx.theme().colors,
+                                                        ))
+                                                    })
                                                     .ghost()
                                                     .toggled(selected)
                                                     .desktop_disabled(!enabled)
@@ -379,7 +392,7 @@ impl DesktopView {
                                                             .text_color(cx.theme().colors.foreground)
                                                     })
                                                     .on_click(cx.listener(move |this, _, window, cx| {
-                                                        if this.load_session(session_id.clone(), cx) {
+                                                        if this.load_session_from_ui(session_id.clone(), window, cx) {
                                                             this.close_active_route(window, cx);
                                                         }
                                                     })),
@@ -435,6 +448,10 @@ impl DesktopView {
             .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
             .and_then(|session| session.title.as_deref())
             .unwrap_or(&title_fallback);
+        let running = self
+            .selected_session_id
+            .as_deref()
+            .is_some_and(|session_id| self.is_session_running(session_id));
         // Centered on the conversation spine: the title shares the transcript
         // and composer column instead of hugging the workspace edge.
         div().w_full().flex().justify_center().child(
@@ -450,6 +467,12 @@ impl DesktopView {
                 .gap_2()
                 .px_4()
                 .py_1()
+                .when(running, |header| {
+                    header
+                        .role(gpui_kit::Role::Group)
+                        .aria_label(rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = title).to_string())
+                        .child(running_indicator("thread-header-running", &theme.colors))
+                })
                 .child(
                     div()
                         .id("thread-title")
@@ -472,7 +495,7 @@ impl DesktopView {
                             &NewSession,
                             Some(key_context::DESKTOP),
                         )
-                        .desktop_disabled(!self.session_change_allowed(None))
+                        .desktop_disabled(!self.new_thread_available())
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta)),
@@ -637,7 +660,7 @@ impl DesktopView {
                             &NewSession,
                             Some(key_context::DESKTOP),
                         )
-                        .desktop_disabled(!self.session_change_allowed(None))
+                        .desktop_disabled(!self.new_thread_available())
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .child(

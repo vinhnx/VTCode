@@ -204,12 +204,34 @@ impl DesktopView {
             self.status = rust_i18n::t!("app.composer.cancellation_queued").to_string();
             return;
         };
-        if self.request(protocol::method::TURN_CANCEL, json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id }))
-        {
+        // An armed running switch rides along: the service discards queued
+        // turns with the cancel, since the terminal pump would otherwise
+        // auto-dispatch them and refuse the deferred switch. Read at send
+        // time so a dropped wait degrades to a plain stop.
+        let clear_queue = self.armed_running_switch.is_some();
+        if self.request(
+            protocol::method::TURN_CANCEL,
+            json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id, keys::CLEAR_QUEUE: clear_queue }),
+        ) {
             self.cancel_request_sent = true;
         } else {
             self.error = Some(rust_i18n::t!("app.composer.cancellation_not_queued").to_string());
         }
+    }
+
+    /// Stop the turn for a confirmed running switch: like [`Self::cancel_turn`],
+    /// but the cancel also discards queued turns (the modal promised it), so
+    /// it re-sends even when a plain stop already went out — the service
+    /// dedups the stop signal and still processes the discard.
+    pub(super) fn cancel_turn_for_running_switch(&mut self, cx: &mut Context<Self>) {
+        if !self.running {
+            return;
+        }
+        self.cancel_requested = true;
+        self.cancel_request_sent = false;
+        self.status = rust_i18n::t!("app.session.running_switch_stopping").to_string();
+        self.try_send_pending_cancel();
+        cx.notify();
     }
 
     pub(super) fn handle_cancel_state_after_turn_event(&mut self) {

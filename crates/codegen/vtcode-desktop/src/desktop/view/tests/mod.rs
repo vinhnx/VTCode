@@ -440,6 +440,7 @@ mod options_misc;
 mod output_surfaces;
 mod overlay_toggles;
 mod review_output;
+mod running_confirm;
 mod search_config;
 mod secret_store;
 mod service_navigation;

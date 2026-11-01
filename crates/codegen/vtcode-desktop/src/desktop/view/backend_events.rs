@@ -63,6 +63,7 @@ impl DesktopView {
                     }
                     self.cancel_session_load_task();
                     self.interrupt_cli_config_write();
+                    self.interrupt_armed_running_switch();
                     self.backend = None;
                     self.clear_pending_interaction();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
@@ -207,6 +208,7 @@ impl DesktopView {
                 let retry = self.pending_first_submission && !self.cancel_requested;
                 self.pending_first_submission = false;
                 self.running = false;
+                self.drop_armed_running_switch();
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
                 if retry {
@@ -334,6 +336,7 @@ impl DesktopView {
                             self.running = false;
                             self.cancel_requested = false;
                             self.cancel_request_sent = false;
+                            self.drop_armed_running_switch();
                         } else if let Some(index) = self.queued_submissions.iter().position(|entry| !entry.acknowledged)
                         {
                             // The failed submit is the oldest unconfirmed
@@ -630,6 +633,7 @@ impl DesktopView {
                             if self.pending_submission.is_some() {
                                 self.recover_pending_submission(true);
                                 self.running = false;
+                                self.drop_armed_running_switch();
                                 self.status = rust_i18n::t!("app.service.invalid_ack").to_string();
                             }
                             // Unconfirmed queued entries stay: the ack is
@@ -788,6 +792,9 @@ impl DesktopView {
                 if was_running != self.running {
                     self.invalidate_webmcp_status();
                 }
+                if was_running && !self.running {
+                    self.drain_armed_running_switch(cx);
+                }
                 self.refresh_selected_change(cx);
                 self.handle_cancel_state_after_turn_event();
             }
@@ -861,6 +868,7 @@ impl DesktopView {
                 self.cancel_session_load_task();
                 self.interrupt_cli_config_write();
                 self.interrupt_secret_save();
+                self.interrupt_armed_running_switch();
                 self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                 self.fail_workspace_review(rust_i18n::t!("app.service.review_exited").to_string());
                 self.clear_pending_interaction();
@@ -923,6 +931,7 @@ impl DesktopView {
                 self.recover_pending_submission(true);
                 self.report_service_launch_failure(error);
                 self.interrupt_cli_config_write();
+                self.interrupt_armed_running_switch();
                 self.backend = None;
                 self.running = false;
                 self.ui_progress_active = false;

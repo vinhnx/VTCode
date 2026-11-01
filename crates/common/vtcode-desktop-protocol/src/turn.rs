@@ -92,6 +92,13 @@ pub struct TurnCancelParams {
     pub session_id: String,
     /// Exact turn identity to cancel.
     pub turn_id: String,
+    /// Discard queued turns behind the cancelled one (running-switch flow:
+    /// the terminal pump auto-dispatches the queue, so a deferred session
+    /// switch can only land on an empty queue). Absent (legacy clients)
+    /// means keep the queue: a plain stop lets queued prompts run
+    /// afterwards (TUI parity).
+    #[serde(default)]
+    pub clear_queue: bool,
 }
 
 /// Parameters for popping the newest queued message back for editing.

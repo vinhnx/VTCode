@@ -195,7 +195,7 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
         view.update(cx, |view, cx| {
             view.composer.update(cx, |state, cx| state.set_value("Newer unsent draft", window, cx));
             view.submit_prompt(window, cx);
-            view.create_session(cx);
+            let _ = view.begin_new_thread(cx);
             let _ = view.load_session("other-session".into(), cx);
             view.select_model("other".into(), "model".into(), cx);
             assert!(!view.workspace_switch_idle());
@@ -236,7 +236,7 @@ fn new_thread_shows_pending_then_creates_a_runtime_on_first_send(cx: &mut TestAp
             view.attachments
                 .push(vtcode_desktop_protocol::TurnAttachment { path: "notes.txt".into(), text: "source".into() });
             view.composer.update(cx, |input, cx| input.set_value("New draft", window, cx));
-            view.create_session(cx);
+            let _ = view.begin_new_thread(cx);
         });
         window.render_frame(cx);
         let pending = window.find("new-thread-pending");
@@ -297,7 +297,7 @@ fn failed_new_thread_close_restores_the_previous_conversation(cx: &mut TestAppCo
                 "VT Code".into(),
                 "Old conversation".into(),
             ));
-            view.create_session(cx);
+            let _ = view.begin_new_thread(cx);
             view.handle_backend_event(
                 BackendEvent::Response {
                     method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(),

@@ -494,11 +494,11 @@ impl DesktopView {
         match action {
             PaletteAction::NewSession => {
                 self.close_active_route(window, cx);
-                self.create_session(cx);
+                let _ = self.create_session_from_ui(window, cx);
             }
             PaletteAction::CloseSession => {
                 self.close_active_route(window, cx);
-                self.close_session(cx);
+                let _ = self.close_session_from_ui(window, cx);
             }
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.open_conversation_search(session_id, window, cx);
@@ -608,7 +608,7 @@ impl DesktopView {
                 cx,
             ),
             PaletteAction::LoadSession(session_id) => {
-                let _ = self.load_session(session_id, cx);
+                let _ = self.load_session_from_ui(session_id, window, cx);
             }
             PaletteAction::PreviewFile(rel_path) => self.open_file_preview(rel_path, window, cx),
             PaletteAction::SelectWorkspaceReviewFile(path) => self.select_workspace_review_file(path, cx),
@@ -622,7 +622,8 @@ impl DesktopView {
 
     pub(super) fn palette_action_available(&self, action: &PaletteAction) -> bool {
         match action {
-            PaletteAction::NewSession | PaletteAction::ChooseModel => self.session_change_allowed(None),
+            PaletteAction::NewSession => self.new_thread_available(),
+            PaletteAction::ChooseModel => self.session_change_allowed(None),
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.selected_session_id.as_deref() == Some(session_id.as_str())
                     && self.has_searchable_conversation_content()
@@ -656,8 +657,8 @@ impl DesktopView {
             | PaletteAction::InsertFileMention(_)
             | PaletteAction::CompleteSlashCommand(_)
             | PaletteAction::InsertHistoryPrompt(_) => true,
-            PaletteAction::CloseSession => self.selected_session_id.is_some() && self.session_change_allowed(None),
-            PaletteAction::LoadSession(session_id) => self.session_change_allowed(Some(session_id)),
+            PaletteAction::CloseSession => self.selected_session_id.is_some() && self.new_thread_available(),
+            PaletteAction::LoadSession(session_id) => self.load_session_available(session_id),
             PaletteAction::SelectWorkspaceReviewFile(_) => {
                 self.current_route() == Route::Review
                     && self.workspace_review.as_ref().is_some_and(|review| review.viewer.is_some())

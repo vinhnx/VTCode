@@ -118,6 +118,7 @@ mod palette;
 mod palette_render;
 mod queue;
 mod root_render;
+mod running_confirm;
 mod runtime_items;
 mod secret_store;
 mod sessions;
@@ -148,6 +149,7 @@ use inspector_changes::*;
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
 use queue::*;
+use running_confirm::{RunningSwitch, RunningSwitchIntent};
 use runtime_items::*;
 use sessions::*;
 use typography::FontTarget;
@@ -457,6 +459,9 @@ struct DesktopView {
     pending_permission_choice: Option<protocol::PermissionMode>,
     full_access_confirm: Option<FullAccessConfirmState>,
     full_access_focus: FocusHandle,
+    running_confirm: Option<RunningSwitch>,
+    running_confirm_focus: FocusHandle,
+    armed_running_switch: Option<RunningSwitch>,
     about_open: bool,
     about_focus: FocusHandle,
     service_info: Option<protocol::InitializeResult>,

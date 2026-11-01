@@ -30,6 +30,7 @@ pub(super) mod keys {
     pub const PROMPT: &str = "prompt";
     pub const ATTACHMENTS: &str = "attachments";
     pub const BATCHABLE: &str = "batchable";
+    pub const CLEAR_QUEUE: &str = "clearQueue";
     pub const BEFORE_INDEX: &str = "beforeIndex";
     pub const LIMIT: &str = "limit";
     pub const ITEM_ID: &str = "itemId";
@@ -122,6 +123,7 @@ pub(super) mod i18n {
     pub const REQUEST_QUEUE_UNAVAILABLE: &str = "app.errors.request_queue_unavailable";
     pub const SESSION_FALLBACK_TITLE: &str = "app.session.fallback_title";
     pub const SESSION_PREPARING_NEW_THREAD: &str = "app.session.preparing_new_thread";
+    pub const SESSION_RUNNING_THREAD_LABEL: &str = "app.session.running_thread_label";
     pub const SESSION_THREAD_READY: &str = "app.session.thread_ready";
     pub const SETTINGS_SEARCH_TITLE: &str = "app.settings.search.title";
     pub const SETTINGS_TITLE: &str = "app.settings.title";
@@ -158,7 +160,7 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 56] = [
+        const KEYS: [&str; 57] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
@@ -204,6 +206,7 @@ mod tests {
             i18n::REQUEST_QUEUE_UNAVAILABLE,
             i18n::SESSION_FALLBACK_TITLE,
             i18n::SESSION_PREPARING_NEW_THREAD,
+            i18n::SESSION_RUNNING_THREAD_LABEL,
             i18n::SESSION_THREAD_READY,
             i18n::SETTINGS_SEARCH_TITLE,
             i18n::SETTINGS_TITLE,

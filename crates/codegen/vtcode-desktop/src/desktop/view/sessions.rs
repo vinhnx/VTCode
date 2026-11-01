@@ -116,6 +116,51 @@ impl DesktopView {
                 || reload_session_id.is_some_and(|id| self.selected_session_id.as_deref() == Some(id)))
     }
 
+    /// Whether a stop-then-proceed flow owns the session-change funnel: an
+    /// unanswered modal or an armed wait. While set, every New/Switch/Close
+    /// entry stays dark so intents can neither swap nor double.
+    pub(super) fn running_switch_pending(&self) -> bool {
+        self.running_confirm.is_some() || self.armed_running_switch.is_some()
+    }
+
+    /// Whether a session change may proceed via the stop-then-proceed
+    /// confirm: a turn is running, but nothing else blocks the deferred send
+    /// once the turn stops (same transition gate as `submit_allowed`, plus
+    /// the retained-draft guard the deferred send inherits).
+    pub(super) fn running_switch_available(&self) -> bool {
+        self.running
+            && !self.running_switch_pending()
+            && self.workspace_transition_idle()
+            && self.backend.is_some()
+            && self.interaction.is_none()
+            && self.retained_submission.is_none()
+    }
+
+    /// Whether the New-thread action is reachable: idle sends immediately,
+    /// a running turn opens the stop-then-proceed confirm instead.
+    pub(super) fn new_thread_available(&self) -> bool {
+        (self.session_change_allowed(None) || self.running_switch_available()) && !self.running_switch_pending()
+    }
+
+    /// Whether loading `session_id` is reachable. The already-selected
+    /// session never routes through the confirm: reloading it mid-turn is a
+    /// no-op the modal copy cannot describe.
+    pub(super) fn load_session_available(&self, session_id: &str) -> bool {
+        if self.running_switch_pending() {
+            return false;
+        }
+        if self.selected_session_id.as_deref() == Some(session_id) {
+            return self.session_change_allowed(Some(session_id));
+        }
+        self.session_change_allowed(Some(session_id)) || self.running_switch_available()
+    }
+
+    /// Whether `session_id` owns the live turn. The service runs a single
+    /// session, so only the selected session can read as running.
+    pub(super) fn is_session_running(&self, session_id: &str) -> bool {
+        self.running && self.selected_session_id.as_deref() == Some(session_id)
+    }
+
     pub(super) fn request_session_change(
         &mut self,
         method: &'static str,
@@ -175,12 +220,51 @@ impl DesktopView {
         true
     }
 
-    pub(super) fn create_session(&mut self, cx: &mut Context<Self>) {
-        let _started = self.begin_new_thread(cx);
+    /// UI entry for New thread: idle sends immediately, a running turn opens
+    /// the stop-then-proceed confirm, anything else falls through to the raw
+    /// path (which reports the retained-draft block itself). Returns whether
+    /// the intent was accepted (sent or confirming).
+    pub(super) fn create_session_from_ui(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.running_switch_pending() {
+            return false;
+        }
+        if !self.session_change_allowed(None) && self.running_switch_available() {
+            self.open_running_confirm(RunningSwitchIntent::NewThread, window, cx);
+            true
+        } else {
+            self.begin_new_thread(cx)
+        }
     }
 
     pub(super) fn load_session(&mut self, session_id: String, cx: &mut Context<Self>) -> bool {
         self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx)
+    }
+
+    /// UI entry for thread switching. Returns true only when the load request
+    /// was actually sent: opening the confirm returns false so panels stay
+    /// open behind the modal.
+    pub(super) fn load_session_from_ui(
+        &mut self,
+        session_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.running_switch_pending() {
+            return false;
+        }
+        if !self.session_change_allowed(Some(&session_id))
+            && self.selected_session_id.as_deref() != Some(session_id.as_str())
+            && self.running_switch_available()
+        {
+            self.open_running_confirm(
+                RunningSwitchIntent::LoadSession { target: session_id, untab: Vec::new() },
+                window,
+                cx,
+            );
+            false
+        } else {
+            self.load_session(session_id, cx)
+        }
     }
 
     pub(super) fn request_earlier_history(&mut self, cx: &mut Context<Self>) {
@@ -567,6 +651,23 @@ impl DesktopView {
             self.request_session_change(protocol::method::SESSION_CLOSE, json!({ keys::SESSION_ID: session_id }), cx);
     }
 
+    /// UI entry for Close thread, with the same idle/running/blocked routing
+    /// as [`Self::create_session_from_ui`]. Returns whether the intent was
+    /// accepted (sent or confirming).
+    pub(super) fn close_session_from_ui(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.running_switch_pending() {
+            return false;
+        }
+        if self.selected_session_id.is_some() && !self.session_change_allowed(None) && self.running_switch_available() {
+            self.open_running_confirm(RunningSwitchIntent::CloseSession, window, cx);
+            true
+        } else {
+            let already_closing = self.session_request == Some(protocol::method::SESSION_CLOSE);
+            self.close_session(cx);
+            !already_closing && self.session_request == Some(protocol::method::SESSION_CLOSE)
+        }
+    }
+
     /// Switch the service to another catalog model. The service restarts its
     /// session; the next prompt starts a fresh one under the new model.
     pub(super) fn select_model(&mut self, provider: String, model: String, cx: &mut Context<Self>) {
@@ -640,6 +741,7 @@ impl DesktopView {
         self.clear_queue_state();
         self.session_request = None;
         self.pending_new_thread = false;
+        self.interrupt_armed_running_switch();
         self.retained_submission = None;
         self.prune_attachment_thumbnails();
         self.mcp_app_pending.clear();

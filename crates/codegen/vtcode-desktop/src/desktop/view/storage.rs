@@ -173,7 +173,15 @@ impl DesktopView {
 
     /// Delete one thread from a context menu, reusing the storage review's
     /// warning prompt so the destructive path stays confirm-gated everywhere.
-    pub(super) fn confirm_delete_thread(&self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+    /// The selected thread is refused outright in every state: the server
+    /// rejects selected-session deletes, so prompting would only bait a
+    /// failure.
+    pub(super) fn confirm_delete_thread(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_session_id.as_deref() == Some(session_id) {
+            self.error = Some(rust_i18n::t!("app.session.delete_selected_blocked").to_string());
+            cx.notify();
+            return;
+        }
         let title = self
             .sessions
             .iter()

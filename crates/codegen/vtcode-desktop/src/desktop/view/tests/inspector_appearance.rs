@@ -185,7 +185,7 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
         assert_eq!(window.find("session-other").disabled(), Some(true));
         view.update(cx, |view, cx| {
             let workspace_before = view.workspace.clone();
-            view.create_session(cx);
+            let _ = view.begin_new_thread(cx);
             view.close_session(cx);
             let _ = view.load_session("other".into(), cx);
             view.select_model("other-provider".into(), "other-model".into(), cx);
@@ -253,7 +253,7 @@ fn initialization_gates_commands_until_the_negotiated_protocol_is_validated(cx: 
             view.initialize_backend(BackendHandle { commands });
             view.composer.update(cx, |state, cx| state.set_value("Wait for connection", window, cx));
             view.submit_prompt(window, cx);
-            view.create_session(cx);
+            let _ = view.begin_new_thread(cx);
             assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::INITIALIZE));
             assert_eq!(view.composer.read(cx).value(), "Wait for connection");
             assert!(!view.running);
@@ -366,15 +366,19 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
         );
         view.update(cx, |view, cx| {
             view.running = true;
+            assert!(
+                view.palette_action_available(&super::super::PaletteAction::CloseSession),
+                "active work keeps session changes reachable through the confirm"
+            );
             view.run_palette_action(super::super::PaletteAction::CloseSession, window, cx);
-            assert!(view.palette.is_some(), "deferred confirmation must recheck availability");
+            assert!(view.palette.is_none(), "confirming a running session change closes the palette");
+            assert!(view.running_confirm.is_some(), "active work reroutes through the stop-then-proceed confirm");
         });
         window.render_frame(cx);
-        assert_eq!(palette.read(cx).matched_count(), 0, "active work prevents session changes");
-        assert!(palette.read(cx).selected_index().is_none());
+        assert!(window.try_find("running-confirm-dialog").is_some());
     })
     .unwrap();
-    assert!(requests.try_recv().is_err(), "an unavailable confirmation cannot send a session-close request");
+    assert!(requests.try_recv().is_err(), "the confirm gates the session-close request");
 }
 
 #[gpui_kit::test]

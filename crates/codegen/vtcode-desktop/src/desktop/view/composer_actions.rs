@@ -29,18 +29,14 @@ impl DesktopView {
                 true
             }
             DesktopSlashAction::NewSession => {
-                if self.begin_new_thread(cx) {
+                if self.create_session_from_ui(window, cx) {
                     self.clear_submitted_command(window, cx);
                 }
                 true
             }
             DesktopSlashAction::CloseSession => {
-                if let Some(session_id) = self.selected_session_id.clone() {
-                    if self.request_session_change(
-                        protocol::method::SESSION_CLOSE,
-                        json!({ keys::SESSION_ID: session_id }),
-                        cx,
-                    ) {
+                if self.selected_session_id.is_some() {
+                    if self.close_session_from_ui(window, cx) {
                         self.clear_submitted_command(window, cx);
                     }
                 } else {
@@ -65,14 +61,7 @@ impl DesktopView {
             }
             DesktopSlashAction::Configuration(target) => {
                 self.clear_submitted_command(window, cx);
-                if self.current_route() == Route::Settings {
-                    self.close_settings(window, cx);
-                }
-                self.config_page_open = true;
-                if let Some(target) = target.as_deref() {
-                    self.resolve_config_deep_link(target, window, cx);
-                }
-                self.open_settings(window, cx);
+                self.open_config_link(target, window, cx);
                 true
             }
             DesktopSlashAction::Settings(tab) => {
@@ -159,6 +148,23 @@ impl DesktopView {
                 self.clear_submitted_command(window, cx);
                 self.open_webmcp_settings(window, cx);
                 true
+            }
+            DesktopSlashAction::Go(target) => {
+                if target.trim().is_empty() {
+                    self.clear_submitted_command(window, cx);
+                    self.open_goto_palette(window, cx);
+                    return true;
+                }
+                let Some(link) = deeplinks::parse(&target) else {
+                    self.clear_submitted_command(window, cx);
+                    self.error = Some(
+                        rust_i18n::t!(i18n::ERRORS_UNKNOWN_DESTINATION, target = target.trim()).to_string(),
+                    );
+                    cx.notify();
+                    return true;
+                };
+                self.clear_submitted_command(window, cx);
+                self.open_deeplink(link, window, cx)
             }
         }
     }
