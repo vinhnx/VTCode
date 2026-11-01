@@ -168,6 +168,7 @@ impl DesktopView {
         // shares the height, mirroring the config rail breakpoint.
         let narrow = window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT);
         route_page(
+            self.route_reserves_light_clearance(window),
             div()
                 .id("settings-panel")
                 .test_support()
@@ -196,7 +197,6 @@ impl DesktopView {
                     div()
                         .text_lg()
                         .font_semibold()
-                        .pl(overlay_title_inset(cx.theme().font_size, 2.25))
                         .child(div().id("settings-title").test_support().child(title)),
                     // Generic "Close" word shared across panels (owned by the browser surface).
                     desktop_button("settings-dismiss")

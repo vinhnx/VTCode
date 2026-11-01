@@ -90,8 +90,8 @@ impl Render for DesktopView {
         let center: AnyElement = match self.current_route() {
             Route::Workspace => workspace.into_any_element(),
             Route::Settings => self.render_settings_page(window, cx),
-            Route::Browser => self.render_thread_browser(cx),
-            Route::Review => self.render_change_review(cx),
+            Route::Browser => self.render_thread_browser(window, cx),
+            Route::Review => self.render_change_review(window, cx),
         };
         let content = div()
             .id("pane-root")

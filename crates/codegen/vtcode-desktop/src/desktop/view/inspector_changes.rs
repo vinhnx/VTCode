@@ -545,7 +545,7 @@ impl DesktopView {
         body.into_any_element()
     }
 
-    pub(super) fn render_change_review(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_change_review(&mut self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let workspace_review = self.workspace_review.is_some();
         let content = if workspace_review {
@@ -564,6 +564,7 @@ impl DesktopView {
             rust_i18n::t!("app.workspace_review.session_description").to_string()
         };
         route_page(
+            self.route_reserves_light_clearance(window),
             div()
                 .id("diff-review-panel")
                 .test_support()
@@ -588,7 +589,6 @@ impl DesktopView {
                         .items_center()
                         .justify_between()
                         .px_4()
-                        .pl(overlay_title_inset(cx.theme().font_size, 2.5))
                         .py_3()
                         .child(
                             div()

@@ -272,6 +272,20 @@ const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
 /// line so it clears the macOS traffic lights while the sidebar surface
 /// itself still spans the full window height.
 ///
+/// macOS traffic-light anchor (see `desktop_window_options`): the lights sit
+/// at (12, 17) with a 12px diameter, so their bottom edge is y = 29.
+/// Windowed zen hides the toolbar that otherwise owns this zone, so route
+/// pages reserve [`ZEN_ROUTE_TOP_CLEARANCE`] themselves and start below the
+/// lights instead of floating them over the panel corner.
+const TRAFFIC_LIGHT_X: f32 = 12.;
+const TRAFFIC_LIGHT_Y: f32 = 17.;
+/// Top clearance reserving the traffic-light zone above route pages when the
+/// toolbar is hidden (windowed zen): the lights end at y = 29, so 40px
+/// clears them with an 11px gap. Fixed pixels: this matches a platform
+/// window inset, not the rem scale. Fullscreen hides the lights, so no
+/// clearance is reserved there.
+const ZEN_ROUTE_TOP_CLEARANCE: f32 = 40.;
+
 /// Compact layout breakpoint: below this viewport width, open panels collapse
 /// the sidebar to its rail and settings stacks its navigation above the
 /// content. The embedded slot cannot hold full chrome plus side-by-side
@@ -763,7 +777,7 @@ fn uuid_like_id() -> String {
 fn desktop_window_options() -> WindowOptions {
     let mut options = TitleBar::window_options();
     if let Some(titlebar) = options.titlebar.as_mut() {
-        titlebar.traffic_light_position = Some(point(px(12.), px(17.)));
+        titlebar.traffic_light_position = Some(point(px(TRAFFIC_LIGHT_X), px(TRAFFIC_LIGHT_Y)));
     }
     // Smallest geometry that keeps every surface non-degenerate: 600x560 is
     // the smallest headless-tested size with all suites green, while 400px

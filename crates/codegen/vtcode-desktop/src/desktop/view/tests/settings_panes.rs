@@ -158,3 +158,109 @@ fn settings_navigation_groups_desktop_tabs_and_cli_config(cx: &mut TestAppContex
     })
     .unwrap();
 }
+
+/// Windowed zen hides the toolbar that otherwise owns the traffic-light
+/// zone, so route pages reserve it themselves: settings, browser, and review
+/// start below the lights (fixed 40px: the lights end at y = 29) instead of
+/// floating the lights over the panel corner and navigation column.
+/// Fullscreen hides the lights, so the clearance collapses there.
+#[gpui_kit::test]
+fn windowed_zen_route_pages_start_below_the_traffic_lights(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Normal mode first: the toolbar owns the light zone, so the settings
+    // panel starts below it with no extra clearance.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        let back = window.find("navigate-back").bounds();
+        let panel = window.find("settings-panel").bounds();
+        assert!(
+            back.origin.y + back.size.height <= panel.origin.y,
+            "toolbar owns the light zone in normal mode: back={back:?} panel={panel:?}"
+        );
+    })
+    .unwrap();
+    // Windowed zen: every route page reserves the light zone itself.
+    view.update(cx, |view, cx| {
+        view.zen_mode = true;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let panel = window.find("settings-panel").bounds();
+        let viewport = window.viewport_size();
+        assert_eq!(
+            panel.origin.y,
+            px(40.),
+            "windowed-zen settings starts below the traffic lights (lights end at y = 29): panel={panel:?}"
+        );
+        assert!(
+            panel.origin.y + panel.size.height <= viewport.height,
+            "the top clearance must not push the panel out of the viewport: panel={panel:?} viewport={viewport:?}"
+        );
+        view.update(cx, |view, cx| view.open_thread_browser(window, cx));
+        window.render_frame(cx);
+        let browser = window.find("thread-browser").bounds();
+        assert_eq!(
+            browser.origin.y,
+            px(40.),
+            "windowed-zen browser starts below the traffic lights: browser={browser:?}"
+        );
+        view.update(cx, |view, cx| view.show_review(window, cx));
+        window.render_frame(cx);
+        let review = window.find("diff-review-panel").bounds();
+        assert_eq!(review.origin.y, px(40.), "windowed-zen review starts below the traffic lights: review={review:?}");
+    })
+    .unwrap();
+    // Narrow windowed zen stacks the settings nav above the content; the
+    // clearance is vertical-only, so it must survive the reflow.
+    cx.simulate_window_resize(window, size(px(600.), px(700.)));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        let panel = window.find("settings-panel").bounds();
+        let viewport = window.viewport_size();
+        assert_eq!(panel.origin.y, px(40.), "narrow windowed-zen settings keeps the light clearance: panel={panel:?}");
+        assert!(
+            panel.origin.x + panel.size.width <= viewport.width
+                && panel.origin.y + panel.size.height <= viewport.height,
+            "narrow windowed-zen settings stays inside the viewport: panel={panel:?} viewport={viewport:?}"
+        );
+    })
+    .unwrap();
+    cx.simulate_window_resize(window, size(px(1280.), px(900.)));
+    // Fullscreen hides the lights: the clearance collapses to zero on every
+    // route, not just the current one.
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    view.update(cx, |_, cx| cx.notify());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let settings = window.find("settings-panel").bounds();
+        assert_eq!(
+            settings.origin.y,
+            px(0.),
+            "fullscreen hides the lights, so settings reserves nothing: settings={settings:?}"
+        );
+        view.update(cx, |view, cx| view.open_thread_browser(window, cx));
+        window.render_frame(cx);
+        let browser = window.find("thread-browser").bounds();
+        assert_eq!(
+            browser.origin.y,
+            px(0.),
+            "fullscreen hides the lights, so the browser reserves nothing: browser={browser:?}"
+        );
+        view.update(cx, |view, cx| view.show_review(window, cx));
+        window.render_frame(cx);
+        let review = window.find("diff-review-panel").bounds();
+        assert_eq!(
+            review.origin.y,
+            px(0.),
+            "fullscreen hides the lights, so review reserves nothing: review={review:?}"
+        );
+    })
+    .unwrap();
+}

@@ -610,8 +610,15 @@ fn settings_page_and_categories_fit_a_narrow_window(cx: &mut TestAppContext) {
         let panel = window.find("settings-panel").bounds();
         let viewport = window.viewport_size();
         assert_panel_embeds(window, "settings-panel");
+        // No horizontal traffic-light dodge: the toolbar owns the light zone
+        // in normal mode (pinned by assert_panel_embeds above), so the title
+        // shares the navigation spine instead of indenting past phantom lights.
         let title = window.find("settings-title").bounds();
-        assert!(title.origin.x >= px(78.), "settings title clears the floating traffic lights: title={title:?}");
+        let search = window.find("settings-filter-search").bounds();
+        assert_eq!(
+            title.origin.x, search.origin.x,
+            "settings title aligns to the navigation spine: title={title:?} search={search:?}"
+        );
         assert!(
             panel.origin.x >= px(0.) && panel.origin.y >= px(0.),
             "settings page starts outside viewport: panel={panel:?}, viewport={viewport:?}"

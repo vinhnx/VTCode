@@ -335,29 +335,34 @@ pub(super) fn settings_switch(
         )
 }
 
+impl DesktopView {
+    /// Whether route pages must reserve the traffic-light zone themselves:
+    /// windowed zen hides the toolbar that otherwise owns the clearance,
+    /// while fullscreen hides the lights so nothing is reserved there.
+    pub(super) fn route_reserves_light_clearance(&self, window: &Window) -> bool {
+        self.zen_mode && !window.is_fullscreen()
+    }
+}
+
 /// Route container shared by the settings, browser, and review pages:
 /// centers the max-width panel in the content slot beneath the persistent
-/// toolbar, which owns the traffic-light clearance. Titles keep their own
-/// horizontal inset via [`overlay_title_inset`].
-pub(super) fn route_page(panel: impl IntoElement) -> impl IntoElement {
+/// toolbar, which owns the traffic-light clearance. Windowed zen hides the
+/// toolbar (`top_clearance`), so the page reserves the light zone itself and
+/// the panel — navigation column included — starts below the lights instead
+/// of floating them over its corner. Titles align to the content spine in
+/// every mode; no horizontal dodge is needed once the lights clear the panel
+/// vertically.
+pub(super) fn route_page(top_clearance: bool, panel: impl IntoElement) -> impl IntoElement {
     div()
         .flex_1()
         .min_w_0()
         .h_full()
         .px_6()
         .pb_6()
+        .when(top_clearance, |page| page.pt(px(ZEN_ROUTE_TOP_CLEARANCE)))
         .flex()
         .justify_center()
         .child(div().w_full().h_full().max_w(px(1500.)).child(panel))
-}
-
-/// Left inset starting a route-page title past the floating traffic lights
-/// (lights end ~x78; titles start at x84) at any UI scale.
-/// `chrome_rems` sums the rem-scaled chrome before the title: backdrop side
-/// margin plus header side padding (settings/browser: 1.5 + 0.75; review:
-/// 1.5 + 1.0).
-pub(super) fn overlay_title_inset(ui_font_size: Pixels, chrome_rems: f32) -> Pixels {
-    (px(84.) - ui_font_size * chrome_rems).max(px(0.))
 }
 
 /// Shared scrim behind every inline modal (palette, review, browser, file
@@ -657,17 +662,5 @@ mod tests {
                 assert_eq!(width, Some(gpui_kit::AbsoluteLength::Pixels(px(1.))));
             }
         });
-    }
-
-    #[test]
-    fn overlay_title_inset_lands_titles_at_x84_and_clamps() {
-        // Default scale: 84 - 16 * 2.25 = 48.
-        assert_eq!(overlay_title_inset(px(16.), 2.25), px(48.));
-        // Large type shrinks the inset so the title stays put: 84 - 24 * 2.25 = 30.
-        assert_eq!(overlay_title_inset(px(24.), 2.25), px(30.));
-        // Wider header padding needs less inset: 84 - 16 * 2.5 = 44.
-        assert_eq!(overlay_title_inset(px(16.), 2.5), px(44.));
-        // Beyond the lights row the inset clamps instead of going negative.
-        assert_eq!(overlay_title_inset(px(48.), 2.25), px(0.));
     }
 }
