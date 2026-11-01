@@ -525,11 +525,7 @@ impl DesktopView {
         self.output_page_pending = None;
         self.output_page_task = None;
         self.output_page_error = None;
-        for item in &loaded.review_items {
-            if matches!(item.details, vtcode_exec_events::ThreadItemDetails::FileChange(_)) {
-                self.update_runtime_item(item);
-            }
-        }
+        self.project_restored_review(&loaded.review_items);
         for item in &loaded.activity_items {
             use vtcode_exec_events::ThreadItemDetails;
             if !matches!(

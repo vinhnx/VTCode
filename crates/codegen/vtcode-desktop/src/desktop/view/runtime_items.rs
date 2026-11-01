@@ -33,19 +33,26 @@ impl DesktopView {
     }
 
     pub(super) fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
-        self.retain_restored_activity(|restored| restored.id != item.id);
-        let _cursor = self.restored_output_cursors.remove(&item.id);
-        let _pages = self.restored_output_pages.remove(&item.id);
+        self.drop_superseded_restored_item(&item.id);
+        self.project_runtime_item(item, false);
+    }
+
+    /// Drop restored projections superseded by a newer item with the same
+    /// identity: its historical activity row, output cursors/pages, and any
+    /// pending output page. Shared by live updates and session-load batches.
+    fn drop_superseded_restored_item(&mut self, item_id: &str) {
+        self.retain_restored_activity(|restored| restored.id.as_str() != item_id);
+        let _cursor = self.restored_output_cursors.remove(item_id);
+        let _pages = self.restored_output_pages.remove(item_id);
         if self
             .output_page_pending
             .as_ref()
-            .is_some_and(|pending| pending.item_id == item.id)
+            .is_some_and(|pending| pending.item_id == item_id)
         {
             self.output_page_pending = None;
             self.output_page_task = None;
             self.output_page_error = None;
         }
-        self.project_runtime_item(item, false);
     }
 
     pub(super) fn project_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem, historical: bool) {
@@ -106,6 +113,33 @@ impl DesktopView {
     }
 
     pub(super) fn upsert_diff_card(&mut self, id: String, change: &vtcode_exec_events::FileChangeItem) {
+        let previous_patch = self.selected_change_patch();
+        self.replace_diff_card_row(id, change);
+        self.rebuild_changes(previous_patch);
+    }
+
+    /// Project restored file-change snapshots after a session load. Rows are
+    /// staged first and the inspector projection rebuilds once, instead of
+    /// once per change-set (each rebuild re-parses every diff patch).
+    pub(super) fn project_restored_review(&mut self, items: &[vtcode_exec_events::ThreadItem]) {
+        let previous_patch = self.selected_change_patch();
+        let mut projected = false;
+        for item in items {
+            let vtcode_exec_events::ThreadItemDetails::FileChange(change) = &item.details else {
+                continue;
+            };
+            self.drop_superseded_restored_item(&item.id);
+            self.replace_diff_card_row(item.id.clone(), change);
+            projected = true;
+        }
+        if projected {
+            self.rebuild_changes(previous_patch);
+        }
+    }
+
+    /// Stage one diff card row without rebuilding the inspector projection;
+    /// the caller rebuilds once after staging a batch.
+    fn replace_diff_card_row(&mut self, id: String, change: &vtcode_exec_events::FileChangeItem) {
         let files = change
             .changes
             .iter()
@@ -136,13 +170,20 @@ impl DesktopView {
         // The inline diff reads open by default; `upsert` preserves the
         // user's toggle on later updates to the same card.
         item.expanded = true;
-        let previous_patch = self
-            .selected_change
-            .as_deref()
-            .and_then(|path| self.changes.patch_for(&self.transcript, path));
         self.transcript.upsert(item);
-        // Change-sets are rare; rebuild the inspector projection eagerly so
-        // renders never parse patches.
+    }
+
+    /// Raw patch text behind the selected change, for viewer refresh detection.
+    fn selected_change_patch(&self) -> Option<String> {
+        self.selected_change
+            .as_deref()
+            .and_then(|path| self.changes.patch_for(&self.transcript, path))
+    }
+
+    /// Rebuild the inspector projection eagerly so renders never parse
+    /// patches. Change-sets are rare; session loads stage rows first and call
+    /// this once for the whole batch.
+    fn rebuild_changes(&mut self, previous_patch: Option<String>) {
         self.changes = ChangesProjection::rebuild(&self.transcript);
         self.change_viewer_dirty |= self
             .selected_change

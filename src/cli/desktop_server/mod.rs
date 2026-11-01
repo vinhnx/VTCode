@@ -594,8 +594,10 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             ))
         }
         method::SESSION_LOAD => {
+            let load_started = Instant::now();
             let params: protocol::SessionIdParams = parse_params(&request.params)?;
             ensure_no_active_turn(context).await?;
+            let archive_started = Instant::now();
             let listing = find_session_by_identifier(&params.session_id)
                 .await?
                 .ok_or_else(|| anyhow!("saved session was not found"))?;
@@ -605,8 +607,11 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             let resume = load_resume_session(&params.session_id, ArchivedSessionIntent::ResumeInPlace)
                 .await?
                 .ok_or_else(|| anyhow!("saved session could not be loaded"))?;
+            let archive_elapsed = archive_started.elapsed();
             let previous_session_id = context.state.lock().await.session_id.clone();
+            let shutdown_started = Instant::now();
             shutdown_current_session(context, false).await?;
+            let shutdown_elapsed = shutdown_started.elapsed();
             {
                 let mut state = context.state.lock().await;
                 if previous_session_id.as_deref().is_some_and(|id| id != params.session_id)
@@ -617,11 +622,15 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             }
             let workspace = context.workspace.clone();
             let history_session_id = params.session_id.clone();
+            let inspector_started = Instant::now();
             let inspector_history =
                 tokio::task::spawn_blocking(move || restored_inspector_history(&workspace, &history_session_id))
                     .await
                     .context("inspector history task failed")??;
+            let inspector_elapsed = inspector_started.elapsed();
+            let resume_started = Instant::now();
             start_session(context, params.session_id.clone(), Some(resume)).await?;
+            let resume_elapsed = resume_started.elapsed();
             let RestoredInspectorHistory {
                 items: review_items,
                 incomplete: review_history_incomplete,
@@ -647,7 +656,17 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                 activity_output_cursors,
                 activity_history_incomplete,
             };
-            Ok((serde_json::to_value(result)?, false))
+            let payload = serde_json::to_value(result)?;
+            tracing::debug!(
+                target: "vtcode.desktop",
+                archive_ms = archive_elapsed.as_millis(),
+                shutdown_ms = shutdown_elapsed.as_millis(),
+                inspector_ms = inspector_elapsed.as_millis(),
+                resume_ms = resume_elapsed.as_millis(),
+                total_ms = load_started.elapsed().as_millis(),
+                "desktop session loaded"
+            );
+            Ok((payload, false))
         }
         method::SESSION_HISTORY => {
             let params: protocol::SessionHistoryParams = parse_params(&request.params)?;

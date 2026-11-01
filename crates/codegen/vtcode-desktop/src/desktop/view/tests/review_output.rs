@@ -807,3 +807,115 @@ fn failed_historical_output_page_keeps_the_incomplete_marker_and_retry_control(c
     })
     .unwrap();
 }
+
+fn restored_file_change(path: &str, patch: &str) -> vtcode_exec_events::FileChangeItem {
+    vtcode_exec_events::FileChangeItem {
+        changes: vec![vtcode_exec_events::FileUpdateChange {
+            path: path.into(),
+            kind: vtcode_exec_events::PatchChangeKind::Update,
+        }],
+        status: vtcode_exec_events::PatchApplyStatus::Completed,
+        unified_diff: Some(patch.into()),
+        diff_incomplete: Some(false),
+        additions: None,
+        deletions: None,
+    }
+}
+
+fn restored_review_item(id: &str, path: &str, patch: &str) -> vtcode_exec_events::ThreadItem {
+    vtcode_exec_events::ThreadItem {
+        context: None,
+        id: id.into(),
+        details: vtcode_exec_events::ThreadItemDetails::FileChange(Box::new(restored_file_change(path, patch))),
+    }
+}
+
+#[gpui_kit::test]
+fn restored_review_batch_matches_single_rebuild_with_newest_wins(cx: &mut TestAppContext) {
+    let old_patch = "--- a/src/shared.rs\n+++ b/src/shared.rs\n@@ -1 +1 @@\n-old\n+old\n";
+    let new_patch = "--- a/src/shared.rs\n+++ b/src/shared.rs\n@@ -1 +1 @@\n-old\n+new\n";
+    let only_patch = "--- a/src/only.rs\n+++ b/src/only.rs\n@@ -1 +1 @@\n-before\n+after\n";
+    // Asymmetric batch: two change-sets overlap on src/shared.rs with
+    // different patches, plus one non-change item the batch must skip.
+    let batch = vec![
+        restored_review_item("rev-old", "src/shared.rs", old_patch),
+        vtcode_exec_events::ThreadItem {
+            context: None,
+            id: "note".into(),
+            details: vtcode_exec_events::ThreadItemDetails::AgentMessage(vtcode_exec_events::AgentMessageItem {
+                text: "not a change-set".into(),
+            }),
+        },
+        restored_review_item("rev-new", "src/shared.rs", new_patch),
+        restored_review_item("rev-only", "src/only.rs", only_patch),
+    ];
+
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _cx| {
+        view.project_restored_review(&batch);
+
+        let diff_rows = view.transcript.items().filter(|item| item.is_diff()).count();
+        assert_eq!(diff_rows, 3, "every change-set stages one diff row; other items are skipped");
+
+        // Independent oracle: the batch result must equal one rebuild of the
+        // final transcript, which is the projection's stated contract.
+        let expected = super::super::ChangesProjection::rebuild(&view.transcript);
+        let paths = |projection: &super::super::ChangesProjection| {
+            projection.entries().iter().map(|entry| entry.path.clone()).collect::<Vec<_>>()
+        };
+        assert_eq!(paths(&view.changes), paths(&expected));
+        assert_eq!(view.changes.totals(), expected.totals());
+        assert_eq!(view.changes.entries().len(), 2);
+        assert_eq!(
+            view.changes.patch_for(&view.transcript, "src/shared.rs").as_deref(),
+            Some(new_patch),
+            "the newest change-set wins for an overlapping path"
+        );
+        assert_eq!(
+            view.changes.entries().first().map(|entry| entry.path.as_str()),
+            Some("src/only.rs"),
+            "entries list newest change-sets first"
+        );
+    });
+    // Render once so layout consumes the batched rows without divergence.
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn restored_review_batch_dirties_viewer_only_when_selected_patch_changes(cx: &mut TestAppContext) {
+    let stable_patch = "--- a/src/stable.rs\n+++ b/src/stable.rs\n@@ -1 +1 @@\n-a\n+b\n";
+    let other_patch = "--- a/src/other.rs\n+++ b/src/other.rs\n@@ -1 +1 @@\n-a\n+b\n";
+    let updated_patch = "--- a/src/stable.rs\n+++ b/src/stable.rs\n@@ -1 +1 @@\n-b\n+c\n";
+
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _cx| {
+        // Pre-stage a selected change so the dirty flag has both outcomes.
+        view.upsert_diff_card("stable-card".into(), &restored_file_change("src/stable.rs", stable_patch));
+        view.selected_change = Some("src/stable.rs".into());
+        assert!(!view.change_viewer_dirty);
+
+        // A batch that only touches other paths leaves the viewer clean.
+        view.project_restored_review(&[restored_review_item("rev-other", "src/other.rs", other_patch)]);
+        assert!(!view.change_viewer_dirty, "untouched selections stay clean");
+        assert_eq!(view.changes.entries().len(), 2);
+
+        // A batch that replaces the selected patch dirties the viewer.
+        view.project_restored_review(&[restored_review_item("rev-stable", "src/stable.rs", updated_patch)]);
+        assert!(view.change_viewer_dirty, "a replaced selected patch refreshes the viewer");
+        assert_eq!(view.changes.patch_for(&view.transcript, "src/stable.rs").as_deref(), Some(updated_patch));
+
+        // An empty batch is a no-op: no rebuild, no dirty flag, no rows.
+        view.change_viewer_dirty = false;
+        let rows_before = view.transcript.len();
+        view.project_restored_review(&[]);
+        assert!(!view.change_viewer_dirty);
+        assert_eq!(view.transcript.len(), rows_before);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
