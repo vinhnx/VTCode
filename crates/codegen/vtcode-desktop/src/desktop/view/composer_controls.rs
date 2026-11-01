@@ -32,10 +32,12 @@ pub(super) enum DesktopSlashAction {
     Theme(Option<String>),
     Splash,
     Help,
+    Go(String),
 }
 
-/// Settings-tab aliases shared by the `/config` and `/settings` deep-links.
-fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
+/// Settings-tab aliases shared by the `/config` and `/settings` deep-links
+/// and the [`deeplinks`](super::deeplinks) system.
+pub(super) fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
     match name {
         "appearance" | "theme" => Some(settings::SettingsTab::Appearance),
         "accessibility" | "a11y" => Some(settings::SettingsTab::Accessibility),
@@ -43,6 +45,7 @@ fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
         "vtcode" | "general" => Some(settings::SettingsTab::VtCode),
         "connections" | "mcp" | "webmcp" => Some(settings::SettingsTab::Connections),
         "notifications" | "notification" | "alerts" | "updates" => Some(settings::SettingsTab::Notifications),
+        "storage" | "disk" | "cleanup" => Some(settings::SettingsTab::Storage),
         _ => None,
     }
 }
@@ -105,6 +108,7 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
         },
         "config" if args.is_empty() => Some(DesktopSlashAction::Configuration(None)),
         "settings" if args.is_empty() => Some(DesktopSlashAction::Settings(None)),
+        "go" => Some(DesktopSlashAction::Go(args.to_string())),
         "config" => {
             // Runtime-owned sections keep their CLI behavior: reset/clear show
             // the target layer and ask for confirmation, checkup/doctor run
@@ -779,6 +783,31 @@ mod tests {
         ] {
             assert_eq!(desktop_slash_action(input), None, "{input:?} stays with the CLI runtime");
         }
+    }
+
+    #[test]
+    fn desktop_go_routes_deeplinks_and_storage_alias() {
+        assert_eq!(
+            desktop_slash_action("/go settings/shortcuts"),
+            Some(DesktopSlashAction::Go("settings/shortcuts".into()))
+        );
+        assert_eq!(
+            desktop_slash_action("/GO COMMAND/ZEN_MODE"),
+            Some(DesktopSlashAction::Go("COMMAND/ZEN_MODE".into()))
+        );
+        assert_eq!(desktop_slash_action("/go"), Some(DesktopSlashAction::Go(String::new())));
+        // /go always routes natively (even unknown links, which report a
+        // desktop status error) so garbage never falls through headless.
+        assert_eq!(desktop_slash_action("/go nope"), Some(DesktopSlashAction::Go("nope".into())));
+        // Storage joins the known settings tabs for every deep-link surface.
+        assert_eq!(
+            desktop_slash_action("/settings storage"),
+            Some(DesktopSlashAction::Settings(Some(SettingsTab::Storage)))
+        );
+        assert_eq!(
+            desktop_slash_action("/config disk"),
+            Some(DesktopSlashAction::Settings(Some(SettingsTab::Storage)))
+        );
     }
 
     #[test]

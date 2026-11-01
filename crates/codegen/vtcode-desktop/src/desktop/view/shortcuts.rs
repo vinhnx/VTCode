@@ -365,7 +365,7 @@ pub(super) const COMMANDS: [ShortcutCommand; 33] = [
     },
 ];
 
-fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
+pub(super) fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
     match id {
         CommandId::Commands => Box::new(OpenCommandPalette),
         CommandId::ConversationSearch => Box::new(OpenConversationSearch),

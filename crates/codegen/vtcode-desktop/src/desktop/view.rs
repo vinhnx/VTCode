@@ -103,6 +103,7 @@ mod config_search;
 mod configuration;
 mod configuration_render;
 mod curated;
+mod deeplinks;
 mod files_panel;
 mod full_access_confirm;
 mod inspector_changes;

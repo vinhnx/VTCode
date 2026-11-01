@@ -30,6 +30,7 @@ pub(super) fn share_palette_commands(groups: Vec<(String, Vec<PaletteCommand>)>)
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum PaletteKind {
     Commands,
+    GoTo,
     ConversationSearch,
     ConfigSettings,
     Models,
@@ -47,7 +48,7 @@ pub(super) enum PaletteKind {
 
 /// What confirming a palette entry does. Executed through existing methods so
 /// palette and toolbar stay behaviorally identical.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum PaletteAction {
     NewSession,
     CloseSession,
@@ -77,6 +78,8 @@ pub(super) enum PaletteAction {
     InsertHistoryPrompt(String),
     InsertDraft(String),
     SelectWorkspaceReviewFile(String),
+    OpenDeepLink(Box<deeplinks::DeepLink>),
+    OpenGoTo,
 }
 
 impl DesktopView {
@@ -120,7 +123,37 @@ impl DesktopView {
                     },
                     PaletteAction::ToggleTheme,
                 ),
+                {
+                    let mut goto =
+                        command(rust_i18n::t!(i18n::PALETTE_COMMAND_GO_TO).to_string(), PaletteAction::OpenGoTo);
+                    goto.keywords = vec![
+                        "go".to_string(),
+                        "goto".to_string(),
+                        "navigate".to_string(),
+                        "deeplink".to_string(),
+                    ];
+                    goto
+                },
             ],
+        ));
+        groups.push((
+            rust_i18n::t!("app.settings.search.group_settings").to_string(),
+            vec![{
+                let mut entry = command(
+                    settings::SettingsTab::Shortcuts.label(),
+                    PaletteAction::SelectSettingsTab(settings::SettingsTab::Shortcuts),
+                );
+                entry.description = Some(rust_i18n::t!("app.shortcuts.group_label").to_string());
+                entry.keywords = settings::SettingsTab::Shortcuts
+                    .search_keywords()
+                    .iter()
+                    .map(|keyword| (*keyword).to_string())
+                    .collect();
+                entry
+                    .keywords
+                    .push(rust_i18n::t!("app.settings.search.group_settings").to_string());
+                entry
+            }],
         ));
         if let Some(session_id) = self.selected_session_id.clone()
             && self.has_searchable_conversation_content()
@@ -297,7 +330,7 @@ impl DesktopView {
         }
     }
 
-    fn has_searchable_conversation_content(&self) -> bool {
+    pub(super) fn has_searchable_conversation_content(&self) -> bool {
         self.transcript.items().any(|item| {
             (is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
                 || (item.is_tool() && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
@@ -371,6 +404,9 @@ impl DesktopView {
                 family.as_deref() == selected
             }
             PaletteAction::SelectSettingsTab(tab) => !self.config_page_open && self.settings_tab == *tab,
+            PaletteAction::OpenDeepLink(link) => {
+                matches!(link.as_ref(), deeplinks::DeepLink::Route(route) if self.current_route() == *route)
+            }
             PaletteAction::SelectWorkspaceReviewFile(path) => self
                 .workspace_review
                 .as_ref()
@@ -547,6 +583,10 @@ impl DesktopView {
             PaletteAction::ToggleInspector => self.toggle_inspector(cx),
             PaletteAction::ToggleZenMode => self.toggle_zen_mode(window, cx),
             PaletteAction::ToggleTheme => self.toggle_theme(window, cx),
+            PaletteAction::OpenDeepLink(link) => {
+                let _opened = self.open_deeplink(*link, window, cx);
+            }
+            PaletteAction::OpenGoTo => self.open_goto_palette(window, cx),
             PaletteAction::SelectFont { target, family } => self.select_font(target, family, cx),
             PaletteAction::SelectSettingsTab(tab) => {
                 self.settings_tab = tab;
@@ -674,7 +714,26 @@ impl DesktopView {
             | PaletteAction::ToggleZenMode
             | PaletteAction::ToggleTheme
             | PaletteAction::SelectFont { .. }
-            | PaletteAction::SelectSettingsTab(_) => true,
+            | PaletteAction::SelectSettingsTab(_)
+            | PaletteAction::OpenGoTo => true,
+            PaletteAction::OpenDeepLink(link) => match link.as_ref() {
+                deeplinks::DeepLink::Route(_)
+                | deeplinks::DeepLink::SettingsTab(_)
+                | deeplinks::DeepLink::ConfigPage
+                | deeplinks::DeepLink::ConfigPath(_) => true,
+                deeplinks::DeepLink::Palette(deeplinks::PaletteLink::ConversationSearch) => {
+                    self.selected_session_id.is_some() && self.has_searchable_conversation_content()
+                }
+                deeplinks::DeepLink::Palette(deeplinks::PaletteLink::Models) => {
+                    self.session_change_allowed(None) && !self.attachments_picker_open
+                }
+                deeplinks::DeepLink::Palette(deeplinks::PaletteLink::Permissions | deeplinks::PaletteLink::Modes) => {
+                    self.can_select_session_options()
+                }
+                deeplinks::DeepLink::Palette(deeplinks::PaletteLink::ConfigSettings) => self.can_edit_cli_settings(),
+                deeplinks::DeepLink::Palette(_) | deeplinks::DeepLink::Command(_) => true,
+                deeplinks::DeepLink::Action(action) => self.palette_action_available(action),
+            },
             PaletteAction::EditConfigSetting(path) => {
                 self.can_edit_cli_settings()
                     && self
@@ -779,6 +838,7 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
             options.reasoning_effort.hash(&mut hasher);
             options.fast_mode.hash(&mut hasher);
         }
+        PaletteAction::OpenDeepLink(link) => link.path().unwrap_or_else(|| format!("{link:?}")).hash(&mut hasher),
         PaletteAction::NewSession
         | PaletteAction::CloseSession
         | PaletteAction::CopyLatestMessage
@@ -790,7 +850,8 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::ToggleInspector
         | PaletteAction::ToggleZenMode
         | PaletteAction::ToggleTheme
-        | PaletteAction::AttachFiles => {}
+        | PaletteAction::AttachFiles
+        | PaletteAction::OpenGoTo => {}
     }
     format!("palette-label-{:016x}", hasher.finish())
 }

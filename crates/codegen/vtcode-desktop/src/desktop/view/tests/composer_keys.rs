@@ -499,3 +499,41 @@ fn composer_stays_true_borderless_in_both_focus_states(cx: &mut TestAppContext) 
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn focus_composer_shortcut_lands_from_every_route(cx: &mut TestAppContext) {
+    use gpui_kit::Focusable;
+    let (window, view) = open_desktop(cx);
+    // Settings route: focus inside the page, then jump back to the chat input.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).current_route() == Route::Settings);
+        window.click("settings-navigation", cx);
+        window.render_frame(cx);
+        window.press("cmd-l", cx);
+        assert!(view.read(cx).current_route() == Route::Workspace, "cmd-l leaves settings");
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window), "cmd-l lands in the chat input");
+    })
+    .unwrap();
+    // Thread browser route.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_thread_browser(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).current_route() == Route::Browser);
+        window.press("cmd-l", cx);
+        assert!(view.read(cx).current_route() == Route::Workspace, "cmd-l leaves the browser");
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+    })
+    .unwrap();
+    // Working-tree review route.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.show_review(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).current_route() == Route::Review);
+        window.press("cmd-l", cx);
+        assert!(view.read(cx).current_route() == Route::Workspace, "cmd-l leaves review");
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+    })
+    .unwrap();
+}

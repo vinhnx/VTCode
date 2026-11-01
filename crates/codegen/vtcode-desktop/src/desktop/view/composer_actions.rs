@@ -157,9 +157,8 @@ impl DesktopView {
                 }
                 let Some(link) = deeplinks::parse(&target) else {
                     self.clear_submitted_command(window, cx);
-                    self.error = Some(
-                        rust_i18n::t!(i18n::ERRORS_UNKNOWN_DESTINATION, target = target.trim()).to_string(),
-                    );
+                    self.error =
+                        Some(rust_i18n::t!(i18n::ERRORS_UNKNOWN_DESTINATION, target = target.trim()).to_string());
                     cx.notify();
                     return true;
                 };

@@ -94,6 +94,7 @@ pub(super) mod i18n {
     pub const CONFIGURATION_ORIGIN_HINT: &str = "app.configuration.origin_hint";
     pub const CONFIGURATION_UNAVAILABLE: &str = "app.configuration.unavailable";
     pub const CONFIGURATION_UNSET: &str = "app.configuration.unset";
+    pub const ERRORS_UNKNOWN_DESTINATION: &str = "app.errors.unknown_destination";
     pub const FILE_PREVIEW_COPY: &str = "app.file_preview.copy";
     pub const FILES_REFRESH_TOOLTIP: &str = "app.files.refresh_tooltip";
     pub const INSPECTOR_EMPTY_ACTIVITY_TITLE: &str = "app.inspector.empty_activity_title";
@@ -105,12 +106,14 @@ pub(super) mod i18n {
     pub const NAVIGATION_TOGGLE_NAVIGATION: &str = "app.navigation.toggle_navigation";
     pub const NAVIGATION_WORKSPACE_UTILITIES: &str = "app.navigation.workspace_utilities";
     pub const PALETTE_COMMAND_CHOOSE_MODEL: &str = "app.palette.command.choose_model";
+    pub const PALETTE_COMMAND_GO_TO: &str = "app.palette.command.go_to";
     pub const PALETTE_COMMAND_SWITCH_WORKSPACE: &str = "app.palette.command.switch_workspace";
     pub const PALETTE_COMMAND_TOGGLE_INSPECTOR: &str = "app.palette.command.toggle_inspector";
     pub const PALETTE_HISTORY_LOAD: &str = "app.palette.history.load";
     pub const PALETTE_HISTORY_LOADING: &str = "app.palette.history.loading";
     pub const PALETTE_SECTIONS_VTCODE_COMMANDS: &str = "app.palette.sections.vtcode_commands";
     pub const PALETTE_TITLE_CONFIGURATION: &str = "app.palette.title.configuration";
+    pub const PALETTE_TITLE_GO_TO: &str = "app.palette.title.go_to";
     pub const PERMISSIONS_CONFIRM_ACKNOWLEDGE: &str = "app.permissions.confirm_full_acknowledge";
     pub const PERMISSIONS_CONFIRM_FILES_BODY: &str = "app.permissions.confirm_full_files_body";
     pub const PERMISSIONS_CONFIRM_FILES_TITLE: &str = "app.permissions.confirm_full_files_title";
@@ -133,6 +136,7 @@ pub(super) mod i18n {
     pub const WORKSPACE_CHOOSE: &str = "app.workspace.choose";
     pub const WORKSPACE_CURRENT_LABEL: &str = "app.workspace.current_label";
     pub const WORKSPACE_REVIEW_SPLIT: &str = "app.workspace_review.split";
+    pub const WORKSPACE_REVIEW_TITLE: &str = "app.workspace_review.title";
     pub const WORKSPACE_REVIEW_UNIFIED: &str = "app.workspace_review.unified";
     pub const WORKSPACE_SECTION: &str = "app.workspace.section";
 }
@@ -160,7 +164,7 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 57] = [
+        const KEYS: [&str; 61] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
@@ -177,6 +181,7 @@ mod tests {
             i18n::CONFIGURATION_ORIGIN_HINT,
             i18n::CONFIGURATION_UNAVAILABLE,
             i18n::CONFIGURATION_UNSET,
+            i18n::ERRORS_UNKNOWN_DESTINATION,
             i18n::FILE_PREVIEW_COPY,
             i18n::FILES_REFRESH_TOOLTIP,
             i18n::INSPECTOR_EMPTY_ACTIVITY_TITLE,
@@ -188,12 +193,14 @@ mod tests {
             i18n::NAVIGATION_TOGGLE_NAVIGATION,
             i18n::NAVIGATION_WORKSPACE_UTILITIES,
             i18n::PALETTE_COMMAND_CHOOSE_MODEL,
+            i18n::PALETTE_COMMAND_GO_TO,
             i18n::PALETTE_COMMAND_SWITCH_WORKSPACE,
             i18n::PALETTE_COMMAND_TOGGLE_INSPECTOR,
             i18n::PALETTE_HISTORY_LOAD,
             i18n::PALETTE_HISTORY_LOADING,
             i18n::PALETTE_SECTIONS_VTCODE_COMMANDS,
             i18n::PALETTE_TITLE_CONFIGURATION,
+            i18n::PALETTE_TITLE_GO_TO,
             i18n::PERMISSIONS_CONFIRM_ACKNOWLEDGE,
             i18n::PERMISSIONS_CONFIRM_FILES_BODY,
             i18n::PERMISSIONS_CONFIRM_FILES_TITLE,
@@ -216,6 +223,7 @@ mod tests {
             i18n::WORKSPACE_CHOOSE,
             i18n::WORKSPACE_CURRENT_LABEL,
             i18n::WORKSPACE_REVIEW_SPLIT,
+            i18n::WORKSPACE_REVIEW_TITLE,
             i18n::WORKSPACE_REVIEW_UNIFIED,
             i18n::WORKSPACE_SECTION,
         ];

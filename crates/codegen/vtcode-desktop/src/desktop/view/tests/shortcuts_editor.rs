@@ -169,3 +169,113 @@ fn shortcut_unbind_marks_unassigned_and_persists(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn command_palette_badges_shortcuts_and_deeplinks_to_shortcut_settings(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        // Badge viewer: exact-command rows carry their saved chord in a
+        // trailing Kbd with its own accessible label (the row label itself
+        // is unchanged). Zen mode is always available, so its row renders
+        // in the fresh baseline (unavailable rows are filtered before
+        // render and never appear).
+        let zen_mode = super::super::PaletteAction::ToggleZenMode;
+        let badge = format!("{}-shortcut", palette_action_id(&zen_mode));
+        assert!(window.try_find(badge.clone()).is_some(), "zen mode shows its chord badge");
+        let formatted =
+            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("ctrl-cmd-z").expect("default parses"));
+        assert!(
+            window.find(badge).label().is_some_and(|label| label.contains(&formatted)),
+            "badge announces the chord"
+        );
+        // Near-miss neighbor stays badge-free.
+        let theme_badge = format!("{}-shortcut", palette_action_id(&super::super::PaletteAction::ToggleTheme));
+        assert!(window.try_find(theme_badge).is_none(), "theme toggle has no exact command");
+        // Real search path: typing "keyboard" surfaces the deeplink row and
+        // filters out unrelated rows.
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("keyboard", cx);
+        window.render_frame(cx);
+        let deeplink_row = palette_action_id(&super::super::PaletteAction::SelectSettingsTab(
+            super::super::settings::SettingsTab::Shortcuts,
+        ));
+        assert!(window.try_find(deeplink_row).is_some(), "keyboard query surfaces the shortcuts deeplink");
+        assert!(
+            window
+                .try_find(palette_action_id(&super::super::PaletteAction::ToggleTheme))
+                .is_none(),
+            "keyboard query filters out unrelated rows"
+        );
+        // Deeplink entry resolves with keyboard-searchable keywords.
+        let deeplink = {
+            let state = view.read(cx);
+            let entry = state
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .find(|entry| {
+                    matches!(
+                        &entry.action,
+                        super::super::PaletteAction::SelectSettingsTab(tab)
+                            if *tab == super::super::settings::SettingsTab::Shortcuts
+                    )
+                })
+                .expect("command palette deeplinks to shortcut settings");
+            assert!(entry.keywords.iter().any(|keyword| keyword == "keyboard"));
+            assert!(entry.keywords.iter().any(|keyword| keyword == "keybinding"));
+            entry.action.clone()
+        };
+        // Confirming the deeplink lands on the Shortcuts settings tab.
+        view.update(cx, |view, cx| {
+            view.run_palette_action(deeplink, window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).current_route() == Route::Settings);
+        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Shortcuts);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn command_palette_badges_follow_saved_overrides_and_hide_unbound(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let _previous = view.preferences.shortcuts.insert("zen_mode".into(), "ctrl-alt-z".into());
+        });
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        let zen_mode = super::super::PaletteAction::ToggleZenMode;
+        let badge = format!("{}-shortcut", palette_action_id(&zen_mode));
+        let overridden =
+            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("ctrl-alt-z").expect("override parses"));
+        let default =
+            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("ctrl-cmd-z").expect("default parses"));
+        assert!(
+            window
+                .find(badge)
+                .label()
+                .is_some_and(|label| label.contains(&overridden) && !label.contains(&default)),
+            "badge shows the saved override, not the default"
+        );
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            let _previous = view.preferences.shortcuts.insert("zen_mode".into(), String::new());
+            view.close_palette(window, cx);
+            view.open_command_palette(window, cx);
+        });
+        window.render_frame(cx);
+        let zen_mode = super::super::PaletteAction::ToggleZenMode;
+        let badge = format!("{}-shortcut", palette_action_id(&zen_mode));
+        assert!(window.try_find(badge).is_none(), "unbound commands hide their badge");
+        assert!(window.try_find(palette_action_id(&zen_mode)).is_some(), "unbinding hides the badge, not the row");
+    })
+    .unwrap();
+}

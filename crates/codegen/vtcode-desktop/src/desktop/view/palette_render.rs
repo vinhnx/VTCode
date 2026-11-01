@@ -1,6 +1,7 @@
 //! Modal command palette and anchored composer popups.
 use super::*;
 use gpui_kit::EntityId;
+use gpui_kit::component::kbd::Kbd;
 
 impl DesktopView {
     /// Modal ⌘K palette. The state entity is created on open, never during
@@ -68,6 +69,7 @@ impl DesktopView {
             PaletteKind::ConfigSettings => rust_i18n::t!(i18n::PALETTE_TITLE_CONFIGURATION).to_string(),
             PaletteKind::ReviewFiles => rust_i18n::t!("app.palette.title.changed_file").to_string(),
             PaletteKind::Commands => rust_i18n::t!("app.palette.title.commands").to_string(),
+            PaletteKind::GoTo => rust_i18n::t!(i18n::PALETTE_TITLE_GO_TO).to_string(),
         };
         let quick_model = self.palette_kind == PaletteKind::ModelOptions;
         let catalog_empty = confirm_groups.is_empty();
@@ -320,6 +322,7 @@ impl DesktopView {
                 let selected = self.is_current_palette_action(&entry.action);
                 let enabled = self.palette_action_available(&entry.action);
                 let id = palette_entry_element_id(&entry.action);
+                let shortcut = self.palette_action_keystroke(&entry.action);
                 let accessible_label = description
                     .as_ref()
                     .map(|details| format!("{label} · {details}"))
@@ -372,6 +375,24 @@ impl DesktopView {
                                             )
                                         }),
                                 )
+                                .when_some(shortcut.clone(), |row, keystroke| {
+                                    row.child(
+                                        div()
+                                            .id(format!("{id}-shortcut"))
+                                            .test_support()
+                                            .flex_none()
+                                            .role(gpui_kit::Role::Label)
+                                            .aria_label(
+                                                rust_i18n::t!(
+                                                    "app.shortcuts.badge_aria",
+                                                    label = label.clone(),
+                                                    value = Kbd::format(&keystroke)
+                                                )
+                                                .to_string(),
+                                            )
+                                            .child(Kbd::new(keystroke).outline()),
+                                    )
+                                })
                         }),
                 );
             }
@@ -494,5 +515,77 @@ impl DesktopView {
     #[must_use]
     fn palette_is_current(&self, palette_id: EntityId) -> bool {
         self.palette.as_ref().is_some_and(|palette| palette.entity_id() == palette_id)
+    }
+}
+
+impl DesktopView {
+    /// Saved binding behind a palette action for the trailing badge viewer.
+    /// Reads saved preferences (never the staged settings draft) and hides
+    /// unbound or invalid values instead of badgeing them.
+    pub(super) fn palette_action_keystroke(&self, action: &PaletteAction) -> Option<gpui_kit::Keystroke> {
+        let id = palette_action_command_id(action)?;
+        let command = shortcuts::COMMANDS.iter().find(|command| command.id == id)?;
+        let staged = shortcuts::staged_value(&self.preferences.shortcuts, command);
+        if staged.is_empty() {
+            return None;
+        }
+        gpui_kit::Keystroke::parse(staged).ok()
+    }
+}
+
+/// Configurable command behind a palette action, when the action runs the
+/// command exactly. Near-miss neighbors (theme toggle vs theme sync, a
+/// specific model vs the model picker, the shortcuts deeplink itself) stay
+/// badge-free so the viewer never implies a chord that runs something else.
+pub(super) fn palette_action_command_id(action: &PaletteAction) -> Option<shortcuts::CommandId> {
+    match action {
+        PaletteAction::NewSession => Some(shortcuts::CommandId::NewSession),
+        PaletteAction::CloseSession => Some(shortcuts::CommandId::CloseSession),
+        PaletteAction::OpenConversationSearch { .. } => Some(shortcuts::CommandId::ConversationSearch),
+        PaletteAction::ChooseModel => Some(shortcuts::CommandId::Model),
+        PaletteAction::ChooseWorkspace => Some(shortcuts::CommandId::Workspace),
+        PaletteAction::ToggleInspector => Some(shortcuts::CommandId::Inspector),
+        PaletteAction::ToggleZenMode => Some(shortcuts::CommandId::ZenMode),
+        PaletteAction::OpenDeepLink(link) => match link.as_ref() {
+            deeplinks::DeepLink::Command(id) => Some(*id),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn palette_shortcut_badges_cover_exact_commands_only() {
+        use shortcuts::CommandId;
+        // Mapped: the action runs the command exactly.
+        assert_eq!(palette_action_command_id(&PaletteAction::NewSession), Some(CommandId::NewSession));
+        assert_eq!(palette_action_command_id(&PaletteAction::CloseSession), Some(CommandId::CloseSession));
+        assert_eq!(
+            palette_action_command_id(&PaletteAction::OpenConversationSearch { session_id: "s".into() }),
+            Some(CommandId::ConversationSearch)
+        );
+        assert_eq!(palette_action_command_id(&PaletteAction::ChooseModel), Some(CommandId::Model));
+        assert_eq!(palette_action_command_id(&PaletteAction::ChooseWorkspace), Some(CommandId::Workspace));
+        assert_eq!(palette_action_command_id(&PaletteAction::ToggleInspector), Some(CommandId::Inspector));
+        assert_eq!(palette_action_command_id(&PaletteAction::ToggleZenMode), Some(CommandId::ZenMode));
+        // Unmapped asymmetric sides: near-miss neighbors stay badge-free so no
+        // badge implies a chord that runs something else.
+        assert_eq!(palette_action_command_id(&PaletteAction::ToggleTheme), None);
+        assert_eq!(palette_action_command_id(&PaletteAction::CopyLatestMessage), None);
+        assert_eq!(palette_action_command_id(&PaletteAction::BrowseThreads), None);
+        assert_eq!(palette_action_command_id(&PaletteAction::RefreshFiles), None);
+        assert_eq!(
+            palette_action_command_id(&PaletteAction::SelectModel { provider: "p".into(), model: "m".into() }),
+            None
+        );
+        assert_eq!(
+            palette_action_command_id(&PaletteAction::SelectSettingsTab(settings::SettingsTab::Shortcuts)),
+            None
+        );
+        assert_eq!(palette_action_command_id(&PaletteAction::InsertHistoryPrompt("hi".into())), None);
     }
 }

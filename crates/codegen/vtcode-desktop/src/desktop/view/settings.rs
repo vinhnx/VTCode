@@ -17,7 +17,7 @@ pub(super) enum SettingsTab {
 }
 
 impl SettingsTab {
-    const ALL: [Self; 7] = [
+    pub(super) const ALL: [Self; 7] = [
         Self::Appearance,
         Self::Accessibility,
         Self::Shortcuts,
@@ -35,7 +35,7 @@ impl SettingsTab {
     /// Tabs plus the configuration entry.
     pub(super) const PAGE_COUNT: usize = Self::ALL.len() + 1;
 
-    fn label(self) -> String {
+    pub(super) fn label(self) -> String {
         match self {
             Self::Appearance => rust_i18n::t!("app.settings.tab.appearance"),
             Self::Accessibility => rust_i18n::t!("app.settings.tab.accessibility"),
@@ -48,7 +48,7 @@ impl SettingsTab {
         .to_string()
     }
 
-    fn search_keywords(self) -> &'static [&'static str] {
+    pub(super) fn search_keywords(self) -> &'static [&'static str] {
         match self {
             Self::Appearance => &[
                 "appearance",
