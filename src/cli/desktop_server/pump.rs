@@ -197,12 +197,13 @@ pub(super) async fn publish_thread_event(
         ThreadEvent::TurnBlocked(_) => Some("blocked"),
         _ => None,
     };
-    let (turn_id, webmcp_event_hub) = {
+    let (turn_id, webmcp_event_hub, drained) = {
         let mut state = state.lock().await;
         if state.session_id.as_deref().is_some_and(|selected| selected != session_id) {
             return Ok(());
         }
         let turn_id = state.active_turn_id.clone();
+        let mut drained = None;
         if terminal_status.is_some() && turn_id.is_some() && state.session_id.as_deref() == Some(session_id) {
             if let Some(turn_id) = turn_id.as_deref() {
                 state.interaction_registry.finish_turn(session_id, turn_id);
@@ -212,8 +213,11 @@ pub(super) async fn publish_thread_event(
             }
             state.active_turn_id = None;
             state.cancel_requested_turn = None;
+            // Atomically with the release: pop the next queued batch (if any)
+            // so a concurrent submit cannot slip an immediate turn ahead of it.
+            drained = state.pop_next_queued_turn();
         }
-        (turn_id, state.webmcp_event_hub.clone())
+        (turn_id, state.webmcp_event_hub.clone(), drained)
     };
 
     // Cleanup depends on the state transition, not on a potentially full or
@@ -241,6 +245,9 @@ pub(super) async fn publish_thread_event(
             json!({ "sessionId": session_id, "turnId": turn_id, "status": status }),
         )
         .await?;
+    }
+    if let Some(drained) = drained {
+        dispatch_drained_turn(state, notifications, session_id, drained.turn_id, drained.batch, drained.input).await?;
     }
     Ok(())
 }

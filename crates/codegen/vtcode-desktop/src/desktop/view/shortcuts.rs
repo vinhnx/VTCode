@@ -39,10 +39,11 @@ pub(super) enum CommandId {
     PreviousReviewChange,
     NextReviewFile,
     PreviousReviewFile,
+    QueueBatched,
 }
 
 impl CommandId {
-    pub(super) const ALL: [Self; 30] = [
+    pub(super) const ALL: [Self; 31] = [
         Self::Commands,
         Self::ConversationSearch,
         Self::NewSession,
@@ -73,6 +74,7 @@ impl CommandId {
         Self::PreviousReviewChange,
         Self::NextReviewFile,
         Self::PreviousReviewFile,
+        Self::QueueBatched,
     ];
 
     pub(super) const fn as_str(self) -> &'static str {
@@ -107,6 +109,7 @@ impl CommandId {
             Self::PreviousReviewChange => "previous_review_change",
             Self::NextReviewFile => "next_review_file",
             Self::PreviousReviewFile => "previous_review_file",
+            Self::QueueBatched => "queue_batched",
         }
     }
 
@@ -155,7 +158,7 @@ impl ShortcutCommand {
     }
 }
 
-pub(super) const COMMANDS: [ShortcutCommand; 30] = [
+pub(super) const COMMANDS: [ShortcutCommand; 31] = [
     ShortcutCommand {
         id: CommandId::Commands,
         label_key: "app.shortcuts.commands_label",
@@ -336,6 +339,12 @@ pub(super) const COMMANDS: [ShortcutCommand; 30] = [
         description_key: "app.shortcuts.previous_review_file_description",
         default_binding: "alt-shift-f7",
     },
+    ShortcutCommand {
+        id: CommandId::QueueBatched,
+        label_key: "app.shortcuts.queue_batched_label",
+        description_key: "app.shortcuts.queue_batched_description",
+        default_binding: "cmd-enter",
+    },
 ];
 
 fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
@@ -370,6 +379,7 @@ fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
         CommandId::PreviousReviewChange => Box::new(PreviousReviewChange),
         CommandId::NextReviewFile => Box::new(NextReviewFile),
         CommandId::PreviousReviewFile => Box::new(PreviousReviewFile),
+        CommandId::QueueBatched => Box::new(QueueBatched),
     }
 }
 
@@ -556,20 +566,20 @@ mod tests {
 
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 32);
+        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 33);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 31);
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 32);
         assert_eq!(
             bindings(&BTreeMap::from([("settings_search".into(), String::new())]))
                 .unwrap()
                 .len(),
-            30
+            31
         );
         assert_eq!(
             bindings(&BTreeMap::from([("settings".into(), String::new())])).unwrap().len(),
-            30,
+            31,
             "unbinding Settings removes both its desktop and in-settings bindings"
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
@@ -641,6 +651,7 @@ mod tests {
             "previous_review_change",
             "next_review_file",
             "previous_review_file",
+            "queue_batched",
         ];
         assert_eq!(CommandId::ALL.map(CommandId::as_str), pinned);
         assert_eq!(COMMANDS.map(|command| command.id), CommandId::ALL);

@@ -69,6 +69,7 @@ impl DesktopView {
                     self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                     self.fail_workspace_review(rust_i18n::t!("app.service.review_disconnected").to_string());
                     self.running = false;
+                    self.clear_queue_state();
                     self.status = rust_i18n::t!("app.service.disconnected").to_string();
                     changed = true;
                     break;
@@ -96,6 +97,10 @@ impl DesktopView {
         self.notify_agent_activity(&event, window, cx);
         self.maybe_notify_update_available(&event, window, cx);
         self.handle_backend_event(event, cx);
+        if let Some(text) = self.pending_composer_restore.take() {
+            self.composer.update(cx, |state, cx| state.set_value(text, window, cx));
+            self.status = rust_i18n::t!("app.composer.draft_restored").to_string();
+        }
         let interaction_replaced = new_interaction
             && previous_interaction_id.as_deref()
                 != self.interaction.as_ref().map(|interaction| interaction.interaction_id.as_str());
@@ -322,12 +327,24 @@ impl DesktopView {
                     }
                     self.error = Some(error);
                     if method == protocol::method::TURN_SUBMIT {
+                        let had_pending = self.pending_submission.is_some();
                         self.recover_pending_submission(false);
-                        self.running = false;
-                        self.cancel_requested = false;
-                        self.cancel_request_sent = false;
+                        if had_pending {
+                            self.running = false;
+                            self.cancel_requested = false;
+                            self.cancel_request_sent = false;
+                        } else if let Some(index) = self.queued_submissions.iter().position(|entry| !entry.acknowledged)
+                        {
+                            // The failed submit is the oldest unconfirmed
+                            // queued entry (FIFO); the running turn it waited
+                            // on is untouched.
+                            let entry = self.queued_submissions.remove(index);
+                            self.transcript.remove(&entry.echo_id);
+                        }
                     } else if method == protocol::method::TURN_CANCEL {
                         self.cancel_request_sent = false;
+                    } else if method == protocol::method::TURN_QUEUE_TAKE_LATEST {
+                        self.take_latest_pending = false;
                     }
                     self.status = rust_i18n::t!("app.service.request_failed").to_string();
                     return;
@@ -601,7 +618,7 @@ impl DesktopView {
                                 .ok()
                                 .filter(|accepted| {
                                     self.selected_session_id.as_deref() == Some(accepted.session_id.as_str())
-                                        && !accepted.turn_id.is_empty()
+                                        && (accepted.queued || !accepted.turn_id.is_empty())
                                 });
                         let Some(accepted) = accepted else {
                             if self.pending_submission.is_some() {
@@ -609,11 +626,39 @@ impl DesktopView {
                                 self.running = false;
                                 self.status = rust_i18n::t!("app.service.invalid_ack").to_string();
                             }
+                            // Unconfirmed queued entries stay: the ack is
+                            // unactionable, and the next queue-status snapshot
+                            // reconciles them.
                             self.error = Some(rust_i18n::t!("app.service.invalid_ack_detail").to_string());
                             return;
                         };
+                        if accepted.queued {
+                            if !self.confirm_oldest_queued_submission() {
+                                // No unconfirmed entry: the ack belongs to an
+                                // in-flight immediate submit that the service
+                                // queued behind a fresh turn (demotion race).
+                                if let Some(draft) = self.pending_submission.take() {
+                                    self.pending_first_submission = false;
+                                    self.queued_submissions.push(QueuedSubmission {
+                                        echo_id: draft.echo_id,
+                                        prompt: draft.prompt,
+                                        acknowledged: true,
+                                    });
+                                }
+                            }
+                            self.try_send_pending_cancel();
+                            return;
+                        }
+                        // Immediate ack: the pending submit, or a queued entry
+                        // the service promoted when the session went idle first.
                         // Lifecycle events can complete the turn before the request response arrives.
-                        if self.pending_submission.is_none() && self.active_turn_id.is_none() {
+                        // An already-started turn owns its ack: queued entries
+                        // are newer submissions whose own acks are still in
+                        // flight, so promotion only runs while idle.
+                        if self.pending_submission.is_none()
+                            && self.active_turn_id.is_none()
+                            && !self.confirm_oldest_queued_submission()
+                        {
                             return;
                         }
                         self.pending_submission = None;
@@ -622,6 +667,40 @@ impl DesktopView {
                         self.running = true;
                         self.status = rust_i18n::t!("app.service.running").to_string();
                         self.try_send_pending_cancel();
+                    }
+                    protocol::method::TURN_QUEUE_TAKE_LATEST => {
+                        self.take_latest_pending = false;
+                        let taken = serde_json::from_value::<protocol::TurnQueueTakeLatestResult>(result)
+                            .ok()
+                            .filter(|taken| self.selected_session_id.as_deref() == Some(taken.session_id.as_str()));
+                        let Some(taken) = taken else {
+                            self.error = Some(rust_i18n::t!("app.service.invalid_ack_detail").to_string());
+                            return;
+                        };
+                        self.queue_depth = taken.queue_depth;
+                        let Some(text) = taken.text else {
+                            return;
+                        };
+                        // Remove the newest confirmed entry (the request-time
+                        // newest; anything newer arrived after the request).
+                        // The service text is authoritative.
+                        if let Some(index) = self.queued_submissions.iter().rposition(|entry| entry.acknowledged) {
+                            let entry = self.queued_submissions.remove(index);
+                            self.transcript.remove(&entry.echo_id);
+                        }
+                        if self.composer.read(cx).value().is_empty() {
+                            self.pending_composer_restore = Some(text);
+                        } else {
+                            // A draft arrived during the round trip: retain the
+                            // popped text instead of clobbering it.
+                            self.retained_submission = Some(SubmissionDraft {
+                                prompt: text,
+                                attachments: Vec::new(),
+                                echo_id: format!("desktop-user-{}", uuid_like_id()),
+                                delivery_uncertain: false,
+                            });
+                            self.status = rust_i18n::t!("app.composer.draft_restored").to_string();
+                        }
                     }
                     protocol::method::TURN_CANCEL => {
                         self.status = rust_i18n::t!("app.service.cancel_accepted").to_string();
@@ -748,6 +827,12 @@ impl DesktopView {
                     cx.notify();
                 }
             }
+            BackendEvent::TurnQueueStatus(status) => {
+                let Ok(snapshot) = serde_json::from_value::<protocol::TurnQueueStatus>(status) else {
+                    return;
+                };
+                self.apply_queue_status(snapshot);
+            }
             BackendEvent::TurnStatus(status) => {
                 if !status.get(keys::SESSION_ID).and_then(Value::as_str).is_some_and(|session_id| {
                     self.notification_matches(session_id, status.get(keys::TURN_ID).and_then(Value::as_str))
@@ -783,6 +868,7 @@ impl DesktopView {
                 self.active_turn_id = None;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
+                self.clear_queue_state();
                 if self.pending_workspace.is_none() {
                     self.fail_pending_navigation();
                 }
@@ -834,6 +920,7 @@ impl DesktopView {
                 self.background_activity_count = 0;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
+                self.clear_queue_state();
             }
         }
     }

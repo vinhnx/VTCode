@@ -70,6 +70,7 @@ pub(crate) enum BackendEvent {
     PrimaryAgentChanged(protocol::PrimaryAgentChanged),
     Interaction(InteractionRequest),
     TurnStatus(Value),
+    TurnQueueStatus(Value),
     UiProgress(Value),
     Exited {
         status: Option<i32>,
@@ -477,6 +478,7 @@ fn decode_frame(
                 .map(Some)
                 .map_err(|_error| ProtocolDecodeError),
             protocol::method::TURN_STATUS => Ok(Some(BackendEvent::TurnStatus(params))),
+            protocol::method::TURN_QUEUE_STATUS => Ok(Some(BackendEvent::TurnQueueStatus(params))),
             protocol::method::UI_PROGRESS => Ok(Some(BackendEvent::UiProgress(params))),
             _ => Ok(None),
         };

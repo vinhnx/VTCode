@@ -16,6 +16,16 @@ impl DesktopView {
     }
 
     pub(super) fn submit_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.submit_prompt_with_batching(window, cx, false);
+    }
+
+    /// Submit like [`Self::submit_prompt`], but a queued submission merges
+    /// with other queued text into a single turn (CLI Ctrl+Enter parity).
+    pub(super) fn submit_batched_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.submit_prompt_with_batching(window, cx, true);
+    }
+
+    fn submit_prompt_with_batching(&mut self, window: &mut Window, cx: &mut Context<Self>, batchable: bool) {
         let prompt = self.composer.read(cx).value().to_string();
         let desktop_slash_action = composer_controls::desktop_slash_action(&prompt);
         if desktop_slash_action.as_ref() == Some(&composer_controls::DesktopSlashAction::StopTurn) {
@@ -23,7 +33,7 @@ impl DesktopView {
                 self.handle_desktop_slash_action(composer_controls::DesktopSlashAction::StopTurn, window, cx);
             return;
         }
-        if !self.session_change_idle() || self.attachments_picker_open || self.retained_submission.is_some() {
+        if !self.submit_allowed() || self.attachments_picker_open || self.retained_submission.is_some() {
             return;
         }
         if prompt.trim().is_empty() {
@@ -78,6 +88,14 @@ impl DesktopView {
                 self.attachments = draft.attachments;
                 false
             }
+        } else if self.running {
+            match self.enqueue_queued_submission(draft, batchable, cx) {
+                Ok(()) => true,
+                Err(draft) => {
+                    self.attachments = draft.attachments;
+                    false
+                }
+            }
         } else {
             match self.enqueue_submission(draft, cx) {
                 Ok(()) => true,
@@ -120,29 +138,8 @@ impl DesktopView {
             self.error = Some(rust_i18n::t!(i18n::QUEUE_FULL).to_string());
             return Err(draft);
         }
-        if let Some(entry) = self
-            .sessions
-            .iter_mut()
-            .find(|session| session.session_id == session_id && session.title.as_deref().is_none_or(str::is_empty))
-        {
-            entry.title = Some(session_title_from_prompt(&draft.prompt));
-        }
-        let echo = if draft.attachments.is_empty() {
-            draft.prompt.clone()
-        } else {
-            let paths = draft
-                .attachments
-                .iter()
-                .map(|attachment| attachment.path.as_str())
-                .collect::<Vec<_>>();
-            format!("{}\n\n{}", draft.prompt, rust_i18n::t!("app.composer.attached_list", paths = paths.join(", ")))
-        };
-        self.transcript.push(TranscriptItem::new(
-            draft.echo_id.clone(),
-            TranscriptRole::User.as_str().into(),
-            rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string().into(),
-            echo,
-        ));
+        self.ensure_session_title(&session_id, &draft.prompt);
+        self.push_submission_echo(&draft);
         self.pending_submission = Some(draft);
         self.pending_first_submission = false;
         self.transcript.follow_latest();

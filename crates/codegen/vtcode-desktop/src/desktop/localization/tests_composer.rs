@@ -47,6 +47,10 @@ fn composer_copy_is_localized_for_every_language() {
             "app.composer.attached_list",
             "app.composer.prompt_too_long",
             "app.composer.dismiss",
+            "app.composer.queued_count",
+            "app.composer.edit_queued",
+            "app.composer.queue_hint",
+            "app.composer.queue_dropped",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
@@ -76,5 +80,9 @@ fn composer_copy_is_localized_for_every_language() {
         assert!(reasoning.contains("demo-effort"), "{locale}: {reasoning}");
         let attached = rust_i18n::t!("app.composer.attached_list", locale = locale, paths = "a, b").to_string();
         assert!(attached.contains("a, b"), "{locale}: {attached}");
+        let queued = rust_i18n::t!("app.composer.queued_count", locale = locale, count = 3).to_string();
+        assert!(queued.contains('3'), "{locale}: {queued}");
+        let dropped = rust_i18n::t!("app.composer.queue_dropped", locale = locale, dropped = 7).to_string();
+        assert!(dropped.contains('7'), "{locale}: {dropped}");
     }
 }

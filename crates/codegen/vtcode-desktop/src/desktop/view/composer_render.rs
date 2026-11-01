@@ -220,6 +220,15 @@ impl DesktopView {
             );
         }
 
+        match self.queue_panel_state() {
+            QueuePanelState::Entries => {
+                panel = panel.child(self.render_queued_messages(cx));
+            }
+            QueuePanelState::Hint => {
+                panel = panel.child(self.render_queue_hint(cx));
+            }
+            QueuePanelState::Hidden => {}
+        }
         if let Some(error) = self.error.as_ref() {
             panel = panel.child(error_alert("composer-error", error.clone(), &colors));
         }
@@ -396,6 +405,9 @@ impl DesktopView {
                 div()
                     .w_full()
                     .on_action(cx.listener(|view, _: &Enter, window, cx| view.handle_composer_enter(window, cx)))
+                    .on_action(cx.listener(|view, _: &QueueBatched, window, cx| {
+                        view.submit_batched_prompt(window, cx);
+                    }))
                     .capture_action(cx.listener(|view, _: &MoveUp, window, cx| {
                         if view.move_composer_suggestion(false, window, cx) {
                             cx.stop_propagation();

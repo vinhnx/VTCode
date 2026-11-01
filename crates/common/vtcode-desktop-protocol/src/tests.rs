@@ -342,6 +342,7 @@ fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> 
         "prompt": "hi",
     }))?;
     assert!(submit.attachments.is_empty(), "attachments default for 1.0 clients");
+    assert!(!submit.batchable, "batchable defaults for pre-queue clients");
 
     let value = serde_json::to_value(TurnSubmitParams {
         session_id: "s".to_string(),
@@ -350,8 +351,10 @@ fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> 
             path: "src/a.rs".to_string(),
             text: "fn a() {}".to_string(),
         }],
+        batchable: true,
     })?;
     assert_eq!(value["attachments"][0]["path"], "src/a.rs");
+    assert_eq!(value["batchable"], true);
 
     let model = serde_json::to_value(ModelInfo {
         provider: "openai".to_string(),
@@ -619,4 +622,85 @@ async fn cloned_senders_keep_the_stream_alive_until_the_last_one_drops() {
     drop(clone);
     assert!(receiver.recv().await.is_some());
     assert_eq!(receiver.recv().await, None, "drained queue with no senders ends the stream");
+}
+
+#[test]
+fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(), Box<dyn Error>> {
+    assert_eq!(method::TURN_QUEUE_TAKE_LATEST, "turn/queue/take-latest");
+    assert_eq!(method::TURN_QUEUE_STATUS, "turn/queue-status");
+
+    let legacy_accepted: TurnAccepted = serde_json::from_value(serde_json::json!({
+        "sessionId": "s",
+        "turnId": "t",
+    }))?;
+    assert!(!legacy_accepted.queued, "queued defaults for pre-queue services");
+    assert_eq!(legacy_accepted.queue_depth, 0);
+    assert_eq!(legacy_accepted.dropped, 0);
+
+    let accepted = TurnAccepted {
+        session_id: "s".to_string(),
+        turn_id: "t".to_string(),
+        queued: true,
+        queue_depth: 2,
+        dropped: 1,
+    };
+    let value = serde_json::to_value(&accepted)?;
+    assert_eq!(value["queued"], true);
+    assert_eq!(value["queueDepth"], 2);
+    assert_eq!(value["dropped"], 1);
+    assert_eq!(serde_json::from_value::<TurnAccepted>(value)?, accepted);
+
+    let empty_take = TurnQueueTakeLatestResult {
+        session_id: "s".to_string(),
+        text: None,
+        queue_depth: 0,
+    };
+    let value = serde_json::to_value(&empty_take)?;
+    assert_eq!(value["text"], Value::Null);
+    assert_eq!(serde_json::from_value::<TurnQueueTakeLatestResult>(value)?, empty_take);
+
+    let legacy_status: TurnQueueStatus = serde_json::from_value(serde_json::json!({
+        "sessionId": "s",
+        "queueDepth": 3,
+    }))?;
+    assert!(legacy_status.previews.is_empty());
+    assert_eq!(legacy_status.dropped_total, 0);
+
+    let status = TurnQueueStatus {
+        session_id: "s".to_string(),
+        queue_depth: 3,
+        previews: vec!["first".to_string(), "second".to_string()],
+        dropped_total: 4,
+    };
+    let value = serde_json::to_value(&status)?;
+    assert_eq!(value["queueDepth"], 3);
+    assert_eq!(value["previews"], serde_json::json!(["first", "second"]));
+    assert_eq!(value["droppedTotal"], 4);
+    assert_eq!(serde_json::from_value::<TurnQueueStatus>(value)?, status);
+    Ok(())
+}
+
+#[test]
+fn queue_preview_label_truncates_at_char_boundaries() {
+    assert_eq!(queue_preview_label(""), "");
+    assert_eq!(queue_preview_label("short"), "short");
+
+    let exact = "a".repeat(MAX_QUEUE_PREVIEW_CHARS);
+    assert_eq!(queue_preview_label(&exact), exact, "exact fit keeps the full text");
+
+    let over = "b".repeat(MAX_QUEUE_PREVIEW_CHARS + 1);
+    let expected = format!("{}…", "b".repeat(MAX_QUEUE_PREVIEW_CHARS));
+    assert_eq!(queue_preview_label(&over), expected, "one over truncates with ellipsis");
+
+    let emoji = "\u{1F600}".repeat(MAX_QUEUE_PREVIEW_CHARS + 5);
+    let preview = queue_preview_label(&emoji);
+    assert_eq!(
+        preview.chars().count(),
+        MAX_QUEUE_PREVIEW_CHARS + 1,
+        "multi-byte truncation counts chars, not bytes"
+    );
+    assert!(preview.ends_with('…'));
+    assert!(preview.is_char_boundary(preview.len() - '…'.len_utf8()));
+
+    assert_eq!(queue_preview_label("line one\nline two"), "line one\nline two", "short multiline text is preserved");
 }

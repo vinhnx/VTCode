@@ -58,9 +58,10 @@ impl RuntimeAdapter for DesktopWebmcpRuntime {
                 vtcode_webmcp::WebmcpError::Unsupported("select a VT Code Desktop session first".into())
             })?
         };
-        let accepted = enqueue_turn(&self.state, &self.notifications, &session_id, prompt, Vec::new())
-            .await
-            .map_err(|error| vtcode_webmcp::WebmcpError::Adapter(error.to_string()))?;
+        let accepted =
+            enqueue_turn(&self.state, &self.notifications, &session_id, prompt, Vec::new(), EnqueueMode::Immediate)
+                .await
+                .map_err(|error| vtcode_webmcp::WebmcpError::Adapter(error.to_string()))?;
         Ok(TurnResult { turn_id: accepted.turn_id, accepted: true })
     }
 }

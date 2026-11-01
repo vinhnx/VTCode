@@ -103,7 +103,7 @@ async fn accepted_turn_is_not_rejected_or_blocked_by_status_queue() {
         });
         let accepted = timeout(
             Duration::from_secs(1),
-            enqueue_turn(&state, &notifications, "session", "only once".into(), Vec::new()),
+            enqueue_turn(&state, &notifications, "session", "only once".into(), Vec::new(), EnqueueMode::Immediate),
         )
         .await
         .expect("a full notification queue must not block the request")

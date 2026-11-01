@@ -10,7 +10,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 23 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 24 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -289,8 +289,9 @@ pub use session::{
 
 pub mod turn;
 pub use turn::{
-    SESSION_START_TURN_ID, STARTUP_INTERACTION_PENDING_ERROR, TurnAccepted, TurnAttachment, TurnCancelParams,
-    TurnSubmitParams,
+    MAX_QUEUE_PREVIEW_CHARS, MAX_QUEUE_STATUS_PREVIEWS, SESSION_START_TURN_ID, STARTUP_INTERACTION_PENDING_ERROR,
+    TurnAccepted, TurnAttachment, TurnCancelParams, TurnQueueStatus, TurnQueueTakeLatestParams,
+    TurnQueueTakeLatestResult, TurnSubmitParams, queue_preview_label,
 };
 
 pub mod update;

@@ -435,6 +435,7 @@ mod startup_interactions;
 mod storage_settings;
 mod themes_transcript;
 mod thread_tabs;
+mod turn_queue;
 mod turns_transcript;
 mod worktree_a11y;
 mod zen_options;

@@ -29,6 +29,8 @@ pub const WORKTREE_REMOVE: &str = "worktree/remove";
 pub const TURN_SUBMIT: &str = "turn/submit";
 /// Cancel a running turn.
 pub const TURN_CANCEL: &str = "turn/cancel";
+/// Pop the newest queued message back for editing.
+pub const TURN_QUEUE_TAKE_LATEST: &str = "turn/queue/take-latest";
 /// Respond to a pending interaction.
 pub const INTERACTION_RESPOND: &str = "interaction/respond";
 /// Discover active provider/model setup.
@@ -62,6 +64,8 @@ pub const INTERACTION_REQUESTED: &str = "interaction/requested";
 pub const PRIMARY_AGENT_CHANGED: &str = "session/primaryAgentChanged";
 /// Publish visible turn state.
 pub const TURN_STATUS: &str = "turn/status";
+/// Publish the authoritative queued-message snapshot.
+pub const TURN_QUEUE_STATUS: &str = "turn/queue-status";
 /// Read bridge state and the non-secret configured origin list.
 pub const WEBMCP_STATUS: &str = "webmcp/status";
 /// Start or reuse the WebMCP bridge and issue an origin-bound pairing code.

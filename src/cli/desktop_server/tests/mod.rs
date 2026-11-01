@@ -147,4 +147,5 @@ mod spooled_scope;
 mod startup_interaction;
 mod storage;
 mod terminal_pump;
+mod turn_queue;
 mod update_status;

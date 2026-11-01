@@ -68,6 +68,8 @@ fn shortcuts_copy_is_localized_for_every_language() {
             "app.shortcuts.next_review_file_description",
             "app.shortcuts.previous_review_file_label",
             "app.shortcuts.previous_review_file_description",
+            "app.shortcuts.queue_batched_label",
+            "app.shortcuts.queue_batched_description",
             "app.shortcuts.unsaved_description",
             "app.shortcuts.browse_description",
             "app.shortcuts.save",

@@ -15,4 +15,4 @@ pub(crate) use action::InlineLoopAction;
 pub(crate) use context::InlineEventContext;
 pub(crate) use driver::{InlineEventLoopResources, poll_inline_loop_action};
 pub(crate) use interrupts::InlineInterruptCoordinator;
-pub(crate) use queue::{InlineQueueState, QueuedInput};
+pub(crate) use queue::{InlineQueueState, QueuedInput, pop_batched_submission, push_capped};

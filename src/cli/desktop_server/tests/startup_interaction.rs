@@ -99,9 +99,16 @@ async fn startup_interaction_blocks_turns_and_session_changes_until_answered() {
     assert_eq!(interaction.turn_id, "session-start");
     assert!(!webmcp_status(&context).await.turns_available);
     assert!(!adapter.status().await.expect("browser status").turns_available);
-    let error = enqueue_turn(&context.state, &context.notifications, "session", "hello".into(), Vec::new())
-        .await
-        .expect_err("pending question blocks turns");
+    let error = enqueue_turn(
+        &context.state,
+        &context.notifications,
+        "session",
+        "hello".into(),
+        Vec::new(),
+        EnqueueMode::Immediate,
+    )
+    .await
+    .expect_err("pending question blocks turns");
     assert!(error.downcast_ref::<StartupInteractionPending>().is_some());
     let turn = Request {
         jsonrpc: "2.0".into(),
@@ -149,9 +156,16 @@ async fn startup_interaction_blocks_turns_and_session_changes_until_answered() {
     assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Transient(_))));
     assert!(webmcp_status(&context).await.turns_available);
     assert!(adapter.status().await.expect("browser status").turns_available);
-    enqueue_turn(&context.state, &context.notifications, "session", "hello".into(), Vec::new())
-        .await
-        .expect("turn accepted after answer");
+    enqueue_turn(
+        &context.state,
+        &context.notifications,
+        "session",
+        "hello".into(),
+        Vec::new(),
+        EnqueueMode::Immediate,
+    )
+    .await
+    .expect("turn accepted after answer");
     assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Submit(_))));
     drop(exit_sender);
     runtime_task.abort();

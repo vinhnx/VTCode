@@ -6,6 +6,7 @@ mod session_preferences;
 mod shared_preferences;
 mod theme_preferences;
 
+use std::collections::VecDeque;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -32,8 +33,8 @@ use vtcode_desktop_protocol::{
     ThreadEventNotification,
 };
 use vtcode_ui::tui::app::{
-    ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, SubmittedInput,
-    host_interaction_from_command, host_interaction_response, new_host_session,
+    ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, host_interaction_from_command,
+    host_interaction_response, new_host_session,
 };
 use vtcode_webmcp::runtime::{
     AppliedChange, CheckResult, FileSnapshot, PatchProposal, RuntimeAdapter, RuntimeStatus, TurnResult, WorkspaceFile,
@@ -41,6 +42,7 @@ use vtcode_webmcp::runtime::{
 use vtcode_webmcp::{FileChange, FilesystemWorkspace, WebmcpServer, WebmcpServerConfig};
 
 use crate::agent::agents::{ResumeSession, load_resume_session};
+use crate::agent::runloop::unified::QueuedInput;
 use crate::agent::runloop::unified::turn::run_single_agent_loop_unified_with_host;
 use crate::startup::StartupContext;
 
@@ -56,6 +58,8 @@ use pump::{publish_interaction, sanitize_primary_agent_display};
 #[cfg(test)]
 use pump::{publish_primary_agent_changed, publish_thread_event};
 use pump::{respond_to_interaction, spawn_session_pump};
+mod turn_queue;
+use turn_queue::{EnqueueMode, dispatch_drained_turn, enqueue_turn, publish_queue_status_sync};
 mod webmcp;
 #[cfg(test)]
 use webmcp::install_session_runtime;
@@ -92,6 +96,12 @@ struct ServerState {
     active_turn_id: Option<String>,
     session_transitioning: bool,
     cancel_requested_turn: Option<String>,
+    /// Prompts queued behind the active turn; drained FIFO on terminal events
+    /// with CLI batching semantics. Desktop agent switches require an idle
+    /// session, so every entry carries `primary_agent: None`.
+    queue: VecDeque<QueuedInput>,
+    /// Total oldest queued prompts discarded by the soft cap.
+    queue_dropped_total: usize,
     pending_interactions: std::collections::HashMap<String, PendingInteraction>,
     interaction_registry: InteractionRegistry,
     /// Provider/model override applied to every session started after a
@@ -747,6 +757,7 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                 &params.session_id,
                 params.prompt,
                 attachment_parts,
+                EnqueueMode::Queueable { batchable: params.batchable },
             )
             .await?;
             Ok((serde_json::to_value(accepted)?, false))
@@ -780,6 +791,30 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             }
             Ok((json!({ "cancelRequested": true }), false))
         }
+        method::TURN_QUEUE_TAKE_LATEST => {
+            let params: protocol::TurnQueueTakeLatestParams = parse_params(&request.params)?;
+            let (result, status) = {
+                let mut state = context.state.lock().await;
+                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
+                    bail!("session is not selected");
+                }
+                // Text-only restore mirrors the CLI queue edit: attachments
+                // stay with their dispatched turn and the composer re-attaches
+                // on resubmit.
+                let text = state.queue.pop_back().map(|queued| queued.input.text);
+                let result = protocol::TurnQueueTakeLatestResult {
+                    session_id: params.session_id,
+                    queue_depth: state.queue.len(),
+                    text,
+                };
+                let status = result.text.is_some().then(|| state.queue_status(&result.session_id));
+                (result, status)
+            };
+            if let Some(status) = status {
+                publish_queue_status_sync(&context.notifications, &status);
+            }
+            Ok((serde_json::to_value(result)?, false))
+        }
         method::INTERACTION_RESPOND => {
             let response: protocol::InteractionResponse = parse_params(&request.params)?;
             respond_to_interaction(context, response).await?;
@@ -790,72 +825,6 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
         }
         _ => bail!("unknown desktop method"),
     }
-}
-
-async fn enqueue_turn(
-    state: &Mutex<ServerState>,
-    notifications: &mpsc::Sender<protocol::Notification>,
-    session_id: &str,
-    prompt: String,
-    attachment_parts: Vec<ContentPart>,
-) -> Result<protocol::TurnAccepted> {
-    if prompt.trim().is_empty() {
-        bail!("prompt must not be empty");
-    }
-    let turn_id = uuid::Uuid::new_v4().to_string();
-    let input = {
-        let mut state = state.lock().await;
-        if state.session_transitioning {
-            bail!("a session change is in progress");
-        }
-        if state.session_id.as_deref() != Some(session_id) {
-            bail!("session is not selected");
-        }
-        if state.active_turn_id.is_some() {
-            bail!("another turn is already running");
-        }
-        if !state.pending_interactions.is_empty() {
-            if state.pending_interactions.values().all(|interaction| {
-                interaction.session_id == session_id && interaction.turn_id == protocol::SESSION_START_TURN_ID
-            }) {
-                return Err(StartupInteractionPending.into());
-            }
-            bail!("resolve the pending CLI interaction before submitting a turn");
-        }
-        let runtime = state
-            .runtime
-            .as_ref()
-            .ok_or_else(|| anyhow!("selected session is not running"))?;
-        if runtime.input.is_closed() {
-            bail!("selected session runtime has stopped; reload the session to continue");
-        }
-        let input = runtime.input.clone();
-        state.cancel_requested_turn = None;
-        state.active_turn_id = Some(turn_id.clone());
-        input
-    };
-    if input
-        .send(InlineEvent::Submit(SubmittedInput::new(prompt, attachment_parts)))
-        .is_err()
-    {
-        let mut state = state.lock().await;
-        if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
-            state.active_turn_id = None;
-            state.cancel_requested_turn = None;
-        }
-        bail!("selected session runtime has stopped; reload the session to continue");
-    }
-    // The prompt has crossed the runtime boundary. Status is advisory: waiting
-    // for this queue here can deadlock the request loop, and reporting failure
-    // after delivery could cause a client to submit the same prompt twice.
-    if let Err(error) = notifications.try_send(protocol::Notification {
-        jsonrpc: "2.0".to_string(),
-        method: protocol::method::TURN_STATUS.to_string(),
-        params: json!({ "sessionId": session_id, "turnId": turn_id, "status": "running" }),
-    }) {
-        tracing::warn!(target: "vtcode.desktop", %error, "could not publish turn status");
-    }
-    Ok(protocol::TurnAccepted { session_id: session_id.to_string(), turn_id })
 }
 
 async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus {

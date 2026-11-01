@@ -3,6 +3,7 @@
 use super::*;
 
 /// Retain the exact submitted content until the service accepts it.
+#[derive(Debug)]
 pub(super) struct SubmissionDraft {
     pub(super) prompt: String,
     pub(super) attachments: Vec<protocol::TurnAttachment>,
@@ -100,6 +101,13 @@ pub(super) struct ActivePrimaryAgentDisplay {
 impl DesktopView {
     pub(super) fn session_change_idle(&self) -> bool {
         self.workspace_switch_idle() && self.backend.is_some() && self.interaction.is_none()
+    }
+
+    /// Whether a prompt may be submitted right now. Unlike
+    /// `session_change_idle`, a running turn does not block: the prompt
+    /// queues behind it. True session transitions still block.
+    pub(super) fn submit_allowed(&self) -> bool {
+        self.workspace_transition_idle() && self.backend.is_some() && self.interaction.is_none()
     }
 
     pub(super) fn session_change_allowed(&self, reload_session_id: Option<&str>) -> bool {
@@ -630,6 +638,7 @@ impl DesktopView {
         self.pending_submission = None;
         self.pending_first_submission = false;
         self.first_submission = None;
+        self.clear_queue_state();
         self.session_request = None;
         self.pending_new_thread = false;
         self.retained_submission = None;

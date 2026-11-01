@@ -79,9 +79,16 @@ async fn session_close_excludes_webmcp_turns_until_shutdown_finishes() {
     });
     assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Exit)));
     assert!(!webmcp_status(&context).await.turns_available);
-    let error = enqueue_turn(&context.state, &context.notifications, "current", "Inspect".into(), Vec::new())
-        .await
-        .expect_err("a transition must reject a browser turn");
+    let error = enqueue_turn(
+        &context.state,
+        &context.notifications,
+        "current",
+        "Inspect".into(),
+        Vec::new(),
+        EnqueueMode::Immediate,
+    )
+    .await
+    .expect_err("a transition must reject a browser turn");
     assert!(error.to_string().contains("session change"));
     exit_sender.send(Ok(())).expect("finish shutdown");
     close.await.expect("close task").expect("close request");

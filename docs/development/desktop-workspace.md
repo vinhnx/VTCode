@@ -508,7 +508,7 @@ Cancelling sends no answer drafts; oversized submissions remain editable instead
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.22` (additive over 1.0–1.21; older fields are serde-defaulted). Incompatible ranges
+server negotiate protocol version `1.24` (additive over 1.0–1.23; older fields are serde-defaulted). Incompatible ranges
 fail explicitly. The protocol crate caps a line at 1 MiB.
 Restored history keeps archive indices for model-only context but marks those rows hidden; desktop paging advances through
 hidden-only pages without displaying them. The CLI resume view uses the same context filter.
@@ -535,7 +535,9 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `storage/summary` | Measure on-disk usage with bounded walks: session archives, managed worktrees, per-workspace memory stores, and the rest of the state directory; session archives and worktrees also report entry counts. |
 | `session/delete` | Delete one archived session by ID after validating the archive path; the selected (active) session is protected and the request fails. |
 | `worktree/list`, `worktree/remove` | List managed `.vtcode/worktrees/` checkouts with their HEAD and dirty flag, or remove one by name. |
-| `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |
+| `turn/submit`, `turn/cancel` | Submit one user turn (queued behind a running turn when busy) or cancel its exact session/turn identity. |
+| `turn/queue/take-latest` | Pop the newest queued message back for editing; returns its text (empty queue returns null). |
+| `turn/queue-status` | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, cumulative `droppedTotal`). |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `composer/resources` | List bounded CLI-safe resource tokens for composer file and mention autocomplete. |
 | `mcp/app/read` | Read one bounded MCP app resource body for static previews. |
@@ -547,6 +549,17 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 
 The service consumes an interaction response only after the active runtime accepts its typed event. Failed delivery leaves
 the interaction pending so the client can retry or let session cleanup dismiss it.
+
+Queued messages mirror the CLI queue semantics. A `turn/submit` that arrives while a turn runs is queued instead of
+rejected and acknowledged with `queued: true` plus the exact `queueDepth` (a queued prompt owns no turn id until its
+batch dispatches, so `turnId` is empty). Batches drain FIFO on terminal events through the same drain core as the TUI:
+`batchable` text-only runs coalesce into one turn (at most 32 items / 64 KiB combined) while plain submits and
+attachment-carrying submits dispatch alone; cancellation preserves the queue. The soft cap keeps 256 prompts, drops the
+oldest first, and reports every gap (`dropped` per acceptance, cumulative `droppedTotal` per snapshot) so a discard is
+never silent. `turn/queue/take-latest` restores the newest queued text into the composer (text-only, like the CLI
+queue edit); the client reconciles its optimistic entries against each `turn/queue-status` snapshot and falls back to
+the service previews when local entries are missing. Ephemeral queue state dies with the session. WebMCP turns keep the
+old contract and are rejected while busy because the browser tracks them by runtime turn id.
 
 Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-events` along with interaction requests,
 turn status, and session-scoped primary-agent display changes. A client must reject stale or duplicate interaction

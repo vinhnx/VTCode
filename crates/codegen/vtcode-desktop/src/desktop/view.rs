@@ -115,6 +115,7 @@ mod navigation_history;
 mod overlays;
 mod palette;
 mod palette_render;
+mod queue;
 mod root_render;
 mod runtime_items;
 mod secret_store;
@@ -144,6 +145,7 @@ use components::*;
 use inspector_changes::*;
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
+use queue::*;
 use runtime_items::*;
 use sessions::*;
 use typography::FontTarget;
@@ -322,6 +324,7 @@ actions!(
         NextReviewFile,
         PreviousReviewFile,
         CancelRun,
+        QueueBatched,
         DismissOverlay,
         OpenSettings,
         CloseWindow,
@@ -562,6 +565,22 @@ struct DesktopView {
     pending_submission: Option<SubmissionDraft>,
     pending_first_submission: bool,
     first_submission: Option<SubmissionDraft>,
+    /// Prompts queued behind the running turn, oldest first. Entries are
+    /// added optimistically on submit and reconciled against authoritative
+    /// `turn/queue-status` snapshots; see `view/queue.rs`.
+    queued_submissions: Vec<QueuedSubmission>,
+    /// Authoritative queue depth from the latest status snapshot.
+    queue_depth: usize,
+    /// Display previews from the latest status snapshot (backstop when local
+    /// entries are missing; normally the panel renders `queued_submissions`).
+    queue_previews: Vec<String>,
+    /// Total oldest queued prompts the service discarded via the soft cap.
+    queue_dropped_total: usize,
+    /// Whether a take-latest request is in flight.
+    take_latest_pending: bool,
+    /// Take-latest text awaiting composer restore (applied with a window by
+    /// `process_drained_event`).
+    pending_composer_restore: Option<String>,
     session_request: Option<&'static str>,
     pending_new_thread: bool,
     session_load_task: Option<Task<()>>,

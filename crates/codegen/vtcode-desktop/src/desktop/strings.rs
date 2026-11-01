@@ -29,6 +29,7 @@ pub(super) mod keys {
     pub const CANCELLED: &str = "cancelled";
     pub const PROMPT: &str = "prompt";
     pub const ATTACHMENTS: &str = "attachments";
+    pub const BATCHABLE: &str = "batchable";
     pub const BEFORE_INDEX: &str = "beforeIndex";
     pub const LIMIT: &str = "limit";
     pub const ITEM_ID: &str = "itemId";

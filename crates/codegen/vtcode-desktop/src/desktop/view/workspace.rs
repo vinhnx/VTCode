@@ -69,12 +69,18 @@ impl DesktopView {
         }));
     }
 
-    pub(super) fn workspace_switch_idle(&self) -> bool {
-        !self.running
-            && self.pending_workspace.is_none()
+    /// Whether no workspace/session transition is in flight, regardless of
+    /// turn activity. Shared by the switch gate (which also requires an idle
+    /// turn) and the submit gate (which queues behind a running turn).
+    pub(super) fn workspace_transition_idle(&self) -> bool {
+        self.pending_workspace.is_none()
             && !self.workspace_selection_pending
             && self.session_request.is_none()
             && self.first_submission.is_none()
+    }
+
+    pub(super) fn workspace_switch_idle(&self) -> bool {
+        !self.running && self.workspace_transition_idle()
     }
 
     fn current_navigation_location(&self) -> Option<NavigationLocation> {
