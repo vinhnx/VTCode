@@ -268,10 +268,12 @@ impl DesktopView {
             })
             .when(!self.zen_mode, |buttons| {
                 buttons.child(
+                    // One quiet option group: tighter than the gap to the
+                    // trailing model/send cluster (separate groups).
                     div()
                         .flex()
                         .items_center()
-                        .gap_2()
+                        .gap_1()
                         .min_w_0()
                         .with_animation("composer-secondary-fade", zen_fade_animation(cx.theme()), |el, delta| {
                             el.opacity(delta)
@@ -467,15 +469,23 @@ impl DesktopView {
                             view.refresh_composer_suggestions_after_input_navigation(window, cx);
                         }),
                     )
-                    .child(
-                        // CLI-minimal: no card, border, or tint (the CLI input
-                        // is a borderless block). The prompt marker and the
-                        // placeholder carry the input affordance instead.
+                    .child({
+                        // True borderless: the group's own tint is cleared so
+                        // the input sits directly on the canvas. The marker,
+                        // placeholder, and caret carry the input affordance;
+                        // focus tints the marker with the caret color.
+                        let composer_focused = self.composer.read(cx).focus_handle(cx).is_focused(window);
+                        let marker_tone = if composer_focused {
+                            colors.caret
+                        } else {
+                            colors.muted_foreground
+                        };
                         div().id("message-composer-frame").test_support().w_full().min_w_0().child(
                             InputGroup::new("message-composer")
                                 .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
                                 .w_full()
                                 .border_0()
+                                .bg(cx.theme().transparent)
                                 .focus_ring(false)
                                 .p_2()
                                 .when(self.zen_mode, |group| group.p_3())
@@ -483,15 +493,15 @@ impl DesktopView {
                                 .addon(
                                     InputGroupAddon::new("composer-prompt-marker")
                                         .align(InputGroupAddonAlignment::InlineStart)
-                                        .child(div().text_color(colors.muted_foreground).child(">")),
+                                        .child(div().text_color(marker_tone).child(">")),
                                 )
                                 .addon(
                                     InputGroupAddon::new("composer-actions")
                                         .align(InputGroupAddonAlignment::BlockEnd)
                                         .child(buttons),
                                 ),
-                        ),
-                    ),
+                        )
+                    }),
             ),
         )
     }

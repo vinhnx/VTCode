@@ -460,3 +460,42 @@ fn recall_refreshes_trigger_suggestions(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn composer_stays_true_borderless_in_both_focus_states(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let assert_composer_geometry = |window: &gpui_kit::Window| {
+            // No separator element: spacing alone separates the text row from
+            // the controls in the true-borderless design.
+            assert!(window.try_find("composer-controls-divider").is_none());
+            let frame = window.find("message-composer-frame").bounds();
+            let marker = window.find("composer-prompt-marker").bounds();
+            let send = window.find("send-prompt").bounds();
+            assert!(frame.size.height > px(0.));
+            assert!(frame.contains(&marker.center()), "marker must sit inside the composer frame");
+            assert!(marker.bottom() <= send.top(), "marker {marker:?} must sit above send {send:?}");
+            // One quiet option group: attach, policy, and mode share a row in
+            // leading-to-trailing order.
+            let attach = window.find("attach-files").bounds();
+            let policy = window.find("composer-policy").bounds();
+            let mode = window.find("composer-mode").bounds();
+            assert_eq!(attach.top(), policy.top(), "option cluster shares one row");
+            assert_eq!(policy.top(), mode.top(), "option cluster shares one row");
+            assert!(attach.right() <= policy.left(), "attach precedes policy");
+            assert!(policy.right() <= mode.left(), "policy precedes mode");
+        };
+        // Unfocused side of the marker-tint branch.
+        let root_focus = view.read(cx).focus_handle.clone();
+        window.focus(&root_focus, cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+        assert_composer_geometry(window);
+        // Focused side: the marker tints, geometry must not move.
+        view.update(cx, |view, cx| view.activate_composer(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+        assert_composer_geometry(window);
+    })
+    .unwrap();
+}
