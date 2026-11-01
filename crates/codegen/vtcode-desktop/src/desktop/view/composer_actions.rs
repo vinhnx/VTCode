@@ -122,7 +122,10 @@ impl DesktopView {
                     // (`handle_theme_command`), so mirror that instead of
                     // rejecting a capitalized id the CLI would accept.
                     let canonical = theme.to_ascii_lowercase();
-                    if themes::find(&canonical).is_none() {
+                    // `mode_for_id` covers the palette catalog plus the
+                    // system-light/system-dark sentinels the picker accepts;
+                    // `find` alone would reject the sentinels here.
+                    if themes::mode_for_id(&canonical).is_none() {
                         self.clear_submitted_command(window, cx);
                         self.error =
                             Some(rust_i18n::t!("app.composer.theme_unavailable", theme = theme.as_str()).to_string());

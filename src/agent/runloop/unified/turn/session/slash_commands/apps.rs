@@ -165,14 +165,14 @@ pub(crate) async fn handle_open_donate_links(ctx: SlashCommandContext<'_>) -> Re
         footer_hint: Some("Esc cancels".to_string()),
         items: vec![
             ui_list::action(
-                "Sponsor VT Code developement",
+                "Sponsor VT Code development",
                 DONATE_URL.to_string(),
                 Some("Support".to_string()),
                 Tone::Accent,
                 Some(InlineListSelection::ConfigAction(DONATE_URL.to_string())),
             ),
             ui_list::action(
-                "Sponsor VT Code developement on GitHub",
+                "Sponsor VT Code development on GitHub",
                 PROJECT_URL.to_string(),
                 Some("GitHub".to_string()),
                 Tone::Accent,

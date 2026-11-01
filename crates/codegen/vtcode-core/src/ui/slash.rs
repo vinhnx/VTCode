@@ -280,6 +280,22 @@ mod tests {
     }
 
     #[test]
+    fn support_commands_are_visible_and_suggested() {
+        for name in ["docs", "donate", "feedback"] {
+            assert!(find_command(name).is_some(), "/{name} must be registered");
+            let suggestions = suggestions_for_terminal(name, TerminalType::Unknown);
+            assert!(
+                suggestions.iter().any(|command| command.name == name),
+                "/{name} must be suggested for its exact prefix"
+            );
+        }
+        assert!(
+            visible_commands_for_desktop().iter().any(|command| command.name == "donate"),
+            "desktop catalog must retain /donate"
+        );
+    }
+
+    #[test]
     fn config_consolidated_commands_are_not_registered() {
         for removed in [
             "checkup",

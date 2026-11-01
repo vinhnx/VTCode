@@ -361,6 +361,41 @@ fn unavailable_theme_slash_command_is_reported_without_submitting_prompt(cx: &mu
 }
 
 #[gpui_kit::test]
+fn system_theme_sentinels_apply_without_submitting_prompt(cx: &mut TestAppContext) {
+    use crate::desktop::themes;
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    // Each sentinel resolves to its own mode; the trailing palette id pins
+    // the pre-existing accept path (an unknown id is reported, see above).
+    for (input, expected_id, expected_mode) in [
+        ("/theme system-light", themes::SYSTEM_LIGHT_ID, ThemeMode::Light),
+        ("/theme system-dark", themes::SYSTEM_DARK_ID, ThemeMode::Dark),
+        ("/theme ciapre", "ciapre", ThemeMode::Dark),
+    ] {
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.backend = Some(BackendHandle { commands: commands.clone() });
+                view.selected_session_id = Some("theme-session".into());
+                view.composer
+                    .update(cx, |input_field, cx| input_field.set_value(input, window, cx));
+                view.submit_prompt(window, cx);
+            });
+            window.render_frame(cx);
+        })
+        .unwrap();
+
+        assert!(requests.try_recv().is_err(), "{input} is a local theme switch");
+        cx.update(|cx| {
+            assert_eq!(view.read(cx).composer.read(cx).value(), "");
+            assert!(view.read(cx).error.is_none(), "{input} must be accepted");
+            assert_eq!(view.read(cx).theme_id.as_str(), expected_id);
+            assert_eq!(view.read(cx).theme_mode, expected_mode);
+        });
+    }
+}
+
+#[gpui_kit::test]
 fn slash_files_opens_native_file_mentions_without_submitting_a_turn(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

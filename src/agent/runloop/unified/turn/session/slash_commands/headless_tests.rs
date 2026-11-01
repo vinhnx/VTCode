@@ -10,11 +10,14 @@
 use super::handlers::{
     handle_clear_screen, handle_manage_skills, handle_oauth_login, handle_open_donate_links, handle_show_log_viewer,
     handle_show_memory_config, handle_show_permissions, handle_show_settings_reset, handle_show_transcript_stats,
-    handle_start_mode_palette,
+    handle_start_mode_palette, handle_start_session_palette, handle_start_theme_palette,
 };
+use super::secrets::handle_manage_secrets;
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::model_picker::ModelPickerState;
-use crate::agent::runloop::slash_commands::{LogFormat, LogScope};
+use crate::agent::runloop::slash_commands::{
+    LogFormat, LogScope, SecretCommandAction, SessionPaletteMode, ThemePaletteMode,
+};
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
@@ -233,4 +236,64 @@ async fn headless_skills_doctor_renders_populated_report_without_waiting() {
     )
     .await;
     assert!(harness.palette_state().is_none(), "/skills doctor must not park modal state");
+}
+
+#[tokio::test]
+async fn headless_secret_add_points_to_settings_or_terminal_without_waiting() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(
+        timeout(
+            HEADLESS_TEST_TIMEOUT,
+            handle_manage_secrets(
+                harness.ctx(),
+                SecretCommandAction::Add { provider: "openai".to_string(), key_name: None },
+            ),
+        )
+        .await,
+        "/secret add",
+    )
+    .await;
+    assert!(harness.palette_state().is_none(), "/secret add must not park modal state");
+}
+
+#[tokio::test]
+async fn headless_secret_delete_points_to_terminal_without_waiting() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(
+        timeout(
+            HEADLESS_TEST_TIMEOUT,
+            handle_manage_secrets(
+                harness.ctx(),
+                SecretCommandAction::Delete { provider: "openai".to_string(), key_name: None },
+            ),
+        )
+        .await,
+        "/secret delete",
+    )
+    .await;
+    assert!(harness.palette_state().is_none(), "/secret delete must not park modal state");
+}
+
+#[tokio::test]
+async fn headless_theme_palette_lists_without_parking_modal_state() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(
+        timeout(HEADLESS_TEST_TIMEOUT, handle_start_theme_palette(harness.ctx(), ThemePaletteMode::Select)).await,
+        "theme list",
+    )
+    .await;
+    assert!(harness.palette_state().is_none(), "theme list must not park modal state");
+}
+
+#[tokio::test]
+async fn headless_session_palette_reports_guidance_without_parking_modal_state() {
+    for mode in [SessionPaletteMode::Resume, SessionPaletteMode::Fork] {
+        let mut harness = HeadlessHarness::new().await;
+        expect_continue(
+            timeout(HEADLESS_TEST_TIMEOUT, handle_start_session_palette(harness.ctx(), mode, 5, false)).await,
+            "session list",
+        )
+        .await;
+        assert!(harness.palette_state().is_none(), "session list must not park modal state");
+    }
 }

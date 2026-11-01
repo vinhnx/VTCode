@@ -267,6 +267,19 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, target: SecretTarg
         )?;
         return Ok(SecretEntryOutcome::Continue);
     }
+    // The secure prompt is a modal: without inline UI the wait below would
+    // wedge the turn until cancel. Desktop users get the native Settings
+    // form instead; everyone else can use the terminal command.
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "API key entry needs an interactive surface. In VT Code Desktop, store the key from Settings → VT Code; or run `vtcode secret add {}` in a terminal.",
+                target.provider_name
+            ),
+        )?;
+        return Ok(SecretEntryOutcome::Continue);
+    }
     let label = target.label.as_str();
     let env_key = target.env_key.as_str();
     let prompt_label = format!("{} API key ({})", label, env_key);
@@ -396,6 +409,19 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, target: SecretT
         ctx.renderer.line(
             MessageStyle::Info,
             &format!("{} does not use a static API key; use its configured authentication flow instead.", target.label),
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+    // Deletion confirms through the secure prompt modal, which does not
+    // exist without inline UI; fail closed with the terminal equivalent
+    // instead of wedging the turn until cancel.
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "API key deletion needs an interactive confirmation. Run `vtcode secret delete {}` in a terminal.",
+                target.provider_name
+            ),
         )?;
         return Ok(SlashCommandControl::Continue);
     }

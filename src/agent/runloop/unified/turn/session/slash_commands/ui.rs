@@ -89,6 +89,13 @@ pub(crate) async fn handle_start_theme_palette(
     if !ensure_selection_ui_available(&mut ctx, "selecting a theme")? {
         return Ok(SlashCommandControl::Continue);
     }
+    // The palette parks modal state that nothing can dismiss without inline
+    // UI; list the ids as text instead so the choice stays expressible.
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(MessageStyle::Info, "Provide a theme name to switch themes")?;
+        crate::agent::runloop::slash_commands::render_theme_list(ctx.renderer)?;
+        return Ok(SlashCommandControl::Continue);
+    }
     if show_theme_palette(ctx.renderer, mode)? {
         *ctx.palette_state = Some(ActivePalette::Theme { mode, original_theme_id: theme::active_theme_id() });
     }
@@ -106,6 +113,16 @@ pub(crate) async fn handle_start_session_palette(
         SessionPaletteMode::Fork => "selecting a session to fork",
     };
     if !ensure_selection_ui_available(&mut ctx, activity)? {
+        return Ok(SlashCommandControl::Continue);
+    }
+    // The parse layer already renders the session list as text without inline
+    // UI; reaching the palette here would park modal state nothing can
+    // dismiss, so stop with guidance instead of opening it.
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Session picker needs inline UI; run vtcode in a terminal to browse archived sessions.",
+        )?;
         return Ok(SlashCommandControl::Continue);
     }
     let scope = if show_all {
