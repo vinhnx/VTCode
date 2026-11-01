@@ -433,6 +433,7 @@ mod inspector_files;
 mod interaction_choices;
 mod loading_lifecycle;
 mod mcp_app;
+mod menu_bar_actions;
 mod notifications;
 mod option_popups;
 mod options_misc;

@@ -310,11 +310,10 @@ impl DesktopView {
             }
         }
         self.theme_id = id;
-        if mode_changed {
-            if matches!(self.preferences.app_icon(), AppIconPreference::Dynamic | AppIconPreference::Unknown) {
-                self.refresh_dock_icon();
-            }
-            menu_bar::refresh_icon(app_icon::png_bytes(self.preferences.app_icon(), self.theme_mode), cx);
+        if mode_changed
+            && matches!(self.preferences.app_icon(), AppIconPreference::Dynamic | AppIconPreference::Unknown)
+        {
+            self.refresh_dock_icon();
         }
         self.apply_typography(cx);
         self.transcript.remeasure();

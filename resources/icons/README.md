@@ -24,7 +24,7 @@ that looks sharp; larger files are for app bundles and in-app display only.
 | `vtcode-mark.svg`             | vector, 195B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
 | `vtcode-mono.svg`             | vector, 195B  | Monochrome V mark (white on transparent) for program registries.                         |
 | `vtcode-mono-32.png`          | 32x32, 308B   | Mono raster handoff for small icon tiles.                                                |
-| `vtcode-mono-120.png`         | 120x120, 827B | Mono raster handoff for HiDPI icon tiles.                                                |
+| `vtcode-mono-120.png`         | 120x120, 827B | Desktop menu-bar status icon (AppKit template) + HiDPI tile handoff.                     |
 
 The legacy `vtcode-profile-*.png` set (yellow `V` mark from `vtchat_resources/v2_1`) was removed; the
 companion plugin now vendors `vtcode-app-dynamic-512.png` as its logo/composer icon, and new manual terminal

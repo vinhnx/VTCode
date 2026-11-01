@@ -364,12 +364,12 @@ fn native_close_uses_menu_bar_mode_only_when_enabled(cx: &mut TestAppContext) {
     drop(view);
     cx.update_window(initial, |_, window, _| window.remove_window()).unwrap();
     let window = cx.update(|cx| {
-        assert!(super::super::menu_bar::set_enabled(true, b"", cx));
+        assert!(super::super::menu_bar::set_enabled(true, cx));
         super::super::open_or_activate_main_window(cx, None).unwrap()
     });
     let mut visual = gpui_kit::VisualTestContext::from_window(window, cx);
     assert!(!visual.simulate_close(), "enabled mode retains the window");
-    cx.update(|cx| assert!(super::super::menu_bar::set_enabled(false, b"", cx)));
+    cx.update(|cx| assert!(super::super::menu_bar::set_enabled(false, cx)));
     assert!(visual.simulate_close(), "disabled mode allows the window to close");
 }
 
@@ -377,7 +377,7 @@ fn native_close_uses_menu_bar_mode_only_when_enabled(cx: &mut TestAppContext) {
 fn menu_bar_mode_closes_one_window_when_another_remains(cx: &mut TestAppContext) {
     let (first, _) = open_desktop(cx);
     let (second, _) = open_desktop(cx);
-    cx.update(|cx| assert!(super::super::menu_bar::set_enabled(true, b"", cx)));
+    cx.update(|cx| assert!(super::super::menu_bar::set_enabled(true, cx)));
     cx.update_window(first, |_, window, cx| super::super::menu_bar::close_or_hide(window, cx))
         .unwrap();
     cx.run_until_parked();
