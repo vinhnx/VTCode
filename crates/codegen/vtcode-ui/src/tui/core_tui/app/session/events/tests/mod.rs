@@ -75,6 +75,7 @@ fn build_session_with_secure_prompt() -> Session {
     session
 }
 
+mod focus_input;
 mod keybindings;
 mod panels_viewer;
 mod review_hints;

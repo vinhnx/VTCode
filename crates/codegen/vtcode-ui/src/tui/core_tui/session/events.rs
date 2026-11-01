@@ -242,7 +242,60 @@ pub(crate) fn dispatch_rebindable_action(session: &mut Session, action: Action) 
                 None
             }
         }
+        Action::FocusInput => focus_input(session),
     }
+}
+
+/// Dismiss key-capturing session state (overlay, reverse search) and return
+/// to the composer input. Mirrors what Esc does to these states — including
+/// modal Cancel emission — without Esc's interrupt, cancel-submit, or rewind
+/// tails. The synthetic Esc passes are bounded at three: a wizard notes
+/// editor deactivates first, then a modal/wizard search query clears, then
+/// the overlay cancels. Each pass strictly reduces open sub-state, so three
+/// always suffice.
+fn focus_input(session: &mut Session) -> Option<InlineEvent> {
+    if session.reverse_search_state.active {
+        session.reverse_search_state.cancel_search(&mut session.input_manager);
+        session.mark_dirty();
+    }
+    if session.modal_state().is_some_and(|modal| modal.secure_prompt.is_some()) {
+        // Masked secret entry: clear the shared scratch like the app-layer
+        // secure Esc arm, never strand the secret in the composer draft.
+        session.input_manager.clear();
+        session.close_overlay();
+        session.mark_dirty();
+        return None;
+    }
+    if session.modal_state().is_some_and(|modal| modal.list.is_none()) {
+        // Text-only overlay: Esc closes these with a Cancel event.
+        session.close_overlay();
+        session.mark_dirty();
+        return Some(InlineEvent::Overlay(OverlayEvent::Cancelled));
+    }
+    let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+    for _ in 0..3 {
+        let modifiers = ModalKeyModifiers { control: false, alt: false, command: false };
+        let result = if let Some(modal) = session.modal_state_mut() {
+            modal.handle_list_key_event(&esc, modifiers)
+        } else if let Some(wizard) = session.wizard_overlay_mut() {
+            wizard.handle_key_event(&esc, modifiers)
+        } else {
+            break;
+        };
+        match result {
+            ModalListKeyResult::Submit(event) | ModalListKeyResult::Cancel(event) => {
+                session.close_overlay();
+                session.mark_dirty();
+                return Some(event);
+            }
+            ModalListKeyResult::Emit(_) | ModalListKeyResult::Redraw => {
+                // A sub-state collapsed (notes editor, query); loop on toward cancel.
+                session.mark_dirty();
+            }
+            ModalListKeyResult::HandledNoRedraw | ModalListKeyResult::NotHandled => break,
+        }
+    }
+    None
 }
 
 pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<InlineEvent> {

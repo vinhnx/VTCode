@@ -160,6 +160,9 @@ Transcript Review uses the same fullscreen rendering surface:
 - `open_transcript_review` and `toggle_transcript_render_mode` can be rebound through the existing keybinding
   configuration.
 - `Alt+O` remains a compatibility alias. If the review action is unbound, `Ctrl+T` remains readline transpose.
+- The `focus_input` binding (default `Alt+I`) dismisses palettes, pickers, the review viewer, and modal search states
+  and returns to the composer input. Unlike `Esc`, it never interrupts a running turn or clears input, and it leaves
+  edit-approval diff previews open since those require an explicit decision.
 - The review hint uses the primary `open_transcript_review` binding and is omitted when that action is unbound.
 
 The compact review UX can be configured independently:
@@ -173,6 +176,7 @@ show_close_button = true
 [ui.keybindings]
 open_transcript_review = ["ctrl+t"]
 toggle_transcript_render_mode = ["r"]
+focus_input = ["alt+i"]
 ```
 
 All three review controls default to enabled, while `ui.tool_display_mode` defaults to `"compact"`. These settings

@@ -139,6 +139,10 @@ fn process_key_with_clipboard_readers(
         return handle_secure_prompt_key(session, key, has_control, has_shift, has_alt, has_command);
     }
 
+    // Resolved once: the modal borrow below forbids borrowing session again.
+    let focus_input_requested =
+        session.has_active_overlay() && session.core.resolve_rebindable_action(&key) == Some(Action::FocusInput);
+
     if let Some(modal) = session.modal_state_mut() {
         let modal_modifiers = ModalKeyModifiers {
             control: has_control,
@@ -150,6 +154,15 @@ fn process_key_with_clipboard_readers(
             session.close_overlay();
             session.mark_dirty();
             return Some(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(action.into()))));
+        }
+
+        // FocusInput dismisses text-only modals exactly like Esc (the
+        // catch-all below would otherwise swallow the chord). List modals
+        // fall through to the FocusInput arm, which preserves Cancel emission.
+        if modal.list.is_none() && modal.secure_prompt.is_none() && focus_input_requested {
+            session.close_overlay();
+            session.mark_dirty();
+            return None;
         }
 
         // Text-only modals (no list, no secure prompt): close on Esc or any
@@ -247,6 +260,34 @@ fn process_key_with_clipboard_readers(
                 session.mark_dirty();
                 return None;
             }
+        }
+        Some(Action::FocusInput) => {
+            // Return to the composer from any key-capturing app layer. Each
+            // dismissal mirrors its Esc path; the diff preview is excluded
+            // because its Esc submits a reject/abort decision, which a focus
+            // key must never take implicitly. The picker cancels first: its
+            // draft restore re-triggers palette matching, so palettes close
+            // after it to land in a bare input.
+            if session.tool_output_viewer_state().is_some() {
+                session.close_tool_output_viewer();
+            }
+            if session.history_picker_state.active {
+                session.history_picker_state.cancel(&mut session.core.input_manager);
+                session.finish_history_picker_interaction(true);
+            }
+            if session.agent_palette_visible() {
+                session.close_agent_palette();
+            }
+            if session.file_palette_visible() {
+                session.close_file_palette();
+            }
+            slash::clear_slash_suggestions(session);
+            if session.local_agents_visible() {
+                session.close_local_agents_drawer(true);
+            }
+            session.cancel_theme_preview();
+            session.mark_dirty();
+            return session.core.dispatch_rebindable_action(Action::FocusInput).map(Into::into);
         }
         _ => {}
     }

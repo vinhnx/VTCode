@@ -4,6 +4,7 @@ mod color_scheme;
 mod diff_overlay;
 mod drag_autoscroll;
 mod file_palette;
+mod focus_input;
 mod header_status;
 mod helpers;
 mod history;
