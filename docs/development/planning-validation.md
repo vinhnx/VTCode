@@ -16,9 +16,15 @@ establish the step's result. Vague instructions such as `run checks` do not coun
 An optional Markdown lint check cannot replace verification for Rust or other
 non-Markdown targets. Targeted Git history or content inspection remains valid
 for review tasks; a list of changed files does not verify implementation behavior.
+File checks such as `test -f docs/README.md` are accepted when they name a concrete
+path and use a supported file predicate. They establish file existence, not link
+accuracy or unrelated behavior.
 
-Explicit scope-review steps may use Git status or diff checks when they name
-concrete files and state an observable expectation limiting which files changed.
+Explicit scope-review steps (`scope` or `scoped` phrasing with a review verb)
+may use Git status or diff checks when they name concrete files and state an
+observable expectation limiting which files changed. A scope-review step may
+pair its Git scope check with concrete gate commands; each companion must be
+concrete on its own, and only the Git check establishes changed-file scope.
 That expectation may appear in the action, outcome, verification, or validation
 section. Prefer comparison against the captured workspace baseline so changes
 that were already present when planning began remain accounted for:

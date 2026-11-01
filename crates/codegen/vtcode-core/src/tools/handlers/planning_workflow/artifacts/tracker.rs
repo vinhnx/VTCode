@@ -2,7 +2,7 @@
 
 use super::sections::{IMPLEMENTATION_SECTION_ALIASES, collect_implementation_step_blocks, section_body_for_aliases};
 use super::steps::{marker_value, parse_bracket_list, step_action_segments};
-use super::verification::{is_scope_review_action, parse_scope_review_checks};
+use super::verification::{is_scope_review_action, is_scope_review_command, parse_scope_review_checks};
 use super::{PLAN_TRACKER_END, PLAN_TRACKER_START};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -118,11 +118,8 @@ pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String
         }
 
         let mut entry = format!("- [ ] {main}\n");
-        let verification_label = if is_scope_review_action(main) {
-            "scope-review"
-        } else {
-            "verify"
-        };
+        let scope_step = is_scope_review_action(main);
+        let verification_label = if scope_step { "scope-review" } else { "verify" };
         for segment in segments.iter().skip(1).chain(block.lines.iter().skip(1)) {
             // Reuse the validator's emphasis-tolerant marker parsing so an
             // accepted `**files:**`-style segment yields the same tracker
@@ -154,7 +151,15 @@ pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String
                     }
                 } else {
                     for value in values {
-                        entry.push_str(&format!("  {verification_label}: {value}\n"));
+                        // Mixed scope-review steps keep gate commands under
+                        // `verify:` so only Git scope checks carry the
+                        // scope-review label downstream.
+                        let label = if scope_step && !is_scope_review_command(&value) {
+                            "verify"
+                        } else {
+                            verification_label
+                        };
+                        entry.push_str(&format!("  {label}: {value}\n"));
                     }
                 }
             }

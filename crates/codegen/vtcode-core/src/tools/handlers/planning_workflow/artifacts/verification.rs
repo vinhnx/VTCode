@@ -288,6 +288,23 @@ fn is_verification_wrapper(word: &str) -> bool {
         .any(|wrapper| word.eq_ignore_ascii_case(wrapper))
 }
 
+fn is_concrete_file_test(value: &str) -> bool {
+    let Ok(words) = shell_words::split(value) else {
+        return false;
+    };
+    match words.as_slice() {
+        [command, flag, path]
+            if command == "test" && matches!(flag.as_str(), "-e" | "-f" | "-d" | "-s" | "-r" | "-w" | "-x") =>
+        {
+            !path.is_empty()
+                && !path.starts_with('-')
+                && !path.chars().any(is_shell_metacharacter)
+                && find_placeholder_tokens(path).is_empty()
+        }
+        _ => false,
+    }
+}
+
 fn is_actual_command_token(raw_word: &str) -> bool {
     let word = raw_word.trim_matches(|character: char| matches!(character, '`' | '"' | '\''));
     let bare_word = word.trim_matches(|character: char| character.is_ascii_punctuation());
@@ -629,13 +646,14 @@ fn is_concrete_git_verification(value: &str) -> bool {
 }
 
 /// Scope review is an explicit step category, never inferred from a Git command.
+/// Both `scope` and `scoped` phrasing qualify when paired with a review verb.
 pub(super) fn is_scope_review_action(action: &str) -> bool {
     let words = action.to_ascii_lowercase().replace('-', " ");
     let words: Vec<&str> = words
         .split_whitespace()
         .map(|word| word.trim_matches(|character: char| character.is_ascii_punctuation()))
         .collect();
-    words.contains(&"scope")
+    (words.contains(&"scope") || words.contains(&"scoped"))
         && words
             .iter()
             .any(|word| matches!(*word, "review" | "check" | "confirm" | "verify"))
@@ -903,6 +921,10 @@ pub(super) fn validate_concrete_verification(value: &str) -> Result<(), Verifica
     // Optional Markdown tooling must not block a documentation plan. Keep
     // the conditional exception explicit; ordinary checks remain required.
     if is_optional_markdown_verification(value) {
+        return Ok(());
+    }
+
+    if is_concrete_file_test(value) {
         return Ok(());
     }
 

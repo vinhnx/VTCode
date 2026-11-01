@@ -21,7 +21,7 @@ pub const CANONICAL_STEP_FORMAT: &str = "1. Action -> files: [path/to/file.rs] -
 /// Shared valid `verify:` examples for planning synthesis/repair prompts.
 /// Binary runloop constants stay compile-time literals and preserve these
 /// examples via presence tests; repair feedback contains only the contract.
-pub const PLANNING_VERIFY_VALID_EXAMPLES: &str = "`verify: [cargo nextest run -p vtcode]`, `verify: [cargo check --locked]`, `verify: [rg -n 'symbol' src/file.rs]`, `verify: [sed -n '1,40p' docs/file.md]`, `verify: [grep -n 'symbol' src/file.rs]`, `verify: [git show --stat HEAD]`";
+pub const PLANNING_VERIFY_VALID_EXAMPLES: &str = "`verify: [cargo nextest run -p vtcode]`, `verify: [cargo check --locked]`, `verify: [rg -n 'symbol' src/file.rs]`, `verify: [sed -n '1,40p' docs/file.md]`, `verify: [grep -n 'symbol' src/file.rs]`, `verify: [test -f docs/file.md]`, `verify: [git show --stat HEAD]`";
 
 /// Shared invalid `verify:` examples. Kept adjacent to
 /// [`PLANNING_VERIFY_VALID_EXAMPLES`] so every prompt surface pairs them.
@@ -193,8 +193,16 @@ fn scope_review_shape_error(
         .filter_map(|field| marker_value(field, &["verify", "verification"]))
         .flat_map(parse_scope_review_checks)
         .collect();
-    if verifications.is_empty() || !verifications.iter().all(|verify| is_scope_review_command(verify)) {
+    if verifications.is_empty() || !verifications.iter().any(|verify| is_scope_review_command(verify)) {
         return Some("scope review must include a concrete Git status or diff check".to_string());
+    }
+    // A scope-review step may pair its Git scope check with concrete gate
+    // commands; each companion must stand alone as concrete verification
+    // while only the Git check establishes changed-file scope.
+    for (index, verify) in verifications.iter().enumerate() {
+        if !is_scope_review_command(verify) && validate_concrete_verification(verify).is_err() {
+            return Some(format!("verification item {} must be a concrete command or check", index + 1));
+        }
     }
     // Expectations may accompany the command or live in the explicit outcome.
     // Match whole tokens, so README.md cannot stand in for other-README.md.

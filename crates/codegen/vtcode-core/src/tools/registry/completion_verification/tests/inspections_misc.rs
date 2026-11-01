@@ -2,6 +2,28 @@ use super::*;
 
 #[cfg(unix)]
 #[tokio::test]
+async fn required_file_test_records_real_exit_status_and_recovers() {
+    let dir = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new(dir.path().to_path_buf()).await;
+    registry.allow_all_tools().await.unwrap();
+    let mut commands = registry.commands_config();
+    commands.allow_list.push("test".into());
+    registry.apply_commands_config(&commands);
+    registry.restore_completion_verification_debt();
+    let command = "test -f README.md";
+    registry.set_required_completion_verifiers(vec![command.into()]);
+    let args = json!({"cmd":command, "yield_time_ms":10000});
+    let missing = registry.execute_tool(tools::EXEC_COMMAND, args.clone()).await.unwrap();
+    assert_eq!(missing["exit_code"], 1, "{missing}");
+    assert!(registry.completion_verification_pending());
+    std::fs::write(dir.path().join("README.md"), "present\n").unwrap();
+    let present = registry.execute_tool(tools::EXEC_COMMAND, args).await.unwrap();
+    assert_eq!(present["exit_code"], 0, "{present}");
+    assert!(!registry.completion_verification_pending());
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn required_inspections_bypass_primed_results_and_record_actual_verdicts() {
     for (command, expected_exit) in [
         ("rg -n original fixture.txt", 1),

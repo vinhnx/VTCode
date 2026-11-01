@@ -3,6 +3,31 @@ use super::verification::{is_independent_rederivation, validate_concrete_verific
 use super::{split_bracket_items, validate_plan_content};
 
 #[test]
+fn concrete_file_existence_checks_are_valid_plan_verifiers() {
+    for command in [
+        "test -f docs/README.md",
+        "test -d docs",
+        "test -e README.md",
+        "test -s 'some file.md'",
+    ] {
+        assert!(validate_concrete_verification(command).is_ok(), "{command}");
+    }
+    for command in [
+        "test -f",
+        "test -f $FILE",
+        "test -f README.md; true",
+        "test -f README.md || true",
+        "test docs",
+    ] {
+        assert!(validate_concrete_verification(command).is_err(), "{command}");
+    }
+    let plan = "## Summary\nFix README link.\n\n## Implementation Steps\n1. Fix link -> files: [README.md] -> verify: [test -f docs/README.md, grep -n docs/README.md README.md]\n\n## Test Cases and Validation\nConfirm the target exists.\n\n## Assumptions and Defaults\nPreserve prose.";
+    assert!(validate_plan_content(plan).is_ready());
+    let tracker = super::generate_tracker_markdown_from_plan(plan).expect("tracker");
+    assert!(tracker.contains("test -f docs/README.md"));
+}
+
+#[test]
 fn rust_lifetime_prose_keeps_metadata_boundaries() {
     for action in [
         "Change return type to &'static str",
@@ -449,6 +474,104 @@ fn multiline_scope_review_preserves_separate_metadata_in_tracker() {
     let tracker = super::generate_tracker_markdown_from_plan(&plan).expect("tracker");
     assert!(tracker.contains("  scope-review: git status --porcelain"));
     assert!(tracker.contains("  outcome: only README.md differs from the captured baseline"));
+}
+
+#[test]
+fn scoped_action_detection_requires_a_review_verb() {
+    for action in [
+        "Confirm scoped change shows only README.md modified",
+        "Review scoped diff for worktree noise",
+        "Check scoped files against the captured baseline",
+        "Verify scoped edits left no unrelated hunks",
+    ] {
+        assert!(super::verification::is_scope_review_action(action), "{action}");
+    }
+    for action in [
+        "Scoped refactor of parser",
+        "Implement scoped parser change",
+        "Implement parser",
+        "Review final diff",
+    ] {
+        assert!(!super::verification::is_scope_review_action(action), "{action}");
+    }
+}
+
+#[test]
+fn scope_review_accepts_gate_paired_with_git_scope_check() {
+    // Session-shaped step 5 from session-vtcode-20261101T022006Z (turns
+    // 1939-1940): a scope gate pairs a concrete gate command with a Git
+    // scope check instead of using the Git check alone.
+    for action in [
+        "Confirm scoped change shows only README.md modified plus file-length gate passes",
+        "Run file-length gate and confirm scoped change lists only README.md modified",
+        "Run README-only gates and confirm no scope creep",
+    ] {
+        for verify in [
+            "python3 scripts/check_file_length.py --mode enforce, git status --porcelain README.md",
+            "python3 scripts/check_file_length.py --mode enforce, git diff --stat HEAD -- README.md",
+            "[python3 scripts/check_file_length.py --mode enforce] and [git status --porcelain README.md]",
+        ] {
+            let plan = scope_review_plan(action, "README.md", verify, "only README.md modified");
+            let report = validate_plan_content(&plan);
+            assert!(report.is_ready(), "mixed scope step must validate ({action} / {verify}): {report:?}");
+            assert_eq!(report.scope_review_step_count, 1);
+        }
+    }
+    let plan = scope_review_plan(
+        "Confirm scoped change shows only README.md modified plus file-length gate passes",
+        "README.md",
+        "python3 scripts/check_file_length.py --mode enforce, git status --porcelain README.md",
+        "only README.md modified",
+    );
+    let tracker = super::generate_tracker_markdown_from_plan(&plan).expect("tracker");
+    assert!(tracker.contains("  verify: python3 scripts/check_file_length.py --mode enforce"));
+    assert!(tracker.contains("  scope-review: git status --porcelain README.md"));
+    assert!(!tracker.contains("  scope-review: python3"));
+}
+
+#[test]
+fn scope_review_rejects_gate_without_scope_check_or_vague_companion() {
+    for verify in [
+        "python3 scripts/check_file_length.py --mode enforce",
+        "git status --porcelain README.md, run checks",
+        "run checks, git diff --stat HEAD -- README.md",
+    ] {
+        let plan = scope_review_plan(
+            "Confirm scoped change shows only README.md modified plus file-length gate passes",
+            "README.md",
+            verify,
+            "only README.md modified",
+        );
+        let report = validate_plan_content(&plan);
+        assert!(!report.is_ready(), "must reject {verify}");
+        assert_eq!(report.invalid_implementation_steps.len(), 1);
+    }
+    let feedback = validate_plan_content(&scope_review_plan(
+        "Confirm scoped change shows only README.md modified plus file-length gate passes",
+        "README.md",
+        "git status --porcelain README.md, run checks",
+        "only README.md modified",
+    ))
+    .repair_feedback();
+    assert!(feedback.contains("verification item 2 must be a concrete command or check"), "{feedback}");
+}
+
+#[test]
+fn sanitized_checkpoint_1940_retry_plan_is_ready() {
+    // Full retry-turn plan from session-vtcode-20261101T022006Z turn 1940:
+    // concrete `test -f` verifiers plus a mixed scoped gate step.
+    let plan = include_str!("fixtures/checkpoint-1940-plan.txt");
+    let report = validate_plan_content(plan);
+    assert!(report.is_ready(), "retained retry plan should validate: {report:?}");
+    let unwrapped = plan.replace("<proposed_plan>", "").replace("</proposed_plan>", "");
+    assert!(validate_plan_content(&unwrapped).is_ready(), "complete unwrapped draft remains valid");
+    assert_eq!(report.implementation_step_count, 5);
+    assert_eq!(report.scope_review_step_count, 1);
+    assert_eq!(report.content_verification_step_count, 4);
+    let tracker = super::generate_tracker_markdown_from_plan(plan).expect("tracker");
+    assert!(tracker.contains("  scope-review: git status --porcelain README.md"));
+    assert!(tracker.contains("  verify: python3 scripts/check_file_length.py --mode enforce"));
+    assert!(tracker.contains("test -f docs/README.md"));
 }
 
 #[test]
