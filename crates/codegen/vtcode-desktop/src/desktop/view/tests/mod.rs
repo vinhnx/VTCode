@@ -421,6 +421,7 @@ mod mcp_app;
 mod notifications;
 mod option_popups;
 mod options_misc;
+mod output_surfaces;
 mod overlay_toggles;
 mod review_output;
 mod search_config;

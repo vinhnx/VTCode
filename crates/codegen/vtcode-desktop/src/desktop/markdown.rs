@@ -3,8 +3,9 @@ use std::{sync::Arc, time::Duration};
 use gpui_kit::Styled;
 use gpui_kit::base::{TextView, TextViewMotion, TextViewStyle};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::theme::ActiveTheme;
-use gpui_kit::{ClipboardItem, ImageCacheError, ImageSource, SharedString, relative};
+use gpui_kit::component::theme::{ActiveTheme, ThemeColor};
+use gpui_kit::prelude::*;
+use gpui_kit::{AnyElement, ClipboardItem, ImageCacheError, ImageSource, SharedString, TestSupportExt, div, relative};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 pub(super) struct PreparedMarkdown {
@@ -145,12 +146,12 @@ fn append_separator(output: &mut String, separator: char) {
 }
 
 pub(super) fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
-    let mut code = gpui_kit::div()
+    let mut code = div()
         .font_family(cx.theme().mono_font_family.clone())
         .text_size(cx.theme().mono_font_size);
     let code_style = code.style().clone();
     let colors = cx.theme().colors;
-    let mut table_head = gpui_kit::div()
+    let mut table_head = div()
         .bg(colors.table_head)
         .text_color(super::themes::filled_button_foreground(colors.table_head));
     TextViewStyle::from_theme(&gpui_kit::base::Theme::global(cx))
@@ -196,6 +197,70 @@ pub(super) fn render_markdown_with_style(
 /// bounded `mcp/app/read` service call.
 pub(super) fn render_html(id: String, source: SharedString, cx: &gpui_kit::App) -> TextView {
     harden_transcript_text_view(TextView::html(id, source).style(markdown_style(cx)))
+}
+
+/// Tool-output body: literal prose plus an optional highlighted
+/// `Structured output:` JSON block.
+///
+/// Splits per render over the already-bounded tail, so marker-less output
+/// pays one scan and structured output one extra JSON parse; memoize at the
+/// call site if profiling ever implicates this. Callers reuse the unsplit
+/// tail for accessibility labels and copies.
+pub(super) fn render_output_sections(
+    base_id: String,
+    tail: &SharedString,
+    colors: &ThemeColor,
+    style: TextViewStyle,
+) -> AnyElement {
+    let sections = super::output_sections::split_output_sections(tail);
+    let mut column = div().flex().flex_col().gap_2();
+    if !sections.leading.is_empty() {
+        column = column.child(sections.leading);
+    }
+    if let Some(structured) = sections.structured {
+        column = column.child(render_structured_output_block(
+            format!("{base_id}-structured"),
+            structured.json,
+            colors,
+            style,
+        ));
+        if !structured.trailing.is_empty() {
+            column = column.child(structured.trailing);
+        }
+    }
+    column.into_any_element()
+}
+
+/// Highlighted `Structured output:` JSON block for tool-output surfaces.
+///
+/// Renders the localized section label plus the validated JSON through the
+/// shared transcript Markdown path, so code-block theming, syntax
+/// highlighting, and hardening (blocked images, web-only links, copy action)
+/// match fenced code in conversation rows.
+fn render_structured_output_block(
+    base_id: String,
+    json: SharedString,
+    colors: &ThemeColor,
+    style: TextViewStyle,
+) -> AnyElement {
+    let mut fenced = String::with_capacity(json.len().saturating_add(12));
+    fenced.push_str("```json\n");
+    fenced.push_str(&json);
+    fenced.push_str("\n```");
+    div()
+        .id(base_id.clone())
+        .test_support()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(super::themes::muted_text(colors))
+                .child(rust_i18n::t!("app.inspector.structured_output_label").to_string()),
+        )
+        .child(render_markdown_with_style(format!("{base_id}-code"), fenced.into(), false, style))
+        .into_any_element()
 }
 
 fn harden_transcript_text_view(text_view: TextView) -> TextView {

@@ -331,6 +331,7 @@ impl DesktopView {
         }
         let (output, tail) = self.cached_output_view();
         let Some(output) = output else {
+            self.output_tail_len = 0;
             return pane
                 .child(empty_state(
                     rust_i18n::t!("app.inspector.empty_output_title").to_string(),
@@ -339,6 +340,20 @@ impl DesktopView {
                 ))
                 .into_any_element();
         };
+        // Follow the live edge while the reader stays pinned: streaming
+        // output only grows, so a longer tail plus a bottom-pinned viewport
+        // means new content arrived below. A reader who scrolled up keeps
+        // their offset; the jump button below resumes following.
+        if self.output_follow_selection != self.selected_output_id {
+            self.output_scroll.set_offset(point(px(0.), px(0.)));
+            self.output_follow_selection = self.selected_output_id.clone();
+        }
+        let grown = tail.len() > self.output_tail_len;
+        self.output_tail_len = tail.len();
+        if output.running && grown && output_pinned_to_bottom(&self.output_scroll) {
+            self.output_scroll.scroll_to_bottom();
+        }
+        let pinned = output_pinned_to_bottom(&self.output_scroll);
         let is_selected_output = self.selected_output_id.as_deref() == Some(output.id.as_str());
         let has_more_output = self.restored_output_cursors.contains_key(&output.id);
         let output_page_loading = self
@@ -465,21 +480,54 @@ impl DesktopView {
         }
         pane.child(
             div()
-                .id("output-body")
-                .lock_scroll_axis()
-                .test_support()
-                .role(gpui_kit::Role::Label)
-                .aria_label(tail.clone())
+                .relative()
+                .w_full()
                 .flex_1()
                 .min_h_0()
-                .track_scroll(&self.output_scroll)
-                .overflow_y_scroll()
-                .vertical_scrollbar(&self.output_scroll)
-                .p_3()
-                .text_xs()
-                .font_family(mono)
-                .text_size(theme.mono_font_size)
-                .child(tail),
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .id("output-body")
+                        .lock_scroll_axis()
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(tail.clone())
+                        .flex_1()
+                        .min_h_0()
+                        .track_scroll(&self.output_scroll)
+                        .overflow_y_scroll()
+                        .vertical_scrollbar(&self.output_scroll)
+                        .p_3()
+                        .text_xs()
+                        .font_family(mono)
+                        .text_size(theme.mono_font_size)
+                        .child(render_output_sections("output-body".to_string(), &tail, &colors, markdown_style(cx))),
+                )
+                .when(!pinned, |wrap| {
+                    // Bottom-centered overlay in the transcript jump-button
+                    // shape: icon-only circle, label carried by tooltip and
+                    // accessible name.
+                    let label = rust_i18n::t!("app.inspector.jump_latest").to_string();
+                    wrap.child(
+                        div().absolute().left_0().right_0().bottom_2().flex().justify_center().child(
+                            desktop_button("output-jump-latest")
+                                .icon(IconName::ArrowDown)
+                                .accessibility_label(label.clone())
+                                .tooltip(label)
+                                .secondary()
+                                .rounded(theme.radius_full())
+                                .border_1()
+                                .border_color(colors.border)
+                                .bg(colors.background)
+                                .text_color(colors.foreground)
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.output_scroll.scroll_to_bottom();
+                                    cx.notify();
+                                })),
+                        ),
+                    )
+                }),
         )
         .into_any_element()
     }
@@ -836,4 +884,10 @@ impl DesktopView {
         }
         row_element
     }
+}
+
+/// Whether the Output pane sits at its live edge. The scroll offset runs
+/// from 0 (top) to `-max` (bottom), so the remaining distance fits a pixel.
+fn output_pinned_to_bottom(scroll: &ScrollHandle) -> bool {
+    scroll.offset().y + scroll.max_offset().y <= px(1.)
 }

@@ -27,6 +27,8 @@ fn inspector_copy_is_localized_for_every_language() {
             "app.inspector.loading_more_output",
             "app.inspector.reading_next_page",
             "app.inspector.truncation_notice",
+            "app.inspector.structured_output_label",
+            "app.inspector.jump_latest",
             "app.inspector.empty_activity_title",
             "app.inspector.empty_activity_description",
             "app.inspector.status_running",

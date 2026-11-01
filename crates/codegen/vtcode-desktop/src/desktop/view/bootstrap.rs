@@ -463,6 +463,8 @@ impl DesktopView {
             config_rail_scroll: ScrollHandle::default(),
             utilities_scroll: ScrollHandle::default(),
             output_scroll: ScrollHandle::default(),
+            output_tail_len: 0,
+            output_follow_selection: None,
             review_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),

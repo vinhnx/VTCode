@@ -5,6 +5,7 @@ mod inspector;
 mod localization;
 mod markdown;
 mod notifications;
+mod output_sections;
 mod preferences;
 mod strings;
 mod themes;

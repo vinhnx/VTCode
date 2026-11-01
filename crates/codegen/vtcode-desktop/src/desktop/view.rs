@@ -70,7 +70,7 @@ use vtcode_desktop_protocol::{
 use super::app_icon;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
-use super::markdown::{markdown_style, render_markdown, render_markdown_with_style};
+use super::markdown::{markdown_style, render_markdown, render_markdown_with_style, render_output_sections};
 use super::preferences;
 use super::strings::{app, bundle, display, i18n, key_context, keys};
 use super::themes;
@@ -498,6 +498,12 @@ struct DesktopView {
     config_rail_scroll: ScrollHandle,
     utilities_scroll: ScrollHandle,
     output_scroll: ScrollHandle,
+    /// Byte length of the Output tab tail at the last render; growth while
+    /// running and pinned drives tail-following (see `render_output_tab`).
+    output_tail_len: usize,
+    /// Selected output id at the last Output tab render; a change resets the
+    /// scroll offset to the top because a new capture is a new document.
+    output_follow_selection: Option<String>,
     review_scroll: ScrollHandle,
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
