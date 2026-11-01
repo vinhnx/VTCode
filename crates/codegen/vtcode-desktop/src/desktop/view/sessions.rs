@@ -162,9 +162,7 @@ impl DesktopView {
             }
             self.pending_new_thread = true;
         } else {
-            let attachments = std::mem::take(&mut self.attachments);
-            self.reset_session_state();
-            self.attachments = attachments;
+            self.reset_preserving_composer_attachments();
             self.clear_error();
             self.record_current_navigation();
         }
@@ -497,7 +495,10 @@ impl DesktopView {
             return;
         }
 
+        // The retained draft rides out the load in a local: keep its
+        // thumbnails alive across the reset inside `load_history`.
         let retained_submission = self.retained_submission.take();
+        let thumbnails = std::mem::take(&mut self.attachment_thumbnails);
         self.load_history(history);
         self.history_start_index = loaded.history_start_index;
         self.history_has_earlier = loaded.history_has_earlier && loaded.history_start_index > 0;
@@ -540,6 +541,8 @@ impl DesktopView {
             }
         }
         self.retained_submission = retained_submission;
+        self.attachment_thumbnails = thumbnails;
+        self.prune_attachment_thumbnails();
         self.selected_session_id = Some(loaded.session.session_id.clone());
         self.ensure_tab(loaded.session.session_id.clone());
         self.background_activity_count = 0;
@@ -638,15 +641,31 @@ impl DesktopView {
         self.session_request = None;
         self.pending_new_thread = false;
         self.retained_submission = None;
+        self.prune_attachment_thumbnails();
+        self.mcp_app_pending.clear();
+        self.mcp_app_task = None;
+        self.mcp_app_bodies.clear();
+        self.mcp_app_errors.clear();
+    }
+
+    /// Reset session state while preserving the composer's attached sources
+    /// (and their thumbnails): model, permission, and theme switches keep the
+    /// editable draft's files while the reset drops everything else, including
+    /// thumbnails for drafts that do not survive.
+    pub(super) fn reset_preserving_composer_attachments(&mut self) {
+        let attachments = std::mem::take(&mut self.attachments);
+        let thumbnails = std::mem::take(&mut self.attachment_thumbnails);
+        self.reset_session_state();
+        self.attachments = attachments;
+        self.attachment_thumbnails = thumbnails;
+        self.prune_attachment_thumbnails();
     }
 
     /// Mirror a service-side session discard (provider switch, credential
     /// repair): drop the selection and turn state, keep attachments for reuse.
     pub(super) fn clear_session_after_service_reset(&mut self) {
         self.selected_session_id = None;
-        let attachments = std::mem::take(&mut self.attachments);
-        self.reset_session_state();
-        self.attachments = attachments;
+        self.reset_preserving_composer_attachments();
         self.record_current_navigation();
     }
 

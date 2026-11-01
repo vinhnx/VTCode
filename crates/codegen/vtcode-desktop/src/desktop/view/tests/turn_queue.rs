@@ -697,3 +697,98 @@ fn queue_state_clears_on_session_reset_and_service_exit(cx: &mut TestAppContext)
         assert!(!view.take_latest_pending);
     });
 }
+
+fn draft_with_image(prompt: &str, path: &str) -> SubmissionDraft {
+    let mut draft = queued_draft(prompt);
+    draft.attachments = vec![vtcode_desktop_protocol::TurnAttachment { path: path.to_string(), text: String::new() }];
+    draft
+}
+
+#[gpui_kit::test]
+fn immediate_ack_releases_the_consumed_draft_thumbnails(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".to_string());
+        view.pending_submission = Some(draft_with_image("with image", "shot.png"));
+        assert!(
+            view.attachment_thumbnails
+                .insert("shot.png".to_string(), test_thumbnail_image())
+                .is_none(),
+            "fixture thumbnail seeded"
+        );
+        view.handle_backend_event(
+            submit_response(
+                vtcode_desktop_protocol::method::TURN_SUBMIT,
+                serde_json::json!({ "sessionId": "session", "turnId": "turn-1", "queued": false }),
+            ),
+            cx,
+        );
+        assert!(view.pending_submission.is_none());
+        assert_eq!(view.active_turn_id.as_deref(), Some("turn-1"));
+        assert!(
+            view.attachment_thumbnails.is_empty(),
+            "an accepted turn consumes its draft, so its thumbnails must go with it"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn demoted_submit_releases_thumbnails_with_its_attachments(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".to_string());
+        view.running = true;
+        view.pending_submission = Some(draft_with_image("gap submit", "shot.png"));
+        assert!(
+            view.attachment_thumbnails
+                .insert("shot.png".to_string(), test_thumbnail_image())
+                .is_none(),
+            "fixture thumbnail seeded"
+        );
+        view.handle_backend_event(
+            submit_response(
+                vtcode_desktop_protocol::method::TURN_SUBMIT,
+                serde_json::json!({ "sessionId": "session", "turnId": "", "queued": true, "queueDepth": 1 }),
+            ),
+            cx,
+        );
+        assert!(view.pending_submission.is_none());
+        assert_eq!(view.queued_submissions.len(), 1, "the ack demotes the in-flight submit");
+        assert!(
+            view.attachment_thumbnails.is_empty(),
+            "queue entries keep no attachments, so demotion must release the thumbnails"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn take_latest_overwrite_releases_the_replaced_draft_thumbnails(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".to_string());
+            view.retained_submission = Some(draft_with_image("uncertain", "shot.png"));
+            assert!(
+                view.attachment_thumbnails
+                    .insert("shot.png".to_string(), test_thumbnail_image())
+                    .is_none(),
+                "fixture thumbnail seeded"
+            );
+            view.composer
+                .update(cx, |state, cx| state.set_value("typed during round trip", window, cx));
+            view.handle_backend_event(
+                submit_response(
+                    vtcode_desktop_protocol::method::TURN_QUEUE_TAKE_LATEST,
+                    serde_json::json!({ "sessionId": "session", "text": "popped", "queueDepth": 0 }),
+                ),
+                cx,
+            );
+            assert_eq!(view.retained_submission.as_ref().map(|draft| draft.prompt.as_str()), Some("popped"));
+            assert!(
+                view.attachment_thumbnails.is_empty(),
+                "replacing the retained draft must release the previous draft's thumbnails"
+            );
+        });
+    })
+    .unwrap();
+}

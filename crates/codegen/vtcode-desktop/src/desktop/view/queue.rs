@@ -67,6 +67,9 @@ impl DesktopView {
             prompt: draft.prompt.clone(),
             acknowledged: false,
         });
+        // The queue entry keeps no attachments: the draft's images are consumed
+        // with the send, so their thumbnails must go with them.
+        self.prune_attachment_thumbnails();
         self.transcript.follow_latest();
         cx.notify();
         Ok(())

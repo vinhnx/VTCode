@@ -437,3 +437,59 @@ fn revision_bumps_on_item_mutations_but_not_layout_only_changes() {
     assert_eq!(transcript.reveal_tool_item("9"), Some(0));
     assert_eq!(transcript.revision(), before + 1, "reveal must bump");
 }
+
+#[test]
+fn append_text_concatenates_streaming_deltas_onto_one_row() {
+    let mut transcript = Transcript::default();
+    // Empty deltas are no-ops: no row and no revision bump.
+    let before = transcript.revision();
+    transcript.append_text("plan".to_string(), "assistant", "Plan".into(), "");
+    assert!(transcript.is_empty());
+    assert_eq!(transcript.revision(), before, "empty deltas must not bump");
+
+    transcript.append_text("plan".to_string(), "assistant", "Plan".into(), "Hello ");
+    assert!(transcript.revision() > before, "the first delta creates the row");
+    let _initial_layout = transcript.take_layout_changes();
+
+    transcript.append_text("plan".to_string(), "assistant", "Plan".into(), "**world**");
+    transcript.append_text("plan".to_string(), "assistant", "Plan".into(), "!");
+    assert_eq!(transcript.len(), 1, "deltas for one id must share one row");
+
+    let row = transcript.get(0).unwrap();
+    assert_eq!(row.id, "plan");
+    assert!(row.is_assistant());
+    assert_eq!(row.text.as_str(), "Hello **world**!");
+    // Render projections always derive from the full concatenated text.
+    assert_eq!(row.markdown.as_str(), "Hello **world**!");
+    assert!(row.accessibility_text.contains("world"));
+    assert!(!row.has_list, "prose without a list must not take the list layout");
+
+    assert_eq!(
+        transcript.take_layout_changes(),
+        vec![
+            super::TranscriptLayoutChange::RemeasureItems(0..1),
+            super::TranscriptLayoutChange::RemeasureItems(0..1),
+        ],
+        "follow-up deltas remeasure only their own row"
+    );
+
+    // A new id starts a second row; list detection follows the full text.
+    transcript.append_text("steps".to_string(), "assistant", "Plan".into(), "Do:\n\n- one");
+    assert_eq!(transcript.len(), 2);
+    let row = transcript.get(1).unwrap();
+    assert_eq!(row.text.as_str(), "Do:\n\n- one");
+    assert!(row.has_list, "a delta that completes a list must flip the layout flag");
+}
+
+#[test]
+fn append_text_sanitizes_markup_across_delta_boundaries() {
+    let mut transcript = Transcript::default();
+    // The tag opens in one delta and closes in the next: only a full-text
+    // derivation strips it, so the pin fails if appends ever sanitize per delta.
+    transcript.append_text("markup".to_string(), "assistant", "Plan".into(), "<a hr");
+    transcript.append_text("markup".to_string(), "assistant", "Plan".into(), "ef=\"u\">z</a>");
+    let row = transcript.get(0).unwrap();
+    assert_eq!(row.text.as_str(), "<a href=\"u\">z</a>");
+    assert_eq!(row.markdown.as_str(), "z");
+    assert_eq!(row.accessibility_text.as_str(), "z");
+}

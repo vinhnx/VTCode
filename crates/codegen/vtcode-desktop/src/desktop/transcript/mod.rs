@@ -559,8 +559,30 @@ impl Transcript {
         if delta.is_empty() {
             return;
         }
-        let mut text = self
-            .position_by_id(&id)
+        // Fast path for streaming: when the row already exists with the same
+        // role and title, extend it in place instead of rebuilding a full item
+        // and round-tripping through the upsert comparison. Tool rows keep the
+        // general path so group summaries still update; new rows and role or
+        // title changes do the same.
+        let existing = self.position_by_id(&id);
+        let same_row = existing
+            .and_then(|index| self.items.get(index).map(|row| (index, row)))
+            .filter(|(_, row)| !row.is_tool() && row.role == role && row.title == title)
+            .map(|(index, _)| index);
+        if let Some(index) = same_row {
+            let Some(row) = self.items.get_mut(index) else {
+                return;
+            };
+            let mut text = row.text.to_string();
+            text.push_str(delta);
+            row.text = text.into();
+            row.prepare_render_content();
+            self.bump_revision();
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+            return;
+        }
+        let mut text = existing
             .and_then(|index| self.items.get(index))
             .map_or_else(String::new, |item| item.text.to_string());
         text.push_str(delta);

@@ -208,11 +208,11 @@ pub(crate) fn launch_backend(workspace: PathBuf, ui_events: BackendEventSender) 
     let _transport_thread = std::thread::Builder::new()
         .name("vtcode-desktop-transport".to_string())
         .spawn(move || {
-            let runtime = match tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
-                .enable_all()
-                .build()
-            {
+            // The transport pumps one framed stdio conversation plus a stderr
+            // drain: purely sequential I/O with no blocking or CPU work, so a
+            // single-threaded runtime on this dedicated thread is sufficient
+            // and avoids parking worker threads.
+            let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                 Ok(runtime) => runtime,
                 Err(_) => {
                     let _ = send_ui_event(
@@ -458,13 +458,17 @@ fn decode_frame(
     frame: &[u8],
     pending: &mut HashMap<RequestId, PendingRequest>,
 ) -> Result<Option<BackendEvent>, ProtocolDecodeError> {
-    let value = serde_json::from_slice::<Value>(frame).map_err(|_error| ProtocolDecodeError)?;
+    let mut value = serde_json::from_slice::<Value>(frame).map_err(|_error| ProtocolDecodeError)?;
     if value.get(keys::JSONRPC).and_then(Value::as_str) != Some(keys::JSONRPC_VERSION) {
         return Err(ProtocolDecodeError);
     }
-    if let Some(method) = value.get(keys::METHOD).and_then(Value::as_str) {
-        let params = value.get(keys::PARAMS).cloned().unwrap_or(Value::Null);
-        return match method {
+    // Move the payload out of the parsed frame instead of cloning it: thread
+    // events can carry full items with large text and output bodies on every
+    // streaming tick. Only the short method name is cloned, to end the borrow
+    // before the payload moves.
+    if let Some(method) = value.get(keys::METHOD).and_then(Value::as_str).map(str::to_owned) {
+        let params = value.get_mut(keys::PARAMS).map(Value::take).unwrap_or(Value::Null);
+        return match method.as_str() {
             protocol::method::THREAD_EVENT => serde_json::from_value::<ThreadEventNotification>(params)
                 .map(BackendEvent::ThreadEvent)
                 .map(Some)
@@ -484,7 +488,7 @@ fn decode_frame(
         };
     }
 
-    let id_value = value.get(keys::ID).ok_or(ProtocolDecodeError)?.clone();
+    let id_value = value.get_mut(keys::ID).map(Value::take).ok_or(ProtocolDecodeError)?;
     let id = serde_json::from_value::<RequestId>(id_value).map_err(|_error| ProtocolDecodeError)?;
     let request = pending.remove(&id).ok_or(ProtocolDecodeError)?;
     if let Some(error) = value.get(keys::ERROR) {
@@ -508,7 +512,7 @@ fn decode_frame(
             .collect();
         Ok(Some(request.finish(None, Some(message))))
     } else {
-        let result = value.get(keys::RESULT).cloned().ok_or(ProtocolDecodeError)?;
+        let result = value.get_mut(keys::RESULT).map(Value::take).ok_or(ProtocolDecodeError)?;
         Ok(Some(request.finish(Some(result), None)))
     }
 }

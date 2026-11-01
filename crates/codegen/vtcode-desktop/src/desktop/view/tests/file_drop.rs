@@ -127,14 +127,6 @@ fn dropping_without_a_workspace_is_a_silent_no_op(cx: &mut TestAppContext) {
     .unwrap();
 }
 
-/// A real 1x1 PNG so the renderer can decode the thumbnail and preview.
-const TINY_PNG: &[u8] = &[
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
-    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49,
-    0x44, 0x41, 0x54, 0x78, 0xDA, 0x63, 0xFC, 0xFF, 0xFF, 0x3F, 0x03, 0x00, 0x05, 0xFE, 0x02, 0xFE, 0xA7, 0x2D, 0x1E,
-    0x48, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-];
-
 #[gpui_kit::test]
 fn dropped_image_attaches_by_path_and_caches_a_thumbnail(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
@@ -337,6 +329,161 @@ fn copied_file_from_the_tree_pastes_as_an_attachment(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, _window, cx| {
         assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn session_reset_drops_thumbnails_once_no_draft_references_them(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("fixture image");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    let paths = ExternalPaths([workspace.path().join("shot.png")].into_iter().collect());
+    dispatch_file_drop(window, paths, cx);
+    cx.update(|cx| {
+        assert!(
+            view.read(cx).attachment_thumbnails.contains_key("shot.png"),
+            "the image thumbnail must be cached for the composer chip"
+        );
+    });
+    // A submitted draft consumes the composer attachments; switching sessions
+    // then drops the draft. Neither holder may leave its decoded image behind.
+    view.update(cx, |view, _| {
+        view.retained_submission = Some(super::super::SubmissionDraft {
+            prompt: "sent".into(),
+            attachments: std::mem::take(&mut view.attachments),
+            echo_id: "echo-1".into(),
+            delivery_uncertain: false,
+        });
+        view.reset_session_state();
+        assert!(view.attachments.is_empty());
+        assert!(view.retained_submission.is_none());
+        assert!(
+            view.attachment_thumbnails.is_empty(),
+            "session reset must drop thumbnails once no draft references them"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn thumbnail_prune_keeps_live_images_and_drops_orphans(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("kept.png"), TINY_PNG).expect("fixture image");
+    std::fs::write(workspace.path().join("sent.png"), TINY_PNG).expect("fixture image");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    let paths = ExternalPaths(
+        [workspace.path().join("kept.png"), workspace.path().join("sent.png")]
+            .into_iter()
+            .collect(),
+    );
+    dispatch_file_drop(window, paths, cx);
+    view.update(cx, |view, _| {
+        // kept.png stays in the composer; sent.png moves into a live draft.
+        let sent_index = view
+            .attachments
+            .iter()
+            .position(|attachment| attachment.path == "sent.png")
+            .expect("sent image attached");
+        let sent = view.attachments.remove(sent_index);
+        view.retained_submission = Some(super::super::SubmissionDraft {
+            prompt: "sent".into(),
+            attachments: vec![sent],
+            echo_id: "echo-1".into(),
+            delivery_uncertain: false,
+        });
+        view.prune_attachment_thumbnails();
+        assert!(view.attachment_thumbnails.contains_key("kept.png"), "composer images keep their chips");
+        assert!(view.attachment_thumbnails.contains_key("sent.png"), "live drafts keep their chips for restore");
+        // Dismissing the draft orphans its image while the composer image stays.
+        view.retained_submission = None;
+        view.prune_attachment_thumbnails();
+        assert!(view.attachment_thumbnails.contains_key("kept.png"));
+        assert!(!view.attachment_thumbnails.contains_key("sent.png"), "dismissed drafts must release their images");
+    });
+}
+
+#[gpui_kit::test]
+fn session_load_keeps_the_retained_draft_and_its_thumbnails(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("fixture image");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    let paths = ExternalPaths([workspace.path().join("shot.png")].into_iter().collect());
+    dispatch_file_drop(window, paths, cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.retained_submission = Some(super::super::SubmissionDraft {
+                prompt: "uncertain".into(),
+                attachments: std::mem::take(&mut view.attachments),
+                echo_id: "echo-1".into(),
+                delivery_uncertain: true,
+            });
+            // A retained draft only survives reloading its selected session.
+            view.selected_session_id = Some("restored".to_string());
+            view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                    error: None,
+                    result: Some(json!({
+                        "session": {"sessionId": "restored", "title": "Saved work", "workspace": "/workspace", "completed": true, "resumable": true},
+                        "messages": [{"role": "user", "text": "Make this change"}],
+                    })),
+                },
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let state = view.read(cx);
+        assert_eq!(
+            state.selected_session_id.as_deref(),
+            Some("restored"),
+            "status={} error={:?} request={:?}",
+            state.status,
+            state.error,
+            state.session_request
+        );
+        assert!(state.retained_submission.is_some(), "the unsent draft survives reloading its session");
+        assert!(
+            state.attachment_thumbnails.contains_key("shot.png"),
+            "the surviving draft keeps its chips across the load"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn new_thread_without_a_session_keeps_composer_thumbnails(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("fixture image");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    let paths = ExternalPaths([workspace.path().join("shot.png")].into_iter().collect());
+    dispatch_file_drop(window, paths, cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            assert!(view.selected_session_id.is_none());
+            assert!(view.begin_new_thread(cx), "new thread starts without a session");
+            assert_eq!(view.attachments.len(), 1, "the draft's files survive the reset");
+            assert!(
+                view.attachment_thumbnails.contains_key("shot.png"),
+                "the surviving files keep their chips across the reset"
+            );
+        });
     })
     .unwrap();
 }

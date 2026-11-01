@@ -7,6 +7,7 @@ impl DesktopView {
     pub(super) fn finish_unverified_turn(&mut self, message: &str) {
         self.pending_submission = None;
         self.pending_first_submission = false;
+        self.prune_attachment_thumbnails();
         self.running = false;
         self.ui_progress_active = false;
         self.active_turn_id = None;

@@ -42,6 +42,7 @@ impl DesktopView {
             ThreadEvent::TurnStarted(_) => {
                 self.pending_submission = None;
                 self.pending_first_submission = false;
+                self.prune_attachment_thumbnails();
                 self.running = true;
                 self.turn_content_seen = false;
                 self.active_turn_id = notification.turn_id;
@@ -51,6 +52,7 @@ impl DesktopView {
             ThreadEvent::TurnCompleted(event) => {
                 self.pending_submission = None;
                 self.pending_first_submission = false;
+                self.prune_attachment_thumbnails();
                 self.running = false;
                 self.active_turn_id = None;
                 self.cancel_requested = false;

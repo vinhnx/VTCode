@@ -209,3 +209,39 @@ fn mcp_app_error_row_retries_through_the_button(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn session_reset_clears_the_mcp_app_preview_cache(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let key = McpAppBodyKey {
+        item_id: "app-1".into(),
+        uri: "ui://demo/app.html".into(),
+    };
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            assert_eq!(view.mcp_app_bodies.insert(key.clone(), app_body()), None);
+            assert_eq!(view.mcp_app_errors.insert(key, "stale".into()), None);
+            assert!(
+                view.mcp_app_pending
+                    .insert(
+                        "app-read-1".into(),
+                        PendingMcpAppRead {
+                            request_id: "app-read-1".into(),
+                            item_id: "app-1".into(),
+                            uri: "ui://demo/app.html".into(),
+                        },
+                    )
+                    .is_none()
+            );
+            view.reset_session_state();
+            assert!(
+                view.mcp_app_bodies.is_empty(),
+                "preview bodies are session-scoped and must not survive the switch"
+            );
+            assert!(view.mcp_app_errors.is_empty());
+            assert!(view.mcp_app_pending.is_empty());
+            assert!(view.mcp_app_task.is_none());
+        });
+    })
+    .unwrap();
+}

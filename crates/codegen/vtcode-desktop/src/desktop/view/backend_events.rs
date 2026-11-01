@@ -457,9 +457,7 @@ impl DesktopView {
                             {
                                 self.save_workspace_permission(choice);
                             }
-                            let attachments = std::mem::take(&mut self.attachments);
-                            self.reset_session_state();
-                            self.attachments = attachments;
+                            self.reset_preserving_composer_attachments();
                             self.selected_session_id = None;
                             self.record_current_navigation();
                             self.configuration = Some(snapshot);
@@ -479,9 +477,7 @@ impl DesktopView {
                                 .map(|preferences| preferences.theme.clone())
                                 .filter(|theme| themes::find(theme).is_some());
                             if let Some(theme) = theme {
-                                let attachments = std::mem::take(&mut self.attachments);
-                                self.reset_session_state();
-                                self.attachments = attachments;
+                                self.reset_preserving_composer_attachments();
                                 self.selected_session_id = None;
                                 self.record_current_navigation();
                                 self.configuration = Some(snapshot);
@@ -561,7 +557,12 @@ impl DesktopView {
                             self.selected_session_id = Some(session.session_id.clone());
                             self.ensure_tab(session.session_id.clone());
                             self.sessions.insert(0, session);
+                            // The first draft rides out the reset in a local:
+                            // restore its thumbnails, then prune once it lands
+                            // in the pending or retained slot.
+                            let thumbnails = std::mem::take(&mut self.attachment_thumbnails);
                             self.reset_session_state();
+                            self.attachment_thumbnails = thumbnails;
                             self.record_current_navigation();
                             self.status = rust_i18n::t!("app.service.session_ready").to_string();
                             if let Some(draft) = first_submission {
@@ -573,6 +574,7 @@ impl DesktopView {
                                     }
                                 }
                             }
+                            self.prune_attachment_thumbnails();
                         } else {
                             self.status = rust_i18n::t!("app.service.creation_failed").to_string();
                             self.retained_submission = first_submission;
@@ -584,8 +586,9 @@ impl DesktopView {
                         let pending_navigation = self.pending_navigation.take();
                         let new_thread = self.pending_new_thread;
                         let closing = self.selected_session_id.clone();
-                        let attachments =
-                            (new_thread || pending_navigation.is_some()).then(|| std::mem::take(&mut self.attachments));
+                        let preserved = (new_thread || pending_navigation.is_some()).then(|| {
+                            (std::mem::take(&mut self.attachments), std::mem::take(&mut self.attachment_thumbnails))
+                        });
                         self.selected_session_id = None;
                         if !new_thread
                             && pending_navigation.is_none()
@@ -594,8 +597,10 @@ impl DesktopView {
                             self.remove_tab(closing);
                         }
                         self.reset_session_state();
-                        if let Some(attachments) = attachments {
+                        if let Some((attachments, thumbnails)) = preserved {
                             self.attachments = attachments;
+                            self.attachment_thumbnails = thumbnails;
+                            self.prune_attachment_thumbnails();
                         }
                         if let Some(pending) = pending_navigation {
                             let _moved = self.navigation_history.navigate_to(pending.target_index);
@@ -645,6 +650,7 @@ impl DesktopView {
                                         prompt: draft.prompt,
                                         acknowledged: true,
                                     });
+                                    self.prune_attachment_thumbnails();
                                 }
                             }
                             self.try_send_pending_cancel();
@@ -664,6 +670,7 @@ impl DesktopView {
                         }
                         self.pending_submission = None;
                         self.pending_first_submission = false;
+                        self.prune_attachment_thumbnails();
                         self.active_turn_id = Some(accepted.turn_id);
                         self.running = true;
                         self.status = rust_i18n::t!("app.service.running").to_string();
@@ -700,6 +707,7 @@ impl DesktopView {
                                 echo_id: format!("desktop-user-{}", uuid_like_id()),
                                 delivery_uncertain: false,
                             });
+                            self.prune_attachment_thumbnails();
                             self.status = rust_i18n::t!("app.composer.draft_restored").to_string();
                         }
                     }

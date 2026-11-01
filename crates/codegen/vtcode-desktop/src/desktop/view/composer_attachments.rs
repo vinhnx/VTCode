@@ -17,6 +17,33 @@ fn load_attachment(
 }
 
 impl DesktopView {
+    /// Drop cached image thumbnails no live attachment references.
+    ///
+    /// Thumbnails are keyed by attachment path while attachments travel: the
+    /// composer moves them into submission drafts on send, drafts move between
+    /// the pending/first/retained slots, and every slot is dropped on session
+    /// switches. Callers invoke this after dropping a holder so consumed sends
+    /// cannot leak decoded images while restorable drafts keep their chips.
+    pub(super) fn prune_attachment_thumbnails(&mut self) {
+        let mut live_paths: Vec<&str> = Vec::new();
+        for attachment in &self.attachments {
+            live_paths.push(attachment.path.as_str());
+        }
+        for draft in [
+            &self.pending_submission,
+            &self.first_submission,
+            &self.retained_submission,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for attachment in &draft.attachments {
+                live_paths.push(attachment.path.as_str());
+            }
+        }
+        self.attachment_thumbnails.retain(|path, _| live_paths.contains(&path.as_str()));
+    }
+
     /// Reset the load gate, then push freshly read attachments — skipping
     /// duplicates and surfacing the last failure — unless the workspace or
     /// selected session changed while the reads ran. Image results also cache

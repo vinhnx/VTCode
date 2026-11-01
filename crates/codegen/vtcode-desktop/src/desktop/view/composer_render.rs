@@ -213,6 +213,7 @@ impl DesktopView {
                                     .ghost()
                                     .on_click(cx.listener(|view, _, _, cx| {
                                         view.retained_submission = None;
+                                        view.prune_attachment_thumbnails();
                                         cx.notify();
                                     })),
                             ),
