@@ -88,14 +88,18 @@ impl DesktopView {
                         .collect::<Vec<_>>()
                 })
                 .await;
-            let _ = view.update(cx, |view, cx| {
-                if let Some(state) = view.attachment_picker.as_mut() {
-                    for (path, image) in thumbnails {
-                        let _ = state.thumbnails.insert(path, image);
+            // The view can drop while thumbnails load; a failed update has no picker left to fill.
+            if view
+                .update(cx, |view, cx| {
+                    if let Some(state) = view.attachment_picker.as_mut() {
+                        for (path, image) in thumbnails {
+                            let _ = state.thumbnails.insert(path, image);
+                        }
+                        cx.notify();
                     }
-                    cx.notify();
-                }
-            });
+                })
+                .is_err()
+            {}
         }));
     }
 

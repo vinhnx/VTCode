@@ -38,7 +38,7 @@ pub(super) const MAX_UI_FONT_SIZE: u8 = 24;
 const DEFAULT_UI_FONT_SIZE: u8 = 16;
 /// The macOS system default body size that the accessibility text slider
 /// scales away from (System Settings → Accessibility → Display → Text).
-#[cfg_attr(test, allow(dead_code))]
+#[cfg_attr(test, allow(dead_code, reason = "the test stub returns a constant scale"))]
 const SYSTEM_BODY_FONT_SIZE: f32 = 13.0;
 
 /// The macOS accessibility text setting as a multiplier over the system
@@ -53,8 +53,13 @@ fn system_text_scale() -> f32 {
             reason = "Reading the macOS accessibility text size requires the AppKit preferred-font query; \
                 it is a process-global main-thread lookup with default options"
         )]
+        // SAFETY: main-thread AppKit query; the preferred-font lookup returns a valid font object.
         unsafe {
-            let font = NSFont::preferredFontForTextStyle_options(&NSFontTextStyleBody, &NSDictionary::dictionary());
+            let font = NSFont::preferredFontForTextStyle_options(NSFontTextStyleBody, &NSDictionary::dictionary());
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "system font sizes are small positives; f32 is exact"
+            )]
             ((font.pointSize() as f32) / SYSTEM_BODY_FONT_SIZE).clamp(1.0, 1.5)
         }
     }
@@ -66,6 +71,11 @@ fn system_text_scale() -> f32 {
 
 /// Resolve the UI base size: an explicit user choice wins; an unset size
 /// follows the macOS accessibility text setting over the 16px baseline.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "rounded and clamped into the 14..=24 u8 font-size range"
+)]
 fn scaled_ui_font_size(explicit: Option<u8>, system_scale: f32) -> u8 {
     match explicit {
         Some(size) => size.clamp(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE),

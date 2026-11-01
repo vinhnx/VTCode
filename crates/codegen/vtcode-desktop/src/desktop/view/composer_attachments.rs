@@ -1,12 +1,13 @@
 //! Composer attachments: the workspace file picker flow and external file drops.
 use super::*;
 
+/// One loaded attachment candidate: the turn attachment (or read failure)
+/// plus, for images, the decoded-ready composer thumbnail.
+type AttachmentLoad = (Result<protocol::TurnAttachment, String>, Option<Arc<gpui_kit::Image>>);
+
 /// Background read for one candidate attachment: the turn attachment plus,
 /// for images, bounded bytes for the composer thumbnail.
-fn load_attachment(
-    root: PathBuf,
-    path: String,
-) -> (Result<protocol::TurnAttachment, String>, Option<Arc<gpui_kit::Image>>) {
+fn load_attachment(root: PathBuf, path: String) -> AttachmentLoad {
     let attachment = files::read_attachment(&root, &root.join(&path));
     let thumbnail = attachment
         .as_ref()
@@ -52,7 +53,7 @@ impl DesktopView {
         &mut self,
         workspace: &PathBuf,
         session: &Option<String>,
-        results: Vec<(Result<protocol::TurnAttachment, String>, Option<Arc<gpui_kit::Image>>)>,
+        results: Vec<AttachmentLoad>,
         cx: &mut Context<Self>,
     ) {
         self.attachments_picker_open = false;

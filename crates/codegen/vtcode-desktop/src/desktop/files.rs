@@ -90,7 +90,7 @@ pub(super) fn read_image(root: &Path, rel_path: &str) -> Option<Arc<gpui_kit::Im
     let format = image_format(rel_path)?;
     let path = resolve_attachment_path(root, Path::new(rel_path)).ok()?;
     let metadata = fs::metadata(&path).ok()?;
-    if !metadata.is_file() || metadata.len() as usize > MAX_IMAGE_BYTES {
+    if !metadata.is_file() || metadata.len() > MAX_IMAGE_BYTES as u64 {
         return None;
     }
     Some(Arc::new(gpui_kit::Image::from_bytes(format, fs::read(&path).ok()?)))
@@ -608,7 +608,7 @@ mod tests {
         let image = read_image(root, "tiny.png").expect("small image reads");
         assert!(Arc::strong_count(&image) >= 1);
 
-        let big: Vec<u8> = vec![0u8; (MAX_IMAGE_BYTES as u64 + 1) as usize];
+        let big: Vec<u8> = vec![0u8; MAX_IMAGE_BYTES + 1];
         fs::write(root.join("huge.png"), &big).unwrap();
         assert!(read_image(root, "huge.png").is_none(), "oversized images must not load");
 
@@ -621,16 +621,14 @@ mod tests {
     fn external_drag_payload_maps_workspace_entries_to_absolute_paths() {
         let workspace = temp_workspace();
         let root = workspace.path();
-        let paths = match external_drag_payload(root, "src/main.rs", false).expect("file payload") {
-            gpui_kit::ExternalDragPayload::Files(paths) => paths,
-        };
+        let gpui_kit::ExternalDragPayload::Files(paths) =
+            external_drag_payload(root, "src/main.rs", false).expect("file payload");
         let entries = paths.entries();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0], (root.join("src/main.rs"), false));
 
-        let paths = match external_drag_payload(root, "src", true).expect("directory payload") {
-            gpui_kit::ExternalDragPayload::Files(paths) => paths,
-        };
+        let gpui_kit::ExternalDragPayload::Files(paths) =
+            external_drag_payload(root, "src", true).expect("directory payload");
         assert_eq!(paths.entries()[0], (root.join("src"), true), "directory flag must be preserved");
 
         assert!(external_drag_payload(root, "", false).is_none(), "empty paths must not drag");
