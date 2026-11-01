@@ -52,16 +52,27 @@ SUCCESS_APP="${TEST_ROOT}/success/VT Code.app"
 cmp -s "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${SUCCESS_APP}/Contents/Resources/THIRD-PARTY-NOTICES"
 cmp -s "${ROOT_DIR}/LICENSE" "${SUCCESS_APP}/Contents/Resources/LICENSE"
 cmp -s "${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns" "${SUCCESS_APP}/Contents/Resources/VTCode.icns"
-[[ -f "${SUCCESS_APP}/Contents/Resources/Assets.car" ]]
+# The Liquid Glass catalog needs the macOS 26+ SDK (mirrors the gate in
+# build-app-icon.sh); older build hosts skip it and the icns fallback above
+# covers them.
+TEST_SDK_MAJOR="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || true)"
+TEST_SDK_MAJOR="${TEST_SDK_MAJOR%%.*}"
+if [[ "${TEST_SDK_MAJOR}" =~ ^[0-9]+$ ]] && (( TEST_SDK_MAJOR >= 26 )); then
+    [[ -f "${SUCCESS_APP}/Contents/Resources/Assets.car" ]]
+    xcrun --sdk macosx assetutil --info "${SUCCESS_APP}/Contents/Resources/Assets.car" > "${TEST_ROOT}/asset-info.json"
+    grep -Fq -- "NSAppearanceNameDarkAqua" "${TEST_ROOT}/asset-info.json"
+    grep -Fq -- "ISAppearanceTintable" "${TEST_ROOT}/asset-info.json"
+    printf 'PASS: macOS 26+ SDK builds the layered Liquid Glass catalog.\n'
+else
+    [[ ! -f "${SUCCESS_APP}/Contents/Resources/Assets.car" ]]
+    printf 'PASS: older SDK skips Assets.car; the icns fallback covers the bundle.\n'
+fi
 grep -Fq -- "<key>CFBundleIconName</key>" "${SUCCESS_APP}/Contents/Info.plist"
 if grep -Fq -- "<key>NSIsTouchNative</key>" "${SUCCESS_APP}/Contents/Info.plist"; then
     printf 'FAIL: bundle declares NSIsTouchNative; that disables the touch-to-mouse emulation the GUI relies on.\n' >&2
     exit 1
 fi
 printf 'PASS: bundle omits NSIsTouchNative, so system touch emulation stays active.\n'
-xcrun --sdk macosx assetutil --info "${SUCCESS_APP}/Contents/Resources/Assets.car" > "${TEST_ROOT}/asset-info.json"
-grep -Fq -- "NSAppearanceNameDarkAqua" "${TEST_ROOT}/asset-info.json"
-grep -Fq -- "ISAppearanceTintable" "${TEST_ROOT}/asset-info.json"
 grep -Fq -- "build --locked --release --manifest-path ${ROOT_DIR}/Cargo.toml -p vtcode -p vtcode-desktop" "${CARGO_LOG}"
 grep -Fq -- "--verify --deep --strict ${SUCCESS_APP}" "${CODESIGN_LOG}"
 printf 'PASS: custom Cargo target artifacts are packaged and the copied app is verified.\n'
