@@ -812,9 +812,11 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         window.render_frame(cx);
         assert!(window.find_all("welcome-workspace").is_empty());
         assert_eq!(window.find("welcome-prompt").label(), Some("Good evening. What are we exploring?"));
-        assert_eq!(window.find("open-first-workspace").label(), Some("Select a folder"));
-        window.within("welcome").click("open-first-workspace", cx);
-        assert!(view.read(cx).workspace_picker_open, "the welcome action opens the native workspace picker");
+        assert!(window.find_all("open-first-workspace").is_empty());
+        // The rail-collapsed sidebar hides its opener here, so drive the
+        // picker directly; the sidebar button dispatches the same action.
+        view.update(cx, |view, cx| view.choose_workspace(window, cx));
+        assert!(view.read(cx).workspace_picker_open, "choosing a workspace opens the native picker");
     })
     .unwrap();
 

@@ -23,7 +23,7 @@ fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_sess
             view.welcome_copy_index = 0;
         });
         window.render_frame(cx);
-        assert_eq!(window.within("welcome").find("open-first-workspace").label(), Some("Choose a workspace"));
+        assert!(window.find_all("open-first-workspace").is_empty());
         view.update(cx, |view, _| {
             view.workspace = Some(std::env::temp_dir());
             view.transcript.push(TranscriptItem::new(

@@ -11,6 +11,15 @@ struct WelcomeHeader {
 }
 
 impl DesktopView {
+    /// Welcome prelude both empty states render from; single owner so their copy cannot drift.
+    fn welcome_header(&self) -> WelcomeHeader {
+        let copy = welcome_copy(self.welcome_copy_index);
+        let greeting = welcome_greeting(self.welcome_period);
+        let workspace_name = self.workspace_file_name();
+        let prompt = welcome_prompt(&greeting, &copy.action, &copy.workspace_action, workspace_name.as_deref());
+        WelcomeHeader { copy, greeting, workspace_name, prompt }
+    }
+
     pub(super) fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
         self.transcript.upsert(TranscriptItem::new(
             id,
@@ -173,14 +182,7 @@ impl DesktopView {
                                 .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
                                 .title(title),
                         )
-                        .size_full()
-                        .when(self.workspace.is_none(), |welcome| {
-                            welcome.content(
-                                EmptyContent::new()
-                                    .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx))
-                                    .children(self.recent_workspace_buttons(cx)),
-                            )
-                        }),
+                        .size_full(),
                 )
                 .into_any_element()
         } else if empty_conversation {
@@ -270,10 +272,10 @@ impl DesktopView {
     /// Minimal centered empty state for Zen mode. The brand mark is the single
     /// focal point, followed by one greeting line; the workspace name renders
     /// as plain text because Zen hides the title-bar identity. The workspace
-    /// picker stays reachable through the primary action when none is set.
+    /// picker stays reachable through the composer context row when none is set.
     fn render_zen_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let WelcomeHeader { copy: welcome_copy, prompt, .. } = self.welcome_header();
+        let WelcomeHeader { prompt, .. } = self.welcome_header();
         div()
             .id("zen-welcome")
             .test_support()
@@ -302,14 +304,7 @@ impl DesktopView {
                                     ),
                             ),
                     )
-                    .size_full()
-                    .when(self.workspace.is_none(), |welcome| {
-                        welcome.content(
-                            EmptyContent::new()
-                                .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx))
-                                .children(self.recent_workspace_buttons(cx)),
-                        )
-                    }),
+                    .size_full(),
             )
             .into_any_element()
     }
@@ -964,5 +959,3 @@ impl DesktopView {
         panel.into_any_element()
     }
 }
-
-mod welcome;

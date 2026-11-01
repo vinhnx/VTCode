@@ -896,7 +896,7 @@ fn zen_empty_state_centers_brand_mark_with_greeting(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zen_empty_state_offers_workspace_picker_when_workspaceless(cx: &mut TestAppContext) {
+fn zen_empty_state_stays_greeting_only_with_picker_in_composer_context(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         view.workspace = None;
@@ -906,8 +906,12 @@ fn zen_empty_state_offers_workspace_picker_when_workspaceless(cx: &mut TestAppCo
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("zen-welcome").is_some());
-        window.within("zen-welcome").click("open-first-workspace", cx);
-        assert!(view.read(cx).workspace_picker_open, "the zen action opens the native workspace picker");
+        assert!(window.try_find("open-first-workspace").is_none());
+        // The workspace picker stays reachable through the composer context row.
+        assert!(window.try_find("composer-context").is_some());
+        window.click("composer-workspace", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("open-workspace-folder").label(), Some("Choose folder…"));
     })
     .unwrap();
 }

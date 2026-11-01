@@ -454,7 +454,6 @@ mod thread_tabs;
 mod transcript_navigation;
 mod turn_queue;
 mod turns_transcript;
-mod welcome_recents;
 mod worktree_a11y;
 mod zen_options;
 mod zen_workspace;

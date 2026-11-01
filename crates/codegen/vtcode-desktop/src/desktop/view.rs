@@ -21,9 +21,7 @@ use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandSt
 use gpui_kit::component::description_list::DescriptionList;
 use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
 use gpui_kit::component::diff::{Diff, DiffMode, DiffState};
-use gpui_kit::component::empty::{
-    Empty as EmptyState, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
-};
+use gpui_kit::component::empty::{Empty as EmptyState, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{
     Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Enter,
@@ -173,7 +171,6 @@ const ZEN_MODE_TOGGLE_ELEMENT_ID: &str = "zen-mode-toggle";
 struct WelcomeCopy {
     action: String,
     workspace_action: String,
-    call_to_action: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,17 +202,14 @@ fn welcome_copy(index: usize) -> WelcomeCopy {
         1 => WelcomeCopy {
             action: rust_i18n::t!("app.welcome.action.improve").to_string(),
             workspace_action: rust_i18n::t!("app.welcome.action.improve_in_workspace").to_string(),
-            call_to_action: rust_i18n::t!("app.welcome.cta.open_project").to_string(),
         },
         2 => WelcomeCopy {
             action: rust_i18n::t!("app.welcome.action.explore").to_string(),
             workspace_action: rust_i18n::t!("app.welcome.action.explore_in_workspace").to_string(),
-            call_to_action: rust_i18n::t!("app.welcome.cta.select_folder").to_string(),
         },
         _ => WelcomeCopy {
             action: rust_i18n::t!("app.welcome.action.build").to_string(),
             workspace_action: rust_i18n::t!("app.welcome.action.build_in_workspace").to_string(),
-            call_to_action: rust_i18n::t!("app.welcome.cta.choose_workspace").to_string(),
         },
     }
 }
