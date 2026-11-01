@@ -12,6 +12,11 @@ All notable changes to vtcode will be documented in this file.
 #### Bug Fixes
 
 - Publish vtcode-desktop-protocol to crates.io (59edae70) (@vinhnx)
+- Pin desktop workflow nextest to repo-required version (723c7175) (@vinhnx)
+
+#### Features
+
+- Build and upload macOS desktop app with release.sh (30a3f0b9) (@vinhnx)
 
 ### Other Changes
 
