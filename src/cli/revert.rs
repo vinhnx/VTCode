@@ -5,15 +5,27 @@ use vtcode_core::utils::colors::style;
 
 use super::checkpoints::{snapshot_config, snapshot_manager};
 
-pub async fn handle_revert_command(config: &CoreAgentConfig, turn: usize, partial: Option<String>) -> Result<()> {
+pub async fn handle_revert_command(
+    config: &CoreAgentConfig,
+    turn: usize,
+    partial: Option<String>,
+    session: Option<String>,
+) -> Result<()> {
     println!("{}\n", style("[REVERT]").cyan().bold());
     let scope = partial
         .as_deref()
         .and_then(SnapshotManager::parse_revert_scope)
         .unwrap_or(RevertScope::Both);
     let manager = snapshot_manager(snapshot_config(config))?;
-    match manager.restore_snapshot(turn, scope).await? {
+    let restored = match session.as_deref() {
+        Some(session) => manager.restore_snapshot_for_session(session, turn, scope).await?,
+        None => manager.restore_snapshot(turn, scope).await?,
+    };
+    match restored {
         Some(restored) => {
+            if let Some(owner) = restored.metadata.session_id.as_deref() {
+                println!("Checkpoint turn {turn} belongs to session {owner}.");
+            }
             if scope.includes_code() {
                 println!("Applied code changes from checkpoint turn {turn}.");
             } else {

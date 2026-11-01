@@ -119,13 +119,27 @@ async fn shell_preimages_respect_ignore_and_workspace_boundaries() -> Result<()>
     fs::write(&outside_file, "outside")?;
     // No input or display text should be mistaken for a shell write.
     declare_prompt_edit(session.clone(), "exec_command".into(), serde_json::json!({"cmd":"cat ignored.txt"})).await?;
-    assert!(manager.load_snapshot(1).await?.expect("checkpoint").files.is_empty());
+    assert!(
+        manager
+            .load_snapshot_for_session(&session, 1)
+            .await?
+            .expect("checkpoint")
+            .files
+            .is_empty()
+    );
     drop(lease);
     manager.navigate_prompt(Some(1), RevertScope::Both, &session, &[]).await?;
     assert_eq!(fs::read_to_string(dir.path().join("ignored.txt"))?, "ignored");
     assert_eq!(fs::read_to_string(outside_file)?, "outside");
     let _lease = manager.begin_prompt(2, &session, "next prompt", &[]).await?;
-    assert!(manager.load_snapshot(2).await?.expect("next checkpoint").files.is_empty());
+    assert!(
+        manager
+            .load_snapshot_for_session(&session, 2)
+            .await?
+            .expect("next checkpoint")
+            .files
+            .is_empty()
+    );
     Ok(())
 }
 
@@ -162,7 +176,7 @@ async fn shell_creation_rewind_redo_then_rewind_creation_removes_file() -> Resul
         .await?;
     assert!(
         manager
-            .load_snapshot(1)
+            .load_snapshot_for_session(&session, 1)
             .await?
             .expect("creation checkpoint")
             .files
@@ -341,7 +355,7 @@ async fn complete_session_navigation_trims_active_and_clears_redo() -> Result<()
     let session = uuid::Uuid::new_v4().to_string();
     let key: String = session.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
     let branch_path = storage.join(format!("branch_{key}.json"));
-    let lock_path = storage.join("rewind.lock");
+    let lock_path = storage.join(format!("rewind-{key}.lock"));
     fs::write(&lock_path, b"")?;
 
     // 20 protected turns plus a redo entry: the completion trim must keep
@@ -371,7 +385,84 @@ async fn complete_session_navigation_trims_active_and_clears_redo() -> Result<()
     );
     assert!(saved.redo.is_empty(), "completion must clear redo");
     assert!(saved.pending.is_none());
-    assert!(!lock_path.exists(), "completion must release the workspace rewind lock");
+    assert!(!lock_path.exists(), "completion must reclaim the session lock file");
     assert!(!recovery_path.exists(), "completion must retire redo recovery records");
+    Ok(())
+}
+
+#[tokio::test]
+async fn sequential_sessions_keep_disjoint_records_and_rewind_points() -> Result<()> {
+    let dir = TempDir::new()?;
+    let manager = SnapshotManager::new(SnapshotConfig::new(dir.path().into()))?;
+    let session_a = "session-a";
+    let session_b = "session-b";
+    let lease_a = manager.begin_prompt(1, session_a, "first a", &[]).await?;
+    drop(lease_a);
+    let lease_b = manager.begin_prompt(1, session_b, "first b", &[]).await?;
+    drop(lease_b);
+    // Same turn number, disjoint records with asymmetric owners.
+    let stored_a = manager.load_snapshot_for_session(session_a, 1).await?.expect("a1");
+    let stored_b = manager.load_snapshot_for_session(session_b, 1).await?.expect("b1");
+    assert_eq!(stored_a.metadata.session_id.as_deref(), Some(session_a));
+    assert_eq!(stored_b.metadata.session_id.as_deref(), Some(session_b));
+    assert_ne!(stored_a.metadata.description, stored_b.metadata.description);
+    // Rewind points stay session-local.
+    assert_eq!(manager.rewind_points(session_a).await?.len(), 1);
+    assert_eq!(manager.rewind_points(session_b).await?.len(), 1);
+    // Per-session numbering advances independently.
+    assert_eq!(manager.next_turn_number(session_a)?, 2);
+    assert_eq!(manager.next_turn_number(session_b)?, 2);
+    Ok(())
+}
+
+#[tokio::test]
+async fn concurrent_sessions_begin_overlapping_turns_without_contention() -> Result<()> {
+    let dir = TempDir::new()?;
+    let manager = SnapshotManager::new(SnapshotConfig::new(dir.path().into()))?;
+    // Hold A's whole-turn lease while B begins: different sessions must not
+    // block each other (the pre-scoping workspace lock denied this).
+    let lease_a = manager.begin_prompt(1, "session-a", "first a", &[]).await?;
+    let lease_b = manager.begin_prompt(1, "session-b", "first b", &[]).await?;
+    // Same-session overlap still fails closed while its lease is held.
+    let err = manager
+        .begin_prompt(2, "session-a", "must not overlap", &[])
+        .await
+        .expect_err("a second turn in the same session must fail while its lease is held");
+    assert!(format!("{err:#}").contains("Another turn is using this session"), "unexpected error: {err:#}");
+    drop(lease_a);
+    drop(lease_b);
+    // Both records survived with their own owners.
+    let stored_a = manager.load_snapshot_for_session("session-a", 1).await?.expect("a1");
+    let stored_b = manager.load_snapshot_for_session("session-b", 1).await?.expect("b1");
+    assert_ne!(stored_a.metadata.description, stored_b.metadata.description);
+    // And the session frees up once its lease drops.
+    let _lease = manager.begin_prompt(2, "session-a", "after release", &[]).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn rewind_waits_for_own_session_turn_but_not_others() -> Result<()> {
+    let dir = TempDir::new()?;
+    let manager = SnapshotManager::new(SnapshotConfig::new(dir.path().into()))?;
+    fs::write(dir.path().join("file.txt"), "v1")?;
+    let lease_a = manager.begin_prompt(1, "session-a", "first a", &[]).await?;
+    // Own-session rewind is refused while the turn runs.
+    let err = manager
+        .navigate_prompt(Some(1), RevertScope::Both, "session-a", &[])
+        .await
+        .map(|_| ())
+        .expect_err("own-session rewind must wait for the turn");
+    assert!(format!("{err:#}").contains("Wait for the current turn to finish"), "unexpected error: {err:#}");
+    // Another session's rewind is not blocked by A's lease: it gets past the
+    // lock and fails only because turn 1 is not on its (empty) branch.
+    let err = manager
+        .navigate_prompt(Some(1), RevertScope::Both, "session-b", &[])
+        .await
+        .map(|_| ())
+        .expect_err("unknown turn must fail");
+    assert!(format!("{err:#}").contains("not on this branch"), "unexpected error: {err:#}");
+    drop(lease_a);
+    // Once the turn settles, the own-session rewind proceeds.
+    manager.navigate_prompt(Some(1), RevertScope::Both, "session-a", &[]).await?;
     Ok(())
 }

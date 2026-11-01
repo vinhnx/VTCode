@@ -19,6 +19,7 @@ pub(crate) const SESSION_LOCK_FILE: &str = "session.lock";
 use crate::manifest::{ManifestStore, PendingCapRewrite};
 use crate::session_dir;
 
+mod append;
 mod eviction;
 mod manifest;
 mod scan;
@@ -327,15 +328,34 @@ struct SessionShared {
     initialized: AtomicBool,
     /// Exclusive flock on the session's `session.lock`, held for as long as
     /// any handle to this session exists. Retention reads it as a liveness
-    /// signal so an open-but-idle session is never marked or evicted.
-    liveness_lock: Option<File>,
+    /// signal so an open-but-idle session is never marked or evicted, and
+    /// exclusive opens refuse when another process holds it. Behind a mutex
+    /// so a shared (degraded) open can upgrade to exclusive without
+    /// reopening; only touched on open paths.
+    liveness_lock: Mutex<Option<File>>,
+}
+
+/// How strongly an open claims the session's liveness lock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OpenMode {
+    /// Best-effort claim for readers: contention degrades to unlocked and
+    /// the open succeeds, preserving the historical behavior.
+    Shared,
+    /// Mandatory claim for the session's single writer: contention with
+    /// another process fails the open with [`SessionStoreError::SessionBusy`]
+    /// instead of interleaving two writers on one event stream.
+    Exclusive,
 }
 
 /// Return the process-wide shared state for one session's canonical event file.
 ///
 /// The weak registry avoids retaining closed sessions forever while still
 /// making repeated `open` calls converge on one file handle and turn state.
-fn shared_session(events_path: &Path, session_id: &str) -> Result<Arc<SessionShared>, SessionStoreError> {
+fn shared_session(
+    events_path: &Path,
+    session_id: &str,
+    mode: OpenMode,
+) -> Result<Arc<SessionShared>, SessionStoreError> {
     static SESSION_SHARED: OnceLock<Mutex<HashMap<PathBuf, Weak<SessionShared>>>> = OnceLock::new();
 
     let key = events_path
@@ -353,17 +373,27 @@ fn shared_session(events_path: &Path, session_id: &str) -> Result<Arc<SessionSha
     // aid, so removing entries with no live owners is safe.
     shared_by_path.retain(|_, shared| shared.strong_count() > 0);
     if let Some(shared) = shared_by_path.get(&key).and_then(Weak::upgrade) {
+        // In-process reopen: handles share one file and turn state. An
+        // exclusive reopen additionally upgrades a degraded (lock-less)
+        // shared open so the writer always ends up holding the lock.
+        if mode == OpenMode::Exclusive {
+            shared.ensure_exclusive_liveness(events_path, session_id)?;
+        }
         return Ok(shared);
     }
 
     let file = VtCodePaths::open_private_append_file(events_path)
         .map_err(|error| SessionStoreError::io(events_path.to_path_buf(), std::io::Error::other(error)))?;
+    let liveness_lock = match mode {
+        OpenMode::Shared => acquire_liveness_lock(events_path, session_id),
+        OpenMode::Exclusive => acquire_liveness_lock_strict(events_path, session_id)?,
+    };
     let shared = Arc::new(SessionShared {
         file: Mutex::new(Some(file)),
         state: Mutex::new(LogState::new(session_id)),
         eviction_lock: Mutex::new(()),
         initialized: AtomicBool::new(false),
-        liveness_lock: acquire_liveness_lock(events_path),
+        liveness_lock: Mutex::new(liveness_lock),
     });
     shared_by_path.insert(key, Arc::downgrade(&shared));
     Ok(shared)
@@ -377,14 +407,47 @@ fn shared_session(events_path: &Path, session_id: &str) -> Result<Arc<SessionSha
 /// failure to create/open/lock degrades to unlocked (previous retention
 /// behavior) instead of failing the session open or swallowing a persistence
 /// error. The fd is released automatically when the shared handle drops.
-fn acquire_liveness_lock(events_path: &Path) -> Option<File> {
-    let dir = events_path.parent()?;
+fn acquire_liveness_lock(events_path: &Path, session_id: &str) -> Option<File> {
+    acquire_liveness_lock_strict(events_path, session_id).unwrap_or(None)
+}
+
+/// Strict liveness claim for the session's single writer.
+///
+/// A `WouldBlock` contention proves another process holds the session open
+/// and fails with [`SessionStoreError::SessionBusy`]; every other failure
+/// (exotic filesystems, permissions) degrades to unlocked exactly like the
+/// best-effort path so a missing lock never blocks a session by itself.
+fn acquire_liveness_lock_strict(events_path: &Path, session_id: &str) -> Result<Option<File>, SessionStoreError> {
+    let Some(dir) = events_path.parent() else {
+        return Ok(None);
+    };
     let lock_path = dir.join(SESSION_LOCK_FILE);
-    VtCodePaths::write_private_file_atomic_if_absent(&lock_path, b"").ok()?;
-    let file = std::fs::OpenOptions::new().read(true).write(true).open(&lock_path).ok()?;
-    match file.try_lock() {
-        Ok(()) => Some(file),
-        Err(_) => None,
+    if VtCodePaths::write_private_file_atomic_if_absent(&lock_path, b"").is_err() {
+        return Ok(None);
+    }
+    let file = match std::fs::OpenOptions::new().read(true).write(true).open(&lock_path) {
+        Ok(file) => file,
+        Err(_) => return Ok(None),
+    };
+    match file.try_lock().map_err(std::io::Error::from) {
+        Ok(()) => Ok(Some(file)),
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(SessionStoreError::SessionBusy { session: session_id.to_owned() })
+        }
+        Err(_) => Ok(None),
+    }
+}
+
+impl SessionShared {
+    /// Claim the liveness lock for an exclusive reopen of an already-shared
+    /// session, so the writer holds the lock even when a reader opened first
+    /// in this process. A no-op when the lock is already held.
+    fn ensure_exclusive_liveness(&self, events_path: &Path, session_id: &str) -> Result<(), SessionStoreError> {
+        let mut slot = self.liveness_lock.lock().map_err(poison)?;
+        if slot.is_none() {
+            *slot = acquire_liveness_lock_strict(events_path, session_id)?;
+        }
+        Ok(())
     }
 }
 
@@ -407,7 +470,21 @@ impl SessionEventLog {
     pub(crate) fn open(workspace: &Path, session_id: &str, max_events: usize) -> Result<Self, SessionStoreError> {
         let dir = session_dir(workspace, session_id);
         let hook = default_eviction_summary_hook(dir.join(crate::DERIVED_DIR), session_id.to_string());
-        Self::open_with_eviction_summary(workspace, session_id, max_events, hook)
+        Self::open_inner(workspace, session_id, max_events, hook, OpenMode::Shared)
+    }
+
+    /// Open the log as the session's single writer, failing with
+    /// [`SessionStoreError::SessionBusy`] when another process already holds
+    /// the session open instead of interleaving two writers on one stream.
+    /// Reopens in this process share state and succeed.
+    pub(crate) fn open_exclusive(
+        workspace: &Path,
+        session_id: &str,
+        max_events: usize,
+    ) -> Result<Self, SessionStoreError> {
+        let dir = session_dir(workspace, session_id);
+        let hook = default_eviction_summary_hook(dir.join(crate::DERIVED_DIR), session_id.to_string());
+        Self::open_inner(workspace, session_id, max_events, hook, OpenMode::Exclusive)
     }
 
     /// Open a log with an explicit eviction-summary callback.
@@ -421,6 +498,16 @@ impl SessionEventLog {
         max_events: usize,
         eviction_summary_hook: EvictionSummaryHook,
     ) -> Result<Self, SessionStoreError> {
+        Self::open_inner(workspace, session_id, max_events, eviction_summary_hook, OpenMode::Shared)
+    }
+
+    fn open_inner(
+        workspace: &Path,
+        session_id: &str,
+        max_events: usize,
+        eviction_summary_hook: EvictionSummaryHook,
+        mode: OpenMode,
+    ) -> Result<Self, SessionStoreError> {
         let dir = session_dir(workspace, session_id);
         crate::ensure_private_directory(&crate::sessions_root(workspace))?;
         crate::ensure_private_directory(&dir)?;
@@ -429,7 +516,7 @@ impl SessionEventLog {
         let events_path = dir.join("events.jsonl");
         let manifest_store = ManifestStore::new(dir.clone());
         let pending_rewrite = manifest_store.load_pending_cap_rewrite()?;
-        let shared = shared_session(&events_path, session_id)?;
+        let shared = shared_session(&events_path, session_id, mode)?;
         let log = Self {
             events_path: events_path.clone(),
             manifest_store,
@@ -502,160 +589,6 @@ impl SessionEventLog {
         }
         drop(_eviction_guard);
         Ok(log)
-    }
-
-    /// Append an event to the log and update the in-memory index/manifest.
-    pub fn append(&self, event: &ThreadEvent) -> Result<(), SessionStoreError> {
-        let _eviction_guard = self.shared.eviction_lock.lock().map_err(poison)?;
-        let mut st = self.shared.state.lock().map_err(poison)?;
-
-        // Serialize into the write buffer with rollback on failure — the
-        // invariant that `write_buf` never contains partial JSON is
-        // encapsulated in `serialize_event`.
-        let (start, end) = st.serialize_event(event)?;
-
-        st.manifest.event_count += 1;
-        st.manifest.updated_at = now_rfc3339();
-
-        // Route through the single turn-lifecycle state machine.  When the
-        // event closes a turn, persist metadata immediately so a reopen
-        // after a mid-turn crash sees a consistent index.
-        let is_turn_boundary = st.apply_lifecycle_event(LifecycleKind::from_event(event), start, end);
-        if is_turn_boundary {
-            self.persist_meta_locked(&mut st)?;
-        }
-
-        if st.write_buf.len() >= MAX_WRITE_BUFFER_BYTES {
-            // Persist metadata with the bounded byte flush so a reopen after
-            // a mid-turn crash does not trust an index that predates these
-            // already-written events.
-            self.persist_meta_locked(&mut st)?;
-        }
-        drop(st);
-        self.enforce_event_cap()
-    }
-
-    /// Enforce the per-session event cap by evicting the oldest completed
-    /// turns when the log exceeds [`Self::max_events`]. Returns `Ok(())` even
-    /// when no truncation is needed or the cap is disabled (`max_events == 0`).
-    fn enforce_event_cap(&self) -> Result<(), SessionStoreError> {
-        let mut st = self.shared.state.lock().map_err(poison)?;
-
-        // `plan_cap_eviction` encapsulates the index arithmetic and returns
-        // `None` when the cap is disabled or not yet exceeded.
-        let Some(plan) = st.plan_cap_eviction(self.max_events) else {
-            return Ok(());
-        };
-
-        // Keep ordinary appends in memory until a turn boundary or an
-        // explicit read. Cap enforcement is the one append-time path that
-        // needs the complete on-disk file before rewriting it.
-        self.flush_write_buf_locked(&mut st)?;
-
-        let (evicted, mut remaining, previous_file_len) = {
-            let mut file_slot = self.shared.file.lock().map_err(poison)?;
-            let file = file_slot.as_mut().ok_or_else(|| self.event_file_unavailable())?;
-            let file_len = file
-                .metadata()
-                .map_err(|error| SessionStoreError::io(&self.events_path, error))?
-                .len();
-            if plan.truncate_offset > file_len {
-                return Err(SessionStoreError::io(
-                    &self.events_path,
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, "cap offset exceeds event log length"),
-                ));
-            }
-            file.seek(SeekFrom::Start(0))
-                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-            let mut evicted = vec![
-                0u8;
-                usize::try_from(plan.truncate_offset).map_err(|error| {
-                    SessionStoreError::io(
-                        &self.events_path,
-                        std::io::Error::new(std::io::ErrorKind::InvalidData, error),
-                    )
-                })?
-            ];
-            file.read_exact(&mut evicted)
-                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-            file.seek(SeekFrom::Start(plan.truncate_offset))
-                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-            let mut remaining = Vec::new();
-            file.read_to_end(&mut remaining)
-                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-            (evicted, remaining, file_len)
-        };
-        let retained_turn_base = st.retained_turn_base_after_eviction(plan.evicted_turn_count);
-        drop(st);
-
-        // The turn index counts only records inside indexed turns. The bytes
-        // removed by a cap rewrite may also contain valid session-level
-        // records (for example `thread.started`) before the first turn, so
-        // reconcile the manifest against the actual persisted prefix rather
-        // than the turn-only estimate from `plan_cap_eviction`.
-        let mut plan = plan;
-        plan.evicted_event_count = count_persisted_event_records(&evicted);
-        let evicted_events = decode_events(&evicted);
-        (self.eviction_summary_hook)(&evicted_events)?;
-
-        // Matrix snapshots are complete session-level checkpoints. Preserve the
-        // latest evicted checkpoint only when no newer snapshot survives.
-        let mut matrix_checkpoints = BTreeMap::new();
-        let mut planning_checkpoint = None;
-        for event in &evicted_events {
-            if let ThreadEvent::PlanDelta(delta) = event
-                && delta.recovery.is_some()
-            {
-                planning_checkpoint = Some(event);
-            }
-            if let ThreadEvent::MatrixUpdated(snapshot) = event {
-                matrix_checkpoints.insert(snapshot.spec.id.clone(), event);
-            }
-        }
-        for event in decode_events(&remaining) {
-            if let ThreadEvent::PlanDelta(delta) = &event
-                && delta.recovery.is_some()
-            {
-                planning_checkpoint = None;
-            }
-            if let ThreadEvent::MatrixUpdated(snapshot) = event {
-                matrix_checkpoints.remove(&snapshot.spec.id);
-            }
-        }
-        let mut checkpoint_prefix = Vec::new();
-        for event in matrix_checkpoints.values().copied().chain(planning_checkpoint) {
-            serde_json::to_writer(&mut checkpoint_prefix, &VersionedThreadEvent::new((*event).clone()))
-                .map_err(|error| SessionStoreError::io(&self.events_path, std::io::Error::other(error)))?;
-            checkpoint_prefix.push(b'\n');
-        }
-        let checkpoint_bytes = checkpoint_prefix.len() as u64;
-        let checkpoint_count = matrix_checkpoints.len() as u64 + u64::from(planning_checkpoint.is_some());
-        if !checkpoint_prefix.is_empty() {
-            checkpoint_prefix.extend_from_slice(&remaining);
-            remaining = checkpoint_prefix;
-        }
-
-        let new_file_len = u64::try_from(remaining.len()).map_err(|error| {
-            SessionStoreError::io(&self.events_path, std::io::Error::new(std::io::ErrorKind::InvalidData, error))
-        })?;
-        self.manifest_store.write_pending_cap_rewrite(&PendingCapRewrite {
-            previous_file_len,
-            new_file_len,
-            retained_turn_base,
-        })?;
-        let next_offset = self.replace_event_file_contents(&remaining)?;
-        let mut st = self.shared.state.lock().map_err(poison)?;
-        st.apply_cap_eviction(plan, next_offset);
-        for entry in &mut st.index.entries {
-            entry.start_offset += checkpoint_bytes;
-            entry.end_offset += checkpoint_bytes;
-        }
-        st.manifest.event_count += checkpoint_count;
-        // The rewrite changed byte offsets and retained counts; persist the
-        // derived metadata before exposing the append as successful.
-        self.persist_meta_locked(&mut st)?;
-        self.manifest_store.clear_pending_cap_rewrite()?;
-        Ok(())
     }
 
     /// Reconstruct every event belonging to `turn`.

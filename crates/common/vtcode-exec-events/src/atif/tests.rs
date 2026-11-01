@@ -150,6 +150,7 @@ fn background_completion_preserves_identity_in_atif_extra() {
                 duration_ms: None,
                 task_id: Some("task-1".to_string()),
                 session_id: Some("session-1".to_string()),
+                correlation_id: None,
                 exec_session_id: Some("exec-1".to_string()),
                 status: Some("stopped".to_string()),
                 transcript_path: Some("/tmp/transcript.jsonl".to_string()),
@@ -172,6 +173,31 @@ fn background_completion_preserves_identity_in_atif_extra() {
     assert_eq!(extra["transcript_path"], "/tmp/transcript.jsonl");
     assert_eq!(extra["archive_path"], "/tmp/archive.json");
     assert_eq!(extra["error_category"], "background_subprocess");
+}
+
+#[test]
+fn session_message_preserves_peer_and_correlation_in_atif_extra() {
+    let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
+    let mut item = HarnessEventItem::new(HarnessEventKind::SessionMessageReceived);
+    item.message = Some("answer from session peer-a".to_string());
+    item.session_id = Some("peer-a".to_string());
+    item.correlation_id = Some("msg-1".to_string());
+    let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+        item: ThreadItem {
+            context: None,
+            id: "peer-msg-1".to_string(),
+            details: ThreadItemDetails::Harness(Box::new(item)),
+        },
+    });
+
+    builder.process_event_at(&event, fixed_ts());
+    let trajectory = builder.finish(None);
+    let step = trajectory.steps.first().expect("session message step");
+    let extra = step.extra.as_ref().expect("session message metadata");
+    assert_eq!(step.message.as_deref(), Some("harness: SessionMessageReceived"));
+    assert_eq!(extra["session_id"], "peer-a");
+    assert_eq!(extra["correlation_id"], "msg-1");
+    assert!(extra.get("task_id").is_none(), "unset fields stay omitted");
 }
 
 #[test]

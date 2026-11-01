@@ -250,6 +250,9 @@ pub(super) fn harness_title(event: &HarnessEventKind) -> &'static str {
         HarnessEventKind::ToolLoopLimitIncreased => "Tool loop limit increased",
         HarnessEventKind::BackgroundSubprocessCompleted => "Background subprocess completed",
         HarnessEventKind::DelegatedAgentStatus => "Delegated agent status",
+        HarnessEventKind::SessionMessageSent => "Session message sent",
+        HarnessEventKind::SessionMessageReceived => "Session message received",
+        HarnessEventKind::SessionMessageExpired => "Session message expired",
     }
 }
 
@@ -279,7 +282,10 @@ pub(super) fn harness_status_label(event: &HarnessEventKind) -> &'static str {
         | HarnessEventKind::SnapshotRestored
         | HarnessEventKind::SessionToolLimitIncreased
         | HarnessEventKind::ToolLoopLimitIncreased
-        | HarnessEventKind::BackgroundSubprocessCompleted => "completed",
+        | HarnessEventKind::BackgroundSubprocessCompleted
+        | HarnessEventKind::SessionMessageSent
+        | HarnessEventKind::SessionMessageReceived
+        | HarnessEventKind::SessionMessageExpired => "completed",
     }
 }
 

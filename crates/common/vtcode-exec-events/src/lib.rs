@@ -35,7 +35,7 @@ pub mod planning;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.22.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.23.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -759,6 +759,12 @@ pub enum HarnessEventKind {
     BackgroundSubprocessCompleted,
     /// A native delegated agent's public status and ancestry were observed.
     DelegatedAgentStatus,
+    /// A message was sent to a peer session's mailbox.
+    SessionMessageSent,
+    /// A peer session's message was received from this session's mailbox.
+    SessionMessageReceived,
+    /// A mailbox message expired before delivery.
+    SessionMessageExpired,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -854,9 +860,14 @@ pub struct HarnessEventItem {
     /// Stable task identifier for background completion events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
-    /// Child session identifier for background completion events.
+    /// Child session identifier for background completion events; the peer
+    /// session for session-messaging events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// Correlation id linking related harness events (a mailbox question to
+    /// its answer for session-messaging events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub correlation_id: Option<String>,
     /// Exec-session identifier for background completion events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exec_session_id: Option<String>,
@@ -869,6 +880,31 @@ pub struct HarnessEventItem {
     /// Archived session reference for background completion events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub archive_path: Option<String>,
+}
+
+impl HarnessEventItem {
+    /// A harness event with every optional field unset. Prefer this over a
+    /// struct literal so new optional fields do not break construction sites.
+    #[must_use]
+    pub fn new(event: HarnessEventKind) -> Self {
+        Self {
+            event,
+            message: None,
+            command: None,
+            path: None,
+            exit_code: None,
+            attempt: None,
+            error_category: None,
+            duration_ms: None,
+            task_id: None,
+            session_id: None,
+            correlation_id: None,
+            exec_session_id: None,
+            status: None,
+            transcript_path: None,
+            archive_path: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

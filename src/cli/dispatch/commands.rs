@@ -187,8 +187,8 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         Commands::CreateProject { name, features } => {
             create_project::handle_create_project_command(core_cfg, &name, &features).await?;
         }
-        Commands::Revert { turn, partial } => {
-            revert::handle_revert_command(core_cfg, turn, partial).await?;
+        Commands::Revert { turn, partial, session } => {
+            revert::handle_revert_command(core_cfg, turn, partial, session).await?;
         }
         Commands::Snapshots => {
             snapshots::handle_snapshots_command(core_cfg).await?;

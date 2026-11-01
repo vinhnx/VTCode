@@ -92,6 +92,9 @@ impl ExecEventRecorder {
         if let Some(event) = self.context.delegation_status_event(call_item_id, tool_name, output) {
             self.record(event);
         }
+        if let Some(event) = self.context.session_message_event(call_item_id, tool_name, output) {
+            self.record(event);
+        }
     }
 
     pub fn record_thread_event(&mut self, event: ThreadEvent) {
@@ -543,6 +546,7 @@ impl ExecEventRecorder {
                 duration_ms: None,
                 task_id: None,
                 session_id: None,
+                correlation_id: None,
                 exec_session_id: None,
                 status: None,
                 transcript_path: None,
@@ -579,6 +583,7 @@ impl ExecEventRecorder {
                 duration_ms: Some(duration_ms),
                 task_id: None,
                 session_id: None,
+                correlation_id: None,
                 exec_session_id: None,
                 status: None,
                 transcript_path: None,

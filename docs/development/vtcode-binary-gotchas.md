@@ -243,6 +243,21 @@ process after the terminal is already restored:
   indefinitely for in-flight `spawn_blocking` work on plain drop; a stuck git snapshot or child reap would
   otherwise park the process after the summary. Normal teardown finishes well within the budget.
 
+## Concurrent sessions in one workspace
+
+- Running a second `vtcode` in a workspace that already has one is supported
+  when the sessions differ. Each session owns disjoint checkpoint records
+  (`turn_{key}_{n}.json`) and a per-session checkpoint lock; turns and
+  rewinds in other sessions proceed concurrently.
+- Opening the *same* session twice fails closed, twice over: the event sink
+  refuses at startup (`SessionBusy`, naming `--session-id` as the remedy),
+  and a same-session turn/retry shows "Prompt kept — session busy" pointing
+  at the terminal that holds the session. Never bypass these to "share" a
+  session: two writers interleave one event stream and corrupt turn state.
+- `revert --turn N` without `--session` prefers legacy records and refuses
+  ambiguous turns across sessions; `snapshots` now prints the owning
+  session per row.
+
 ## Blocker forensics and retention pins
 
 Blocked handoffs copy session `events.jsonl` / ATIF into `{archive}-forensics/` beside the blocker archive (best-effort;

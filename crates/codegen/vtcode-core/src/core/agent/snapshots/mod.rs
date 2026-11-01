@@ -1,4 +1,5 @@
 mod native;
+mod retention;
 mod types;
 pub use native::{PromptCheckpointLease, declare_prompt_edit};
 use std::collections::BTreeSet;
@@ -42,6 +43,151 @@ pub struct SnapshotManager {
     max_age_days: Option<u64>,
 }
 
+/// Filesystem-safe session key shared by branch files, snapshot records, and
+/// session locks.
+///
+/// Hex-encoding keeps every byte (including `/`, `.`, and unicode) out of the
+/// filename so session ids can never escape the storage directory. Fails
+/// closed on empty or over-long ids instead of writing an ambiguous file.
+fn session_filename_key(session: &str) -> Result<String> {
+    anyhow::ensure!(!session.is_empty() && session.len() <= 80, "Invalid session ID");
+    Ok(session.as_bytes().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Shared lock file serializing checkpoint-content reclamation
+/// (`delete_sessions` + `collect_garbage`) across processes.
+///
+/// Retention is best-effort and retryable: a process that finds this lock
+/// held skips its cleanup round instead of interleaving filesnap deletes
+/// with another process's scan. Unlike the per-session turn locks, this
+/// file persists; it is never unlinked.
+const WORKSPACE_CLEANUP_LOCK_FILE: &str = "rewind.lock";
+
+/// Whether a locked fd still refers to the file currently at `lock_path`.
+///
+/// The completion path unlinks a session lock while holding its lock. A process
+/// that opened the old inode just before that unlink can `try_lock` the ghost
+/// after the holder drops — while another process creates a fresh file — and
+/// both would believe they hold the lock. Comparing inos closes that window.
+#[cfg(unix)]
+fn locked_file_matches_path(file: &fs::File, lock_path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(locked) = file.metadata() else {
+        return false;
+    };
+    let Ok(current) = fs::metadata(lock_path) else {
+        return false;
+    };
+    locked.ino() == current.ino()
+}
+
+#[cfg(not(unix))]
+fn locked_file_matches_path(_: &fs::File, _: &Path) -> bool {
+    true
+}
+
+/// Acquire the lock at `lock_path`, verifying the locked inode is still the
+/// file at that path. A ghost acquisition (locked inode replaced under us)
+/// is dropped and retried against the current file, so mutual exclusion holds
+/// across the completion path's unlink-while-held cleanup.
+fn acquire_verified_rewind_lock(lock_path: &Path) -> std::io::Result<fs::File> {
+    for _ in 0..3 {
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(lock_path)?;
+        file.try_lock()?;
+        if locked_file_matches_path(&file, lock_path) {
+            return Ok(file);
+        }
+        drop(file);
+    }
+    Err(std::io::Error::other(format!(
+        "{} kept changing identity; retry the turn",
+        lock_path.file_name().and_then(|name| name.to_str()).unwrap_or("lock file")
+    )))
+}
+
+/// Remove a lock file only while holding its lock on the current inode.
+///
+/// Deleting a lock another process holds (or is about to hold) would let a
+/// later open create a fresh inode and break mutual exclusion, so an
+/// unacquirable or replaced file is left alone. Best-effort: failures only
+/// leave a stale 0-byte file for the next cleanup round.
+fn remove_lock_file_if_unheld(lock_path: &Path) {
+    let file = match fs::OpenOptions::new().read(true).write(true).open(lock_path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+        Err(error) => {
+            tracing::debug!(%error, path = %lock_path.display(), "failed to open lock file for cleanup");
+            return;
+        }
+    };
+    // Only unlink while holding a lock on the file that is currently at the
+    // path; a ghost lock (path replaced under us) must not delete the
+    // replacement's lock file.
+    if file.try_lock().is_ok() && locked_file_matches_path(&file, lock_path) {
+        if let Err(error) = fs::remove_file(lock_path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::debug!(%error, path = %lock_path.display(), "failed to remove stale lock file");
+        }
+    }
+    // `file` (and its lock) drops here, after the unlink.
+}
+
+/// Identity of one checkpoint record file: the owning session (if any) plus
+/// the session-local turn number.
+///
+/// `session_key` is `None` for legacy `turn_{n}.json` records written before
+/// session scoping; scoped records carry `Some(key)`.
+///
+/// Ordering is turn-major so retention prunes the oldest turns first across
+/// all sessions, with the session key as a deterministic tiebreak.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct SnapshotRecordId {
+    turn: usize,
+    session_key: Option<String>,
+}
+
+/// One enumerated checkpoint record: its identity plus its live `.json` path.
+///
+/// Retired (`*.retired-*`), recovery (`turn_recovery_*.json`), and branch
+/// (`branch_*.json`) files never produce entries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SnapshotFileEntry {
+    id: SnapshotRecordId,
+    path: PathBuf,
+}
+
+/// Parse a checkpoint-directory filename into a record identity.
+///
+/// Returns `None` for anything that is not a live checkpoint record: wrong
+/// extension, `turn_recovery_*` rescue files, branch files, and malformed
+/// stems. This predicate is shared by enumeration, retention, and tests so the
+/// on-disk contract cannot drift between readers.
+fn parse_snapshot_filename(file_name: &str) -> Option<SnapshotRecordId> {
+    let stem = file_name.strip_suffix(".json")?;
+    let rest = stem.strip_prefix("turn_")?;
+    if rest.is_empty() || stem.starts_with("turn_recovery_") {
+        return None;
+    }
+    // Legacy `turn_{n}.json`: the whole remainder is the turn number.
+    if let Ok(turn) = rest.parse::<usize>() {
+        return Some(SnapshotRecordId { turn, session_key: None });
+    }
+    // Scoped `turn_{hex}_{n}.json`: hex carries no underscores, so the turn
+    // is everything after the last one.
+    let (key, turn_str) = rest.rsplit_once('_')?;
+    if key.is_empty() || key.len() % 2 != 0 || !key.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let turn = turn_str.parse::<usize>().ok()?;
+    Some(SnapshotRecordId { turn, session_key: Some(key.to_owned()) })
+}
+
 impl SnapshotManager {
     pub fn new(config: SnapshotConfig) -> Result<Self> {
         let storage_dir = config.storage_dir();
@@ -67,6 +213,18 @@ impl SnapshotManager {
 
     fn snapshot_path(&self, turn_number: usize) -> PathBuf {
         self.storage_dir.join(format!("turn_{turn_number}.json"))
+    }
+
+    /// Session-scoped checkpoint record: `turn_{session_key}_{turn}.json`.
+    ///
+    /// Each session owns a disjoint set of record files so two sessions in one
+    /// workspace never overwrite each other's checkpoints. The unscoped
+    /// [`Self::snapshot_path`] form stays as the legacy layout: pre-upgrade
+    /// records keep loading (see [`Self::load_snapshot_for_session`]) and
+    /// session-less writers keep writing it.
+    fn snapshot_path_for_session(&self, session: &str, turn_number: usize) -> Result<PathBuf> {
+        let key = session_filename_key(session)?;
+        Ok(self.storage_dir.join(format!("turn_{key}_{turn_number}.json")))
     }
 
     fn normalize_path(&self, path: &Path) -> Option<PathBuf> {
@@ -107,7 +265,7 @@ impl SnapshotManager {
         Ok(absolute)
     }
 
-    fn read_snapshot_files(&self) -> Result<Vec<(usize, PathBuf)>> {
+    fn read_snapshot_files(&self) -> Result<Vec<SnapshotFileEntry>> {
         let mut entries = Vec::with_capacity(64); // Typical directory has ~20-50 snapshot files
         if !self.storage_dir.exists() {
             return Ok(entries);
@@ -115,25 +273,32 @@ impl SnapshotManager {
         for entry in fs::read_dir(&self.storage_dir)
             .with_context(|| format!("failed to read checkpoint directory: {}", self.storage_dir.display()))?
         {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            let path = entry?.path();
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
-            }
-            let stem = match path.file_stem().and_then(|stem| stem.to_str()) {
-                Some(value) => value,
-                None => continue,
             };
-            let turn_str = match stem.strip_prefix("turn_") {
-                Some(value) => value,
-                None => continue,
-            };
-            if let Ok(turn) = turn_str.parse::<usize>() {
-                entries.push((turn, path));
+            if let Some(id) = parse_snapshot_filename(name) {
+                entries.push(SnapshotFileEntry { id, path });
             }
         }
-        entries.sort_by_key(|(turn, _)| *turn);
+        entries.sort_by(|a, b| a.id.cmp(&b.id));
         Ok(entries)
+    }
+
+    /// Enumerate live checkpoint records that carry `turn_number`, across the
+    /// legacy layout and every session scope.
+    ///
+    /// Used to resolve bare-turn lookups (`revert --turn N`): legacy records
+    /// sort before scoped ones so pre-upgrade workspaces resolve exactly as
+    /// they did before session scoping existed.
+    fn read_snapshot_files_for_turn(&self, turn_number: usize) -> Result<Vec<SnapshotFileEntry>> {
+        let mut matches: Vec<SnapshotFileEntry> = self
+            .read_snapshot_files()?
+            .into_iter()
+            .filter(|entry| entry.id.turn == turn_number)
+            .collect();
+        matches.sort_by(|a, b| a.id.session_key.cmp(&b.id.session_key));
+        Ok(matches)
     }
 
     fn decode_file(encoding: FileEncoding, data: &str) -> Result<Vec<u8>> {
@@ -198,11 +363,20 @@ impl SnapshotManager {
             .as_secs())
     }
 
-    pub fn next_turn_number(&self) -> Result<usize> {
+    /// Next checkpoint turn number for `session`: one past the highest turn
+    /// the session already owns.
+    ///
+    /// Legacy (unscoped) records count toward every session's maximum so a
+    /// resumed pre-upgrade session never reuses a turn number its own branch
+    /// file already references under the legacy layout. Fresh sessions in a
+    /// fresh workspace still start at 1.
+    pub fn next_turn_number(&self, session: &str) -> Result<usize> {
+        let key = session_filename_key(session)?;
         Ok(self
             .read_snapshot_files()?
             .into_iter()
-            .map(|(turn, _)| turn)
+            .filter(|entry| entry.id.session_key.is_none() || entry.id.session_key.as_deref() == Some(&key))
+            .map(|entry| entry.id.turn)
             .max()
             .unwrap_or(0)
             .saturating_add(1))
@@ -264,6 +438,9 @@ impl SnapshotManager {
             Self::resolve_prompt_metadata(prompt_text, prompt_message_index, conversation);
         let description_source = prompt_text.as_deref().unwrap_or(description);
         let turn_context = turn_context.unwrap_or_default();
+        // Session-carrying snapshots land in that session's disjoint record
+        // set; session-less callers keep the legacy shared layout.
+        let record_session = turn_context.session_id.clone();
         let metadata = SnapshotMetadata {
             id: format!("turn_{turn_number}"),
             turn_number,
@@ -287,7 +464,10 @@ impl SnapshotManager {
             schema_version: Some(SNAPSHOT_SCHEMA_VERSION),
         };
 
-        let path = self.snapshot_path(turn_number);
+        let path = match record_session.as_deref() {
+            Some(session) => self.snapshot_path_for_session(session, turn_number)?,
+            None => self.snapshot_path(turn_number),
+        };
         if let Some(parent) = path.parent() {
             ensure_dir_exists(parent)
                 .await
@@ -318,16 +498,16 @@ impl SnapshotManager {
         self.cleanup_old_snapshots().await?;
         let snapshot_files = self.read_snapshot_files()?;
         let mut snapshots = Vec::with_capacity(snapshot_files.len());
-        for (_, path) in snapshot_files {
-            let data = tokio::fs::read(&path)
+        for entry in snapshot_files {
+            let data = tokio::fs::read(&entry.path)
                 .await
-                .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
+                .with_context(|| format!("failed to read checkpoint: {}", entry.path.display()))?;
             let mut stored: StoredSnapshot = serde_json::from_slice(&data)
-                .with_context(|| format!("failed to parse checkpoint: {}", path.display()))?;
+                .with_context(|| format!("failed to parse checkpoint: {}", entry.path.display()))?;
             Self::hydrate_prompt_metadata(&mut stored);
             snapshots.push(stored.metadata);
         }
-        snapshots.sort_by_key(|a| std::cmp::Reverse(a.turn_number));
+        snapshots.sort_by(|a, b| b.turn_number.cmp(&a.turn_number).then_with(|| a.session_id.cmp(&b.session_id)));
         Ok(snapshots)
     }
 
@@ -335,11 +515,30 @@ impl SnapshotManager {
         if !self.enabled {
             return Ok(None);
         }
-        let path = self.snapshot_path(turn_number);
-        if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+        self.load_snapshot_from_path(&self.snapshot_path(turn_number)).await
+    }
+
+    /// Load `session`'s checkpoint for `turn_number`.
+    ///
+    /// Reads the session-scoped record first, then falls back to the legacy
+    /// shared layout so resumed pre-upgrade sessions keep rewinding turns
+    /// they recorded before session scoping existed.
+    pub async fn load_snapshot_for_session(&self, session: &str, turn_number: usize) -> Result<Option<StoredSnapshot>> {
+        if !self.enabled {
             return Ok(None);
         }
-        let data = tokio::fs::read(&path)
+        let scoped = self.snapshot_path_for_session(session, turn_number)?;
+        if let Some(stored) = self.load_snapshot_from_path(&scoped).await? {
+            return Ok(Some(stored));
+        }
+        self.load_snapshot_from_path(&self.snapshot_path(turn_number)).await
+    }
+
+    async fn load_snapshot_from_path(&self, path: &Path) -> Result<Option<StoredSnapshot>> {
+        if !tokio::fs::try_exists(path).await.unwrap_or(false) {
+            return Ok(None);
+        }
+        let data = tokio::fs::read(path)
             .await
             .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
         let mut stored: StoredSnapshot =
@@ -353,7 +552,37 @@ impl SnapshotManager {
     }
 
     pub async fn restore_snapshot(&self, turn_number: usize, scope: RevertScope) -> Result<Option<CheckpointRestore>> {
-        let Some(stored) = self.load_snapshot(turn_number).await? else {
+        // Legacy records resolve exactly as before session scoping existed.
+        if let Some(stored) = self.load_snapshot(turn_number).await? {
+            return self.restore_stored_snapshot(stored, scope).await.map(Some);
+        }
+        let matches = self.read_snapshot_files_for_turn(turn_number)?;
+        let [entry] = matches.as_slice() else {
+            if matches.is_empty() {
+                return Ok(None);
+            }
+            let sessions = matches
+                .iter()
+                .filter_map(|entry| entry.id.session_key.as_deref())
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::bail!("turn {turn_number} exists in multiple sessions ({sessions}); re-run with --session <id>");
+        };
+        let Some(stored) = self.load_snapshot_from_path(&entry.path).await? else {
+            return Ok(None);
+        };
+        self.restore_stored_snapshot(stored, scope).await.map(Some)
+    }
+
+    /// Restore `session`'s checkpoint for `turn_number`, with the same
+    /// session-then-legacy lookup as [`Self::load_snapshot_for_session`].
+    pub async fn restore_snapshot_for_session(
+        &self,
+        session: &str,
+        turn_number: usize,
+        scope: RevertScope,
+    ) -> Result<Option<CheckpointRestore>> {
+        let Some(stored) = self.load_snapshot_for_session(session, turn_number).await? else {
             return Ok(None);
         };
 
@@ -464,241 +693,6 @@ impl SnapshotManager {
         };
 
         Ok(CheckpointRestore { metadata: stored.metadata, conversation })
-    }
-
-    /// Turn numbers still referenced by any *recent* session navigation
-    /// (active branch, redo stack, or pending recovery). Rewind/redo must
-    /// never lose these. Branch files older than the retention window are
-    /// ignored so a completed session cannot pin its turns forever.
-    fn protected_turns(&self) -> BTreeSet<usize> {
-        let cutoff = self.retention_cutoff_secs().ok().flatten();
-        self.protected_turns_with_cutoff(cutoff)
-    }
-
-    fn protected_turns_with_cutoff(&self, cutoff: Option<u64>) -> BTreeSet<usize> {
-        let mut protected = BTreeSet::new();
-        let Ok(entries) = fs::read_dir(&self.storage_dir) else {
-            return protected;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            if !stem.starts_with("branch_") || path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            if let Some(cutoff) = cutoff {
-                // Stale navigation (completed/abandoned session past retention)
-                // must not keep its turn files alive. `cutoff` is a UNIX
-                // timestamp: branch files last modified before it are stale.
-                let modified_secs = path
-                    .metadata()
-                    .and_then(|meta| meta.modified())
-                    .ok()
-                    .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-                    .map(|since| since.as_secs());
-                if !modified_secs.is_some_and(|secs| secs > cutoff) {
-                    continue;
-                }
-            }
-            let Ok(bytes) = fs::read(&path) else {
-                continue;
-            };
-            let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-                continue;
-            };
-            for key in ["active", "redo", "pending"] {
-                collect_turn_numbers(&value[key], &mut protected);
-            }
-        }
-        protected
-    }
-
-    /// Cheap retention prune: enforce the snapshot count budget without
-    /// reading checkpoint JSON bodies. Safe to call on the per-turn hot path
-    /// (`native::begin_prompt`); age-based expiry stays in
-    /// [`Self::cleanup_old_snapshots`], which needs each file's `created_at`.
-    pub async fn prune_snapshot_budget(&self) -> Result<()> {
-        if !self.enabled {
-            return Ok(());
-        }
-        let manager = self.clone();
-        let entries = tokio::task::spawn_blocking(move || -> Result<Vec<(usize, PathBuf)>> {
-            let protected = manager.protected_turns();
-            Ok(manager
-                .read_snapshot_files()?
-                .into_iter()
-                .filter(|(turn, _)| !protected.contains(turn))
-                .collect())
-        })
-        .await
-        .context("checkpoint retention worker failed")??;
-        if self.max_snapshots != 0 && entries.len() > self.max_snapshots {
-            let excess = entries.len() - self.max_snapshots;
-            for (_, path) in entries.into_iter().take(excess) {
-                if let Err(err) = self.retire_snapshot(&path).await {
-                    tracing::warn!(
-                        path = %path.display(),
-                        error = %err,
-                        "Failed to remove old checkpoint"
-                    );
-                }
-            }
-        }
-        self.cleanup_retired_snapshots(false).await;
-        Ok(())
-    }
-
-    /// Full retention: age-expire checkpoints past `max_age_days`, then apply
-    /// the count budget. Age scan reads each candidate's `created_at`, so prefer
-    /// [`Self::prune_snapshot_budget`] on hot paths.
-    pub async fn cleanup_old_snapshots(&self) -> Result<()> {
-        if !self.enabled {
-            return Ok(());
-        }
-
-        let protected = self.protected_turns();
-        if let Some(cutoff) = self.retention_cutoff_secs()? {
-            for (turn, path) in self.read_snapshot_files()? {
-                if protected.contains(&turn) {
-                    continue;
-                }
-                let data = match tokio::fs::read(&path).await {
-                    Ok(data) => data,
-                    Err(err) => {
-                        tracing::warn!(
-                            path = %path.display(),
-                            error = %err,
-                            "Failed to read checkpoint"
-                        );
-                        continue;
-                    }
-                };
-                let stored: StoredSnapshot = match serde_json::from_slice(&data) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        tracing::warn!(
-                            path = %path.display(),
-                            error = %err,
-                            "Failed to parse checkpoint"
-                        );
-                        continue;
-                    }
-                };
-                if stored.metadata.created_at <= cutoff
-                    && let Err(err) = self.retire_snapshot(&path).await
-                {
-                    tracing::warn!(
-                        path = %path.display(),
-                        error = %err,
-                        "Failed to remove expired checkpoint"
-                    );
-                }
-            }
-        }
-
-        self.prune_snapshot_budget().await?;
-        self.cleanup_retired_snapshots(true).await;
-        Ok(())
-    }
-
-    async fn retire_snapshot(&self, path: &Path) -> Result<()> {
-        let retired = path.with_extension(format!("retired-{}", uuid::Uuid::new_v4()));
-        tokio::fs::rename(path, retired).await?;
-        Ok(())
-    }
-
-    async fn cleanup_retired_snapshots(&self, full_maintenance: bool) {
-        let storage = self.storage_dir.clone();
-        let workspace = self.canonical_workspace.clone();
-        let result = tokio::task::spawn_blocking(move || -> Result<()> {
-            // A replaced record can still be live if publication failed. Read
-            // every live record before deleting anything; corrupt metadata defers
-            // cleanup rather than guessing which content can be discarded.
-            let mut live_paths = Vec::new();
-            let mut retired = Vec::new();
-            for entry in fs::read_dir(&storage)? {
-                let path = entry?.path();
-                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-                    continue;
-                };
-                if !name.starts_with("turn_") {
-                    continue;
-                }
-                if name.ends_with(".json") {
-                    live_paths.push(path);
-                } else if path
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    .is_some_and(|value| value.starts_with("retired-"))
-                {
-                    retired.push(path);
-                }
-            }
-            // The per-prompt path does not need live JSON or a content store
-            // when no records were retired. Explicit maintenance still runs GC.
-            if retired.is_empty() && !full_maintenance {
-                return Ok(());
-            }
-            let mut live = BTreeSet::new();
-            for path in live_paths {
-                let stored: StoredSnapshot = serde_json::from_slice(&fs::read(path)?)?;
-                for file in stored.files {
-                    if file.encoding == Some(FileEncoding::Filesnap) {
-                        live.insert(file.data.context("Missing checkpoint reference")?);
-                    }
-                }
-            }
-            let store = filesnap::WorkspaceStore::open(&storage, &workspace)?;
-            for path in retired {
-                let stored: StoredSnapshot = serde_json::from_slice(&fs::read(&path)?)?;
-                let mut sessions = BTreeSet::new();
-                for file in &stored.files {
-                    if file.encoding == Some(FileEncoding::Filesnap) {
-                        let session = file.data.as_deref().context("Missing retired checkpoint reference")?;
-                        let id = session.strip_prefix("vt-").context("Invalid retired checkpoint reference")?;
-                        uuid::Uuid::parse_str(id)?;
-                        if !live.contains(session) {
-                            sessions.insert(session.to_owned());
-                        }
-                    }
-                }
-                let outcome = store.delete_sessions(&sessions.into_iter().collect::<Vec<_>>());
-                anyhow::ensure!(
-                    outcome.refused.is_empty() && outcome.incomplete.is_empty(),
-                    "Checkpoint cleanup is incomplete: {outcome:?}"
-                );
-                fs::remove_file(path)?;
-            }
-            filesnap::collect_garbage(&storage)?;
-            Ok(())
-        })
-        .await;
-        if !matches!(&result, Ok(Ok(()))) {
-            tracing::warn!(?result, "Checkpoint content cleanup deferred; retired records remain retryable");
-        }
-    }
-
-    fn retention_cutoff_secs(&self) -> Result<Option<u64>> {
-        let Some(days) = self.max_age_days else {
-            return Ok(None);
-        };
-
-        let now = Self::current_timestamp()?;
-        if days == 0 {
-            return Ok(Some(now));
-        }
-
-        let seconds = days.saturating_mul(SECONDS_PER_DAY);
-        let cutoff_instant = SystemTime::now()
-            .checked_sub(Duration::from_secs(seconds))
-            .unwrap_or(SystemTime::UNIX_EPOCH);
-        let cutoff = cutoff_instant
-            .duration_since(UNIX_EPOCH)
-            .context("system clock before UNIX_EPOCH")?
-            .as_secs();
-        Ok(Some(cutoff))
     }
 
     pub fn parse_revert_scope(value: &str) -> Option<RevertScope> {

@@ -505,6 +505,9 @@ pub enum Commands {
         /// Scope of revert operation: conversation, code, full
         #[arg(long)]
         partial: Option<String>,
+        /// Session that owns the checkpoint (required when several sessions recorded the same turn)
+        #[arg(long)]
+        session: Option<String>,
     },
 
     /// List all available snapshots

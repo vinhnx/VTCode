@@ -522,7 +522,8 @@ pub(crate) async fn initialize_session_ui(
 
     let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref() {
         let manager = manager.clone();
-        match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number())) {
+        let session_id = session_id.to_owned();
+        match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number(&session_id))) {
             Ok(Ok(turn)) => turn,
             Ok(Err(error)) => {
                 warn!(%error, "Failed to inspect checkpoint turn numbers");

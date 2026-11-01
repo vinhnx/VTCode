@@ -3,12 +3,12 @@ use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use serde_json::json;
 
 #[test]
-fn checkpoint_unavailable_notice_names_safety_lock_and_options_for_busy_workspace() {
-    let notice = checkpoint_unavailable_notice("Another turn or rewind is using this workspace: operation would block");
+fn checkpoint_unavailable_notice_names_safety_lock_and_options_for_busy_session() {
+    let notice = checkpoint_unavailable_notice("Another turn is using this session: operation would block");
     assert!(notice.starts_with("Prompt kept"), "notice must confirm the prompt is kept: {notice}");
     assert!(notice.contains("safety lock"), "notice must name the safety reason: {notice}");
     assert!(notice.contains("wait then retry"), "notice must offer wait+retry: {notice}");
-    assert!(notice.contains("separate worktree"), "notice must offer worktree option: {notice}");
+    assert!(notice.contains("another terminal"), "notice must point at the duplicate session holder: {notice}");
 }
 
 #[test]
@@ -136,7 +136,7 @@ async fn cancelled_note_preparation_does_not_publish_transient_history() {
     let notify = Notify::new();
     let mut history = vec![Message::user("preserved request".to_owned())];
     let preparation = async {
-        let notes = super::prepare_transient_turn_notes(
+        let (notes, _) = super::prepare_transient_turn_notes(
             temp.path(),
             &registry,
             Some("dirty workspace evidence".to_owned()),
@@ -160,7 +160,7 @@ async fn cancelled_note_preparation_does_not_publish_transient_history() {
 async fn prepare_transient_turn_notes_omits_resume_hint_without_sessions() {
     let temp = tempfile::tempdir().expect("tempdir");
     let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
-    let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
     assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
     assert!(transient.is_empty(), "no sessions must produce no notes");
 }
@@ -179,7 +179,7 @@ async fn prepare_transient_turn_notes_injects_bounded_resume_hint() {
         .expect("run should start");
     let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-    let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
 
     let hint = transient
         .iter()
@@ -211,7 +211,7 @@ async fn prepare_transient_turn_notes_omits_retained_background_sessions() {
         .expect("background run should start");
     let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-    let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
 
     assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
     assert!(transient.is_empty(), "retained background work must not force a resume wait");
@@ -432,4 +432,173 @@ fn refused_turn_rollback_without_prompt_restores_pre_turn_length() {
 
     assert!(rollback.apply(&mut history));
     assert_eq!(history, before);
+}
+
+fn seed_peer_question(workspace: &std::path::Path, from: &str, to: &str, question: &str) -> String {
+    let mail = vtcode_memory::NewMail::question(
+        to,
+        vec![vtcode_memory::MailQuestion {
+            id: "q1".to_owned(),
+            question: question.to_owned(),
+            options: Vec::new(),
+        }],
+        "",
+        None,
+    )
+    .expect("valid question");
+    vtcode_memory::send_mail(workspace, from, &mail)
+        .expect("send peer mail")
+        .message_id
+}
+
+#[tokio::test]
+async fn turn_notes_deliver_peer_messages_with_reply_hint_and_ack() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
+    registry.set_harness_session("self-sess");
+    let _live = vtcode_memory::open(temp.path(), "self-sess", vtcode_memory::DEFAULT_MAX_EVENTS).expect("live self");
+
+    let question_id = seed_peer_question(temp.path(), "peer-a", "self-sess", "should we retry the cache?");
+    let answer_id = vtcode_memory::send_mail(
+        temp.path(),
+        "peer-b",
+        &vtcode_memory::NewMail::answer("self-sess", &question_id, "retry with backoff", None).expect("valid answer"),
+    )
+    .expect("send answer")
+    .message_id;
+
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let note = transient
+        .iter()
+        .find(|note| note.starts_with("Peer session messages"))
+        .expect("peer note present");
+    assert!(note.contains("should we retry the cache?"), "question text surfaced: {note}");
+    assert!(note.contains("retry with backoff"), "answer text surfaced: {note}");
+    assert!(note.contains("answer_session"), "reply hint present: {note}");
+    assert!(note.contains(&question_id), "question id present for correlation: {note}");
+
+    let pending_ids: Vec<&str> = delivery.pending.iter().map(|receipt| receipt.message_id.as_str()).collect();
+    assert!(pending_ids.contains(&question_id.as_str()), "question receipt: {pending_ids:?}");
+    assert!(pending_ids.contains(&answer_id.as_str()), "answer receipt: {pending_ids:?}");
+    assert!(
+        delivery
+            .pending
+            .iter()
+            .any(|receipt| receipt.kind_label == "question" && receipt.peer_session == "peer-a")
+    );
+    assert!(
+        delivery
+            .pending
+            .iter()
+            .any(|receipt| receipt.kind_label == "answer" && receipt.peer_session == "peer-b")
+    );
+
+    // The caller acks after admitting the note; acked mail is not redelivered.
+    let received = super::ack_peer_messages(temp.path(), "self-sess", &delivery.pending);
+    assert_eq!(received.len(), 2);
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    assert!(!transient.iter().any(|note| note.starts_with("Peer session messages")));
+    assert!(delivery.pending.is_empty());
+}
+
+#[tokio::test]
+async fn unacked_peer_messages_redeliver_on_the_next_turn() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
+    registry.set_harness_session("self-sess");
+    let _live = vtcode_memory::open(temp.path(), "self-sess", vtcode_memory::DEFAULT_MAX_EVENTS).expect("live self");
+
+    seed_peer_question(temp.path(), "peer-a", "self-sess", "should we retry the cache?");
+
+    // First preparation formats but does not ack (simulating a stop accepted
+    // before admission): the next preparation must surface the same mail.
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    assert!(transient.iter().any(|note| note.starts_with("Peer session messages")));
+    assert_eq!(delivery.pending.len(), 1);
+
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let note = transient
+        .iter()
+        .find(|note| note.starts_with("Peer session messages"))
+        .expect("redelivered peer note");
+    assert!(note.contains("should we retry the cache?"), "mail kept: {note}");
+    assert_eq!(delivery.pending.len(), 1);
+}
+
+#[tokio::test]
+async fn turn_notes_render_every_structured_question_before_ack() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
+    registry.set_harness_session("self-sess");
+    let _live = vtcode_memory::open(temp.path(), "self-sess", vtcode_memory::DEFAULT_MAX_EVENTS).expect("live self");
+
+    let mail = vtcode_memory::NewMail::question(
+        "self-sess",
+        vec![
+            vtcode_memory::MailQuestion {
+                id: "q1".to_owned(),
+                question: "retry the cache?".to_owned(),
+                options: Vec::new(),
+            },
+            vtcode_memory::MailQuestion {
+                id: "q2".to_owned(),
+                question: "bump the timeout?".to_owned(),
+                options: vec![
+                    vtcode_memory::MailOption {
+                        label: "600s".to_owned(),
+                        description: "Wait longer.".to_owned(),
+                    },
+                    vtcode_memory::MailOption {
+                        label: "60s".to_owned(),
+                        description: "Fail fast.".to_owned(),
+                    },
+                ],
+            },
+        ],
+        "deploy context",
+        None,
+    )
+    .expect("valid multi-question");
+    vtcode_memory::send_mail(temp.path(), "peer-a", &mail).expect("send");
+
+    let (transient, _) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    let note = transient
+        .iter()
+        .find(|note| note.starts_with("Peer session messages"))
+        .expect("peer note present");
+    assert!(note.contains("retry the cache?"), "first question kept: {note}");
+    assert!(note.contains("bump the timeout?"), "second question kept: {note}");
+    assert!(note.contains("600s / 60s"), "options kept: {note}");
+    assert!(note.contains("deploy context"), "body kept: {note}");
+}
+
+#[tokio::test]
+async fn turn_notes_surface_expired_peer_messages_as_receipts_without_note_lines() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
+    registry.set_harness_session("self-sess");
+    let _live = vtcode_memory::open(temp.path(), "self-sess", vtcode_memory::DEFAULT_MAX_EVENTS).expect("live self");
+
+    // Hand-craft an already-expired envelope: the drain moves it aside and
+    // reports the id without a model-visible line.
+    let inbox = vtcode_memory::session_directory(temp.path(), "self-sess").join(vtcode_memory::MAILBOX_DIR);
+    std::fs::create_dir_all(&inbox).expect("inbox dir");
+    let stale = vtcode_memory::MailMessage {
+        schema_version: vtcode_memory::MAILBOX_SCHEMA_VERSION,
+        message_id: "11111111-1111-1111-1111-111111111111".to_owned(),
+        from_session: "peer-a".to_owned(),
+        to_session: "self-sess".to_owned(),
+        kind: vtcode_memory::MailKind::Question,
+        in_reply_to: None,
+        questions: Vec::new(),
+        text: String::new(),
+        created_at: "2020-01-01T00:00:00Z".to_owned(),
+        expires_at: "2020-01-01T01:00:00Z".to_owned(),
+    };
+    std::fs::write(inbox.join(format!("{}.json", stale.message_id)), serde_json::to_vec(&stale).expect("ser"))
+        .expect("write stale");
+
+    let (transient, delivery) = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
+    assert!(!transient.iter().any(|note| note.starts_with("Peer session messages")));
+    assert_eq!(delivery.expired_ids, vec![stale.message_id]);
 }

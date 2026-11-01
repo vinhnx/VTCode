@@ -180,11 +180,26 @@ fn rotate_current_trajectory(dir: &Path) {
         return;
     }
     let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
-    let rotated_name = format!("{TRAJECTORY_PREFIX}{timestamp}.{TRAJECTORY_EXTENSION}");
-    let rotated_path = dir.join(rotated_name);
-    if let Err(e) = fs::rename(&current, &rotated_path) {
-        tracing::warn!("Failed to rotate trajectory {} -> {}: {e}", current.display(), rotated_path.display());
+    // Pids disambiguate concurrent startups landing in the same second; the
+    // counter covers same-process repeats (tests, crash loops). Bounded: past
+    // the bound, skip rotation — appending is safer than clobbering.
+    let pid = std::process::id();
+    for counter in 0..1000u32 {
+        let rotated_name = if counter == 0 {
+            format!("{TRAJECTORY_PREFIX}{timestamp}-pid{pid}.{TRAJECTORY_EXTENSION}")
+        } else {
+            format!("{TRAJECTORY_PREFIX}{timestamp}-pid{pid}-{counter}.{TRAJECTORY_EXTENSION}")
+        };
+        let rotated_path = dir.join(rotated_name);
+        if rotated_path.exists() {
+            continue;
+        }
+        if let Err(e) = fs::rename(&current, &rotated_path) {
+            tracing::warn!("Failed to rotate trajectory {} -> {}: {e}", current.display(), rotated_path.display());
+        }
+        return;
     }
+    tracing::warn!("Skipping trajectory rotation: too many colliding rotations; appending instead");
 }
 
 fn is_trajectory_file(path: &Path) -> bool {
@@ -343,6 +358,31 @@ mod tests {
             .collect();
         assert_eq!(rotated.len(), 1, "Old log should be rotated");
         assert!(current.exists(), "New current file should be created");
+    }
+
+    #[tokio::test]
+    async fn test_rotation_never_clobbers_prior_rotated_logs() {
+        let temp_dir = TempDir::new().unwrap();
+        let logs_dir = temp_dir.path().join(".vtcode").join("logs");
+        fs::create_dir_all(&logs_dir).unwrap();
+
+        let current = logs_dir.join("trajectory.jsonl");
+        fs::write(&current, "first-run\n").unwrap();
+        let _first = TrajectoryLogger::new(temp_dir.path());
+        fs::write(&current, "second-run\n").unwrap();
+        let _second = TrajectoryLogger::new(temp_dir.path());
+
+        let mut payload = String::new();
+        let mut rotated = 0;
+        for entry in fs::read_dir(&logs_dir).unwrap().filter_map(|e| e.ok()) {
+            if is_trajectory_file(&entry.path()) {
+                rotated += 1;
+                payload.push_str(&fs::read_to_string(entry.path()).unwrap());
+            }
+        }
+        assert_eq!(rotated, 2, "each rotation must keep its own file");
+        assert!(payload.contains("first-run"), "first run must survive: {payload}");
+        assert!(payload.contains("second-run"), "second run must survive: {payload}");
     }
 
     #[test]

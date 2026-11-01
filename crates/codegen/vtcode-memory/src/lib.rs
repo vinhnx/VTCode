@@ -31,6 +31,8 @@
 pub mod error;
 pub mod event_log;
 pub mod explanation;
+/// Cross-process session mailbox for peer Q&A.
+pub mod mailbox;
 /// Manifest and turn-index persistence helpers.
 pub mod manifest;
 pub mod matrix;
@@ -46,6 +48,12 @@ pub use error::SessionStoreError;
 pub use event_log::{
     DEFAULT_MAX_EVENTS, EvictionSummaryHook, SessionEventLog, SessionManifest, TurnIndex, TurnIndexEntry,
 };
+pub use mailbox::{
+    DEFAULT_TTL_SECS, InboxDrain, MAILBOX_DIR, MAILBOX_SCHEMA_VERSION, MAX_INBOX_DEPTH, MAX_MAIL_BYTES,
+    MAX_OPTION_DESCRIPTION_CHARS, MAX_OPTION_LABEL_CHARS, MAX_OPTIONS, MAX_QUESTION_CHARS, MAX_QUESTION_ID_CHARS,
+    MAX_QUESTIONS, MAX_TEXT_CHARS, MAX_TTL_SECS, MIN_TTL_SECS, MailKind, MailMessage, MailOption, MailQuestion,
+    MailReceipt, NewMail, ack_mail, drain_inbox, find_mail, read_mail, send_mail,
+};
 pub use migration::{MigrationReport, migrate_legacy};
 pub use pack::{
     AUDIT_PACK_SCHEMA_VERSION, AuditPackEntry, AuditVerification, SessionAuditPack, audit_pack_path, create_audit_pack,
@@ -56,8 +64,8 @@ pub use progress::{
     GoalTracker, Milestone, MilestoneStatus, ProgressLedger, load_progress, progress_path, save_progress,
 };
 pub use query::{
-    FactRecord, MemorySearchResult, SessionMemoryView, SessionSummary, query_facts, recent_sessions, search_memory,
-    session_memory_facts, write_session_memory_view,
+    FactRecord, MemorySearchResult, SessionMemoryView, SessionSummary, live_sessions, query_facts, recent_sessions,
+    search_memory, session_memory_facts, write_session_memory_view,
 };
 pub use retention::{
     RETENTION_PIN_FILE, RetentionPolicy, apply_retention, apply_retention_preserving, evict_zero_turn_completed_store,
@@ -106,6 +114,20 @@ pub fn session_directory(workspace: &Path, session_id: &str) -> PathBuf {
 /// coordinated turn index.
 pub fn open(workspace: &Path, session_id: &str, max_events: usize) -> Result<SessionEventLog, SessionStoreError> {
     SessionEventLog::open(workspace, session_id, max_events)
+}
+
+/// Open (creating if necessary) the event log as the session's single writer.
+///
+/// Fails with [`SessionStoreError::SessionBusy`] when another process already
+/// holds the session open instead of interleaving two writers on one event
+/// stream. Reopens in this process share state and succeed. Readers that must
+/// tolerate a live writer keep using [`open`].
+pub fn open_exclusive(
+    workspace: &Path,
+    session_id: &str,
+    max_events: usize,
+) -> Result<SessionEventLog, SessionStoreError> {
+    SessionEventLog::open_exclusive(workspace, session_id, max_events)
 }
 
 /// Open a session log with a callback that persists summaries before cap

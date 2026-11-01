@@ -122,8 +122,23 @@ fn parses_revert_partial_long_flag() {
         cli.command,
         Some(Commands::Revert {
             turn: 3,
-            partial: Some(ref scope)
+            partial: Some(ref scope),
+            session: None,
         }) if scope == "code"
+    ));
+}
+
+#[test]
+fn parses_revert_session_long_flag() {
+    let cli = Cli::parse_from(["vtcode", "revert", "--turn", "3", "--session", "pane-b"]);
+
+    assert!(matches!(
+        cli.command,
+        Some(Commands::Revert {
+            turn: 3,
+            partial: None,
+            session: Some(ref session),
+        }) if session == "pane-b"
     ));
 }
 

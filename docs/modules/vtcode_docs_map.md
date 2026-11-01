@@ -445,9 +445,9 @@ below based on the topic area.
 
 - **File**: `docs/development/session-persistence.md`
   - **Content**: Session Event Persistence
-  - **Topics**: Memory-envelope file replacement, Audit packs
-  - **User Questions**: "What can you tell me about Session Event Persistence?", "How does Memory-envelope file
-    replacement work?", "How does Audit packs work?"
+  - **Topics**: Concurrent sessions, Peer-session messaging, Memory-envelope file replacement, Audit packs
+  - **User Questions**: "What can you tell me about Session Event Persistence?", "How does Concurrent sessions work?",
+    "How does Peer-session messaging work?"
 
 - **File**: `docs/development/session-orchestration-ownership.md`
   - **Content**: Session orchestration ownership

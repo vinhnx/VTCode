@@ -35,9 +35,11 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool, web_fetch_par
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool, web_search_parameter_schema};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION,
-    agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters,
-    list_files_parameters, mcp_parameters, search_tools_parameters, write_stdin_parameters,
+    AGENT_DESCRIPTION, ANSWER_SESSION_DESCRIPTION, ASK_SESSION_DESCRIPTION, EXEC_COMMAND_DESCRIPTION,
+    LIST_SESSIONS_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION, agent_parameters,
+    answer_session_parameters, apply_patch_parameters, ask_session_parameters, code_search_parameters, cron_parameters,
+    exec_command_parameters, list_files_parameters, list_sessions_parameters, mcp_parameters, search_tools_parameters,
+    write_stdin_parameters,
 };
 
 // ===========================================================================
@@ -194,6 +196,30 @@ impl ToolPack for MultiAgentPack {
             ToolRegistration::new("matrix", CapabilityLevel::Basic, false, ToolRegistry::matrix_executor)
                 .with_description(vtcode_utility_tool_specs::MATRIX_DESCRIPTION)
                 .with_parameter_schema(vtcode_utility_tool_specs::matrix_parameters()),
+            ToolRegistration::new(
+                tools::ASK_SESSION,
+                CapabilityLevel::Basic,
+                false,
+                ToolRegistry::ask_session_executor,
+            )
+            .with_description(ASK_SESSION_DESCRIPTION)
+            .with_parameter_schema(ask_session_parameters()),
+            ToolRegistration::new(
+                tools::ANSWER_SESSION,
+                CapabilityLevel::Basic,
+                false,
+                ToolRegistry::answer_session_executor,
+            )
+            .with_description(ANSWER_SESSION_DESCRIPTION)
+            .with_parameter_schema(answer_session_parameters()),
+            ToolRegistration::new(
+                tools::LIST_SESSIONS,
+                CapabilityLevel::Basic,
+                false,
+                ToolRegistry::list_sessions_executor,
+            )
+            .with_description(LIST_SESSIONS_DESCRIPTION)
+            .with_parameter_schema(list_sessions_parameters()),
         ];
         batch_register(inventory, registrations);
     }

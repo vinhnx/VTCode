@@ -344,6 +344,7 @@ pub(crate) fn background_completion_thread_event(event: &BackgroundCompletionEve
                 duration_ms: None,
                 task_id: Some(event.task_id.clone()),
                 session_id: Some(event.session_id.clone()),
+                correlation_id: None,
                 exec_session_id: Some(event.exec_session_id.clone()),
                 status: Some(event.status.as_str().to_string()),
                 transcript_path: event.transcript_path.as_ref().map(|path| path.display().to_string()),

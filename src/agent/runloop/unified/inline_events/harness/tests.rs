@@ -406,3 +406,23 @@ fn tool_updated_event_captures_streamed_output() {
     assert_eq!(details.output, "On branch main");
     assert_eq!(details.status, ToolCallStatus::InProgress);
 }
+
+#[test]
+fn session_message_event_carries_peer_and_correlation() {
+    let event = harness_session_message_event(
+        HarnessEventKind::SessionMessageReceived,
+        Some("answer from session peer-a".to_string()),
+        Some("peer-a".to_string()),
+        Some("msg-1".to_string()),
+    );
+    let ThreadEvent::ItemCompleted(completed) = event else {
+        panic!("expected item.completed");
+    };
+    let ThreadItemDetails::Harness(item) = completed.item.details else {
+        panic!("expected harness item");
+    };
+    assert_eq!(item.event, HarnessEventKind::SessionMessageReceived);
+    assert_eq!(item.session_id.as_deref(), Some("peer-a"));
+    assert_eq!(item.correlation_id.as_deref(), Some("msg-1"));
+    assert!(item.task_id.is_none(), "no task identity is fabricated");
+}

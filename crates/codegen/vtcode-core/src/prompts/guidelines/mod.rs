@@ -15,9 +15,11 @@ const TOOL_LIST_FILES: &str = tools::LIST_FILES;
 const TOOL_GREP_FILE: &str = tools::GREP_FILE;
 const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
 const TOOL_REQUEST_USER_INPUT: &str = tools::REQUEST_USER_INPUT;
+const TOOL_ASK_SESSION: &str = tools::ASK_SESSION;
 const TOOL_TASK_TRACKER: &str = tools::TASK_TRACKER;
 const PUBLIC_DECISION_GUIDANCE: &str = "- Use optional `record_decision` for consequential choices, rejected approaches, or recovery changes. Give concise public rationale; ordinary reads and commands need no record.";
 const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, checks, resources, and timeouts; start freezes the spec. The coordinator delegates execution and verification to scheduler-owned workers; discovery is idle-only. Replay restores admission before discovery; resume reconciles owned cleanup. status is a projection; pause stops dispatch; user cancel is terminal. Internal failures require reconciliation, not cancellation. Workers retain effective permissions and sandbox gates. Read leases require read-only workers. Report identity is runtime-owned; final success needs durable declared checks for the current generation, never summaries or child completion. Source and declared input changes, including submodule state, invalidate checks. Automatic retry requires replay_safe, confirmed cleanup, and at most one interrupted/timeout retry; other failures need a coordinator decision.";
+const SESSION_MESSAGING_GUIDANCE: &str = "- Peer sessions: `list_sessions` discovers live CLI sessions in this workspace; `ask_session` sends one a question and its `answer_session` reply arrives as a notice on a later turn. Delivery needs the peer running.";
 const WEB_SEARCH_GUIDANCE: &str = "- web_search uses keyless DuckDuckGo; web_fetch needs separate approval. For `antiban_blocked` or `retryable: false`, do not retry; wait `retry_after_ms` for `cooldown`; retry `network_error`/`upstream_error` once.";
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
 
@@ -120,6 +122,7 @@ struct ToolPresence {
     start_planning: bool,
     matrix: bool,
     record_decision: bool,
+    session_messaging: bool,
 }
 
 impl ToolPresence {
@@ -141,6 +144,7 @@ impl ToolPresence {
             start_planning: false,
             matrix: false,
             record_decision: false,
+            session_messaging: false,
         };
         for tool in available_tools {
             match tool.as_str() {
@@ -156,6 +160,7 @@ impl ToolPresence {
                 TOOL_TASK_TRACKER => presence.task_tracker = true,
                 TOOL_START_PLANNING => presence.start_planning = true,
                 "matrix" => presence.matrix = true,
+                TOOL_ASK_SESSION => presence.session_messaging = true,
                 "record_decision" => presence.record_decision = true,
                 _ => {}
             }
@@ -184,6 +189,9 @@ pub(crate) fn generate_tool_guidelines_with_capabilities(
             let mut lines = vec!["\n\n## Active Tools".to_owned()];
             if presence.matrix {
                 lines.push(MATRIX_GUIDANCE.to_owned());
+            }
+            if presence.session_messaging {
+                lines.push(SESSION_MESSAGING_GUIDANCE.to_owned());
             }
             if presence.record_decision {
                 lines.push(PUBLIC_DECISION_GUIDANCE.to_owned());
@@ -250,6 +258,9 @@ pub(crate) fn generate_tool_guidelines_for_profile(
     let mut lines = Vec::new();
     if presence.matrix {
         lines.push(MATRIX_GUIDANCE.to_owned());
+    }
+    if presence.session_messaging {
+        lines.push(SESSION_MESSAGING_GUIDANCE.to_owned());
     }
     if presence.web_search {
         lines.push(WEB_SEARCH_GUIDANCE.to_owned());

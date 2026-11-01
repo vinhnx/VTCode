@@ -153,11 +153,12 @@ pub(super) fn remove_transient_system_notes(history: &mut Vec<vtcode_core::llm::
 ///
 /// Pure policy: maps the checkpoint error text to a short `Info` notice.
 /// The full error stays in the tracing log; the UI stays concise. The busy
-/// branch names the safety reason (checkpoint corruption) and both options
-/// (wait + retry, separate worktree) so parallel-session users can act.
+/// branch fires only when this same session already has a running turn
+/// (other sessions proceed concurrently), so it points at the duplicate
+/// holder instead of a separate worktree.
 pub(super) fn checkpoint_unavailable_notice(err_text: &str) -> &'static str {
-    if err_text.contains("Another turn or rewind is using this workspace") {
-        "Prompt kept — workspace busy (safety lock prevents checkpoint corruption). Options: wait then retry, or use a separate worktree."
+    if err_text.contains("Another turn is using this session") {
+        "Prompt kept — session busy (safety lock prevents checkpoint corruption). If another terminal holds this session, continue there; otherwise wait then retry."
     } else if err_text.contains("Interrupted rewind") {
         "Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry."
     } else {
@@ -257,19 +258,186 @@ pub(super) fn build_unrelated_dirty_worktree_note(
     )))
 }
 
+/// One peer message delivered to this turn, kept for harness-event emission.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct PeerMessageReceived {
+    /// Sending session id.
+    pub peer_session: String,
+    /// Mailbox message id (event `correlation_id`).
+    pub message_id: String,
+    /// Human-readable kind label (`question`, `answer`, or `note`).
+    pub kind_label: &'static str,
+}
+
+/// Mailbox drain outcome: the model-visible note plus per-message receipts
+/// the caller publishes as harness events (the user-visible surface).
+#[derive(Debug, Default)]
+pub(super) struct PeerMessageDelivery {
+    /// Note text for the transient system notes, when mail arrived.
+    pub note: Option<String>,
+    /// Receipts for formatted messages, not yet acknowledged. The caller acks
+    /// them via [`ack_peer_messages`] only after the note is admitted to
+    /// model history, so a stop accepted between preparation and admission
+    /// redelivers instead of losing mail.
+    pub pending: Vec<PeerMessageReceived>,
+    /// Ids of messages that expired before delivery.
+    pub expired_ids: Vec<String>,
+}
+
+/// Cap on peer messages surfaced in one turn note. Overflow stays queued for
+/// later turns; bounds the injected context.
+const PEER_MESSAGE_NOTE_CAP: usize = 5;
+
+/// Per-message text display cap in the peer note.
+const PEER_MESSAGE_TEXT_MAX_BYTES: usize = 300;
+
+/// Drain this session's peer-message inbox and format the turn note.
+///
+/// Delivery is fail-open: a drain error warns and retries next turn (files
+/// stay queued), so a sick mailbox never breaks turn preparation. Draining
+/// never acknowledges: the caller acks via [`ack_peer_messages`] after the
+/// note is admitted, keeping at-least-once redelivery across a cancelled
+/// preparation.
+pub(super) fn drain_peer_messages(workspace: &std::path::Path, session_id: &str) -> PeerMessageDelivery {
+    let drain = match vtcode_memory::drain_inbox(workspace, session_id) {
+        Ok(drain) => drain,
+        Err(error) => {
+            tracing::warn!(error = %error, "peer inbox drain failed; retrying next turn");
+            return PeerMessageDelivery::default();
+        }
+    };
+    let mut delivery = PeerMessageDelivery {
+        note: None,
+        pending: Vec::with_capacity(drain.live.len().min(PEER_MESSAGE_NOTE_CAP)),
+        expired_ids: drain.expired_ids,
+    };
+    if drain.live.is_empty() {
+        return delivery;
+    }
+    let mut lines = Vec::with_capacity(drain.live.len().min(PEER_MESSAGE_NOTE_CAP));
+    for message in drain.live.iter().take(PEER_MESSAGE_NOTE_CAP) {
+        let text = vtcode_commons::formatting::truncate_byte_budget(
+            &peer_message_display_text(message),
+            PEER_MESSAGE_TEXT_MAX_BYTES,
+            "…",
+        );
+        let line = match message.kind {
+            vtcode_memory::MailKind::Question => format!(
+                "- Question from `{}` [id `{}`]: {text} (reply with `answer_session` {{\"message_id\": \"{}\", \"answer\": \"...\"}})",
+                message.from_session, message.message_id, message.message_id,
+            ),
+            vtcode_memory::MailKind::Answer => format!(
+                "- Answer from `{}` [re `{}`]: {text}",
+                message.from_session,
+                message.in_reply_to.as_deref().unwrap_or("?"),
+            ),
+            vtcode_memory::MailKind::Notice => {
+                format!("- Note from `{}`: {text}", message.from_session)
+            }
+        };
+        lines.push(line);
+        delivery.pending.push(PeerMessageReceived {
+            peer_session: message.from_session.clone(),
+            message_id: message.message_id.clone(),
+            kind_label: match message.kind {
+                vtcode_memory::MailKind::Question => "question",
+                vtcode_memory::MailKind::Answer => "answer",
+                vtcode_memory::MailKind::Notice => "note",
+            },
+        });
+    }
+    let overflow = drain.live.len().saturating_sub(PEER_MESSAGE_NOTE_CAP);
+    let overflow_line = (overflow > 0).then(|| format!("({overflow} more queued; they arrive on later turns)"));
+    delivery.note = Some(format!(
+        "Peer session messages ({}):\n{}{}",
+        lines.len(),
+        lines.join("\n"),
+        overflow_line.map(|line| format!("\n{line}")).unwrap_or_default(),
+    ));
+    delivery
+}
+
+/// Acknowledge drained peer messages after their note is admitted to model
+/// history. Returns the receipts that archived successfully; the caller emits
+/// one `SessionMessageReceived` event per returned receipt. Anything else
+/// stays queued and redelivers next turn (at-least-once).
+pub(super) fn ack_peer_messages(
+    workspace: &std::path::Path,
+    session_id: &str,
+    pending: &[PeerMessageReceived],
+) -> Vec<PeerMessageReceived> {
+    let mut received = Vec::with_capacity(pending.len());
+    for receipt in pending {
+        match vtcode_memory::ack_mail(workspace, session_id, &receipt.message_id) {
+            Ok(true) => received.push(receipt.clone()),
+            Ok(false) => tracing::warn!(
+                message_id = %receipt.message_id,
+                "peer message vanished before ack; dropping from this turn"
+            ),
+            Err(error) => tracing::warn!(
+                error = %error, message_id = %receipt.message_id,
+                "peer message ack failed; will redeliver next turn"
+            ),
+        }
+    }
+    received
+}
+
+/// Display text for one message: every structured question for questions
+/// (a multi-question message must not silently drop questions the ack then
+/// destroys), freeform text otherwise.
+fn peer_message_display_text(message: &vtcode_memory::MailMessage) -> String {
+    if message.kind != vtcode_memory::MailKind::Question {
+        return message.text.clone();
+    }
+    let mut parts: Vec<String> = message
+        .questions
+        .iter()
+        .map(|question| {
+            if question.options.is_empty() {
+                question.question.clone()
+            } else {
+                let options = question
+                    .options
+                    .iter()
+                    .map(|option| option.label.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                format!("{} [{}]", question.question, options)
+            }
+        })
+        .collect();
+    if !message.text.trim().is_empty() {
+        parts.push(message.text.trim().to_owned());
+    }
+    if parts.len() == 1 {
+        parts.pop().unwrap_or_default()
+    } else {
+        parts
+            .iter()
+            .enumerate()
+            .map(|(index, part)| format!("{}. {part}", index + 1))
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+}
+
 /// Assemble transient system notes without mutating model history.
 /// The caller publishes them only after its cancellable preparation wait succeeds.
 ///
 /// `unrelated_dirty_note` is pre-fetched by the caller via `spawn_blocking`
 /// (see `orchestration.rs`) because `build_unrelated_dirty_worktree_note`
 /// spawns blocking `git` subprocesses — see the `# Blocking` docs in `git.rs`.
+///
+/// Also drains the peer-message inbox: the returned delivery carries the
+/// per-message receipts the caller emits as harness events.
 pub(super) async fn prepare_transient_turn_notes(
     workspace: &std::path::Path,
     tool_registry: &ToolRegistry,
     unrelated_dirty_note: Option<String>,
     background_completion_note: Option<String>,
-) -> Vec<String> {
-    let mut transient_system_notes = Vec::with_capacity(4);
+) -> (Vec<String>, PeerMessageDelivery) {
+    let mut transient_system_notes = Vec::with_capacity(5);
 
     if let Some(note) = {
         let stale_paths = tool_registry.edited_file_monitor_ref().stale_tracked_paths();
@@ -294,7 +462,16 @@ pub(super) async fn prepare_transient_turn_notes(
         transient_system_notes.push(note);
     }
 
-    transient_system_notes
+    // Peer-session messaging: drain the inbox so questions and answers from
+    // other CLI sessions in this workspace land in this turn. The delivery
+    // receipts flow back to the caller for harness-event emission.
+    let session_id = tool_registry.harness_context_snapshot().session_id;
+    let delivery = drain_peer_messages(workspace, &session_id);
+    if let Some(note) = delivery.note.clone() {
+        transient_system_notes.push(note);
+    }
+
+    (transient_system_notes, delivery)
 }
 
 /// Cap on exec sessions surfaced in one cross-turn resume hint.

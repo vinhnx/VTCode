@@ -11,9 +11,16 @@ pub(super) use vtcode_exec_events::{
 
 pub(super) use crate::event_log::{DEFAULT_MAX_EVENTS, SessionEventLog};
 pub(super) use crate::migration::migrate_legacy;
-pub(super) use crate::query::{query_facts, recent_sessions};
+pub(super) use crate::query::{live_sessions, query_facts, recent_sessions};
 pub(super) use crate::{
-    EvictionSummaryHook, SessionStoreError, open, open_with_eviction_summary, retention::apply_retention, sessions_root,
+    EvictionSummaryHook, SessionStoreError,
+    mailbox::{
+        InboxDrain, MailKind, MailMessage, MailOption, MailQuestion, NewMail, ack_mail, drain_inbox, find_mail,
+        read_mail, send_mail,
+    },
+    open, open_exclusive, open_with_eviction_summary,
+    retention::apply_retention,
+    sessions_root,
 };
 
 fn sample_turn() -> Vec<ThreadEvent> {
@@ -58,6 +65,7 @@ fn sample_zero_turn_completion() -> Vec<ThreadEvent> {
     ]
 }
 
+mod mailbox;
 mod manifest_scan;
 mod retention;
 mod session_store;

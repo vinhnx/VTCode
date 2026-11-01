@@ -751,6 +751,28 @@ pub(crate) fn harness_event(
     harness_event_with_duration(event, message, path, attempt, error_category, None)
 }
 
+/// Harness event for peer-session messaging, carrying the peer session and
+/// the mailbox message id as `correlation_id` so a received answer links
+/// back to the `SessionMessageSent` event from `ask_session`.
+pub(crate) fn harness_session_message_event(
+    event: HarnessEventKind,
+    message: Option<String>,
+    peer_session: Option<String>,
+    correlation_id: Option<String>,
+) -> ThreadEvent {
+    let mut item = HarnessEventItem::new(event);
+    item.message = message;
+    item.session_id = peer_session;
+    item.correlation_id = correlation_id;
+    ThreadEvent::ItemCompleted(ItemCompletedEvent {
+        item: ThreadItem {
+            context: None,
+            id: format!("harness-{}", Uuid::new_v4()),
+            details: ThreadItemDetails::Harness(Box::new(item)),
+        },
+    })
+}
+
 pub(crate) fn tool_outcome_observation_event(
     tool_name: &str,
     attempts: u32,
@@ -790,6 +812,7 @@ fn harness_event_with_duration(
                 duration_ms,
                 task_id: None,
                 session_id: None,
+                correlation_id: None,
                 exec_session_id: None,
                 status: None,
                 transcript_path: None,

@@ -24,10 +24,12 @@ use vtcode_core::utils::session_archive::SessionMessage;
 use vtcode_ui::tui::app::{InlineHandle, ProgressGuard};
 
 use super::super::super::support::{
-    RefusedTurnRollback, build_unrelated_dirty_worktree_note, checkpoint_unavailable_notice,
+    RefusedTurnRollback, ack_peer_messages, build_unrelated_dirty_worktree_note, checkpoint_unavailable_notice,
     prepare_transient_turn_notes,
 };
-use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, harness_event};
+use crate::agent::runloop::unified::inline_events::harness::{
+    HarnessEventEmitter, harness_event, harness_session_message_event,
+};
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::turn::background_completion::PendingBackgroundCompletions;
@@ -271,7 +273,7 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         }
         Ok(Ok(None)) => None,
     };
-    let transient_system_notes = preparation_wait!(prepare_transient_turn_notes(
+    let (transient_system_notes, peer_delivery) = preparation_wait!(prepare_transient_turn_notes(
         config.workspace.as_path(),
         tool_registry,
         unrelated_dirty_note,
@@ -281,6 +283,32 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         },
     ));
     working_history.extend(transient_system_notes.iter().cloned().map(Message::system));
+    // Ack only after admission: a stop accepted between preparation and this
+    // extend leaves the mail queued for redelivery instead of losing it.
+    let received = ack_peer_messages(
+        config.workspace.as_path(),
+        &tool_registry.harness_context_snapshot().session_id,
+        &peer_delivery.pending,
+    );
+    if let Some(emitter) = harness_emitter.as_ref() {
+        use vtcode_core::exec::events::HarnessEventKind;
+        for receipt in &received {
+            let _ = emitter.emit(harness_session_message_event(
+                HarnessEventKind::SessionMessageReceived,
+                Some(format!("{} from session {}", receipt.kind_label, receipt.peer_session)),
+                Some(receipt.peer_session.clone()),
+                Some(receipt.message_id.clone()),
+            ));
+        }
+        for expired_id in &peer_delivery.expired_ids {
+            let _ = emitter.emit(harness_session_message_event(
+                HarnessEventKind::SessionMessageExpired,
+                Some("peer message expired before delivery".to_string()),
+                None,
+                Some(expired_id.clone()),
+            ));
+        }
+    }
     tracing::debug!(target: "vtcode.response_latency", operation_id = turn_progress.operation().id(),
                 preparation_ms = preparation_started_at.elapsed().as_secs_f64() * 1000.0,
                 accepted_to_prepared_ms = turn_progress.operation().started_at().elapsed().as_secs_f64() * 1000.0,

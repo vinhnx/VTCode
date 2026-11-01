@@ -176,3 +176,102 @@ fn migrate_legacy_imports_history_and_trajectory() {
     let sessions = recent_sessions(dir.path(), 10);
     assert_eq!(sessions.len(), 2);
 }
+
+/// Hold a session's lock file on a foreign fd, simulating another process.
+/// Same-process flock conflicts, so this deterministically reproduces
+/// cross-process contention without spawning subprocesses.
+fn hold_session_lock_externally(workspace: &std::path::Path, session_id: &str) -> fs::File {
+    let lock_path = sessions_root(workspace).join(session_id).join("session.lock");
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("lock file must exist");
+    file.try_lock().expect("test must establish the foreign hold");
+    file
+}
+
+fn lock_is_held_externally(workspace: &std::path::Path, session_id: &str) -> bool {
+    let lock_path = sessions_root(workspace).join(session_id).join("session.lock");
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("lock file must exist");
+    file.try_lock()
+        .map_err(std::io::Error::from)
+        .is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock)
+}
+
+#[test]
+fn exclusive_open_fails_when_held_elsewhere_and_recovers_on_release() {
+    let dir = TempDir::new().expect("tempdir");
+    let manifest_path = sessions_root(dir.path()).join("sess-busy").join("manifest.json");
+    {
+        let log = open_exclusive(dir.path(), "sess-busy", DEFAULT_MAX_EVENTS).expect("first open");
+        for e in &sample_turn() {
+            log.append(e).expect("append");
+        }
+    }
+    let manifest_before = fs::read(&manifest_path).expect("manifest persisted");
+    let foreign = hold_session_lock_externally(dir.path(), "sess-busy");
+    let err = open_exclusive(dir.path(), "sess-busy", DEFAULT_MAX_EVENTS)
+        .map(|_| ())
+        .expect_err("held session must fail");
+    assert!(
+        matches!(err, SessionStoreError::SessionBusy { .. }),
+        "must fail closed with SessionBusy, got: {err}"
+    );
+    assert!(err.to_string().contains("sess-busy"), "must name the session: {err}");
+    assert!(err.to_string().contains("--session-id"), "must name the remedy: {err}");
+    assert_eq!(
+        fs::read(&manifest_path).expect("manifest"),
+        manifest_before,
+        "a refused open must not mutate store state"
+    );
+    drop(foreign);
+    let log = open_exclusive(dir.path(), "sess-busy", DEFAULT_MAX_EVENTS).expect("open after release");
+    assert_eq!(log.turn_count(), 1, "history survives the refused open");
+}
+
+#[test]
+fn shared_open_degrades_when_held_elsewhere() {
+    let dir = TempDir::new().expect("tempdir");
+    {
+        let log = open_exclusive(dir.path(), "sess-read", DEFAULT_MAX_EVENTS).expect("first open");
+        for e in &sample_turn() {
+            log.append(e).expect("append");
+        }
+    }
+    let _foreign = hold_session_lock_externally(dir.path(), "sess-read");
+    // Readers tolerate a live writer: the open succeeds degraded.
+    let log = open(dir.path(), "sess-read", DEFAULT_MAX_EVENTS).expect("degraded shared open");
+    assert_eq!(log.turn_count(), 1);
+}
+
+#[test]
+fn exclusive_reopen_shares_state_in_process() {
+    let dir = TempDir::new().expect("tempdir");
+    let first = open_exclusive(dir.path(), "sess-shared", DEFAULT_MAX_EVENTS).expect("first open");
+    let second = open_exclusive(dir.path(), "sess-shared", DEFAULT_MAX_EVENTS).expect("in-process reopen");
+    for e in &sample_turn() {
+        first.append(e).expect("append");
+    }
+    assert_eq!(second.turn_count(), 1, "reopened handles share one turn index");
+}
+
+#[test]
+fn exclusive_open_upgrades_after_degraded_shared_reader() {
+    let dir = TempDir::new().expect("tempdir");
+    // Establish the session, release it, then hold it externally so the
+    // shared open below degrades (no fd) instead of claiming the lock.
+    drop(open_exclusive(dir.path(), "sess-upgrade", DEFAULT_MAX_EVENTS).expect("first open"));
+    let foreign = hold_session_lock_externally(dir.path(), "sess-upgrade");
+    let _reader = open(dir.path(), "sess-upgrade", DEFAULT_MAX_EVENTS).expect("degraded shared open");
+    drop(foreign);
+    let _writer = open_exclusive(dir.path(), "sess-upgrade", DEFAULT_MAX_EVENTS).expect("upgrade");
+    assert!(
+        lock_is_held_externally(dir.path(), "sess-upgrade"),
+        "the upgraded writer must hold the liveness lock"
+    );
+}

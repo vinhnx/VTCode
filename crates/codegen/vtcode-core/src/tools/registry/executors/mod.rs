@@ -30,6 +30,7 @@ mod matrix;
 mod patch_pipeline;
 mod sandbox_runtime;
 mod search_introspection;
+mod session_messaging;
 mod subagents;
 
 pub use sandbox_runtime::sandbox_policy_from_runtime_config;
@@ -755,6 +756,8 @@ impl ToolRegistry {
 
 #[cfg(test)]
 mod sandbox_runtime_tests;
+#[cfg(test)]
+mod session_messaging_tests;
 
 #[cfg(test)]
 mod execute_code_tests;

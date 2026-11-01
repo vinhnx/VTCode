@@ -696,10 +696,17 @@ impl AtifTrajectoryBuilder {
                 if let Some(m) = &h.message {
                     let _ = extra.insert("harness_message".to_string(), Value::String(m.clone()));
                 }
-                if h.event == crate::HarnessEventKind::BackgroundSubprocessCompleted {
+                if matches!(
+                    h.event,
+                    crate::HarnessEventKind::BackgroundSubprocessCompleted
+                        | crate::HarnessEventKind::SessionMessageSent
+                        | crate::HarnessEventKind::SessionMessageReceived
+                        | crate::HarnessEventKind::SessionMessageExpired
+                ) {
                     for (key, value) in [
                         ("task_id", h.task_id.as_ref()),
                         ("session_id", h.session_id.as_ref()),
+                        ("correlation_id", h.correlation_id.as_ref()),
                         ("exec_session_id", h.exec_session_id.as_ref()),
                         ("status", h.status.as_ref()),
                         ("transcript_path", h.transcript_path.as_ref()),

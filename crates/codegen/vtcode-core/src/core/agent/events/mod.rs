@@ -439,7 +439,7 @@ async fn open_session_store_sink_with_limits(
 ) -> Result<(Arc<SessionStoreSinkState>, SessionStoreSinkHandle)> {
     let workspace = workspace.to_path_buf();
     let session_id_owned = session_id.to_string();
-    let log = spawn_blocking(move || vtcode_memory::open(&workspace, &session_id_owned, DEFAULT_MAX_EVENTS))
+    let log = spawn_blocking(move || vtcode_memory::open_exclusive(&workspace, &session_id_owned, DEFAULT_MAX_EVENTS))
         .await
         .context("canonical session store open task failed")??;
 

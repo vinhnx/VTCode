@@ -145,3 +145,27 @@ fn matrix_guidance_has_presence_and_budget_in_both_densities() {
         assert!(vtcode_commons::estimate_tokens(&enabled) <= 220, "{profile:?}: {enabled}");
     }
 }
+#[test]
+fn session_messaging_guidance_has_presence_and_budget_in_both_densities() {
+    for profile in [ToolGuidanceProfile::Default, ToolGuidanceProfile::Minimal] {
+        let enabled = generate_tool_guidelines_with_capabilities(
+            &["ask_session".to_string(), "request_user_input".to_string()],
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+            profile,
+            false,
+        );
+        let disabled = generate_tool_guidelines_with_capabilities(
+            &["request_user_input".to_string()],
+            None,
+            ResolvedShellPromptProfile::UnixLike,
+            profile,
+            false,
+        );
+        assert_eq!(enabled.matches(SESSION_MESSAGING_GUIDANCE).count(), 1);
+        assert!(enabled.contains("`list_sessions` discovers live CLI sessions"));
+        assert!(enabled.contains("`answer_session` reply arrives as a notice"));
+        assert!(!disabled.contains("Peer sessions"));
+        assert!(vtcode_commons::estimate_tokens(&enabled) <= 160, "{profile:?}: {enabled}");
+    }
+}

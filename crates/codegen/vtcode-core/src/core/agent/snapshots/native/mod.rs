@@ -15,7 +15,13 @@ fn active_map() -> &'static Mutex<HashMap<String, Arc<Mutex<Active>>>> {
     ACTIVE.get_or_init(Mutex::default)
 }
 
-/// Holds exclusive workspace access until the complete agent turn has settled.
+/// Holds this session's checkpoint lock until the complete agent turn has
+/// settled.
+///
+/// Same-session begins and rewinds serialize on this lock; other sessions in
+/// the workspace proceed concurrently with their own locks and disjoint
+/// checkpoint records.
+#[derive(Debug)]
 pub struct PromptCheckpointLease {
     key: String,
     _lock: fs::File,
@@ -56,50 +62,6 @@ fn atomic_json(path: &Path, value: &impl Serialize) -> Result<()> {
     file.sync_all()?;
     fs::rename(temp, path)?;
     Ok(())
-}
-
-/// Whether a locked fd still refers to the file currently at `lock_path`.
-///
-/// The completion path unlinks `rewind.lock` while holding its lock. A process
-/// that opened the old inode just before that unlink can `try_lock` the ghost
-/// after the holder drops — while another process creates a fresh file — and
-/// both would believe they hold the lock. Comparing inos closes that window.
-#[cfg(unix)]
-fn locked_file_matches_path(file: &fs::File, lock_path: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let Ok(locked) = file.metadata() else {
-        return false;
-    };
-    let Ok(current) = fs::metadata(lock_path) else {
-        return false;
-    };
-    locked.ino() == current.ino()
-}
-
-#[cfg(not(unix))]
-fn locked_file_matches_path(_: &fs::File, _: &Path) -> bool {
-    true
-}
-
-/// Acquire the workspace rewind lock, verifying the locked inode is still the
-/// file at `lock_path`. A ghost acquisition (locked inode replaced under us)
-/// is dropped and retried against the current file, so mutual exclusion holds
-/// across the completion path's unlink-while-held cleanup.
-fn acquire_verified_rewind_lock(lock_path: &Path) -> std::io::Result<fs::File> {
-    for _ in 0..3 {
-        let file = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(lock_path)?;
-        file.try_lock()?;
-        if locked_file_matches_path(&file, lock_path) {
-            return Ok(file);
-        }
-        drop(file);
-    }
-    Err(std::io::Error::other("rewind.lock kept changing identity; retry the turn"))
 }
 
 fn file_records(manifest: &filesnap::Manifest, workspace: &Path, engine: &str) -> Result<Vec<FileSnapshot>> {
@@ -421,9 +383,20 @@ impl SnapshotManager {
     }
 
     fn navigation_path(&self, session: &str) -> Result<PathBuf> {
-        anyhow::ensure!(session.len() <= 80 && !session.is_empty(), "Invalid session ID");
-        let key: String = session.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+        let key = session_filename_key(session)?;
         Ok(self.storage_dir.join(format!("branch_{key}.json")))
+    }
+
+    /// This session's checkpoint lock file: the `branch_{key}.json`
+    /// navigation file's `rewind-{key}.lock` sibling.
+    ///
+    /// The [`PromptCheckpointLease`] holds it for the whole turn and
+    /// rewind/recover take it for their duration, so one session can never
+    /// capture and restore at once — while other sessions use their own
+    /// lock files concurrently.
+    fn session_lock_path(&self, session: &str) -> Result<PathBuf> {
+        let key = session_filename_key(session)?;
+        Ok(self.storage_dir.join(format!("rewind-{key}.lock")))
     }
     fn navigation(&self, session: &str) -> Result<Navigation> {
         match fs::read(self.navigation_path(session)?) {
@@ -437,7 +410,7 @@ impl SnapshotManager {
     /// snapshot for the full retention window. Keeps the newest
     /// [`REWIND_ACTIVE_KEEP`] active turns for a possible resume, drops the
     /// rest (those `turn_*.json` files become prune-eligible), clears the redo
-    /// stack, and releases the workspace rewind lock.
+    /// stack, and reclaims this session's lock file.
     pub async fn complete_session_navigation(&self, session: &str) -> Result<()> {
         if !self.enabled {
             return Ok(());
@@ -456,28 +429,7 @@ impl SnapshotManager {
         if had_record || !state.active.is_empty() || state.pending.is_some() {
             atomic_json(&nav_path, &state)?;
         }
-        let lock_path = self.storage_dir.join("rewind.lock");
-        // Only remove the lock while we hold it. Deleting an flocked file that
-        // another process holds would let later `try_lock` calls create a fresh
-        // inode and break mutual exclusion.
-        match fs::OpenOptions::new().read(true).write(true).open(&lock_path) {
-            Ok(file) => {
-                // Only unlink while holding a lock on the file that is
-                // currently at the path; a ghost lock (path replaced under
-                // us) must not delete the replacement's lock file.
-                if file.try_lock().is_ok() && locked_file_matches_path(&file, &lock_path) {
-                    if let Err(error) = fs::remove_file(&lock_path)
-                        && error.kind() != std::io::ErrorKind::NotFound
-                    {
-                        tracing::debug!(%error, "failed to remove rewind.lock after session completion");
-                    }
-                }
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                tracing::debug!(%error, "failed to open rewind.lock after session completion");
-            }
-        }
+        remove_lock_file_if_unheld(&self.session_lock_path(session)?);
         // Newly unpinned turns can be reclaimed now rather than waiting for the
         // next prompt's budget prune.
         if let Err(error) = self.prune_snapshot_budget().await {
@@ -514,7 +466,7 @@ impl SnapshotManager {
     }
 
     /// Prepare a checkpoint while allowing the caller to stop waiting. The
-    /// blocking worker retains the rewind lock through atomic publication and
+    /// blocking worker retains the session lock through atomic publication and
     /// drops its lease on cancellation; no tool may run without that lease.
     pub async fn begin_prompt_with_cancellation(
         &self,
@@ -529,8 +481,9 @@ impl SnapshotManager {
         let prompt = prompt.to_owned();
         let conversation = conversation.to_vec();
         // Lock acquisition, scanning, serialization and durable publication
-        // all belong on the blocking worker. Its lease retains the same lock
-        // through pruning and the complete agent turn, including on cancellation.
+        // all belong on the blocking worker. Its lease retains the session
+        // lock through pruning and the complete agent turn, including on
+        // cancellation. Other sessions hold their own locks concurrently.
         let worker_cancel = cancellation.clone();
         let worker = tokio::task::spawn_blocking(move || -> Result<Option<PromptCheckpointLease>> {
             if worker_cancel.is_cancelled() {
@@ -571,8 +524,13 @@ impl SnapshotManager {
         prompt: &str,
         conversation: &[SessionMessage],
     ) -> Result<PromptCheckpointLease> {
-        let lock = acquire_verified_rewind_lock(&self.storage_dir.join("rewind.lock"))
-            .context("Another turn or rewind is using this workspace")?;
+        // Validate before touching any lock so invalid ids fail fast, then
+        // take this session's lock. Same-session overlap fails here (a second
+        // turn or rewind in this session); other sessions proceed on their
+        // own locks — the filesnap engine serializes per session and gives
+        // each capture a truthful record of the workspace.
+        let lock_path = self.session_lock_path(session)?;
+        let lock = acquire_verified_rewind_lock(&lock_path).context("Another turn is using this session")?;
         let mut state = self.navigation(session)?;
         anyhow::ensure!(state.pending.is_none(), "Interrupted rewind; run /rewind-recover before continuing");
         let workspace = self.canonical_workspace.clone();
@@ -582,7 +540,7 @@ impl SnapshotManager {
         let active = Active {
             workspace: workspace.clone(),
             storage: storage.clone(),
-            record: self.snapshot_path(turn),
+            record: self.snapshot_path_for_session(session, turn)?,
             engine: engine.clone(),
             watch: watch.clone(),
         };
@@ -650,7 +608,7 @@ impl SnapshotManager {
         let state = self.navigation(session)?;
         let mut points = Vec::new();
         for turn in state.active.iter().rev() {
-            if let Some(stored) = self.load_snapshot(*turn).await? {
+            if let Some(stored) = self.load_snapshot_for_session(session, *turn).await? {
                 points.push(stored.metadata);
             }
         }
@@ -664,7 +622,9 @@ impl SnapshotManager {
         session: &str,
         conversation: &[SessionMessage],
     ) -> Result<CheckpointRestore> {
-        let _lock = acquire_verified_rewind_lock(&self.storage_dir.join("rewind.lock"))
+        // Serialize against this session's own turns; other sessions rewind
+        // concurrently on their own locks.
+        let _lock = acquire_verified_rewind_lock(&self.session_lock_path(session)?)
             .context("Wait for the current turn to finish")?;
         let policy = match fs::read_to_string(self.canonical_workspace.join(".filesnapignore")) {
             Ok(text) => text,
@@ -699,7 +659,11 @@ impl SnapshotManager {
                 .context("Checkpoint is not on this branch")?;
             let mut targets = Vec::new();
             for id in state.active[index..].iter().rev() {
-                targets.push(self.load_snapshot(*id).await?.context("Checkpoint expired")?);
+                targets.push(
+                    self.load_snapshot_for_session(session, *id)
+                        .await?
+                        .context("Checkpoint expired")?,
+                );
             }
             (targets, state.active[..index].to_vec())
         } else {
@@ -775,7 +739,7 @@ impl SnapshotManager {
     /// this never touches the redo stack, so `/rewind-recover` cannot overwrite
     /// edits made after a completed rewind when there is nothing to recover.
     pub async fn recover_pending_rewind(&self, session: &str) -> Result<CheckpointRestore> {
-        let _lock = acquire_verified_rewind_lock(&self.storage_dir.join("rewind.lock"))
+        let _lock = acquire_verified_rewind_lock(&self.session_lock_path(session)?)
             .context("Wait for the current turn to finish")?;
         // Fail closed when no recovery is pending; never fall back to redo.
         let state = self.navigation(session)?;

@@ -60,6 +60,15 @@ The sibling `completion.rs` owns evaluator acceptance and the shared pre/post
 verification assessment path; verification admission, budgets, and terminal
 task lifecycle remain in `execute.rs`.
 
+The loop above is one session per process by design. Running several `vtcode`
+processes in one workspace (one pane per session) is supported at the store
+layer instead: per-session checkpoint records and locks plus an exclusive
+event-log writer per session, with same-session overlap failing closed. See
+the "Concurrent sessions" section of
+[session persistence](./session-persistence.md) for the contract; the
+orchestration table needs no per-process row because no runloop state crosses
+process boundaries.
+
 ```sh
 cargo nextest run --locked -p vtcode -p vtcode-core -E 'test(session_loop_runner) | test(summarized_fork_history) | test(core::threads::tests::prepare_archived_session)'
 ```

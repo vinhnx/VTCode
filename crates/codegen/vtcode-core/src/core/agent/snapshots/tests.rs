@@ -399,7 +399,10 @@ async fn v2_snapshot_round_trips_session_linkage_and_canonical_usage() -> Result
         .await?
         .expect("metadata");
 
-    let stored = manager.load_snapshot(1).await?.expect("stored snapshot");
+    let stored = manager
+        .load_snapshot_for_session("session-911", 1)
+        .await?
+        .expect("stored snapshot");
     assert_eq!(stored.schema_version, Some(SNAPSHOT_SCHEMA_VERSION));
     assert_eq!(stored.metadata.session_id.as_deref(), Some("session-911"));
     assert_eq!(stored.metadata.runtime_turn_id.as_deref(), Some("turn-runtime-911"));
@@ -514,5 +517,241 @@ async fn retention_releases_engine_sessions_but_preserves_live_content() -> Resu
     janitor.create_snapshot(2, "replacement", &[], &files, None, None, None).await?;
     assert!(store.target_for_turn(&second)?.is_none());
     assert_eq!(store.sessions()?.len(), 1);
+    Ok(())
+}
+
+fn session_context(session: &str) -> SnapshotTurnContext {
+    SnapshotTurnContext {
+        session_id: Some(CompactStr::from(session)),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn parse_snapshot_filename_contract() {
+    // Legacy layout: bare turn number, no session.
+    assert_eq!(parse_snapshot_filename("turn_12.json"), Some(SnapshotRecordId { turn: 12, session_key: None }));
+    // Scoped layout: even-length hex key plus the turn after the LAST underscore.
+    assert_eq!(
+        parse_snapshot_filename("turn_61_7.json"),
+        Some(SnapshotRecordId { turn: 7, session_key: Some("61".to_owned()) })
+    );
+    // Everything else is not a live checkpoint record.
+    for name in [
+        "turn_recovery_01234567-89ab-cdef-0123-456789abcdef.json", // rescue record
+        "branch_61.json",                                          // navigation state
+        "turn_3.retired-test",                                     // retired journal (wrong extension)
+        "turn_.json",                                              // missing turn
+        "turn_abc.json",                                           // non-numeric, unscopable
+        "turn_1_2_3.json",                                         // key would contain an underscore
+        "turn_abc_4.json",                                         // odd-length hex key
+        "turn_zz_4.json",                                          // non-hex key
+        "turn_61_x.json",                                          // non-numeric turn
+        "snapshots.json",                                          // unrelated file
+    ] {
+        assert_eq!(parse_snapshot_filename(name), None, "must skip {name}");
+    }
+}
+
+#[tokio::test]
+async fn session_scoped_records_do_not_collide_across_sessions() -> Result<()> {
+    let (_dir, manager) = setup_manager();
+    let conversation_a = vec![SessionMessage::new(
+        crate::llm::provider::MessageRole::User,
+        "alpha prompt",
+    )];
+    let conversation_b = vec![SessionMessage::new(
+        crate::llm::provider::MessageRole::User,
+        "beta prompt",
+    )];
+    let files = BTreeSet::new();
+    manager
+        .create_snapshot(1, "a1", &conversation_a, &files, None, None, Some(session_context("a")))
+        .await?
+        .expect("a1");
+    manager
+        .create_snapshot(1, "b1", &conversation_b, &files, None, None, Some(session_context("b")))
+        .await?
+        .expect("b1");
+    // Both turn-1 records coexist with asymmetric contents.
+    let stored_a = manager.load_snapshot_for_session("a", 1).await?.expect("a1");
+    let stored_b = manager.load_snapshot_for_session("b", 1).await?.expect("b1");
+    assert_eq!(stored_a.conversation, conversation_a);
+    assert_eq!(stored_b.conversation, conversation_b);
+    assert_eq!(stored_a.metadata.session_id.as_deref(), Some("a"));
+    // Bare legacy lookup finds neither scoped record.
+    assert!(manager.load_snapshot(1).await?.is_none());
+    let listed = manager.list_snapshots().await?;
+    assert_eq!(listed.len(), 2);
+    Ok(())
+}
+
+#[tokio::test]
+async fn session_load_falls_back_to_legacy_record() -> Result<()> {
+    let (_dir, manager) = setup_manager();
+    let legacy_conversation = vec![SessionMessage::new(
+        crate::llm::provider::MessageRole::User,
+        "legacy prompt",
+    )];
+    manager
+        .create_snapshot(1, "legacy", &legacy_conversation, &BTreeSet::new(), None, None, None)
+        .await?;
+    let stored = manager.load_snapshot_for_session("a", 1).await?.expect("legacy fallback");
+    assert_eq!(stored.conversation, legacy_conversation);
+    // A scoped record shadows the legacy one for its own session only.
+    let scoped_conversation = vec![SessionMessage::new(
+        crate::llm::provider::MessageRole::User,
+        "scoped prompt",
+    )];
+    manager
+        .create_snapshot(1, "scoped", &scoped_conversation, &BTreeSet::new(), None, None, Some(session_context("a")))
+        .await?;
+    let stored = manager.load_snapshot_for_session("a", 1).await?.expect("scoped");
+    assert_eq!(stored.conversation, scoped_conversation);
+    let stored = manager.load_snapshot_for_session("b", 1).await?.expect("legacy for b");
+    assert_eq!(stored.conversation, legacy_conversation);
+    Ok(())
+}
+
+#[tokio::test]
+async fn next_turn_number_is_per_session_but_counts_legacy() -> Result<()> {
+    let (_dir, manager) = setup_manager();
+    assert_eq!(manager.next_turn_number("a")?, 1, "fresh workspace starts at 1");
+    let conversation = vec![SessionMessage::new(crate::llm::provider::MessageRole::User, "hi")];
+    let files = BTreeSet::new();
+    // Legacy history counts toward every session (resume never reuses numbers).
+    manager
+        .create_snapshot(1, "legacy1", &conversation, &files, None, None, None)
+        .await?;
+    manager
+        .create_snapshot(2, "legacy2", &conversation, &files, None, None, None)
+        .await?;
+    assert_eq!(manager.next_turn_number("a")?, 3);
+    assert_eq!(manager.next_turn_number("b")?, 3);
+    // Each session's own scoped records advance only that session.
+    manager
+        .create_snapshot(3, "a3", &conversation, &files, None, None, Some(session_context("a")))
+        .await?;
+    assert_eq!(manager.next_turn_number("a")?, 4);
+    assert_eq!(manager.next_turn_number("b")?, 3, "other sessions ignore foreign scoped records");
+    Ok(())
+}
+
+#[tokio::test]
+async fn retention_protects_only_owning_branch_scoped_turns() -> Result<()> {
+    let (_dir, manager) = setup_manager();
+    let conversation = vec![SessionMessage::new(crate::llm::provider::MessageRole::User, "hi")];
+    let files = BTreeSet::new();
+    manager
+        .create_snapshot(1, "a1", &conversation, &files, None, None, Some(session_context("a")))
+        .await?;
+    manager
+        .create_snapshot(1, "b1", &conversation, &files, None, None, Some(session_context("b")))
+        .await?;
+    manager
+        .create_snapshot(2, "b2", &conversation, &files, None, None, Some(session_context("b")))
+        .await?;
+    // Only session "a" (key 61) pins turn 1; session "b" has no branch file.
+    let branch_a = serde_json::json!({ "active": [1], "redo": [], "pending": null });
+    fs::write(manager.storage_dir.join("branch_61.json"), serde_json::to_vec(&branch_a)?)?;
+    let mut config = SnapshotConfig::new(manager.workspace.clone());
+    config.max_snapshots = 1;
+    let trimmed = SnapshotManager::new(config)?;
+    trimmed.cleanup_old_snapshots().await?;
+    assert!(trimmed.load_snapshot_for_session("a", 1).await?.is_some(), "branch-pinned turn must survive");
+    assert!(trimmed.load_snapshot_for_session("b", 1).await?.is_none(), "oldest unpinned turn must be pruned");
+    assert!(trimmed.load_snapshot_for_session("b", 2).await?.is_some(), "newest unpinned turn fits the budget");
+    Ok(())
+}
+
+#[tokio::test]
+async fn restore_bare_turn_prefers_legacy_then_fails_closed_on_ambiguity() -> Result<()> {
+    let (_dir, manager) = setup_manager();
+    fs::write(manager.workspace.join("proof.txt"), "v0")?;
+    let files = BTreeSet::from([PathBuf::from("proof.txt")]);
+    let conversation = vec![SessionMessage::new(crate::llm::provider::MessageRole::User, "hi")];
+    manager
+        .create_snapshot(1, "legacy", &conversation, &files, None, None, None)
+        .await?;
+    fs::write(manager.workspace.join("proof.txt"), "v1")?;
+    manager
+        .create_snapshot(1, "a1", &conversation, &files, None, None, Some(session_context("a")))
+        .await?;
+    // Legacy wins bare-turn resolution (pre-upgrade behavior preserved).
+    manager.restore_snapshot(1, RevertScope::Code).await?.expect("legacy restore");
+    assert_eq!(fs::read_to_string(manager.workspace.join("proof.txt"))?, "v0");
+    // Scoped restore still reaches the session record.
+    manager
+        .restore_snapshot_for_session("a", 1, RevertScope::Code)
+        .await?
+        .expect("scoped restore");
+    assert_eq!(fs::read_to_string(manager.workspace.join("proof.txt"))?, "v1");
+    // Drop the legacy record: two scoped owners of turn 1 fail closed...
+    fs::remove_file(manager.snapshot_path(1))?;
+    manager
+        .create_snapshot(1, "b1", &conversation, &files, None, None, Some(session_context("b")))
+        .await?;
+    let err = manager
+        .restore_snapshot(1, RevertScope::Code)
+        .await
+        .expect_err("ambiguous turn must fail");
+    assert!(err.to_string().contains("--session"), "must name the remedy, got: {err}");
+    // ...while explicit sessions keep working.
+    manager
+        .restore_snapshot_for_session("b", 1, RevertScope::Code)
+        .await?
+        .expect("b restore");
+    Ok(())
+}
+
+#[tokio::test]
+async fn retired_cleanup_collects_scoped_records() -> Result<()> {
+    let (_dir, manager) = setup_manager();
+    let path = manager.workspace.join("scoped.txt");
+    fs::write(&path, "scoped")?;
+    let files = BTreeSet::from([PathBuf::from("scoped.txt")]);
+    manager
+        .create_snapshot(1, "s1", &[], &files, None, None, Some(session_context("a")))
+        .await?
+        .expect("first metadata");
+    manager
+        .create_snapshot(2, "s2", &[], &files, None, None, Some(session_context("a")))
+        .await?
+        .expect("second metadata");
+    let first = manager.load_snapshot_for_session("a", 1).await?.expect("first").files[0]
+        .data
+        .clone()
+        .expect("reference");
+    let second = manager.load_snapshot_for_session("a", 2).await?.expect("second").files[0]
+        .data
+        .clone()
+        .expect("reference");
+    let mut config = SnapshotConfig::new(manager.workspace.clone());
+    config.max_snapshots = 1;
+    SnapshotManager::new(config)?.cleanup_old_snapshots().await?;
+    // The retired scoped record's engine session is reclaimed; the live one stays.
+    let store = filesnap::WorkspaceStore::open(&manager.storage_dir, &manager.workspace)?;
+    assert_eq!(store.sessions()?, vec![second.clone()]);
+    assert!(store.target_for_turn(&first)?.is_none());
+    assert!(manager.load_snapshot_for_session("a", 2).await?.is_some());
+    Ok(())
+}
+
+#[tokio::test]
+async fn cleanup_reclaims_stale_unheld_session_locks() -> Result<()> {
+    let (_dir, manager) = setup_manager();
+    let stale = manager.storage_dir.join("rewind-61.lock");
+    fs::write(&stale, b"")?;
+    let held_path = manager.storage_dir.join("rewind-62.lock");
+    fs::write(&held_path, b"")?;
+    let held = fs::OpenOptions::new().read(true).write(true).open(&held_path)?;
+    held.try_lock().expect("test holds the lock");
+    let mut config = SnapshotConfig::new(manager.workspace.clone());
+    config.max_age_days = Some(0);
+    SnapshotManager::new(config)?.cleanup_old_snapshots().await?;
+    assert!(!stale.exists(), "stale unheld session lock must be reclaimed");
+    assert!(held_path.exists(), "held session lock must survive retention");
+    assert!(manager.storage_dir.join("rewind.lock").exists(), "the shared cleanup mutex persists across rounds");
+    drop(held);
     Ok(())
 }

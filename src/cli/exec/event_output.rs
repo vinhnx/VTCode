@@ -348,6 +348,15 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                             style("[DELEGATION]").cyan().bold()
                         }
                     }
+                    vtcode_core::exec::events::HarnessEventKind::SessionMessageSent => {
+                        style("[MESSAGE SENT]").cyan().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::SessionMessageReceived => {
+                        style("[MESSAGE]").green().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::SessionMessageExpired => {
+                        style("[MESSAGE EXPIRED]").yellow().bold()
+                    }
                 };
                 let detail = match (item.message.as_deref(), item.path.as_deref()) {
                     (Some(message), Some(path)) => format!("{message}: {path}"),
