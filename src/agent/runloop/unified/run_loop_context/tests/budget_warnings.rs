@@ -99,6 +99,15 @@ fn harness_state_reports_wall_clock_budget_exhaustion() {
 }
 
 #[test]
+fn zero_tool_wall_clock_budget_is_unlimited() {
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 0, 1);
+    state.record_tool_wall_clock(Duration::from_secs(10_000), state.tool_clock_checkpoint());
+    assert!(!state.wall_clock_exhausted());
+    assert_eq!(state.wall_clock_budget_exhaustion(), None);
+    assert_eq!(state.record_wall_clock_exhaustion_notice(), None);
+}
+
+#[test]
 fn tool_wall_clock_accumulates_only_recorded_execution_intervals() {
     let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
     state.record_tool_wall_clock(Duration::from_secs(4), state.tool_clock_checkpoint());

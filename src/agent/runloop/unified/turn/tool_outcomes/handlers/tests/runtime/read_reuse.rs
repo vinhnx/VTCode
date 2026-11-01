@@ -39,6 +39,19 @@ async fn duplicate_task_tracker_create_is_blocked_not_breaking() {
 }
 
 #[tokio::test]
+async fn zero_wall_clock_limit_allows_tool_admission_after_elapsed_execution() {
+    let mut backing = TestContextBacking::new(4).await;
+    let sample_path = backing.sample_file.to_string_lossy().to_string();
+    let mut ctx = backing.turn_processing_context();
+    ctx.harness_state.max_tool_wall_clock = Duration::ZERO;
+    ctx.harness_state.tool_wall_clock_elapsed = Duration::from_secs(600);
+    let result = validate_tool_call(&mut ctx, "unlimited-clock", tool_names::READ_FILE, &json!({"path": sample_path}))
+        .await
+        .expect("validate tool with unlimited wall-clock budget");
+    assert!(matches!(result, ValidationResult::Proceed(_)));
+}
+
+#[tokio::test]
 async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
     let mut backing = TestContextBacking::new(4).await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();

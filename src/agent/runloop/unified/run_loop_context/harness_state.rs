@@ -126,7 +126,7 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn wall_clock_exhausted(&self) -> bool {
-        self.effective_wall_clock_elapsed() >= self.max_tool_wall_clock
+        !self.max_tool_wall_clock.is_zero() && self.effective_wall_clock_elapsed() >= self.max_tool_wall_clock
     }
 
     fn effective_wall_clock_elapsed(&self) -> Duration {
