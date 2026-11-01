@@ -23,7 +23,7 @@ sha2 = { workspace = true }
 walkdir = "2.5"
 thiserror = { workspace = true }
 uuid = { workspace = true }
-lru = "0.18"
+lru = "0.19"
 
 [dev-dependencies]
 tempfile = { workspace = true }

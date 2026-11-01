@@ -17,7 +17,7 @@ keywords = ["vt", "safety", "sandbox", "policy", "command"]
 anyhow = { workspace = true }
 dirs = { workspace = true }
 hashbrown = { workspace = true }
-lru = "0.18"
+lru = "0.19"
 nix = { workspace = true, features = ["user", "signal", "process", "resource"] }
 once_cell = { workspace = true }
 rustc-hash = { workspace = true }

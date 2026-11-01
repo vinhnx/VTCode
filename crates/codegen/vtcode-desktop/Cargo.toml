@@ -18,7 +18,7 @@ workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 anyhow = { workspace = true }
-gpui-kit = "=0.8.0"
+gpui-kit = "=0.8.1"
 pulldown-cmark = "0.13.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,6 +28,6 @@ vtcode-desktop-protocol = { workspace = true }
 vtcode-exec-events = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
-gpui-kit = { version = "=0.8.0", features = ["test-support"] }
+gpui-kit = { version = "=0.8.1", features = ["test-support"] }
 tempfile = { workspace = true }
 
