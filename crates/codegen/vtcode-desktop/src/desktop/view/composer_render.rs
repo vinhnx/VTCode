@@ -292,7 +292,8 @@ impl DesktopView {
                                     this.open_attachment_picker(window, cx);
                                 })),
                         )
-                        .child(self.render_policy_button(cx)),
+                        .child(self.render_policy_button(cx))
+                        .child(self.render_mode_button(cx)),
                 )
             });
         let mut model_actions =
@@ -359,9 +360,11 @@ impl DesktopView {
         if self.attachment_picker.is_some() {
             panel = panel.child(self.render_attachment_picker(cx));
         }
-        // Zen hides this row, except when no workspace is set yet: the picker is
-        // the only visible path to choose one (the zen empty state has no workspace link).
-        if !self.zen_mode || self.workspace.is_none() {
+        // Normal mode folds workspace, connection, and mode controls into the
+        // sidebar, Settings, and the button row; only the zen no-workspace
+        // state keeps this row, where the picker is the only visible path to
+        // choose one (the zen empty state has no workspace link).
+        if self.zen_mode && self.workspace.is_none() {
             panel = panel.child(
                 div()
                     .id("composer-context")
@@ -391,8 +394,7 @@ impl DesktopView {
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
-                    )
-                    .when(!self.zen_mode, |row| row.child(self.render_mode_button(cx))),
+                    ),
             );
         }
         div().w_full().flex().justify_center().child(

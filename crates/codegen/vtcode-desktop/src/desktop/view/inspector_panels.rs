@@ -823,6 +823,21 @@ impl DesktopView {
         }
     }
 
+    /// Transcript tool-row title tone: finished work drops to the secondary
+    /// ramp so primary prose keeps the column, while live rows stay at full
+    /// foreground. The status indicator keeps its semantic color either way,
+    /// so state is never carried by the title tone alone.
+    pub(super) fn tool_row_title_color(
+        state: ActivityState,
+        colors: gpui_kit::component::theme::ThemeColor,
+    ) -> gpui_kit::Hsla {
+        if state == ActivityState::Completed {
+            themes::muted_text(&colors)
+        } else {
+            colors.foreground
+        }
+    }
+
     fn render_activity_row(
         row: &ActivityRow,
         colors: gpui_kit::component::theme::ThemeColor,

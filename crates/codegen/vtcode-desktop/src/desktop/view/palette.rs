@@ -554,6 +554,11 @@ impl DesktopView {
                 if tab == settings::SettingsTab::Storage {
                     self.maybe_request_storage_summary(cx);
                 }
+                // Passive entry: refresh when a service can answer. Explicit
+                // refresh controls keep the loud no-backend failure instead.
+                if tab == settings::SettingsTab::Connections && self.backend.is_some() {
+                    self.request_webmcp_status();
+                }
                 self.open_settings(window, cx);
                 self.settings_navigation_focus.focus(window, cx);
                 cx.notify();

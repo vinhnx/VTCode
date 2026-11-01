@@ -75,9 +75,16 @@ fn closing_tabs_untabs_without_closing_sessions(cx: &mut TestAppContext) {
         window.click("thread-tab-close-thread-c", cx);
         assert!(requests.try_recv().is_err(), "closing an unselected tab sends no load");
         assert_eq!(view.read(cx).open_tabs.as_slice(), ["thread-a"]);
+        window.render_frame(cx);
+        assert!(window.try_find("thread-tabs").is_none(), "a lone tab hides the strip");
 
-        // Closing the last tab hides the strip; the session stays selected.
-        window.click("thread-tab-close-thread-a", cx);
+        // The last tab closes through its action (its button left with the
+        // strip); the session stays selected.
+        window.dispatch_action(Box::new(super::super::tabs::CloseThreadTab { session_id: "thread-a".into() }), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).open_tabs.is_empty());
         assert!(window.try_find("thread-tabs").is_none(), "empty tabs hide the strip");
@@ -183,6 +190,112 @@ fn session_row_menu_offers_copy_close_and_confirm_gated_delete(cx: &mut TestAppC
     cx.update(|cx| {
         assert_eq!(view.read(cx).sessions.len(), 3);
     });
+}
+
+#[gpui_kit::test]
+fn single_tab_hides_the_strip_and_keeps_a_compact_header(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_threaded_desktop(cx);
+    view.update(cx, |view, _| {
+        view.open_tabs = vec!["thread-b".into()];
+        view.transcript.push(TranscriptItem::new(
+            "header-message".into(),
+            "assistant".into(),
+            "VT Code".into(),
+            "Conversation remains visible.".into(),
+        ));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("thread-tabs").is_none(), "a lone tab hides the strip");
+        assert!(window.try_find("thread-tab-new").is_none(), "the strip takes its new-thread button with it");
+        assert!(window.try_find("thread-header").is_some(), "the compact header identifies the thread");
+        assert!(window.try_find("thread-title").is_some());
+        assert!(window.try_find("thread-header-new").is_some(), "the header keeps a new-thread action");
+        window.right_click("session-row-thread-b", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("popup-menu").role(),
+            Some(gpui_kit::Role::Menu),
+            "lone-tab sidebar menu stays reachable"
+        );
+        window.press("escape", cx);
+        window.render_frame(cx);
+
+        window.click("thread-header-new", cx);
+        let BackendCommand::Request { method, params } =
+            requests.try_recv().expect("header new-thread starts a thread")
+        else {
+            panic!("expected a session request");
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
+        assert_eq!(params["sessionId"].as_str(), Some("thread-b"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn single_tab_empty_thread_shows_header_for_its_selection(cx: &mut TestAppContext) {
+    let (window, view, _) = open_threaded_desktop(cx);
+    view.update(cx, |view, _| {
+        view.open_tabs = vec!["thread-b".into()];
+        assert!(view.transcript.is_empty(), "no transcript pushed: the empty case");
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("thread-tabs").is_none(), "a lone tab hides the strip");
+        assert!(window.try_find("thread-header").is_some(), "the selection keeps its header");
+        assert!(window.try_find("thread-title").is_some());
+        assert!(window.try_find("thread-header-new").is_some(), "empty threads keep a new-thread action");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn fresh_launch_without_selection_keeps_no_identity_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.zen_mode = false;
+        assert!(view.selected_session_id.is_none(), "no selection yet");
+        assert!(view.transcript.is_empty(), "no content yet");
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("thread-tabs").is_none());
+        assert!(window.try_find("thread-header").is_none(), "welcome owns the empty state");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn multi_tab_strip_replaces_the_header_and_zero_tabs_restore_it(cx: &mut TestAppContext) {
+    let (window, view, _) = open_threaded_desktop(cx);
+    view.update(cx, |view, _| {
+        view.transcript.push(TranscriptItem::new(
+            "header-message".into(),
+            "assistant".into(),
+            "VT Code".into(),
+            "Conversation remains visible.".into(),
+        ));
+    });
+    cx.update_window(window, |_, window, cx| {
+        // Three tabs: the strip owns thread identity, so the header stays out.
+        window.render_frame(cx);
+        assert!(window.try_find("thread-tabs").is_some());
+        assert!(window.try_find("thread-header").is_none(), "the strip replaces the header");
+        assert!(window.try_find("thread-header-new").is_none());
+
+        // Zero tabs: the header returns for the still-selected thread.
+        view.update(cx, |view, _| view.open_tabs.clear());
+        window.render_frame(cx);
+        assert!(window.try_find("thread-tabs").is_none());
+        assert!(window.try_find("thread-header").is_some(), "zero tabs restore the header");
+        assert!(window.try_find("thread-header-new").is_some());
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

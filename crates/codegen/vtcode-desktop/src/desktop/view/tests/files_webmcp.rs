@@ -689,20 +689,63 @@ fn unavailable_fast_mode_alert_uses_the_selected_language(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn composer_cli_webmcp_button_opens_connections_settings(cx: &mut TestAppContext) {
+fn connections_settings_tab_opens_and_refreshes_webmcp_status(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(1);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.backend = Some(BackendHandle { commands }));
         window.render_frame(cx);
-        window.click("composer-cli-webmcp", cx);
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        select_settings_category(window, 4, cx);
         window.render_frame(cx);
         assert!(window.try_find("connections-settings").is_some());
     })
     .unwrap();
 
     let Some(BackendCommand::Request { method, .. }) = requests.try_recv().ok() else {
-        panic!("WebMCP button should refresh connection status");
+        panic!("Connections tab should refresh connection status");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn settings_search_palette_to_connections_refreshes_webmcp_status(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        window.press("cmd-f", cx);
+        window.render_frame(cx);
+        assert!(matches!(view.read(cx).palette_kind, super::super::PaletteKind::SettingsSearch));
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.within("command-palette").input("Connections", cx);
+        window.render_frame(cx);
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::Connections);
+        window.within("command-palette").click(palette_action_id(&action), cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Connections);
+        assert!(window.try_find("connections-settings").is_some());
+    })
+    .unwrap();
+
+    let Some(BackendCommand::Request { method, .. }) = requests.try_recv().ok() else {
+        panic!("palette Connections entry should refresh connection status");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
     assert!(requests.try_recv().is_err());
@@ -880,4 +923,54 @@ fn oversized_encoded_submission_keeps_composer_attachments_and_connection(cx: &m
     })
     .unwrap();
     assert!(requests.try_recv().is_err(), "oversized frame never reaches the transport");
+}
+
+#[gpui_kit::test]
+fn zen_no_workspace_composer_keeps_the_workspace_popover(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.zen_mode = true;
+        view.workspace = None;
+        view.preferences.recent_workspaces = vec!["/project/alpha".into(), "/project/beta".into()];
+        cx.notify();
+    });
+
+    let alpha_id = opaque_path_element_id("recent-workspace-popover", "/project/alpha");
+    let beta_id = opaque_path_element_id("recent-workspace-popover", "/project/beta");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("composer-context").is_some(), "zen without a workspace keeps the picker row");
+        window.click("composer-workspace", cx);
+        window.render_frame(cx);
+
+        assert_eq!(window.find("open-workspace-folder").label(), Some("Choose folder…"));
+        assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha"));
+        assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_no_workspace_webmcp_button_opens_connections_settings(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    view.update(cx, |view, _| {
+        view.zen_mode = true;
+        view.workspace = None;
+        view.backend = Some(BackendHandle { commands });
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("composer-cli-webmcp", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).current_route() == Route::Settings);
+        assert!(window.try_find("connections-settings").is_some());
+    })
+    .unwrap();
+
+    let Some(BackendCommand::Request { method, .. }) = requests.try_recv().ok() else {
+        panic!("zen WebMCP button should refresh connection status");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
+    assert!(requests.try_recv().is_err());
 }

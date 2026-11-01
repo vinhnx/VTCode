@@ -95,6 +95,9 @@ fn storage_keyboard_navigation_requests_summary_once(cx: &mut TestAppContext) {
     cx.update(|cx| {
         assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Storage);
     });
+    // Cycling to Storage passes through Connections, which refreshes live
+    // status like the storage summary.
+    drain_request(&mut requests, vtcode_desktop_protocol::method::WEBMCP_STATUS);
     drain_summary_request(&mut requests);
     assert!(requests.try_recv().is_err(), "summary requested once while loading");
 }

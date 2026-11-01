@@ -97,7 +97,8 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         window.render_frame(cx);
         assert!(window.try_find("status-bar").is_none());
         assert!(window.try_find("thread-actions").is_none(), "thread actions belong in the single header menu");
-        assert_eq!(window.find("composer-cli-webmcp").label(), Some("Open VT Code CLI and WebMCP connection settings"));
+        assert!(window.try_find("attach-files").is_some(), "composer keeps its attach action");
+        assert!(window.try_find("composer-mode").is_some(), "mode lives in the composer button row");
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("Keep this draft", window, cx))
@@ -136,7 +137,7 @@ fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestApp
             window.click(button, cx);
             window.render_frame(cx);
             let popup = window.find("command-palette").bounds();
-            let composer = window.find("composer-context").bounds();
+            let composer = window.find("message-composer-frame").bounds();
             assert!(popup.bottom() <= composer.top(), "{button} popup must stay above the input");
             if button == "pick-model" {
                 assert!((popup.right() - composer.right()).abs() <= px(1.));
@@ -154,7 +155,7 @@ fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestApp
         window.click("attach-files", cx);
         window.render_frame(cx);
         let picker = window.find("attachment-picker-trap").bounds();
-        let composer = window.find("composer-context").bounds();
+        let composer = window.find("message-composer-frame").bounds();
         assert!(picker.bottom() <= composer.top(), "attach picker must stay above the input");
         assert!((picker.left() - composer.left()).abs() <= px(1.));
         assert!(picker.left() >= px(12.) && picker.right() <= window.viewport_size().width - px(12.));
@@ -181,7 +182,7 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let initial_popup = window.find("command-palette").bounds();
         assert_eq!(initial_popup.size.width, px(392.));
-        let composer = window.find("composer-context").bounds();
+        let composer = window.find("message-composer-frame").bounds();
         assert!(initial_popup.bottom() <= composer.top());
         assert!((initial_popup.right() - composer.right()).abs() <= px(1.));
         view.update(cx, |view, cx| {
@@ -190,7 +191,7 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         let popup = window.find("command-palette").bounds();
-        let composer = window.find("composer-context").bounds();
+        let composer = window.find("message-composer-frame").bounds();
         assert!(popup.bottom() <= composer.top(), "popup must remain above the growing composer");
         assert!(popup.top() < initial_popup.top());
         assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));

@@ -888,6 +888,14 @@ impl DesktopView {
             if *tab == SettingsTab::Storage {
                 self.maybe_request_storage_summary(cx);
             }
+            // Live connection state, like the storage summary: passive
+            // selection refreshes only when a service exists to answer, so a
+            // backend-less page never marks status dirty or posts a queue
+            // notice. The request itself is pending-gated, so re-selecting
+            // refreshes only after the previous round-trip settles.
+            if *tab == SettingsTab::Connections && self.backend.is_some() {
+                self.request_webmcp_status();
+            }
             if reveal {
                 self.settings_nav_scroll.scroll_to_item(index);
             }

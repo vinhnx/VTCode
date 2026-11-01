@@ -102,7 +102,8 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
         assert!(window.try_find("status-bar").is_some());
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Enter Zen mode"));
         assert!(window.try_find("thread-header").is_some());
-        assert!(window.try_find("composer-context").is_some());
+        assert!(window.try_find("composer-context").is_none(), "normal mode folds context into the button row");
+        assert!(window.try_find("composer-mode").is_some(), "mode lives in the composer button row");
         let expanded_panels_slot = window.find("zen-mode-toggle").bounds();
         let expanded_panels_bar = window.find("title-bar").bounds();
 
@@ -188,7 +189,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
             "exiting zen restores the same slot"
         );
         assert!(window.try_find("thread-header").is_some());
-        assert!(window.try_find("composer-context").is_some());
+        assert!(window.try_find("composer-context").is_none(), "exiting zen restores the single-row composer");
         assert!(window.try_find("navigation-rail").is_none());
         assert!(window.try_find("project-thread-sidebar").is_none());
         assert!(window.try_find("top-new-thread").is_some());
@@ -348,7 +349,7 @@ fn activity_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
-fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut TestAppContext) {
+fn sidebar_workspace_section_exposes_recent_projects_and_folder_picker(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
         view.workspace = Some(PathBuf::from("/project/alpha"));
@@ -356,14 +357,11 @@ fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut
         cx.notify();
     });
 
-    let alpha_id = opaque_path_element_id("recent-workspace-popover", "/project/alpha");
-    let beta_id = opaque_path_element_id("recent-workspace-popover", "/project/beta");
+    let alpha_id = opaque_path_element_id("workspace", "/project/alpha");
+    let beta_id = opaque_path_element_id("workspace", "/project/beta");
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("composer-workspace", cx);
-        window.render_frame(cx);
-
-        assert_eq!(window.find("open-workspace-folder").label(), Some("Choose folder…"));
+        assert!(window.try_find("choose-workspace").is_some(), "sidebar offers the folder picker");
         assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha (current workspace)"));
         assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
     })
@@ -384,10 +382,8 @@ fn selecting_a_recent_workspace_uses_the_existing_shutdown_transition(cx: &mut T
         cx.notify();
     });
 
-    let target_id = opaque_path_element_id("recent-workspace-popover", &target_path.display().to_string());
+    let target_id = opaque_path_element_id("workspace", &target_path.display().to_string());
     cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        window.click("composer-workspace", cx);
         window.render_frame(cx);
         window.click(target_id, cx);
         window.render_frame(cx);

@@ -26,16 +26,27 @@ impl Render for DesktopView {
         // sidebar returns when the panel closes or the window widens.
         let narrow_panel =
             window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT) && self.current_route() != Route::Workspace;
+        // One identity row: several tabs get the switch strip, while zero or one
+        // tab gets the compact header for a thread with content or a selection
+        // (a lone tab would only repeat the window title). The header carries
+        // the conversation-column new-thread action the hidden strip would
+        // otherwise take with it. Threads with neither stay on the welcome or
+        // pending states, which own their own calls to action.
+        let multi_tab = self.open_tabs.len() > 1;
         let conversation = div()
             .flex_1()
             .min_w_0()
             .h_full()
             .flex()
             .flex_col()
-            .when(!self.open_tabs.is_empty() && !self.zen_mode, |column| column.child(self.render_thread_tabs(cx)))
-            .when(!self.transcript.is_empty() && !self.zen_mode && !self.pending_blank_transition(), |column| {
-                column.child(self.render_thread_header(cx.theme()))
-            })
+            .when(multi_tab && !self.zen_mode, |column| column.child(self.render_thread_tabs(cx)))
+            .when(
+                !multi_tab
+                    && (!self.transcript.is_empty() || self.selected_session_id.is_some())
+                    && !self.zen_mode
+                    && !self.pending_blank_transition(),
+                |column| column.child(self.render_thread_header(cx.theme())),
+            )
             .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
                 column.child(self.render_navigation_loading(cx))
             })

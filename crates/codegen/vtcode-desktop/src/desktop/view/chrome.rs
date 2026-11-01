@@ -423,6 +423,10 @@ impl DesktopView {
         )
     }
 
+    /// Compact identity row for the zero/single-tab case with content or a
+    /// selection: one quiet title line plus the conversation-column new-thread
+    /// action. Multi-tab windows use the switch strip instead, so this row
+    /// never repeats it.
     pub(super) fn render_thread_header(&self, theme: &Theme) -> impl IntoElement {
         let title_fallback = rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string();
         let title = self
@@ -443,18 +447,33 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_between()
+                .gap_2()
                 .px_4()
-                .py_3()
+                .py_1()
                 .child(
                     div()
                         .id("thread-title")
                         .test_support()
                         .min_w_0()
                         .flex_1()
-                        .text_lg()
+                        .text_sm()
                         .font_semibold()
                         .truncate()
                         .child(title.to_string()),
+                )
+                .child(
+                    desktop_button("thread-header-new")
+                        .icon(IconName::Plus)
+                        .ghost()
+                        .small()
+                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
+                        .tooltip_with_action(
+                            rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
+                            &NewSession,
+                            Some(key_context::DESKTOP),
+                        )
+                        .desktop_disabled(!self.session_change_allowed(None))
+                        .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta)),
         )

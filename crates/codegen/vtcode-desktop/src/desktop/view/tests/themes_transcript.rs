@@ -859,3 +859,36 @@ fn slash_theme_accepts_capitalized_ids_like_the_cli(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[test]
+fn completed_tool_titles_drop_to_muted_while_live_rows_stay_foreground() {
+    for palette in super::super::themes::all_themes() {
+        let colors = gpui_kit::component::theme::ThemeColor {
+            primary: palette.accent,
+            success: palette.success,
+            danger: palette.danger,
+            warning: palette.warning,
+            foreground: palette.foreground,
+            popover: palette.background,
+            ..Default::default()
+        };
+
+        for state in [
+            ActivityState::Running,
+            ActivityState::Failed,
+            ActivityState::Interrupted,
+            ActivityState::Other,
+        ] {
+            assert_eq!(
+                DesktopView::tool_row_title_color(state, colors),
+                colors.foreground,
+                "{} keeps {state:?} tool titles at full foreground",
+                palette.id
+            );
+        }
+        // Finished work reads quieter but stays AA-legible on every theme.
+        let completed = DesktopView::tool_row_title_color(ActivityState::Completed, colors);
+        let ratio = super::super::themes::contrast_ratio(completed, colors.popover);
+        assert!(ratio >= 4.5, "{}: completed tool title unreadable ({ratio:.2})", palette.id);
+    }
+}

@@ -815,7 +815,10 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
 fn composer_accepts_keyboard_input_with_accent_focus_ring_disabled(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("message-composer", cx);
+        // Click the prompt marker inside the input area: the input group's
+        // vertical center falls in the wrapped button row at this width, so a
+        // group center click would land on a footer control instead.
+        window.click("composer-prompt-marker", cx);
         window.input("Focused draft", cx);
         window.render_frame(cx);
 

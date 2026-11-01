@@ -124,7 +124,8 @@ impl DesktopView {
 
     /// Horizontal quick-switch strip: one button per open tab with a close
     /// affordance, a trailing new-thread button, and a right-click menu per
-    /// tab. Rendered only while at least one tab is open.
+    /// tab. Rendered only while more than one tab is open; zero/single-tab
+    /// windows use the compact thread header instead.
     pub(super) fn render_thread_tabs(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let mut strip = div()

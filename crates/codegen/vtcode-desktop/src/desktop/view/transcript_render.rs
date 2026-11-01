@@ -689,7 +689,7 @@ impl DesktopView {
                                 .min_w_0()
                                 .flex_1()
                                 .truncate()
-                                .text_color(colors.foreground)
+                                .text_color(Self::tool_row_title_color(state, colors))
                                 .child(item.title.clone()),
                         )
                         // The state icon already signals completion, so

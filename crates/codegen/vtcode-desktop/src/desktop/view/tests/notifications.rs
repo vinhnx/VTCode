@@ -307,6 +307,12 @@ fn check_for_updates_button_requests_status(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(view.read(cx).update_request_pending);
         let mut requests = requests;
+        // Keyboarding to Notifications passes through Connections, which
+        // refreshes live status like the storage summary.
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("connection status refresh")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
         let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
             panic!("update request")
         };
