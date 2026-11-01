@@ -21,6 +21,9 @@ pub mod markdown_store;
 
 mod atomic_write;
 mod snapshot;
+mod storage;
+
+pub use storage::{IndexStorage, MarkdownIndexStorage};
 
 use anyhow::Result;
 use hashbrown::{HashMap, HashSet};
@@ -30,56 +33,10 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
 use std::fs;
-use std::io::{ErrorKind, Write};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
-
-/// Persistence backend for [`SimpleIndexer`].
-pub trait IndexStorage: Send + Sync {
-    /// Prepare any directories or resources required for persistence.
-    fn init(&self, index_dir: &Path) -> Result<()>;
-
-    /// Persist an indexed file entry.
-    fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()>;
-
-    /// Whether this backend expects full-snapshot persistence.
-    ///
-    /// Snapshot-aware backends receive the complete in-memory index on each
-    /// update so on-disk state stays consistent across single-file and
-    /// directory indexing flows.
-    fn prefers_snapshot_persistence(&self) -> bool {
-        false
-    }
-
-    /// Remove a previously persisted file entry.
-    ///
-    /// Defaults to a no-op to keep existing custom storage backends compatible.
-    fn remove(&self, _index_dir: &Path, _file_path: &Path) -> Result<()> {
-        Ok(())
-    }
-
-    /// Persist a batch of indexed file entries.
-    ///
-    /// Defaults to calling [`IndexStorage::persist`] for each entry, keeping
-    /// existing custom storage backends compatible.
-    fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
-        for entry in entries {
-            self.persist(index_dir, entry)?;
-        }
-        Ok(())
-    }
-
-    /// Persist a batch of indexed file entries borrowed from the in-memory cache.
-    ///
-    /// Defaults to cloning the borrowed entries and delegating to
-    /// [`IndexStorage::persist_batch`] so existing custom storage backends remain
-    /// compatible.
-    fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
-        let owned = entries.iter().map(|entry| (*entry).clone()).collect::<Vec<_>>();
-        self.persist_batch(index_dir, &owned)
-    }
-}
 
 /// Directory traversal filter hook for [`SimpleIndexer`].
 pub trait TraversalFilter: Send + Sync {
@@ -88,72 +45,22 @@ pub trait TraversalFilter: Send + Sync {
 
     /// Determine if the indexer should process the provided file.
     fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool;
-}
 
-/// Markdown-backed [`IndexStorage`] implementation.
-#[derive(Debug, Default, Clone)]
-pub struct MarkdownIndexStorage;
-
-impl IndexStorage for MarkdownIndexStorage {
-    fn init(&self, index_dir: &Path) -> Result<()> {
-        fs::create_dir_all(index_dir)?;
-        Ok(())
+    /// Metadata-aware variant of [`TraversalFilter::should_index_file`].
+    ///
+    /// The default implementation delegates to [`TraversalFilter::should_index_file`],
+    /// so existing filters keep their exact behavior. Filters whose file check
+    /// starts with an existence test should override this to reuse `metadata`
+    /// instead of stat-ing the path a second time.
+    fn should_index_file_with_metadata(
+        &self,
+        path: &Path,
+        metadata: &fs::Metadata,
+        config: &SimpleIndexerConfig,
+    ) -> bool {
+        let _ = metadata;
+        self.should_index_file(path, config)
     }
-
-    fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()> {
-        let dir = atomic_write::canonical_storage_dir(index_dir)?;
-        let file_name = format!("{}.md", calculate_hash(&entry.path));
-        let mut buffer = Vec::new();
-        writeln!(buffer, "# File Index: {}", entry.path)?;
-        writeln!(buffer)?;
-        write_markdown_fields(&mut buffer, entry)?;
-        atomic_write::write_atomic(&dir, &file_name, &buffer)
-    }
-
-    fn prefers_snapshot_persistence(&self) -> bool {
-        true
-    }
-
-    fn remove(&self, index_dir: &Path, file_path: &Path) -> Result<()> {
-        if !index_dir.exists() {
-            return Ok(());
-        }
-        let dir = atomic_write::canonical_storage_dir(index_dir)?;
-        let file_name = format!("{}.md", calculate_hash(file_path.to_string_lossy().as_ref()));
-        match fs::remove_file(dir.join(file_name)) {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(err.into()),
-        }
-    }
-
-    fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
-        persist_markdown_snapshot(index_dir, entries.iter())
-    }
-
-    fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
-        persist_markdown_snapshot(index_dir, entries.iter().copied())
-    }
-}
-
-fn persist_markdown_snapshot<'a>(index_dir: &Path, entries: impl IntoIterator<Item = &'a FileIndex>) -> Result<()> {
-    let entries = entries.into_iter().collect::<Vec<_>>();
-
-    let dir = atomic_write::canonical_storage_dir(index_dir)?;
-    let mut buffer = Vec::new();
-
-    writeln!(buffer, "# Workspace File Index")?;
-    writeln!(buffer)?;
-    writeln!(buffer, "- **Entries**: {}", entries.len())?;
-    writeln!(buffer)?;
-
-    for entry in entries {
-        write_markdown_entry(&mut buffer, entry)?;
-    }
-
-    atomic_write::write_atomic(&dir, "index.md", &buffer)?;
-    cleanup_legacy_markdown_entries(&dir)?;
-    Ok(())
 }
 
 /// Default traversal filter powered by [`SimpleIndexerConfig`].
@@ -167,6 +74,15 @@ impl TraversalFilter for ConfigTraversalFilter {
 
     fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
         path.is_file() && snapshot::has_indexable_file_name(path, config)
+    }
+
+    fn should_index_file_with_metadata(
+        &self,
+        path: &Path,
+        metadata: &fs::Metadata,
+        config: &SimpleIndexerConfig,
+    ) -> bool {
+        metadata.is_file() && snapshot::has_indexable_file_name(path, config)
     }
 }
 
@@ -467,10 +383,24 @@ impl SimpleIndexer {
     /// caller's directory diff). `modified` is second-granularity: a
     /// same-second, same-size rewrite is picked up by the next run.
     fn cached_or_built_index(&mut self, file_path: &Path, rebuilt_any: &mut bool) -> Result<Option<FileIndex>> {
+        // Stat once and reuse the metadata for the unchanged screen, the
+        // traversal filter, and the rebuilt entry instead of stat-ing up to
+        // four times per file (filter, screen, filter, mtime).
+        let metadata = match fs::metadata(file_path) {
+            Ok(metadata) => metadata,
+            Err(_) => {
+                // Missing/unreadable: preserve `build_file_index` semantics,
+                // which maps missing files to `None` unless a custom filter
+                // claims the path (in which case the read error propagates).
+                let built = self.build_file_index(file_path)?;
+                *rebuilt_any |= built.is_some();
+                return Ok(built);
+            }
+        };
+
         let cache_key = file_path.to_string_lossy().into_owned();
         if let Some(cached) = self.index_cache.get(cache_key.as_str())
-            && self.should_process_file_path(file_path)
-            && let Ok(metadata) = fs::metadata(file_path)
+            && self.should_process_file_path_with_metadata(file_path, &metadata)
             && let Ok(modified) = metadata.modified()
             && let Ok(elapsed) = modified.duration_since(SystemTime::UNIX_EPOCH)
             && elapsed.as_secs() == cached.modified
@@ -479,7 +409,7 @@ impl SimpleIndexer {
             return Ok(Some(cached.clone()));
         }
 
-        let built = self.build_file_index(file_path)?;
+        let built = self.build_file_index_with_metadata(file_path, &metadata)?;
         *rebuilt_any |= built.is_some();
         Ok(built)
     }
@@ -720,9 +650,7 @@ impl SimpleIndexer {
 
     #[inline]
     fn get_modified_time(&self, file_path: &Path) -> Result<u64> {
-        let metadata = fs::metadata(file_path)?;
-        let modified = metadata.modified()?;
-        Ok(modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs())
+        metadata_modified_secs(&fs::metadata(file_path)?)
     }
 
     #[inline]
@@ -749,10 +677,47 @@ impl SimpleIndexer {
             }
         };
 
+        let modified = self.get_modified_time(file_path)?;
+        Ok(Some(self.finish_file_index(file_path, content, modified)))
+    }
+
+    /// [`Self::build_file_index`] reusing an already-observed `metadata`.
+    ///
+    /// Used by the directory-walk hot loop so each file is stat-ed once.
+    /// A file that vanishes between the stat and the read maps to `None`,
+    /// matching the legacy path's existence re-check. (A custom filter that
+    /// accepts nonexistent paths would have surfaced the read error in the
+    /// legacy path; here the transient delete is skipped instead.)
+    fn build_file_index_with_metadata(
+        &mut self,
+        file_path: &Path,
+        metadata: &fs::Metadata,
+    ) -> Result<Option<FileIndex>> {
+        if !self.should_process_file_path_with_metadata(file_path, metadata) {
+            return Ok(None);
+        }
+
+        let content = match fs::read_to_string(file_path) {
+            Ok(text) => text,
+            Err(err) => {
+                if err.kind() == ErrorKind::InvalidData || err.kind() == ErrorKind::NotFound {
+                    return Ok(None);
+                }
+                return Err(err.into());
+            }
+        };
+
+        let modified = metadata_modified_secs(metadata)?;
+        Ok(Some(self.finish_file_index(file_path, content, modified)))
+    }
+
+    /// Assemble a [`FileIndex`] from already-read content and mtime, and cache
+    /// the content for hash-verified searches.
+    fn finish_file_index(&mut self, file_path: &Path, content: String, modified: u64) -> FileIndex {
         let index = FileIndex {
             path: file_path.to_string_lossy().into_owned(),
             hash: calculate_hash(&content),
-            modified: self.get_modified_time(file_path)?,
+            modified,
             size: content.len() as u64,
             language: self.detect_language(file_path),
             tags: vec![],
@@ -761,7 +726,7 @@ impl SimpleIndexer {
         self.content_cache
             .insert(index.path.clone(), (index.hash.clone(), Arc::from(content)));
 
-        Ok(Some(index))
+        index
     }
 
     #[inline]
@@ -776,11 +741,25 @@ impl SimpleIndexer {
 
     #[inline]
     fn should_process_file_path(&self, path: &Path) -> bool {
+        self.should_process_with(path, || self.should_index_file_path(path))
+    }
+
+    #[inline]
+    fn should_process_file_path_with_metadata(&self, path: &Path, metadata: &fs::Metadata) -> bool {
+        self.should_process_with(path, || self.filter.should_index_file_with_metadata(path, metadata, &self.config))
+    }
+
+    /// Allowed/excluded scope gate shared by both file filters.
+    ///
+    /// Allowed directories bypass exclusion; everywhere else an excluded path
+    /// short-circuits before the (potentially stat-ing) filter runs.
+    #[inline]
+    fn should_process_with(&self, path: &Path, indexable: impl FnOnce() -> bool) -> bool {
         if self.is_allowed_path(path) {
-            return self.should_index_file_path(path);
+            return indexable();
         }
 
-        !self.is_excluded_path(path) && self.should_index_file_path(path)
+        !self.is_excluded_path(path) && indexable()
     }
 
     fn build_walker(&self, dir_path: &Path) -> Walk {
@@ -943,42 +922,11 @@ fn calculate_hash(content: &str) -> String {
     vtcode_commons::utils::calculate_sha256(content.as_bytes())
 }
 
-fn write_markdown_entry(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
-    writeln!(writer, "## {}", entry.path)?;
-    writeln!(writer)?;
-    write_markdown_fields(writer, entry)?;
-    writeln!(writer)?;
-    Ok(())
-}
-
-fn write_markdown_fields(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
-    writeln!(writer, "- **Path**: {}", entry.path)?;
-    writeln!(writer, "- **Hash**: {}", entry.hash)?;
-    writeln!(writer, "- **Modified**: {}", entry.modified)?;
-    writeln!(writer, "- **Size**: {} bytes", entry.size)?;
-    writeln!(writer, "- **Language**: {}", entry.language)?;
-    writeln!(writer, "- **Tags**: {}", entry.tags.join(", "))?;
-    Ok(())
-}
-
-fn cleanup_legacy_markdown_entries(index_dir: &Path) -> Result<()> {
-    for entry in fs::read_dir(index_dir)? {
-        let entry = entry?;
-        let file_name = entry.file_name();
-        let file_name = file_name.to_string_lossy();
-        if is_legacy_markdown_entry_name(file_name.as_ref()) {
-            fs::remove_file(entry.path())?;
-        }
-    }
-    Ok(())
-}
-
+/// Second-granularity mtime shared by the index builder and the unchanged
+/// screen so both observe the same clock reading for one stat.
 #[inline]
-fn is_legacy_markdown_entry_name(file_name: &str) -> bool {
-    let Some(hash_part) = file_name.strip_suffix(".md") else {
-        return false;
-    };
-    hash_part.len() == 64 && hash_part.bytes().all(|byte| byte.is_ascii_hexdigit())
+fn metadata_modified_secs(metadata: &fs::Metadata) -> Result<u64> {
+    Ok(metadata.modified()?.duration_since(SystemTime::UNIX_EPOCH)?.as_secs())
 }
 
 #[cfg(test)]

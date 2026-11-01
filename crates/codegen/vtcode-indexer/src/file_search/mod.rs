@@ -162,7 +162,12 @@ impl FileIndex {
                     (files, directories)
                 });
 
-        let mut interner = vtcode_commons::StringInterner::new();
+        // Pre-size the interner arena and lookup tables from the collected
+        // paths so the build below does not repeatedly realloc and rehash.
+        let total_path_bytes: usize =
+            files.iter().map(String::len).sum::<usize>() + directories.iter().map(String::len).sum::<usize>();
+        let mut interner =
+            vtcode_commons::StringInterner::with_capacity(total_path_bytes, files.len() + directories.len());
         let mut path_texts_by_id = Vec::with_capacity(files.len() + directories.len());
         let interned_files: Vec<StringId> = files
             .iter()

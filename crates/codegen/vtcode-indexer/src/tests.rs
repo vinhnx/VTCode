@@ -3,6 +3,8 @@ use std::fs;
 use std::sync::{Arc, Mutex};
 use tempfile::tempdir;
 
+mod metadata_build;
+
 #[test]
 fn skips_hidden_directories_by_default() -> Result<()> {
     let temp = tempdir()?;
