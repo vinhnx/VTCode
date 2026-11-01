@@ -620,6 +620,61 @@ impl DesktopView {
         .into_any_element()
     }
 
+    /// Window-drag strip for windowed zen mode: the toolbar (and Kit
+    /// TitleBar's `start_window_move` drag) is hidden, while
+    /// `app_owns_titlebar_drag` disables native AppKit dragging for the
+    /// whole window — without this strip the window cannot be moved at
+    /// all. The strip owns the traffic-light zone
+    /// (`ZEN_DRAG_STRIP_HEIGHT`), so route pages add no padding of their
+    /// own; double-click keeps the native zoom behavior. Transparent by
+    /// design: it is window chrome, not content.
+    pub(super) fn render_zen_drag_strip(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .id("zen-drag-strip")
+            .w_full()
+            .h(px(ZEN_DRAG_STRIP_HEIGHT))
+            .flex_shrink_0()
+            // Before `test_support()`: `on_double_click` is implemented for
+            // `Stateful` only (same ordering as Kit TitleBar).
+            .on_double_click(|_, window, _| window.titlebar_double_click())
+            .test_support()
+            .on_mouse_down_out(cx.listener(|this, _: &MouseDownEvent, _, _| {
+                this.zen_drag_armed = false;
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseDownEvent, _, _| {
+                    this.zen_drag_armed = true;
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, _| {
+                    this.zen_drag_armed = false;
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, _| {
+                // Fail closed: only a held left button may start the native
+                // drag. A press released off-strip (or lost to a focus
+                // change) never disarms — `on_mouse_up` only fires while
+                // hovered — so a bare hover must heal the stuck arm instead
+                // of grabbing the window with no button held. The arm is
+                // consumed exactly once, on every move over the strip.
+                let armed = std::mem::replace(&mut this.zen_drag_armed, false);
+                if !event.dragging() || !armed {
+                    return;
+                }
+                // Native-only: the headless test platform leaves
+                // `start_window_move` unimplemented (as with `zoom_window`
+                // in bootstrap), so guard the call the same way.
+                #[cfg(not(test))]
+                window.start_window_move();
+                #[cfg(test)]
+                let _ = window;
+            }))
+            .into_any_element()
+    }
+
     /// Floating zen exit: pinned to the main column's top-right corner and
     /// painted after the content, so it floats above the edge-to-edge zen
     /// surface. Toggling restores the toolbar and the toggle's docked slot.

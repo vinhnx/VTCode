@@ -339,31 +339,19 @@ pub(super) fn settings_switch(
         )
 }
 
-impl DesktopView {
-    /// Whether route pages must reserve the traffic-light zone themselves:
-    /// windowed zen hides the toolbar that otherwise owns the clearance,
-    /// while fullscreen hides the lights so nothing is reserved there.
-    pub(super) fn route_reserves_light_clearance(&self, window: &Window) -> bool {
-        self.zen_mode && !window.is_fullscreen()
-    }
-}
-
 /// Route container shared by the settings, browser, and review pages:
-/// centers the max-width panel in the content slot beneath the persistent
-/// toolbar, which owns the traffic-light clearance. Windowed zen hides the
-/// toolbar (`top_clearance`), so the page reserves the light zone itself and
-/// the panel — navigation column included — starts below the lights instead
-/// of floating them over its corner. Titles align to the content spine in
-/// every mode; no horizontal dodge is needed once the lights clear the panel
-/// vertically.
-pub(super) fn route_page(top_clearance: bool, panel: impl IntoElement) -> impl IntoElement {
+/// centers the max-width panel in the content slot. The toolbar (normal
+/// mode) or the zen drag strip (windowed zen) owns the traffic-light
+/// clearance above the slot, so the page adds none itself. Titles align
+/// to the content spine in every mode; no horizontal dodge is needed once
+/// the lights clear the panel vertically.
+pub(super) fn route_page(panel: impl IntoElement) -> impl IntoElement {
     div()
         .flex_1()
         .min_w_0()
         .h_full()
         .px_6()
         .pb_6()
-        .when(top_clearance, |page| page.pt(px(ZEN_ROUTE_TOP_CLEARANCE)))
         .flex()
         .justify_center()
         .child(div().w_full().h_full().max_w(px(1500.)).child(panel))

@@ -113,9 +113,15 @@ impl Render for DesktopView {
             .child(center);
         // Navigation sits beside this column instead of below the toolbar,
         // so the sidebar spans the full window height. Zen drops the toolbar
-        // entirely: the content spans edge to edge and the zen toggle floats
-        // above it, painted after the content.
-        let toolbar = (!self.zen_mode).then(|| self.render_toolbar(window, cx));
+        // entirely: the drag strip takes its place above the edge-to-edge
+        // content (a fullscreen window cannot move, so nothing renders
+        // there) and the zen toggle floats above it, painted after the
+        // content.
+        let top_chrome = if self.zen_mode {
+            (!window.is_fullscreen()).then(|| self.render_zen_drag_strip(cx))
+        } else {
+            Some(self.render_toolbar(window, cx))
+        };
         let main = div()
             .flex_1()
             .min_w_0()
@@ -123,7 +129,7 @@ impl Render for DesktopView {
             .h_full()
             .flex()
             .flex_col()
-            .children(toolbar)
+            .children(top_chrome)
             .child(content)
             .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)))
             .when(self.zen_mode, |main| main.child(self.render_zen_toggle_floating(cx)));

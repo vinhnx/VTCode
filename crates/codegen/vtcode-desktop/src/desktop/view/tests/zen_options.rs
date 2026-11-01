@@ -177,11 +177,12 @@ fn zen_surface_spans_the_window_edge_to_edge(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        // Zen drops the toolbar and runs the conversation flush to every
-        // window edge: no chrome rhythm inset, square corners.
+        // Zen drops the toolbar: the drag strip owns the top 40px and the
+        // conversation runs flush below it with no chrome rhythm inset and
+        // square corners.
         assert!(window.try_find("title-bar").is_none(), "zen drops the toolbar");
         let surface = window.find("workspace-surface").bounds();
-        assert_eq!(surface.origin, point(px(0.), px(0.)), "zen content spans edge to edge");
+        assert_eq!(surface.origin, point(px(0.), px(40.)), "zen content starts below the drag strip");
         // Exiting zen restores the toolbar and the windowed pane rhythm.
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
@@ -194,4 +195,75 @@ fn zen_surface_spans_the_window_edge_to_edge(cx: &mut TestAppContext) {
     cx.update(|cx| {
         assert!(!view.read(cx).zen_mode, "the toggle must have exited zen for the rhythm comparison");
     });
+}
+
+/// Windowed zen hides the toolbar that otherwise owns window dragging: Kit
+/// TitleBar moves the window via `start_window_move`, while
+/// `app_owns_titlebar_drag` disables native AppKit dragging for the whole
+/// window — without a drag region the window cannot be moved at all. The
+/// zen drag strip takes the toolbar's place above the content and owns the
+/// traffic-light zone, so route pages and the workspace surface start
+/// below it. Normal mode keeps the toolbar instead, and fullscreen
+/// renders neither (a fullscreen window cannot move).
+#[gpui_kit::test]
+fn zen_drag_strip_restores_window_dragging_in_windowed_zen(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.zen_mode = true;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("title-bar").is_none(), "zen drops the toolbar");
+        let strip = window.find("zen-drag-strip").bounds();
+        let viewport = window.viewport_size();
+        assert_eq!(strip.origin, point(px(0.), px(0.)), "strip spans the top edge: {strip:?}");
+        assert_eq!(strip.size.width, viewport.width, "strip spans the full width: {strip:?} {viewport:?}");
+        assert_eq!(strip.size.height, px(40.), "strip owns the traffic-light zone (lights end at y = 29): {strip:?}");
+        let surface = window.find("workspace-surface").bounds();
+        assert_eq!(surface.origin.y, strip.bottom(), "workspace starts below the strip: {surface:?}");
+        // Route pages keep their light clearance through the strip, not padding.
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        let panel = window.find("settings-panel").bounds();
+        assert_eq!(panel.origin.y, strip.bottom(), "settings starts below the strip: {panel:?}");
+        // A click arms on press and disarms on release without starting a
+        // native drag (headless `start_window_move` would panic): the strip
+        // is a safe no-op for clicks, drags only.
+        window.click("zen-drag-strip", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert!(!view.read(cx).zen_drag_armed, "clicking the strip ends disarmed");
+    });
+    // Fullscreen hides the lights and cannot move: no strip.
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.is_fullscreen(), "dispatch must enter full screen");
+        assert!(window.try_find("zen-drag-strip").is_none(), "fullscreen has no drag strip");
+    })
+    .unwrap();
+    // Normal mode restores the toolbar instead of the strip.
+    view.update(cx, |view, cx| {
+        view.zen_mode = false;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_action(Box::new(super::super::ToggleFullScreen), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(!window.is_fullscreen(), "dispatch must exit full screen");
+        assert!(window.try_find("title-bar").is_some(), "normal mode restores the toolbar");
+        assert!(window.try_find("zen-drag-strip").is_none(), "normal mode has no zen strip");
+    })
+    .unwrap();
 }

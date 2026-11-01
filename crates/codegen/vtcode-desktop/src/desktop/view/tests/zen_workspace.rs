@@ -51,8 +51,8 @@ fn zen_toggle_floats_above_content_with_reduced_motion(cx: &mut TestAppContext) 
         let zen = window.find("zen-mode-toggle").bounds();
         assert_eq!(zen.size, entered.size, "enter and exit share one frame");
         assert!(
-            window.find("workspace-surface").bounds().contains(&zen.center()),
-            "the exit floats above the content"
+            window.find("zen-drag-strip").bounds().contains(&zen.center()),
+            "the exit floats above the drag strip"
         );
 
         window.press("ctrl-cmd-z", cx);
@@ -136,8 +136,8 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
         let zen_slot = window.find("zen-mode-toggle").bounds();
         assert_eq!(zen_slot.size, collapsed_nav_slot.size, "enter and exit share one frame");
         assert!(
-            window.find("workspace-surface").bounds().contains(&zen_slot.center()),
-            "the exit floats above the content while the workspace zooms"
+            window.find("zen-drag-strip").bounds().contains(&zen_slot.center()),
+            "the exit floats above the drag strip while the workspace zooms"
         );
         assert!(
             zen_slot.size.width >= px(24.) && zen_slot.size.height >= px(24.),

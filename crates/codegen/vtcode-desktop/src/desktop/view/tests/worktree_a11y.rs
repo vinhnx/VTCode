@@ -951,9 +951,10 @@ fn zen_toggle_floats_above_the_edge_to_edge_surface_and_redocks_on_exit(cx: &mut
         assert!(window.try_find("title-bar").is_none(), "zen drops the toolbar");
         let zen = window.find("zen-mode-toggle").bounds();
         assert_eq!(zen.size, entered.size, "enter and exit share one frame");
+        let strip = window.find("zen-drag-strip").bounds();
+        assert!(strip.contains(&zen.center()), "the exit floats above the drag strip");
         let surface = window.find("workspace-surface").bounds();
-        assert!(surface.contains(&zen.center()), "the exit floats above the content");
-        assert_eq!(surface.origin, point(px(0.), px(0.)), "zen content spans edge to edge");
+        assert_eq!(surface.origin, point(px(0.), px(40.)), "zen content starts below the drag strip");
 
         window.click("zen-mode-toggle", cx);
         window.render_frame(cx);

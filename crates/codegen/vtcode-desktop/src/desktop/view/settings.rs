@@ -168,7 +168,6 @@ impl DesktopView {
         // shares the height, mirroring the config rail breakpoint.
         let narrow = window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT);
         route_page(
-            self.route_reserves_light_clearance(window),
             div()
                 .id("settings-panel")
                 .test_support()

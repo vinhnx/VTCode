@@ -53,9 +53,9 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
     FocusHandle, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent,
-    MouseUpEvent, NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription,
-    SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, img, point, px,
-    size,
+    MouseMoveEvent, MouseUpEvent, NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollHandle, Size,
+    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, img,
+    point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -277,17 +277,17 @@ const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
 ///
 /// macOS traffic-light anchor (see `desktop_window_options`): the lights sit
 /// at (12, 17) with a 12px diameter, so their bottom edge is y = 29.
-/// Windowed zen hides the toolbar that otherwise owns this zone, so route
-/// pages reserve [`ZEN_ROUTE_TOP_CLEARANCE`] themselves and start below the
-/// lights instead of floating them over the panel corner.
+/// Windowed zen hides the toolbar that otherwise owns this zone, so the
+/// zen drag strip owns it instead and every route starts below the lights
+/// instead of floating them over its corner.
 const TRAFFIC_LIGHT_X: f32 = 12.;
 const TRAFFIC_LIGHT_Y: f32 = 17.;
-/// Top clearance reserving the traffic-light zone above route pages when the
-/// toolbar is hidden (windowed zen): the lights end at y = 29, so 40px
-/// clears them with an 11px gap. Fixed pixels: this matches a platform
-/// window inset, not the rem scale. Fullscreen hides the lights, so no
-/// clearance is reserved there.
-const ZEN_ROUTE_TOP_CLEARANCE: f32 = 40.;
+/// Height of the zen drag strip (see `render_zen_drag_strip`), which doubles
+/// as the traffic-light clearance when the toolbar is hidden (windowed
+/// zen): the lights end at y = 29, so 40px clears them with an 11px gap.
+/// Fixed pixels: this matches a platform window inset, not the rem scale.
+/// Fullscreen hides the lights and cannot move, so no strip renders there.
+const ZEN_DRAG_STRIP_HEIGHT: f32 = 40.;
 
 /// Compact layout breakpoint: below this viewport width, open panels collapse
 /// the sidebar to its rail and settings stacks its navigation above the
@@ -648,6 +648,7 @@ struct DesktopView {
     navigation_peek: bool,
     hovered_message: Option<String>,
     zen_mode: bool,
+    zen_drag_armed: bool,
     shortcut_draft: std::collections::BTreeMap<String, String>,
     shortcut_search_input: Entity<InputState>,
     _shortcut_search_subscription: Subscription,

@@ -89,7 +89,7 @@ impl DesktopView {
     /// Full-window thread browser over the cached session list. Selecting a
     /// row loads the thread and dismisses the browser; Escape and backdrop
     /// click only dismiss.
-    pub(super) fn render_thread_browser(&mut self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_thread_browser(&mut self, _window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string();
         let row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
@@ -266,7 +266,6 @@ impl DesktopView {
                 .into_any_element()
         };
         route_page(
-            self.route_reserves_light_clearance(window),
             div()
                 .id("thread-browser")
                 .test_support()
