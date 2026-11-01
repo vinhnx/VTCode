@@ -4,9 +4,26 @@ use gpui_kit::Global;
 #[cfg(not(test))]
 use objc2::{MainThreadMarker, rc::Retained, runtime::AnyObject, sel};
 #[cfg(not(test))]
-use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem, NSStatusBar, NSStatusItem, NSVariableStatusItemLength};
+use objc2_app_kit::{
+    NSApplication, NSImage, NSMenu, NSMenuItem, NSStatusBar, NSStatusItem, NSVariableStatusItemLength,
+};
 #[cfg(not(test))]
-use objc2_foundation::NSString;
+use objc2_foundation::{NSSize, NSString};
+
+/// Status-item icon edge: the 18pt square macOS centers in the menu bar.
+#[cfg(not(test))]
+const STATUS_ICON_EDGE: f64 = 18.;
+
+/// Decode embedded app-icon art into a menu-bar-sized image.
+#[cfg(not(test))]
+fn status_item_image(png: &'static [u8], mtm: MainThreadMarker) -> Option<Retained<NSImage>> {
+    use objc2_foundation::NSData;
+
+    let data = NSData::with_bytes(png);
+    let image = NSImage::initWithData(mtm.alloc::<NSImage>(), &data)?;
+    image.setSize(NSSize { width: STATUS_ICON_EDGE, height: STATUS_ICON_EDGE });
+    Some(image)
+}
 
 struct MenuBarState {
     enabled: bool,
@@ -21,19 +38,22 @@ pub(super) fn enabled(cx: &App) -> bool {
 }
 
 #[cfg(test)]
-pub(super) fn set_enabled(enabled: bool, cx: &mut App) -> bool {
+pub(super) fn set_enabled(enabled: bool, _icon_png: &'static [u8], cx: &mut App) -> bool {
     cx.set_global(MenuBarState { enabled });
     true
 }
 
 #[cfg(not(test))]
 #[expect(unsafe_code, reason = "AppKit menu actions require Objective-C selectors")]
-pub(super) fn set_enabled(enabled: bool, cx: &mut App) -> bool {
+pub(super) fn set_enabled(enabled: bool, icon_png: &'static [u8], cx: &mut App) -> bool {
     if enabled == self::enabled(cx) {
         return true;
     }
     if enabled {
         let Some(mtm) = MainThreadMarker::new() else {
+            return false;
+        };
+        let Some(image) = status_item_image(icon_png, mtm) else {
             return false;
         };
         let status_bar = NSStatusBar::systemStatusBar();
@@ -42,7 +62,7 @@ pub(super) fn set_enabled(enabled: bool, cx: &mut App) -> bool {
             status_bar.removeStatusItem(&item);
             return false;
         };
-        button.setTitle(&NSString::from_str("VT"));
+        button.setImage(Some(&image));
         let app = NSApplication::sharedApplication(mtm);
         let menu = NSMenu::new(mtm);
         menu.setAutoenablesItems(false);
@@ -89,6 +109,20 @@ pub(super) fn refresh_labels(cx: &App) {
     let _ = cx;
 }
 
+/// Swap the status-item artwork (theme or app-icon change). No item, no-op.
+pub(super) fn refresh_icon(icon_png: &'static [u8], cx: &App) {
+    #[cfg(not(test))]
+    if let Some((mtm, item)) =
+        MainThreadMarker::new().zip(cx.try_global::<MenuBarState>().and_then(|state| state.item.as_ref()))
+        && let Some(button) = item.button(mtm)
+        && let Some(image) = status_item_image(icon_png, mtm)
+    {
+        button.setImage(Some(&image));
+    }
+    #[cfg(test)]
+    let _ = (icon_png, cx);
+}
+
 /// Hide the app instead of closing when menu-bar mode owns the last window.
 pub(super) fn should_hide(cx: &App) -> bool {
     enabled(cx) && cx.windows().len() == 1
@@ -122,7 +156,8 @@ impl DesktopView {
                     .checked(self.preferences.show_in_menu_bar && enabled(cx))
                     .accessibility_label(title)
                     .on_click(cx.listener(|view, checked, window, cx| {
-                        if set_enabled(*checked, cx) {
+                        let icon = app_icon::png_bytes(view.preferences.app_icon(), view.theme_mode);
+                        if set_enabled(*checked, icon, cx) {
                             view.preferences.show_in_menu_bar = *checked;
                             view.save_preferences();
                             cx.notify();

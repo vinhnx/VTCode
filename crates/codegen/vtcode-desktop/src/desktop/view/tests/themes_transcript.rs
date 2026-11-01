@@ -584,20 +584,18 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
 
-        // Expanding the card exposes the patch text and the copy action.
-        window.click("diff-change-1", cx);
+        // The inline diff reads open by default; the patch text and the
+        // copy action are available without expanding first.
+        assert!(
+            window.try_find("diff-lines-change-1").is_some(),
+            "new diff cards render their patch lines without a toggle"
+        );
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "diff expanded by default");
         window.click("copy-patch-change-1", cx);
         assert!(
             cx.read_from_clipboard().unwrap().text().unwrap().contains("+new line"),
             "copy patch must copy the raw unified diff"
         );
-        view.read(cx)
-            .transcript
-            .get(0)
-            .unwrap()
-            .expanded
-            .then_some(())
-            .expect("diff expanded");
 
         let updated_patch = "@@ -1 +1 @@\n-old line\n+latest line\n";
         view.update(cx, |view, cx| {

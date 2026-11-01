@@ -9,6 +9,7 @@ impl DesktopView {
         }
         self.preferences.set_app_icon(preference);
         self.refresh_dock_icon();
+        menu_bar::refresh_icon(app_icon::png_bytes(self.preferences.app_icon(), self.theme_mode), cx);
         self.save_preferences();
         cx.notify();
     }

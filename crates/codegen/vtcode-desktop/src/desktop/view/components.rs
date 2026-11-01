@@ -148,7 +148,16 @@ pub(super) fn settings_group_box(
 /// the soft Codex-style outline. Applied through `content_style` so the title
 /// and footer keep their unboxed seats above and below the surface.
 pub(super) fn card_border_style(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::StyleRefinement {
-    gpui_kit::StyleRefinement::default().border_1().border_color(colors.border)
+    gpui_kit::StyleRefinement::default()
+        .border_1()
+        .border_color(soft_edge_color(colors))
+}
+
+/// Softened edge tone shared by card outlines and dividers: the theme
+/// border at reduced opacity so boundaries read as quiet hairlines rather
+/// than rules. One value for every surface — tune here, not per surface.
+pub(super) fn soft_edge_color(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
+    colors.border.opacity(0.55)
 }
 
 /// One settings row: title and description stacked left, a control pinned
@@ -208,10 +217,13 @@ pub(super) fn row_description(
     div().text_sm().text_color(themes::muted_text(colors)).child(text.into())
 }
 
-/// 1px separator between settings rows, drawn in the theme border token with
-/// breathing room so it reads as a quiet hairline rather than a rule.
+/// 1px separator between settings rows, drawn in the softened edge tone
+/// with breathing room so it reads as a quiet hairline rather than a rule.
 pub(super) fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
-    div().w_full().py_1().child(div().h(px(1.)).w_full().bg(colors.border))
+    div()
+        .w_full()
+        .py_1()
+        .child(div().h(px(1.)).w_full().bg(soft_edge_color(colors)))
 }
 
 /// 1px hairline between panes: vertical in side-by-side bodies, horizontal in
@@ -223,6 +235,7 @@ pub(super) fn pane_divider(
     vertical: bool,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> AnyElement {
+    let tone = soft_edge_color(colors);
     if vertical {
         div()
             .id(id)
@@ -230,7 +243,7 @@ pub(super) fn pane_divider(
             .w(px(1.))
             .flex_shrink_0()
             .self_stretch()
-            .bg(colors.border)
+            .bg(tone)
             .into_any_element()
     } else {
         div()
@@ -239,7 +252,7 @@ pub(super) fn pane_divider(
             .h(px(1.))
             .w_full()
             .flex_shrink_0()
-            .bg(colors.border)
+            .bg(tone)
             .into_any_element()
     }
 }
@@ -559,9 +572,9 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer()
 }
 
-/// The single zen toggle: one title-bar trailing slot shared by both modes.
-/// Enter and exit share id, size, variant, and position; only the icon paint
-/// and label change, so the button never shifts when toggled.
+/// The single zen toggle: docked in the title bar normally, floating above
+/// the content in zen mode. Enter and exit share id, size, and variant; only
+/// the icon paint, label, and mount point change.
 pub(super) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit::Hsla, focus: &FocusHandle) -> Button {
     let label = if zen_mode {
         rust_i18n::t!("app.navigation.exit_zen").to_string()
@@ -636,7 +649,7 @@ mod tests {
             gpui_kit::init(cx);
             let colors = cx.theme().colors;
             let style = card_border_style(&colors);
-            assert_eq!(style.border_color, Some(colors.border));
+            assert_eq!(style.border_color, Some(soft_edge_color(&colors)));
             let widths = style.border_widths;
             for width in [widths.top, widths.left, widths.bottom, widths.right] {
                 assert_eq!(width, Some(gpui_kit::AbsoluteLength::Pixels(px(1.))));

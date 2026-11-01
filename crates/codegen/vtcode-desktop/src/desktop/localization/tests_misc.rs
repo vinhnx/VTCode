@@ -176,7 +176,6 @@ fn files_errors_copy_is_localized_for_every_language() {
             "app.files.not_regular",
             "app.files.no_parent",
             "app.files.open_failed",
-            "app.files.attachments_workspace",
             "app.files.drop_to_attach",
             "app.files.picker_disconnected",
             "app.files.picker_failed",

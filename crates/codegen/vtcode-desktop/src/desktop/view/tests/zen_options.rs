@@ -177,15 +177,15 @@ fn zen_surface_spans_the_window_edge_to_edge(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        // Zen runs the conversation flush beneath the title bar and out to the
-        // window edges: no chrome rhythm inset, square corners.
+        // Zen drops the toolbar and runs the conversation flush to every
+        // window edge: no chrome rhythm inset, square corners.
+        assert!(window.try_find("title-bar").is_none(), "zen drops the toolbar");
         let surface = window.find("workspace-surface").bounds();
-        let title_bar = window.find("title-bar").bounds();
-        assert_eq!(surface.origin.y, title_bar.bottom(), "zen content hugs the title bar");
-        assert_eq!(surface.origin.x, px(0.), "zen content spans to the left edge");
-        // Exiting zen restores the windowed pane rhythm on every edge.
+        assert_eq!(surface.origin, point(px(0.), px(0.)), "zen content spans edge to edge");
+        // Exiting zen restores the toolbar and the windowed pane rhythm.
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
+        let title_bar = window.find("title-bar").bounds();
         let windowed = window.find("workspace-surface").bounds();
         assert_eq!(windowed.origin.y, title_bar.bottom() + px(12.), "windowed mode keeps the top rhythm");
         assert!(windowed.origin.x > surface.origin.x, "windowed mode keeps the side rhythm");

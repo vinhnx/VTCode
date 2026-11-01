@@ -683,33 +683,42 @@ impl DesktopView {
                         .gap_2()
                         .min_w_0()
                         .w_full()
-                        .text_color(status_color)
                         .child(Self::render_activity_status_indicator("tool-indicator", &item.id, state, status_color))
-                        .child(div().min_w_0().truncate().child(item.title.clone()))
-                        // The status slot always renders so rows keep their
-                        // shape as states change; completed rows paint it
-                        // transparent instead of collapsing the layout.
                         .child(
                             div()
-                                .id(format!("tool-status-{}", item.id))
-                                .test_support()
                                 .min_w_0()
+                                .flex_1()
                                 .truncate()
-                                .text_sm()
-                                .text_color(if state == ActivityState::Completed {
-                                    status_color.opacity(0.)
-                                } else {
-                                    status_color
-                                })
-                                .child(status.to_string()),
+                                .text_color(colors.foreground)
+                                .child(item.title.clone()),
                         )
+                        // The state icon already signals completion, so
+                        // completed rows drop the redundant label; other
+                        // states keep theirs and the chevron stays docked.
+                        .when(state != ActivityState::Completed, |row| {
+                            row.child(
+                                div()
+                                    .id(format!("tool-status-{}", item.id))
+                                    .test_support()
+                                    .flex_shrink_0()
+                                    // Bound so backend strings ellipsize instead of
+                                    // pushing the title and chevron out of the row.
+                                    .max_w(px(320.))
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(themes::muted_text(&colors))
+                                    .child(status.to_string()),
+                            )
+                        })
                         .child(
                             Icon::new(if item.expanded {
                                 IconName::ChevronDown
                             } else {
                                 IconName::ChevronRight
                             })
-                            .small(),
+                            .small()
+                            .flex_shrink_0()
+                            .text_color(themes::muted_text(&colors)),
                         ),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -763,7 +772,8 @@ impl DesktopView {
                             .role(gpui_kit::Role::Label)
                             .aria_label(output_excerpt.clone())
                             .test_support()
-                            .ml_4()
+                            // Align under the title: status icon plus the row gap.
+                            .ml_6()
                             .px_3()
                             .py_2()
                             .rounded_md()
@@ -908,6 +918,7 @@ impl DesktopView {
             let mut lines = ClassifiedDiffLines::new(&diff.patch);
             let mut diff_view = div()
                 .id(format!("diff-lines-{}", item.id))
+                .test_support()
                 .w_full()
                 .flex()
                 .flex_col()

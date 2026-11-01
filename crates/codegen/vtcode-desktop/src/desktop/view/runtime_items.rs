@@ -133,6 +133,9 @@ impl DesktopView {
             card.patch.clone(),
         );
         item.diff = Some(card);
+        // The inline diff reads open by default; `upsert` preserves the
+        // user's toggle on later updates to the same card.
+        item.expanded = true;
         let previous_patch = self
             .selected_change
             .as_deref()

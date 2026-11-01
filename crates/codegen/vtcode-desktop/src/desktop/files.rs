@@ -39,7 +39,8 @@ pub(super) struct FileEntry {
 
 /// A bounded file preview.
 pub(super) struct FilePreview {
-    /// Path relative to the workspace root.
+    /// Display path: workspace-relative, or absolute for files read from
+    /// anywhere else on disk.
     pub rel_path: String,
     /// Decoded preview text; empty for image previews.
     pub text: String,
@@ -71,11 +72,23 @@ fn image_format(rel_path: &str) -> Option<gpui_kit::ImageFormat> {
     }
 }
 
+/// Resolve one file for reading or launching. Relative paths stay confined
+/// to the workspace (symlink escapes fail closed); absolute paths — which
+/// only arrive from explicit user drops, pastes, or attachment chips —
+/// resolve directly so files from anywhere can attach.
+fn resolve_attachment_path(root: &Path, path: &Path) -> Result<PathBuf, ()> {
+    if path.is_absolute() {
+        vtcode_commons::paths::canonicalize(path).map_err(|_error| ())
+    } else {
+        vtcode_commons::paths::resolve_workspace_path(root, path).map_err(|_error| ())
+    }
+}
+
 /// Read a bounded image file for thumbnails and the preview viewer, returned
 /// ready for the renderer to decode.
 pub(super) fn read_image(root: &Path, rel_path: &str) -> Option<Arc<gpui_kit::Image>> {
     let format = image_format(rel_path)?;
-    let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path)).ok()?;
+    let path = resolve_attachment_path(root, Path::new(rel_path)).ok()?;
     let metadata = fs::metadata(&path).ok()?;
     if !metadata.is_file() || metadata.len() as usize > MAX_IMAGE_BYTES {
         return None;
@@ -175,7 +188,7 @@ fn parse_branch_head(git_dir: &Path) -> Option<String> {
 /// Read a bounded text preview of one file. Returns `None` for missing,
 /// oversized-binary, or non-UTF-8 files.
 pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
-    let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path)).ok()?;
+    let path = resolve_attachment_path(root, Path::new(rel_path)).ok()?;
     if !fs::metadata(&path).ok()?.is_file() {
         return None;
     }
@@ -314,7 +327,7 @@ fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command 
 /// Resolve the launch target: the file itself, or its containing directory
 /// for terminal emulators. Pure filesystem work, safe to unit test.
 fn launch_path(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<PathBuf, String> {
-    let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path))
+    let path = resolve_attachment_path(root, Path::new(rel_path))
         .map_err(|_error| rust_i18n::t!("app.files.missing").to_string())?;
     if !fs::metadata(&path).map(|metadata| metadata.is_file()).unwrap_or(false) {
         return Err(rust_i18n::t!("app.files.not_regular").to_string());
@@ -488,12 +501,16 @@ pub(super) fn external_drag_payload(
 /// Attach complete text only; the preview's truncation is never silently
 /// submitted. Images attach by path alone (the agent reads them itself), so
 /// non-UTF-8 image formats are first-class attachments instead of rejections.
+/// Workspace files keep their relative label; files from anywhere else
+/// attach under their absolute path.
 pub(super) fn read_attachment(root: &Path, path: &Path) -> Result<vtcode_desktop_protocol::TurnAttachment, String> {
     let root = vtcode_commons::paths::canonicalize(root).map_err(|error| error.to_string())?;
-    let resolved = vtcode_commons::paths::resolve_workspace_path(&root, path)
-        .map_err(|_error| rust_i18n::t!("app.files.attachments_workspace").to_string())?;
-    let relative = resolved.strip_prefix(&root).map_err(|error| error.to_string())?;
-    let relative = relative.to_string_lossy().replace('\\', "/");
+    let resolved =
+        resolve_attachment_path(&root, path).map_err(|_error| rust_i18n::t!("app.files.missing").to_string())?;
+    let relative = resolved
+        .strip_prefix(&root)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|_| resolved.to_string_lossy().replace('\\', "/"));
     if is_image_path(&relative) {
         return Ok(vtcode_desktop_protocol::TurnAttachment { path: relative, text: String::new() });
     }
@@ -557,6 +574,30 @@ mod tests {
         let attachment = read_attachment(workspace.path(), Path::new("shot.png")).expect("image attaches");
         assert_eq!(attachment.path, "shot.png");
         assert!(attachment.text.is_empty(), "images attach by path, never inline text");
+    }
+
+    #[test]
+    fn outside_files_attach_under_their_absolute_path() {
+        use std::os::unix::fs::symlink;
+        let workspace = temp_workspace();
+        let outside = temp_workspace();
+        let file = outside.path().join("outside.md");
+        fs::write(&file, "shared").unwrap();
+        // Asymmetric pair: the same bytes attach relatively inside the
+        // workspace and absolutely outside it.
+        fs::write(workspace.path().join("inside.md"), "shared").unwrap();
+        let inside = read_attachment(workspace.path(), Path::new("inside.md")).expect("inside attaches");
+        assert_eq!(inside.path, "inside.md");
+        assert_eq!(inside.text, "shared");
+        let canonical = vtcode_commons::paths::canonicalize(&file).expect("canonical fixture");
+        let attached = read_attachment(workspace.path(), &file).expect("outside attaches");
+        assert_eq!(attached.path, canonical.to_string_lossy().replace('\\', "/"));
+        assert_eq!(attached.text, "shared");
+        // A relative symlink escape still fails closed: only explicit
+        // absolute paths leave the workspace.
+        symlink(outside.path(), workspace.path().join("escape")).unwrap();
+        assert!(read_attachment(workspace.path(), Path::new("escape/outside.md")).is_err());
+        assert!(read_attachment(workspace.path(), &outside.path().join("gone.md")).is_err());
     }
 
     #[test]
@@ -887,10 +928,13 @@ mod tests {
 
         let absolute = outside.path().join("secret.txt");
         let traversal = format!("../{}/secret.txt", outside.path().file_name().unwrap().to_str().unwrap());
-        for path in [absolute.to_str().unwrap(), traversal.as_str(), "escape/secret.txt"] {
+        // Relative escapes fail closed; explicit absolute paths are user
+        // intent and resolve directly.
+        for path in [traversal.as_str(), "escape/secret.txt"] {
             assert!(read_preview(workspace.path(), path).is_none(), "reject {path}");
             assert!(read_attachment(workspace.path(), Path::new(path)).is_err(), "reject {path}");
         }
+        assert_eq!(read_preview(workspace.path(), absolute.to_str().unwrap()).unwrap().text, "private");
         assert_eq!(read_preview(workspace.path(), "alias.txt").unwrap().text, "allowed");
         let attachment = read_attachment(workspace.path(), &workspace.path().join("alias.txt")).unwrap();
         assert_eq!(attachment.path, "inside.txt");

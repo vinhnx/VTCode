@@ -1,13 +1,38 @@
-//! About dialog: branded app identity, version, and pointers into the project.
+//! About dialog: the native macOS About panel, with a themed fallback.
 //!
-//! Replaces the native About panel so the dialog shares the app's theme,
-//! typography, and overlay behavior (Escape dismissal, focus restore).
+//! Production opens AppKit's standard About panel (name, icon, version, and
+//! copyright all come from the bundle's Info.plist); the custom dialog below
+//! only covers tests and the off-main-thread edge, styled after the native
+//! panel (bare icon, plain version line, copyright) with the project actions.
 use super::bootstrap::HELP_URL;
 use super::*;
+
+/// Present AppKit's standard About panel. Returns false off the main thread
+/// or when AppKit is unavailable; callers fall back to the custom dialog.
+#[cfg(not(test))]
+fn show_native_about_panel() -> bool {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    app.orderFrontStandardAboutPanel(None);
+    true
+}
+
+#[cfg(test)]
+fn show_native_about_panel() -> bool {
+    false
+}
 
 impl DesktopView {
     pub(super) fn open_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.disarm_double_escape();
+        if show_native_about_panel() {
+            return;
+        }
         self.about_open = true;
         self.about_focus.focus(window, cx);
         cx.notify();
@@ -68,16 +93,7 @@ impl DesktopView {
                     .px_6()
                     .pt_6()
                     .pb_5()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .size(px(88.))
-                            .rounded_lg()
-                            .bg(colors.primary.opacity(0.08))
-                            .child(brand_logo(56.)),
-                    )
+                    .child(brand_logo(64.))
                     .child(
                         div()
                             .text_xl()
@@ -89,12 +105,8 @@ impl DesktopView {
                         div()
                             .id("about-version")
                             .test_support()
-                            .rounded_full()
-                            .border_1()
-                            .border_color(colors.border)
-                            .px_2()
-                            .text_xs()
-                            .text_color(colors.muted_foreground)
+                            .text_sm()
+                            .text_color(colors.foreground)
                             .child(rust_i18n::t!("app.about.version", version = env!("CARGO_PKG_VERSION")).to_string()),
                     )
                     // HIG about windows carry the copyright line, kept small

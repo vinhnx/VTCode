@@ -101,7 +101,10 @@ impl Render for DesktopView {
             })
             .child(center);
         // Navigation sits beside this column instead of below the toolbar,
-        // so the sidebar spans the full window height.
+        // so the sidebar spans the full window height. Zen drops the toolbar
+        // entirely: the content spans edge to edge and the zen toggle floats
+        // above it, painted after the content.
+        let toolbar = (!self.zen_mode).then(|| self.render_toolbar(window, cx));
         let main = div()
             .flex_1()
             .min_w_0()
@@ -109,9 +112,10 @@ impl Render for DesktopView {
             .h_full()
             .flex()
             .flex_col()
-            .child(self.render_toolbar(window, cx))
+            .children(toolbar)
             .child(content)
-            .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)));
+            .when(self.preferences.show_status_bar && !self.zen_mode, |main| main.child(self.render_status_bar(cx)))
+            .when(self.zen_mode, |main| main.child(self.render_zen_toggle_floating(cx)));
         let mut body = div()
             .size_full()
             .flex()

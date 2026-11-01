@@ -161,7 +161,7 @@ const ZEN_CONTENT_WIDTH: f32 = 600.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const WELCOME_COPY_COUNT: usize = 3;
 
-const ACTIVITY_ROW_HEIGHT: f32 = 60.;
+const ACTIVITY_ROW_HEIGHT: f32 = 44.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
 const CHANGE_ROW_HEIGHT: f32 = 28.;
 /// Palette panel id; the focus trap targets the same element.

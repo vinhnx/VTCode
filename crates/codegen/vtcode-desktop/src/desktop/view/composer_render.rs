@@ -220,14 +220,8 @@ impl DesktopView {
             );
         }
 
-        match self.queue_panel_state() {
-            QueuePanelState::Entries => {
-                panel = panel.child(self.render_queued_messages(cx));
-            }
-            QueuePanelState::Hint => {
-                panel = panel.child(self.render_queue_hint(cx));
-            }
-            QueuePanelState::Hidden => {}
+        if self.queue_panel_state() == QueuePanelState::Entries {
+            panel = panel.child(self.render_queued_messages(cx));
         }
         if let Some(error) = self.error.as_ref() {
             panel = panel.child(error_alert("composer-error", error.clone(), &colors));

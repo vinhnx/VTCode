@@ -23,10 +23,8 @@ pub(super) struct QueuedSubmission {
 /// Which queue surface the composer shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum QueuePanelState {
-    /// Nothing queued and no turn running.
+    /// Nothing queued: the panel stays out of the way.
     Hidden,
-    /// A turn runs with nothing queued: show the quiet Enter-hint.
-    Hint,
     /// Entries (or authoritative previews) to list.
     Entries,
 }
@@ -169,15 +167,11 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Which queue surface the composer shows: the entry list, the quiet
-    /// Enter-hint while a turn runs with nothing queued, or nothing. The hint
-    /// only shows when Enter can actually queue (no interaction, transition,
-    /// or retained draft in the way).
+    /// Which queue surface the composer shows: the entry list when
+    /// something is queued, otherwise nothing.
     pub(super) fn queue_panel_state(&self) -> QueuePanelState {
         if !self.queued_submissions.is_empty() || self.queue_depth > 0 {
             QueuePanelState::Entries
-        } else if self.running && self.submit_allowed() && self.retained_submission.is_none() {
-            QueuePanelState::Hint
         } else {
             QueuePanelState::Hidden
         }
@@ -231,16 +225,6 @@ impl DesktopView {
                     ),
             )
             .children(rows.into_iter().map(|row| row_description(row, &colors)))
-    }
-
-    /// Render the quiet Enter-hint shown while a turn runs with nothing queued.
-    pub(super) fn render_queue_hint(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let colors = cx.theme().colors;
-        div()
-            .id("queue-hint")
-            .test_support()
-            .w_full()
-            .child(row_description(rust_i18n::t!("app.composer.queue_hint").to_string(), &colors))
     }
 
     /// Drop ephemeral queue state (session switch, teardown, disconnect).

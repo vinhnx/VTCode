@@ -616,11 +616,8 @@ impl DesktopView {
                 .flex()
                 .flex_col()
                 .gap_2()
-                .rounded_md()
-                .border_1()
-                .border_color(colors.border)
-                .px_3()
-                .py_2()
+                .px_2()
+                .py_1()
                 .child(
                     div()
                         .flex()
@@ -836,49 +833,35 @@ impl DesktopView {
     ) -> impl IntoElement {
         let status_color = Self::activity_status_color(row.state, colors);
         let status = gpui_kit::SharedString::from(row.status.as_str());
-        let mut row_element = div()
-            .id(format!("activity-{}", row.id))
-            .test_support()
-            .role(gpui_kit::Role::ListItem)
-            .aria_label(row.title.clone())
-            .aria_description(status.clone())
-            .aria_position_in_set(position)
-            .aria_size_of_set(set_size)
-            .w_full()
-            .h(px(row_height))
-            .flex()
-            .items_center()
-            .gap_3()
-            .px_3()
-            .py_2()
-            .rounded_lg()
-            .bg(colors.secondary)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .size(px(28.))
-                    .flex_shrink_0()
-                    .rounded_full()
-                    .bg(colors.popover)
-                    .child(Self::render_activity_status_indicator(
-                        "activity-indicator",
-                        &row.id,
-                        row.state,
-                        status_color,
-                    )),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .justify_center()
-                    .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
-                    .child(div().text_xs().truncate().text_color(themes::muted_text(&colors)).child(status)),
-            );
+        let mut row_element =
+            div()
+                .id(format!("activity-{}", row.id))
+                .test_support()
+                .role(gpui_kit::Role::ListItem)
+                .aria_label(row.title.clone())
+                .aria_description(status.clone())
+                .aria_position_in_set(position)
+                .aria_size_of_set(set_size)
+                .w_full()
+                .h(px(row_height))
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_2()
+                .py_1()
+                .child(div().flex().items_center().justify_center().flex_shrink_0().child(
+                    Self::render_activity_status_indicator("activity-indicator", &row.id, row.state, status_color),
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .justify_center()
+                        .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
+                        .child(div().text_xs().truncate().text_color(themes::muted_text(&colors)).child(status)),
+                );
         if let Some(output_action) = output_action {
             row_element = row_element.child(div().flex_shrink_0().child(output_action));
         }

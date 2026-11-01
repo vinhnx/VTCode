@@ -415,12 +415,15 @@ impl DesktopView {
             });
 
         if self.current_route() == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch {
+            // The embedded search keeps its own mouse-downs: the settings
+            // panel dismisses the search on any other press inside it.
             return div()
                 .id(COMMAND_PALETTE_ELEMENT_ID)
                 .test_support()
                 .role(gpui_kit::Role::Group)
                 .aria_label(title.clone())
                 .w_full()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(command)
                 .into_any_element();
         }

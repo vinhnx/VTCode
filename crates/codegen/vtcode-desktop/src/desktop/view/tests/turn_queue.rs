@@ -473,20 +473,18 @@ fn take_latest_skips_empty_queue_without_a_request(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn queue_panel_state_tracks_entries_depth_and_running(cx: &mut TestAppContext) {
+fn queue_panel_state_tracks_entries_and_depth(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
     view.update(cx, |view, _| {
         assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden);
         view.running = true;
-        assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden, "no backend means Enter cannot queue");
         view.backend = Some(BackendHandle { commands });
-        assert_eq!(view.queue_panel_state(), QueuePanelState::Hint, "running with nothing queued shows the hint");
         view.session_request = Some("session/load");
-        assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden, "transitions hide the hint");
+        assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden);
         view.session_request = None;
         view.retained_submission = Some(queued_draft("retained"));
-        assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden, "a retained draft hides the hint");
+        assert_eq!(view.queue_panel_state(), QueuePanelState::Hidden, "running with nothing queued shows nothing");
         view.retained_submission = None;
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-1".to_string(),

@@ -67,6 +67,32 @@ fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut Test
 }
 
 #[gpui_kit::test]
+fn clicking_settings_navigation_dismisses_the_search(cx: &mut TestAppContext) {
+    let (window, view) = open_settings_search(cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(window.try_find("command-palette").is_some(), "search renders inline");
+        window.click("settings-nav-storage", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("command-palette").is_none(), "outside click dismisses the search");
+        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Storage);
+        assert!(window.try_find("storage-settings").is_some(), "the selected tab content renders");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn clicking_the_search_button_again_closes_the_search(cx: &mut TestAppContext) {
+    let (window, _view) = open_settings_search(cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(window.try_find("command-palette").is_some(), "search renders inline");
+        window.click("settings-filter-search", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("command-palette").is_none(), "the search button toggles the search closed");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn settings_search_matches_singular_and_plural_theme_queries(cx: &mut TestAppContext) {
     let (window, view) = open_settings_search(cx);
     cx.update_window(window, |_, window, cx| {

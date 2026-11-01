@@ -56,7 +56,8 @@ pub struct TurnSubmitParams {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnAttachment {
-    /// Workspace-relative path used for labeling.
+    /// Display path used for labeling: workspace-relative for workspace
+    /// files, absolute for files attached from anywhere else.
     pub path: String,
     /// Bounded file content.
     pub text: String,

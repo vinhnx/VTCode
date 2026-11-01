@@ -181,6 +181,17 @@ impl DesktopView {
                 .rounded_xl()
                 .bg(colors.secondary)
                 .text_sm()
+                // The embedded search has no scrim: any other press inside
+                // the panel dismisses it. The palette and its toggle button
+                // keep their own mouse-downs, so neither ever dismisses it.
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|view, _, window, cx| {
+                        if view.palette.is_some() && view.palette_kind == PaletteKind::SettingsSearch {
+                            view.close_palette(window, cx);
+                        }
+                    }),
+                )
                 .child(panel_header(
                     div()
                         .text_lg()
@@ -344,6 +355,9 @@ impl DesktopView {
                     .justify_start()
                     .bg(colors.secondary)
                     .rounded_md()
+                    // Keep the press: the panel dismisses the search on any
+                    // other mouse-down, so the click below toggles cleanly.
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .dispatches_desktop_action(OpenSettingsSearch, self.focus_handle.clone()),
             )
             .child(scroll_column("settings-nav-list", &self.settings_nav_scroll, entries))

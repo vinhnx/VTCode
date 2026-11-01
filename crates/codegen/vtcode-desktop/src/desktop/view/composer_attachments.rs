@@ -71,13 +71,13 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Attach files dropped onto the window from Finder.
+    /// Attach files dropped onto the window from Finder, from anywhere on
+    /// disk — not only inside the workspace.
     ///
     /// GPUI hands external drops over as absolute file paths (there is no file
     /// promise receiver below GPUI), so Safari/Mail/Photos promise-only drops
     /// never reach the app. Reads run on the background executor like the
-    /// picker flow, and [`files::read_attachment`] rejects paths outside the
-    /// workspace with its own localized boundary notice.
+    /// picker flow.
     pub(super) fn attach_dropped_files(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
         if paths.is_empty() || self.attachments_picker_open || self.session_request.is_some() {
             return;

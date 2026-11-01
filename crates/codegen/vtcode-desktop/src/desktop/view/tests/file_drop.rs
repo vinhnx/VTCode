@@ -50,20 +50,25 @@ fn dropped_workspace_file_attaches_asynchronously(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn dropped_file_outside_the_workspace_surfaces_the_boundary_notice(cx: &mut TestAppContext) {
+fn dropped_file_outside_the_workspace_attaches_with_its_absolute_path(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let outside = tempfile::TempDir::new().expect("outside directory");
     let file = outside.path().join("outside.md");
-    std::fs::write(&file, "secret").expect("fixture file");
+    std::fs::write(&file, "shared").expect("fixture file");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
     });
-    let paths = ExternalPaths([file].into_iter().collect());
+    let paths = ExternalPaths([file.clone()].into_iter().collect());
     dispatch_file_drop(window, paths, cx);
     cx.update(|cx| {
-        assert!(view.read(cx).error.is_some(), "out-of-workspace drop must surface the boundary notice");
-        assert!(view.read(cx).attachments.is_empty(), "rejected files must not attach");
+        let state = view.read(cx);
+        assert_eq!(state.attachments.len(), 1, "outside files attach like workspace files");
+        // Temp roots sit behind a symlink, so the label carries the canonical path.
+        let canonical = vtcode_commons::paths::canonicalize(&file).expect("canonical fixture path");
+        assert_eq!(state.attachments[0].path, canonical.display().to_string());
+        assert_eq!(state.attachments[0].text, "shared");
+        assert!(state.error.is_none(), "valid outside drop must not set an error");
     });
 }
 

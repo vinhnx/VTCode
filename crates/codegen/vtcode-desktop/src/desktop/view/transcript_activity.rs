@@ -36,7 +36,7 @@ impl DesktopView {
                     .items_center()
                     .justify_start()
                     .gap_2()
-                    .child(Icon::new(IconName::Wrench).small())
+                    .child(Icon::new(IconName::Wrench).small().flex_shrink_0())
                     .when(running > 0, |row| {
                         row.child(
                             div()
@@ -57,6 +57,7 @@ impl DesktopView {
                             .id(format!("activity-group-label-{}", head.id))
                             .test_support()
                             .min_w_0()
+                            .flex_1()
                             .truncate()
                             .child(label.clone()),
                     )
@@ -66,7 +67,8 @@ impl DesktopView {
                         } else {
                             IconName::ChevronRight
                         })
-                        .small(),
+                        .small()
+                        .flex_shrink_0(),
                     ),
             )
             .accessibility_label(format!(
@@ -80,7 +82,7 @@ impl DesktopView {
             .toggled(head.activity_expanded)
             .ghost()
             .small()
-            .max_w_full()
+            .w_full()
             .justify_start()
             .text_color(status_color)
             .on_click(cx.listener(move |view, _, _, cx| {

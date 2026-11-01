@@ -170,8 +170,18 @@ pub(crate) fn run() {
         super::super::notifications::initialize(cx);
         init_keybindings(cx, &preferences);
         init_native_menus(cx);
-        if preferences.show_in_menu_bar && !menu_bar::set_enabled(true, cx) {
-            vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
+        if preferences.show_in_menu_bar {
+            // The theme applies at window open; resolve the startup mode from
+            // the saved theme id so the status icon matches from first paint.
+            let startup_mode = preferences
+                .theme
+                .as_deref()
+                .and_then(themes::mode_for_id)
+                .unwrap_or(ThemeMode::Dark);
+            let icon = app_icon::png_bytes(preferences.app_icon(), startup_mode);
+            if !menu_bar::set_enabled(true, icon, cx) {
+                vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
+            }
         }
         if let Err(error) = open_or_activate_main_window(cx, Some(preferences)) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
@@ -629,6 +639,9 @@ impl DesktopView {
         }
         self.apply_typography(cx);
         self.refresh_dock_icon();
+        // The startup status icon guessed the mode from the saved theme id;
+        // re-resolve now that the theme (and any CLI follow) has applied.
+        menu_bar::refresh_icon(app_icon::png_bytes(self.preferences.app_icon(), self.theme_mode), cx);
         self.sidebar_width = preferences.sidebar_width();
         self.inspector_width = preferences.inspector_width();
         self.inspector_open = false;

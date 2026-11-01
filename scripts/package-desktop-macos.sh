@@ -114,6 +114,8 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
     <string>${VERSION}</string>
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright 2025 Vinh Nguyen</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>NSHighResolutionCapable</key>

@@ -909,7 +909,7 @@ fn long_thread_titles_truncate_within_the_header_in_narrow_windows(cx: &mut Test
 }
 
 #[gpui_kit::test]
-fn zen_toggle_keeps_one_title_bar_slot_with_collapsed_panels(cx: &mut TestAppContext) {
+fn zen_toggle_floats_above_the_edge_to_edge_surface_and_redocks_on_exit(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
@@ -948,11 +948,12 @@ fn zen_toggle_keeps_one_title_bar_slot_with_collapsed_panels(cx: &mut TestAppCon
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Exit Zen mode"));
+        assert!(window.try_find("title-bar").is_none(), "zen drops the toolbar");
         let zen = window.find("zen-mode-toggle").bounds();
-        assert_eq!(zen.right(), entered.right(), "zen toggle never moves horizontally");
-        assert_eq!(zen.top(), entered.top(), "zen toggle never moves vertically");
         assert_eq!(zen.size, entered.size, "enter and exit share one frame");
-        assert!(window.find("title-bar").bounds().contains(&zen.center()), "zen exit stays in the title bar");
+        let surface = window.find("workspace-surface").bounds();
+        assert!(surface.contains(&zen.center()), "the exit floats above the content");
+        assert_eq!(surface.origin, point(px(0.), px(0.)), "zen content spans edge to edge");
 
         window.click("zen-mode-toggle", cx);
         window.render_frame(cx);
@@ -960,6 +961,7 @@ fn zen_toggle_keeps_one_title_bar_slot_with_collapsed_panels(cx: &mut TestAppCon
         let restored = window.find("zen-mode-toggle").bounds();
         assert_eq!(restored.right(), entered.right());
         assert_eq!(restored.top(), entered.top());
+        assert!(window.find("title-bar").bounds().contains(&restored.center()), "exit redocks the toggle");
         assert!(window.try_find("thread-header").is_some());
     })
     .unwrap();

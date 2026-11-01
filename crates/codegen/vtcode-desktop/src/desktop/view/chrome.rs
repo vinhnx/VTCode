@@ -470,28 +470,8 @@ impl DesktopView {
         let leading_inset = |bar: TitleBar| {
             if window.is_fullscreen() { bar.pl_3() } else { bar }
         };
-        // Both modes share one trailing toolbar container, so the zen toggle
-        // keeps the same slot while the workspace zooms; it only fades and
-        // repaints. The bar persists across modes, so its fade id is keyed by
-        // mode: each toggle crossfades the whole bar between states.
-        if self.zen_mode {
-            return leading_inset(
-                TitleBar::new()
-                    .w_full()
-                    .h(px(TOOLBAR_HEIGHT))
-                    .pr_3()
-                    .border_b_0()
-                    .bg(toolbar_surface)
-                    .child(div().flex_1())
-                    .child(self.render_header_actions(cx)),
-            )
-            .with_animation(
-                gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
-                zen_fade_animation(cx.theme()),
-                |el, delta| el.opacity(delta),
-            )
-            .into_any_element();
-        }
+        // Zen drops the toolbar entirely (see `render_zen_toggle_floating`),
+        // so this bar only renders in normal mode.
         let navigation_visible = self.preferences.navigation_visible();
         let navigation_label = if navigation_visible {
             rust_i18n::t!(i18n::NAVIGATION_TOGGLE_NAVIGATION).to_string()
@@ -594,109 +574,122 @@ impl DesktopView {
                 )
                 .child(self.render_header_actions(cx)),
         )
-        .with_animation(
-            gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
-            zen_fade_animation(cx.theme()),
-            |el, delta| el.opacity(delta),
-        )
+        .with_animation("title-bar-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
         .into_any_element()
     }
 
-    /// Trailing header actions shared by both modes. The toolbar container is
-    /// identical in both; only its children differ, and the zen toggle is
-    /// always last, so it keeps one trailing slot while other chrome fades.
-    /// The toolbar forces the compact size on `.child()` controls, while
-    /// `.content()` items carry their own size.
+    /// Floating zen exit: pinned to the main column's top-right corner and
+    /// painted after the content, so it floats above the edge-to-edge zen
+    /// surface. Toggling restores the toolbar and the toggle's docked slot.
+    pub(super) fn render_zen_toggle_floating(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let faded = themes::faded_chrome(colors.background, colors.foreground);
+        div()
+            .absolute()
+            .top_2()
+            .right_2()
+            .rounded_full()
+            .bg(colors.popover)
+            .border_1()
+            .border_color(soft_edge_color(&colors))
+            .shadow_md()
+            .with_animation("zen-toggle-float", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
+            .child(zen_mode_toggle(true, faded, &self.focus_handle))
+    }
+
+    /// Trailing header actions for the normal-mode toolbar. The zen toggle is
+    /// always last, so it keeps one trailing slot. The toolbar forces the
+    /// compact size on `.child()` controls, while `.content()` items carry
+    /// their own size.
     fn render_header_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let mut group = ToolbarGroup::new("header-actions-group")
             .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
             .gap_1();
-        if !self.zen_mode {
-            if !self.preferences.navigation_visible() {
-                group = group
-                    .child(
-                        desktop_button("top-new-thread")
-                            .icon(IconName::Plus)
-                            .ghost()
-                            .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
-                            .tooltip_with_action(
-                                rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
-                                &NewSession,
-                                Some(key_context::DESKTOP),
-                            )
-                            .desktop_disabled(!self.session_change_allowed(None))
-                            .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
-                    )
-                    .child(
-                        desktop_button("top-utilities")
-                            .icon(IconName::GitBranch)
-                            .ghost()
-                            .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string())
-                            .tooltip_with_action(
-                                rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string(),
-                                &OpenUtilities,
-                                Some(key_context::DESKTOP),
-                            )
-                            .desktop_disabled(self.workspace.is_none())
-                            .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
-                    );
-            }
+        if !self.preferences.navigation_visible() {
             group = group
                 .child(
-                    desktop_button("search-commands")
-                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string())
-                        .icon(IconName::Search)
+                    desktop_button("top-new-thread")
+                        .icon(IconName::Plus)
                         .ghost()
+                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string())
                         .tooltip_with_action(
-                            rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(),
-                            &OpenCommandPalette,
+                            rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string(),
+                            &NewSession,
                             Some(key_context::DESKTOP),
                         )
-                        .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
+                        .desktop_disabled(!self.session_change_allowed(None))
+                        .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .child(
-                    desktop_button("toggle-inspector")
-                        .icon(IconName::PanelRight)
-                        .accessibility_label(if self.inspector_open {
-                            rust_i18n::t!("app.navigation.hide_panel").to_string()
-                        } else {
-                            rust_i18n::t!("app.navigation.show_panel").to_string()
-                        })
+                    desktop_button("top-utilities")
+                        .icon(IconName::GitBranch)
+                        .ghost()
+                        .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string())
                         .tooltip_with_action(
-                            rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
-                            &ToggleInspector,
+                            rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string(),
+                            &OpenUtilities,
                             Some(key_context::DESKTOP),
                         )
-                        .ghost()
-                        .desktop_disabled(self.workspace.is_none() || self.current_route() != Route::Workspace)
-                        .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
-                )
-                .child(
-                    desktop_button("open-settings")
-                        .accessibility_label(rust_i18n::t!("app.navigation.settings_button").to_string())
-                        .icon(IconName::Settings2)
-                        .tooltip_with_action(
-                            rust_i18n::t!("app.navigation.settings_button").to_string(),
-                            &OpenSettings,
-                            Some(key_context::DESKTOP),
-                        )
-                        .ghost()
-                        .on_click(cx.listener(|view, _, window, cx| view.toggle_settings(window, cx))),
+                        .desktop_disabled(self.workspace.is_none())
+                        .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
                 );
-            if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
-                group = group.content(
-                    Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                        .small()
-                        .child(speed.clone()),
-                );
-            }
+        }
+        group = group
+            .child(
+                desktop_button("search-commands")
+                    .accessibility_label(rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string())
+                    .icon(IconName::Search)
+                    .ghost()
+                    .tooltip_with_action(
+                        rust_i18n::t!(i18n::NAVIGATION_SEARCH_COMMANDS).to_string(),
+                        &OpenCommandPalette,
+                        Some(key_context::DESKTOP),
+                    )
+                    .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
+            )
+            .child(
+                desktop_button("toggle-inspector")
+                    .icon(IconName::PanelRight)
+                    .accessibility_label(if self.inspector_open {
+                        rust_i18n::t!("app.navigation.hide_panel").to_string()
+                    } else {
+                        rust_i18n::t!("app.navigation.show_panel").to_string()
+                    })
+                    .tooltip_with_action(
+                        rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
+                        &ToggleInspector,
+                        Some(key_context::DESKTOP),
+                    )
+                    .ghost()
+                    .desktop_disabled(self.workspace.is_none() || self.current_route() != Route::Workspace)
+                    .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
+            )
+            .child(
+                desktop_button("open-settings")
+                    .accessibility_label(rust_i18n::t!("app.navigation.settings_button").to_string())
+                    .icon(IconName::Settings2)
+                    .tooltip_with_action(
+                        rust_i18n::t!("app.navigation.settings_button").to_string(),
+                        &OpenSettings,
+                        Some(key_context::DESKTOP),
+                    )
+                    .ghost()
+                    .on_click(cx.listener(|view, _, window, cx| view.toggle_settings(window, cx))),
+            );
+        if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
             group = group.content(
-                self.render_chrome_menu("header-overflow", rust_i18n::t!("app.navigation.window_actions").to_string()),
+                Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                    .small()
+                    .child(speed.clone()),
             );
         }
+        group = group.content(
+            self.render_chrome_menu("header-overflow", rust_i18n::t!("app.navigation.window_actions").to_string()),
+        );
         let faded = themes::faded_chrome(theme.colors.background, theme.colors.foreground);
-        group = group.child(zen_mode_toggle(self.zen_mode, faded, &self.focus_handle));
+        // The toolbar only renders outside zen mode; the toggle always offers entry here.
+        group = group.child(zen_mode_toggle(false, faded, &self.focus_handle));
         Toolbar::new("header-toolbar").small().child(group)
     }
 }

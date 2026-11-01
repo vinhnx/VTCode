@@ -457,7 +457,7 @@ fn palette_copy_latest_message_copies_newest_raw_text(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn tool_status_slot_renders_in_every_state(cx: &mut TestAppContext) {
+fn tool_status_slot_only_renders_for_unfinished_states(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -472,12 +472,15 @@ fn tool_status_slot_renders_in_every_state(cx: &mut TestAppContext) {
             }
         });
         window.render_frame(cx);
-        // Completed rows keep a transparent status slot instead of dropping
-        // it, so rows hold their shape as states change.
-        let done = window.find("tool-status-done-tool").bounds();
-        let failed = window.find("tool-status-failed-tool").bounds();
-        assert!(done.size.height > px(0.));
-        assert_eq!(done.size.height, failed.size.height);
+        // Completed rows drop the redundant label (the state icon already
+        // signals it); other states keep theirs. Both rows span the full
+        // content width, so their chevrons stay docked on one edge.
+        assert!(window.try_find("tool-status-done-tool").is_none(), "completed rows omit the status label");
+        assert!(window.try_find("tool-status-failed-tool").is_some(), "failed rows keep the status label");
+        let done = window.find("tool-done-tool").bounds();
+        let failed = window.find("tool-failed-tool").bounds();
+        assert_eq!(done.right(), failed.right(), "chevrons share one trailing edge");
+        assert_eq!(done.size.height, failed.size.height, "rows hold their shape as states change");
     })
     .unwrap();
 }

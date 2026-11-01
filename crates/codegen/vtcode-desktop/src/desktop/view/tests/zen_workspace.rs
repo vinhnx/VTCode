@@ -27,7 +27,7 @@ fn zen_mode_hides_welcome_for_empty_threads(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zen_toggle_keeps_one_header_slot_with_reduced_motion(cx: &mut TestAppContext) {
+fn zen_toggle_floats_above_content_with_reduced_motion(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
@@ -47,10 +47,13 @@ fn zen_toggle_keeps_one_header_slot_with_reduced_motion(cx: &mut TestAppContext)
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Exit Zen mode"));
         assert!(window.try_find("welcome").is_none());
         assert!(window.try_find("send-prompt").is_some());
+        assert!(window.try_find("title-bar").is_none(), "zen drops the toolbar");
         let zen = window.find("zen-mode-toggle").bounds();
-        assert_eq!(zen.right(), entered.right(), "one zen slot keeps its trailing edge");
-        assert_eq!(zen.top(), entered.top(), "one zen slot keeps its vertical lane");
         assert_eq!(zen.size, entered.size, "enter and exit share one frame");
+        assert!(
+            window.find("workspace-surface").bounds().contains(&zen.center()),
+            "the exit floats above the content"
+        );
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
@@ -66,7 +69,7 @@ fn zen_toggle_keeps_one_header_slot_with_reduced_motion(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
-fn zen_mode_hides_navigation_and_keeps_one_toggle_slot(cx: &mut TestAppContext) {
+fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
@@ -128,16 +131,13 @@ fn zen_mode_hides_navigation_and_keeps_one_toggle_slot(cx: &mut TestAppContext) 
         window.render_frame(cx);
         assert_eq!(window.find("zen-mode-toggle").label(), Some("Exit Zen mode"));
         assert!(window.try_find("navigation-rail").is_none());
-        assert!(
-            window
-                .find("title-bar")
-                .bounds()
-                .contains(&window.find("zen-mode-toggle").bounds().center()),
-            "zen toggle stays fixed in the title bar while the workspace zooms"
-        );
+        assert!(window.try_find("title-bar").is_none(), "zen drops the toolbar");
         let zen_slot = window.find("zen-mode-toggle").bounds();
-        assert_eq!(zen_slot.origin, collapsed_nav_slot.origin, "toggling zen must not move its slot");
         assert_eq!(zen_slot.size, collapsed_nav_slot.size, "enter and exit share one frame");
+        assert!(
+            window.find("workspace-surface").bounds().contains(&zen_slot.center()),
+            "the exit floats above the content while the workspace zooms"
+        );
         assert!(
             zen_slot.size.width >= px(24.) && zen_slot.size.height >= px(24.),
             "zen toggle must keep a comfortable pointer target: {zen_slot:?}"
@@ -342,7 +342,7 @@ fn activity_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext)
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(window.find("activity-tool-font-scale").bounds().size.height, px(90.));
+        assert_eq!(window.find("activity-tool-font-scale").bounds().size.height, px(66.));
     })
     .unwrap();
 }
