@@ -8,9 +8,13 @@ use serde::Serialize;
 use super::SESSION_FILE_EXTENSION;
 use super::identifier::session_archive_path_for_identifier;
 use super::settings::{SESSION_DIR_ENV, read_env_var_os};
-use super::snapshot::{SessionArchiveSummary, SessionListing, SessionSnapshot, session_listing_matches_workspace};
+use super::snapshot::{
+    SessionArchiveSummary, SessionListHeader, SessionListing, SessionSnapshot, normalize_list_query_workspace,
+    raw_workspace_path_matches_query,
+};
+use chrono::{DateTime, Utc};
 use vtcode_commons::VtCodePaths;
-use vtcode_commons::fs::read_private_json_file;
+use vtcode_commons::fs::{read_private_file_no_follow, read_private_json_file};
 
 pub(crate) async fn resolve_sessions_dir_for_archive_writes() -> Result<PathBuf> {
     resolve_sessions_dir().await
@@ -33,16 +37,20 @@ pub async fn list_recent_session_summaries_in_workspace(
     list_recent_sessions_matching(limit, Some(workspace), SessionListing::into_summary).await
 }
 
-async fn list_recent_sessions_matching<T, Project>(
-    limit: usize,
-    workspace: Option<&Path>,
-    project: Project,
-) -> Result<Vec<T>>
-where
-    T: Send + 'static,
-    Project: Fn(SessionListing) -> T + Copy + Send + 'static,
-{
-    let total_started = Instant::now();
+/// One archive's filter/sort header plus its raw bytes, retained so the
+/// surviving entries can be fully parsed without a second read.
+struct ScannedSession {
+    path: PathBuf,
+    ended_at: DateTime<Utc>,
+    workspace_path: String,
+    bytes: Vec<u8>,
+}
+
+/// Scan every archive file into headers, newest first.
+///
+/// Header parsing skips transcript/message/progress allocation; corrupt files
+/// are skipped exactly as a failed full parse would skip them.
+async fn scan_session_headers() -> Result<Vec<ScannedSession>> {
     let sessions_dir = match resolve_sessions_dir().await {
         Ok(dir) => dir,
         Err(_) => return Ok(Vec::new()),
@@ -55,7 +63,6 @@ where
     // `std::fs::read_dir` is a blocking directory scan; run it off the async
     // executor and collect paths before spawning parallel read tasks. See `# Blocking`
     // docs in `src/agent/runloop/git.rs`.
-    let scan_started = Instant::now();
     let session_paths: Vec<PathBuf> = tokio::task::spawn_blocking(move || -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
         for entry in fs::read_dir(&sessions_dir)
@@ -71,66 +78,110 @@ where
     })
     .await
     .context("session directory scan task panicked")??;
-    let scan_elapsed = scan_started.elapsed();
 
-    // Process session files in parallel for better performance with large archives
+    // Parse headers in parallel for better performance with large archives
     // Batch processing to avoid overwhelming the system with too many concurrent tasks
     const BATCH_SIZE: usize = 10;
-    let mut all_sessions = Vec::new();
-    let reads_started = Instant::now();
+    let mut scanned = Vec::new();
 
     for batch in session_paths.chunks(BATCH_SIZE) {
         let mut tasks = Vec::with_capacity(batch.len());
 
         for path in batch {
             let path = path.clone();
-            let workspace = workspace.map(Path::to_path_buf);
             let task = tokio::task::spawn(async move {
-                let snapshot = match read_private_json_file::<SessionSnapshot>(&path).await {
-                    Ok(snapshot) => snapshot,
+                let bytes = match read_private_file_no_follow(&path).await {
+                    Ok(bytes) => bytes,
                     Err(_) => return None,
                 };
-                let listing = SessionListing { path, snapshot };
-                if workspace
-                    .as_deref()
-                    .is_some_and(|workspace| !session_listing_matches_workspace(&listing, workspace))
-                {
-                    return None;
-                }
-                Some((listing.snapshot.ended_at, project(listing)))
+                let header: SessionListHeader = match serde_json::from_slice(&bytes) {
+                    Ok(header) => header,
+                    Err(_) => return None,
+                };
+                Some(ScannedSession {
+                    path,
+                    ended_at: header.ended_at,
+                    workspace_path: header.metadata.workspace_path,
+                    bytes,
+                })
             });
             tasks.push(task);
         }
 
         // Collect results from this batch
         for task in tasks {
-            if let Ok(Some(listing)) = task.await {
-                all_sessions.push(listing);
+            if let Ok(Some(entry)) = task.await {
+                scanned.push(entry);
             }
         }
     }
-    let reads_elapsed = reads_started.elapsed();
 
-    // Sort and limit results
-    all_sessions.sort_by_key(|(ended_at, _)| std::cmp::Reverse(*ended_at));
-    let matching_sessions = all_sessions.len();
-    if limit > 0 && all_sessions.len() > limit {
-        all_sessions.truncate(limit);
+    scanned.sort_by_key(|entry| std::cmp::Reverse(entry.ended_at));
+    Ok(scanned)
+}
+
+async fn list_recent_sessions_matching<T, Project>(
+    limit: usize,
+    workspace: Option<&Path>,
+    project: Project,
+) -> Result<Vec<T>>
+where
+    T: Send + 'static,
+    Project: Fn(SessionListing) -> T + Copy + Send + 'static,
+{
+    let total_started = Instant::now();
+    let scan_started = Instant::now();
+    let scanned = scan_session_headers().await?;
+    let scan_elapsed = scan_started.elapsed();
+
+    // Filter and limit on headers, then fully parse only the survivors.
+    // Surviving entries that fail the full parse are skipped and backfilled
+    // from the next-ranked headers so `limit` keeps its exact meaning.
+    let normalized_workspace = workspace.map(normalize_list_query_workspace);
+    let take = if limit > 0 { limit } else { usize::MAX };
+    let mut selected = Vec::with_capacity(take.min(scanned.len()));
+    let mut matching_sessions = 0;
+    let materialize_started = Instant::now();
+
+    for entry in &scanned {
+        if normalized_workspace
+            .as_deref()
+            .is_some_and(|query| !raw_workspace_path_matches_query(&entry.workspace_path, query))
+        {
+            continue;
+        }
+        matching_sessions += 1;
+        if selected.len() >= take {
+            continue;
+        }
+        let snapshot: SessionSnapshot = match serde_json::from_slice(&entry.bytes) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                tracing::debug!(
+                    path = %entry.path.display(),
+                    %error,
+                    "skipping archive that fails full snapshot parse"
+                );
+                continue;
+            }
+        };
+        selected.push(project(SessionListing { path: entry.path.clone(), snapshot }));
     }
+    let materialize_elapsed = materialize_started.elapsed();
 
     tracing::debug!(
         target: "vtcode::session_archive",
-        scanned_files = session_paths.len(),
+        scanned_files = scanned.len(),
         matching_sessions,
-        returned_sessions = all_sessions.len(),
+        returned_sessions = selected.len(),
         workspace_filtered = workspace.is_some(),
-        directory_scan = ?scan_elapsed,
-        snapshot_reads = ?reads_elapsed,
+        header_scan = ?scan_elapsed,
+        materialize = ?materialize_elapsed,
         total = ?total_started.elapsed(),
         "listed session archives"
     );
 
-    Ok(all_sessions.into_iter().map(|(_, session)| session).collect())
+    Ok(selected)
 }
 
 /// Find a session archive by its identifier (file stem) without needing to list all sessions.
@@ -179,18 +230,28 @@ pub async fn find_session_by_id_or_name(id_or_name: &str) -> Result<SessionListi
         return Ok(listing);
     }
 
-    // Fall back to searching recent sessions by identifier substring
-    let listings = list_recent_sessions(200).await?;
+    // Fall back to searching recent sessions by identifier substring.
+    // The header scan is newest-first like the previous list-then-scan order
+    // with the same 200-entry recency window (counted over headers now, so a
+    // match ranked past 200 headers by corrupt newer archives is missed), and
+    // fully parses only the winner.
     let normalized_query = id_or_name.to_lowercase();
 
-    for listing in &listings {
+    for entry in scan_session_headers().await?.into_iter().take(200) {
         // Match against the file stem (session identifier)
-        if let Some(stem) = listing.path.file_stem()
-            && let Some(stem_str) = stem.to_str()
-            && stem_str.to_lowercase().contains(&normalized_query)
-        {
-            return Ok(listing.clone());
+        let stem_matches = entry
+            .path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .is_some_and(|stem| stem.to_lowercase().contains(&normalized_query));
+        if !stem_matches {
+            continue;
         }
+        let snapshot: SessionSnapshot = match serde_json::from_slice(&entry.bytes) {
+            Ok(snapshot) => snapshot,
+            Err(_) => continue,
+        };
+        return Ok(SessionListing { path: entry.path, snapshot });
     }
 
     Err(anyhow::anyhow!("No saved chat found matching '{id_or_name}'."))

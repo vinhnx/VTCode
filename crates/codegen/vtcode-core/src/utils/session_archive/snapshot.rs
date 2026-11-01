@@ -57,6 +57,24 @@ pub struct SessionListing {
     pub snapshot: SessionSnapshot,
 }
 
+/// Minimal projection of [`SessionSnapshot`] used to filter, sort, and limit
+/// archive listings without deserializing transcripts, messages, or progress.
+///
+/// Unknown fields are ignored, so this parses every file a full snapshot
+/// parse accepts. Files it rejects are skipped exactly as a failed full parse.
+#[derive(Debug, Deserialize)]
+pub(crate) struct SessionListHeader {
+    pub metadata: SessionListHeaderMetadata,
+    pub ended_at: DateTime<Utc>,
+}
+
+/// Header-only view of [`SessionArchiveMetadata`](super::metadata::SessionArchiveMetadata).
+#[derive(Debug, Deserialize)]
+pub(crate) struct SessionListHeaderMetadata {
+    #[serde(default)]
+    pub workspace_path: String,
+}
+
 /// Small archive metadata retained by desktop session-list queries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionArchiveSummary {
@@ -231,9 +249,27 @@ pub fn session_workspace_path(listing: &SessionListing) -> Option<PathBuf> {
 }
 
 pub fn session_listing_matches_workspace(listing: &SessionListing, workspace: &Path) -> bool {
-    let Some(session_workspace) = session_workspace_path(listing) else {
-        return false;
-    };
+    raw_workspace_path_matches_query(
+        &listing.snapshot.metadata.workspace_path,
+        &normalize_workspace_for_match(workspace),
+    )
+}
 
-    normalize_workspace_for_match(&session_workspace) == normalize_workspace_for_match(workspace)
+/// Normalize a list-query workspace once so per-file matching avoids a
+/// repeated `current_dir` + normalization per archive.
+pub(crate) fn normalize_list_query_workspace(path: &Path) -> PathBuf {
+    normalize_workspace_for_match(path)
+}
+
+/// Match a raw `metadata.workspace_path` against a pre-normalized query.
+///
+/// This is the single matching core behind [`session_listing_matches_workspace`];
+/// header scans call it directly with an already-normalized query.
+pub(crate) fn raw_workspace_path_matches_query(workspace_path: &str, normalized_query: &Path) -> bool {
+    let raw = workspace_path.trim();
+    if raw.is_empty() {
+        return false;
+    }
+
+    normalize_workspace_for_match(Path::new(raw)).as_path() == normalized_query
 }

@@ -1,8 +1,9 @@
-use super::{FileOpsTool, compile_list_glob, list_entry_matches};
+use super::{FileOpsTool, ListNameMatcher, compile_list_glob, list_entry_matches};
 use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
+use crate::types::CompactStr;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -26,6 +27,9 @@ impl FileOpsTool {
                 suggestion,
             ));
         }
+
+        // Built after the existence check so missing paths skip even this one allocation.
+        let name_matcher = ListNameMatcher::new(input);
 
         // Pre-allocate with max_items capacity to avoid reallocations - AGENTS.md max 5 items
         let mut items = Vec::with_capacity(input.max_items.min(5));
@@ -63,7 +67,7 @@ impl FileOpsTool {
             }
 
             let relative_path = self.relative_path_json(&path);
-            if !list_entry_matches(input, &relative_path, &name, list_glob.as_ref()) {
+            if !list_entry_matches(&name_matcher, &relative_path, &name, list_glob.as_ref()) {
                 continue;
             }
 
@@ -109,6 +113,12 @@ impl FileOpsTool {
             .as_ref()
             .ok_or_else(|| anyhow!("Error: Invalid 'list_files' arguments. When mode='find_name', must provide name_pattern (string). Example: {{\"path\": \".\", \"mode\": \"find_name\", \"name_pattern\": \"Cargo.toml\"}}"))?;
         let search_path = self.normalize_list_path(input).await?;
+        // Lower the wanted name once: the loop below runs per directory entry.
+        let wanted_lower: Option<CompactStr> = if input.case_sensitive.unwrap_or(true) {
+            None
+        } else {
+            Some(CompactStr::from(file_name.to_lowercase()))
+        };
 
         let walker_entries: Vec<(PathBuf, bool)> = spawn_blocking({
             let search_path = search_path.clone();
@@ -135,10 +145,9 @@ impl FileOpsTool {
             }
 
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            let matches = if input.case_sensitive.unwrap_or(true) {
-                name == file_name.as_str()
-            } else {
-                name.to_lowercase() == file_name.to_lowercase()
+            let matches = match &wanted_lower {
+                Some(wanted) => name.to_lowercase().as_str() == wanted.as_str(),
+                None => name == file_name.as_str(),
             };
 
             if matches {

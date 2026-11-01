@@ -250,3 +250,122 @@ async fn basic_list_cache_respects_filter_shape() {
         .expect("beta list should succeed");
     assert_eq!(beta["items"][0]["name"], "beta.rs");
 }
+
+fn matcher_input(name_pattern: Option<&str>, case_sensitive: Option<bool>) -> ListInput {
+    ListInput {
+        path: String::new(),
+        max_items: 20,
+        page: None,
+        per_page: None,
+        response_format: None,
+        include_hidden: false,
+        glob_pattern: None,
+        mode: None,
+        name_pattern: name_pattern.map(str::to_string),
+        content_pattern: None,
+        file_extensions: None,
+        case_sensitive,
+    }
+}
+
+#[test]
+fn name_matcher_wildcard_and_empty_pattern_match_everything() {
+    for input in [
+        matcher_input(None, None),
+        matcher_input(None, Some(false)),
+        matcher_input(Some("*"), None),
+        matcher_input(Some("*"), Some(false)),
+        // `str::contains("")` is always true; pin that an empty pattern matches all.
+        matcher_input(Some(""), None),
+        matcher_input(Some(""), Some(false)),
+    ] {
+        let matcher = ListNameMatcher::new(&input);
+        assert!(matcher.matches_name("Alpha.rs"));
+        assert!(matcher.matches_name("alphabet.txt"));
+        assert!(matcher.matches_name(""));
+    }
+}
+
+#[test]
+fn name_matcher_case_sensitive_contains_is_exact_case() {
+    let input = matcher_input(Some("Alpha"), Some(true));
+    let matcher = ListNameMatcher::new(&input);
+    assert!(matcher.matches_name("Alpha.rs"));
+    assert!(matcher.matches_name("Alpha_dir"));
+    assert!(!matcher.matches_name("alphabet.txt"));
+
+    // Asymmetric direction: a lowercase pattern must not match uppercase names.
+    let input = matcher_input(Some("alpha"), None);
+    let matcher = ListNameMatcher::new(&input);
+    assert!(!matcher.matches_name("Alpha.rs"));
+    assert!(matcher.matches_name("alphabet.txt"));
+}
+
+#[test]
+fn name_matcher_case_insensitive_contains_ignores_case_once_per_call() {
+    for pattern in ["alpha", "ALPHA", "AlPhA"] {
+        let input = matcher_input(Some(pattern), Some(false));
+        let matcher = ListNameMatcher::new(&input);
+        // The lowered pattern is precomputed at construction, not per entry.
+        assert_eq!(matcher.lowered_pattern.as_deref(), Some("alpha"));
+        assert!(matcher.matches_name("Alpha.rs"));
+        assert!(matcher.matches_name("alphabet.txt"));
+        assert!(matcher.matches_name("Alpha_dir"));
+        assert!(!matcher.matches_name("beta.rs"));
+    }
+}
+
+#[test]
+fn name_matcher_case_insensitive_unicode_keeps_full_lowercase_semantics() {
+    let input = matcher_input(Some("ÉCOLE"), Some(false));
+    let matcher = ListNameMatcher::new(&input);
+    assert!(matcher.matches_name("école.txt"));
+    assert!(!matcher.matches_name("school.txt"));
+
+    // Asymmetric direction with the same folded form.
+    let input = matcher_input(Some("école"), Some(false));
+    let matcher = ListNameMatcher::new(&input);
+    assert!(matcher.matches_name("ÉCOLE.txt"));
+
+    // Case-sensitive matching must not fold at all.
+    let input = matcher_input(Some("ÉCOLE"), Some(true));
+    let matcher = ListNameMatcher::new(&input);
+    assert!(!matcher.matches_name("école.txt"));
+    assert!(matcher.matches_name("ÉCOLE.txt"));
+}
+
+#[tokio::test]
+async fn find_by_name_matches_exact_case_and_folds_when_insensitive() {
+    let workspace = TempDir::new().unwrap();
+    fs::write(workspace.path().join("Cargo.toml"), "fixture").unwrap();
+    fs::write(workspace.path().join("README.md"), "fixture").unwrap();
+    let tool = make_tool(&workspace);
+
+    let find = |name_pattern: &str, case_sensitive: Option<bool>| {
+        let mut args = json!({"path": ".", "mode": "find_name", "name_pattern": name_pattern});
+        if let Some(case_sensitive) = case_sensitive {
+            args["case_sensitive"] = json!(case_sensitive);
+        }
+        tool.execute(args)
+    };
+
+    // Exact case-sensitive hit (default).
+    let hit = find("Cargo.toml", None).await.unwrap();
+    assert_eq!(hit["found"], true);
+    assert_eq!(hit["name"], "Cargo.toml");
+
+    // Wrong case misses when sensitive...
+    let miss = find("cargo.toml", Some(true)).await.unwrap();
+    assert_eq!(miss["found"], false);
+
+    // ...but hits in both directions when insensitive.
+    for pattern in ["cargo.toml", "CARGO.TOML"] {
+        let folded = find(pattern, Some(false)).await.unwrap();
+        assert_eq!(folded["found"], true, "pattern: {pattern}");
+        assert_eq!(folded["name"], "Cargo.toml");
+    }
+
+    // Unknown name misses.
+    let unknown = find("nope.txt", None).await.unwrap();
+    assert_eq!(unknown["found"], false);
+}

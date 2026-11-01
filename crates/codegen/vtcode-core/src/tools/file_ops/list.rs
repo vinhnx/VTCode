@@ -4,6 +4,7 @@ use crate::config::constants::tools;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
+use crate::types::CompactStr;
 use anyhow::{Context, Result, anyhow};
 use glob::Pattern;
 use serde_json::{Value, json};
@@ -30,8 +31,48 @@ pub(super) fn compile_list_glob(input: &ListInput) -> Result<Option<Pattern>> {
         .map(Some)
 }
 
+/// Precomputed name-pattern matcher for one list/search call.
+///
+/// Matching runs once per directory entry, so lowercasing the pattern on
+/// every call wastes an allocation per entry. Build this once per
+/// `execute_*` call and reuse it for every entry instead.
+pub(super) struct ListNameMatcher<'a> {
+    pattern: &'a str,
+    lowered_pattern: Option<CompactStr>,
+    case_sensitive: bool,
+}
+
+impl<'a> ListNameMatcher<'a> {
+    pub(super) fn new(input: &'a ListInput) -> Self {
+        let pattern = input.name_pattern.as_deref().unwrap_or("*");
+        let case_sensitive = input.case_sensitive.unwrap_or(true);
+        let lowered_pattern = if !case_sensitive && pattern != "*" {
+            Some(CompactStr::from(pattern.to_lowercase()))
+        } else {
+            None
+        };
+        debug_assert_eq!(
+            lowered_pattern.is_some(),
+            !case_sensitive && pattern != "*",
+            "lowered pattern is precomputed exactly for case-insensitive non-wildcard matching"
+        );
+        Self { pattern, lowered_pattern, case_sensitive }
+    }
+
+    fn matches_name(&self, name: &str) -> bool {
+        if self.case_sensitive {
+            return self.pattern == "*" || name.contains(self.pattern);
+        }
+        match &self.lowered_pattern {
+            Some(lowered) => name.to_lowercase().contains(lowered.as_str()),
+            // Only the "*" wildcard reaches here without a lowered pattern.
+            None => true,
+        }
+    }
+}
+
 pub(super) fn list_entry_matches(
-    input: &ListInput,
+    matcher: &ListNameMatcher,
     relative_path: &str,
     name: &str,
     glob_pattern: Option<&Pattern>,
@@ -42,16 +83,7 @@ pub(super) fn list_entry_matches(
             || pattern.matches(name);
     }
 
-    let pattern = input.name_pattern.as_deref().unwrap_or("*");
-    if pattern == "*" {
-        return true;
-    }
-
-    if input.case_sensitive.unwrap_or(true) {
-        name.contains(pattern)
-    } else {
-        name.to_lowercase().contains(&pattern.to_lowercase())
-    }
+    matcher.matches_name(name)
 }
 
 impl FileOpsTool {
@@ -126,6 +158,9 @@ impl FileOpsTool {
             return Ok(cached_result);
         }
 
+        // Built after the cache hit so cached listings skip even this one allocation.
+        let name_matcher = ListNameMatcher::new(input);
+
         // Pre-allocate with reasonable estimate for directory entries
         let mut all_items = Vec::with_capacity(32);
         if base_is_file {
@@ -134,7 +169,7 @@ impl FileOpsTool {
                 .ok_or_else(|| anyhow!("Invalid file name for path: {}", input.path))?;
             let file_name = file_name.to_string_lossy().into_owned();
             let relative_path = self.relative_path_json(&base);
-            if !list_entry_matches(input, &relative_path, &file_name, list_glob.as_ref()) {
+            if !list_entry_matches(&name_matcher, &relative_path, &file_name, list_glob.as_ref()) {
                 return Ok(json!({
                     "success": true,
                     "items": [],
@@ -185,7 +220,7 @@ impl FileOpsTool {
                     .is_dir();
 
                 let relative_path = self.relative_path_json(&path);
-                if !list_entry_matches(input, &relative_path, &name, list_glob.as_ref()) {
+                if !list_entry_matches(&name_matcher, &relative_path, &name, list_glob.as_ref()) {
                     continue;
                 }
 

@@ -702,6 +702,39 @@ async fn byte_range_reads_with_offset() -> Result<()> {
 }
 
 #[tokio::test]
+async fn byte_range_mid_line_offset_matches_next_boundary_read() -> Result<()> {
+    let mut temp = NamedTempFile::new()?;
+    writeln!(temp, "first line")?;
+    writeln!(temp, "second line")?;
+    writeln!(temp, "third line")?;
+
+    let handler = ReadFileHandler;
+    let read_at = |offset_bytes| {
+        let args = ReadFileArgs {
+            file_path: temp.path().to_string_lossy().to_string(),
+            offset: 1,
+            limit: 2000,
+            mode: ReadMode::Slice,
+            indentation: None,
+            max_tokens: None,
+            condense: false,
+            offset_bytes: Some(offset_bytes),
+            page_size_bytes: Some(50),
+        };
+        handler.handle_detailed(args)
+    };
+
+    // Offset 3 lands mid-line; the partial first line is skipped.
+    let mid_line = read_at(3).await?;
+    // Offset 11 is the next line boundary ("second line" starts here).
+    let boundary = read_at(11).await?;
+    assert_eq!(mid_line.content, "2: second line\n3: third line");
+    assert_eq!(boundary.content, mid_line.content);
+    assert!(!mid_line.has_more);
+    Ok(())
+}
+
+#[tokio::test]
 async fn byte_range_beyond_eof_returns_empty() -> Result<()> {
     let mut temp = NamedTempFile::new()?;
     temp.as_file_mut().write_all(b"short")?;
