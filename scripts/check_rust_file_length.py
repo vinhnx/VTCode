@@ -57,9 +57,13 @@ def list_tracked_rust_files() -> list[Path]:
     return files
 
 
-def count_lines(path: Path) -> int:
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        return sum(1 for _ in handle)
+def count_lines(path: Path) -> int | None:
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as handle:
+            return sum(1 for _ in handle)
+    except OSError:
+        # File removed since the ls-files snapshot; ignore.
+        return None
 
 
 def emit_report(summary: dict[str, Any], top_items: list[dict[str, Any]], top_count: int) -> None:
@@ -68,7 +72,8 @@ def emit_report(summary: dict[str, Any], top_items: list[dict[str, Any]], top_co
         f"total={summary['total_files']}, "
         f">{summary['max_lines']}={summary['over_max']}, "
         f">1000={summary['over_1000']}, "
-        f">1500={summary['over_1500']}"
+        f">1500={summary['over_1500']}, "
+        f"skipped_missing={summary['skipped_missing']}"
     )
     if not top_items:
         return
@@ -85,8 +90,12 @@ def main() -> int:
     files = list_tracked_rust_files()
 
     entries: list[dict[str, Any]] = []
+    skipped_missing = 0
     for path in files:
         lines = count_lines(path)
+        if lines is None:
+            skipped_missing += 1
+            continue
         entries.append(
             {
                 "path": path.relative_to(REPO_ROOT).as_posix(),
@@ -107,6 +116,7 @@ def main() -> int:
         "over_max": len(over_max),
         "over_1000": len(over_1000),
         "over_1500": len(over_1500),
+        "skipped_missing": skipped_missing,
     }
 
     emit_report(summary, entries, args.top)

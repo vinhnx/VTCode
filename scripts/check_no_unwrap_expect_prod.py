@@ -189,14 +189,21 @@ def main() -> int:
     files = list_tracked_rust_files()
 
     scanned = 0
+    skipped_missing = 0
     for path in files:
         if is_test_path(path):
             continue
+        try:
+            findings.extend(scan_file(path, allow_rules))
+        except OSError:
+            # File removed since the ls-files snapshot; ignore.
+            skipped_missing += 1
+            continue
         scanned += 1
-        findings.extend(scan_file(path, allow_rules))
 
     print(
-        f"unwrap/expect scan summary: scanned_files={scanned}, findings={len(findings)}, mode={args.mode}"
+        f"unwrap/expect scan summary: scanned_files={scanned}, findings={len(findings)}, "
+        f"skipped_missing={skipped_missing}, mode={args.mode}"
     )
 
     if findings:
