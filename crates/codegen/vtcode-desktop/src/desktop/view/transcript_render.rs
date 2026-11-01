@@ -408,6 +408,9 @@ impl DesktopView {
             return;
         };
         self.keyboard_focused_message = Some(item.id.clone());
+        // Kit limitation: `scroll_to_item` pins to viewport top and the
+        // scroller exposes no visible-range query, so reveal-only-if-outside
+        // is unimplementable; every step recenters.
         self.message_scroller.update(cx, |state, cx| {
             let _scrolled = state.scroll_to_item(index, cx);
         });

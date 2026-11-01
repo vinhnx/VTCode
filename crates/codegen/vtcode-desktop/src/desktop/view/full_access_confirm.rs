@@ -24,6 +24,7 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.disarm_double_escape();
         self.full_access_confirm = Some(FullAccessConfirmState {
             options,
             workspace: self.workspace.clone(),
@@ -34,6 +35,7 @@ impl DesktopView {
     }
 
     pub(super) fn cancel_full_access_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.disarm_double_escape();
         self.full_access_confirm = None;
         self.focus_composer(window, cx);
         cx.notify();
@@ -43,6 +45,7 @@ impl DesktopView {
         let Some(state) = self.full_access_confirm.take() else {
             return;
         };
+        self.disarm_double_escape();
         self.focus_composer(window, cx);
         if !state.acknowledged || self.workspace != state.workspace {
             cx.notify();

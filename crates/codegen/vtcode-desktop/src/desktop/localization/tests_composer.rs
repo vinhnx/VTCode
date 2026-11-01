@@ -15,6 +15,7 @@ fn composer_copy_is_localized_for_every_language() {
             "app.composer.restore_draft",
             "app.composer.no_turn_to_stop",
             "app.composer.no_thread_to_close",
+            "app.composer.mode_switch_busy",
             "app.composer.choose_workspace_files",
             "app.composer.palette_group_files",
             "app.composer.palette_group_commands",

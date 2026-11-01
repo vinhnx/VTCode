@@ -40,6 +40,17 @@ impl DesktopView {
         if self.composer_history_index.is_some_and(|ix| ix >= entries.len()) {
             self.composer_history_index = None;
         }
+        // Genuine input abandons recall: when the draft no longer matches the
+        // entry this cursor wrote, restart traversal instead of clobbering
+        // typing (or resurrecting a cleared stash). Synchronous by design —
+        // `Change` effects flush after the update, too late to gate the next
+        // keypress, and recall's own undo-preserving writes emit `Change`.
+        if self
+            .composer_history_index
+            .is_some_and(|ix| entries.get(ix).map(String::as_str) != Some(draft.as_ref()))
+        {
+            self.reset_history_recall();
+        }
         let entry = match self.composer_history_index {
             None if older => {
                 self.composer_history_stash = draft;
@@ -48,17 +59,22 @@ impl DesktopView {
             }
             None => return false,
             Some(ix) if older => {
-                let next = (ix + 1).min(entries.len() - 1);
-                self.composer_history_index = Some(next);
-                entries.get(next).cloned()
+                if ix + 1 >= entries.len() {
+                    // At the oldest (CLI `go_to_previous_history` returns None):
+                    // consume the key without rewriting identical text or
+                    // pushing a phantom undo step.
+                    return true;
+                }
+                self.composer_history_index = Some(ix + 1);
+                entries.get(ix + 1).cloned()
             }
             Some(0) => {
                 self.composer_history_index = None;
                 let stash = std::mem::take(&mut self.composer_history_stash);
                 self.composer.update(cx, |input, cx| input.replace_all(stash, window, cx));
                 self.move_composer_caret_to_end(window, cx);
-                // Silent writes emit no `Change`: refresh suggestions so a
-                // recalled `@…` trigger still offers Tab completion.
+                // Programmatic writes emit no synchronous signal, so refresh
+                // suggestions explicitly for a recalled `@…` trigger.
                 self.refresh_composer_suggestions_after_input_navigation(window, cx);
                 cx.notify();
                 return true;
@@ -74,8 +90,8 @@ impl DesktopView {
         };
         self.composer.update(cx, |input, cx| input.replace_all(entry, window, cx));
         self.move_composer_caret_to_end(window, cx);
-        // Silent writes emit no `Change`: refresh suggestions so a
-        // recalled `@…` trigger still offers Tab completion.
+        // Programmatic writes emit no synchronous signal, so refresh
+        // suggestions explicitly for a recalled `@…` trigger.
         self.refresh_composer_suggestions_after_input_navigation(window, cx);
         cx.notify();
         true

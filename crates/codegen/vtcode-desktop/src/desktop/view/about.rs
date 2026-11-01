@@ -7,6 +7,7 @@ use super::*;
 
 impl DesktopView {
     pub(super) fn open_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.disarm_double_escape();
         self.about_open = true;
         self.about_focus.focus(window, cx);
         cx.notify();
@@ -16,6 +17,7 @@ impl DesktopView {
         if !self.about_open {
             return;
         }
+        self.disarm_double_escape();
         self.about_open = false;
         self.focus_composer(window, cx);
         cx.notify();
@@ -23,6 +25,7 @@ impl DesktopView {
 
     /// Third-party notices live in Settings → VT Code; route there and close.
     fn open_acknowledgments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.disarm_double_escape();
         self.about_open = false;
         self.settings_tab = settings::SettingsTab::VtCode;
         self.open_settings(window, cx);

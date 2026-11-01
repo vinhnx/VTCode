@@ -539,7 +539,12 @@ impl DesktopView {
                 }
             }
             PaletteKind::PromptHistory => {
-                let _accepted = self.accept_composer_suggestion(window, cx);
+                if !self.accept_composer_suggestion(window, cx) {
+                    // Empty history or a filter matching nothing: Enter
+                    // submits the draft instead of dying silently.
+                    self.close_palette(window, cx);
+                    self.submit_prompt(window, cx);
+                }
             }
             PaletteKind::SlashCommands => {
                 let _accepted = self.accept_composer_suggestion(window, cx);

@@ -617,11 +617,11 @@ mod tests {
 
     #[test]
     fn rejects_overrides_colliding_with_fixed_chords() {
-        // Every modified fixed-table chord must be rejected: a rebind here
-        // double-fires with the fixed handler (e.g. `ctrl-m` toggling the
-        // model picker open then shut). CLI import funnels through the same
-        // `bindings()` gate, so it is covered too.
-        for key in super::super::bootstrap::FIXED_RESERVED_CHORDS {
+        // Every modified fixed-table chord must be rejected: the deeper fixed
+        // binding would shadow the rebind (e.g. `ctrl-m` opening the model
+        // picker instead of the rebound command in the composer). CLI import
+        // funnels through the same `bindings()` gate, so it is covered too.
+        for key in bootstrap::FIXED_RESERVED_CHORDS {
             assert!(bindings(&BTreeMap::from([("model".into(), (*key).into())])).is_err(), "{key} must be reserved");
         }
         // Near-miss neighbors stay accepted (asymmetric sides).

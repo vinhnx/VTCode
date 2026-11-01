@@ -261,6 +261,7 @@ impl DesktopView {
         let Some(workspace) = self.workspace.clone() else {
             return;
         };
+        self.disarm_double_escape();
         // Capture the restore target for both preview kinds, matching the text
         // path, so Escape always returns focus to the opening surface.
         if self.file_preview.is_none() {

@@ -34,6 +34,7 @@ impl DesktopView {
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
+        self.disarm_double_escape();
         self.attachment_picker = Some(AttachmentPickerState {
             tab: AttachmentPickerTab::Workspace,
             thumbnails: HashMap::new(),
@@ -47,6 +48,7 @@ impl DesktopView {
         if self.attachment_picker.take().is_none() {
             return;
         }
+        self.disarm_double_escape();
         self.focus_composer(window, cx);
         cx.notify();
     }

@@ -131,20 +131,27 @@ fn history_recall_traverses_newest_first_restores_stash_and_resets_on_submit(cx:
             });
         });
         window.render_frame(cx);
-        window.press("up", cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
-        window.press("up", cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "first prompt");
-        window.press("up", cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "first prompt", "recall clamps at the oldest");
-        window.press("down", cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
-        window.press("down", cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "wip", "down past newest restores the stash");
-        window.press("down", cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "wip", "live draft has nothing newer");
-        window.press("up", cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+    })
+    .unwrap();
+    // One press per update: `Change` effects flush at update boundaries in
+    // production (each keypress is its own platform event), so batching
+    // presses would hide a self-resetting traversal.
+    for (key, expected, message) in [
+        ("up", "second prompt", ""),
+        ("up", "first prompt", ""),
+        ("up", "first prompt", "recall clamps at the oldest"),
+        ("down", "second prompt", ""),
+        ("down", "wip", "down past newest restores the stash"),
+        ("down", "wip", "live draft has nothing newer"),
+        ("up", "second prompt", ""),
+    ] {
+        cx.update_window(window, |_, window, cx| {
+            window.press(key, cx);
+            assert_eq!(view.read(cx).composer.read(cx).value(), expected, "{message}");
+        })
+        .unwrap();
+    }
+    cx.update_window(window, |_, window, cx| {
         window.press("enter", cx);
         window.render_frame(cx);
     })
@@ -162,6 +169,77 @@ fn history_recall_traverses_newest_first_restores_stash_and_resets_on_submit(cx:
     })
     .unwrap();
     assert!(requests.try_recv().is_err(), "recall never submits");
+}
+
+#[gpui_kit::test]
+fn up_past_oldest_pushes_no_phantom_undo(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            for (id, text) in [("history-user-1", "first prompt"), ("history-user-2", "second prompt")] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), "user".into(), "You".into(), text.into()));
+            }
+            view.composer.update(cx, |state, cx| {
+                state.set_value("wip", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    for (key, expected) in [("up", "second prompt"), ("up", "first prompt"), ("up", "first prompt")] {
+        cx.update_window(window, |_, window, cx| {
+            window.press(key, cx);
+            assert_eq!(view.read(cx).composer.read(cx).value(), expected);
+        })
+        .unwrap();
+    }
+    // The clamped press wrote nothing, so undo reaches the real prior step.
+    cx.update_window(window, |_, window, cx| {
+        window.press("cmd-z", cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn enter_with_empty_history_picker_submits_the_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("fresh-session".into());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("hello", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "empty picker still opens");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("draft submits") else {
+        panic!("expected submit");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+    assert_eq!(params["prompt"], "hello");
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).palette.is_none(), "failed accept closes the picker");
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "single submit");
 }
 
 #[gpui_kit::test]

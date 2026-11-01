@@ -347,6 +347,7 @@ impl DesktopView {
     }
 
     pub(super) fn close_file_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.disarm_double_escape();
         self.preview_task = None;
         self.file_preview = None;
         self.preview_editor_error = None;

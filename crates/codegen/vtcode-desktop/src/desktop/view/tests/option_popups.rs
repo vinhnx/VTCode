@@ -434,7 +434,7 @@ fn locked_agent_cycle_surfaces_busy_status(cx: &mut TestAppContext) {
         window.press("shift-tab", cx);
     })
     .unwrap();
-    requests.try_recv().expect("first cycle requests");
+    let _first = requests.try_recv().expect("first cycle requests");
     cx.update_window(window, |_, window, cx| {
         // Second press while the select is in flight: no request, busy notice instead.
         window.press("shift-tab", cx);

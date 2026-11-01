@@ -5,10 +5,11 @@ use super::*;
 pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
 
 /// Modified chords from the fixed table in [`init_keybindings`].
-/// `shortcuts::bindings()` rejects overrides colliding with these: a rebind
-/// here would double-fire with the fixed handler (e.g. `ctrl-m` toggling the
-/// model picker twice). Bare fixed chords need no entry — the modifier rule
-/// rejects them already. Keep in sync with the table below.
+/// `shortcuts::bindings()` rejects overrides colliding with these: the deeper
+/// fixed binding would shadow the rebind (e.g. `ctrl-m` opening the model
+/// picker instead of the rebound command while the composer is focused).
+/// Bare fixed chords need no entry — the modifier rule rejects them already.
+/// Keep in sync with the table below.
 pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
     "ctrl-w",
     "alt-d",
@@ -53,9 +54,10 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("end", LastSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
         // No fixed `cmd-[`: the configurable NavigateBack default owns that
-        // chord with superset behavior (route-back, then session history). A
-        // fixed twin would double-dispatch — GPUI runs every matched binding
-        // until one stops propagation, and neither handler stops.
+        // chord with superset behavior (route-back, then session history),
+        // so a fixed twin would be dead weight — the old twin never
+        // double-fired (bubble listeners stop by default) and NavigateBack
+        // already runs the route-back-first logic.
         // CLI readline parity, composer-scoped and fixed like the CLI (these
         // reuse Kit's own editing actions, so undo/redo keep working).
         KeyBinding::new("ctrl-w", DeleteToPreviousWordStart, Some(key_context::COMPOSER)),
@@ -307,12 +309,17 @@ impl DesktopView {
                 .placeholder(rust_i18n::t!(i18n::COMPOSER_INPUT_PLACEHOLDER).to_string())
                 .auto_grow(1, 6)
                 .submit_on_enter(true)
+                // Pinned, not defaulted: off-macOS Kit binds ctrl-f to Search
+                // on the deeper input context, and only a non-searchable input
+                // propagates it back out to our fixed ctrl-f caret binding.
+                .searchable(false)
         });
         let composer_subscription = cx.subscribe_in(&composer, window, |view, _, event, window, cx| {
             if matches!(event, InputEvent::Change) {
-                // Genuine input abandons history recall; recall's own
-                // programmatic writes emit no Change, so this cannot self-reset.
-                view.reset_history_recall();
+                // Recall abandonment is NOT reset here: `Change` flushes after
+                // the update, and recall's own writes emit it too, so a reset
+                // here would self-clear every traversal step in production.
+                // `recall_history` detects draft mutation synchronously.
                 view.update_composer_suggestions(window, cx);
             }
         });

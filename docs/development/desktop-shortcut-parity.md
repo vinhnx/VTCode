@@ -11,10 +11,15 @@ plus `gpui-pre` dispatch (`keymap.rs`, `window.rs`).
 ## Dispatch rules (verified against vendored source)
 
 - Bindings sort by **context depth desc, then registration index desc**;
-  every matching binding is tried in order until one stops propagation
-  (`resolve_bindings_for_input`, `dispatch_key_event`).
-- `.on_action` listeners **do not stop propagation by default**; an action
-  that nobody stops falls through to the next matching binding.
+  each matching binding's action is dispatched in order until
+  `propagate_event` goes false (`resolve_bindings_for_input`,
+  `dispatch_key_event`, `dispatch_action_on_node_inner`).
+- Capture listeners **propagate by default** (must `stop_propagation` to
+  claim); bubble (`.on_action`) listeners **stop by default** (must
+  `propagate()` to fall through).
+- Same-chord collisions therefore resolve to the highest-precedence action
+  whose listeners don't all propagate: a deeper fixed binding **shadows** a
+  user rebind rather than double-firing (hence `FIXED_RESERVED_CHORDS`).
 - `Input` context is deeper than `VTCodeDesktop`, so Kit input bindings win
   first, then unhandled/propagated actions reach desktop bindings.
 - `secondary-enter` = `cmd-enter` on macOS.
