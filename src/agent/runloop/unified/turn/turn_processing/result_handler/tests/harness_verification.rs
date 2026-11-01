@@ -65,9 +65,7 @@ async fn wall_clock_exhaustion_has_priority_over_pending_verification_and_tool_c
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.tool_calls = 1;
     ctx.harness_state.max_tool_wall_clock = std::time::Duration::from_secs(600);
-    ctx.harness_state.turn_started_at = std::time::Instant::now()
-        .checked_sub(std::time::Duration::from_secs(601))
-        .unwrap();
+    ctx.harness_state.tool_wall_clock_elapsed = std::time::Duration::from_secs(601);
     let super::super::PendingVerificationTextOutcome::Block { reason } =
         ctx.handle_pending_verification_text_response(&mut tracker, "Done").unwrap()
     else {

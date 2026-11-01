@@ -158,6 +158,45 @@ pub(crate) async fn run_tool_call_with_args(
     turn_index: usize,
     prevalidated: bool,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
+    let started = std::time::Instant::now();
+    let excluded_before = ctx.harness_state.tool_clock_checkpoint();
+    let result = run_tool_call_with_args_inner(
+        ctx,
+        tool_item_id,
+        requested_name,
+        args_val,
+        ctrl_c_state,
+        ctrl_c_notify,
+        default_placeholder,
+        lifecycle_hooks,
+        skip_confirmations,
+        vt_cfg,
+        turn_index,
+        prevalidated,
+    )
+    .await;
+    ctx.harness_state.record_tool_wall_clock(started.elapsed(), excluded_before);
+    result
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "The timed wrapper preserves the existing pipeline arguments."
+)]
+async fn run_tool_call_with_args_inner(
+    ctx: &mut RunLoopContext<'_>,
+    tool_item_id: String,
+    requested_name: &str,
+    args_val: &Value,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    default_placeholder: Option<String>,
+    lifecycle_hooks: Option<&LifecycleHookEngine>,
+    skip_confirmations: bool,
+    vt_cfg: Option<&VTCodeConfig>,
+    turn_index: usize,
+    prevalidated: bool,
+) -> Result<ToolPipelineOutcome, anyhow::Error> {
     ctx.handle
         .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::CheckingPermissions);
     let invocation_started_at = std::time::Instant::now();

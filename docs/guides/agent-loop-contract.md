@@ -425,6 +425,8 @@ minimal resume artifact (envelope + summary + retained users only).
 requested deadline expires, then returns one bounded result. A deadline does not terminate an in-progress process; the
 returned session ID is reusable for a later wait. Wait time is excluded from the ordinary per-turn harness wall-clock
 budget, while cancellation, shutdown, safety policy, and the configured long-running-command ceiling remain active.
+The per-turn tool wall-clock budget accumulates time in tool execution, counting a parallel group once; time waiting for
+model responses is not charged. Explicit input and command waits are excluded from that accumulation.
 
 Non-draining inspection returns the latest bounded output snapshot. A sliding head/tail preview, including a same-length
 update or a reset after another reader drains output, replaces the previous snapshot. Draining waits append new chunks.

@@ -94,20 +94,30 @@ fn harness_state_reports_wall_clock_budget_exhaustion() {
     let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
     assert_eq!(state.wall_clock_budget_exhaustion(), None);
-    state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(11)).unwrap();
+    state.tool_wall_clock_elapsed = Duration::from_secs(11);
     assert_eq!(state.wall_clock_budget_exhaustion(), Some(ToolWallClockExhaustion { max_secs: 10 }));
+}
+
+#[test]
+fn tool_wall_clock_accumulates_only_recorded_execution_intervals() {
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
+    state.record_tool_wall_clock(Duration::from_secs(4), state.tool_clock_checkpoint());
+    state.record_tool_wall_clock(Duration::from_secs(5), state.tool_clock_checkpoint());
+    assert!(!state.wall_clock_exhausted());
+    state.record_tool_wall_clock(Duration::from_secs(1), state.tool_clock_checkpoint());
+    assert!(state.wall_clock_exhausted());
 }
 #[test]
 fn harness_state_excludes_active_external_wait_from_wall_clock_budget() {
     let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
-    let wait_started_at = Instant::now().checked_sub(Duration::from_secs(11)).unwrap();
-    state.turn_started_at = wait_started_at;
-    state.wait_started_at = Some(wait_started_at);
-
-    assert_eq!(state.wall_clock_budget_exhaustion(), None);
-
+    let excluded_before = state.tool_clock_checkpoint();
+    state.begin_budget_excluded_wait();
+    state.wait_started_at = Instant::now().checked_sub(Duration::from_secs(11));
     state.end_budget_excluded_wait();
+    state.record_tool_wall_clock(Duration::from_secs(12), excluded_before);
     assert_eq!(state.wall_clock_budget_exhaustion(), None);
+    state.record_tool_wall_clock(Duration::from_secs(10), state.tool_clock_checkpoint());
+    assert_eq!(state.wall_clock_budget_exhaustion(), Some(ToolWallClockExhaustion { max_secs: 10 }));
 }
 #[test]
 fn harness_state_records_wall_clock_exhaustion_notice_once() {
@@ -118,7 +128,7 @@ fn harness_state_records_wall_clock_exhaustion_notice_once() {
     assert!(!state.take_wall_clock_directive_pending());
 
     // Simulate the wall-clock budget elapsing.
-    state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(11)).unwrap();
+    state.tool_wall_clock_elapsed = Duration::from_secs(11);
 
     // First rejection: first_notice=true and arms the directive.
     assert_eq!(

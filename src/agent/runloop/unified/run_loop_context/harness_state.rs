@@ -20,7 +20,7 @@ impl HarnessTurnState {
             run_id,
             turn_id,
             phase: TurnPhase::Preparing,
-            turn_started_at: Instant::now(),
+            tool_wall_clock_elapsed: Duration::ZERO,
             wait_started_at: None,
             excluded_wait_duration: Duration::ZERO,
             tool_calls: 0,
@@ -130,9 +130,16 @@ impl HarnessTurnState {
     }
 
     fn effective_wall_clock_elapsed(&self) -> Duration {
-        let elapsed = self.turn_started_at.elapsed();
-        let active_wait = self.wait_started_at.map(|started| started.elapsed()).unwrap_or(Duration::ZERO);
-        elapsed.saturating_sub(self.excluded_wait_duration.saturating_add(active_wait))
+        self.tool_wall_clock_elapsed
+    }
+
+    pub(crate) fn tool_clock_checkpoint(&self) -> Duration {
+        self.excluded_wait_duration
+    }
+
+    pub(crate) fn record_tool_wall_clock(&mut self, elapsed: Duration, excluded_before: Duration) {
+        let excluded = self.excluded_wait_duration.saturating_sub(excluded_before);
+        self.tool_wall_clock_elapsed = self.tool_wall_clock_elapsed.saturating_add(elapsed.saturating_sub(excluded));
     }
 
     /// Pause ordinary turn wall-clock accounting around an explicit external

@@ -43,9 +43,7 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
     let mut backing = TestContextBacking::new(4).await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
-    ctx.harness_state.turn_started_at = Instant::now()
-        .checked_sub(Duration::from_secs(ctx.harness_state.max_tool_wall_clock.as_secs() + 1))
-        .unwrap();
+    ctx.harness_state.tool_wall_clock_elapsed = ctx.harness_state.max_tool_wall_clock + Duration::from_secs(1);
 
     let result =
         validate_tool_call(&mut ctx, "wall_clock_exhausted", tool_names::READ_FILE, &json!({"path": sample_path}))

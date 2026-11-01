@@ -103,6 +103,24 @@ impl ValidatedToolCall<'_> {
     }
 }
 
+fn reject_expired_wall_clock(ctx: &mut TurnProcessingContext<'_>, call: &ValidatedToolCall<'_>) -> bool {
+    let Some(notice) = ctx.harness_state.record_wall_clock_exhaustion_notice() else {
+        return false;
+    };
+    let message = if notice.first_notice {
+        notice.exhaustion.policy_violation_message()
+    } else {
+        notice.exhaustion.skipped_call_message()
+    };
+    ctx.push_rejected_tool_response(
+        call.call_id(),
+        Some(&call.prepared.canonical_name),
+        Some(&call.prepared.effective_args),
+        super::build_turn_budget_error_content(message),
+    );
+    true
+}
+
 #[cfg(test)]
 fn planned_execution_group_stats(
     validated_calls: &[ValidatedToolCall<'_>],
@@ -182,6 +200,21 @@ where
 }
 
 async fn execute_parallel_group<'a, 'b>(
+    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
+    validated_calls: Vec<ValidatedToolCall<'_>>,
+    batch_tracker: &mut crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome,
+) -> Result<Option<TurnHandlerOutcome>> {
+    let started = std::time::Instant::now();
+    let excluded_before = t_ctx.ctx.harness_state.tool_clock_checkpoint();
+    let result = execute_parallel_group_inner(t_ctx, validated_calls, batch_tracker).await;
+    t_ctx
+        .ctx
+        .harness_state
+        .record_tool_wall_clock(started.elapsed(), excluded_before);
+    result
+}
+
+async fn execute_parallel_group_inner<'a, 'b>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     validated_calls: Vec<ValidatedToolCall<'_>>,
     batch_tracker: &mut crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome,
@@ -512,6 +545,12 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
         let group = validated_calls.by_ref().take(len).collect::<Vec<_>>();
         match kind {
             PreparedToolBatchKind::ParallelReadonly => {
+                if t_ctx.ctx.harness_state.wall_clock_exhausted() {
+                    for call in &group {
+                        reject_expired_wall_clock(t_ctx.ctx, call);
+                    }
+                    continue;
+                }
                 if let Some(outcome) = execute_parallel_group(t_ctx, group, &mut batch_tracker).await? {
                     if t_ctx.ctx.harness_state.blocked_tool_recovery_pending() {
                         for remaining in validated_calls.by_ref() {
@@ -532,6 +571,9 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
             PreparedToolBatchKind::Sequential => {
                 let mut group_iter = group.into_iter().enumerate();
                 while let Some((_group_index, validated_call)) = group_iter.next() {
+                    if reject_expired_wall_clock(t_ctx.ctx, &validated_call) {
+                        continue;
+                    }
                     let tool_call_id = validated_call.call_id().to_string();
                     let tool_name = validated_call.prepared.canonical_name;
                     let args = validated_call.prepared.effective_args;
@@ -562,6 +604,8 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
             }
         }
     }
+
+    flush_budget_synthesis_directives(t_ctx.ctx);
 
     if batch_tracker.entries.len() > 1 {
         let stats = batch_tracker.stats();
@@ -738,6 +782,21 @@ mod tests {
         );
 
         assert_eq!(stats, (1, 1, 2));
+    }
+
+    #[tokio::test]
+    async fn prevalidated_call_is_rejected_when_prior_group_exhausted_wall_clock() {
+        let mut backing = super::super::tests::TestContextBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        let call = validated_call("later-call", tools::READ_FILE, true, true, serde_json::json!({"path":"sample.txt"}));
+        ctx.harness_state.tool_wall_clock_elapsed = std::time::Duration::from_secs(59);
+        assert!(!super::reject_expired_wall_clock(&mut ctx, &call));
+        ctx.harness_state.tool_wall_clock_elapsed += std::time::Duration::from_secs(1);
+        assert!(super::reject_expired_wall_clock(&mut ctx, &call));
+        assert!(ctx.working_history.iter().any(|message| {
+            message.tool_call_id.as_deref() == Some("later-call")
+                && message.content.as_text().contains("wall clock budget")
+        }));
     }
 
     #[test]

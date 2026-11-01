@@ -680,6 +680,11 @@ impl<'a> CopilotRuntimeHost<'a> {
             return Ok(Some(tool_exceeded_budget_response(tool_name, exhaustion.max)));
         }
 
+        if let Some(exhaustion) = self.harness_state.wall_clock_budget_exhaustion() {
+            self.pending_hook_rewritten_args.remove(tool_call_id);
+            return Ok(Some(denied_tool_response(tool_name, &exhaustion.policy_violation_message())));
+        }
+
         self.harness_state.record_admitted_tool_call();
         // Control-plane exec calls (wait/inspect) do not consume the per-turn
         // tool-call budget; see `record_tool_call_budget_usage` for rationale.

@@ -47,11 +47,14 @@ async fn test_run_tool_call_unknown_tool_failure() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert_eq!(ctx.harness_state.tool_wall_clock_elapsed, Duration::ZERO);
     let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
         .await
         .expect("run_tool_call must run");
 
     assert!(matches!(outcome.status, ToolExecutionStatus::Failure { .. }));
+    assert!(ctx.harness_state.tool_wall_clock_elapsed > Duration::ZERO);
 }
 #[tokio::test]
 async fn test_run_tool_call_respects_max_tool_calls_budget() {
