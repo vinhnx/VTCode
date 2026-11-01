@@ -41,6 +41,79 @@ pub(crate) fn request_local_cancel(ctrl_c_state: &Arc<CtrlCState>, ctrl_c_notify
     ctrl_c_notify.notify_one();
 }
 
+/// Out-of-band stop handles for host adapters (the desktop JSON-RPC service).
+///
+/// A running turn only watches [`CtrlCState`]/[`Notify`]; `InlineEvent`s
+/// queued in the session channel are not polled mid-turn. The TUI bridges
+/// this gap with a send-time event callback
+/// (`session_setup::build_session_event_callback`), but host sessions have no
+/// TUI worker to invoke one — so the runloop publishes its handles here and
+/// the host fires [`request_local_cancel`] directly.
+pub(crate) type StopHandles = (Arc<CtrlCState>, Arc<Notify>);
+
+/// Single-publish slot carrying [`StopHandles`] from the runloop to its host.
+/// First publish wins; a desktop runloop never starts a second iteration.
+pub(crate) type StopHandleSlot = Arc<std::sync::OnceLock<StopHandles>>;
+
+/// Create an empty stop-handle slot for one host-owned runloop.
+#[must_use]
+pub(crate) fn new_stop_handle_slot() -> StopHandleSlot {
+    Arc::new(std::sync::OnceLock::new())
+}
+
+/// Publish the runloop's stop handles. Called once after shell setup; a
+/// repeated publish keeps the first handles.
+pub(crate) fn publish_stop_handles(slot: &StopHandleSlot, state: &Arc<CtrlCState>, notify: &Arc<Notify>) {
+    let _kept_first = slot.set((Arc::clone(state), Arc::clone(notify)));
+}
+
+/// Fire a local cancel through published handles.
+///
+/// Returns `false` when the runloop has not published yet (still in setup);
+/// the caller decides whether to wait briefly or fall back to the queued
+/// `InlineEvent::Cancel`, which only dismisses overlay waits.
+pub(crate) fn fire_stop_signal(slot: &StopHandleSlot) -> bool {
+    if let Some((state, notify)) = slot.get() {
+        request_local_cancel(state, notify);
+        true
+    } else {
+        false
+    }
+}
+
+/// Fire a local exit through published handles.
+///
+/// Mirrors the TUI exit callback for host adapters: the queued
+/// `InlineEvent::Exit` is only consumed once the interaction loop runs, so a
+/// runloop paused in [`await_initialization`] needs this signal to end
+/// gracefully instead of waiting for the host's abort timeout.
+pub(crate) fn fire_exit_signal(slot: &StopHandleSlot) -> bool {
+    if let Some((state, notify)) = slot.get() {
+        request_local_exit(state, notify);
+        true
+    } else {
+        false
+    }
+}
+
+/// Clear a handled cancellation when a fresh submission arrives.
+///
+/// Mirror of the TUI submit callback (`Submit`/`QueueSubmit` while handled
+/// resets and wakes): without it, a stop pressed during initialization pauses
+/// [`await_initialization`] forever, because host sessions have no callback to
+/// deliver the reset. Returns `false` when the handles are unpublished or no
+/// handled cancellation exists.
+pub(crate) fn reset_handled_stop(slot: &StopHandleSlot) -> bool {
+    if let Some((state, notify)) = slot.get() {
+        if state.is_cancel_handled() {
+            state.reset();
+            notify.notify_one();
+            return true;
+        }
+    }
+    false
+}
+
 /// Accept an explicit TUI exit immediately, even while initialization or a
 /// provider request owns the asynchronous event consumer.
 pub(crate) fn request_local_exit(ctrl_c_state: &Arc<CtrlCState>, ctrl_c_notify: &Arc<Notify>) {
@@ -271,6 +344,41 @@ mod tests {
         let (result, ()) = tokio::join!(initializing, exit);
         assert!(result.is_none());
         assert!(!polled.get());
+    }
+
+    #[test]
+    fn stop_handle_slot_fires_only_after_publish_and_keeps_first() {
+        let slot = new_stop_handle_slot();
+        assert!(!fire_stop_signal(&slot));
+        assert!(!fire_exit_signal(&slot));
+        assert!(!reset_handled_stop(&slot));
+        let first = Arc::new(CtrlCState::new());
+        let first_notify = Arc::new(Notify::new());
+        publish_stop_handles(&slot, &first, &first_notify);
+        assert!(fire_stop_signal(&slot));
+        assert!(first.is_cancel_requested());
+        let second = Arc::new(CtrlCState::new());
+        publish_stop_handles(&slot, &second, &Arc::new(Notify::new()));
+        assert!(fire_stop_signal(&slot));
+        assert!(!second.is_cancel_requested(), "first publish wins");
+    }
+
+    #[test]
+    fn exit_signal_requests_exit_and_reset_clears_only_handled_cancels() {
+        let slot = new_stop_handle_slot();
+        let state = Arc::new(CtrlCState::new());
+        let notify = Arc::new(Notify::new());
+        publish_stop_handles(&slot, &state, &notify);
+        assert!(!reset_handled_stop(&slot), "nothing handled, nothing cleared");
+        state.request_local_cancel();
+        assert!(!reset_handled_stop(&slot), "an unhandled request is not a fresh submission");
+        assert!(state.is_cancel_requested());
+        state.mark_cancel_handled();
+        assert!(reset_handled_stop(&slot));
+        assert!(!state.is_cancel_requested());
+        assert!(!state.is_cancel_handled());
+        assert!(fire_exit_signal(&slot));
+        assert!(state.is_exit_requested());
     }
 
     #[tokio::test]

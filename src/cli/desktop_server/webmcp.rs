@@ -1,4 +1,5 @@
 use super::*;
+use crate::agent::runloop::unified::stop_requests;
 
 #[derive(Clone)]
 pub(super) struct DesktopWebmcpRuntime {
@@ -72,6 +73,7 @@ pub(super) async fn start_session(
     resume: Option<ResumeSession>,
 ) -> Result<()> {
     let vtcode_ui::tui::app::HostSession { session, input, commands } = new_host_session();
+    let stop = stop_requests::new_stop_handle_slot();
     let (command_sender, command_receiver) = mpsc::channel(protocol::DEFAULT_QUEUE_CAPACITY);
     let command_forwarder = std::thread::Builder::new()
         .name("vtcode-desktop-host-commands".to_string())
@@ -93,6 +95,7 @@ pub(super) async fn start_session(
     let primary_agent_explicitly_configured =
         options.mode.is_some() || context.startup.primary_agent_explicitly_configured;
     let planning_entry_source = session_options::planning_source(&options, context.startup.planning_entry_source);
+    let stop_for_runloop = stop.clone();
     let runtime_task = tokio::spawn(async move {
         run_single_agent_loop_unified_with_host(
             &config,
@@ -105,6 +108,7 @@ pub(super) async fn start_session(
             None,
             session,
             event_sender,
+            Some(stop_for_runloop),
         )
         .await
     });
@@ -120,7 +124,14 @@ pub(super) async fn start_session(
     });
     install_session_runtime(
         context,
-        RuntimeSession { session_id, input, exit, abort, command_forwarder },
+        RuntimeSession {
+            session_id,
+            input,
+            stop,
+            exit,
+            abort,
+            command_forwarder,
+        },
         command_receiver,
         event_receiver,
     )

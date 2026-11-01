@@ -1,4 +1,5 @@
 use super::*;
+use crate::agent::runloop::unified::state::CtrlCState;
 
 #[tokio::test]
 async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
@@ -16,6 +17,9 @@ async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
         .unwrap();
     let (input, mut input_receiver) = mpsc::unbounded_channel();
     let (exit_sender, exit) = oneshot::channel();
+    let ctrl_c = std::sync::Arc::new(CtrlCState::new());
+    let stop = stop_requests::new_stop_handle_slot();
+    stop_requests::publish_stop_handles(&stop, &ctrl_c, &std::sync::Arc::new(Notify::new()));
     let state = std::sync::Arc::clone(&context.state);
     let finished = std::sync::Arc::clone(&context.turn_finished);
     let runtime_task = tokio::spawn(async move {
@@ -40,6 +44,7 @@ async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
         state.runtime = Some(RuntimeSession {
             session_id: "session".into(),
             input,
+            stop: stop.clone(),
             exit,
             abort: runtime_task.abort_handle(),
             command_forwarder: std::thread::spawn(|| {}),
@@ -68,6 +73,7 @@ async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
     assert_eq!(frames[0]["method"], "first");
     assert_eq!(frames[1]["method"], "second");
     assert_eq!(frames.last().unwrap()["result"]["shutdown"], true);
+    assert!(ctrl_c.is_exit_requested(), "shutdown must end the runloop through its stop handles");
     runtime_task.await.unwrap();
 }
 #[tokio::test]
@@ -95,6 +101,7 @@ async fn accepted_turn_is_not_rejected_or_blocked_by_status_queue() {
             runtime: Some(RuntimeSession {
                 session_id: "session".into(),
                 input,
+                stop: stop_requests::new_stop_handle_slot(),
                 exit,
                 abort: runtime_task.abort_handle(),
                 command_forwarder: std::thread::spawn(|| {}),
@@ -136,6 +143,7 @@ async fn webmcp_turns_use_the_selected_desktop_runtime_and_respect_busy_state() 
         runtime: Some(RuntimeSession {
             session_id: "desktop-session".into(),
             input,
+            stop: stop_requests::new_stop_handle_slot(),
             exit,
             abort,
             command_forwarder,

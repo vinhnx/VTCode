@@ -16,6 +16,7 @@ fn runtime_state(session: &str) -> RuntimeStateFixture {
         runtime: Some(RuntimeSession {
             session_id: session.into(),
             input,
+            stop: stop_requests::new_stop_handle_slot(),
             exit,
             abort: runtime_task.abort_handle(),
             command_forwarder: std::thread::spawn(|| {}),
@@ -160,6 +161,7 @@ async fn take_latest_request_pops_newest_for_editing() {
         state.runtime = Some(RuntimeSession {
             session_id: "session".into(),
             input,
+            stop: stop_requests::new_stop_handle_slot(),
             exit,
             abort: runtime_task.abort_handle(),
             command_forwarder: std::thread::spawn(|| {}),
@@ -341,6 +343,7 @@ async fn session_teardown_clears_ephemeral_queue_state() {
         state.runtime = Some(RuntimeSession {
             session_id: "session".into(),
             input,
+            stop: stop_requests::new_stop_handle_slot(),
             exit,
             abort: runtime_task.abort_handle(),
             command_forwarder: std::thread::spawn(|| {}),

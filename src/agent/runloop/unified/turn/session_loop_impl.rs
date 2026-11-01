@@ -43,6 +43,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         &mut steering_receiver,
         None,
         None,
+        None,
     )
     .await
 }
@@ -51,7 +52,9 @@ pub(crate) async fn run_single_agent_loop_unified(
 ///
 /// The session transports user input and presentation commands without
 /// initializing a terminal. Runtime execution, policy, persistence, and
-/// verification remain owned by the unified runloop.
+/// verification remain owned by the unified runloop. When `stop_slot` is set,
+/// the runloop publishes its stop handles there after shell setup so the host
+/// can cancel a running turn out-of-band.
 #[allow(
     clippy::too_many_arguments,
     reason = "Preserve the unified runloop's established typed startup inputs while replacing only its session and event endpoints."
@@ -67,6 +70,7 @@ pub(crate) async fn run_single_agent_loop_unified_with_host(
     mut steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     session: InlineSession,
     event_sender: vtcode_desktop_protocol::LiveEventSender,
+    stop_slot: Option<crate::agent::runloop::unified::stop_requests::StopHandleSlot>,
 ) -> Result<()> {
     session_loop_runner::run_single_agent_loop_unified_impl(
         config,
@@ -79,6 +83,7 @@ pub(crate) async fn run_single_agent_loop_unified_with_host(
         &mut steering_receiver,
         Some(session),
         Some(event_sender),
+        stop_slot,
     )
     .await
 }

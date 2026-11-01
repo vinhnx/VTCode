@@ -81,6 +81,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
     steering_receiver: &mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
     mut host_session: Option<InlineSession>,
     event_sender: Option<vtcode_desktop_protocol::LiveEventSender>,
+    stop_slot: Option<crate::agent::runloop::unified::stop_requests::StopHandleSlot>,
 ) -> Result<()> {
     let terminal_enabled = host_session.is_none();
     let _terminal_cleanup_guard = TerminalCleanupGuard::new(terminal_enabled);
@@ -110,6 +111,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             steering_receiver: &mut *steering_receiver,
             host_session: &mut host_session,
             event_sender: event_sender.clone(),
+            stop_slot: stop_slot.clone(),
             terminal_enabled,
             skip_confirmations,
             full_auto,

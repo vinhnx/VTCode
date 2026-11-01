@@ -31,6 +31,7 @@ async fn session_install_delivers_a_queued_startup_interaction() {
         RuntimeSession {
             session_id: "new-session".into(),
             input,
+            stop: stop_requests::new_stop_handle_slot(),
             exit,
             abort: runtime_task.abort_handle(),
             command_forwarder: std::thread::spawn(|| {}),
@@ -74,6 +75,7 @@ async fn startup_interaction_blocks_turns_and_session_changes_until_answered() {
         state.runtime = Some(RuntimeSession {
             session_id: "session".into(),
             input,
+            stop: stop_requests::new_stop_handle_slot(),
             exit,
             abort: runtime_task.abort_handle(),
             command_forwarder: std::thread::spawn(|| {}),

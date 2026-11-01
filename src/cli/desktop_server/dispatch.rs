@@ -1,4 +1,5 @@
 use super::*;
+use crate::agent::runloop::unified::stop_requests;
 
 pub(super) async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
     let transition = matches!(
@@ -74,8 +75,35 @@ pub(super) fn dispatch_interaction_response(
     Ok(())
 }
 
+/// Bound for a starting runloop to publish its stop handles before a cancel
+/// falls back to the queued event alone. Host shell setup is in-memory work,
+/// so a missing slot after this long means the runtime is gone.
+const STOP_HANDLE_WAIT: Duration = Duration::from_secs(2);
+const STOP_HANDLE_POLL: Duration = Duration::from_millis(10);
+
+/// Fire the runloop's out-of-band stop signal, waiting briefly when the
+/// runtime is still publishing its handles after shell setup.
+pub(super) async fn signal_runloop_stop(stop: &StopHandleSlot) {
+    signal_runloop_stop_with_timeout(stop, STOP_HANDLE_WAIT).await;
+}
+
+pub(super) async fn signal_runloop_stop_with_timeout(stop: &StopHandleSlot, wait: Duration) {
+    if stop_requests::fire_stop_signal(stop) {
+        return;
+    }
+    let _ = timeout(wait, async {
+        loop {
+            tokio::time::sleep(STOP_HANDLE_POLL).await;
+            if stop_requests::fire_stop_signal(stop) {
+                return;
+            }
+        }
+    })
+    .await;
+}
+
 pub(super) async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool) -> Result<()> {
-    let (session_id, input, active_turn, should_send_cancel, mut runtime) = {
+    let (session_id, input, stop, active_turn, should_send_cancel, mut runtime) = {
         let mut state = context.state.lock().await;
         let active_turn = state.active_turn_id.clone();
         if active_turn.is_some() && !cancel_active {
@@ -90,15 +118,28 @@ pub(super) async fn shutdown_current_session(context: &ServiceContext, cancel_ac
         let runtime = state.runtime.take();
         let session_id = runtime.as_ref().map(|session| session.session_id.clone());
         let input = runtime.as_ref().map(|session| session.input.clone());
-        (session_id, input, active_turn, should_send_cancel, runtime)
+        let stop = runtime.as_ref().map(|session| session.stop.clone());
+        (session_id, input, stop, active_turn, should_send_cancel, runtime)
     };
 
     if let Some(input) = input {
         if active_turn.is_some() {
             if should_send_cancel {
+                if !input.is_closed()
+                    && let Some(stop) = stop.as_ref()
+                {
+                    signal_runloop_stop(stop).await;
+                }
                 let _ = input.send(InlineEvent::Cancel);
             }
             let _ = timeout(SESSION_SHUTDOWN_TIMEOUT, wait_for_active_turn_to_finish(context)).await;
+        }
+        // Dual delivery mirrors the TUI exit callback: the queued event ends
+        // an idle loop, while the signal also reaches a runloop paused in
+        // initialization (which never polls the queue) so shutdown stays
+        // graceful instead of waiting for the abort timeout.
+        if let Some(stop) = stop.as_ref() {
+            stop_requests::fire_exit_signal(stop);
         }
         let _ = input.send(InlineEvent::Exit);
     }

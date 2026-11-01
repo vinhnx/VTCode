@@ -43,6 +43,7 @@ use vtcode_webmcp::{FileChange, FilesystemWorkspace, WebmcpServer, WebmcpServerC
 
 use crate::agent::agents::{ResumeSession, load_resume_session};
 use crate::agent::runloop::unified::QueuedInput;
+use crate::agent::runloop::unified::stop_requests::StopHandleSlot;
 use crate::agent::runloop::unified::turn::run_single_agent_loop_unified_with_host;
 use crate::startup::StartupContext;
 
@@ -50,7 +51,7 @@ mod catalog;
 mod dispatch;
 use dispatch::{
     dispatch_interaction_response, ensure_no_active_turn, handle_request, parse_params, protocol_interaction_kind,
-    resolve_review_scope, send_notification, session_summary, shutdown_current_session,
+    resolve_review_scope, send_notification, session_summary, shutdown_current_session, signal_runloop_stop,
 };
 mod pump;
 #[cfg(test)]
@@ -128,6 +129,10 @@ struct ServerState {
 struct RuntimeSession {
     session_id: String,
     input: mpsc::UnboundedSender<InlineEvent>,
+    /// Out-of-band stop handles published by the runloop after shell setup.
+    /// Firing these is what actually stops a running turn; the queued
+    /// `InlineEvent::Cancel` only dismisses overlay waits.
+    stop: StopHandleSlot,
     exit: oneshot::Receiver<std::result::Result<(), String>>,
     abort: AbortHandle,
     command_forwarder: std::thread::JoinHandle<()>,
@@ -783,30 +788,40 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
         }
         method::TURN_CANCEL => {
             let params: protocol::TurnCancelParams = parse_params(&request.params)?;
-            let (input, should_send) = {
+            let (input, stop, should_send) = {
                 let mut state = context.state.lock().await;
                 if state.session_id.as_deref() != Some(params.session_id.as_str())
                     || state.active_turn_id.as_deref() != Some(params.turn_id.as_str())
                 {
                     bail!("turn is no longer active");
                 }
-                let input = state
+                let runtime = state
                     .runtime
                     .as_ref()
-                    .map(|runtime| runtime.input.clone())
                     .ok_or_else(|| anyhow!("selected session is not running"))?;
+                let input = runtime.input.clone();
+                let stop = runtime.stop.clone();
                 let should_send = state.cancel_requested_turn.as_deref() != Some(params.turn_id.as_str());
                 if should_send {
                     state.cancel_requested_turn = Some(params.turn_id.clone());
                 }
-                (input, should_send)
+                (input, stop, should_send)
             };
-            if should_send && input.send(InlineEvent::Cancel).is_err() {
-                let mut state = context.state.lock().await;
-                if state.cancel_requested_turn.as_deref() == Some(params.turn_id.as_str()) {
-                    state.cancel_requested_turn = None;
+            if should_send {
+                // The out-of-band signal is what stops the running turn; the
+                // queued event only dismisses overlay waits. A closed channel
+                // proves the runtime is gone, so skip the publish wait and go
+                // straight to the send-failure bail below.
+                if !input.is_closed() {
+                    signal_runloop_stop(&stop).await;
                 }
-                bail!("selected session runtime has stopped");
+                if input.send(InlineEvent::Cancel).is_err() {
+                    let mut state = context.state.lock().await;
+                    if state.cancel_requested_turn.as_deref() == Some(params.turn_id.as_str()) {
+                        state.cancel_requested_turn = None;
+                    }
+                    bail!("selected session runtime has stopped");
+                }
             }
             Ok((json!({ "cancelRequested": true }), false))
         }

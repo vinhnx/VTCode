@@ -5,7 +5,7 @@
 //! (`crate::agent::runloop::unified::{push_capped, pop_batched_submission}`).
 
 use super::*;
-use crate::agent::runloop::unified::{pop_batched_submission, push_capped};
+use crate::agent::runloop::unified::{pop_batched_submission, push_capped, stop_requests};
 use vtcode_ui::tui::app::SubmittedInput;
 
 /// How a turn submission behaves when another turn is already running.
@@ -34,9 +34,11 @@ impl EnqueueMode {
 enum EnqueuePlan {
     Immediate {
         input: mpsc::UnboundedSender<InlineEvent>,
+        stop: StopHandleSlot,
         submission: SubmittedInput,
     },
     Queued {
+        stop: StopHandleSlot,
         status: protocol::TurnQueueStatus,
         dropped: usize,
     },
@@ -130,27 +132,39 @@ pub(super) async fn enqueue_turn(
                 bail!("selected session runtime has stopped; reload the session to continue");
             }
             let input = runtime.input.clone();
+            let stop = runtime.stop.clone();
             state.cancel_requested_turn = None;
             state.active_turn_id = Some(turn_id.clone());
-            EnqueuePlan::Immediate { input, submission }
+            EnqueuePlan::Immediate { input, stop, submission }
         } else if mode.queueable() {
             // A turn is running: queue behind it with CLI batching semantics
             // instead of rejecting. Pending interactions do not block
             // queueing; the prompt dispatches once the turn ends (CLI parity:
             // the TUI queues regardless of overlays).
-            let runtime_alive = state.runtime.as_ref().is_some_and(|runtime| !runtime.input.is_closed());
-            if !runtime_alive {
+            let stop = state
+                .runtime
+                .as_ref()
+                .filter(|runtime| !runtime.input.is_closed())
+                .map(|runtime| runtime.stop.clone());
+            let Some(stop) = stop else {
                 bail!("selected session runtime has stopped; reload the session to continue");
-            }
+            };
             let dropped = push_capped(&mut state.queue, QueuedInput::new(submission, None));
             state.queue_dropped_total += dropped;
-            EnqueuePlan::Queued { status: state.queue_status(session_id), dropped }
+            EnqueuePlan::Queued {
+                stop,
+                status: state.queue_status(session_id),
+                dropped,
+            }
         } else {
             bail!("another turn is already running");
         }
     };
     match plan {
-        EnqueuePlan::Queued { status, dropped } => {
+        EnqueuePlan::Queued { stop, status, dropped } => {
+            // TUI parity: a fresh submission clears a handled cancellation so
+            // a stop pressed during initialization resumes instead of wedging.
+            stop_requests::reset_handled_stop(&stop);
             publish_queue_status_sync(notifications, &status);
             Ok(protocol::TurnAccepted {
                 session_id: session_id.to_string(),
@@ -163,7 +177,7 @@ pub(super) async fn enqueue_turn(
                 dropped,
             })
         }
-        EnqueuePlan::Immediate { input, submission } => {
+        EnqueuePlan::Immediate { input, stop, submission } => {
             if input.send(InlineEvent::Submit(submission)).is_err() {
                 let mut state = state.lock().await;
                 if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
@@ -172,6 +186,10 @@ pub(super) async fn enqueue_turn(
                 }
                 bail!("selected session runtime has stopped; reload the session to continue");
             }
+            // TUI parity: a fresh submission clears a handled cancellation (see
+            // the queued arm above). Only after a successful send: a dead
+            // runtime owns no stop state worth clearing.
+            stop_requests::reset_handled_stop(&stop);
             // The prompt has crossed the runtime boundary. Status is advisory: waiting
             // for this queue here can deadlock the request loop, and reporting failure
             // after delivery could cause a client to submit the same prompt twice.

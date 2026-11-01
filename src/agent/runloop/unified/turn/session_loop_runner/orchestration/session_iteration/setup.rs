@@ -191,6 +191,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         steering_receiver,
         host_session,
         event_sender,
+        stop_slot,
         terminal_enabled,
         skip_confirmations,
         full_auto,
@@ -296,6 +297,16 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         };
         (shell, result)
     };
+    // Host adapters (desktop service) cancel running turns out-of-band: the
+    // session event queue is not polled mid-turn, so publish the stop handles
+    // as soon as the shell owns them.
+    if let Some(slot) = stop_slot.as_ref() {
+        crate::agent::runloop::unified::stop_requests::publish_stop_handles(
+            slot,
+            &shell.ctrl_c_state,
+            &shell.ctrl_c_notify,
+        );
+    }
     let Some(critical_result) = critical_result else {
         crate::agent::runloop::unified::stop_requests::finish_initialization_exit(
             &shell.handle,

@@ -1,4 +1,5 @@
 pub(super) use super::*;
+pub(super) use crate::agent::runloop::unified::stop_requests;
 
 fn test_startup_context(workspace: &Path) -> StartupContext {
     use std::collections::BTreeMap;
@@ -145,6 +146,7 @@ mod session_history;
 mod shutdown_turns;
 mod spooled_scope;
 mod startup_interaction;
+mod stop_signal;
 mod storage;
 mod terminal_pump;
 mod turn_queue;

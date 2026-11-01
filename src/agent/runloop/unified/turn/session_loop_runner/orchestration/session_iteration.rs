@@ -43,6 +43,7 @@ pub(super) struct SessionLoopState<'a> {
     pub(super) steering_receiver: &'a mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
     pub(super) host_session: &'a mut Option<InlineSession>,
     pub(super) event_sender: Option<vtcode_desktop_protocol::LiveEventSender>,
+    pub(super) stop_slot: Option<crate::agent::runloop::unified::stop_requests::StopHandleSlot>,
     pub(super) terminal_enabled: bool,
     pub(super) skip_confirmations: bool,
     pub(super) full_auto: bool,

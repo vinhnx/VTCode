@@ -59,6 +59,7 @@ async fn session_close_excludes_webmcp_turns_until_shutdown_finishes() {
         state.runtime = Some(RuntimeSession {
             session_id: "current".into(),
             input,
+            stop: stop_requests::new_stop_handle_slot(),
             exit,
             abort: runtime_task.abort_handle(),
             command_forwarder: std::thread::spawn(|| {}),
