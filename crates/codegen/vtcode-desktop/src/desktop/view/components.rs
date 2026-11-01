@@ -168,6 +168,7 @@ pub(super) fn settings_row(
     control: impl IntoElement,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
+    let description = description.into();
     div()
         .flex()
         .flex_wrap()
@@ -178,8 +179,11 @@ pub(super) fn settings_row(
             div()
                 .min_w_0()
                 .flex_1()
+                .flex()
+                .flex_col()
+                .gap_1()
                 .child(row_title(title, colors))
-                .child(row_description(description, colors)),
+                .when(!description.is_empty(), |text| text.child(row_description(description, colors))),
         )
         .child(control)
 }

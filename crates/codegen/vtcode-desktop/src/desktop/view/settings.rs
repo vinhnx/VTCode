@@ -455,7 +455,7 @@ impl DesktopView {
             .test_support()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap_6()
             .child(
                 div()
                     .text_color(cx.theme().colors.muted_foreground)
@@ -485,7 +485,7 @@ impl DesktopView {
             .test_support()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap_6()
             .child(accessible_group_box(
                 "notifications-delivery-group",
                 group_title.clone(),
@@ -646,7 +646,7 @@ impl DesktopView {
             .test_support()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap_6()
             .child(self.render_provider_settings(cx))
             .child(self.render_shared_preferences(cx))
             .child(self.render_cli_configuration(cx))
@@ -796,7 +796,7 @@ impl DesktopView {
             .test_support()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap_6()
             .child(self.render_webmcp_settings(false, cx))
             .child(self.render_webmcp_settings(true, cx))
             .child({

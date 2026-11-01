@@ -627,7 +627,7 @@ impl DesktopView {
             .test_support()
             .flex()
             .flex_col()
-            .gap_5()
+            .gap_6()
             .child(accessible_group_box(
                 "appearance-visual-style-group",
                 visual_style.clone(),
@@ -800,14 +800,24 @@ impl DesktopView {
             layout.clone(),
             settings_group_box(layout, colors)
                 .child(
-                    gpui_kit::component::switch::Switch::new("navigation-visible")
-                        .label(rust_i18n::t!("app.settings.appearance.show_navigation").to_string())
-                        .checked(self.preferences.navigation_visible())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_navigation_visible(*checked, cx);
-                        })),
+                    div()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            gpui_kit::component::switch::Switch::new("navigation-visible")
+                                .label(rust_i18n::t!("app.settings.appearance.show_navigation").to_string())
+                                .checked(self.preferences.navigation_visible())
+                                .on_click(cx.listener(|view, checked, _, cx| {
+                                    view.set_navigation_visible(*checked, cx);
+                                })),
+                        )
+                        .child(row_description(
+                            rust_i18n::t!("app.settings.appearance.navigation_hint").to_string(),
+                            colors,
+                        )),
                 )
-                .child(row_description(rust_i18n::t!("app.settings.appearance.navigation_hint").to_string(), colors))
                 .child(self.render_translucent_sidebar_switch(cx))
                 .child(
                     gpui_kit::component::switch::Switch::new("navigation-on-right")

@@ -257,7 +257,7 @@ impl DesktopView {
             .test_support()
             .flex()
             .flex_col()
-            .gap_5()
+            .gap_6()
             .child(accessible_group_box(
                 "storage-device-group",
                 device_title.clone(),

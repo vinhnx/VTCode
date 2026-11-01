@@ -447,6 +447,7 @@ mod secret_store;
 mod service_navigation;
 mod sessions_startup;
 mod settings_panes;
+mod settings_spacing;
 mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
