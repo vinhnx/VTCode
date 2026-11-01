@@ -77,10 +77,23 @@ jobs:
         with:
           key: desktop-macos
 
+      - name: Resolve nextest version
+        id: nextest
+        run: |
+          version=$(sed -n 's/^nextest-version *= *"//p' .config/nextest.toml | head -1)
+          version=${version%\"}
+          if [[ -z "$version" ]]; then
+            echo "Could not read nextest-version from .config/nextest.toml" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Install nextest
         uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
         with:
-          tool: nextest
+          # Pinned to the repo requirement: unpinned `nextest` resolves via the
+          # action's own (stale) manifest — 0.9.132 — below nextest.toml's floor.
+          tool: nextest@${{ steps.nextest.outputs.version }}
 
       - name: Check desktop, protocol, and backend
         run: cargo check --locked -p vtcode-desktop -p vtcode-desktop-protocol -p vtcode
