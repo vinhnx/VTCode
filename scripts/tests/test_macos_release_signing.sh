@@ -66,6 +66,9 @@ xcrun() {
         printf '{"status":"%s"}\n' "${TEST_NOTARY_STATUS:-Accepted}"
         return 0
     fi
+    if [[ "$1" == "stapler" && "$2" == "staple" ]]; then
+        return "${TEST_STAPLER_STATUS:-0}"
+    fi
     return 2
 }
 
@@ -214,6 +217,87 @@ if verify_macos_release_binary "$tmp/vtcode" >/dev/null 2>&1; then
 else
     pass 'Gatekeeper rejection blocks the release'
 fi
+unset TEST_SPCTL_STATUS
+
+mkdir -p "$tmp/VT Code.app/Contents/MacOS" "$tmp/VT Code.app/Contents/Helpers"
+printf 'desktop gui fixture\n' >"$tmp/VT Code.app/Contents/MacOS/vtcode-desktop"
+printf 'desktop helper fixture\n' >"$tmp/VT Code.app/Contents/Helpers/vtcode"
+chmod +x "$tmp/VT Code.app/Contents/MacOS/vtcode-desktop" "$tmp/VT Code.app/Contents/Helpers/vtcode"
+printf 'notarization fixture\n' >"$tmp/desktop-notarization.zip"
+
+: >"$tmp/codesign-args"
+if sign_macos_app_bundle "$tmp/VT Code.app"; then
+    pass 'app bundle signing signs nested executables and the bundle'
+else
+    fail_test 'app bundle signing should pass'
+fi
+# The stub logs one line per arg: each nested binary is signed once, and the
+# bundle path itself appears exactly twice (bundle sign + deep verify).
+if [[ "$(grep -cxF -- "$tmp/VT Code.app/Contents/MacOS/vtcode-desktop" "$tmp/codesign-args")" -eq 1 ]] \
+    && [[ "$(grep -cxF -- "$tmp/VT Code.app/Contents/Helpers/vtcode" "$tmp/codesign-args")" -eq 1 ]] \
+    && [[ "$(grep -cxF -- "$tmp/VT Code.app" "$tmp/codesign-args")" -eq 2 ]] \
+    && grep -Fq -- '--options' "$tmp/codesign-args" \
+    && grep -Fq -- 'runtime' "$tmp/codesign-args" \
+    && grep -Fq -- '--timestamp' "$tmp/codesign-args"; then
+    pass 'app bundle signing hardens nested code and the bundle'
+else
+    fail_test 'app bundle signing flags or targets are incomplete'
+fi
+
+mkdir -p "$tmp/Empty.app/Contents"
+if sign_macos_app_bundle "$tmp/Empty.app" >/dev/null 2>&1; then
+    fail_test 'app bundle signing must reject a bundle without Contents/MacOS'
+else
+    pass 'app bundle signing rejects a bundle without Contents/MacOS'
+fi
+
+if notarize_macos_archive "$tmp/desktop-notarization.zip"; then
+    pass 'accepted archive notarization passes'
+else
+    fail_test 'accepted archive notarization should pass'
+fi
+
+TEST_NOTARY_STATUS=Invalid
+if notarize_macos_archive "$tmp/desktop-notarization.zip" >/dev/null 2>&1; then
+    fail_test 'invalid archive notarization must block the release'
+else
+    pass 'invalid archive notarization blocks the release'
+fi
+unset TEST_NOTARY_STATUS
+
+if notarize_macos_archive "$tmp/missing.zip" >/dev/null 2>&1; then
+    fail_test 'archive notarization must reject a missing archive'
+else
+    pass 'archive notarization rejects a missing archive'
+fi
+
+if staple_macos_app_bundle "$tmp/VT Code.app"; then
+    pass 'stapling passes after accepted notarization'
+else
+    fail_test 'stapling should pass'
+fi
+
+TEST_STAPLER_STATUS=1
+if staple_macos_app_bundle "$tmp/VT Code.app" >/dev/null 2>&1; then
+    fail_test 'stapler failure must block the release'
+else
+    pass 'stapler failure blocks the release'
+fi
+unset TEST_STAPLER_STATUS
+
+if verify_macos_app_bundle "$tmp/VT Code.app"; then
+    pass 'app bundle verification accepts a notarized Developer ID bundle'
+else
+    fail_test 'app bundle verification should pass'
+fi
+
+TEST_SPCTL_STATUS=1
+if verify_macos_app_bundle "$tmp/VT Code.app" >/dev/null 2>&1; then
+    fail_test 'Gatekeeper bundle rejection must block the release'
+else
+    pass 'Gatekeeper bundle rejection blocks the release'
+fi
+unset TEST_SPCTL_STATUS
 
 unset VTCODE_MACOS_SIGNING_IDENTITY VTCODE_MACOS_NOTARY_PROFILE
 _vtcode_macos_release_signing_mode="uninitialized"
@@ -256,6 +340,20 @@ if verify_macos_release_binary "$tmp/vtcode" >/dev/null 2>&1; then
     fail_test 'unsigned binary verification must reject a non-executable file'
 else
     pass 'unsigned binary verification rejects a non-executable file'
+fi
+
+if sign_macos_app_bundle "$tmp/VT Code.app" \
+    && notarize_macos_archive "$tmp/desktop-notarization.zip" \
+    && staple_macos_app_bundle "$tmp/VT Code.app" \
+    && verify_macos_app_bundle "$tmp/VT Code.app"; then
+    pass 'unsigned bundle helpers skip signing, notarization, stapling, and verification'
+else
+    fail_test 'unsigned bundle helpers should not require signing credentials'
+fi
+if [[ ! -s "$tmp/codesign-args" && ! -s "$tmp/xcrun-args" && ! -s "$tmp/spctl-args" ]]; then
+    pass 'unsigned bundle helpers do not call signing, notarization, or Gatekeeper tools'
+else
+    fail_test 'unsigned bundle helpers must not require signing or Gatekeeper tools'
 fi
 
 exit "$fail"

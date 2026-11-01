@@ -132,6 +132,25 @@ create_compatibility_asset() {
     return 0
 }
 
+# Print the desktop app distribution archive name for a release version.
+#
+#   desktop_archive_name <version> <macos-target>
+#
+# The name MUST keep the updater-safe shape `vtcode-desktop-<v>-<target>.zip`:
+# the v0.141.5+ updater requires exactly one asset matching
+# `starts_with("vtcode-") && ends_with("{target}.tar.gz"|"{target}.zip")`
+# (`select_archive_asset` in src/updater/github.rs), and the legacy updater
+# matches `{target}.tar.gz` substrings. A `.zip` macOS asset matches neither
+# selector, so it rides the normal upload queue without breaking CLI
+# self-update. Never rename this to `.tar.gz` or a Windows triple.
+desktop_archive_name() {
+    if [[ $# -ne 2 ]]; then
+        echo "usage: desktop_archive_name <version> <macos-target>" >&2
+        return 2
+    fi
+    printf 'vtcode-desktop-%s-%s.zip\n' "$1" "$2"
+}
+
 # Generate the aggregate checksum manifest for installable archives.
 #
 # Compatibility assets are intentionally excluded: updater versions that use

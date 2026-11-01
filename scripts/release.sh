@@ -587,6 +587,23 @@ main() {
 			print_warning "Failed to build macOS aarch64"
 		fi
 
+		# Build the macOS desktop app bundle and stage its distribution zip.
+		# Sequential after the arch CLI builds: packaging reuses their cargo
+		# cache via CARGO_BUILD_TARGET but compiles the GUI crate fresh, and a
+		# third concurrent release build would thrash the shared target dir.
+		# The zip + sha256 land in $binaries_dir where checksums.txt and the
+		# upload queue pick them up automatically.
+		print_info "Building macOS desktop app..."
+		local require_desktop="${RELEASE_REQUIRE_DESKTOP:-true}"
+		if build_macos_desktop_archive "$released_version" "$binaries_dir"; then
+			print_success "Built macOS desktop app"
+		elif [[ "$require_desktop" == "true" ]]; then
+			print_error "Desktop app build failed; aborting release (set RELEASE_REQUIRE_DESKTOP=false to ship CLI-only)"
+			exit 1
+		else
+			print_warning "Desktop app build failed; continuing without it (RELEASE_REQUIRE_DESKTOP=false)"
+		fi
+
 		# Download Linux and Windows binaries from CI artifacts
 		print_info "Downloading Linux and Windows binaries from CI..."
 
@@ -941,6 +958,7 @@ main() {
 	print_info "Distribution:"
 	print_info "  ✓ Cargo (crates.io)"
 	print_info "  ✓ GitHub Releases (all platforms: macOS local + Linux/Windows CI)"
+	print_info "  ✓ macOS Desktop app (vtcode-desktop-<version>-<target>.zip + .sha256)"
 	print_info "  ✓ Homebrew (vinhnx/homebrew-tap/vtcode)"
 	print_info ""
 	print_info "Cost optimization:"

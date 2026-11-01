@@ -594,10 +594,14 @@ updater, concurrent turns, GUI credential setup, or full parity with every TUI c
 
 ### Desktop update policy
 
-VT Code Desktop does not currently check for or install updates. Its local `.app` bundle is ad hoc signed, and the
-main-branch macOS workflow uploads a seven-day CI artifact rather than a desktop release. The CLI's `vtcode update`
-updates a standalone CLI executable; it does not replace and verify the complete desktop bundle and its bundled helper
-as one unit.
+VT Code Desktop does not currently check for or install updates. Every release ships a prebuilt
+`vtcode-desktop-<version>-<macos-target>.zip` (+ `.sha256`) on GitHub Releases, built by `release.sh` Step 4 from
+`scripts/package-desktop-macos.sh`: ad hoc signed with `FIRST-LAUNCH.txt` Gatekeeper guidance by default, or Developer ID
+signed, notarized, and stapled when `VTCODE_MACOS_SIGNING_IDENTITY`/`VTCODE_MACOS_NOTARY_PROFILE` are configured (set
+`RELEASE_REQUIRE_DESKTOP=false` to ship a CLI-only release). The asset name matches no CLI updater selector, so it rides
+the normal upload queue without affecting `vtcode update`, which still updates a standalone CLI executable rather than the
+desktop bundle and its bundled helper as one unit. The main-branch macOS workflow additionally uploads a seven-day CI
+artifact for development builds.
 
 Before adding in-app update controls, publish a target-specific desktop release contract and a complete Developer ID
 signed and notarized `.app` or `.dmg`. Stage and verify the whole bundle, then let the user choose when to replace it and
