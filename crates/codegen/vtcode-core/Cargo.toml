@@ -69,9 +69,9 @@ indexmap = { workspace = true }
 tempfile = { workspace = true }
 dunce = "1.0"
 once_cell = { workspace = true }
-parking_lot = "0.12"
+parking_lot = "0.13"
 sha2 = { workspace = true }
-lru = "0.18"
+lru = "0.19"
 num_cpus = { workspace = true }
 chrono = { workspace = true } # For timestamp handling in CLI
 humantime = "2.1"
@@ -99,7 +99,7 @@ unicode-width = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"], optional = true }
 # Keep the optional SQLite feature on the stable toolchain: rusqlite 0.40
 # requires libsqlite3-sys 0.38, which uses unstable cfg_select.
-rusqlite = { version = "0.40", features = ["bundled"], optional = true }
+rusqlite = { version = "0.41", features = ["bundled"], optional = true }
 nix = { workspace = true, features = ["user", "signal", "poll", "term"] }
 ratatui = { workspace = true, features = [
     "crossterm",
@@ -134,12 +134,12 @@ schemars = { workspace = true, optional = true }
 # MCP (Model Context Protocol) support
 # Phase 1: Upgrade to 0.9.0+ for improved transport and lifecycle management
 url = { workspace = true }
-jsonschema = "0.58"
+jsonschema = "0.60"
 uuid = { workspace = true, features = ["v4", "serde"] }
 which = "8.0.2"
 textwrap = "0.16"
 # Phase 1 pilot: DDG HTML parsing in web_search only (pinned; revisit on 0.1+)
-astral-html = "=0.0.3"
+astral-html = "=0.0.4"
 rustc-hash = { workspace = true }
 arc-swap = "1.9"
 linkme = { workspace = true }
