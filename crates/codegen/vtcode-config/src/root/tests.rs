@@ -222,6 +222,8 @@ fn app_icon_defaults_to_dynamic_and_parses_each_variant() {
     for (raw, expected) in [
         ("light", AppIconPreference::Light),
         ("dark", AppIconPreference::Dark),
+        ("clear", AppIconPreference::Clear),
+        ("tinted", AppIconPreference::Tinted),
         ("dynamic", AppIconPreference::Dynamic),
     ] {
         let parsed: UiConfig = toml::from_str(&format!("app_icon = \"{raw}\"")).unwrap();

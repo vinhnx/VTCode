@@ -419,7 +419,7 @@ fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Res
                 None => {
                     renderer.line(
                         MessageStyle::Error,
-                        "Usage: /terminal-setup [install-iterm2-icon|reset-iterm2-icon|icon [light|dark|dynamic]]",
+                        "Usage: /terminal-setup [install-iterm2-icon|reset-iterm2-icon|icon [light|dark|clear|tinted|dynamic]]",
                     )?;
                 }
             }

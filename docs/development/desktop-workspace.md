@@ -624,7 +624,7 @@ as `Contents/Resources/VTCode.icns` (pre-Tahoe fallback) and compiles
 paths or external image requests are needed at runtime. On macOS 26+ the OS
 composes the layered Liquid Glass Default/Dark/Clear/Tinted appearances from
 the catalog at display time. The running app applies the saved Appearance
-picker selection (Dynamic/Light/Dark) to the Dock via
+picker selection (Dynamic/Light/Dark/Clear/Tinted) to the Dock via
 `NSApplication.setApplicationIconImage`, resolving Dynamic against the active
 theme mode. The flat PNGs and the `.icns` carry the rounded squircle with
 transparency baked in, because macOS clips neither `.icns` art nor

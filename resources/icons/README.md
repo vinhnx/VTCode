@@ -1,19 +1,25 @@
 # VT Code app and terminal profile icons
 
-Current artwork is the `vtcode-app-*` set (flat `V` mark): Light is a sand tile with a charcoal `V`, Dark is a
-charcoal tile with a warm-white `V`, and Dynamic is a diagonal split tile. Use the smallest icon that looks sharp;
-larger files are for app bundles and in-app display only.
+Current artwork is the `vtcode-app-*` set: Light is a sand tile with a charcoal `V`, Dark is a
+charcoal tile with a warm-white `V`, Dynamic is a diagonal split tile, Clear is the glass `V` on
+transparency (no tile), and Tinted is a monochrome slate tile with a white `V`. Use the smallest icon
+that looks sharp; larger files are for app bundles and in-app display only.
 
 | File                          | Size          | Use                                                                                      |
 | ----------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
 | `vtcode-app-light-128.png`    | 128x128, 7.5K | iTerm2 HiDPI profile artwork (light mode). Embedded by `vtcode-core/build.rs`.           |
 | `vtcode-app-dark-128.png`     | 128x128, 7.1K | iTerm2 HiDPI profile artwork (dark mode). Embedded by `vtcode-core/build.rs`.            |
+| `vtcode-app-clear-128.png`    | 128x128, 4.8K | iTerm2 HiDPI profile artwork (clear glass V). Embedded by `vtcode-core/build.rs`.        |
+| `vtcode-app-tinted-128.png`   | 128x128, 6.7K | iTerm2 HiDPI profile artwork (tinted slate). Embedded by `vtcode-core/build.rs`.         |
 | `vtcode-app-dynamic-128.png`  | 128x128, 7.5K | Mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`).  |
 | `vtcode-app-light-512.png`    | 512x512, 36K  | Desktop Dock artwork (light mode) and Appearance picker preview.                         |
 | `vtcode-app-dark-512.png`     | 512x512, 34K  | Desktop Dock artwork (dark mode) and Appearance picker preview.                          |
+| `vtcode-app-clear-512.png`    | 512x512, 38K  | Desktop Dock artwork (clear glass V) and Appearance picker preview.                      |
+| `vtcode-app-tinted-512.png`   | 512x512, 36K  | Desktop Dock artwork (tinted slate) and Appearance picker preview.                       |
 | `vtcode-app-dynamic-512.png`  | 512x512, 40K  | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art.               |
 | `vtcode-app-dynamic.icns`     | 285K          | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26).    |
 | `AppIcon.icon/`               | 35K           | Layered Liquid Glass source: `icon.json` + `Assets/Foreground.png` (1024 V glyph mask).  |
+| `liquid-glass/`               | 380K          | Tahoe appearance sources: per-variant layer pairs (see its `README.md`).                 |
 | `vtcode.svg`                  | vector, 245B  | Scalable source for docs.                                                                |
 | `vtcode-mark.svg`             | vector, 195B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
 | `vtcode-mono.svg`             | vector, 195B  | Monochrome V mark (white on transparent) for program registries.                         |
@@ -26,16 +32,17 @@ setups should use the `vtcode-app-*` set.
 
 ## Variant selection
 
-`Dynamic` (default) follows the active light/dark mode; `Light`/`Dark` pin one artwork. Per the artwork notes,
-automatic switching selects Light or Dark art at runtime — the Dynamic split tile itself is only used where the
-context cannot switch (bundle icon, manual setups, picker preview).
+`Dynamic` (default) follows the active light/dark mode; `Light`/`Dark`/`Clear`/`Tinted` pin one artwork. Per the
+artwork notes, automatic switching selects Light or Dark art at runtime — the Dynamic split tile itself is only used
+where the context cannot switch (bundle icon, manual setups, picker preview).
 
-- Desktop: Settings → Appearance → App Icon picker (Dynamic/Light/Dark). The running app applies the selection to
-  the Dock via `NSApplication.setApplicationIconImage` at startup, on selection, and on theme-mode changes while
-  Dynamic is selected. Finder always shows the bundle (Dynamic) icon.
-- CLI: `ui.app_icon = "dynamic"|"light"|"dark"` in `vtcode.toml` (default `"dynamic"`). The iTerm2 tab icon
-  installer resolves Dynamic against the active CLI theme at startup and reinstalls on drift, so a theme-mode
-  change applies on the next launch. Switch immediately with `/terminal-setup icon light|dark|dynamic`.
+- Desktop: Settings → Appearance → App Icon picker (Dynamic/Light/Dark/Clear/Tinted). The running app applies the
+  selection to the Dock via `NSApplication.setApplicationIconImage` at startup, on selection, and on theme-mode
+  changes while Dynamic is selected. Finder always shows the bundle (Dynamic) icon.
+- CLI: `ui.app_icon = "dynamic"|"light"|"dark"|"clear"|"tinted"` in `vtcode.toml` (default `"dynamic"`). The iTerm2
+  tab icon installer resolves Dynamic against the active CLI theme at startup and reinstalls on drift, so a
+  theme-mode change applies on the next launch. Switch immediately with
+  `/terminal-setup icon light|dark|clear|tinted|dynamic`.
 
 ## Liquid Glass bundle icon (macOS 26+)
 
@@ -62,23 +69,28 @@ not used as the fallback.
 
 ## Regenerating the flat art and fallback icns
 
-After an artwork update, bake the squircle mask into all six `vtcode-app-*.png` files and stage the
+After an artwork update, bake the squircle mask into the `vtcode-app-*.png` files and stage the
 Dynamic iconset with `scripts/make-macos-app-icons.py` (requires Pillow), then build the fallback:
 
 ```bash
 python3 scripts/make-macos-app-icons.py \
   --light /path/to/flat-light-1024.png \
   --dark /path/to/flat-dark-1024.png \
-  --dynamic /path/to/flat-dynamic-1024.png
+  --dynamic /path/to/flat-dynamic-1024.png \
+  --clear resources/icons/liquid-glass/Clear \
+  --tinted resources/icons/liquid-glass/Tinted
 iconutil -c icns /tmp/VTCode.iconset -o resources/icons/vtcode-app-dynamic.icns
 iconutil -c iconset resources/icons/vtcode-app-dynamic.icns -o /tmp/check.iconset
 ```
 
-Inputs may be any square PNG (flat or already masked); the script upscales to a 1024 working size,
+Each variant flag is optional (omitted variants keep their shipped files); pass a square PNG master
+or a layer directory holding `01-background.png` + `02-V-foreground.png`, which the script composites
+back-to-front. PNG inputs may be flat or already masked; the script upscales to a 1024 working size,
 scales the art into the centered 824px content box, applies an antialiased superellipse mask, and
 downscales to the shipped sizes (premultiplied resampling, so tile edges keep their color under
-partial alpha). The desktop `embedded_artwork_carries_macos_rounded_shape` test rejects full-bleed
-squares. `iconutil`'s icns-write
+partial alpha). Clear carries no tile, so its gate instead requires transparent margins with the opaque
+fraction in the 0.005-0.15 glass-V band. The desktop `embedded_artwork_carries_macos_rounded_shape`
+test rejects full-bleed squares. `iconutil`'s icns-write
 path is broken on some hosts (older macOS 27 builds reject even previously working iconsets while the
 read path works); generate on a host where it succeeds (verified on macOS 27.0.1).
 
@@ -110,8 +122,9 @@ Text `OSC 1`/`OSC 2` works everywhere. For a graphical icon, configure once per 
   notice). VT Code switches the session to the profile once at TUI startup, only when the file exists, and switches back
   to the session's original profile on exit — so the icon is shown only while the TUI runs. If a tab is already stuck
   showing the icon from an older build, run `/terminal-setup reset-iterm2-icon` in it or open a new tab.
-- iTerm2 (manual): Settings > Profiles > General > Icon, choose `vtcode-app-light-128.png` or
-  `vtcode-app-dark-128.png` to match the terminal theme (the automatic installer picks for you).
+- iTerm2 (manual): Settings > Profiles > General > Icon, choose `vtcode-app-light-128.png`,
+  `vtcode-app-dark-128.png`, `vtcode-app-clear-128.png`, or `vtcode-app-tinted-128.png` to match the
+  terminal theme (the automatic installer picks for you).
 - Windows Terminal: set the profile `"icon"` to `resources/icons/vtcode-app-dynamic-128.png`.
 - VS Code / Zed / Warp: these use theme/picker icons, not image files; keep the runtime `OSC 1`/`OSC 2` label and
   optionally reference `vtcode.svg` in docs.

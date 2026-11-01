@@ -28,6 +28,8 @@ impl DesktopView {
             }
             AppIconPreference::Light => rust_i18n::t!("app.settings.appearance.light").to_string(),
             AppIconPreference::Dark => rust_i18n::t!("app.settings.appearance.dark").to_string(),
+            AppIconPreference::Clear => rust_i18n::t!("app.settings.appearance.app_icon_clear").to_string(),
+            AppIconPreference::Tinted => rust_i18n::t!("app.settings.appearance.app_icon_tinted").to_string(),
         };
         let active = self.preferences.app_icon() == preference;
         let accessibility_label = if active {

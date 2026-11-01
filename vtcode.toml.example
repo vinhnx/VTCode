@@ -64,7 +64,7 @@ bottleneck_tracing = false
 
 [ui]
 # Application icon artwork: "dynamic" follows the active light/dark mode,
-# "light" and "dark" pin one variant.
+# "light", "dark", "clear", and "tinted" pin one variant.
 # app_icon = "dynamic"
 # When omitted, reduced motion uses VTCODE_REDUCE_MOTION first, then a supported
 # OS accessibility preference (Windows, macOS, GNOME/KDE/XFCE on Linux).

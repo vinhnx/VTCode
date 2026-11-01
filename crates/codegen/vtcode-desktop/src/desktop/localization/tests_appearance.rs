@@ -21,6 +21,8 @@ fn app_icon_copy_is_localized_for_every_language() {
             ("app.settings.appearance.app_icon", "App Icon"),
             ("app.settings.appearance.app_icon_description", "Dynamic follows the active theme mode."),
             ("app.settings.appearance.app_icon_dynamic", "Dynamic"),
+            ("app.settings.appearance.app_icon_clear", "Clear"),
+            ("app.settings.appearance.app_icon_tinted", "Tinted"),
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

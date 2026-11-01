@@ -73,7 +73,7 @@ install -m 644 "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${CONTENTS}/Resources/THIRD-PA
 # The bundle icon is the prebuilt Dynamic (split-tile) artwork: it reads in
 # both light and dark Finder treatments, matching the desktop picker's
 # default. The running app applies the saved Appearance selection
-# (Dynamic/Light/Dark) to the Dock at startup. Without the artwork the
+# (Dynamic/Light/Dark/Clear/Tinted) to the Dock at startup. Without the artwork the
 # build fails: never ship iconless. VTCODE_PACKAGE_TEST_ICON_SOURCE
 # overrides the artwork path for failure-path tests.
 ICON_SOURCE="${VTCODE_PACKAGE_TEST_ICON_SOURCE:-${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns}"

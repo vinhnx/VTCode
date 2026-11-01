@@ -11,6 +11,8 @@ const EMBEDDED_ASSETS: &[(&str, &str)] = &[
     ("docs/modules/vtcode_docs_map.md", "docs/vtcode_docs_map.md"),
     ("resources/icons/vtcode-app-light-128.png", "resources/icons/vtcode-app-light-128.png"),
     ("resources/icons/vtcode-app-dark-128.png", "resources/icons/vtcode-app-dark-128.png"),
+    ("resources/icons/vtcode-app-clear-128.png", "resources/icons/vtcode-app-clear-128.png"),
+    ("resources/icons/vtcode-app-tinted-128.png", "resources/icons/vtcode-app-tinted-128.png"),
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -417,17 +417,19 @@ pub(super) fn brand_logo(size: f32) -> impl IntoElement {
 /// Appearance-picker preview tile for one icon variant. Images are decoded
 /// once and shared; the `Dynamic` tile shows the split tile glyph.
 pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl IntoElement {
-    static PREVIEWS: std::sync::OnceLock<[Arc<gpui_kit::Image>; 3]> = std::sync::OnceLock::new();
+    static PREVIEWS: std::sync::OnceLock<[Arc<gpui_kit::Image>; 5]> = std::sync::OnceLock::new();
     let previews = PREVIEWS.get_or_init(|| {
         AppIconPreference::ALL.map(|variant| {
             Arc::new(gpui_kit::Image::from_bytes(gpui_kit::ImageFormat::Png, app_icon::preview_bytes(variant).to_vec()))
         })
     });
-    let [dynamic, light, dark] = previews;
+    let [dynamic, light, dark, clear, tinted] = previews;
     let image = match preference {
         AppIconPreference::Dynamic | AppIconPreference::Unknown => dynamic,
         AppIconPreference::Light => light,
         AppIconPreference::Dark => dark,
+        AppIconPreference::Clear => clear,
+        AppIconPreference::Tinted => tinted,
     };
     img(image.clone()).w(px(size)).h(px(size)).rounded_md()
 }

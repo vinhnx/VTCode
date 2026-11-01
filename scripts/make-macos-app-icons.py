@@ -21,16 +21,22 @@ Usage (from the repo root):
     python3 scripts/make-macos-app-icons.py \
         --light /path/to/flat-light-1024.png \
         --dark /path/to/flat-dark-1024.png \
-        --dynamic /path/to/flat-dynamic-1024.png
+        --dynamic /path/to/flat-dynamic-1024.png \
+        --clear resources/icons/liquid-glass/Clear \
+        --tinted resources/icons/liquid-glass/Tinted
 
-This rewrites the six ``resources/icons/vtcode-app-*.png`` files and stages
-``/tmp/VTCode.iconset``; build the fallback with:
+This rewrites the ``resources/icons/vtcode-app-*.png`` files for the given
+variants and, when ``--dynamic`` is passed, stages ``/tmp/VTCode.iconset``;
+build the fallback with:
     iconutil -c icns /tmp/VTCode.iconset -o resources/icons/vtcode-app-dynamic.icns
     iconutil -c iconset resources/icons/vtcode-app-dynamic.icns -o /tmp/check.iconset
 
-Inputs may be any square PNG (flat or already masked); non-1024 inputs are
-scaled to the 1024 working size first (exact 2x NEAREST for 512px flat
-geometric art, LANCZOS otherwise).
+Each variant accepts a square PNG master or a layer directory holding
+``01-background.png`` + ``02-V-foreground.png`` (composited back-to-front,
+as in ``resources/icons/liquid-glass/``). PNG inputs may be flat or already
+masked; non-1024 inputs are scaled to the 1024 working size first (exact 2x
+NEAREST for 512px flat geometric art, LANCZOS otherwise). At least one
+variant is required; omitted variants keep their shipped files untouched.
 """
 
 from __future__ import annotations
@@ -87,9 +93,24 @@ def squircle_alpha(size: int) -> Image.Image:
     return mask.resize((size, size), Image.Resampling.LANCZOS)
 
 
+def composite_layers(directory: pathlib.Path) -> Image.Image:
+    """Composite a layer directory back-to-front into square RGBA art."""
+    background = Image.open(directory / "01-background.png").convert("RGBA")
+    foreground = Image.open(directory / "02-V-foreground.png").convert("RGBA")
+    if background.size != foreground.size:
+        raise ValueError(
+            f"layer sizes differ in {directory}: {background.size} vs {foreground.size}"
+        )
+    return Image.alpha_composite(background, foreground)
+
+
 def load_working_master(path: pathlib.Path) -> Image.Image:
-    """Load square art scaled to the 1024 working size as RGBA."""
-    art = Image.open(path).convert("RGBA")
+    """Load square art scaled to the 1024 working size as RGBA.
+
+    ``path`` is a PNG master or a layer directory (see
+    :func:`composite_layers`).
+    """
+    art = composite_layers(path) if path.is_dir() else Image.open(path).convert("RGBA")
     if art.size[0] != art.size[1]:
         raise ValueError(f"icon art must be square: {path} is {art.size[0]}x{art.size[1]}")
     if art.size[0] == WORKING_SIZE:
@@ -174,6 +195,28 @@ def check_shape(name: str, art: Image.Image) -> None:
         raise ValueError(f"{name}: center must stay opaque")
 
 
+def check_shape_clear(name: str, art: Image.Image) -> None:
+    """Fail loudly when the Clear master misses the see-through geometry.
+
+    Clear carries no tile: the background stays transparent and only the
+    glass V strokes are opaque. Corners and edge midpoints must be clear,
+    and the opaque fraction must sit in a narrow band, which fails both on
+    opaque tiles passed as Clear and on empty/missing glyphs.
+    """
+    size = art.size[0]
+    mid = size // 2
+    last = size - 1
+    clear_points = [(0, 0), (last, 0), (0, last), (last, last),
+                    (mid, 0), (0, mid), (last, mid), (mid, last)]
+    for x, y in clear_points:
+        if art.getpixel((x, y))[3] > 8:
+            raise ValueError(f"{name}: margin ({x}, {y}) must be transparent")
+    histogram = art.getchannel("A").histogram()
+    opaque = sum(histogram[248:]) / (size * size)
+    if not 0.005 <= opaque <= 0.15:
+        raise ValueError(f"{name}: opaque fraction {opaque:.3f} outside the 0.005-0.15 glass-V band")
+
+
 def write_png(art: Image.Image, path: pathlib.Path) -> None:
     art.save(path, "PNG", optimize=True)
     print(f"Wrote {path.relative_to(REPO_ROOT)} ({art.size[0]}x{art.size[1]})")
@@ -181,23 +224,34 @@ def write_png(art: Image.Image, path: pathlib.Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Bake the macOS squircle mask into app-icon art.")
-    parser.add_argument("--light", type=pathlib.Path, required=True, help="Flat Light master (square PNG).")
-    parser.add_argument("--dark", type=pathlib.Path, required=True, help="Flat Dark master (square PNG).")
-    parser.add_argument("--dynamic", type=pathlib.Path, required=True, help="Flat Dynamic master (square PNG).")
+    parser.add_argument("--light", type=pathlib.Path, help="Light master (square PNG or layer dir).")
+    parser.add_argument("--dark", type=pathlib.Path, help="Dark master (square PNG or layer dir).")
+    parser.add_argument("--dynamic", type=pathlib.Path, help="Dynamic master (square PNG or layer dir).")
+    parser.add_argument("--clear", type=pathlib.Path,
+                        help="Clear master (square PNG or layer dir, e.g. resources/icons/liquid-glass/Clear).")
+    parser.add_argument("--tinted", type=pathlib.Path,
+                        help="Tinted master (square PNG or layer dir, e.g. resources/icons/liquid-glass/Tinted).")
     parser.add_argument("--icons-dir", type=pathlib.Path, default=ICONS_DIR, help="Output dir for shipped PNGs.")
     parser.add_argument("--iconset-dir", type=pathlib.Path, default=pathlib.Path("/tmp/VTCode.iconset"),
                         help="Staging dir for the Dynamic iconset.")
     args = parser.parse_args()
 
+    requested = [(name, getattr(args, name)) for name in ("light", "dark", "dynamic", "clear", "tinted")]
+    requested = [(name, path) for name, path in requested if path is not None]
+    if not requested:
+        print("Error: pass at least one of --light/--dark/--dynamic/--clear/--tinted.", file=sys.stderr)
+        return 2
+
     try:
         alpha = squircle_alpha(CONTENT_SIZE)
         masters = {
-            "light": inset_masked_master(load_working_master(args.light), alpha),
-            "dark": inset_masked_master(load_working_master(args.dark), alpha),
-            "dynamic": inset_masked_master(load_working_master(args.dynamic), alpha),
+            name: inset_masked_master(load_working_master(path), alpha) for name, path in requested
         }
         for name, art in masters.items():
-            check_shape(name, art)
+            if name == "clear":
+                check_shape_clear(name, art)
+            else:
+                check_shape(name, art)
     except (ValueError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -207,13 +261,14 @@ def main() -> int:
         for size in (512, 128):
             write_png(resize_rgba(art, size), args.icons_dir / f"vtcode-app-{name}-{size}.png")
 
-    args.iconset_dir.mkdir(parents=True, exist_ok=True)
-    for filename, size in sorted(ICONSET_SLOTS.items(), key=lambda item: item[1]):
-        slot = resize_rgba(masters["dynamic"], size)
-        slot.save(args.iconset_dir / filename, "PNG", optimize=True)
-    print(f"Staged {len(ICONSET_SLOTS)} iconset slots in {args.iconset_dir}")
-    print("Next: iconutil -c icns "
-          f"{args.iconset_dir} -o {ICONS_DIR.relative_to(REPO_ROOT)}/vtcode-app-dynamic.icns")
+    if "dynamic" in masters:
+        args.iconset_dir.mkdir(parents=True, exist_ok=True)
+        for filename, size in sorted(ICONSET_SLOTS.items(), key=lambda item: item[1]):
+            slot = resize_rgba(masters["dynamic"], size)
+            slot.save(args.iconset_dir / filename, "PNG", optimize=True)
+        print(f"Staged {len(ICONSET_SLOTS)} iconset slots in {args.iconset_dir}")
+        print("Next: iconutil -c icns "
+              f"{args.iconset_dir} -o {ICONS_DIR.relative_to(REPO_ROOT)}/vtcode-app-dynamic.icns")
     return 0
 
 

@@ -110,13 +110,21 @@ const PROFILE_ICON_LIGHT_BYTES: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded_assets/resources/icons/vtcode-app-light-128.png"));
 const PROFILE_ICON_DARK_BYTES: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded_assets/resources/icons/vtcode-app-dark-128.png"));
+const PROFILE_ICON_CLEAR_BYTES: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/embedded_assets/resources/icons/vtcode-app-clear-128.png"));
+const PROFILE_ICON_TINTED_BYTES: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/embedded_assets/resources/icons/vtcode-app-tinted-128.png"));
 
-/// Artwork bytes for an already-resolved dark/light mode.
-pub fn artwork_bytes(dark_mode: bool) -> &'static [u8] {
-    if dark_mode {
-        PROFILE_ICON_DARK_BYTES
-    } else {
-        PROFILE_ICON_LIGHT_BYTES
+/// Artwork bytes for a concrete icon variant.
+///
+/// Callers pass [`resolve_artwork`] output: unresolved `Dynamic`/`Unknown`
+/// input falls back to the light tile rather than failing the install.
+pub fn artwork_bytes(preference: AppIconPreference) -> &'static [u8] {
+    match preference {
+        AppIconPreference::Dark => PROFILE_ICON_DARK_BYTES,
+        AppIconPreference::Clear => PROFILE_ICON_CLEAR_BYTES,
+        AppIconPreference::Tinted => PROFILE_ICON_TINTED_BYTES,
+        AppIconPreference::Light | AppIconPreference::Dynamic | AppIconPreference::Unknown => PROFILE_ICON_LIGHT_BYTES,
     }
 }
 
@@ -131,15 +139,16 @@ fn require_artwork_available(bytes: &'static [u8]) -> Result<&'static [u8]> {
     }
 }
 
-/// Resolve an icon preference against a theme id. `Dynamic` (and `Unknown`)
-/// follow the theme's own light/dark mode; explicit variants pin their art.
-pub fn resolve_dark_mode_with_theme(preference: AppIconPreference, theme_id: &str) -> bool {
-    preference.is_dark(!crate::ui::theme::is_light_theme(theme_id))
+/// Resolve an icon preference to concrete artwork against a theme id.
+/// `Dynamic` (and `Unknown`) follow the theme's own light/dark mode;
+/// explicit variants pin their art.
+pub fn resolve_artwork_with_theme(preference: AppIconPreference, theme_id: &str) -> AppIconPreference {
+    preference.resolve(!crate::ui::theme::is_light_theme(theme_id))
 }
 
-/// Resolve an icon preference against the active CLI theme.
-pub fn resolve_dark_mode(preference: AppIconPreference) -> bool {
-    resolve_dark_mode_with_theme(preference, &crate::ui::theme::active_theme_id())
+/// Resolve an icon preference to concrete artwork against the active CLI theme.
+pub fn resolve_artwork(preference: AppIconPreference) -> AppIconPreference {
+    resolve_artwork_with_theme(preference, &crate::ui::theme::active_theme_id())
 }
 
 /// Outcome of [`install_profile_icon`].
@@ -177,10 +186,16 @@ pub fn installed_icon_path(data_dir: &Path) -> PathBuf {
 
 /// Install the VT Code iTerm2 profile icon (macOS only, idempotent).
 ///
-/// Writes only VT Code-owned files: the artwork under the data root and
-/// `vtcode.json` under iTerm2's DynamicProfiles directory. Existing
-/// profiles are never modified; deleting `vtcode.json` uninstalls.
-pub fn install_profile_icon(home: &Path, data_dir: &Path, dark_mode: bool) -> Result<ProfileIconInstallReport> {
+/// Pass [`resolve_artwork`] output: unresolved `Dynamic`/`Unknown` input
+/// falls back to the light tile (see [`artwork_bytes`]). Writes only VT
+/// Code-owned files: the artwork under the data root and `vtcode.json`
+/// under iTerm2's DynamicProfiles directory. Existing profiles are never
+/// modified; deleting `vtcode.json` uninstalls.
+pub fn install_profile_icon(
+    home: &Path,
+    data_dir: &Path,
+    preference: AppIconPreference,
+) -> Result<ProfileIconInstallReport> {
     if !cfg!(target_os = "macos") {
         anyhow::bail!("iTerm2 profile icons are only available on macOS");
     }
@@ -189,7 +204,7 @@ pub fn install_profile_icon(home: &Path, data_dir: &Path, dark_mode: bool) -> Re
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create icon directory {}", parent.display()))?;
     }
-    std::fs::write(&icon_path, require_artwork_available(artwork_bytes(dark_mode))?)
+    std::fs::write(&icon_path, require_artwork_available(artwork_bytes(preference))?)
         .with_context(|| format!("failed to write icon {}", icon_path.display()))?;
     if let Some(parent) = icon_path.parent() {
         let _removed = std::fs::remove_file(parent.join(LEGACY_PROFILE_ICON_FILENAME));
@@ -216,7 +231,8 @@ pub fn profile_icon_instructions() -> Vec<String> {
         "1. Run `/terminal-setup install-iterm2-icon` to install the VT Code tab icon automatically.".to_string(),
         "2. If a tab is stuck showing the VT Code icon after exit, run `/terminal-setup reset-iterm2-icon`."
             .to_string(),
-        "3. Switch artwork with `/terminal-setup icon light|dark|dynamic` (persist via `ui.app_icon`).".to_string(),
+        "3. Switch artwork with `/terminal-setup icon light|dark|clear|tinted|dynamic` (persist via `ui.app_icon`)."
+            .to_string(),
         "4. Or set it manually: Settings → Profiles → General → Icon → Custom, then pick a PNG from resources/icons/."
             .to_string(),
     ]
@@ -254,6 +270,8 @@ pub fn parse_terminal_icon_command(args: &str) -> Option<TerminalIconCommand> {
         ["icon"] => Some(TerminalIconCommand::Show),
         ["icon", "light"] => Some(TerminalIconCommand::Switch(AppIconPreference::Light)),
         ["icon", "dark"] => Some(TerminalIconCommand::Switch(AppIconPreference::Dark)),
+        ["icon", "clear"] => Some(TerminalIconCommand::Switch(AppIconPreference::Clear)),
+        ["icon", "tinted"] => Some(TerminalIconCommand::Switch(AppIconPreference::Tinted)),
         ["icon", "dynamic"] => Some(TerminalIconCommand::Switch(AppIconPreference::Dynamic)),
         _ => None,
     }
@@ -278,12 +296,12 @@ pub fn run_terminal_icon_show(renderer: &mut crate::utils::ansi::AnsiRenderer) -
         return Ok(());
     }
     let theme_id = crate::ui::theme::active_theme_id();
-    let dark = resolve_dark_mode(AppIconPreference::Dynamic);
+    let resolved = resolve_artwork(AppIconPreference::Dynamic);
     renderer.line(
         MessageStyle::Info,
         &format!(
-            "With `ui.app_icon = \"dynamic\"` (default), the tab icon follows the active theme ('{theme_id}', {} mode). Switch now with `/terminal-setup icon light|dark|dynamic`, or pin via `ui.app_icon`.",
-            if dark { "dark" } else { "light" },
+            "With `ui.app_icon = \"dynamic\"` (default), the tab icon follows the active theme ('{theme_id}', {} artwork). Switch now with `/terminal-setup icon light|dark|clear|tinted|dynamic`, or pin via `ui.app_icon`.",
+            resolved.id(),
         ),
     )?;
     Ok(())
@@ -304,12 +322,9 @@ pub fn run_terminal_icon_switch(
         return Ok(());
     }
     let (home, data_dir) = default_install_paths()?;
-    let dark = resolve_dark_mode(preference);
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Installing VT Code iTerm2 tab icon ({} artwork)...", if dark { "dark" } else { "light" }),
-    )?;
-    let report = install_profile_icon(&home, &data_dir, dark)?;
+    let resolved = resolve_artwork(preference);
+    renderer.line(MessageStyle::Info, &format!("Installing VT Code iTerm2 tab icon ({} artwork)...", resolved.id()))?;
+    let report = install_profile_icon(&home, &data_dir, resolved)?;
     renderer.line(MessageStyle::Status, &format!("✓ Profile written: {}", report.profile_path.display()))?;
     renderer.line(MessageStyle::Status, &format!("✓ Icon installed: {}", report.icon_path.display()))?;
     renderer.line(
@@ -367,26 +382,26 @@ pub fn ensure_profile_icon(preference: AppIconPreference) -> Result<Option<Profi
     let (home, data_dir) = default_install_paths()?;
     let iterm_session = std::env::var("ITERM_SESSION_ID").is_ok();
     let tmux_session = std::env::var("TMUX").is_ok();
-    let dark_mode = resolve_dark_mode(preference);
-    ensure_profile_icon_at(&home, &data_dir, iterm_session, tmux_session, dark_mode)
+    let resolved = resolve_artwork(preference);
+    ensure_profile_icon_at(&home, &data_dir, iterm_session, tmux_session, resolved)
 }
 
 /// Testable core of [`ensure_profile_icon`] with explicit paths, environment
-/// flags, and resolved artwork mode (no process-environment reads, no
+/// flags, and resolved artwork preference (no process-environment reads, no
 /// global roots, no theme-global reads).
 pub fn ensure_profile_icon_at(
     home: &Path,
     data_dir: &Path,
     iterm_session: bool,
     tmux_session: bool,
-    dark_mode: bool,
+    preference: AppIconPreference,
 ) -> Result<Option<ProfileIconInstallReport>> {
     if !cfg!(target_os = "macos") || !iterm_session || tmux_session {
         return Ok(None);
     }
     let profile_path = installed_iterm2_profile_path(home);
     let icon_path = installed_icon_path(data_dir);
-    let expected_artwork = artwork_bytes(dark_mode);
+    let expected_artwork = artwork_bytes(preference);
     let icon_fresh = std::fs::read(&icon_path)
         .map(|bytes| bytes == expected_artwork)
         .unwrap_or(false);
@@ -397,7 +412,7 @@ pub fn ensure_profile_icon_at(
     if profile_current && icon_fresh {
         return Ok(None);
     }
-    install_profile_icon(home, data_dir, dark_mode).map(Some)
+    install_profile_icon(home, data_dir, preference).map(Some)
 }
 
 #[cfg(test)]
@@ -434,26 +449,52 @@ mod tests {
     }
 
     #[test]
-    fn artwork_bytes_differ_per_mode_and_are_non_empty() {
-        let light = artwork_bytes(false);
-        let dark = artwork_bytes(true);
-        assert!(!light.is_empty() && !dark.is_empty());
-        assert_ne!(light, dark);
+    fn artwork_bytes_differ_per_variant_and_are_non_empty() {
+        let variants = [
+            AppIconPreference::Light,
+            AppIconPreference::Dark,
+            AppIconPreference::Clear,
+            AppIconPreference::Tinted,
+        ];
+        for preference in variants {
+            let bytes = artwork_bytes(preference);
+            assert!(!bytes.is_empty(), "{preference:?} artwork must be embedded");
+            assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "{preference:?} artwork must be a PNG");
+            // IHDR is always the first chunk: width/height sit at bytes 16..24.
+            // Fails when a wrong-size master (e.g. a 512px file) is embedded.
+            assert_eq!(&bytes[12..16], b"IHDR", "{preference:?} artwork must start with IHDR");
+            let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+            let height = u32::from_be_bytes(bytes[20..24].try_into().unwrap());
+            assert_eq!((width, height), (128, 128), "{preference:?} artwork must be 128x128");
+        }
+        for (index, first) in variants.iter().enumerate() {
+            for second in &variants[index + 1..] {
+                assert_ne!(artwork_bytes(*first), artwork_bytes(*second), "{first:?} vs {second:?}");
+            }
+        }
+        assert_eq!(artwork_bytes(AppIconPreference::Dynamic), artwork_bytes(AppIconPreference::Light));
+        assert_eq!(artwork_bytes(AppIconPreference::Unknown), artwork_bytes(AppIconPreference::Light));
     }
 
     #[test]
-    fn resolve_dark_mode_pins_explicit_variants_and_follows_theme_for_dynamic() {
+    fn resolve_artwork_pins_explicit_variants_and_follows_theme_for_dynamic() {
         use vtcode_commons::ui_protocol::AppIconPreference;
 
         for theme_id in ["mono", "vitesse-light", "unknown-theme"] {
-            assert!(!resolve_dark_mode_with_theme(AppIconPreference::Light, theme_id));
-            assert!(resolve_dark_mode_with_theme(AppIconPreference::Dark, theme_id));
+            for pinned in [
+                AppIconPreference::Light,
+                AppIconPreference::Dark,
+                AppIconPreference::Clear,
+                AppIconPreference::Tinted,
+            ] {
+                assert_eq!(resolve_artwork_with_theme(pinned, theme_id), pinned, "{pinned:?} on {theme_id}");
+            }
         }
-        assert!(resolve_dark_mode_with_theme(AppIconPreference::Dynamic, "mono"));
-        assert!(!resolve_dark_mode_with_theme(AppIconPreference::Dynamic, "vitesse-light"));
+        assert_eq!(resolve_artwork_with_theme(AppIconPreference::Dynamic, "mono"), AppIconPreference::Dark);
+        assert_eq!(resolve_artwork_with_theme(AppIconPreference::Dynamic, "vitesse-light"), AppIconPreference::Light);
         assert_eq!(
-            resolve_dark_mode_with_theme(AppIconPreference::Unknown, "vitesse-light"),
-            resolve_dark_mode_with_theme(AppIconPreference::Dynamic, "vitesse-light")
+            resolve_artwork_with_theme(AppIconPreference::Unknown, "vitesse-light"),
+            resolve_artwork_with_theme(AppIconPreference::Dynamic, "vitesse-light")
         );
     }
 
@@ -465,6 +506,8 @@ mod tests {
         for (raw, expected) in [
             ("light", AppIconPreference::Light),
             ("dark", AppIconPreference::Dark),
+            ("clear", AppIconPreference::Clear),
+            ("tinted", AppIconPreference::Tinted),
             ("dynamic", AppIconPreference::Dynamic),
         ] {
             assert_eq!(
@@ -522,10 +565,10 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
 
-        let first = install_profile_icon(home.path(), data.path(), true).unwrap();
+        let first = install_profile_icon(home.path(), data.path(), AppIconPreference::Dark).unwrap();
         assert!(first.profile_path.exists());
         assert!(first.icon_path.exists());
-        assert_eq!(std::fs::read(&first.icon_path).unwrap(), artwork_bytes(true));
+        assert_eq!(std::fs::read(&first.icon_path).unwrap(), artwork_bytes(AppIconPreference::Dark));
 
         let stored: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&first.profile_path).unwrap()).unwrap();
@@ -534,7 +577,7 @@ mod tests {
             first.icon_path.to_string_lossy().into_owned()
         );
 
-        let second = install_profile_icon(home.path(), data.path(), true).unwrap();
+        let second = install_profile_icon(home.path(), data.path(), AppIconPreference::Dark).unwrap();
         assert_eq!(second.profile_path, first.profile_path);
         assert_eq!(second.icon_path, first.icon_path);
     }
@@ -549,28 +592,46 @@ mod tests {
         std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
         std::fs::write(&legacy, b"stale-legacy-bytes").unwrap();
 
-        let report = install_profile_icon(home.path(), data.path(), true).unwrap();
+        let report = install_profile_icon(home.path(), data.path(), AppIconPreference::Dark).unwrap();
         assert!(report.icon_path.exists());
         assert!(!legacy.exists(), "retired artwork must be removed on install");
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn install_profile_icon_switches_artwork_between_modes() {
+    fn install_profile_icon_switches_artwork_between_variants() {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
 
-        let dark = install_profile_icon(home.path(), data.path(), true).unwrap();
-        assert_eq!(std::fs::read(&dark.icon_path).unwrap(), artwork_bytes(true));
-        let light = install_profile_icon(home.path(), data.path(), false).unwrap();
-        assert_eq!(light.icon_path, dark.icon_path);
-        assert_eq!(std::fs::read(&light.icon_path).unwrap(), artwork_bytes(false));
+        // Install every pinned variant in turn: each write must land that
+        // variant's own bytes at the same stable path (fails on crossed
+        // artwork selection, where two variants would install identical art).
+        let mut installed: Vec<Vec<u8>> = Vec::new();
+        for preference in [
+            AppIconPreference::Dark,
+            AppIconPreference::Light,
+            AppIconPreference::Clear,
+            AppIconPreference::Tinted,
+        ] {
+            let report = install_profile_icon(home.path(), data.path(), preference).unwrap();
+            assert_eq!(report.icon_path, installed_icon_path(data.path()));
+            let bytes = std::fs::read(&report.icon_path).unwrap();
+            assert_eq!(bytes, artwork_bytes(preference), "{preference:?} must install its own art");
+            assert!(!installed.contains(&bytes), "{preference:?} art must differ from earlier installs");
+            installed.push(bytes);
+        }
     }
 
     #[test]
     fn profile_icon_instructions_point_at_installer() {
         let lines = profile_icon_instructions();
         assert!(lines.iter().any(|line| line.contains("install-iterm2-icon")));
+        // The switch guidance must name every selectable variant, so a future
+        // variant cannot land in the parser without surfacing in setup help.
+        let joined = lines.join("\n");
+        for variant in AppIconPreference::ALL {
+            assert!(joined.contains(variant.id()), "instructions lack {}", variant.id());
+        }
     }
 
     #[test]
@@ -578,7 +639,7 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
 
-        let report = ensure_profile_icon_at(home.path(), data.path(), false, false, true).unwrap();
+        let report = ensure_profile_icon_at(home.path(), data.path(), false, false, AppIconPreference::Dark).unwrap();
         assert!(report.is_none());
         assert!(!iterm2_dynamic_profiles_dir(home.path()).exists());
     }
@@ -588,7 +649,7 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
 
-        let report = ensure_profile_icon_at(home.path(), data.path(), true, true, true).unwrap();
+        let report = ensure_profile_icon_at(home.path(), data.path(), true, true, AppIconPreference::Dark).unwrap();
         assert!(report.is_none());
         assert!(!iterm2_dynamic_profiles_dir(home.path()).exists());
     }
@@ -599,34 +660,34 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
 
-        let first = ensure_profile_icon_at(home.path(), data.path(), true, false, true).unwrap();
+        let first = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Dark).unwrap();
         assert!(first.is_some());
 
-        let second = ensure_profile_icon_at(home.path(), data.path(), true, false, true).unwrap();
+        let second = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Dark).unwrap();
         assert!(second.is_none());
 
         let icon_path = installed_icon_path(data.path());
         std::fs::write(&icon_path, b"stale-bytes").unwrap();
-        let third = ensure_profile_icon_at(home.path(), data.path(), true, false, true).unwrap();
+        let third = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Dark).unwrap();
         let report = third.expect("stale artwork must trigger a refresh");
-        assert_eq!(std::fs::read(&report.icon_path).unwrap(), artwork_bytes(true));
+        assert_eq!(std::fs::read(&report.icon_path).unwrap(), artwork_bytes(AppIconPreference::Dark));
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn ensure_refreshes_when_resolved_mode_changes() {
+    fn ensure_refreshes_when_resolved_artwork_changes() {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
 
-        let first = ensure_profile_icon_at(home.path(), data.path(), true, false, true).unwrap();
+        let first = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Dark).unwrap();
         assert!(first.is_some());
-        assert_eq!(std::fs::read(installed_icon_path(data.path())).unwrap(), artwork_bytes(true));
+        assert_eq!(std::fs::read(installed_icon_path(data.path())).unwrap(), artwork_bytes(AppIconPreference::Dark));
 
-        let second = ensure_profile_icon_at(home.path(), data.path(), true, false, false).unwrap();
-        let report = second.expect("mode change must refresh the installed artwork");
-        assert_eq!(std::fs::read(&report.icon_path).unwrap(), artwork_bytes(false));
+        let second = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Clear).unwrap();
+        let report = second.expect("artwork change must refresh the installed artwork");
+        assert_eq!(std::fs::read(&report.icon_path).unwrap(), artwork_bytes(AppIconPreference::Clear));
 
-        let third = ensure_profile_icon_at(home.path(), data.path(), true, false, false).unwrap();
+        let third = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Clear).unwrap();
         assert!(third.is_none());
     }
 
@@ -636,12 +697,12 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
 
-        let first = ensure_profile_icon_at(home.path(), data.path(), true, false, true).unwrap();
+        let first = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Dark).unwrap();
         let profile_path = first.expect("first run installs").profile_path;
 
         // Simulate an older install that still carries the removed APS rule.
         std::fs::write(&profile_path, r#"{"Profiles":[{"Name":"VT Code"}]}"#).unwrap();
-        let refreshed = ensure_profile_icon_at(home.path(), data.path(), true, false, true).unwrap();
+        let refreshed = ensure_profile_icon_at(home.path(), data.path(), true, false, AppIconPreference::Dark).unwrap();
         let report = refreshed.expect("drifted profile content must trigger a rewrite");
         assert_eq!(report.profile_path, profile_path);
 

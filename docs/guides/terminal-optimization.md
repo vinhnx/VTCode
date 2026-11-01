@@ -52,9 +52,10 @@ today:
 | VS Code integrated terminal                                               | Extension terminal `iconPath`             | Automatic: bundled `media/vtcode-terminal.png`                                                                                                                                                                                                                                                                   |
 | Kitty, Ghostty, WezTerm, Alacritty, Terminal.app, Warp, Zed, Hyper, Tabby | None per-session (app/window level only)  | `OSC 1`/`OSC 2` text label                                                                                                                                                                                                                                                                                       |
 
-Bundled assets live in `resources/icons/` (see its `README.md`): `vtcode-app-light-128.png` and
-`vtcode-app-dark-128.png` for iTerm2 HiDPI profiles (selected by `ui.app_icon`, Dynamic by default), and
-`vtcode-app-dynamic-128.png` for Windows Terminal manual setup. On iTerm2,
+Bundled assets live in `resources/icons/` (see its `README.md`): `vtcode-app-light-128.png`,
+`vtcode-app-dark-128.png`, `vtcode-app-clear-128.png`, and `vtcode-app-tinted-128.png` for iTerm2 HiDPI
+profiles (selected by `ui.app_icon`, Dynamic by default), and `vtcode-app-dynamic-128.png` for Windows
+Terminal manual setup. On iTerm2,
 `/terminal-setup install-iterm2-icon` installs a `VT Code` dynamic profile automatically. VT Code switches the session
 to that profile once at startup (via `OSC 1337;SetProfile=`) and switches back to the session's original profile on
 exit, so the tab icon is only shown while the TUI runs. Because `SetProfile` is a sticky change with no automatic
