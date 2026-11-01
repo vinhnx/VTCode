@@ -26,15 +26,12 @@ impl DesktopView {
         } else {
             counts.summary()
         };
-        div()
+        inspector_tab_body()
             .id("utilities-pane")
             .lock_scroll_axis()
             .test_support()
             .role(gpui_kit::Role::Group)
             .aria_label(rust_i18n::t!("app.utilities.group_aria").to_string())
-            .w_full()
-            .flex_1()
-            .min_h_0()
             .track_scroll(&self.utilities_scroll)
             .overflow_y_scroll()
             .vertical_scrollbar(&self.utilities_scroll)

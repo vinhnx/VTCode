@@ -431,6 +431,7 @@ mod full_access_confirm;
 mod heading_tiers;
 mod inspector_appearance;
 mod inspector_files;
+mod inspector_layout;
 mod interaction_choices;
 mod loading_lifecycle;
 mod mcp_app;

@@ -195,7 +195,17 @@ fn conversation_workspace_is_inset_below_the_toolbar_and_after_navigation(cx: &m
             assert!(bounds.left() > navigation.right(), "workspace must have a visible left inset: {bounds:?}");
         }
         assert!(bounds.top() > toolbar.bottom(), "workspace must have a visible top inset: {bounds:?}");
-        assert!(bounds.size.width > px(500.));
+        // The inspector shares the row as a separated card, so the workspace
+        // card alone is narrower than the old combined surface; the row must
+        // still fill the content slot band to band.
+        let pane = window.find("pane-root").bounds();
+        let inspector = window.find("inspector-panel").bounds();
+        let outer = bounds.left() - pane.left();
+        assert_eq!(
+            pane.right() - inspector.right(),
+            outer,
+            "workspace row must fill the content slot: workspace={bounds:?}, inspector={inspector:?}, pane={pane:?}"
+        );
         assert!(bounds.size.height > px(500.));
     })
     .unwrap();

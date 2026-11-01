@@ -161,7 +161,7 @@ impl DesktopView {
                         let path = entry.rel_path.clone();
                         let name = path.rsplit('/').next().unwrap_or(&path).to_string();
                         let is_attached = attached.contains(path.as_str());
-                        let thumbnail = state.thumbnails.get(&path).cloned();
+                        let thumbnail = state.thumbnail(&path).cloned();
                         let attach_path = path.clone();
                         let remove_path = path.clone();
                         div()

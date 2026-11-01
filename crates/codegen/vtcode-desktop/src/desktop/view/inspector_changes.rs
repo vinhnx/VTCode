@@ -62,12 +62,16 @@ impl DesktopView {
         self.select_inspector_tab_from_keyboard(index, window, cx);
     }
 
-    /// Right-hand context inspector: derived Changes, Files, and Activity
-    /// views over the same transcript the conversation renders.
+    /// Right-hand context inspector: derived Changes, Files, Activity,
+    /// Output, and Utilities views over the same transcript the conversation
+    /// renders. The panel is a separated card beside the workspace surface,
+    /// so it carries the main-container canvas fill at the side-panel radius
+    /// tier while every tab body shares [`inspector_tab_body`].
     pub(super) fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
-        let colors = theme.colors;
+        let colors = cx.theme().colors;
         let panel = div()
+            .id("inspector-panel")
+            .test_support()
             .w(px(self.inspector_width))
             .min_w(px(MIN_PANE_WIDTH))
             .h_full()
@@ -75,62 +79,8 @@ impl DesktopView {
             .flex()
             .flex_col()
             .rounded_lg()
-            .bg(themes::mix(colors.background, colors.secondary, 0.3))
-            .child(
-                div()
-                    .id("inspector-navigation")
-                    .test_support()
-                    .key_context(key_context::INSPECTOR)
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(rust_i18n::t!("app.inspector.inspector_tabs").to_string())
-                    .aria_description(rust_i18n::t!("app.inspector.tabs_hint").to_string())
-                    .border_1()
-                    .border_color(colors.border.opacity(0.))
-                    .focus_visible(|style| style.border_color(colors.ring))
-                    // Inset the rail from the panel edge; the 12px sides share
-                    // the content spine, and the tighter bottom keeps the tabs
-                    // attached to their panel.
-                    .px_3()
-                    .pt_3()
-                    .pb_2()
-                    .on_action(
-                        cx.listener(|view, _: &NextInspectorTab, window, cx| {
-                            view.cycle_inspector_tab(true, window, cx)
-                        }),
-                    )
-                    .on_action(cx.listener(|view, _: &PreviousInspectorTab, window, cx| {
-                        view.cycle_inspector_tab(false, window, cx)
-                    }))
-                    .on_action(cx.listener(|view, _: &FirstInspectorTab, window, cx| {
-                        view.select_inspector_tab_from_keyboard(0, window, cx)
-                    }))
-                    .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
-                        view.select_inspector_tab_from_keyboard(InspectorTab::ALL.len().saturating_sub(1), window, cx)
-                    }))
-                    .child(
-                        div()
-                            .id("inspector-tabs-focus")
-                            .test_support()
-                            .track_focus(&self.inspector_focus)
-                            .child(
-                                desktop_tab_bar("inspector-tabs")
-                                    // Five tabs share a narrow rail, so the inspector keeps the
-                                    // compact size; settings uses the medium default.
-                                    .small()
-                                    .track_scroll(&self.inspector_tabs_scroll)
-                                    .selected_index(
-                                        InspectorTab::ALL
-                                            .iter()
-                                            .position(|tab| *tab == self.inspector_tab)
-                                            .unwrap_or_default(),
-                                    )
-                                    .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                        view.select_inspector_tab(*index, window, cx)
-                                    }))
-                                    .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
-                            ),
-                    ),
-            );
+            .bg(colors.background)
+            .child(self.render_inspector_tab_bar(cx));
 
         let content = match self.inspector_tab {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),
@@ -149,6 +99,60 @@ impl DesktopView {
             })
             .with_animation("inspector-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
             .into_any_element()
+    }
+
+    /// Tab rail header: the segmented control keeps the compact size (five
+    /// tabs share the rail) with tracked reveal for keyboard and
+    /// programmatic selection. The rail shares the `px_3` content spine,
+    /// and the tighter bottom keeps the tabs attached to their panel.
+    fn render_inspector_tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        div()
+            .id("inspector-navigation")
+            .test_support()
+            .key_context(key_context::INSPECTOR)
+            .role(gpui_kit::Role::Group)
+            .aria_label(rust_i18n::t!("app.inspector.inspector_tabs").to_string())
+            .aria_description(rust_i18n::t!("app.inspector.tabs_hint").to_string())
+            .border_1()
+            .border_color(colors.border.opacity(0.))
+            .focus_visible(|style| style.border_color(colors.ring))
+            .px_3()
+            .pt_3()
+            .pb_2()
+            .on_action(cx.listener(|view, _: &NextInspectorTab, window, cx| view.cycle_inspector_tab(true, window, cx)))
+            .on_action(
+                cx.listener(|view, _: &PreviousInspectorTab, window, cx| view.cycle_inspector_tab(false, window, cx)),
+            )
+            .on_action(cx.listener(|view, _: &FirstInspectorTab, window, cx| {
+                view.select_inspector_tab_from_keyboard(0, window, cx)
+            }))
+            .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
+                view.select_inspector_tab_from_keyboard(InspectorTab::ALL.len().saturating_sub(1), window, cx)
+            }))
+            .child(
+                div()
+                    .id("inspector-tabs-focus")
+                    .test_support()
+                    .track_focus(&self.inspector_focus)
+                    .child(
+                        desktop_tab_bar("inspector-tabs")
+                            // Five tabs share a narrow rail, so the inspector keeps the
+                            // compact size; settings uses the medium default.
+                            .small()
+                            .track_scroll(&self.inspector_tabs_scroll)
+                            .selected_index(
+                                InspectorTab::ALL
+                                    .iter()
+                                    .position(|tab| *tab == self.inspector_tab)
+                                    .unwrap_or_default(),
+                            )
+                            .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                view.select_inspector_tab(*index, window, cx)
+                            }))
+                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                    ),
+            )
     }
 
     fn render_changes_tab(
@@ -179,13 +183,8 @@ impl DesktopView {
                 colors,
             )));
         }
-        div()
+        inspector_tab_body()
             .id("inspector-changes-tab")
-            .w_full()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
             .child(
                 div().px_3().py_2().child(
                     desktop_button("review-working-tree")

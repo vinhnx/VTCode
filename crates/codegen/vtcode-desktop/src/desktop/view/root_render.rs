@@ -34,6 +34,8 @@ impl Render for DesktopView {
         // pending states, which own their own calls to action.
         let multi_tab = self.open_tabs.len() > 1;
         let conversation = div()
+            .id("conversation-column")
+            .test_support()
             .flex_1()
             .min_w_0()
             .h_full()
@@ -70,25 +72,32 @@ impl Render for DesktopView {
             // Zen is the distraction-free surface: the card runs edge to edge,
             // so square corners meet the title bar and window sides flush.
             .when(self.zen_mode, |card| card.rounded_none())
-            .child(conversation)
-            .when(inspector_visible, |workspace| {
-                workspace.child(
-                    div()
-                        .relative()
-                        .h_full()
-                        .flex_shrink_0()
-                        .child(self.render_inspector(cx))
-                        .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
-                )
-            });
-        // Route panels embed in the content slot beneath the persistent
-        // toolbar: chrome stays mounted and the panel inherits the pane
-        // rhythm instead of taking over the window.
+            .child(conversation);
+        // The inspector is a separated card beside the workspace surface,
+        // not nested in it: the row gap matches the pane padding so the
+        // two cards float on the chrome with one even rhythm.
+        let inspector = inspector_visible.then(|| {
+            div()
+                .relative()
+                .h_full()
+                .flex_shrink_0()
+                .child(self.render_inspector(cx))
+                .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
+        });
         // Route panels embed in the content slot beneath the persistent
         // toolbar: chrome stays mounted and the panel inherits the pane
         // rhythm instead of taking over the window.
         let center: AnyElement = match self.current_route() {
-            Route::Workspace => workspace.into_any_element(),
+            Route::Workspace => div()
+                .flex_1()
+                .min_w_0()
+                .min_h_0()
+                .h_full()
+                .flex()
+                .gap_3()
+                .child(workspace)
+                .children(inspector)
+                .into_any_element(),
             Route::Settings => self.render_settings_page(window, cx),
             Route::Browser => self.render_thread_browser(window, cx),
             Route::Review => self.render_change_review(window, cx),

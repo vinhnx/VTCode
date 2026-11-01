@@ -280,6 +280,16 @@ pub(super) fn nav_group_header(
         .into_any_element()
 }
 
+/// Shared inspector tab container: every inspector tab (Changes, Files,
+/// Activity, Output, Utilities) fills the card below the tab rail with the
+/// same flex geometry. Returns `Div` so callers chain their stable id,
+/// scrolling, padding, and roles: scrolled regions keep edge gutters while
+/// headers keep the shared `px_3` spine, so insets stay tab-owned and the
+/// card never double-pads its content.
+pub(super) fn inspector_tab_body() -> gpui_kit::Div {
+    div().w_full().flex_1().min_h_0().flex().flex_col()
+}
+
 /// Bordered section group for diff panes: quiet 1px `border`-token
 /// containment at the nested-card tier, so the file list and the diff read
 /// as two grouped panes with [`row_divider`] between them. Returns `Div`

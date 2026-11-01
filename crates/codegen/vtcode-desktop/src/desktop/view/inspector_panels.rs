@@ -148,7 +148,7 @@ impl DesktopView {
     }
 
     pub(super) fn render_inspector_files_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let mut body = div().w_full().flex_1().min_h_0().flex().flex_col();
+        let mut body = inspector_tab_body().id("inspector-files-tab").test_support();
         body = body.child(panel_header(
             desktop_button("focus-files")
                 .label(rust_i18n::t!("app.files.workspace_files").to_string())
@@ -321,7 +321,7 @@ impl DesktopView {
         let theme = cx.theme();
         let colors = theme.colors;
         let mono = theme.mono_font_family.clone();
-        let mut pane = div().w_full().flex_1().min_h_0().flex().flex_col();
+        let mut pane = inspector_tab_body().id("inspector-output-tab").test_support();
         if self.restored_activity_history_incomplete {
             pane = pane.child(div().px_3().pt_2().child(warning_alert(
                 "activity-history-warning",
@@ -519,7 +519,6 @@ impl DesktopView {
                                 .rounded(theme.radius_full())
                                 .border_1()
                                 .border_color(colors.border)
-                                .bg(colors.background)
                                 .text_color(colors.foreground)
                                 .on_click(cx.listener(|view, _, _, cx| {
                                     view.output_scroll.scroll_to_bottom();
@@ -540,14 +539,10 @@ impl DesktopView {
         let activity = self.cached_activity_projection();
         let counts = ActivityCounts::from_rows(&activity.rows);
         let has_older_activity = activity.has_older;
-        let mut body = div()
+        let mut body = inspector_tab_body()
             .id("activity-list")
-            .w_full()
-            .flex_1()
-            .min_h_0()
+            .test_support()
             .overflow_hidden()
-            .flex()
-            .flex_col()
             .gap_2()
             .p_3();
         if self.restored_activity_history_incomplete {
