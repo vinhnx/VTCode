@@ -128,21 +128,29 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         }
         tool_registry.set_harness_task(Some(task_id));
     }
-    if tool_registry.is_planning_active()
-        && !active_task_follow_up
-        && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
+    // An explicit user turn after a terminal plan rejection rearms the
+    // validation-repair budget. Planning mode parks recovery in
+    // AwaitingInput/AwaitingApproval; execution mode (no recovery cycle)
+    // sets a one-shot pending flag. Internal follow-ups must not consume
+    // the rearm, so the pending flag is taken last for short-circuiting.
+    let planning_retry_ready = tool_registry.is_planning_active()
         && matches!(
             plan_session.recovery.outcome,
             vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
                 | vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval
-        )
+        );
+    if !active_task_follow_up
+        && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
+        && (planning_retry_ready || plan_session.take_execution_plan_rejection_pending())
     {
         plan_session.begin_explicit_recovery_cycle();
-        crate::agent::runloop::unified::planning_workflow::recovery_state::record_clarification(
-            &mut plan_session.recovery,
-            next_turn_input,
-            false,
-        );
+        if tool_registry.is_planning_active() {
+            crate::agent::runloop::unified::planning_workflow::recovery_state::record_clarification(
+                &mut plan_session.recovery,
+                next_turn_input,
+                false,
+            );
+        }
     }
     let (session_state, runtime_steering) = runtime.split_mut();
     let working_history = Arc::make_mut(&mut session_state.messages);

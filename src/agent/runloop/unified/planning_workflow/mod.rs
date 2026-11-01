@@ -248,7 +248,9 @@ pub(crate) async fn persisted_plan_is_ready(state: &PlanningWorkflowState) -> bo
 
 pub(crate) use super::planning_workflow_state::{PlanningFinishReason, finish_planning_workflow};
 pub(crate) use confirmation::{StartPlanningDecision, execute_plan_approval, present_start_planning_confirmation};
-pub(crate) use events::{emit_context_reset, emit_plan_approval_resolved, emit_plan_ready_events};
+pub(crate) use events::{
+    emit_context_reset, emit_plan_approval_resolved, emit_plan_ready_events, emit_plan_rejected_events,
+};
 pub(crate) use execution::handle_start_planning;
 pub(crate) use exit_trigger::{PlanningExitContext, maybe_handle_planning_exit_trigger};
 pub(crate) use intent::{

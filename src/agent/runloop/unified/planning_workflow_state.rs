@@ -71,6 +71,12 @@ pub(crate) struct PlanningWorkflowSessionState {
     /// often blocks tools in the entry turn, and discarding would leave the
     /// execution agent selected while planning stays active.
     plan_entry_agent_switch_pending: bool,
+    /// Set when an execution-mode (planning-inactive) turn ends in terminal
+    /// plan rejection. Planning mode rearms via the recovery outcome
+    /// (`AwaitingInput`); execution mode has no recovery cycle, so this flag
+    /// lets the next explicit user turn reset the validation-repair budget
+    /// instead of terminally rejecting the first invalid draft again.
+    execution_plan_rejection_pending: bool,
 }
 
 /// Maximum number of pseudo-tool-call-markup re-prompts per planning session.
@@ -110,6 +116,7 @@ impl PlanningWorkflowSessionState {
         self.fallback_primary_agent = None;
         self.pending_approval = None;
         self.plan_entry_agent_switch_pending = false;
+        self.execution_plan_rejection_pending = false;
     }
 
     pub(crate) fn exit(&mut self) {
@@ -127,6 +134,7 @@ impl PlanningWorkflowSessionState {
         self.fallback_primary_agent = None;
         self.pending_approval = None;
         self.plan_entry_agent_switch_pending = false;
+        self.execution_plan_rejection_pending = false;
     }
 
     /// Leave Planning after the artifact/tracker handoff while retaining the
@@ -322,6 +330,18 @@ impl PlanningWorkflowSessionState {
     /// after final-response validation.
     pub(crate) fn take_plan_entry_agent_switch(&mut self) -> bool {
         std::mem::take(&mut self.plan_entry_agent_switch_pending)
+    }
+
+    /// Record a terminal execution-mode plan rejection. Consumed once by the
+    /// next explicit user turn (turn_prep), which rearms the repair budget.
+    pub(crate) fn mark_execution_plan_rejection_pending(&mut self) {
+        self.execution_plan_rejection_pending = true;
+    }
+
+    /// Take the pending execution-mode rejection rearm. Returns true once per
+    /// rejection; internal follow-ups must not consume it.
+    pub(crate) fn take_execution_plan_rejection_pending(&mut self) -> bool {
+        std::mem::take(&mut self.execution_plan_rejection_pending)
     }
 
     pub(crate) fn set_previous_primary_agent(&mut self, agent: Option<String>) {

@@ -714,6 +714,37 @@ fn plan_delta_chunks_accumulate_and_empty_recovery_checkpoints_stay_hidden(cx: &
     });
 }
 
+#[gpui_kit::test]
+fn rejected_plan_draft_events_render_a_visible_transcript_row(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ItemCompletedEvent, PlanItem, ThreadEvent, ThreadItem, ThreadItemDetails};
+
+    // Terminal plan rejections publish the rejected draft as `{turn}-rejected-plan`
+    // thread events because host runtimes never forward renderer transcript lines.
+    let (_, view) = open_desktop(cx);
+    cx.update_entity(&view, |view, _| {
+        view.handle_thread_event(plan_delta_notification(
+            "session",
+            "turn",
+            "turn-rejected-plan",
+            "## Rejected draft",
+            false,
+        ));
+        view.handle_thread_event(vtcode_desktop_protocol::ThreadEventNotification {
+            session_id: "session".into(),
+            turn_id: Some("turn".into()),
+            event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    context: None,
+                    id: "turn-rejected-plan".into(),
+                    details: ThreadItemDetails::Plan(PlanItem { text: "## Rejected draft".into() }),
+                },
+            })),
+        });
+        assert_eq!(view.transcript.len(), 1);
+        assert_eq!(view.transcript.get(0).unwrap().text.as_ref(), "## Rejected draft");
+    });
+}
+
 #[test]
 fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
     let mut enabled = super::super::desktop_button("native-cursor-enabled");

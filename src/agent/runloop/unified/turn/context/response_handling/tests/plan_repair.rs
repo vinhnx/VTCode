@@ -272,6 +272,94 @@ async fn untagged_planlike_text_with_exhausted_budget_rejects_with_specific_reas
     assert_history_carries_validator_feedback(&last_final_answer_text(&ctx));
 }
 #[tokio::test]
+async fn terminal_planning_rejection_retains_draft_and_rearms_explicit_retry() {
+    use vtcode_core::exec::events::planning::PlanningOutcome;
+    use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails, VersionedThreadEvent};
+
+    // Session session-vtcode-20261101T022006Z_758272-55771: the in-turn repair
+    // budget burned out, the terminal rejection showed the draft through
+    // renderer lines only (invisible in desktop), and every `retry` re-hit
+    // the exhausted budget and terminally rejected the first invalid draft
+    // again with the identical error.
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    let events_path = backing.enable_harness_emitter();
+    let mut ctx = backing.turn_processing_context();
+    ctx.plan_session.mark_plan_validation_repair_used();
+    ctx.plan_session.mark_plan_validation_repair_used();
+
+    let outcome = ctx
+        .handle_text_response(
+            String::new(),
+            Vec::new(),
+            None,
+            Some(RECOVERY_INVALID_VERIFICATION_PLAN.to_string()),
+            false,
+        )
+        .await
+        .expect("terminal rejection should be handled");
+
+    assert_terminal_plan_rejection_is_blocked(&outcome);
+    assert_history_carries_validator_feedback(&last_final_answer_text(&ctx));
+
+    // The rejected draft must be retained for the explicit retry: recovery
+    // snapshot (model context and forensics) plus canonical thread events
+    // (desktop transcript, which never sees renderer lines).
+    assert_eq!(ctx.plan_session.recovery.outcome, PlanningOutcome::AwaitingInput);
+    assert!(
+        ctx.plan_session.recovery.input_prompt_shown,
+        "session resume must not auto-queue a synthetic turn with an exhausted budget"
+    );
+    assert!(
+        ctx.plan_session
+            .recovery
+            .best_draft
+            .as_deref()
+            .is_some_and(|draft| draft.contains("Update the preview guard")),
+        "the rejected draft must be retained in the recovery snapshot"
+    );
+    assert!(
+        ctx.plan_session
+            .recovery
+            .validation_report
+            .as_deref()
+            .is_some_and(|report| report.contains("Plan validation issues:")),
+        "the validator report must be retained for the retry"
+    );
+
+    let events = tokio::fs::read_to_string(&events_path).await.expect("rejection event log");
+    assert!(
+        !events.contains("\"type\":\"plan.approval.requested\""),
+        "a rejected draft must never request approval"
+    );
+    let rejected = events
+        .lines()
+        .map(|line| {
+            serde_json::from_str::<VersionedThreadEvent>(line)
+                .expect("versioned event")
+                .into_event()
+        })
+        .find_map(|event| match event {
+            ThreadEvent::ItemCompleted(completed) if completed.item.id.ends_with("-rejected-plan") => {
+                Some(completed.item)
+            }
+            _ => None,
+        })
+        .expect("terminal rejection must publish the rejected draft as a plan item");
+    let ThreadItemDetails::Plan(plan) = &rejected.details else {
+        panic!("rejected item must carry plan details");
+    };
+    assert!(plan.text.contains("Update the preview guard"));
+
+    // The exhausted budget holds for the rest of this turn, but the next
+    // explicit user turn resets the cycle (turn_prep) so `retry` can repair
+    // instead of terminally rejecting the first invalid draft again.
+    assert!(!ctx.plan_session.plan_validation_repair_allowed());
+    ctx.plan_session.begin_explicit_recovery_cycle();
+    assert!(ctx.plan_session.plan_validation_repair_allowed());
+    assert!(ctx.plan_session.recovery.best_draft.is_some(), "an explicit retry must keep the retained draft");
+}
+#[tokio::test]
 async fn untagged_valid_plan_promotes_to_approval_handoff() {
     // A tagless draft that already validates must not end with the generic
     // planless hint; it promotes to a plan candidate and reaches the same

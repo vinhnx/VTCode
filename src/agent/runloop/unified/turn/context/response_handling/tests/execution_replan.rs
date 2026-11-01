@@ -189,8 +189,11 @@ async fn execution_mode_replan_rejection_surfaces_feedback_without_repair_direct
 }
 #[tokio::test]
 async fn plan_only_execution_rejection_still_publishes_final_response() {
+    use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails, VersionedThreadEvent};
+
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.set_approved_plan_execution_for_test(true);
+    let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();
 
     let outcome = ctx
@@ -215,4 +218,34 @@ async fn plan_only_execution_rejection_still_publishes_final_response() {
         ctx.harness_state.final_response_event_emitted(),
         "a plan-only rejection must publish the final assistant event"
     );
+
+    // Host runtimes never see renderer lines: the rejected draft must also
+    // travel as canonical thread events, like the planning-mode path.
+    let events = tokio::fs::read_to_string(&events_path).await.expect("rejection event log");
+    let rejected = events
+        .lines()
+        .map(|line| {
+            serde_json::from_str::<VersionedThreadEvent>(line)
+                .expect("versioned event")
+                .into_event()
+        })
+        .find_map(|event| match event {
+            ThreadEvent::ItemCompleted(completed) if completed.item.id.ends_with("-rejected-plan") => {
+                Some(completed.item)
+            }
+            _ => None,
+        })
+        .expect("execution rejection must publish the rejected draft as a plan item");
+    let ThreadItemDetails::Plan(plan) = &rejected.details else {
+        panic!("rejected item must carry plan details");
+    };
+    assert!(plan.text.contains("not a valid plan artifact"));
+
+    // Execution mode has no recovery cycle: a one-shot pending flag rearms
+    // the repair budget on the next explicit user turn (turn_prep).
+    assert!(
+        ctx.plan_session.take_execution_plan_rejection_pending(),
+        "terminal execution rejection must arm the rearm flag"
+    );
+    assert!(!ctx.plan_session.take_execution_plan_rejection_pending(), "the rearm flag must fire once");
 }

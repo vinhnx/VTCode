@@ -4,8 +4,9 @@ use crate::agent::runloop::unified::plan_blocks::{
 };
 use crate::agent::runloop::unified::planning_workflow::{
     PlanApprovalRoute, PlanArtifactError, ValidatedPlanArtifact, allocate_plan_file_if_missing,
-    build_plan_repair_directive, emit_plan_ready_events, persist_plan_draft, persisted_plan_is_ready,
-    plan_approval_route, plan_rejection_history_feedback, plan_repair_directive_for_error, validate_plan_content,
+    build_plan_repair_directive, emit_plan_ready_events, emit_plan_rejected_events, persist_plan_draft,
+    persisted_plan_is_ready, plan_approval_route, plan_rejection_history_feedback, plan_repair_directive_for_error,
+    validate_plan_content,
 };
 use crate::agent::runloop::unified::turn::turn_processing::resolve_effective_request_model;
 use crate::agent::runloop::unified::ui_interaction_stream_helpers::render_compact_reasoning_block;
@@ -15,8 +16,8 @@ pub(crate) const DENIED_INTERVIEW_PLAN_SYNTHESIS_RETRY_DIRECTIVE: &str = "Planni
 
 pub(crate) const PLAN_PSEUDO_TOOL_CALL_REPROMPT_DIRECTIVE: &str = "Planning: the previous response contained tool-call markup that was not executed — XML tool-call text is not a tool call. If you need more repository evidence, invoke tools through the tool-call channel. Otherwise present the completed plan as one compact `<proposed_plan>` (Summary, numbered steps in the form `Action -> files: [path] -> verify: [command]`, Validation, short Assumptions). Each `verify:` must be a concrete command or observable check; valid examples: `cargo nextest run -p vtcode`, `cargo check --locked`, `rg -n 'symbol' src/file.rs`, `sed -n '1,40p' docs/file.md`, `grep -n 'symbol' src/file.rs`. Invalid: `run checks`, `check later`, or `git diff --check`. Tool-call markup written as text is never executed.";
 
-const EXECUTION_PLAN_REJECTION_NOTICE: &str = "The proposed plan was rejected and discarded; no continuation turn was scheduled. Adjust the request or revise the plan to continue.";
-const PLANNING_PLAN_REJECTION_NOTICE: &str = "The proposed plan was rejected and discarded; no continuation turn was scheduled. Revise the plan or restate the request to continue.";
+const EXECUTION_PLAN_REJECTION_NOTICE: &str = "The proposed plan was rejected and kept as a draft; no continuation turn was scheduled. Adjust the request or revise the plan to continue.";
+const PLANNING_PLAN_REJECTION_NOTICE: &str = "The proposed plan was rejected and kept as a draft; no continuation turn was scheduled. Revise the plan or restate the request to continue.";
 const TERMINAL_PLAN_REJECTION_REASON: &str = "plan artifact rejected; revise the plan before continuing";
 const PLAN_APPROVAL_WAITING_NOTICE: &str = "Plan is awaiting approval. Type `approve`, `implement`, or `yes` to begin execution, or `edit` to revise the plan.";
 const PLAN_APPROVAL_DISMISSED_NOTICE: &str = "Plan review ended without starting implementation. The plan remains available for revision or approval in a later turn.";
@@ -199,6 +200,14 @@ impl<'a> TurnProcessingContext<'a> {
                 self.renderer.line(MessageStyle::Info, "Rejected plan revision:")?;
                 self.renderer.line(MessageStyle::Response, plan_text)?;
             }
+            // Host runtimes (desktop) never forward transcript lines, so the
+            // rejected draft must also travel as canonical thread events.
+            emit_plan_rejected_events(
+                self.harness_emitter,
+                &self.harness_state.run_id.0,
+                &self.harness_state.turn_id.0,
+                plan_text,
+            );
             // The rejection is a terminal, user-visible outcome. Publish it
             // through the assistant-response path as well as the renderer so
             // finalization does not mistake this blocked control-flow turn
@@ -213,6 +222,10 @@ impl<'a> TurnProcessingContext<'a> {
                 Some(uni::AssistantPhase::FinalAnswer),
             )?;
             append_rejected_plan_draft_to_last_assistant(self.working_history, plan_text);
+            // Execution mode has no recovery cycle, so arm the one-shot rearm
+            // flag: the next explicit user turn resets the repair budget
+            // instead of terminally rejecting the first invalid draft again.
+            self.plan_session.mark_execution_plan_rejection_pending();
             return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                 reason: Some(TERMINAL_PLAN_REJECTION_REASON.to_string()),
             }));
@@ -280,6 +293,31 @@ impl<'a> TurnProcessingContext<'a> {
             self.renderer.line(MessageStyle::Info, "Rejected plan draft:")?;
             self.renderer.line(MessageStyle::Response, plan_text)?;
         }
+        // Host runtimes (desktop) never forward transcript lines, so the
+        // rejected draft must also travel as canonical thread events.
+        emit_plan_rejected_events(
+            self.harness_emitter,
+            &self.harness_state.run_id.0,
+            &self.harness_state.turn_id.0,
+            plan_text,
+        );
+        // Park the recovery cycle in AwaitingInput with the draft retained so
+        // the next explicit user turn (`retry`, `continue`, new instructions)
+        // resets the validation-repair budget via `begin_explicit_recovery_cycle`
+        // (turn_prep). Without this, the exhausted in-turn budget persists
+        // across turns and every retry terminally rejects the first invalid
+        // draft again with the identical error.
+        crate::agent::runloop::unified::planning_workflow::recovery_state::retain_draft(
+            &mut self.plan_session.recovery,
+            plan_text,
+        );
+        self.plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
+        // The exhausted incident must not auto-present on session resume: the
+        // setup resume gate skips its synthetic continue only when the prompt
+        // was shown, and a synthetic turn cannot rearm (internal follow-ups
+        // never reset the budget), so it would burn a crippled turn.
+        self.plan_session.recovery.input_prompt_shown = true;
+        self.persist_planning_recovery().await?;
         self.renderer.line(
             MessageStyle::Warning,
             crate::agent::runloop::unified::planning_workflow_state::PLANNING_WORKFLOW_NO_APPROVAL_READY_PLAN_HINT,

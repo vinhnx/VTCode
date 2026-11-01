@@ -1,5 +1,31 @@
 # Session Log Review
 
+## 2026-11-01 | Terminal plan rejection hid the draft in desktop and retry never rearmed
+
+### Baseline
+
+Session `session-vtcode-20261101T022006Z_758272-55771` ("use plan mode refine and update @README.md", desktop,
+2 turns) burned the in-turn validation-repair budget on
+`step 5: verification item 2 must be a concrete command or check` and terminally rejected the plan. The rejected
+draft rendered through renderer lines only, which the desktop pump never forwards, so the desktop user saw the
+rejection notice but never the draft — and `events.jsonl` carried no trace for forensics. Turn 2 ("retry")
+re-hit the exhausted budget (`plan_validation_repair_reprompts` never resets across turns) and terminally
+rejected the first invalid draft again with the identical error: an unrecoverable loop with an invisible draft.
+
+| Observation | Disposition |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rejected drafts were renderer-only; desktop shows thread events, not transcript lines. | New `emit_plan_rejected_events` publishes the draft as a `{turn_id}-rejected-plan` plan item (`ItemStarted` + `PlanDelta` + `ItemCompleted`) with no approval request, called from both terminal rejection branches. Desktop renders it via the existing `Plan` path; `events.jsonl` keeps the forensic trace. |
+| Terminal planning rejection neither retained the draft nor parked recovery, so no explicit retry could repair. | Terminal planning rejection now retains the draft (`best_draft` + `validation_report`), sets recovery `AwaitingInput`, and persists a checkpoint; the next explicit user turn rearms via `begin_explicit_recovery_cycle` (existing turn_prep gate). Execution mode has no recovery cycle, so it sets a one-shot `execution_plan_rejection_pending` flag consumed by the same unified gate (internal follow-ups excluded). |
+| "Rejected and discarded" contradicted "Repair the listed defects in the retained draft". | Notices now read "rejected and kept as a draft"; tests reference the constants, so no test churn. |
+
+### Verification
+
+<!-- markdownlint-disable-next-line MD013 -->
+- `cargo nextest run -p vtcode -E 'test(plan) or test(repair) or test(reject) or test(tracker) or test(planning) or test(recovery) or test(turn_prep) or test(approval)'` — 898 passed (incl. new `terminal_planning_rejection_retains_draft_and_rearms_explicit_retry`, extended `plan_only_execution_rejection_still_publishes_final_response`, new `rejected_plan_events_publish_draft_without_approval_request`)
+- `cargo nextest run -p vtcode-core -E 'test(planning) or test(artifact) or test(verify)'` — 242 passed
+- `cargo nextest run -p vtcode-desktop -E 'test(turns_transcript)'` — 29 passed (incl. new `rejected_plan_draft_events_render_a_visible_transcript_row`)
+- `./scripts/check-dev.sh` — fmt/clippy/compile/shell PASS; file-length gate fails only on pre-existing `files.rs` 1001-line violation at HEAD (untouched by this change)
+
 ## 2026-10-11 | Semantic operation identity bounds repeated preflight rejections across turns
 
 ### Baseline
