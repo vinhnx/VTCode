@@ -17,6 +17,24 @@ async fn detects_same_mtime_same_size_hash_mismatch() -> Result<()> {
 }
 
 #[tokio::test]
+async fn accepted_snapshot_exposes_exact_baseline_and_detects_later_edit() -> Result<()> {
+    let temp = TempDir::new()?;
+    let file = temp.path().join("sample.txt");
+    std::fs::write(&file, "accepted\n")?;
+    let monitor = EditedFileMonitor::new();
+    let accepted = monitor.accept_disk_version_snapshot(&file).await?;
+    std::fs::write(&file, "later change\n")?;
+    assert_eq!(accepted.text_content.as_deref(), Some("accepted\n"));
+    let conflict = monitor
+        .detect_conflict(&file, None, None)
+        .await?
+        .expect("newer edit must conflict");
+    assert_eq!(conflict.read_snapshot.and_then(|snapshot| snapshot.text_content).as_deref(), Some("accepted\n"));
+    assert_eq!(conflict.disk_snapshot.and_then(|snapshot| snapshot.text_content).as_deref(), Some("later change\n"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn suppresses_self_write_event() -> Result<()> {
     let temp = TempDir::new()?;
     let file = temp.path().join("sample.txt");
@@ -53,6 +71,25 @@ async fn expected_agent_snapshot_does_not_hide_external_follow_up_change() -> Re
 
     let conflict = monitor.detect_conflict(&file, Some("agent\n".to_string()), None).await?;
     assert!(conflict.is_some());
+    Ok(())
+}
+
+#[tokio::test]
+async fn later_read_invalidates_old_agent_write_marker() -> Result<()> {
+    let temp = TempDir::new()?;
+    let file = temp.path().join("sample.txt");
+    let monitor = EditedFileMonitor::new();
+    std::fs::write(&file, "agent version\n")?;
+    monitor.record_agent_write_text(&file, "agent version\n")?;
+    std::fs::write(&file, "read version\n")?;
+    monitor.track_read(&file).await?;
+    std::fs::write(&file, "agent version\n")?;
+    let conflict = monitor
+        .detect_conflict(&file, None, None)
+        .await?
+        .expect("new change must conflict");
+    assert_eq!(conflict.read_snapshot.and_then(|s| s.text_content).as_deref(), Some("read version\n"));
+    assert_eq!(conflict.disk_snapshot.and_then(|s| s.text_content).as_deref(), Some("agent version\n"));
     Ok(())
 }
 

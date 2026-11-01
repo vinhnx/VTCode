@@ -52,18 +52,21 @@ async fn planning_prompt_size_fixed_fixture() {
     // and 10269 bytes/2216 tokens for Minimal; keep tight caps and presence checks.
     // Cancelled planning resumes on fresh input; retain a 50-byte allowance for this policy.
     // Terminal planning guidance adds 128 bytes and about 30 estimated tokens.
+    // Partial-commit and conflict-reload runtime guidance adds 229 bytes and
+    // about 45 estimated tokens (Default measures 11328 bytes/2398 tokens,
+    // Minimal measures 11600 bytes/2468 tokens).
     for case in [
         PlanningPromptSizeCase {
             density: "Default",
             prompt_budget_tokens: 100_000,
-            max_prompt_bytes: 11_128,
-            max_estimated_tokens: 2_390,
+            max_prompt_bytes: 11_400,
+            max_estimated_tokens: 2_435,
         },
         PlanningPromptSizeCase {
             density: "Minimal",
             prompt_budget_tokens: 1,
-            max_prompt_bytes: 11_428,
-            max_estimated_tokens: 2_460,
+            max_prompt_bytes: 11_670,
+            max_estimated_tokens: 2_505,
         },
     ] {
         let mut config = VTCodeConfig::default();
@@ -129,7 +132,8 @@ async fn test_minimal_mode_selection() {
     // Includes direct patch calls and bounded context-mismatch recovery.
     // Raised from 3700 for the reuse-reads and exact-whitespace patch-copy guidance (measured 3917).
     // Raised from 4700 for the fold-by-default delegation rule (measured 4719).
-    assert!(result.len() < 4780, "Minimal mode should produce <4.78K chars (was {} chars)", result.len());
+    // Raised for the partial-commit and conflict-reload runtime guidance (measured 4948).
+    assert!(result.len() < 5010, "Minimal mode should produce <5.01K chars (was {} chars)", result.len());
     assert!(result.contains("VT Code") || result.contains("VT Code"), "Should contain VT Code identifier");
 }
 #[tokio::test]
@@ -149,9 +153,10 @@ async fn test_default_prompt_selection() {
     // Raised from 5400 for the reuse-reads runtime guidance bullet (measured 5496).
     // Named HOVER guidance measures 5616 bytes; retain a narrow byte allowance.
     // Raised from 6350 for the fold-by-default delegation rule (measured 6375).
+    // Raised for the partial-commit and conflict-reload runtime guidance (measured 6604).
     assert!(
-        result.len() <= 6450,
-        "Default mode should stay sparse with runtime guidance (<=6450 bytes, was {} bytes)",
+        result.len() <= 6670,
+        "Default mode should stay sparse with runtime guidance (<=6670 bytes, was {} bytes)",
         result.len()
     );
     assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
@@ -176,9 +181,10 @@ async fn test_lightweight_mode_selection() {
     // Generated verifier success guidance adds 114 bytes (about 25 tokens).
     // Includes patch recovery guidance; token tests stay authoritative.
     // Raised from 4800 for the reuse-reads runtime guidance bullet (measured 4862).
+    // Raised for the partial-commit and conflict-reload runtime guidance (measured 5970).
     assert!(
-        result.len() < 5750,
-        "Lightweight should be compact with runtime guidance (<5.75K chars, was {} chars)",
+        result.len() < 6040,
+        "Lightweight should be compact with runtime guidance (<6.04K chars, was {} chars)",
         result.len()
     );
     assert!(result.contains("task_tracker"));
@@ -266,9 +272,10 @@ async fn test_specialized_mode_selection() {
     // Generated verifier success guidance adds 114 bytes (about 25 tokens).
     // Includes patch recovery guidance; token tests stay authoritative.
     // Raised from 5400 for the reuse-reads runtime guidance bullet (measured 5569).
+    // Raised for the partial-commit and conflict-reload runtime guidance (measured 6677).
     assert!(
-        result.len() <= 6450,
-        "Specialized should stay sparse with runtime guidance (<=6.45K chars, was {} chars)",
+        result.len() <= 6740,
+        "Specialized should stay sparse with runtime guidance (<=6.74K chars, was {} chars)",
         result.len()
     );
     assert!(result.contains("task_tracker"));
@@ -386,5 +393,6 @@ fn test_minimal_prompt_token_count() {
     // Raised from 665 for the reuse-reads runtime guidance bullet (measured 688).
     // Raised to 725 for the hypothesis-loop runtime bullet (measured 710).
     // Raised to 890 for the fold-by-default delegation rule (measured 878).
-    assert!(approx_tokens <= 890, "Minimal prompt should stay compact, got ~{approx_tokens}");
+    // Raised for the partial-commit and conflict-reload runtime guidance (measured 920).
+    assert!(approx_tokens <= 955, "Minimal prompt should stay compact, got ~{approx_tokens}");
 }

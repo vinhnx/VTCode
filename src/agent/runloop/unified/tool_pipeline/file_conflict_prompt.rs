@@ -1,6 +1,6 @@
 use crate::agent::runloop::ui_list;
 use crate::agent::runloop::ui_list::Tone;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
@@ -91,15 +91,15 @@ where
         .await?
         {
             OverlayWaitOutcome::Submitted(ConflictResolution::Reload) => {
-                registry
+                let snapshot = registry
                     .edited_file_monitor_ref()
-                    .accept_disk_version(&conflict.absolute_path)
+                    .accept_disk_version_snapshot(&conflict.absolute_path)
                     .await?;
                 return Ok(conflict_resolution_status(
                     conflict.finalized_output(
                         "reloaded",
                         "Reloaded the file from disk. Pending agent changes were discarded.",
-                        read_disk_text(&conflict.absolute_path).await,
+                        snapshot.text_content,
                     ),
                     true,
                 ));
@@ -343,11 +343,6 @@ fn aborted_conflict_status(conflict: &PendingFileConflict) -> ToolExecutionStatu
         conflict.finalized_output("aborted", "Aborted the agent write because the file changed on disk.", None),
         false,
     )
-}
-
-async fn read_disk_text(path: &Path) -> Option<String> {
-    let bytes = tokio::fs::read(path).await.ok()?;
-    String::from_utf8(bytes).ok()
 }
 
 #[cfg(test)]

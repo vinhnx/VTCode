@@ -336,9 +336,15 @@ impl EditedFileMonitor {
     }
 
     pub async fn accept_disk_version(&self, path: &Path) -> Result<()> {
+        self.accept_disk_version_snapshot(path).await.map(|_| ())
+    }
+
+    /// Accept and return the same snapshot so callers expose exactly the accepted bytes.
+    pub async fn accept_disk_version_snapshot(&self, path: &Path) -> Result<FileSnapshot> {
         let path = normalize_event_path(path);
         let snapshot = snapshot_path_async(path.clone()).await?;
-        self.record_read_snapshot(&path, snapshot)
+        self.record_read_snapshot(&path, snapshot.clone())?;
+        Ok(snapshot)
     }
 
     pub fn record_read_snapshot(&self, path: &Path, snapshot: FileSnapshot) -> Result<()> {
@@ -348,6 +354,7 @@ impl EditedFileMonitor {
             let entry = state.tracked_entry(&path);
             entry.last_read_snapshot = Some(snapshot.clone());
             entry.last_known_disk_snapshot = Some(snapshot);
+            entry.last_agent_write_snapshot = None;
             entry.stale_conflict = None;
         }
         self.watch_parent(&path);
