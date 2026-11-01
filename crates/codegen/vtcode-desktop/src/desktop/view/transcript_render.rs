@@ -11,27 +11,6 @@ struct WelcomeHeader {
 }
 
 impl DesktopView {
-    /// Welcome prelude both empty states render from; single owner so their copy cannot drift.
-    fn welcome_header(&self) -> WelcomeHeader {
-        let copy = welcome_copy(self.welcome_copy_index);
-        let greeting = welcome_greeting(self.welcome_period);
-        let workspace_name = self.workspace_file_name();
-        let prompt = welcome_prompt(&greeting, &copy.action, &copy.workspace_action, workspace_name.as_deref());
-        WelcomeHeader { copy, greeting, workspace_name, prompt }
-    }
-
-    /// "Open a workspace" action shared by both welcome empty states.
-    fn open_first_workspace_button(&self, call_to_action: String, cx: &mut Context<Self>) -> Button {
-        desktop_button("open-first-workspace")
-            .label(call_to_action.clone())
-            .accessibility_label(call_to_action)
-            .primary()
-            .desktop_disabled(
-                self.workspace_picker_open || !self.workspace_switch_idle() || self.retained_submission.is_some(),
-            )
-            .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx)))
-    }
-
     pub(super) fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
         self.transcript.upsert(TranscriptItem::new(
             id,
@@ -198,7 +177,8 @@ impl DesktopView {
                         .when(self.workspace.is_none(), |welcome| {
                             welcome.content(
                                 EmptyContent::new()
-                                    .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx)),
+                                    .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx))
+                                    .children(self.recent_workspace_buttons(cx)),
                             )
                         }),
                 )
@@ -326,7 +306,8 @@ impl DesktopView {
                     .when(self.workspace.is_none(), |welcome| {
                         welcome.content(
                             EmptyContent::new()
-                                .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx)),
+                                .child(self.open_first_workspace_button(welcome_copy.call_to_action, cx))
+                                .children(self.recent_workspace_buttons(cx)),
                         )
                     }),
             )
@@ -983,3 +964,5 @@ impl DesktopView {
         panel.into_any_element()
     }
 }
+
+mod welcome;

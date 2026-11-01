@@ -231,11 +231,7 @@ impl DesktopView {
                     );
                 } else {
                     for path in &recent {
-                        let label = Path::new(path)
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .unwrap_or(path)
-                            .to_string();
+                        let label = workspace_short_name(path).to_string();
                         let selected = current.as_deref() == Some(path.as_str());
                         let entry_view = view.clone();
                         let entry_path = path.clone();
