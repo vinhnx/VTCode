@@ -27,6 +27,9 @@ impl DesktopView {
 
     fn submit_prompt_with_batching(&mut self, window: &mut Window, cx: &mut Context<Self>, batchable: bool) {
         let prompt = self.composer.read(cx).value().to_string();
+        // Reset before every early return: webmcp and slash handlers consume
+        // the draft without reaching the send block below.
+        self.reset_history_recall();
         let desktop_slash_action = composer_controls::desktop_slash_action(&prompt);
         if desktop_slash_action.as_ref() == Some(&composer_controls::DesktopSlashAction::StopTurn) {
             let _handled =
@@ -174,7 +177,8 @@ impl DesktopView {
         }
         if let Some(draft) = self.retained_submission.take() {
             self.transcript.remove(&draft.echo_id);
-            self.composer.update(cx, |state, cx| state.set_value(draft.prompt, window, cx));
+            self.replace_composer_text(draft.prompt, window, cx);
+            self.reset_history_recall();
             self.attachments = draft.attachments;
             self.clear_error();
             self.status = rust_i18n::t!("app.composer.draft_restored").to_string();

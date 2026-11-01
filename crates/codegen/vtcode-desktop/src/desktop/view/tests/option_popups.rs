@@ -309,6 +309,145 @@ fn mode_picker_uses_the_cli_catalog_and_sends_custom_primary_agents(cx: &mut Tes
 }
 
 #[gpui_kit::test]
+fn shift_tab_cycles_primary_agent_and_defers_to_open_suggestions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session".to_string());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("shift-tab", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("mode request") else {
+        panic!("request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["mode"], "plan", "cycle moves build -> plan");
+    cx.update_window(window, |_, window, cx| {
+        // Second press while the select is in flight is dropped (mode-switch lock).
+        window.press("shift-tab", cx);
+        assert!(requests.try_recv().is_err(), "locked cycle sends nothing");
+        // With suggestions open, Shift+Tab navigates instead of cycling.
+        view.update(cx, |view, cx| {
+            // Release the first request: without this the mode-switch lock
+            // would mask a spurious cycle on the channel below.
+            view.session_request = None;
+            for (id, text) in [
+                ("history-user-1", "Earlier prompt"),
+                ("history-user-2", "Latest prompt"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), "user".into(), "You".into(), text.into()));
+            }
+            view.focus_composer(window, cx);
+        });
+        window.render_frame(cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+        let before = view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index());
+        window.press("shift-tab", cx);
+        assert!(view.read(cx).palette.is_some(), "suggestion nav keeps the palette open");
+        let after = view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index());
+        assert_ne!(before, after, "shift-tab moved the suggestion highlight");
+        assert!(requests.try_recv().is_err(), "suggestion nav never cycles the agent");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn shift_tab_on_multiline_draft_never_cycles_the_agent(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session".to_string());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("  indented\n  line", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("shift-tab", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "multiline shift-tab keeps Kit's native outdent");
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).palette.is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn agent_cycle_from_unknown_mode_starts_at_first_mode(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            let mut configuration = runtime_options_config();
+            configuration.session_options.as_mut().expect("session options").mode = "zzz-unknown".to_string();
+            view.configuration = Some(configuration);
+            view.selected_session_id = Some("session".to_string());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("shift-tab", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("mode request") else {
+        panic!("request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["mode"], "build", "unknown mode restarts at the first available mode");
+}
+
+#[gpui_kit::test]
+fn locked_agent_cycle_surfaces_busy_status(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session".to_string());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("shift-tab", cx);
+    })
+    .unwrap();
+    requests.try_recv().expect("first cycle requests");
+    cx.update_window(window, |_, window, cx| {
+        // Second press while the select is in flight: no request, busy notice instead.
+        window.press("shift-tab", cx);
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "locked cycle sends nothing");
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).status, rust_i18n::t!("app.composer.mode_switch_busy").to_string());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn workspace_permission_choices_persist_after_acknowledgement_and_restore_on_reconnect(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::PermissionMode;
     let workspace = tempfile::tempdir().expect("workspace");

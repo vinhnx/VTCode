@@ -13,7 +13,11 @@ pub(super) fn snapshot(bindings: &HashMap<String, Vec<String>>, theme: &str) -> 
         shortcuts: Default::default(),
         shortcut_warnings: Vec::new(),
     };
-    for (cli_action, desktop_action) in [("interrupt", "cancel"), ("open_model_picker", "model")] {
+    for (cli_action, desktop_action) in [
+        ("interrupt", "cancel"),
+        ("open_model_picker", "model"),
+        ("edit_queue", "edit_queue"),
+    ] {
         let Some(specs) = bindings.get(cli_action) else {
             continue;
         };
@@ -99,6 +103,7 @@ mod tests {
             &HashMap::from([
                 ("interrupt".into(), vec!["Control+SHIFT+x".into(), "ctrl+shift+x".into()]),
                 ("open_model_picker".into(), Vec::new()),
+                ("edit_queue".into(), vec!["alt+up".into()]),
                 ("exit".into(), vec!["ctrl+d".into()]),
             ]),
             "ciapre-blue",
@@ -106,7 +111,8 @@ mod tests {
         assert_eq!(projected.theme, "ciapre-blue");
         assert_eq!(projected.shortcuts["cancel"], vec!["ctrl-shift-x"]);
         assert!(projected.shortcuts["model"].is_empty());
-        assert_eq!(projected.shortcuts.len(), 2, "terminal-only exit is not imported into native window handling");
+        assert_eq!(projected.shortcuts["edit_queue"], vec!["alt-up"]);
+        assert_eq!(projected.shortcuts.len(), 3, "terminal-only exit is not imported into native window handling");
         assert!(projected.shortcut_warnings.is_empty());
         let invalid = snapshot(&HashMap::from([("interrupt".into(), vec!["not a key".into()])]), "ciapre");
         assert!(!invalid.shortcuts.contains_key("cancel"), "invalid bindings must not disable cancellation");

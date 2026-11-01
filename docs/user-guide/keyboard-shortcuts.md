@@ -136,3 +136,12 @@ Cancellation stops the active task without discarding completed output or compos
 one second to exit; a fresh submission cannot override an accepted exit. Cancelled work requires fresh user input
 to resume and never triggers automatic recovery or continuation. During initialization, cancellation pauses the
 remaining setup work until a fresh submission. See [response progress](../development/response-progress.md).
+
+## Desktop parity
+
+The macOS desktop app ports this surface with native adaptations; the full CLI↔desktop matrix (Kit-native keys,
+dispatch rules, deliberate deltas, remaining gaps) lives in
+[desktop-shortcut-parity](../development/desktop-shortcut-parity.md). Key adaptations: `Cmd+.` replaces `Ctrl+C`
+interrupt, `Cmd+Enter` replaces `Ctrl+Enter` batchable queue, `?` maps to Settings→Shortcuts, and terminal-only
+bindings (`Ctrl+D` exit, Kitty/legacy encoding folds) have no desktop equivalent. CLI `interrupt`, `open_model_picker`,
+and `edit_queue` rebindings import into the desktop Shortcuts page.

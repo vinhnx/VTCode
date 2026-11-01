@@ -336,6 +336,50 @@ fn take_latest_restores_newest_text_into_composer(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn alt_up_keypress_pops_newest_queued_into_composer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".to_string());
+            view.running = true;
+            view.enqueue_queued_submission(queued_draft("older"), false, cx)
+                .expect("queue older");
+            view.enqueue_queued_submission(queued_draft("newer"), false, cx)
+                .expect("queue newer");
+            assert!(view.confirm_oldest_queued_submission());
+            assert!(view.confirm_oldest_queued_submission());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("wip", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("alt-up", cx);
+        assert!(!view.read(cx).take_latest_pending, "non-empty draft blocks the pop");
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| state.set_value("", window, cx));
+        });
+        window.press("alt-up", cx);
+        assert!(view.read(cx).take_latest_pending);
+    })
+    .unwrap();
+    for _ in 0..2 {
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("expected queued submit");
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+    }
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected take-latest request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_QUEUE_TAKE_LATEST);
+    assert_eq!(params, serde_json::json!({ "sessionId": "session" }));
+    assert!(requests.try_recv().is_err(), "one keypress sends exactly one take-latest");
+}
+
+#[gpui_kit::test]
 fn take_latest_keeps_draft_and_retains_popped_text(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
@@ -578,6 +622,36 @@ fn batched_submit_marks_queued_but_never_immediate(cx: &mut TestAppContext) {
         panic!("expected queued request");
     };
     assert_eq!(params["batchable"], true);
+}
+
+#[gpui_kit::test]
+fn cmd_enter_keypress_queues_one_batchable_turn_while_running(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".to_string());
+            view.running = true;
+            view.composer.update(cx, |state, cx| {
+                state.set_value("batched prompt", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("cmd-enter", cx);
+        let view = view.read(cx);
+        assert_eq!(view.composer.read(cx).value(), "");
+        assert_eq!(view.queued_submissions.len(), 1);
+        assert_eq!(view.queued_submissions[0].prompt, "batched prompt");
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected queued turn request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+    assert_eq!(params["batchable"], true, "cmd-enter queues a batchable turn");
+    assert!(requests.try_recv().is_err(), "one keypress sends exactly one turn");
 }
 
 #[test]

@@ -496,6 +496,55 @@ fn slash_history_opens_recent_thread_prompts_without_submitting(cx: &mut TestApp
 }
 
 #[gpui_kit::test]
+fn ctrl_r_opens_prefiltered_prompt_history_with_toggle_and_restore(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("history-session".into());
+            for (id, text) in [
+                ("history-user-1", "Review stale diffs"),
+                ("history-user-2", "Implement current changes"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), "user".into(), "You".into(), text.into()));
+            }
+            view.composer.update(cx, |input, cx| {
+                input.set_value("stale", window, cx);
+                input.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(matches!(view.read(cx).palette_kind, super::super::PaletteKind::PromptHistory));
+        assert!(view.read(cx).palette.is_some());
+        // Second press toggles closed; the draft is untouched.
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none());
+        assert_eq!(view.read(cx).composer.read(cx).value(), "stale");
+        // Reopen and accept: the draft-prefiltered match wins over recency order.
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "Review stale diffs");
+        assert!(view.read(cx).palette.is_none());
+        assert!(requests.try_recv().is_err(), "choosing history only restores a draft");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn slash_new_and_stop_use_desktop_session_lifecycle(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

@@ -98,7 +98,8 @@ impl DesktopView {
         self.maybe_notify_update_available(&event, window, cx);
         self.handle_backend_event(event, cx);
         if let Some(text) = self.pending_composer_restore.take() {
-            self.composer.update(cx, |state, cx| state.set_value(text, window, cx));
+            self.replace_composer_text(text, window, cx);
+            self.reset_history_recall();
             self.status = rust_i18n::t!("app.composer.draft_restored").to_string();
         }
         let interaction_replaced = new_interaction

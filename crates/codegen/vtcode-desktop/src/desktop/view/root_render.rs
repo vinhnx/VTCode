@@ -181,11 +181,6 @@ impl Render for DesktopView {
                     view.navigate_forward(cx);
                 }
             }))
-            .on_action(cx.listener(|view, _: &RouteBack, window, cx| {
-                if !view.go_route_back(window, cx) {
-                    cx.propagate();
-                }
-            }))
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|view, _, _, cx| {
@@ -232,6 +227,12 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, _: &OpenConversationSearch, window, cx| {
                 if let Some(session_id) = view.selected_session_id.clone() {
                     view.open_conversation_search(session_id, window, cx);
+                }
+            }))
+            .on_action(cx.listener(|view, _: &OpenPromptHistory, window, cx| view.open_prompt_history(window, cx)))
+            .on_action(cx.listener(|view, _: &TakeLatestQueued, window, cx| {
+                if view.composer.read(cx).focus_handle(cx).is_focused(window) {
+                    view.take_latest_queued(cx);
                 }
             }))
             .on_action(

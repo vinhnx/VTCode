@@ -205,6 +205,13 @@ below based on the topic area.
   - **Content**: Desktop component review
   - **User Questions**: "What can you tell me about Desktop component review?"
 
+- **File**: `docs/development/desktop-shortcut-parity.md`
+  - **Content**: Desktop⇄CLI Shortcut Parity Matrix
+  - **Topics**: Dispatch rules (verified against vendored source), Kit-native input keys (macOS, `Input` context),
+    Parity matrix, Shipped in this increment, Remaining gaps (ranked)
+  - **User Questions**: "What can you tell me about Desktop⇄CLI Shortcut Parity Matrix?", "How does Dispatch rules
+    (verified against vendored source) work?", "How does Kit-native input keys (macOS, `Input` context) work?"
+
 - **File**: `docs/development/README.md`
   - **Content**: Development Guide
   - **Topics**: Getting Started, Security and Execution, Performance and Reliability, Model Management, Maintenance

@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::time::{Duration, Instant};
 
 use chrono::Timelike;
 use gpui_kit::assets::IconName;
@@ -25,8 +26,9 @@ use gpui_kit::component::empty::{
 };
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{
-    Copy, Cut, Enter, IndentInline, Input, InputEvent, InputState, MoveDown, MoveUp, Paste, Position, Redo, SelectAll,
-    Textarea, TextareaState, Undo,
+    Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Enter,
+    IndentInline, Input, InputEvent, InputState, MoveDown, MoveLeft, MoveRight, MoveToEnd, MoveUp, OutdentInline,
+    Paste, Position, Redo, SelectAll, Textarea, TextareaState, Undo,
 };
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
@@ -97,6 +99,7 @@ mod components;
 mod composer_actions;
 mod composer_attachments;
 mod composer_controls;
+mod composer_history;
 mod composer_render;
 mod config_search;
 mod configuration;
@@ -127,6 +130,7 @@ mod shortcuts_render;
 mod storage;
 mod submit;
 mod tabs;
+mod transcript_activity;
 mod transcript_render;
 mod typography;
 mod updates;
@@ -303,7 +307,6 @@ actions!(
         RefreshWorkspace,
         NavigateBack,
         NavigateForward,
-        RouteBack,
         ToggleInspector,
         ToggleSidebar,
         ToggleZenMode,
@@ -325,6 +328,12 @@ actions!(
         PreviousReviewFile,
         CancelRun,
         QueueBatched,
+        OpenPromptHistory,
+        TakeLatestQueued,
+        HistoryPrevious,
+        HistoryNext,
+        TranscriptPrevious,
+        TranscriptNext,
         DismissOverlay,
         OpenSettings,
         CloseWindow,
@@ -410,6 +419,19 @@ struct DesktopView {
     finished_turn_id: Option<String>,
     cancel_requested: bool,
     cancel_request_sent: bool,
+    /// Last Escape with nothing to dismiss (CLI `Esc Esc` parity): a second
+    /// press clears the composer draft only when the draft is unchanged since
+    /// arming, so typing between the presses disarms the clear.
+    last_escape_press: Option<(Instant, gpui_kit::SharedString)>,
+    /// Inline history-recall cursor (CLI Up/Down/Ctrl+P/N parity): index into
+    /// [`DesktopView::prompt_history_entries`], `None` while editing live.
+    composer_history_index: Option<usize>,
+    /// Live draft stashed when recall starts; restored when traversing back.
+    composer_history_stash: gpui_kit::SharedString,
+    transcript_focus: FocusHandle,
+    /// Keyboard highlight for Up/Down transcript navigation (message id).
+    /// Reveals the same row actions as hover; Esc leaves it as position memory.
+    keyboard_focused_message: Option<String>,
     running: bool,
     /// Whether the active turn has produced transcript content. Meaningful
     /// only while `running`: reset when a turn begins (submit, `TurnStarted`),

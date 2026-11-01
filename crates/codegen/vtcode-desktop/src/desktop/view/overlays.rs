@@ -393,25 +393,68 @@ impl DesktopView {
         }
     }
 
+    /// An overlay lifecycle event invalidates an armed double-Esc: clearing
+    /// requires two consecutive bare presses with nothing opening or
+    /// dismissing in between.
+    pub(super) fn disarm_double_escape(&mut self) {
+        self.last_escape_press = None;
+    }
+
     pub(super) fn dismiss_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // About is the topmost modal: it opens over any route from the
         // application menu, so Escape dismisses it before other layers.
         if self.about_open {
+            self.disarm_double_escape();
             self.close_about(window, cx);
         } else if self.full_access_confirm.is_some() {
+            self.disarm_double_escape();
             self.cancel_full_access_confirm(window, cx);
         } else if self.attachment_picker.is_some() {
+            self.disarm_double_escape();
             self.close_attachment_picker(window, cx);
         } else if self.go_route_back(window, cx) {
             // Panel-interior layers first (typed editor, capture, palette,
             // config page to its tab), then the previous history entry.
+            self.disarm_double_escape();
         } else if self.navigation_peek {
+            self.disarm_double_escape();
             self.navigation_peek = false;
             cx.notify();
         } else if self.palette.is_some() {
+            self.disarm_double_escape();
             self.close_palette(window, cx);
         } else if self.file_preview.is_some() {
+            self.disarm_double_escape();
             self.close_file_preview(window, cx);
+        } else if self.composer.read(cx).focus_handle(cx).is_focused(window)
+            && !self.composer.read(cx).value().is_empty()
+        {
+            // CLI `Esc Esc` parity: consecutive presses with nothing to
+            // dismiss clear the draft text (attachments keep their own
+            // remove controls). Dismissals above never arm the timer and
+            // disarm a pending one, and a changed draft re-arms instead
+            // of clearing.
+            const DOUBLE_ESCAPE_WINDOW: Duration = Duration::from_millis(800);
+            let draft = self.composer.read(cx).value();
+            let now = Instant::now();
+            let consecutive = self
+                .last_escape_press
+                .as_ref()
+                .is_some_and(|(at, snapshot)| *snapshot == draft && now.duration_since(*at) < DOUBLE_ESCAPE_WINDOW);
+            if consecutive {
+                self.last_escape_press = None;
+                // Undoable clear: `replace_all` keeps the draft on the undo
+                // stack where `set_value` would erase it.
+                self.replace_composer_text("", window, cx);
+                self.reset_history_recall();
+                cx.notify();
+            } else {
+                self.last_escape_press = Some((now, draft));
+                cx.propagate();
+            }
+        } else if self.transcript_focus.is_focused(window) {
+            // Leave transcript navigation where it is and return to the composer.
+            self.focus_composer(window, cx);
         } else {
             cx.propagate();
         }

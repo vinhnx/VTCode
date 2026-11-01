@@ -404,19 +404,38 @@ impl DesktopView {
             panel.child(
                 div()
                     .w_full()
-                    .on_action(cx.listener(|view, _: &Enter, window, cx| view.handle_composer_enter(window, cx)))
+                    .key_context(key_context::COMPOSER)
+                    .on_action(
+                        cx.listener(|view, action: &Enter, window, cx| view.handle_composer_enter(action, window, cx)),
+                    )
                     .on_action(cx.listener(|view, _: &QueueBatched, window, cx| {
                         view.submit_batched_prompt(window, cx);
                     }))
+                    .on_action(cx.listener(|view, _: &HistoryPrevious, window, cx| {
+                        // Same suggestion-first priority as the arrow captures:
+                        // history must not clobber the draft under an open picker.
+                        if !view.move_composer_suggestion(false, window, cx) {
+                            let _recalled = view.recall_history(true, false, window, cx);
+                        }
+                    }))
+                    .on_action(cx.listener(|view, _: &HistoryNext, window, cx| {
+                        if !view.move_composer_suggestion(true, window, cx) {
+                            let _recalled = view.recall_history(false, false, window, cx);
+                        }
+                    }))
                     .capture_action(cx.listener(|view, _: &MoveUp, window, cx| {
-                        if view.move_composer_suggestion(false, window, cx) {
+                        if view.move_composer_suggestion(false, window, cx)
+                            || view.recall_history(true, true, window, cx)
+                        {
                             cx.stop_propagation();
                         } else {
                             cx.propagate();
                         }
                     }))
                     .capture_action(cx.listener(|view, _: &MoveDown, window, cx| {
-                        if view.move_composer_suggestion(true, window, cx) {
+                        if view.move_composer_suggestion(true, window, cx)
+                            || view.recall_history(false, true, window, cx)
+                        {
                             cx.stop_propagation();
                         } else {
                             cx.propagate();
@@ -427,6 +446,18 @@ impl DesktopView {
                             window.focus_next(cx);
                         }
                         cx.stop_propagation();
+                    }))
+                    .capture_action(cx.listener(|view, _: &OutdentInline, window, cx| {
+                        if view.move_composer_suggestion(false, window, cx) {
+                            cx.stop_propagation();
+                        } else if view.composer.read(cx).value().contains('\n') {
+                            // Multiline drafts keep Kit's native outdent; agent
+                            // cycling is a single-line affordance (CLI parity).
+                            cx.propagate();
+                        } else {
+                            view.cycle_primary_agent(cx);
+                            cx.stop_propagation();
+                        }
                     }))
                     .on_key_up(cx.listener(|view, event: &KeyUpEvent, window, cx| {
                         if matches!(event.keystroke.key.as_str(), "left" | "right" | "up" | "down" | "home" | "end") {

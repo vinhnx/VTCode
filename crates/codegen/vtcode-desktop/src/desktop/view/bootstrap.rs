@@ -4,6 +4,25 @@ use super::*;
 /// Documentation and issue tracker opened by the Help menu and About dialog.
 pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
 
+/// Modified chords from the fixed table in [`init_keybindings`].
+/// `shortcuts::bindings()` rejects overrides colliding with these: a rebind
+/// here would double-fire with the fixed handler (e.g. `ctrl-m` toggling the
+/// model picker twice). Bare fixed chords need no entry — the modifier rule
+/// rejects them already. Keep in sync with the table below.
+pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
+    "ctrl-w",
+    "alt-d",
+    "ctrl-u",
+    "ctrl-k",
+    "ctrl-f",
+    "ctrl-b",
+    "ctrl-j",
+    "alt-enter",
+    "ctrl-m",
+    "ctrl-p",
+    "ctrl-n",
+];
+
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
     match shortcuts::bindings(&preferences.shortcuts) {
         Ok(bindings) => cx.bind_keys(bindings),
@@ -33,7 +52,25 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("home", FirstSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("end", LastSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
-        KeyBinding::new("cmd-[", RouteBack, Some(key_context::DESKTOP)),
+        // No fixed `cmd-[`: the configurable NavigateBack default owns that
+        // chord with superset behavior (route-back, then session history). A
+        // fixed twin would double-dispatch — GPUI runs every matched binding
+        // until one stops propagation, and neither handler stops.
+        // CLI readline parity, composer-scoped and fixed like the CLI (these
+        // reuse Kit's own editing actions, so undo/redo keep working).
+        KeyBinding::new("ctrl-w", DeleteToPreviousWordStart, Some(key_context::COMPOSER)),
+        KeyBinding::new("alt-d", DeleteToNextWordEnd, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-u", DeleteToBeginningOfLine, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-k", DeleteToEndOfLine, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-f", MoveRight, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-b", MoveLeft, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-j", Enter { secondary: false, shift: true }, Some(key_context::COMPOSER)),
+        KeyBinding::new("alt-enter", Enter { secondary: false, shift: true }, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-m", OpenModelPicker, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-p", HistoryPrevious, Some(key_context::COMPOSER)),
+        KeyBinding::new("ctrl-n", HistoryNext, Some(key_context::COMPOSER)),
+        KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
+        KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
     ]);
 }
 
@@ -273,6 +310,9 @@ impl DesktopView {
         });
         let composer_subscription = cx.subscribe_in(&composer, window, |view, _, event, window, cx| {
             if matches!(event, InputEvent::Change) {
+                // Genuine input abandons history recall; recall's own
+                // programmatic writes emit no Change, so this cannot self-reset.
+                view.reset_history_recall();
                 view.update_composer_suggestions(window, cx);
             }
         });
@@ -379,6 +419,11 @@ impl DesktopView {
             finished_turn_id: None,
             cancel_requested: false,
             cancel_request_sent: false,
+            last_escape_press: None,
+            composer_history_index: None,
+            composer_history_stash: gpui_kit::SharedString::from(""),
+            transcript_focus: cx.focus_handle().tab_stop(true),
+            keyboard_focused_message: None,
             running: false,
             turn_content_seen: false,
             status: rust_i18n::t!("app.workspace.startup_hint").to_string(),

@@ -53,6 +53,8 @@ pub(super) mod key_context {
     pub const SETTINGS: &str = "VTCodeSettings";
     pub const DIFF_REVIEW: &str = "VTCodeDiffReview";
     pub const INSPECTOR: &str = "VTCodeInspector";
+    pub const COMPOSER: &str = "VTCodeComposer";
+    pub const TRANSCRIPT: &str = "VTCodeTranscript";
 }
 
 /// macOS app-bundle layout fragments shared by backend resolution and

@@ -412,6 +412,7 @@ impl DesktopView {
             self.close_settings(window, cx);
         }
         self.palette_return_focus = window.focused(cx);
+        self.disarm_double_escape();
         let state = cx.new(|cx| CommandState::new(window, cx));
         self.palette = Some(state.clone());
         self.palette_kind = kind;
@@ -434,9 +435,15 @@ impl DesktopView {
         ) {
             let has_suggestions = self.palette_groups.first().is_some_and(|(_, entries)| !entries.is_empty());
             if has_suggestions && let Some(state) = self.palette.clone() {
-                state.update(cx, |state, cx| {
-                    state.set_selected_index(Some(gpui_kit::component::IndexPath::new(0)), window, cx);
-                });
+                // Never clobber a live selection: with a prefilled query the
+                // model already highlights the first match, whose row is not
+                // necessarily row 0 (forcing row 0 would collapse to None).
+                let needs_select = state.read(cx).selected_index().is_none() && state.read(cx).matched_count() > 0;
+                if needs_select {
+                    state.update(cx, |state, cx| {
+                        state.set_selected_index(Some(gpui_kit::component::IndexPath::new(0)), window, cx);
+                    });
+                }
             }
             return;
         }
@@ -565,19 +572,19 @@ impl DesktopView {
             PaletteAction::AttachFiles => self.attach_files(window, cx),
             PaletteAction::AttachFile(path) => self.attach_context_file(path, cx),
             PaletteAction::InsertDraft(text) => {
-                self.composer.update(cx, |input, cx| {
-                    let current = input.value().to_string();
-                    let separator = if current.is_empty() || current.ends_with(char::is_whitespace) {
-                        ""
-                    } else {
-                        " "
-                    };
-                    input.set_value(format!("{current}{separator}{text} "), window, cx);
-                });
+                let current = self.composer.read(cx).value().to_string();
+                let separator = if current.is_empty() || current.ends_with(char::is_whitespace) {
+                    ""
+                } else {
+                    " "
+                };
+                self.replace_composer_text(format!("{current}{separator}{text} "), window, cx);
+                self.reset_history_recall();
                 self.focus_composer(window, cx);
             }
             PaletteAction::InsertHistoryPrompt(prompt) => {
-                self.composer.update(cx, |input, cx| input.set_value(prompt, window, cx));
+                self.replace_composer_text(prompt, window, cx);
+                self.reset_history_recall();
                 self.focus_composer(window, cx);
             }
             PaletteAction::InsertFileMention(path) => self.complete_composer_trigger(

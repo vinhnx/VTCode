@@ -8,6 +8,7 @@ use super::*;
 impl DesktopView {
     fn clear_submitted_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
+        self.reset_history_recall();
     }
 
     pub(super) fn handle_desktop_slash_action(
@@ -282,19 +283,14 @@ impl DesktopView {
         }
     }
 
-    fn open_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let mut seen = HashSet::new();
+    pub(super) fn open_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.toggle_palette_kind(PaletteKind::PromptHistory, window, cx) {
+            return;
+        }
         let entries = self
-            .transcript
-            .items_newest_first()
-            .filter(|item| item.role == "user")
-            .filter_map(|item| {
-                let prompt = item.text.to_string();
-                if prompt.trim().is_empty() || !seen.insert(prompt.clone()) {
-                    return None;
-                }
-                Some(command(session_title_from_prompt(&prompt), PaletteAction::InsertHistoryPrompt(prompt)))
-            })
+            .prompt_history_entries()
+            .into_iter()
+            .map(|prompt| command(session_title_from_prompt(&prompt), PaletteAction::InsertHistoryPrompt(prompt)))
             .collect();
         self.show_palette(
             PaletteKind::PromptHistory,
@@ -302,6 +298,14 @@ impl DesktopView {
             window,
             cx,
         );
+        // CLI parity: seed the filter from the draft. Cancel-restore is
+        // automatic — the palette query is separate from the composer draft.
+        let seed = self.composer.read(cx).value().trim().to_string();
+        if !seed.is_empty() {
+            if let Some(palette) = &self.palette {
+                palette.update(cx, |state, cx| state.set_query(seed, window, cx));
+            }
+        }
     }
 
     pub(super) fn composer_resource_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
@@ -471,16 +475,28 @@ impl DesktopView {
         if item_count == 0 {
             return false;
         }
-        let current = state.read(cx).selected_index().map(|index| index.row).unwrap_or(0);
-        let selected = if down {
-            (current + 1) % item_count
-        } else if current == 0 {
-            item_count - 1
-        } else {
-            current - 1
+        let current = state.read(cx).selected_index().map(|index| index.row);
+        let step_from = |row: usize| {
+            if down {
+                (row + 1) % item_count
+            } else if row == 0 {
+                item_count - 1
+            } else {
+                row - 1
+            }
         };
+        // Kit-side filtering (prompt-history seed) hides rows, and selecting a
+        // hidden row collapses the highlight to None: step until a row sticks.
+        // No `on_select` is wired, so probes are side-effect-free notifies.
+        let mut candidate = current.map_or(if down { 0 } else { item_count - 1 }, step_from);
         state.update(cx, |state, cx| {
-            state.set_selected_index(Some(gpui_kit::component::IndexPath::new(selected)), window, cx);
+            for _ in 0..item_count {
+                state.set_selected_index(Some(gpui_kit::component::IndexPath::new(candidate)), window, cx);
+                if state.selected_index().is_some_and(|index| index.row == candidate) {
+                    break;
+                }
+                candidate = step_from(candidate);
+            }
         });
         true
     }
@@ -509,7 +525,13 @@ impl DesktopView {
         true
     }
 
-    pub(super) fn handle_composer_enter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn handle_composer_enter(&mut self, action: &Enter, window: &mut Window, cx: &mut Context<Self>) {
+        if action.secondary {
+            // Cmd+Enter carries the batched-queue intent: leave it for the
+            // QueueBatched binding instead of submitting a standalone turn.
+            cx.propagate();
+            return;
+        }
         match self.palette_kind {
             PaletteKind::FileMentions => {
                 if !self.accept_composer_suggestion(window, cx) {
@@ -830,6 +852,36 @@ impl DesktopView {
             window,
             cx,
         );
+    }
+
+    /// Cycle the primary agent forward (CLI Shift+Tab parity). The select
+    /// path enforces the mode-switch lock, so mid-run presses are dropped
+    /// exactly like the CLI busy notice.
+    pub(super) fn cycle_primary_agent(&mut self, cx: &mut Context<Self>) {
+        let Some(options) = self.session_options() else {
+            return;
+        };
+        if options.available_modes.is_empty() {
+            return;
+        }
+        // Unknown current mode (stale/custom value) starts at the first mode
+        // instead of skipping it via `unwrap_or(0)`-then-increment.
+        let next = options
+            .available_modes
+            .iter()
+            .position(|mode| mode.name == options.mode)
+            .map_or(0, |current| (current + 1) % options.available_modes.len());
+        let Some(mode) = options.available_modes.get(next).map(|mode| mode.name.clone()) else {
+            return;
+        };
+        // CLI parity: a lock-dropped cycle surfaces a busy notice instead of
+        // silently swallowing the press (`MODE_SWITCH_BUSY_NOTICE`).
+        if !self
+            .select_session_options(protocol::SessionOptionsSelectParams { mode: Some(mode), ..Default::default() }, cx)
+        {
+            self.status = rust_i18n::t!("app.composer.mode_switch_busy").to_string();
+            cx.notify();
+        }
     }
 
     pub(super) fn open_modes(&mut self, window: &mut Window, cx: &mut Context<Self>) {

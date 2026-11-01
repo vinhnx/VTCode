@@ -1,0 +1,384 @@
+use super::super::DesktopView;
+use super::super::PaletteKind;
+use super::*;
+use gpui_kit::Entity;
+
+fn focus_empty_composer(window: &AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
+    cx.update_window(*window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn ctrl_w_deletes_word_backward_and_undo_restores(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    focus_empty_composer(&window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.input("hello world", cx);
+        window.press("ctrl-w", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "hello ");
+        // Headless `press` does not deliver the ctrl-z chord; cmd-z drives the same Undo action.
+        window.press("cmd-z", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "hello world");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn ctrl_u_and_ctrl_k_delete_to_line_edges(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    focus_empty_composer(&window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.input("hello world", cx);
+        window.press("ctrl-u", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+        window.input("hello world", cx);
+        window.press("cmd-left", cx);
+        window.press("ctrl-k", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn alt_d_deletes_word_forward(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    focus_empty_composer(&window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.input("hello world", cx);
+        window.press("cmd-left", cx);
+        window.press("alt-d", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), " world");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn ctrl_f_b_move_by_char_and_ctrl_j_alt_enter_insert_newlines(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    focus_empty_composer(&window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.input("ab", cx);
+        window.press("ctrl-b", cx);
+        window.input("X", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "aXb");
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| state.set_value("cd", window, cx));
+        });
+        // Programmatic writes leave the caret at the start; ctrl-f steps over 'c'.
+        window.press("ctrl-f", cx);
+        window.input("Y", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "cYd");
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| state.set_value("", window, cx));
+        });
+        window.input("a", cx);
+        window.press("ctrl-j", cx);
+        window.input("b", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "a\nb");
+        window.press("alt-enter", cx);
+        window.input("d", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "a\nb\nd");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn ctrl_m_opens_and_toggles_model_options(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    focus_empty_composer(&window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let (commands, _) = tokio::sync::mpsc::channel(2);
+            view.backend = Some(BackendHandle { commands });
+        });
+        window.press("ctrl-m", cx);
+        window.render_frame(cx);
+        assert!(matches!(view.read(cx).palette_kind, PaletteKind::ModelOptions));
+        window.press("ctrl-m", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_recall_traverses_newest_first_restores_stash_and_resets_on_submit(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("history-session".into());
+            for (id, text) in [("history-user-1", "first prompt"), ("history-user-2", "second prompt")] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), "user".into(), "You".into(), text.into()));
+            }
+            view.composer.update(cx, |state, cx| {
+                state.set_value("wip", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "first prompt");
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "first prompt", "recall clamps at the oldest");
+        window.press("down", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+        window.press("down", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "wip", "down past newest restores the stash");
+        window.press("down", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "wip", "live draft has nothing newer");
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected recalled submit");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+    assert_eq!(params["prompt"], "second prompt");
+    // Submit reset the cursor: recall starts from the newest again, not one past it.
+    cx.update_window(window, |_, window, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "recall never submits");
+}
+
+#[gpui_kit::test]
+fn ctrl_p_recalls_from_multiline_while_arrows_move_caret(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.transcript.push(TranscriptItem::new(
+                "history-user-1".into(),
+                "user".into(),
+                "You".into(),
+                "only prompt".into(),
+            ));
+            view.composer.update(cx, |state, cx| {
+                state.set_value("line one\nline two", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("up", cx);
+        assert_eq!(
+            view.read(cx).composer.read(cx).value(),
+            "line one\nline two",
+            "arrows keep native caret moves on multiline drafts"
+        );
+        window.press("ctrl-p", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "only prompt");
+        window.press("ctrl-n", cx);
+        assert_eq!(
+            view.read(cx).composer.read(cx).value(),
+            "line one\nline two",
+            "ctrl-n restores the stashed multiline draft"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn typing_after_recall_and_escape_clear_abandon_the_recall_cursor(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            for (id, text) in [("history-user-1", "first prompt"), ("history-user-2", "second prompt")] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), "user".into(), "You".into(), text.into()));
+            }
+            view.composer.update(cx, |state, cx| {
+                state.set_value("wip", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+    })
+    .unwrap();
+    // Separate updates: emitted `Change` effects flush at update boundaries,
+    // matching production where each keystroke is its own platform event.
+    cx.update_window(window, |_, window, cx| {
+        // Typing abandons recall: Down moves the caret instead of restoring the stash.
+        window.input(" xyz", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt xyz", "typing lands in the composer");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.press("down", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt xyz");
+        // Clearing abandons recall: Down cannot resurrect the stash.
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "second prompt");
+        window.press("escape", cx);
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.press("down", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "", "cleared draft stays cleared");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn double_escape_clear_is_undoable(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.input("hello", cx);
+        window.press("escape", cx);
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+        // Headless `press` does not deliver the ctrl-z chord; cmd-z drives the same Undo action.
+        window.press("cmd-z", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "hello");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn ctrl_p_n_navigate_open_suggestions_before_history(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            for (id, text) in [
+                ("history-user-1", "Earlier prompt"),
+                ("history-user-2", "Latest prompt"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), "user".into(), "You".into(), text.into()));
+            }
+            view.composer.update(cx, |state, cx| {
+                state.set_value("prompt", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+        let before = view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index());
+        window.press("ctrl-p", cx);
+        let after = view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index());
+        assert_ne!(before, after, "ctrl-p moves the suggestion highlight");
+        assert_eq!(
+            view.read(cx).composer.read(cx).value(),
+            "prompt",
+            "history must not clobber the draft under an open picker"
+        );
+        window.press("ctrl-n", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "prompt");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn suggestion_nav_steps_within_filtered_matches(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            for (id, text) in [
+                ("history-user-1", "Review stale diffs"),
+                ("history-user-2", "Implement current changes"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), "user".into(), "You".into(), text.into()));
+            }
+            view.composer.update(cx, |state, cx| {
+                state.set_value("stale", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        // The seed matches only unfiltered row 1; Down must not collapse the
+        // highlight onto the filtered-out row 0.
+        window.press("down", cx);
+        assert!(
+            view.read(cx)
+                .palette
+                .as_ref()
+                .and_then(|state| state.read(cx).selected_index())
+                .is_some(),
+            "filtered nav keeps a live highlight"
+        );
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "Review stale diffs");
+        assert!(view.read(cx).palette.is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn recall_refreshes_trigger_suggestions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.transcript.push(TranscriptItem::new(
+                "history-user-1".into(),
+                "user".into(),
+                "You".into(),
+                "Inspect @src/main.rs".into(),
+            ));
+            view.composer.update(cx, |state, cx| {
+                state.set_value("wip", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("up", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "Inspect @src/main.rs");
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        // Recall's silent write emits no Change, so the next-frame refresh is
+        // what surfaces the mention palette for Tab completion.
+        assert!(view.read(cx).palette.is_some());
+        assert!(matches!(view.read(cx).palette_kind, PaletteKind::FileMentions));
+    })
+    .unwrap();
+}

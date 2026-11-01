@@ -40,10 +40,12 @@ pub(super) enum CommandId {
     NextReviewFile,
     PreviousReviewFile,
     QueueBatched,
+    PromptHistory,
+    EditQueue,
 }
 
 impl CommandId {
-    pub(super) const ALL: [Self; 31] = [
+    pub(super) const ALL: [Self; 33] = [
         Self::Commands,
         Self::ConversationSearch,
         Self::NewSession,
@@ -75,6 +77,8 @@ impl CommandId {
         Self::NextReviewFile,
         Self::PreviousReviewFile,
         Self::QueueBatched,
+        Self::PromptHistory,
+        Self::EditQueue,
     ];
 
     pub(super) const fn as_str(self) -> &'static str {
@@ -110,6 +114,8 @@ impl CommandId {
             Self::NextReviewFile => "next_review_file",
             Self::PreviousReviewFile => "previous_review_file",
             Self::QueueBatched => "queue_batched",
+            Self::PromptHistory => "prompt_history",
+            Self::EditQueue => "edit_queue",
         }
     }
 
@@ -158,7 +164,7 @@ impl ShortcutCommand {
     }
 }
 
-pub(super) const COMMANDS: [ShortcutCommand; 31] = [
+pub(super) const COMMANDS: [ShortcutCommand; 33] = [
     ShortcutCommand {
         id: CommandId::Commands,
         label_key: "app.shortcuts.commands_label",
@@ -345,6 +351,18 @@ pub(super) const COMMANDS: [ShortcutCommand; 31] = [
         description_key: "app.shortcuts.queue_batched_description",
         default_binding: "cmd-enter",
     },
+    ShortcutCommand {
+        id: CommandId::PromptHistory,
+        label_key: "app.shortcuts.prompt_history_label",
+        description_key: "app.shortcuts.prompt_history_description",
+        default_binding: "ctrl-r",
+    },
+    ShortcutCommand {
+        id: CommandId::EditQueue,
+        label_key: "app.shortcuts.edit_queue_label",
+        description_key: "app.shortcuts.edit_queue_description",
+        default_binding: "alt-up",
+    },
 ];
 
 fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
@@ -380,6 +398,8 @@ fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
         CommandId::NextReviewFile => Box::new(NextReviewFile),
         CommandId::PreviousReviewFile => Box::new(PreviousReviewFile),
         CommandId::QueueBatched => Box::new(QueueBatched),
+        CommandId::PromptHistory => Box::new(OpenPromptHistory),
+        CommandId::EditQueue => Box::new(TakeLatestQueued),
     }
 }
 
@@ -423,6 +443,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                 "cmd-shift-z",
             ]
             .contains(&normalized.as_str())
+                || bootstrap::FIXED_RESERVED_CHORDS.contains(&normalized.as_str())
             {
                 return Err(rust_i18n::t!("app.shortcuts.reserved_shortcut", label = label.as_str()).to_string());
             }
@@ -566,20 +587,20 @@ mod tests {
 
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 33);
+        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 35);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 32);
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 34);
         assert_eq!(
             bindings(&BTreeMap::from([("settings_search".into(), String::new())]))
                 .unwrap()
                 .len(),
-            31
+            33
         );
         assert_eq!(
             bindings(&BTreeMap::from([("settings".into(), String::new())])).unwrap().len(),
-            31,
+            33,
             "unbinding Settings removes both its desktop and in-settings bindings"
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
@@ -592,6 +613,21 @@ mod tests {
         ] {
             assert!(bindings(&BTreeMap::from([(action.into(), key.into())])).is_err(), "{action}: {key}");
         }
+    }
+
+    #[test]
+    fn rejects_overrides_colliding_with_fixed_chords() {
+        // Every modified fixed-table chord must be rejected: a rebind here
+        // double-fires with the fixed handler (e.g. `ctrl-m` toggling the
+        // model picker open then shut). CLI import funnels through the same
+        // `bindings()` gate, so it is covered too.
+        for key in super::super::bootstrap::FIXED_RESERVED_CHORDS {
+            assert!(bindings(&BTreeMap::from([("model".into(), (*key).into())])).is_err(), "{key} must be reserved");
+        }
+        // Near-miss neighbors stay accepted (asymmetric sides).
+        assert!(bindings(&BTreeMap::from([("model".into(), "ctrl-shift-m".into())])).is_ok());
+        assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-alt-p".into())])).is_ok());
+        assert!(bindings(&BTreeMap::from([("settings".into(), "cmd-shift-]".into())])).is_ok());
     }
 
     #[test]
@@ -652,6 +688,8 @@ mod tests {
             "next_review_file",
             "previous_review_file",
             "queue_batched",
+            "prompt_history",
+            "edit_queue",
         ];
         assert_eq!(CommandId::ALL.map(CommandId::as_str), pinned);
         assert_eq!(COMMANDS.map(|command| command.id), CommandId::ALL);

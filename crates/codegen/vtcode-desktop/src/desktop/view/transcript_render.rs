@@ -275,6 +275,11 @@ impl DesktopView {
             .aria_label(rust_i18n::t!("app.transcript.conversation_label").to_string())
             .role(gpui_kit::Role::Region)
             .test_support()
+            .track_focus(&self.transcript_focus)
+            .when(self.transcript.is_empty(), |el| el.tab_stop(false))
+            .key_context(key_context::TRANSCRIPT)
+            .on_action(cx.listener(|view, _: &TranscriptPrevious, _, cx| view.move_transcript_focus(false, cx)))
+            .on_action(cx.listener(|view, _: &TranscriptNext, _, cx| view.move_transcript_focus(true, cx)))
             .flex_1()
             .min_h_0()
             .w_full()
@@ -366,6 +371,49 @@ impl DesktopView {
             .child(shimmer_label("navigation-loading-label", label))
     }
 
+    /// Rows the renderer hides (collapsed activity members) are also skipped by
+    /// keyboard navigation, so the highlight never lands on an invisible row.
+    fn transcript_row_visible(item: &TranscriptItem) -> bool {
+        !(item.activity_grouped && !item.activity_group_head && !item.activity_expanded)
+    }
+
+    /// Move the keyboard highlight across messages (Up/Down with the
+    /// transcript focused). Clamps at both ends and scrolls the row into view.
+    pub(super) fn move_transcript_focus(&mut self, down: bool, cx: &mut Context<Self>) {
+        let visible: Vec<usize> = self
+            .transcript
+            .items()
+            .enumerate()
+            .filter(|(_, item)| Self::transcript_row_visible(item))
+            .map(|(index, _)| index)
+            .collect();
+        if visible.is_empty() {
+            return;
+        }
+        let current = self.keyboard_focused_message.as_deref().and_then(|id| {
+            visible
+                .iter()
+                .position(|&index| self.transcript.get(index).is_some_and(|item| item.id.as_str() == id))
+        });
+        let next = match (current, down) {
+            (Some(position), true) => (position + 1).min(visible.len() - 1),
+            (Some(position), false) => position.saturating_sub(1),
+            (None, true) => 0,
+            (None, false) => visible.len() - 1,
+        };
+        let Some(&index) = visible.get(next) else {
+            return;
+        };
+        let Some(item) = self.transcript.get(index) else {
+            return;
+        };
+        self.keyboard_focused_message = Some(item.id.clone());
+        self.message_scroller.update(cx, |state, cx| {
+            let _scrolled = state.scroll_to_item(index, cx);
+        });
+        cx.notify();
+    }
+
     fn render_transcript_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
         // Resolve the tail before borrowing the row for render: the cache
         // needs `&mut self` while the row borrows the transcript.
@@ -373,7 +421,7 @@ impl DesktopView {
         let Some(item) = self.transcript.get(index) else {
             return div().into_any_element();
         };
-        if item.activity_grouped && !item.activity_group_head && !item.activity_expanded {
+        if !Self::transcript_row_visible(item) {
             return div().into_any_element();
         }
         let group_header = item
@@ -401,6 +449,7 @@ impl DesktopView {
             })
             .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)));
         let message_id = item.id.clone();
+        let keyboard_focused = self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
         div()
             .id(format!("transcript-row-{}", item.id))
             .when(item.is_tool() || item.is_diff(), |row| row.role(gpui_kit::Role::ListItem))
@@ -408,6 +457,20 @@ impl DesktopView {
             .w_full()
             .flex()
             .justify_center()
+            // Absolutely positioned so the highlight never reflows the row.
+            .when(keyboard_focused, |row| {
+                row.child(
+                    div()
+                        .id(format!("transcript-focus-rail-{}", item.id))
+                        .test_support()
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(2.))
+                        .bg(cx.theme().colors.accent),
+                )
+            })
             // MessageScroller owns the shared horizontal row inset.
             .when(item.is_tool(), |row| row.pb_1())
             .when(item.is_user(), |row| row.pb_6())
@@ -506,10 +569,12 @@ impl DesktopView {
                 ),
             )
             .when(!user, |message| {
-                // Message actions reveal on hover only; the slot keeps the
-                // xsmall button height so rows never reflow. Keyboard and
-                // screen-reader users copy through the palette command.
-                let revealed = self.hovered_message.as_deref() == Some(item.id.as_str());
+                // Message actions reveal on hover or keyboard highlight; the
+                // slot keeps the xsmall button height so rows never reflow.
+                // Keyboard and screen-reader users can also copy through the
+                // palette command.
+                let revealed = self.hovered_message.as_deref() == Some(item.id.as_str())
+                    || self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
                 message.footer(
                     MessageFooter::new().child(
                         div()
@@ -570,95 +635,6 @@ impl DesktopView {
                     .child(div().text_sm().font_semibold().text_color(tone).child(item.title.clone())),
             )
             .child(div().text_sm().text_color(colors.foreground).child(item.text.clone()))
-            .into_any_element()
-    }
-
-    fn render_activity_group(&self, range: std::ops::Range<usize>, cx: &mut Context<Self>) -> AnyElement {
-        let Some(head) = self.transcript.get(range.start) else {
-            return div().into_any_element();
-        };
-        let id = head.id.clone();
-        let summary = head.activity_group_summary;
-        let failed = summary.failed;
-        let running = summary.running;
-        let colors = cx.theme().colors;
-        let status = if failed > 0 {
-            ActivityState::Failed
-        } else if running > 0 {
-            ActivityState::Running
-        } else {
-            ActivityState::Other
-        };
-        let status_color = Self::activity_status_color(status, colors);
-        let mut label = rust_i18n::t!("app.transcript.activity_total", total = summary.total).to_string();
-        if running > 0 {
-            label.push_str(display::MIDDOT);
-            label.push_str(rust_i18n::t!("app.transcript.activity_running", count = running).as_ref());
-        }
-        if failed > 0 {
-            label.push_str(display::MIDDOT);
-            label.push_str(rust_i18n::t!("app.transcript.activity_failed", count = failed).as_ref());
-        }
-        desktop_button(format!("activity-group-{}", head.id))
-            .child(
-                div()
-                    .w_full()
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .justify_start()
-                    .gap_2()
-                    .child(Icon::new(IconName::Wrench).small())
-                    .when(running > 0, |row| {
-                        row.child(
-                            div()
-                                .id(format!("activity-group-running-indicator-{}", head.id))
-                                .test_support()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(
-                                    Spinner::new()
-                                        .small()
-                                        .color(Self::activity_status_color(ActivityState::Running, colors)),
-                                ),
-                        )
-                    })
-                    .child(
-                        div()
-                            .id(format!("activity-group-label-{}", head.id))
-                            .test_support()
-                            .min_w_0()
-                            .truncate()
-                            .child(label.clone()),
-                    )
-                    .child(
-                        Icon::new(if head.activity_expanded {
-                            IconName::ChevronDown
-                        } else {
-                            IconName::ChevronRight
-                        })
-                        .small(),
-                    ),
-            )
-            .accessibility_label(format!(
-                "{} {label}",
-                if head.activity_expanded {
-                    rust_i18n::t!("app.transcript.collapse")
-                } else {
-                    rust_i18n::t!("app.transcript.expand")
-                }
-            ))
-            .toggled(head.activity_expanded)
-            .ghost()
-            .small()
-            .max_w_full()
-            .justify_start()
-            .text_color(status_color)
-            .on_click(cx.listener(move |view, _, _, cx| {
-                view.transcript.toggle_activity_group(&id);
-                cx.notify();
-            }))
             .into_any_element()
     }
 

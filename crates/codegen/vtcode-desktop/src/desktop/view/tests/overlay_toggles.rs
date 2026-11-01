@@ -336,6 +336,96 @@ fn escape_closes_settings_palette_before_the_panel(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn double_escape_clears_the_composer_draft_and_typing_disarms_it(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.input("hello", cx);
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "hello", "single escape only arms");
+        window.input("x", cx);
+        window.render_frame(cx);
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "hellox", "typing disarms the pending clear");
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "", "consecutive presses clear the draft");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn escape_closes_prompt_history_then_double_escape_clears_the_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.transcript.push(TranscriptItem::new(
+                "history-user-1".into(),
+                "user".into(),
+                "You".into(),
+                "Review stale diffs".into(),
+            ));
+            view.composer.update(cx, |state, cx| {
+                state.set_value("stale", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "escape dismisses the picker");
+        assert_eq!(view.read(cx).composer.read(cx).value(), "stale", "dismissal keeps the draft");
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "stale", "dismissal does not arm the clear");
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "", "consecutive presses clear the draft");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn overlay_open_and_dismiss_disarm_pending_double_escape(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.transcript.push(TranscriptItem::new(
+                "history-user-1".into(),
+                "user".into(),
+                "You".into(),
+                "Review stale diffs".into(),
+            ));
+            view.composer.update(cx, |state, cx| {
+                state.set_value("stale", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("escape", cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "escape dismisses the picker");
+        // The intervening open/dismiss disarmed the first press: this Esc
+        // re-arms instead of clearing.
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "stale", "dismissal disarms the pending clear");
+        window.press("escape", cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "", "consecutive presses clear the draft");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn toolbar_back_prefers_the_panel_over_session_history(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
