@@ -118,14 +118,14 @@ trigger_docs_rs_rebuild() {
 
 	print_distribution "Triggering docs.rs rebuild for version $version..."
 	local crates=(
-		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-webmcp vtcode-memory vtcode-macros
+		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-desktop-protocol vtcode-webmcp vtcode-memory vtcode-macros
 		vtcode-config vtcode-indexer vtcode-bash-runner vtcode-utility-tool-specs vtcode-eval
 		vtcode-safety vtcode-a2a vtcode-llm vtcode-skills vtcode-agent-plugins vtcode-ui vtcode-mcp
 		vtcode-core vtcode-acp vtcode
 	)
 	for crate in "${crates[@]}"; do
 		# Fire-and-forget rebuild pings; each is an independent HTTPS GET,
-		# so all 21 run concurrently instead of sequentially.
+		# so all 22 run concurrently instead of sequentially.
 		curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true &
 	done
 	wait 2>/dev/null || true
