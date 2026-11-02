@@ -506,6 +506,16 @@ impl DesktopView {
                         .desktop_disabled(!self.new_thread_available())
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
+                .child(
+                    desktop_button("thread-header-cli")
+                        .icon(IconName::Terminal)
+                        .ghost()
+                        .small()
+                        .accessibility_label(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string())
+                        .tooltip(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string())
+                        .desktop_disabled(self.selected_session_id.is_none())
+                        .dispatches_desktop_action(OpenCliHandoff, self.focus_handle.clone()),
+                )
                 .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta)),
         )
     }

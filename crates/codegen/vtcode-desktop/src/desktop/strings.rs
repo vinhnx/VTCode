@@ -129,6 +129,7 @@ pub(super) mod i18n {
     pub const SESSION_PREPARING_NEW_THREAD: &str = "app.session.preparing_new_thread";
     pub const SESSION_RUNNING_THREAD_LABEL: &str = "app.session.running_thread_label";
     pub const SESSION_THREAD_READY: &str = "app.session.thread_ready";
+    pub const SETTINGS_CONNECTIONS_TERMINAL: &str = "app.settings.connections.terminal";
     pub const SETTINGS_SEARCH_TITLE: &str = "app.settings.search.title";
     pub const SETTINGS_TITLE: &str = "app.settings.title";
     pub const SHORTCUTS_SEARCH_ARIA: &str = "app.shortcuts.search_aria";
@@ -165,7 +166,7 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 62] = [
+        const KEYS: [&str; 63] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
@@ -217,6 +218,7 @@ mod tests {
             i18n::SESSION_PREPARING_NEW_THREAD,
             i18n::SESSION_RUNNING_THREAD_LABEL,
             i18n::SESSION_THREAD_READY,
+            i18n::SETTINGS_CONNECTIONS_TERMINAL,
             i18n::SETTINGS_SEARCH_TITLE,
             i18n::SETTINGS_TITLE,
             i18n::SHORTCUTS_SEARCH_ARIA,

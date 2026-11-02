@@ -383,7 +383,11 @@ impl DesktopView {
     }
 
     #[cfg(test)]
-    fn intercept_test_launch(&mut self, rel_path: &str, editor: files::ExternalEditor) -> Option<Result<(), String>> {
+    pub(super) fn intercept_test_launch(
+        &mut self,
+        rel_path: &str,
+        editor: files::ExternalEditor,
+    ) -> Option<Result<(), String>> {
         let intercept = self.test_launch_intercept.as_mut()?;
         intercept
             .calls

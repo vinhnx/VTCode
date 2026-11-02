@@ -254,6 +254,27 @@ Run `/splash` to inspect the current CLI workspace, session, tool registry, and 
 credentials. In VT Code Desktop the same command opens Settings → Connections, refreshes bridge status, and shows the
 Desktop-to-CLI protocol handshake; a standalone CLI process cannot observe another process's Desktop connection.
 
+## Desktop and CLI handoff
+
+Each surface can hand its current thread to the other. Both directions link the same archived thread (resume in
+place), so work in one side at a time: each side checkpoints on its own turns and the latest checkpoint wins the
+archive.
+
+- **CLI → Desktop (`/desktop`, macOS only)** — Opens VT Code Desktop with the current thread selected. Delivery
+  goes through a `vtcode://session/<id>?workspace=<path>` URL handled by the running app, so handoff to an open
+  Desktop is instant (no new process, no reboot); a cold app launches and picks the link up on startup. When no
+  bundle claims the scheme (dev builds, outdated installs), it falls back to resolving the app exactly like
+  `vtcode desktop` (explicit path, `VTCODE_DESKTOP_APP`, then the standard install locations) with `--session` /
+  `--workspace` argv. Linking needs a saved checkpoint: threads checkpoint after every turn, so a fresh thread with
+  no turns yet opens unlinked with a notice — run a turn and retry. With history persistence disabled the thread
+  cannot be linked.
+- **Desktop → CLI** — The thread-header Terminal button, `/cli`, and the ⌘K "Continue in terminal" entry all open
+  the same handoff card showing `vtcode --resume <id> --all` for the selected thread (the same command as Settings →
+  Connections → Terminal). **Copy** copies it; **Continue in terminal** copies it and opens Terminal at the
+  workspace; **Dismiss** closes the card. With no thread selected the button is disabled and the other entries
+  explain why.
+- Typing `/desktop` inside Desktop reports that you are already there instead of opening a second instance.
+
 ## Configuration quick reference
 
 | Action                         | Command                         | Result                                                                       |

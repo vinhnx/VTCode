@@ -126,6 +126,7 @@ pub(crate) enum SlashCommandOutcome {
     OpenDocs,
     OpenFeedback,
     OpenDonateLinks,
+    OpenDesktop,
     StartModelSelection,
     ToggleFastMode {
         enable: Option<bool>,

@@ -156,6 +156,52 @@ impl DesktopView {
         }
     }
 
+    /// Handle a `vtcode://` handoff link in the running app. Same workspace
+    /// loads directly through the UI entry (running-turn confirm included),
+    /// skipping the session-list wait; another workspace navigates through
+    /// the pending path like back/forward.
+    pub(super) fn handle_handoff_link(
+        &mut self,
+        link: protocol::handoff_url::HandoffLink,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = files::canonicalize_workspace_folder(&link.workspace) else {
+            self.error = Some(rust_i18n::t!("app.workspace.invalid_folder").to_string());
+            cx.notify();
+            return;
+        };
+        if self.workspace.as_ref() == Some(&workspace) {
+            // False is normal here: the running-turn confirm opened, or one
+            // is already up and the link yields to it.
+            let _ = self.load_session_from_ui(link.session_id, window, cx);
+        } else {
+            self.arm_session_link(workspace, link.session_id, cx);
+        }
+    }
+
+    /// Arm a CLI session handoff (`/desktop` argv or `vtcode://` link):
+    /// record the link target in history, select its workspace, and let the
+    /// session-list continuation load the thread — the same path as
+    /// back/forward workspace navigation.
+    pub(super) fn arm_session_link(&mut self, workspace: PathBuf, session_id: String, cx: &mut Context<Self>) {
+        self.navigation_history.record(NavigationLocation {
+            workspace: workspace.clone(),
+            session_id: Some(session_id),
+        });
+        let Some(index) = self.navigation_history.current_index() else {
+            return;
+        };
+        self.pending_navigation = Some(PendingNavigation { target_index: index, workspace_switch: true });
+        self.select_workspace(workspace.clone(), cx);
+        if self.workspace.as_ref() != Some(&workspace)
+            && self.pending_workspace.as_ref() != Some(&workspace)
+            && !self.workspace_selection_pending
+        {
+            self.pending_navigation = None;
+        }
+    }
+
     fn navigate_to_history_index(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(target) = self.navigation_history.location(index).cloned() else {
             return;

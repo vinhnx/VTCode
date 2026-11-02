@@ -807,13 +807,13 @@ impl DesktopView {
             .child(self.render_webmcp_settings(false, cx))
             .child(self.render_webmcp_settings(true, cx))
             .child({
-                let group_title = rust_i18n::t!("app.settings.connections.terminal").to_string();
+                let group_title = rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string();
                 let command = Self::terminal_command_for_session(self.selected_session_id.as_deref());
                 accessible_group_box(
                     "terminal-settings-group",
                     group_title.clone(),
                     settings_group_box(group_title, &cx.theme().colors).child(settings_row(
-                        rust_i18n::t!("app.settings.connections.terminal").to_string(),
+                        rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(),
                         command.clone(),
                         desktop_button("copy-terminal-command")
                             .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())

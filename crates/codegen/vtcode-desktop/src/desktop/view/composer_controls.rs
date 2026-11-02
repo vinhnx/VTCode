@@ -33,6 +33,8 @@ pub(super) enum DesktopSlashAction {
     Splash,
     Help,
     Go(String),
+    Cli,
+    Desktop,
 }
 
 /// Settings-tab aliases shared by the `/config` and `/settings` deep-links
@@ -81,7 +83,10 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
     // service-side session while this client keeps showing it as selected,
     // `/exit foo` the same, `/stop foo` would be silently dropped by the idle
     // gate mid-run, and `/model foo` would park the text-driven picker and
-    // swallow later turns. Every remaining fallthrough below is headless-safe
+    // swallow later turns. `cli` and `desktop` are likewise unconditional:
+    // the service has no `/cli` (fallthrough would submit it as a prompt)
+    // and its `/desktop` would spawn a second desktop instance.
+    // Every remaining fallthrough below is headless-safe
     // (pure text, usage errors, or text-driven selection).
     let command = name.to_ascii_lowercase();
     let keyword = args.to_ascii_lowercase();
@@ -90,6 +95,8 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
         "exit" => Some(DesktopSlashAction::CloseSession),
         "stop" => Some(DesktopSlashAction::StopTurn),
         "model" | "models" => Some(DesktopSlashAction::ModelPicker),
+        "cli" => Some(DesktopSlashAction::Cli),
+        "desktop" => Some(DesktopSlashAction::Desktop),
         "history" if args.is_empty() => Some(DesktopSlashAction::History),
         "splash" if args.is_empty() => Some(DesktopSlashAction::Splash),
         "help" if args.is_empty() => Some(DesktopSlashAction::Help),
@@ -756,6 +763,8 @@ mod tests {
         assert_eq!(desktop_slash_action("/fast off"), Some(DesktopSlashAction::FastMode(Some(false))));
         assert_eq!(desktop_slash_action("/theme ciapre"), Some(DesktopSlashAction::Theme(Some("ciapre".into()))));
         assert_eq!(desktop_slash_action("/theme"), Some(DesktopSlashAction::Theme(None)));
+        assert_eq!(desktop_slash_action("/cli"), Some(DesktopSlashAction::Cli));
+        assert_eq!(desktop_slash_action("/desktop"), Some(DesktopSlashAction::Desktop));
 
         for input in [
             "/fast maybe",
@@ -827,6 +836,8 @@ mod tests {
             ("/Splash", DesktopSlashAction::Splash),
             ("/HELP", DesktopSlashAction::Help),
             ("/Mode", DesktopSlashAction::Modes),
+            ("/CLI", DesktopSlashAction::Cli),
+            ("/Desktop", DesktopSlashAction::Desktop),
         ] {
             assert_eq!(desktop_slash_action(input), Some(expected), "{input:?} routes natively");
         }
@@ -854,6 +865,10 @@ mod tests {
             ("/STOP now", DesktopSlashAction::StopTurn),
             ("/model foo", DesktopSlashAction::ModelPicker),
             ("/MODEL foo bar", DesktopSlashAction::ModelPicker),
+            ("/cli please", DesktopSlashAction::Cli),
+            ("/CLI PLEASE", DesktopSlashAction::Cli),
+            ("/desktop now", DesktopSlashAction::Desktop),
+            ("/DESKTOP now", DesktopSlashAction::Desktop),
         ] {
             assert_eq!(desktop_slash_action(input), Some(expected), "{input:?} routes natively");
         }

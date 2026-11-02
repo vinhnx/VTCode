@@ -108,6 +108,23 @@ way on macOS: it checks the explicit path, then `VTCODE_DESKTOP_APP`, then `~/Ap
 `vtcode desktop --install` downloads and installs the app from the prebuilt release asset instead (updates install in
 place; fresh installs go to `~/Applications`).
 
+The GUI accepts a startup link, `--session <id> --workspace <path>` (either order; `--flag=value` also works),
+sent by CLI `/desktop` via `open --args`. It selects the workspace and loads the thread through the same
+pending-navigation path as back/forward history, so an unknown session reports the standard thread-unavailable
+notice and an unreadable workspace stays on welcome with the invalid-folder notice. Unknown
+arguments (including the `-psn_*` tokens Finder injects) are ignored.
+
+The fast path is a `vtcode://session/<id>?workspace=<path>` URL (scheme claimed in the bundle plist,
+contract in `vtcode-desktop-protocol::handoff_url`), delivered to the running app through `on_open_urls` —
+no new process, no backend reboot, no handshake replay. Measured on the backend half with the debug binary
+(spawn + initialize + full discovery + load-answer vs a single load round trip on a warm backend, warm page
+cache, 3 runs each): 53 ms median cold vs 0.076 ms median warm, ~690x. Full GUI cold boot adds further
+cold-side-only cost (process launch, UI init, first render); end-to-end GUI timing needs a scheme-registered
+bundle installed. Events arriving before init finish queue in a small
+inbox and drain after the window opens. Same-workspace links load directly through the UI entry (running-turn
+confirm included); other workspaces navigate through the pending path. Either way the CLI falls back to the
+argv launch when no bundle claims the scheme.
+
 The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.8.0 setup](https://gpui-kit.com/docs/installation/).
 
 ## Runtime and session behavior

@@ -373,6 +373,7 @@ impl DesktopView {
                                     self.slash_commands.clear();
                                     self.error = Some(rust_i18n::t!("app.service.invalid_slash_catalog").to_string());
                                 }
+                                self.localize_slash_catalog();
                                 self.service_info = Some(info);
                                 self.status = rust_i18n::t!("app.service.connected_service").to_string();
                                 let mut discovery_queued = true;

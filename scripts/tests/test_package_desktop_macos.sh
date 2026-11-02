@@ -69,6 +69,9 @@ else
 	printf 'PASS: older SDK skips Assets.car; the icns fallback covers the bundle.\n'
 fi
 grep -Fq -- "<key>CFBundleIconName</key>" "${SUCCESS_APP}/Contents/Info.plist"
+grep -Fq -- "<key>CFBundleURLTypes</key>" "${SUCCESS_APP}/Contents/Info.plist"
+grep -Fq -- "<string>vtcode</string>" "${SUCCESS_APP}/Contents/Info.plist"
+printf 'PASS: bundle claims the vtcode:// handoff scheme.\n'
 if grep -Fq -- "<key>NSIsTouchNative</key>" "${SUCCESS_APP}/Contents/Info.plist"; then
 	printf 'FAIL: bundle declares NSIsTouchNative; that disables the touch-to-mouse emulation the GUI relies on.\n' >&2
 	exit 1

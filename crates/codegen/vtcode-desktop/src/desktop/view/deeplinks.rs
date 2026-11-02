@@ -134,6 +134,7 @@ fn action_path(action: &PaletteAction) -> Option<String> {
     match action {
         PaletteAction::NewSession => Some("action/new-session".to_string()),
         PaletteAction::CloseSession => Some("action/close-session".to_string()),
+        PaletteAction::OpenInCli => Some("action/open-in-cli".to_string()),
         PaletteAction::CopyLatestMessage => Some("action/copy-latest".to_string()),
         PaletteAction::ChooseModel => Some("action/choose-model".to_string()),
         PaletteAction::ChooseWorkspace => Some("action/choose-workspace".to_string()),
@@ -308,6 +309,7 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
     let action = match verb.to_ascii_lowercase().as_str() {
         "new-session" => exact(rest, PaletteAction::NewSession)?,
         "close-session" => exact(rest, PaletteAction::CloseSession)?,
+        "open-in-cli" => exact(rest, PaletteAction::OpenInCli)?,
         "copy-latest" => exact(rest, PaletteAction::CopyLatestMessage)?,
         "choose-model" => exact(rest, PaletteAction::ChooseModel)?,
         "choose-workspace" => exact(rest, PaletteAction::ChooseWorkspace)?,
@@ -627,6 +629,7 @@ mod tests {
         }
         // Representative actions, parameterless and parameterized.
         assert_eq!(parse("action/toggle-zen"), Some(DeepLink::Action(PaletteAction::ToggleZenMode)));
+        assert_eq!(parse("action/open-in-cli"), Some(DeepLink::Action(PaletteAction::OpenInCli)));
         assert_eq!(parse("action/load-session/abc"), Some(DeepLink::Action(PaletteAction::LoadSession("abc".into()))));
         assert_eq!(
             parse("action/preview-file/src/main.rs"),

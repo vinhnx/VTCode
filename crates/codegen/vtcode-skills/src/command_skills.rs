@@ -248,6 +248,12 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "integration"
     ),
     built_in_command_spec!(
+        "desktop",
+        "Open the VT Code desktop app linked to the current thread (macOS only)",
+        "/desktop",
+        "integration"
+    ),
+    built_in_command_spec!(
         "resume",
         "List archived sessions when idle; resume the active turn while it is paused",
         "/resume [limit|--all]",
@@ -506,6 +512,14 @@ mod tests {
         assert!(plan.description.contains("planning workflow"));
         assert!(!plan.description.contains("mode"));
         assert_eq!(plan.usage, "/plan [task]");
+    }
+
+    #[test]
+    fn desktop_command_skill_opens_the_desktop_app() {
+        let desktop = find_command_skill_by_slash_name("desktop").expect("desktop spec");
+        assert!(desktop.is_built_in());
+        assert_eq!(desktop.usage, "/desktop");
+        assert_eq!(desktop.category(), "integration");
     }
 
     #[test]

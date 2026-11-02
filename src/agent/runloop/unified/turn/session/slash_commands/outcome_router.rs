@@ -56,6 +56,7 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::ManageLocalServer { .. }) => route_runtime_outcome(outcome, ctx).await,
         outcome @ (SlashCommandOutcome::NewSession
         | SlashCommandOutcome::OpenDocs
+        | SlashCommandOutcome::OpenDesktop
         | SlashCommandOutcome::OpenFeedback
         | SlashCommandOutcome::OpenDonateLinks
         | SlashCommandOutcome::ManageSkills { .. }
@@ -163,6 +164,7 @@ async fn route_navigation_outcome(
     match outcome {
         SlashCommandOutcome::NewSession => handlers::handle_new_session(ctx).await,
         SlashCommandOutcome::OpenDocs => handlers::handle_open_docs(ctx).await,
+        SlashCommandOutcome::OpenDesktop => handlers::handle_open_desktop(ctx).await,
         SlashCommandOutcome::OpenFeedback => handlers::handle_open_feedback(ctx).await,
         SlashCommandOutcome::OpenDonateLinks => handlers::handle_open_donate_links(ctx).await,
         SlashCommandOutcome::ManageSkills { action } => handlers::handle_manage_skills(ctx, action).await,

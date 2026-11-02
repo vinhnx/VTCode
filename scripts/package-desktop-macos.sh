@@ -301,6 +301,17 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
     <string>15.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>VT Code handoff</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>vtcode</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST

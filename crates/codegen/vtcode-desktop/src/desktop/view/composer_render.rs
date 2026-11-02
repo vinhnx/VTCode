@@ -221,6 +221,13 @@ impl DesktopView {
             );
         }
 
+        // Hide a card left over from a previous selection: reopening via the
+        // button, `/cli`, or the palette refreshes it for the current thread.
+        if let Some(handoff) = self.cli_handoff.as_ref()
+            && self.selected_session_id.as_deref() == Some(handoff.session_id.as_str())
+        {
+            panel = panel.child(self.render_cli_handoff_card(handoff, cx));
+        }
         if self.queue_panel_state() == QueuePanelState::Entries {
             panel = panel.child(self.render_queued_messages(cx));
         }

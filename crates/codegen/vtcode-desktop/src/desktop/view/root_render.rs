@@ -181,6 +181,11 @@ impl Render for DesktopView {
                     let _ = view.close_session_from_ui(window, cx);
                 }))
             })
+            .when(self.selected_session_id.is_some(), |body| {
+                body.on_action(cx.listener(|view, _: &OpenCliHandoff, _, cx| {
+                    view.open_cli_handoff(cx);
+                }))
+            })
             .when(
                 self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open,
                 |body| {

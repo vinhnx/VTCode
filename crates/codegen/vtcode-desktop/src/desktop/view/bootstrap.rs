@@ -1,5 +1,7 @@
 //! App startup: menus, keybindings, window reopen, construction, and preference persistence.
+use super::super::{SharedUrlInbox, UrlInbox};
 use super::*;
+use std::{cell::RefCell, rc::Rc};
 
 /// Documentation and issue tracker opened by the Help menu and About dialog.
 pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
@@ -160,11 +162,27 @@ pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
     ]);
 }
 
-pub(crate) fn run() {
+pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
     let preferences = preferences::Preferences::load();
     super::super::localization::initialize(preferences.ui_language());
+    let inbox: SharedUrlInbox = Rc::new(RefCell::new(UrlInbox::default()));
+    let inbox_events = inbox.clone();
     let application = gpui_kit::application().with_assets(super::super::assets::DesktopAssets);
-    let _application = application.on_reopen(show_main_window);
+    // `vtcode://` delivery to the running app (CLI `/desktop` fast path).
+    // The callback runs on the main thread without app access, so it only
+    // touches the inbox; dispatch happens through `AsyncApp` once init ran.
+    let _application = application.on_reopen(show_main_window).on_open_urls(move |urls| {
+        let ready = {
+            let mut inbox = inbox_events.borrow_mut();
+            for url in &urls {
+                inbox.push_url(url);
+            }
+            inbox.take_ready()
+        };
+        if let Some((app, links)) = ready {
+            app.update(|cx| dispatch_handoff_links(cx, links));
+        }
+    });
     application.run(move |cx: &mut App| {
         gpui_kit::init(cx);
         super::super::notifications::initialize(cx);
@@ -173,14 +191,57 @@ pub(crate) fn run() {
         if preferences.show_in_menu_bar && !menu_bar::set_enabled(true, cx) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
         }
-        if let Err(error) = open_or_activate_main_window(cx, Some(preferences)) {
+        inbox.borrow_mut().set_app(cx.to_async());
+        if let Err(error) = open_or_activate_main_window(cx, Some(preferences), startup_link) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
+        } else {
+            // The window (and its global) exists now: drain URLs that
+            // arrived before init finished on a cold launch.
+            let links = inbox.borrow_mut().take_pending();
+            if !links.is_empty() {
+                dispatch_handoff_links(cx, links);
+            }
         }
     });
 }
 
+/// Main window for `vtcode://` delivery. Weak: a closed window must drop
+/// its view instead of leaking it through the global.
+struct MainWindow {
+    view: gpui_kit::WeakEntity<DesktopView>,
+    window: gpui_kit::AnyWindowHandle,
+}
+
+impl gpui_kit::Global for MainWindow {}
+
+/// Route handoff links to the live main window. Unknown sessions and
+/// workspaces fail through the same notices as the argv path. A missing
+/// window (failed open, closed since) drops the links silently: there is
+/// no surface to report on.
+fn dispatch_handoff_links(cx: &mut App, links: Vec<protocol::handoff_url::HandoffLink>) {
+    let Some(main) = cx.try_global::<MainWindow>() else {
+        return;
+    };
+    let Some(view) = main.view.upgrade() else {
+        return;
+    };
+    let window = main.window;
+    if window
+        .update(cx, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                for link in links {
+                    view.handle_handoff_link(link, window, cx);
+                }
+            });
+        })
+        .is_err()
+    {
+        vtcode_commons::diagnostics::stderr(format_args!("handoff delivery missed its window"));
+    }
+}
+
 pub(super) fn show_main_window(cx: &mut App) {
-    if let Err(error) = open_or_activate_main_window(cx, None) {
+    if let Err(error) = open_or_activate_main_window(cx, None, None) {
         vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
     }
 }
@@ -189,6 +250,7 @@ pub(super) fn show_main_window(cx: &mut App) {
 pub(super) fn open_or_activate_main_window(
     cx: &mut App,
     preferences: Option<preferences::Preferences>,
+    startup_link: Option<protocol::handoff_url::HandoffLink>,
 ) -> anyhow::Result<gpui_kit::AnyWindowHandle> {
     // A dock/Finder reopen should return to the user's focused workspace when
     // multiple windows exist; keep the first-window fallback for the current
@@ -223,6 +285,7 @@ pub(super) fn open_or_activate_main_window(
             }
         });
     })?;
+    cx.set_global(MainWindow { view: view.downgrade(), window });
     if start_maximized {
         // macOS ignores WindowBounds::Maximized at creation, so zoom after
         // opening to reach the native zoomed state the Zoom menu toggles.
@@ -230,10 +293,33 @@ pub(super) fn open_or_activate_main_window(
         #[cfg(not(test))]
         window.update(cx, |_, window, _| window.zoom_window())?;
     }
-    // Reopen the most recent workspace when it still exists.
-    let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
-    if let Some(path) = last_workspace {
-        window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.select_workspace_on_startup(path, cx)))?;
+    // A CLI handoff (`/desktop`) selects its workspace and loads its thread
+    // through pending navigation; otherwise reopen the most recent workspace.
+    // An unreadable handoff workspace stays on welcome with the standard
+    // notice instead of falling back: opening a different directory than the
+    // requested one would silently land the user in the wrong workspace.
+    let mut handoff = None;
+    let mut handoff_invalid = false;
+    if let Some(link) = startup_link {
+        match files::canonicalize_workspace_folder(&link.workspace) {
+            Some(workspace) => handoff = Some((workspace, link.session_id)),
+            None => handoff_invalid = true,
+        }
+    }
+    if let Some((workspace, session_id)) = handoff {
+        window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.arm_session_link(workspace, session_id, cx)))?;
+    } else if handoff_invalid {
+        window.update(cx, |_, _, cx| {
+            view.update(cx, |view, cx| {
+                view.error = Some(rust_i18n::t!("app.workspace.invalid_folder").to_string());
+                cx.notify();
+            })
+        })?;
+    } else {
+        let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
+        if let Some(path) = last_workspace {
+            window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.select_workspace_on_startup(path, cx)))?;
+        }
     }
     view.update(cx, |view, cx| view.start_event_drain(cx));
     cx.activate(true);
@@ -610,6 +696,7 @@ impl DesktopView {
             mcp_app_bodies: HashMap::new(),
             mcp_app_errors: HashMap::new(),
             retained_submission: None,
+            cli_handoff: None,
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
             preferences,

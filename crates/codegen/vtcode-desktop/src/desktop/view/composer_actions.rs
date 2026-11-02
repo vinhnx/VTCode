@@ -152,6 +152,19 @@ impl DesktopView {
                 self.open_webmcp_settings(window, cx);
                 true
             }
+            DesktopSlashAction::Cli => {
+                self.clear_submitted_command(window, cx);
+                self.open_cli_handoff(cx);
+                true
+            }
+            DesktopSlashAction::Desktop => {
+                self.clear_submitted_command(window, cx);
+                // English literal: the repo does not add locale keys without
+                // full native-quality translations.
+                self.status = "You are already using VT Code Desktop.".to_string();
+                cx.notify();
+                true
+            }
             DesktopSlashAction::Go(target) => {
                 if target.trim().is_empty() {
                     self.clear_submitted_command(window, cx);

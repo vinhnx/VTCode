@@ -12,6 +12,8 @@ mod compact;
 mod config_toml;
 #[path = "control.rs"]
 mod control;
+#[path = "desktop.rs"]
+mod desktop;
 #[path = "diagnostics.rs"]
 mod diagnostics;
 #[path = "fast.rs"]
@@ -54,6 +56,7 @@ pub(super) use control::{
     handle_show_settings_at_path, handle_show_settings_reset, handle_show_transcript_stats, handle_stop_agent,
     show_settings_at_path_from_context,
 };
+pub(super) use desktop::handle_open_desktop;
 pub(super) use diagnostics::{
     handle_run_checkup, handle_show_memory_config, handle_show_splash, handle_show_status,
     handle_start_checkup_interactive, handle_start_terminal_setup,

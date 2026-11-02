@@ -234,3 +234,21 @@ async fn local_help_renders_usage() {
     let outcome = handle_slash_command("local help", &mut renderer, &workspace).await.unwrap();
     assert!(matches!(outcome, SlashCommandOutcome::Handled));
 }
+#[tokio::test]
+async fn desktop_opens_the_desktop_app_without_arguments() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let mut renderer = renderer_for_tests();
+    let outcome = handle_slash_command("desktop", &mut renderer, workspace.path())
+        .await
+        .expect("desktop should parse");
+    assert!(matches!(outcome, SlashCommandOutcome::OpenDesktop));
+}
+#[tokio::test]
+async fn desktop_with_arguments_renders_usage() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let mut renderer = renderer_for_tests();
+    let outcome = handle_slash_command("desktop extra", &mut renderer, workspace.path())
+        .await
+        .expect("desktop should parse");
+    assert!(matches!(outcome, SlashCommandOutcome::Handled));
+}

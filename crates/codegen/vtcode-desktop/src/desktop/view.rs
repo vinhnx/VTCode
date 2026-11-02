@@ -84,6 +84,7 @@ use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, launch_backend,
     request_fits_frame,
 };
+use cli_handoff::CliHandoff;
 use full_access_confirm::FullAccessConfirmState;
 use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
 use overlays::{Route, RouteHistory};
@@ -96,6 +97,7 @@ mod backend_events;
 mod bootstrap;
 mod browser;
 mod chrome;
+mod cli_handoff;
 mod components;
 mod composer_actions;
 mod composer_attachments;
@@ -313,6 +315,7 @@ actions!(
         OpenSelectedFile,
         NewSession,
         CloseSession,
+        OpenCliHandoff,
         ChooseWorkspace,
         FocusComposer,
         OpenUtilities,
@@ -648,6 +651,7 @@ struct DesktopView {
     mcp_app_bodies: HashMap<McpAppBodyKey, McpAppReadResult>,
     mcp_app_errors: HashMap<McpAppBodyKey, gpui_kit::SharedString>,
     retained_submission: Option<SubmissionDraft>,
+    cli_handoff: Option<CliHandoff>,
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
     preferences: preferences::Preferences,

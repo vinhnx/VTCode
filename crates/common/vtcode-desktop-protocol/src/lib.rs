@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vtcode_exec_events::VersionedThreadEvent;
 
+pub mod handoff_url;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.

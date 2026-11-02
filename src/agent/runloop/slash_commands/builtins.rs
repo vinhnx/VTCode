@@ -287,6 +287,14 @@ fn handle_share_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slash
     }
 }
 
+fn handle_desktop_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    if !args.trim().is_empty() {
+        renderer.line(MessageStyle::Error, "Usage: /desktop")?;
+        return Ok(SlashCommandOutcome::Handled);
+    }
+    Ok(SlashCommandOutcome::OpenDesktop)
+}
+
 fn handle_history_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if !args.is_empty() {
         renderer.line(MessageStyle::Error, "Usage: /history")?;
@@ -521,6 +529,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "rewind" => handle_rewind_command(args, renderer),
         "redo" => Ok(SlashCommandOutcome::Redo),
         "docs" => Ok(SlashCommandOutcome::OpenDocs),
+        "desktop" => handle_desktop_command(args, renderer),
         "feedback" => handle_feedback_command(args, renderer),
         "exit" => Ok(SlashCommandOutcome::Exit),
         "skills" => handle_skills_command(input, renderer),

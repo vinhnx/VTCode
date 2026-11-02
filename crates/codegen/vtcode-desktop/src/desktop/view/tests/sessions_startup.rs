@@ -275,7 +275,7 @@ fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
     })
     .unwrap();
     cx.update(|cx| {
-        let reopened = super::super::open_or_activate_main_window(cx, None).unwrap();
+        let reopened = super::super::open_or_activate_main_window(cx, None, None).unwrap();
         assert_eq!(reopened, window);
         assert_eq!(cx.windows().len(), 1);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this unsent draft");
@@ -294,7 +294,7 @@ fn reopening_activates_the_focused_window_when_multiple_are_open(cx: &mut TestAp
         .unwrap();
     cx.update(|cx| {
         assert_eq!(cx.active_window(), Some(second_window));
-        assert_eq!(super::super::open_or_activate_main_window(cx, None).unwrap(), second_window);
+        assert_eq!(super::super::open_or_activate_main_window(cx, None, None).unwrap(), second_window);
         assert_eq!(cx.windows().len(), 2, "reopening activates a window instead of duplicating it");
     });
 
@@ -350,10 +350,10 @@ fn reopening_after_last_window_closes_creates_one_new_window(cx: &mut TestAppCon
     cx.update_window(closed, |_, window, _| window.remove_window()).unwrap();
     cx.update(|cx| {
         assert!(cx.windows().is_empty());
-        let reopened = super::super::open_or_activate_main_window(cx, None).unwrap();
+        let reopened = super::super::open_or_activate_main_window(cx, None, None).unwrap();
         assert_ne!(reopened, closed);
         assert_eq!(cx.windows(), vec![reopened]);
-        assert_eq!(super::super::open_or_activate_main_window(cx, None).unwrap(), reopened);
+        assert_eq!(super::super::open_or_activate_main_window(cx, None, None).unwrap(), reopened);
         assert_eq!(cx.windows().len(), 1);
     });
 }
@@ -365,7 +365,7 @@ fn native_close_uses_menu_bar_mode_only_when_enabled(cx: &mut TestAppContext) {
     cx.update_window(initial, |_, window, _| window.remove_window()).unwrap();
     let window = cx.update(|cx| {
         assert!(super::super::menu_bar::set_enabled(true, cx));
-        super::super::open_or_activate_main_window(cx, None).unwrap()
+        super::super::open_or_activate_main_window(cx, None, None).unwrap()
     });
     let mut visual = gpui_kit::VisualTestContext::from_window(window, cx);
     assert!(!visual.simulate_close(), "enabled mode retains the window");
@@ -396,7 +396,7 @@ fn reopening_restores_translucent_sidebar_root(cx: &mut TestAppContext) {
     })
     .unwrap();
     drop(view);
-    let reopened = cx.update(|cx| super::super::open_or_activate_main_window(cx, None).unwrap());
+    let reopened = cx.update(|cx| super::super::open_or_activate_main_window(cx, None, None).unwrap());
     cx.update_window(reopened, |_, window, cx| {
         let root = window.root::<gpui_kit::base::Root>().flatten().unwrap();
         assert!(root.update(cx, |root, _| root.style().background.is_some()));
