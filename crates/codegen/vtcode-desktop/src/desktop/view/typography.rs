@@ -1,10 +1,10 @@
 //! Installed-font selection reuses the retained Kit command palette.
 
-use super::{DesktopView, PaletteAction, PaletteKind, command, desktop_button};
+use super::{DesktopView, PaletteAction, PaletteKind, command, desktop_button, settings_row};
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, App, Context, Window, div};
+use gpui_kit::{AnyElement, App, Context, Window};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum FontTarget {
@@ -108,29 +108,20 @@ impl DesktopView {
         } else {
             family.to_string()
         };
-        div()
-            .flex()
-            .w_full()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .py_1()
-            .child(super::row_title(label.clone(), &cx.theme().colors))
-            .child(
-                desktop_button(id)
-                    .label(display.to_string())
-                    .accessibility_label(
-                        rust_i18n::t!(
-                            "app.appearance.choose_current",
-                            label = label.as_str(),
-                            value = display.as_str()
-                        )
+        settings_row(
+            label.clone(),
+            "",
+            desktop_button(id)
+                .label(display.to_string())
+                .accessibility_label(
+                    rust_i18n::t!("app.appearance.choose_current", label = label.as_str(), value = display.as_str())
                         .to_string(),
-                    )
-                    .ghost()
-                    .on_click(cx.listener(move |view, _, window, cx| view.open_font_palette(target, window, cx))),
-            )
-            .into_any_element()
+                )
+                .ghost()
+                .on_click(cx.listener(move |view, _, window, cx| view.open_font_palette(target, window, cx))),
+            &cx.theme().colors,
+        )
+        .into_any_element()
     }
 }
 

@@ -348,24 +348,9 @@ impl DesktopView {
             .role(gpui_kit::Role::Group)
             .aria_label(rust_i18n::t!("app.settings.appearance.reduce_motion").to_string())
             .w_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(row_title(rust_i18n::t!("app.settings.appearance.reduce_motion").to_string(), &colors))
-                    .child(row_description(
-                        rust_i18n::t!("app.settings.appearance.reduce_motion_description").to_string(),
-                        &colors,
-                    )),
-            )
-            .child(
+            .child(settings_row(
+                rust_i18n::t!("app.settings.appearance.reduce_motion").to_string(),
+                rust_i18n::t!("app.settings.appearance.reduce_motion_description").to_string(),
                 div()
                     .flex()
                     .gap_1()
@@ -402,7 +387,8 @@ impl DesktopView {
                             .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
                             .on_click(cx.listener(move |view, _, _, cx| view.set_reduced_motion(preference, cx)))
                     })),
-            )
+                &colors,
+            ))
             .into_any_element()
     }
 
@@ -426,76 +412,62 @@ impl DesktopView {
                 preferences::MAX_UI_FONT_SIZE,
             )
         };
-        div()
-            .w_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .py_1()
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(row_title(label.clone(), &cx.theme().colors))
-                    .child(row_description(description, &cx.theme().colors)),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .children([-1i16, 1].into_iter().enumerate().map(|(index, delta)| {
-                        desktop_button(format!("font-{key}-{index}"))
-                            .label(if delta < 0 { "−" } else { "+" })
-                            .accessibility_label(format!(
-                                "{} {label}",
-                                if delta < 0 {
-                                    rust_i18n::t!("app.appearance.decrease")
-                                } else {
-                                    rust_i18n::t!("app.appearance.increase")
-                                }
-                            ))
-                            .ghost()
-                            .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                let current = if code {
-                                    view.preferences.typography_for(view.theme_mode).code_font_size
-                                } else {
-                                    view.preferences.typography_for(view.theme_mode).ui_font_size
-                                };
-                                let next = if delta < 0 {
-                                    current.saturating_sub(1)
-                                } else {
-                                    current.saturating_add(1)
-                                }
-                                .clamp(minimum, maximum);
-                                if code {
-                                    view.preferences.set_code_font_size(view.theme_mode, next);
-                                } else {
-                                    view.preferences.set_ui_font_size(view.theme_mode, next);
-                                }
-                                view.apply_typography(cx);
-                                view.save_preferences();
-                            }))
-                    }))
-                    .child(
-                        div()
-                            .id(format!("font-{key}-value"))
-                            .role(gpui_kit::Role::Label)
-                            .aria_label(
-                                rust_i18n::t!("app.appearance.size_pixels", label = label.as_str(), size = size)
-                                    .to_string(),
-                            )
-                            .test_support()
-                            .text_sm()
-                            .child(format!("{size} px")),
-                    ),
-            )
-            .into_any_element()
+        settings_row(
+            label.clone(),
+            description,
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .children([-1i16, 1].into_iter().enumerate().map(|(index, delta)| {
+                    desktop_button(format!("font-{key}-{index}"))
+                        .label(if delta < 0 { "−" } else { "+" })
+                        .accessibility_label(format!(
+                            "{} {label}",
+                            if delta < 0 {
+                                rust_i18n::t!("app.appearance.decrease")
+                            } else {
+                                rust_i18n::t!("app.appearance.increase")
+                            }
+                        ))
+                        .ghost()
+                        .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            let current = if code {
+                                view.preferences.typography_for(view.theme_mode).code_font_size
+                            } else {
+                                view.preferences.typography_for(view.theme_mode).ui_font_size
+                            };
+                            let next = if delta < 0 {
+                                current.saturating_sub(1)
+                            } else {
+                                current.saturating_add(1)
+                            }
+                            .clamp(minimum, maximum);
+                            if code {
+                                view.preferences.set_code_font_size(view.theme_mode, next);
+                            } else {
+                                view.preferences.set_ui_font_size(view.theme_mode, next);
+                            }
+                            view.apply_typography(cx);
+                            view.save_preferences();
+                        }))
+                }))
+                .child(
+                    div()
+                        .id(format!("font-{key}-value"))
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(
+                            rust_i18n::t!("app.appearance.size_pixels", label = label.as_str(), size = size)
+                                .to_string(),
+                        )
+                        .test_support()
+                        .text_sm()
+                        .child(format!("{size} px")),
+                ),
+            &cx.theme().colors,
+        )
+        .into_any_element()
     }
 
     /// One theme entry in the settings picker: a color preview chip that

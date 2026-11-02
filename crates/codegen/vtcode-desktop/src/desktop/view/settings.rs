@@ -266,11 +266,9 @@ impl DesktopView {
                 desktop_button(format!("settings-nav-{tab:?}").to_lowercase())
                     .accessibility_label(tab.label())
                     .child(div().flex_1().min_w_0().truncate().child(tab.label()))
-                    .toggled(active)
-                    .ghost()
+                    .desktop_selected(active, &colors)
                     .w_full()
                     .justify_start()
-                    .when(active, |button| button.bg(colors.popover).text_color(colors.foreground))
                     .on_click(cx.listener(move |view, _, window, cx| view.select_settings_page(index, window, cx)))
                     .into_any_element(),
             );
@@ -280,11 +278,9 @@ impl DesktopView {
         let config_entry = desktop_button("settings-nav-configuration")
             .accessibility_label(config_label.clone())
             .child(div().flex_1().min_w_0().truncate().child(config_label))
-            .toggled(config_active)
-            .ghost()
+            .desktop_selected(config_active, &colors)
             .w_full()
             .justify_start()
-            .when(config_active, |button| button.bg(colors.popover).text_color(colors.foreground))
             .on_click(cx.listener(|view, _, window, cx| {
                 view.select_settings_page(SettingsTab::CONFIG_INDEX, window, cx);
             }))
