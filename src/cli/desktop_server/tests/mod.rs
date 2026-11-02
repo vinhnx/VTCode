@@ -51,6 +51,21 @@ fn test_startup_context(workspace: &Path) -> StartupContext {
     }
 }
 
+/// Hermetic config workspace: a temp dir containing a `vtcode.toml` so
+/// `ConfigManager::save_config` targets the workspace file. Without a
+/// workspace file `config_path` falls back to the real user config and saves
+/// stomp it (cross-test flakes plus user-config corruption). Same precedent
+/// as the `theme_preferences` writer test.
+pub(super) fn hermetic_workspace() -> tempfile::TempDir {
+    let workspace = tempfile::tempdir().expect("workspace");
+    std::fs::write(
+        workspace.path().join("vtcode.toml"),
+        "# Hermetic desktop-server test workspace; see hermetic_workspace.\n",
+    )
+    .expect("workspace config");
+    workspace
+}
+
 fn test_service_context(
     startup: StartupContext,
     workspace: PathBuf,
@@ -65,6 +80,35 @@ fn test_service_context(
         webmcp: Mutex::new(None),
     };
     (context, receiver)
+}
+
+/// Isolated session-store scope: `VT_SESSION_DIR` rooted at a temp dir.
+/// Restores the environment on drop. Tests using this must be `#[serial]`.
+struct IsolatedSessionStore {
+    _temp: tempfile::TempDir,
+    _env: vtcode_commons::env_lock::EnvGuard,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl IsolatedSessionStore {
+    fn new() -> Self {
+        let temp = tempfile::tempdir().expect("sessions dir");
+        let env = vtcode_commons::env_lock::lock();
+        let previous = std::env::var_os(vtcode_core::utils::session_archive::SESSION_DIR_ENV);
+        env.set_var(vtcode_core::utils::session_archive::SESSION_DIR_ENV, temp.path());
+        Self { _temp: temp, _env: env, previous }
+    }
+
+    fn path(&self) -> &Path {
+        self._temp.path()
+    }
+}
+
+impl Drop for IsolatedSessionStore {
+    fn drop(&mut self) {
+        self._env
+            .restore_var(vtcode_core::utils::session_archive::SESSION_DIR_ENV, self.previous.clone());
+    }
 }
 
 fn test_git(workspace: &Path, args: &[&str]) {
@@ -140,6 +184,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
 }
 
 mod config_auth;
+mod config_restart;
 mod model_review;
 mod secret_store;
 mod session_history;

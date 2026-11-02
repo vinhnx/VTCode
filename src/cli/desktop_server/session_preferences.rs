@@ -1,7 +1,9 @@
-//! Persist desktop mode and fast-mode changes through the CLI's layered config writer.
+//! Persist desktop runtime preference changes (mode, fast-mode, reasoning
+//! effort) through the CLI's layered config writer.
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use vtcode_config::types::ReasoningEffortLevel;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::types::AgentConfig;
 
@@ -12,6 +14,7 @@ pub(super) async fn persist(
     agent: AgentConfig,
     fast_mode: Option<bool>,
     mode: Option<String>,
+    effort: Option<ReasoningEffortLevel>,
 ) -> Result<()> {
     tokio::task::spawn_blocking(move || {
         let mut manager = ConfigManager::load_from_workspace(&workspace)
@@ -22,6 +25,9 @@ pub(super) async fn persist(
         }
         if let Some(mode) = mode {
             config.default_primary_agent = mode;
+        }
+        if let Some(effort) = effort {
+            config.agent.reasoning_effort = effort;
         }
         manager
             .save_config(&config)
@@ -37,7 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn desktop_fast_mode_uses_cli_config_writer() {
-        let directory = tempfile::tempdir().expect("temporary workspace");
+        let directory = super::super::tests::hermetic_workspace();
         let mut agent = AgentConfig {
             model: "gpt-6.1-sol".into(),
             api_key: "test-key".into(),
@@ -47,7 +53,7 @@ mod tests {
             verbose: false,
             quiet: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.into(),
-            reasoning_effort: vtcode_config::types::ReasoningEffortLevel::default(),
+            reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: vtcode_core::config::types::UiSurfacePreference::default(),
             prompt_cache: vtcode_core::config::core::PromptCachingConfig::default(),
             model_source: vtcode_core::config::types::ModelSelectionSource::WorkspaceConfig,
@@ -61,22 +67,33 @@ mod tests {
             openai_chatgpt_auth: None,
         };
 
-        persist(directory.path().to_path_buf(), agent.clone(), Some(true), Some("duck".into()))
+        persist(directory.path().to_path_buf(), agent.clone(), Some(true), Some("duck".into()), None)
             .await
             .expect("save eligible CLI fast-mode preference");
 
         let manager = ConfigManager::load_from_workspace(directory.path()).expect("load saved CLI config");
         assert_eq!(manager.config().provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Ultrafast));
         assert_eq!(manager.config().default_primary_agent, "duck");
-        persist(directory.path().to_path_buf(), agent.clone(), Some(false), Some("build".into()))
-            .await
-            .expect("disable fast processing");
+        persist(
+            directory.path().to_path_buf(),
+            agent.clone(),
+            Some(false),
+            Some("build".into()),
+            Some(ReasoningEffortLevel::High),
+        )
+        .await
+        .expect("disable fast processing");
         let manager = ConfigManager::load_from_workspace(directory.path()).expect("reload saved CLI config");
         assert_eq!(manager.config().provider.openai.service_tier, None);
         assert_eq!(manager.config().default_primary_agent, "build");
+        assert_eq!(manager.config().agent.reasoning_effort, ReasoningEffortLevel::High);
 
         agent.model = "gpt-5.6-sol".into();
-        assert!(persist(directory.path().to_path_buf(), agent, Some(true), None).await.is_err());
+        assert!(
+            persist(directory.path().to_path_buf(), agent, Some(true), None, None)
+                .await
+                .is_err()
+        );
         let manager = ConfigManager::load_from_workspace(directory.path()).expect("reload after rejected route");
         assert_eq!(manager.config().provider.openai.service_tier, None);
     }

@@ -185,6 +185,49 @@ pub(super) async fn shutdown_current_session(context: &ServiceContext, cancel_ac
     Ok(())
 }
 
+/// Restart the selected session's runtime under the same session id after an
+/// idle configuration change, preserving the thread instead of discarding it.
+///
+/// Loads resume data before shutdown (the archive is current while idle, and a
+/// load failure here leaves the live session untouched), shuts the runtime
+/// down, applies `apply` to the shared state, then starts a fresh runtime
+/// under the same id so the new configuration takes effect. Queued prompts and
+/// restored-output spools are carried across the restart. With no session
+/// selected, applies `apply` and starts nothing.
+///
+/// Requires an idle session: no active turn and no pending interactions. The
+/// `config/*` transition guard enforces this before dispatch.
+pub(super) async fn restart_session_preserving_thread(
+    context: &ServiceContext,
+    apply: impl FnOnce(&mut ServerState),
+) -> Result<()> {
+    let session_id = context.state.lock().await.session_id.clone();
+    let Some(session_id) = session_id else {
+        let mut state = context.state.lock().await;
+        apply(&mut state);
+        return Ok(());
+    };
+    let resume = load_resume_session(&session_id, ArchivedSessionIntent::ResumeInPlace).await?;
+    let (queue, queue_dropped_total, restored_output_spools) = {
+        let mut state = context.state.lock().await;
+        (
+            std::mem::take(&mut state.queue),
+            std::mem::take(&mut state.queue_dropped_total),
+            std::mem::take(&mut state.restored_output_spools),
+        )
+    };
+    shutdown_current_session(context, false).await?;
+    {
+        let mut state = context.state.lock().await;
+        apply(&mut state);
+        state.queue = queue;
+        state.queue_dropped_total = queue_dropped_total;
+        state.restored_output_spools = restored_output_spools;
+    }
+    start_session(context, session_id, resume).await?;
+    Ok(())
+}
+
 async fn wait_for_active_turn_to_finish(context: &ServiceContext) {
     loop {
         let notified = context.turn_finished.notified();

@@ -51,7 +51,8 @@ mod catalog;
 mod dispatch;
 use dispatch::{
     dispatch_interaction_response, ensure_no_active_turn, handle_request, parse_params, protocol_interaction_kind,
-    resolve_review_scope, send_notification, session_summary, shutdown_current_session, signal_runloop_stop,
+    resolve_review_scope, restart_session_preserving_thread, send_notification, session_summary,
+    shutdown_current_session, signal_runloop_stop,
 };
 mod pump;
 #[cfg(test)]
@@ -384,9 +385,9 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                 bail!("Resolve the pending CLI interaction before changing configuration");
             }
             let result = config_settings::write(context.workspace.clone(), params).await?;
-            shutdown_current_session(context, false).await?;
             stop_webmcp_bridge(context).await;
-            context.state.lock().await.session_id = None;
+            // The write targets disk; keep the thread across the restart.
+            restart_session_preserving_thread(context, |_| {}).await?;
             Ok((serde_json::to_value(result)?, false))
         }
         method::CONFIG_OPEN_FILE => {
@@ -428,7 +429,6 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             {
                 bail!("unknown provider/model selection");
             }
-            shutdown_current_session(context, false).await?;
             // Re-resolve credentials for the newly selected provider so later
             // turns authenticate as that provider. A failed resolution keeps
             // the selection but reports `authenticated: false`; the desktop
@@ -442,13 +442,12 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             };
             let override_auth =
                 catalog::resolve_override_auth(context, &params.provider, &params.model, &api_key_env).await;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = None;
+            restart_session_preserving_thread(context, |state| {
                 state.model_override = Some(params);
                 state.model_override_auth = Some(override_auth);
                 state.session_options.reasoning_effort = None;
-            }
+            })
+            .await?;
             let agent = active_agent_config(context).await;
             let snapshot = configuration_snapshot(context, &agent).await?;
             Ok((serde_json::to_value(snapshot)?, false))
@@ -478,19 +477,22 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                 crate::agent::runloop::unified::fast_mode::supports_fast_mode(&agent, &context.startup.config);
             let modes = session_options::discover_modes(context.workspace.clone()).await?;
             session_options::validate(&params, &agent.provider, &agent.model, speed_supported, &modes)?;
-            if params.fast_mode.is_some() || params.mode.is_some() {
+            if params.fast_mode.is_some() || params.mode.is_some() || params.reasoning_effort.is_some() {
+                // Best-effort disk persistence: model-specific effort names
+                // outside the CLI enum (e.g. "max") stay live-session-only.
                 session_preferences::persist(
                     context.workspace.clone(),
                     agent.clone(),
                     params.fast_mode,
                     params.mode.clone(),
+                    params
+                        .reasoning_effort
+                        .as_deref()
+                        .and_then(vtcode_config::types::ReasoningEffortLevel::parse),
                 )
                 .await?;
             }
-            shutdown_current_session(context, false).await?;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = None;
+            restart_session_preserving_thread(context, |state| {
                 if let Some(enabled) = params.fast_mode {
                     state.fast_mode_overrides.insert(agent.provider.to_ascii_lowercase(), enabled);
                 }
@@ -510,7 +512,8 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                     state.permission_before_full_access = None;
                 }
                 session_options::merge(&mut state.session_options, params);
-            }
+            })
+            .await?;
             let agent = active_agent_config(context).await;
             Ok((serde_json::to_value(configuration_snapshot(context, &agent).await?)?, false))
         }
@@ -518,12 +521,9 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             let params: protocol::ThemePreferenceSelectParams = parse_params(&request.params)?;
             ensure_no_active_turn(context).await?;
             let theme = theme_preferences::persist(context.workspace.clone(), params.theme).await?;
-            shutdown_current_session(context, false).await?;
-            {
-                let mut state = context.state.lock().await;
-                state.session_id = None;
-                state.theme_override = Some(theme.clone());
-            }
+            // A theme change carries no runtime state: record the override and
+            // leave the live session untouched instead of restarting it.
+            context.state.lock().await.theme_override = Some(theme.clone());
             let agent = active_agent_config(context).await;
             let mut snapshot = configuration_snapshot(context, &agent).await?;
             if let Some(shared) = snapshot.shared_ui.as_mut() {
