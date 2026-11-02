@@ -117,7 +117,7 @@ steps.
 Details (click or F8 to expand)
 ```
 
-when the thread message runloop is running, clicking on this doesn't do anything. may need to handle it differently in the UI. for the context for the agent, it should still show relevant info.
+when the thread message runloop is running, clicking on this doesn't do anything. may need to handle it differently in the UI for both clid and desktop. for the context for the agent, it should still show relevant info.
 
 ---
 
