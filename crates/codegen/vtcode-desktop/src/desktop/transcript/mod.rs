@@ -880,7 +880,15 @@ impl Transcript {
     }
 
     pub fn remeasure(&mut self) {
-        self.layout_changes.push(TranscriptLayoutChange::Remeasure);
+        // Consecutive full remeasures are redundant by construction: nothing
+        // changed between them, so measuring twice yields the same layout.
+        // Theme browsing, contrast drags, and font stepping enqueue bursts
+        // while the transcript is unmounted (routes), and the consumer
+        // applies every entry; collapsing the burst here keeps one probe per
+        // drain instead of one per click.
+        if !matches!(self.layout_changes.last(), Some(TranscriptLayoutChange::Remeasure)) {
+            self.layout_changes.push(TranscriptLayoutChange::Remeasure);
+        }
     }
 }
 

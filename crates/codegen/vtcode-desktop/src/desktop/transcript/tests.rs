@@ -493,3 +493,32 @@ fn append_text_sanitizes_markup_across_delta_boundaries() {
     assert_eq!(row.markdown.as_str(), "z");
     assert_eq!(row.accessibility_text.as_str(), "z");
 }
+
+#[test]
+fn consecutive_full_remeasures_collapse_to_one_probe() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "assistant", "A **stable** response."));
+    let _initial_layout = transcript.take_layout_changes();
+
+    // Theme browsing while the transcript is unmounted: twenty clicks
+    // enqueue twenty bursts, but the drain must carry one full probe so
+    // the consumer remeasures rows once instead of once per click.
+    for _ in 0..20 {
+        transcript.remeasure();
+    }
+    assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::Remeasure]);
+
+    // Interleaved work breaks the run: a row pushed between two probes
+    // keeps both probes, since the second measures newer state.
+    transcript.remeasure();
+    transcript.push(item(2, "assistant", "Another response."));
+    transcript.remeasure();
+    assert_eq!(
+        transcript.take_layout_changes(),
+        vec![
+            super::TranscriptLayoutChange::Remeasure,
+            super::TranscriptLayoutChange::Splice { range: 1..1, count: 1 },
+            super::TranscriptLayoutChange::Remeasure,
+        ]
+    );
+}
