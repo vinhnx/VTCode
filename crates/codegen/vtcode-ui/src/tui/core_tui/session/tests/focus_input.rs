@@ -43,7 +43,7 @@ fn focus_input_cancels_list_modal_with_cancel_event() {
     show_list_modal(&mut session, false);
     assert!(session.has_active_overlay());
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(!session.has_active_overlay(), "modal should close");
     assert!(
@@ -65,7 +65,7 @@ fn focus_input_closes_search_modal_in_one_press() {
         .expect("search enabled")
         .query = "al".to_string();
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(!session.has_active_overlay(), "one press lands in input, not just clear search");
     assert!(matches!(event, Some(InlineEvent::Overlay(OverlayEvent::Cancelled))), "got {event:?}");
@@ -78,7 +78,7 @@ fn focus_input_exits_reverse_search_and_restores_draft() {
     session.reverse_search_state.start_search(&session.input_manager, &history);
     assert!(session.reverse_search_state.active);
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(event.is_none());
     assert!(!session.reverse_search_state.active);
@@ -98,7 +98,7 @@ fn focus_input_cancels_text_only_modal_with_cancel_event() {
     });
     assert!(session.has_active_overlay());
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(!session.has_active_overlay(), "modal should close");
     assert!(
@@ -125,7 +125,7 @@ fn focus_input_clears_secure_scratch_like_escape() {
     });
     assert!(session.has_active_overlay());
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(event.is_none(), "secure cancel is silent, got {event:?}");
     assert!(!session.has_active_overlay(), "secure prompt closed");
@@ -146,7 +146,7 @@ fn focus_input_cancels_plain_wizard_with_cancel_event() {
     });
     assert!(session.wizard_overlay().is_some());
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(session.wizard_overlay().is_none(), "wizard should close");
     assert!(
@@ -179,7 +179,7 @@ fn focus_input_cancels_worst_case_wizard_in_one_press() {
     wizard.steps[step].notes_active = true;
     wizard.steps[step].notes = "note".to_string();
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(session.wizard_overlay().is_none(), "wizard should close in one press");
     assert!(
@@ -192,7 +192,7 @@ fn focus_input_cancels_worst_case_wizard_in_one_press() {
 fn focus_input_is_noop_at_input() {
     let mut session = session_with_input("hello", 2);
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::FocusInput);
+    let event = action::dispatch_rebindable_action(&mut session, Action::FocusInput);
 
     assert!(event.is_none());
     assert_eq!(session.input_manager.content(), "hello");

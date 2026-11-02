@@ -142,7 +142,7 @@ fn jump_dispatch_falls_back_to_bottom_when_scrolled_without_target() {
     // Simulate fresh tracking (e.g. after clear + rescroll with no changes).
     session.last_change_line_idx = None;
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
+    let event = action::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
     assert!(matches!(event, Some(InlineEvent::JumpToLastChange)));
     assert_eq!(session.scroll_offset(), 0);
 }
@@ -154,7 +154,7 @@ fn jump_dispatch_falls_back_to_cursor_end_when_at_bottom_without_target() {
     session.set_cursor(0);
     session.last_change_line_idx = None;
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
+    let event = action::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
     assert!(event.is_none());
     assert_eq!(session.input_manager.cursor(), 5, "cursor must move to buffer end");
 }
@@ -170,7 +170,7 @@ fn jump_dispatch_at_bottom_with_tracked_change_preserves_cursor_end() {
     assert!(session.last_change_line_idx.is_some());
     assert!(!session.should_show_jump_to_last_change());
 
-    let event = events::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
+    let event = action::dispatch_rebindable_action(&mut session, Action::JumpToLastChange);
     assert!(event.is_none());
     assert_eq!(session.input_manager.cursor(), 5, "cursor must move to buffer end");
 }

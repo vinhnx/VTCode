@@ -2,6 +2,10 @@ use hashbrown::{HashMap, HashSet};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
 
+mod dispatch;
+
+pub(crate) use dispatch::dispatch_rebindable_action;
+
 /// Rebindable user-facing actions.
 ///
 /// Each variant corresponds to a command-level action that a user may want to
@@ -606,7 +610,7 @@ impl super::Session {
     }
 
     pub(crate) fn dispatch_rebindable_action(&mut self, action: Action) -> Option<super::super::types::InlineEvent> {
-        super::events::dispatch_rebindable_action(self, action)
+        dispatch_rebindable_action(self, action)
     }
 
     pub(crate) fn primary_binding_label(&self, action: Action) -> Option<&str> {
