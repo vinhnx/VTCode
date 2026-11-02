@@ -59,6 +59,53 @@ pub(super) fn sanitize_relative_path(path: &Path) -> Option<PathBuf> {
     Some(normalized)
 }
 
+/// One workspace path a checkpoint could not snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SnapshotSkippedPath {
+    /// Workspace-relative path with forward slashes (matches [`FileSnapshot::path`]).
+    pub path: String,
+    /// Human reason phrase; free text so old readers never choke on new reasons.
+    pub reason: String,
+}
+
+/// Paths a checkpoint left out. The turn proceeds anyway; rewind surfaces
+/// this so a restore never silently claims completeness it does not have.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SnapshotSkippedPaths {
+    /// Total dropped paths; `sample` is bounded by filesnap's per-turn report.
+    #[serde(default)]
+    pub total: usize,
+    /// Up to a few dropped paths with reasons (bounded sample, not exhaustive).
+    #[serde(default)]
+    pub sample: Vec<SnapshotSkippedPath>,
+}
+
+impl SnapshotSkippedPaths {
+    pub fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+
+    /// Short data summary every warning site shares:
+    /// `2 paths (a.mov (larger than …), and 1 more)`.
+    pub fn summary(&self) -> String {
+        let noun = if self.total == 1 { "path" } else { "paths" };
+        if self.sample.is_empty() {
+            return format!("{} {noun}", self.total);
+        }
+        let sample = self
+            .sample
+            .iter()
+            .map(|skipped| format!("{} ({})", skipped.path, skipped.reason))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if self.sample.len() < self.total {
+            format!("{} {noun} ({sample}, and {} more)", self.total, self.total - self.sample.len())
+        } else {
+            format!("{} {noun} ({sample})", self.total)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SnapshotMetadata {
     pub id: String,
@@ -81,6 +128,10 @@ pub struct SnapshotMetadata {
     pub session_turn_number: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn_diagnostics: Option<SnapshotTurnDiagnostics>,
+    /// Paths the capture left out; the turn proceeded anyway. `None` (and
+    /// absent in old records) means a complete capture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skipped_paths: Option<SnapshotSkippedPaths>,
 }
 
 impl SnapshotMetadata {

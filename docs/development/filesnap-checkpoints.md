@@ -29,8 +29,17 @@ cannot safely infer which files to delete; use a new prompt checkpoint to valida
 The interactive runtime captures the conversation prefix before the user prompt and records file pre-images after tool
 argument normalization. If checkpointing itself fails, the prompt is not sent: the message is removed from history and
 restored into the input field so nothing is lost. Native list modals show only the current branch. Consumed or discarded
-redo records are retired and their storage reclaimed instead of leaking. A workspace lease excludes concurrent
-turns/restores. Ignore rules are pinned across each combined restoration.
+redo records are retired and their storage reclaimed instead of leaking. A per-session lease excludes concurrent
+turns/restores in the same session; other sessions in the workspace proceed concurrently. Ignore rules are pinned
+across each combined restoration.
+
+A turn-start checkpoint proceeds even when the workspace scan must skip a path it cannot snapshot: an untracked file
+larger than the 16 MiB snapshot size limit, an unreadable file, or a symlink/socket/device. The exclusions (exact
+count plus a sample of up to three paths with reasons) are recorded on the snapshot, and a warning names them
+because /rewind of that turn may be incomplete. List unrelated paths in `.filesnapignore` (gitignore syntax,
+workspace root) to keep captures clean. Restoring such a checkpoint warns again and the rewind picker marks its
+title with the skipped count; redo needs no warning because its rescue capture fails closed. The selected-file
+checkpoints behind reverts and the rescue capture itself still fail closed, naming the files they could not save.
 
 Legacy CLI revert APIs retain their selected-file checkpoint semantics. New interactive checkpoints scan filesnap’s
 three partitions. Existing V0/V1/V2 inline snapshots and V3 engine references remain readable through the legacy API.

@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub use types::{
     ActionSnapshot, DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS, FileEncoding,
     FileSnapshot, REWIND_ACTIVE_KEEP, RevertScope, RollbackResult, SnapshotConfig, SnapshotMetadata,
-    SnapshotTurnContext, SnapshotTurnDiagnostics, StoredSnapshot,
+    SnapshotSkippedPath, SnapshotSkippedPaths, SnapshotTurnContext, SnapshotTurnDiagnostics, StoredSnapshot,
 };
 use types::{
     MAX_DESCRIPTION_LEN, NEXT_ACTION_NUMBER, SNAPSHOT_SCHEMA_VERSION, collect_turn_numbers, normalized_prompt_text,
@@ -417,7 +417,10 @@ impl SnapshotManager {
             let store = filesnap::WorkspaceStore::open(&storage, &workspace)?;
             let turn = format!("vt-{}", uuid::Uuid::new_v4());
             let checkpoint = store.checkpoint(&turn, &turn, absolute_paths.iter().cloned())?;
-            anyhow::ensure!(checkpoint.stats.dropped == 0, "Checkpoint could not capture every selected file");
+            if checkpoint.stats.dropped != 0 {
+                let skipped = native::skipped_paths_record(&workspace, &checkpoint);
+                anyhow::bail!("Checkpoint could not capture every selected file: {}", skipped.summary());
+            }
             Ok(paths
                 .into_iter()
                 .zip(absolute_paths)
@@ -455,6 +458,7 @@ impl SnapshotManager {
             runtime_turn_id: turn_context.runtime_turn_id,
             session_turn_number: turn_context.session_turn_number,
             turn_diagnostics: turn_context.turn_diagnostics,
+            skipped_paths: None,
         };
 
         let stored = StoredSnapshot {

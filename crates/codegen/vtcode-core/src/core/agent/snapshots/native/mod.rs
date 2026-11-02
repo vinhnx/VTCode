@@ -25,6 +25,15 @@ fn active_map() -> &'static Mutex<HashMap<String, Arc<Mutex<Active>>>> {
 pub struct PromptCheckpointLease {
     key: String,
     _lock: fs::File,
+    skipped_paths: Option<SnapshotSkippedPaths>,
+}
+
+impl PromptCheckpointLease {
+    /// Paths the turn-start capture left out, if any, so the caller can warn
+    /// that this turn's rewind may be incomplete.
+    pub fn skipped_paths(&self) -> Option<&SnapshotSkippedPaths> {
+        self.skipped_paths.as_ref()
+    }
 }
 impl Drop for PromptCheckpointLease {
     fn drop(&mut self) {
@@ -62,6 +71,41 @@ fn atomic_json(path: &Path, value: &impl Serialize) -> Result<()> {
     file.sync_all()?;
     fs::rename(temp, path)?;
     Ok(())
+}
+
+/// One filesnap drop reason as a short human phrase.
+fn drop_reason_phrase(reason: filesnap::DropReason) -> String {
+    match reason {
+        filesnap::DropReason::OverSizeLimit => {
+            let mib = filesnap::ScanLimits::default().max_file_bytes / (1024 * 1024);
+            format!("larger than the {mib} MiB snapshot size limit")
+        }
+        filesnap::DropReason::Unreadable => "unreadable".to_string(),
+        filesnap::DropReason::NotARegularFile => "not a regular file".to_string(),
+    }
+}
+
+/// Record what a capture left out: the exact dropped count plus filesnap's
+/// bounded sample, relativized for display. Stored on the snapshot and
+/// carried by the lease so both the turn-start warning and a later rewind
+/// can stay honest about coverage.
+pub(super) fn skipped_paths_record(workspace: &Path, checkpoint: &filesnap::Checkpoint) -> SnapshotSkippedPaths {
+    SnapshotSkippedPaths {
+        total: checkpoint.stats.dropped,
+        sample: checkpoint
+            .stats
+            .sample
+            .iter()
+            .map(|(path, reason)| SnapshotSkippedPath {
+                path: path
+                    .strip_prefix(workspace)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                reason: drop_reason_phrase(*reason),
+            })
+            .collect(),
+    }
 }
 
 fn file_records(manifest: &filesnap::Manifest, workspace: &Path, engine: &str) -> Result<Vec<FileSnapshot>> {
@@ -544,7 +588,7 @@ impl SnapshotManager {
             engine: engine.clone(),
             watch: watch.clone(),
         };
-        let files = {
+        let (files, skipped_paths) = {
             let store = filesnap::WorkspaceStore::open(&storage, &workspace)?;
             store.note_turn(&watch, &engine)?;
             let watched: Vec<_> = store
@@ -553,12 +597,15 @@ impl SnapshotManager {
                 .collect();
             store.declare_paths(&engine, &engine, &watched)?;
             let checkpoint = filesnap::capture_turn(&store, &engine, &engine, &filesnap::TurnScope::at(&workspace))?;
-            anyhow::ensure!(checkpoint.stats.dropped == 0, "Checkpoint skipped paths; cannot safely start turn");
+            // Skipped paths degrade the checkpoint instead of blocking the
+            // turn: the exclusions ride the snapshot record and the lease so
+            // the turn-start warning and a later rewind stay honest.
+            let skipped_paths = (checkpoint.stats.dropped != 0).then(|| skipped_paths_record(&workspace, &checkpoint));
             let files = file_records(&checkpoint.manifest, &workspace, &engine)?;
             for file in &files {
                 SnapshotManager::checked_file_path(&workspace, &storage, Path::new(&file.path))?;
             }
-            files
+            (files, skipped_paths)
         };
         let metadata = SnapshotMetadata {
             id: format!("turn_{turn}"),
@@ -574,6 +621,7 @@ impl SnapshotManager {
             runtime_turn_id: None,
             session_turn_number: Some(turn),
             turn_diagnostics: None,
+            skipped_paths: skipped_paths.clone(),
         };
         atomic_json(
             &active.record,
@@ -601,7 +649,7 @@ impl SnapshotManager {
             .lock()
             .map_err(|error| anyhow::anyhow!("Checkpoint lock poisoned: {error}"))?
             .insert(session.into(), Arc::new(Mutex::new(active)));
-        Ok(PromptCheckpointLease { key: session.into(), _lock: lock })
+        Ok(PromptCheckpointLease { key: session.into(), _lock: lock, skipped_paths })
     }
     /// Enumerate only checkpoints on this session's current conversation branch.
     pub async fn rewind_points(&self, session: &str) -> Result<Vec<SnapshotMetadata>> {
@@ -676,6 +724,10 @@ impl SnapshotManager {
         rescue.metadata.prompt_text = None;
         rescue.metadata.prompt_message_index = None;
         rescue.metadata.message_count = conversation.len();
+        // The rescue capture below fails closed on drops, so its coverage is
+        // complete by construction: the destination's exclusions must not ride
+        // along and cry wolf on redo.
+        rescue.metadata.skipped_paths = None;
         let paths: BTreeSet<String> = targets
             .iter()
             .flat_map(|target| target.files.iter().map(|f| f.path.clone()))
@@ -690,7 +742,10 @@ impl SnapshotManager {
             let engine = format!("vt-{}", uuid::Uuid::new_v4());
             let store = filesnap::WorkspaceStore::open(&storage, &workspace)?;
             let checkpoint = store.checkpoint(&engine, &engine, paths)?;
-            anyhow::ensure!(checkpoint.stats.dropped == 0, "Could not save recovery files; rewind cancelled");
+            if checkpoint.stats.dropped != 0 {
+                let skipped = skipped_paths_record(&workspace, &checkpoint);
+                anyhow::bail!("Could not save recovery files ({}); rewind cancelled", skipped.summary());
+            }
             file_records(&checkpoint.manifest, &workspace, &engine)
         })
         .await??;

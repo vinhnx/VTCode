@@ -1,6 +1,10 @@
-use super::{ExecutionSummaryStatus, RefusedTurnRollback, checkpoint_unavailable_notice, classify_execution_summary};
+use super::{
+    ExecutionSummaryStatus, RefusedTurnRollback, checkpoint_unavailable_notice, classify_execution_summary,
+    skipped_paths_turn_warning,
+};
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use serde_json::json;
+use vtcode_core::core::agent::snapshots::{SnapshotSkippedPath, SnapshotSkippedPaths};
 
 #[test]
 fn checkpoint_unavailable_notice_names_safety_lock_and_options_for_busy_session() {
@@ -19,8 +23,23 @@ fn checkpoint_unavailable_notice_routes_interrupted_rewind_to_recover() {
 
 #[test]
 fn checkpoint_unavailable_notice_falls_back_to_concise_retry() {
-    let notice = checkpoint_unavailable_notice("Checkpoint skipped paths; cannot safely start turn");
+    let notice = checkpoint_unavailable_notice("checkpoint preparation worker failed");
     assert_eq!(notice, "Prompt kept — checkpoint unavailable. Wait a moment and retry.");
+}
+
+#[test]
+fn skipped_paths_turn_warning_names_exclusions_and_remedy() {
+    let skipped = SnapshotSkippedPaths {
+        total: 1,
+        sample: vec![SnapshotSkippedPath {
+            path: "resources/gif/demo-desktop.mov".to_string(),
+            reason: "larger than the 16 MiB snapshot size limit".to_string(),
+        }],
+    };
+    let warning = skipped_paths_turn_warning(&skipped);
+    assert!(warning.contains("demo-desktop.mov"), "warning must name the skipped path: {warning}");
+    assert!(warning.contains(".filesnapignore"), "warning must name the remedy: {warning}");
+    assert!(warning.contains("may be incomplete"), "warning must stay honest about rewind: {warning}");
 }
 
 #[tokio::test]

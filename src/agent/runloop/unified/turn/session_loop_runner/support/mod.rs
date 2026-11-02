@@ -5,10 +5,12 @@ use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_ov
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::context::last_user_message_index;
 use anyhow::Result;
+use std::borrow::Cow;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::agent::snapshots::SnapshotSkippedPaths;
 use vtcode_core::core::agent::steering::{FollowUpProvenance, QueuedFollowUpIntent};
 use vtcode_core::llm::provider::{AssistantPhase, MessageRole};
 use vtcode_core::tools::registry::ToolRegistry;
@@ -152,18 +154,29 @@ pub(super) fn remove_transient_system_notes(history: &mut Vec<vtcode_core::llm::
 /// User-facing notice when a prompt checkpoint cannot be taken.
 ///
 /// Pure policy: maps the checkpoint error text to a short `Info` notice.
-/// The full error stays in the tracing log; the UI stays concise. The busy
-/// branch fires only when this same session already has a running turn
+/// The busy branch fires only when this same session already has a running turn
 /// (other sessions proceed concurrently), so it points at the duplicate
 /// holder instead of a separate worktree.
-pub(super) fn checkpoint_unavailable_notice(err_text: &str) -> &'static str {
+pub(super) fn checkpoint_unavailable_notice(err_text: &str) -> Cow<'static, str> {
     if err_text.contains("Another turn is using this session") {
-        "Prompt kept — session busy (safety lock prevents checkpoint corruption). If another terminal holds this session, continue there; otherwise wait then retry."
+        Cow::Borrowed(
+            "Prompt kept — session busy (safety lock prevents checkpoint corruption). If another terminal holds this session, continue there; otherwise wait then retry.",
+        )
     } else if err_text.contains("Interrupted rewind") {
-        "Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry."
+        Cow::Borrowed("Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry.")
     } else {
-        "Prompt kept — checkpoint unavailable. Wait a moment and retry."
+        Cow::Borrowed("Prompt kept — checkpoint unavailable. Wait a moment and retry.")
     }
+}
+
+/// Warning when a turn proceeds with a degraded checkpoint: the capture left
+/// paths out, so this turn's rewind may be incomplete. Names the exclusions
+/// and the one-step remedy instead of blocking the turn.
+pub(super) fn skipped_paths_turn_warning(skipped: &SnapshotSkippedPaths) -> String {
+    format!(
+        "Checkpoint skipped {} — this turn's /rewind may be incomplete. List unrelated paths in .filesnapignore.",
+        skipped.summary()
+    )
 }
 
 pub(super) fn build_tracked_file_freshness_note(

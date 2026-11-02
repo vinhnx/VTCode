@@ -3,7 +3,9 @@ use crate::agent::runloop::unified::reasoning::model_supports_reasoning;
 use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
-use vtcode_core::core::agent::snapshots::{CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata};
+use vtcode_core::core::agent::snapshots::{
+    CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata, SnapshotSkippedPaths,
+};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineListSearchConfig, InlineListSelection, RewindAction};
@@ -148,7 +150,7 @@ pub(crate) async fn handle_open_rewind_picker(mut ctx: SlashCommandContext<'_>) 
 }
 
 fn rewind_checkpoint_title(metadata: &SnapshotMetadata) -> String {
-    if metadata.description.trim().is_empty() {
+    let base = if metadata.description.trim().is_empty() {
         metadata
             .prompt_text
             .as_deref()
@@ -158,7 +160,26 @@ fn rewind_checkpoint_title(metadata: &SnapshotMetadata) -> String {
             .unwrap_or_else(|| format!("turn {}", metadata.turn_number))
     } else {
         metadata.description.clone()
+    };
+    match metadata.skipped_paths.as_ref().filter(|skipped| !skipped.is_empty()) {
+        Some(skipped) => format!("{base} ({} skipped)", skipped.total),
+        None => base,
     }
+}
+
+/// Warning when restoring a checkpoint that skipped paths: the capture left
+/// files out, so the restore may be incomplete.
+fn skipped_paths_restore_warning(skipped: &SnapshotSkippedPaths) -> String {
+    format!("This checkpoint skipped {} — the restore may be incomplete.", skipped.summary())
+}
+
+/// Exclusions relevant to this restore: file coverage only matters when the
+/// scope touches code, so conversation-only restores stay silent.
+fn restore_skipped_paths(scope: RevertScope, metadata: &SnapshotMetadata) -> Option<&SnapshotSkippedPaths> {
+    if !scope.includes_code() {
+        return None;
+    }
+    metadata.skipped_paths.as_ref().filter(|skipped| !skipped.is_empty())
 }
 
 fn show_rewind_checkpoint_modal(handle: &InlineHandle, snapshots: &[SnapshotMetadata]) {
@@ -418,6 +439,9 @@ fn render_rewind_restore_success(
     }
 
     renderer.line(MessageStyle::Info, &format!("Successfully rewound to turn {turn} with scope {scope:?}"))?;
+    if let Some(skipped) = restore_skipped_paths(scope, &restored.metadata) {
+        renderer.line(MessageStyle::Warning, &skipped_paths_restore_warning(skipped))?;
+    }
     Ok(())
 }
 
@@ -431,6 +455,8 @@ fn render_redo_restore_success(
     // The redo snapshot reuses the rewind target's metadata, so its turn_number
     // still identifies the earlier checkpoint even though the payload is the
     // pre-rewind state. Report redo without inferring a turn from metadata.
+    // No exclusions warning here: the rescue capture fails closed, so the
+    // redo record's coverage is complete by construction.
     replace_conversation_and_rerender(renderer, conversation_history, &restored, supports_reasoning)?;
 
     renderer.line(
@@ -465,8 +491,13 @@ fn rewind_partial_arg(scope: RevertScope) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_prompt_boundary_in_history, rewind_checkpoint_title, rewind_partial_arg};
-    use vtcode_core::core::agent::snapshots::{RevertScope, SnapshotMetadata};
+    use super::{
+        resolve_prompt_boundary_in_history, restore_skipped_paths, rewind_checkpoint_title, rewind_partial_arg,
+        skipped_paths_restore_warning,
+    };
+    use vtcode_core::core::agent::snapshots::{
+        RevertScope, SnapshotMetadata, SnapshotSkippedPath, SnapshotSkippedPaths,
+    };
 
     fn snapshot_metadata(description: &str, prompt_text: Option<&str>) -> SnapshotMetadata {
         SnapshotMetadata {
@@ -483,6 +514,17 @@ mod tests {
             runtime_turn_id: None,
             session_turn_number: None,
             turn_diagnostics: None,
+            skipped_paths: None,
+        }
+    }
+
+    fn skipped_fixture() -> SnapshotSkippedPaths {
+        SnapshotSkippedPaths {
+            total: 2,
+            sample: vec![SnapshotSkippedPath {
+                path: "demo.mov".to_string(),
+                reason: "larger than the 16 MiB snapshot size limit".to_string(),
+            }],
         }
     }
 
@@ -499,6 +541,31 @@ mod tests {
         assert_eq!(rewind_checkpoint_title(&snapshot_metadata("  ", Some("prompt text"))), "prompt text");
         assert_eq!(rewind_checkpoint_title(&snapshot_metadata("", None)), "turn 2");
         assert_eq!(rewind_checkpoint_title(&snapshot_metadata("", Some("   "))), "turn 2");
+    }
+
+    #[test]
+    fn rewind_checkpoint_title_marks_skipped_paths() {
+        let mut metadata = snapshot_metadata("refactor parser", Some("prompt"));
+        metadata.skipped_paths = Some(skipped_fixture());
+        assert_eq!(rewind_checkpoint_title(&metadata), "refactor parser (2 skipped)");
+    }
+
+    #[test]
+    fn skipped_paths_restore_warning_names_exclusions() {
+        let warning = skipped_paths_restore_warning(&skipped_fixture());
+        assert!(warning.contains("demo.mov"), "warning must name the skipped path: {warning}");
+        assert!(warning.contains("may be incomplete"), "warning must stay honest about rewind: {warning}");
+    }
+
+    #[test]
+    fn restore_skipped_paths_warns_for_code_scopes_only() {
+        let mut degraded = snapshot_metadata("refactor parser", Some("prompt"));
+        degraded.skipped_paths = Some(skipped_fixture());
+        assert!(restore_skipped_paths(RevertScope::Both, &degraded).is_some());
+        assert!(restore_skipped_paths(RevertScope::Code, &degraded).is_some());
+        assert!(restore_skipped_paths(RevertScope::Conversation, &degraded).is_none());
+        let clean = snapshot_metadata("clean", Some("prompt"));
+        assert!(restore_skipped_paths(RevertScope::Both, &clean).is_none());
     }
 
     #[test]

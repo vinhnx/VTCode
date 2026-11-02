@@ -304,6 +304,7 @@ async fn load_snapshot_hydrates_prompt_metadata_for_legacy_files() -> Result<()>
             runtime_turn_id: None,
             session_turn_number: None,
             turn_diagnostics: None,
+            skipped_paths: None,
         },
         conversation: vec![
             SessionMessage::new(crate::llm::provider::MessageRole::User, "Legacy prompt"),
@@ -341,6 +342,7 @@ fn legacy_snapshot_versions_migrate_without_inventing_diagnostics() -> Result<()
             runtime_turn_id: None,
             session_turn_number: None,
             turn_diagnostics: None,
+            skipped_paths: None,
         },
         conversation: Vec::new(),
         files: Vec::new(),
@@ -355,6 +357,33 @@ fn legacy_snapshot_versions_migrate_without_inventing_diagnostics() -> Result<()
         StoredSnapshot { schema_version: Some(SchemaVersion::V1), ..legacy }.migrate(SNAPSHOT_SCHEMA_VERSION)?;
     assert_eq!(migrated_v1.schema_version, Some(SNAPSHOT_SCHEMA_VERSION));
     assert!(migrated_v1.metadata.turn_diagnostics.is_none());
+    Ok(())
+}
+
+#[test]
+fn records_without_skipped_paths_parse_as_complete() -> Result<()> {
+    let raw = serde_json::json!({
+        "metadata": {
+            "id": "turn_1",
+            "turn_number": 1,
+            "created_at": 1,
+            "description": "pre-exclusions",
+            "message_count": 0,
+            "file_count": 0
+        },
+        "conversation": [],
+        "files": [],
+    });
+    let stored: StoredSnapshot = serde_json::from_value(raw)?;
+    assert!(stored.metadata.skipped_paths.is_none());
+    // Clean records serialize exactly as before (no new keys).
+    let value = serde_json::to_value(&stored)?;
+    assert!(
+        !value["metadata"]
+            .as_object()
+            .expect("metadata map")
+            .contains_key("skipped_paths")
+    );
     Ok(())
 }
 
