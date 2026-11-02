@@ -269,3 +269,70 @@ fn transcript_prose_and_code_track_their_own_font_sizes(cx: &mut TestAppContext)
     );
     assert_eq!(control_small.unwrap(), control_large.unwrap(), "pure prose must ignore the code font size");
 }
+
+/// End-to-end through the real settings UI: a stepper click updates the
+/// theme and the composer geometry follows once settings closes.
+#[gpui_kit::test]
+fn composer_follows_settings_stepper_clicks(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.configuration = Some(runtime_options_config());
+    });
+    let before = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(cx.theme().font_size, px(16.));
+            window.find("composer-policy-label").bounds().size.height
+        })
+        .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.within("settings-panel").click("font-ui-1", cx);
+        window.render_frame(cx);
+        assert_eq!(cx.theme().font_size, px(17.));
+        window.within("settings-panel").click("settings-dismiss", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    let after = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("composer-policy-label").bounds().size.height
+        })
+        .unwrap();
+    assert!(
+        after > before,
+        "composer labels must follow settings stepper clicks ({before:?} at 16px vs {after:?} at 17px)"
+    );
+}
+
+/// Production frames draw WITHOUT `refresh()`, so element reuse stays active
+/// (unlike `render_frame`, which forces a full re-render). A typography
+/// change must still sync `rem_size` and move composer geometry on such a
+/// frame — otherwise the setting only works in tests.
+#[gpui_kit::test]
+fn typography_survives_production_frame_reuse(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.configuration = Some(runtime_options_config());
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.rem_size(), px(16.));
+        let before = window.find("composer-policy-label").bounds().size.height;
+        view.update(cx, |view, cx| {
+            view.preferences.ui_font_size = Some(24);
+            view.apply_typography(cx);
+        });
+        window.draw(cx).clear(cx);
+        assert_eq!(cx.theme().font_size, px(24.));
+        assert_eq!(window.rem_size(), px(24.), "rem_size must sync on a reuse-active frame");
+        let after = window.find("composer-policy-label").bounds().size.height;
+        assert!(
+            after > before,
+            "composer labels must follow the font size on a reuse-active frame ({before:?} vs {after:?})"
+        );
+    })
+    .unwrap();
+}
