@@ -8,7 +8,21 @@ terminal presentation output to its protocol stream.
 The [GPUI Kit guide review](desktop-gpui-kit-review.md) records coverage of all 41 main guide topics,
 the applicable ownership/lifecycle improvements, and verification boundaries.
 
-![VT Code Desktop welcome view](../../resources/screenshots/vtcode-desktop.png)
+<!-- markdownlint-disable MD033 -->
+<video src="../../resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
+  poster="../../resources/screenshots/vtcode-desktop-light.png"
+  aria-label="VT Code Desktop app demo">
+  <a href="../../resources/gif/demo-desktop.mov">Open the demo video</a>
+</video>
+<!-- markdownlint-enable MD033 -->
+
+<p>
+  <img src="../../resources/screenshots/vtcode-desktop-light.png" width="49%"
+    alt="VT Code Desktop in light appearance" />
+  <img src="../../resources/screenshots/vtcode-desktop-dark.png" width="49%"
+    alt="VT Code Desktop in dark appearance" />
+</p>
+<p align="center"><sub>Light and dark appearances</sub></p>
 
 ## System requirements
 
@@ -74,8 +88,11 @@ scripts/package-desktop-macos.sh
 
 The optional first argument selects the output `.app` path. The script builds the release GUI and matching service,
 places the service in `Contents/Helpers`, signs both executables before signing the app, and verifies the bundle. The
-default output is `dist/VT Code.app`; the script will not overwrite an existing output. Ad hoc signatures support local
-development only. They do not establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
+default output is `dist/VT Code.app`; the script refuses to overwrite an existing bundle unless `--force` (or
+`VTCODE_PACKAGE_FORCE=1`) is given, in which case the old bundle is replaced only after the new one is signed and
+verified. `--skip-build` reuses the binaries already in the release directory, and `--no-assets` skips the Liquid Glass
+`Assets.car` catalog (the icns fallback still ships). Ad hoc signatures support local development only. They do not
+establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
 Every package writes Gatekeeper first-launch steps next to the bundle (`FIRST-LAUNCH.txt`): right-click the app and
 choose Open, or allow it once in System Settings > Privacy & Security.
 The packaged GUI uses only its bundled `Contents/Helpers/vtcode`; if that helper is missing, it asks you to rebuild or

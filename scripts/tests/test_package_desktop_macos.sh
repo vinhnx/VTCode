@@ -93,3 +93,66 @@ if VTCODE_PACKAGE_TEST_ICON_SOURCE="${TEST_ROOT}/no-such-icon.icns" \
     exit 1
 fi
 printf 'PASS: missing bundle icon artwork fails packaging.\n'
+
+# Re-running against the existing bundle without --force must refuse and hint
+# at the overwrite flag.
+if "${ROOT_DIR}/scripts/package-desktop-macos.sh" "${SUCCESS_APP}" >/dev/null 2>"${TEST_ROOT}/exists.err"; then
+    printf 'FAIL: packaging over an existing bundle without --force must fail.\n' >&2
+    exit 1
+fi
+grep -Fq -- "--force" "${TEST_ROOT}/exists.err"
+printf 'PASS: existing output without --force fails with an overwrite hint.\n'
+
+# A failed --force run must leave the previous bundle untouched: the old app
+# is only removed once the new one is signed and verified.
+printf 'previous bundle marker\n' >"${SUCCESS_APP}/Contents/previous-marker.txt"
+if VTCODE_PACKAGE_TEST_ICON_SOURCE="${TEST_ROOT}/no-such-icon.icns" \
+    "${ROOT_DIR}/scripts/package-desktop-macos.sh" --force "${SUCCESS_APP}" >/dev/null 2>&1; then
+    printf 'FAIL: --force with missing icon artwork must fail packaging.\n' >&2
+    exit 1
+fi
+[[ "$(cat "${SUCCESS_APP}/Contents/previous-marker.txt")" == "previous bundle marker" ]]
+printf 'PASS: failed --force run preserves the previous bundle.\n'
+
+# --force after the positional path (option order must not matter) replaces
+# the bundle.
+"${ROOT_DIR}/scripts/package-desktop-macos.sh" "${SUCCESS_APP}" --force >/dev/null
+[[ "$(cat "${SUCCESS_APP}/Contents/MacOS/vtcode-desktop")" == "custom target desktop binary" ]]
+[[ ! -e "${SUCCESS_APP}/Contents/previous-marker.txt" ]]
+printf 'PASS: --force overwrites the existing bundle.\n'
+
+# --skip-build reuses the release binaries without invoking cargo.
+SKIP_BUILD_APP="${TEST_ROOT}/skip-build/VT Code.app"
+CARGO_LINES_BEFORE="$(wc -l <"${CARGO_LOG}" | tr -d ' ')"
+"${ROOT_DIR}/scripts/package-desktop-macos.sh" --skip-build "${SKIP_BUILD_APP}" >/dev/null
+[[ "$(cat "${SKIP_BUILD_APP}/Contents/Helpers/vtcode")" == "custom target CLI helper" ]]
+CARGO_LINES_AFTER="$(wc -l <"${CARGO_LOG}" | tr -d ' ')"
+[[ "${CARGO_LINES_BEFORE}" == "${CARGO_LINES_AFTER}" ]]
+printf 'PASS: --skip-build reuses release binaries without invoking cargo.\n'
+
+# --skip-build with no binaries to reuse must fail instead of shipping nothing.
+if CARGO_TARGET_DIR="${TEST_ROOT}/empty-target" \
+    "${ROOT_DIR}/scripts/package-desktop-macos.sh" --skip-build "${TEST_ROOT}/empty/VT Code.app" >/dev/null 2>&1; then
+    printf 'FAIL: --skip-build with missing binaries must fail.\n' >&2
+    exit 1
+fi
+printf 'PASS: --skip-build with missing binaries fails.\n'
+
+# --no-assets skips the Liquid Glass catalog on every host (older SDKs skip
+# it anyway; macOS 26+ SDKs would otherwise build it).
+NO_ASSETS_APP="${TEST_ROOT}/no-assets/VT Code.app"
+"${ROOT_DIR}/scripts/package-desktop-macos.sh" --no-assets "${NO_ASSETS_APP}" >/dev/null
+[[ ! -f "${NO_ASSETS_APP}/Contents/Resources/Assets.car" ]]
+cmp -s "${ROOT_DIR}/resources/icons/vtcode-app-dynamic.icns" "${NO_ASSETS_APP}/Contents/Resources/VTCode.icns"
+printf 'PASS: --no-assets ships the icns fallback without Assets.car.\n'
+
+"${ROOT_DIR}/scripts/package-desktop-macos.sh" --help >"${TEST_ROOT}/help.txt"
+grep -Fq -- "Usage:" "${TEST_ROOT}/help.txt"
+grep -Fq -- "--force" "${TEST_ROOT}/help.txt"
+printf 'PASS: --help describes usage and the overwrite flag.\n'
+
+if "${ROOT_DIR}/scripts/package-desktop-macos.sh" --no-such-flag >/dev/null 2>&1; then
+    printf 'FAIL: unknown option must fail.\n' >&2
+    exit 1
+fi
+printf 'PASS: unknown option fails.\n'

@@ -12,7 +12,7 @@
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
 
-> **New: native macOS app:** the full VT Code engine behind a premium desktop interface.
+> **Native macOS app:** the full VT Code engine behind a desktop interface.
 > [Download the latest app](https://github.com/vinhnx/VTCode/releases/latest),
 > [jump to the desktop app](#desktop-app), or read the
 > [desktop workspace guide](./docs/development/desktop-workspace.md).
@@ -21,12 +21,15 @@
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
 
 <p>
-  <a href="#desktop-app">
-    <img src="./resources/screenshots/vtcode-desktop.png" width="100%"
-      alt="VT Code desktop app: native macOS interface backed by the full VT Code engine" />
-  </a>
+  <!-- markdownlint-disable MD033 -->
+  <video src="./resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
+    poster="./resources/screenshots/vtcode-desktop-light.png"
+    aria-label="VT Code Desktop app demo">
+    <a href="./resources/gif/demo-desktop.mov">Open the demo video</a>
+  </video>
+  <!-- markdownlint-enable MD033 -->
 </p>
-<sub><a href="#desktop-app"><strong>VT Code Desktop</strong></a>: click to learn more</sub>
+<sub>VT Code Desktop demo. Open the video directly if playback is unavailable.</sub>
 
 <p>
   <img src="./resources/screenshots/vtcode-cli-tui.gif" width="39%"
@@ -217,22 +220,34 @@ Use `vtcode continue --session-id <id>` to fork an earlier session.
 </div>
 
 The GUI talks to a matching local service binary while the unified runloop still owns providers, tool policy,
-sandboxing, and sessions.
+sandboxing, and sessions. Desktop reuses your CLI configuration, provider credentials, workspace trust, and sandbox
+policy. Configure a provider from Terminal first, for example with `vtcode secret add openai`.
 
-### Download (Apple Silicon, macOS 15+)
+<p>
+  <img src="./resources/screenshots/vtcode-desktop-light.png" width="49%"
+    alt="VT Code Desktop in light appearance" />
+  <img src="./resources/screenshots/vtcode-desktop-dark.png" width="49%"
+    alt="VT Code Desktop in dark appearance" />
+</p>
+<p align="center"><sub>Light and dark appearances</sub></p>
 
-Download `vtcode-desktop-<version>-aarch64-apple-darwin.zip` from the
+### Install (macOS 15+)
+
+On Apple Silicon, download `vtcode-desktop-<version>-aarch64-apple-darwin.zip` from the
 [latest release](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**), unzip, and drag
-**VT Code.app** to `~/Applications`. Verify with the matching `.sha256` sidecar or `checksums.txt`, then open
-it anytime with `vtcode desktop`. To skip the manual steps, run `vtcode desktop --install`, let the installer
-offer the app, or run `vtcode update --with-desktop`. Fresh installs go to `~/Applications`; plain `vtcode update`
-asks between `~/Applications` and `/Applications`.
+**VT Code.app** to `~/Applications`. Verify it with the matching `.sha256` sidecar or `checksums.txt`. Or install
+through the CLI with `vtcode desktop --install` or `vtcode update --with-desktop`; fresh installs use
+`~/Applications`, while plain `vtcode update` asks between `~/Applications` and `/Applications`.
+
+On Intel Macs, build the desktop app from source on macOS 15+; see the build instructions below. Launch an installed
+app with `vtcode desktop`.
 
 > **Note:** Release builds are ad hoc signed unless the release notes say otherwise. Approve the first launch
 > with Right-click > Open, or allow VT Code once in System Settings > Privacy & Security.
 
-On hosts without a published desktop asset, the installer falls back to compiling the app from source
-(`--without-desktop` skips it). It asks where to install (`~/Applications` or `/Applications`).
+On hosts without a published desktop asset, the installer can compile the app from source (`--without-desktop` skips
+it). See the [desktop workspace guide](./docs/development/desktop-workspace.md) for system requirements, source builds,
+Gatekeeper approval, and troubleshooting.
 
 <details>
 <summary><strong>Build and launch from source</strong></summary>

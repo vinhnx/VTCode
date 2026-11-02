@@ -68,17 +68,11 @@ desktop app: implement keyboard navigation for threads panel. also consider addi
 
 ---
 
-refine readme with both screenshots and updated instructions. /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/resources/screenshots/vtcode-desktop-light.png /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/resources/screenshots/vtcode-desktop-dark.png
-
----
-
 check and fix desktop themes doesn't grouped by modes (light/dark) in the settings
 
 '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 11.01.13 AM.png'
 
 ---
-
-use /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/resources/gif/demo-desktop.mov as hero demo.
 
 ---
 
@@ -129,3 +123,23 @@ maybe implement a vertical slider for effort selection. make it special and intu
 ---
 
 for zen mode, when activated, hide distractions and focus on the main content. move and group the chat input accessory buttons like models/effort, build modes, approval modes together. keep it minimal and simple with clean layout, and must focused on the main content. and easy to toggle on/off.
+
+---
+
+Implement license, open source section disclosure and viewer for desktop app. check the repo for details.
+
+---
+
+add current time at each agent's message response. reference: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 3.12.46 PM.png'
+
+---
+
+implement context menu on files for quick actions like open, delete, rename. maybe also add copy path. available in desktop app where the file is shown.
+
+---
+
+implement a simple markdown preview for desktop app.
+
+---
+
+implement terminal for desktop app.
