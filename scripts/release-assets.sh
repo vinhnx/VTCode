@@ -151,6 +151,69 @@ desktop_archive_name() {
     printf 'vtcode-desktop-%s-%s.zip\n' "$1" "$2"
 }
 
+# Append the desktop app section to a GitHub release's notes.
+#
+#   append_desktop_release_notes <version> <desktop-zip-name> <signing-mode>
+#
+# Idempotent: skips when the notes already reference the desktop archive, so
+# `--skip-release` re-runs never duplicate the section. <signing-mode> is
+# "notarized" or "unsigned" (mirrors the signing lib mode) and selects the
+# first-launch guidance.
+append_desktop_release_notes() {
+    if [[ $# -ne 3 ]]; then
+        echo "usage: append_desktop_release_notes <version> <desktop-zip-name> <signing-mode>" >&2
+        return 2
+    fi
+    local version=$1
+    local zip_name=$2
+    local mode=$3
+    local arch_note
+    case "$zip_name" in
+    *aarch64-apple-darwin*)
+        arch_note="Apple Silicon"
+        ;;
+    *x86_64-apple-darwin*)
+        arch_note="Intel"
+        ;;
+    *)
+        echo "unexpected desktop archive name: $zip_name" >&2
+        return 1
+        ;;
+    esac
+    local body
+    if ! body=$(gh release view "$version" --json body --jq .body 2>/dev/null); then
+        echo "could not read release notes for $version" >&2
+        return 1
+    fi
+    if grep -Fq -- "$zip_name" <<<"$body"; then
+        return 0
+    fi
+    local first_launch
+    if [[ "$mode" == "notarized" ]]; then
+        first_launch="The app is Developer ID signed and notarized, so it opens normally."
+    else
+        first_launch="This build is ad hoc signed (no Developer ID): on first launch, right-click VT Code.app and choose Open (or allow it in Settings > Privacy & Security). See FIRST-LAUNCH.txt inside the zip."
+    fi
+    local section
+    # Two leading newlines: gh strips the body's trailing newline, so the
+    # section needs its own blank line separator.
+    section=$(cat <<EOF
+
+
+### Desktop app (macOS)
+
+- Download \`$zip_name\` ($arch_note, macOS 15+), unzip, and drag **VT Code.app** to Applications.
+- $first_launch
+- The bundle includes its matching \`vtcode\` CLI helper; open the app anytime with \`vtcode desktop\`.
+- Verify with \`$zip_name.sha256\` or \`checksums.txt\`.
+EOF
+    )
+    if ! gh release edit "$version" --notes "${body}${section}"; then
+        echo "could not update release notes for $version" >&2
+        return 1
+    fi
+}
+
 # Generate the aggregate checksum manifest for installable archives.
 #
 # Compatibility assets are intentionally excluded: updater versions that use

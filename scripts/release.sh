@@ -921,6 +921,21 @@ main() {
 		fi
 		print_success "All binaries, compatibility assets, checksums.txt, and install scripts uploaded successfully"
 
+		# Point the release notes at the desktop app (idempotent on re-runs;
+		# skipped when no desktop archive was staged).
+		shopt -s nullglob
+		local -a desktop_zips=("$binaries_dir"/vtcode-desktop-*.zip)
+		shopt -u nullglob
+		if [[ ${#desktop_zips[@]} -eq 1 ]]; then
+			# _vtcode_macos_release_signing_mode is set by the sourced signing lib.
+			# shellcheck disable=SC2154
+			if ! append_desktop_release_notes "$released_version" "$(basename "${desktop_zips[0]}")" "$_vtcode_macos_release_signing_mode"; then
+				print_warning "Could not update release notes with the desktop app section"
+			fi
+		elif [[ ${#desktop_zips[@]} -gt 1 ]]; then
+			print_warning "Multiple desktop archives staged; skipping release notes update"
+		fi
+
 		# Extract checksums before cleanup for Homebrew formula update
 		local release_x86_sha=""
 		local release_arm_sha=""
