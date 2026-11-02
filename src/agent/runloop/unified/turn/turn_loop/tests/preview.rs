@@ -218,7 +218,7 @@ Synthesize the approval-ready plan from evidence gathered before preview exhaust
         ));
     }
     let mut history = vec![
-        uni::Message::user("make a plan from the repository evidence and wait for approval".to_string()),
+        uni::Message::user("investigate the repository evidence".to_string()),
         uni::Message::tool_response("prior-preview".to_string(), prior_marker),
     ];
     let outcome = run_turn_loop(&mut history, backing.turn_loop_context())

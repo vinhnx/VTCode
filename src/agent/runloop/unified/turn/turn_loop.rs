@@ -177,7 +177,8 @@ pub(crate) async fn run_turn_loop(
         ctx.session_stats.recent_touched_files().into_iter().collect();
     let mut pending_primary_agent: Option<String> = None;
     let mut pending_plan_execution_target = None;
-    *ctx.auto_finish_planning_attempted = false;
+    *ctx.auto_finish_planning_attempted = ctx.plan_session.take_recovery_input_pending()
+        || ctx.plan_session.recovery.outcome == vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
 
     // Compact command rows are a presentation-only active tail. A new turn
     // must start a fresh contiguous group even when the renderer is reused by
@@ -537,6 +538,12 @@ pub(crate) async fn run_turn_loop(
             }
         };
 
+        if let Some(stop) =
+            crate::agent::runloop::unified::stop_requests::stop_outcome(turn_processing_ctx.ctrl_c_state)
+        {
+            result = stop;
+            break;
+        }
         turn_processing_ctx.record_planning_response(&response).await?;
 
         // Track turn usage and context pressure before later processing borrows `response`.

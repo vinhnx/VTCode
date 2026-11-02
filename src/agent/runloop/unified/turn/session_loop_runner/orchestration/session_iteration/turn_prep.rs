@@ -54,6 +54,7 @@ pub(super) struct TurnPrep<'a> {
     pub agent_touched_paths: &'a BTreeSet<PathBuf>,
     pub turn_progress: &'a ProgressGuard,
     pub next_turn_input: &'a str,
+    pub thread_id: &'a str,
     pub turn_id: &'a str,
     pub executing_approved_plan: bool,
     pub active_task_follow_up: bool,
@@ -98,6 +99,7 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         agent_touched_paths,
         turn_progress,
         next_turn_input,
+        thread_id,
         turn_id,
         executing_approved_plan,
         active_task_follow_up,
@@ -130,6 +132,27 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         }
         tool_registry.set_harness_task(Some(task_id));
     }
+    let user_revision = !executing_approved_plan
+        && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
+        && (!active_task_follow_up
+            || runtime.state.messages.last().is_some_and(|message| {
+                message.metadata.as_ref().and_then(|metadata| metadata.source()) == Some("user_input")
+            }));
+    if user_revision
+        && tool_registry.is_planning_active()
+        && crate::agent::runloop::unified::planning_workflow::recovery_state::begin_user_revision(
+            &mut plan_session.recovery,
+        )
+        && let Some(emitter) = harness_emitter.as_ref()
+    {
+        emitter
+            .persist_checkpoint(&crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
+                &plan_session.recovery,
+                thread_id,
+                turn_id,
+            ))
+            .await?;
+    }
     // An explicit user turn after a terminal plan rejection rearms the
     // validation-repair budget. Planning mode parks recovery in
     // AwaitingInput/AwaitingApproval; execution mode (no recovery cycle)
@@ -145,7 +168,7 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(next_turn_input)
         && (planning_retry_ready || plan_session.take_execution_plan_rejection_pending())
     {
-        plan_session.begin_explicit_recovery_cycle();
+        plan_session.begin_explicit_recovery_cycle_for_user_input();
         if tool_registry.is_planning_active() {
             crate::agent::runloop::unified::planning_workflow::recovery_state::record_clarification(
                 &mut plan_session.recovery,

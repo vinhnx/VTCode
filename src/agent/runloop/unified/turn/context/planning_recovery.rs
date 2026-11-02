@@ -79,14 +79,23 @@ impl TurnProcessingContext<'_> {
     }
 
     pub(crate) async fn record_planning_response(&mut self, response: &uni::LLMResponse) -> anyhow::Result<()> {
-        if self.is_planning_active()
-            && self.plan_session.recovery.research_closed
-            && self.plan_session.recovery.outcome != PlanningOutcome::Researching
-        {
+        if !self.is_planning_active() || vtcode_core::core::agent::refusal::is_refusal(response) {
+            return Ok(());
+        }
+        let previous_draft = self.plan_session.recovery.best_draft.clone();
+        let previous_defects = self.plan_session.recovery.best_draft_defects;
+        if let Some(text) = response.content.as_deref() {
+            recovery_state::retain_draft(&mut self.plan_session.recovery, text);
+        }
+        let recording_recovery = self.plan_session.recovery.research_closed
+            && self.plan_session.recovery.outcome != PlanningOutcome::Researching;
+        if recording_recovery {
             self.plan_session.recovery.response_class = Some(recovery_state::response_class(response));
-            if let Some(text) = response.content.as_deref() {
-                recovery_state::retain_draft(&mut self.plan_session.recovery, text);
-            }
+        }
+        if recording_recovery
+            || self.plan_session.recovery.best_draft != previous_draft
+            || self.plan_session.recovery.best_draft_defects != previous_defects
+        {
             self.persist_planning_recovery().await?;
         }
         Ok(())
@@ -111,6 +120,22 @@ impl TurnProcessingContext<'_> {
     }
 
     pub(crate) async fn await_planning_recovery_input(&mut self, detail: &str) -> anyhow::Result<TurnHandlerOutcome> {
+        self.await_planning_recovery_input_with_fallback(detail, None).await
+    }
+
+    pub(crate) async fn await_planning_recovery_input_with_fallback(
+        &mut self,
+        detail: &str,
+        fallback: Option<(&str, &str)>,
+    ) -> anyhow::Result<TurnHandlerOutcome> {
+        if self.is_planning_active() {
+            recovery_state::close_research(
+                &mut self.plan_session.recovery,
+                self.working_history,
+                self.provider_client.name(),
+                &self.config.model,
+            );
+        }
         self.plan_session.recovery.outcome = PlanningOutcome::AwaitingInput;
         let already_shown = self.plan_session.recovery.input_prompt_shown;
         self.plan_session.recovery.input_prompt_shown = true;
@@ -212,6 +237,7 @@ impl TurnProcessingContext<'_> {
                                 &text,
                                 research_missing_facts,
                             );
+                            *self.auto_finish_planning_attempted = true;
                             self.working_history
                                 .push(uni::Message::user(recovery_state::redact_bounded(&text, 8192)));
                         }
@@ -227,9 +253,17 @@ impl TurnProcessingContext<'_> {
             }
         }
         self.harness_state.mark_final_response_fallback();
-        self.handle_assistant_response("Planning needs your input. Saved progress is available. Choose retry, add clarification, or use `/model`; implementation still requires plan approval.".into(), Vec::new(), None, false, Some(uni::AssistantPhase::FinalAnswer))?;
-        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-            reason: Some("planning awaiting input".into()),
-        }))
+        let (message, reason) = fallback.unwrap_or((
+            "Planning needs your input. Saved progress is available. Choose retry, add clarification, or use `/model`; implementation still requires plan approval.",
+            "planning awaiting input",
+        ));
+        self.handle_assistant_response(
+            message.into(),
+            Vec::new(),
+            None,
+            false,
+            Some(uni::AssistantPhase::FinalAnswer),
+        )?;
+        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason.into()) }))
     }
 }

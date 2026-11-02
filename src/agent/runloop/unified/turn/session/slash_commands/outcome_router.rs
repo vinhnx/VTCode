@@ -181,14 +181,54 @@ async fn route_navigation_outcome(
 
 async fn route_mode_and_auth_outcome(
     outcome: SlashCommandOutcome,
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     match outcome {
         SlashCommandOutcome::TogglePlanningWorkflow { enable, prompt } => {
-            let control = handlers::handle_toggle_planning_workflow(ctx, enable).await?;
+            let restart = ctx.tool_registry.is_planning_active() && prompt.is_some() && enable == Some(true);
+            let control = handlers::handle_toggle_planning_workflow(ctx.reborrow(), enable).await?;
             if matches!(control, SlashCommandControl::Continue)
                 && let Some(prompt) = prompt
             {
+                if restart {
+                    let previous_agent = ctx.plan_session.previous_primary_agent().map(str::to_owned);
+                    let fallback_agent = ctx.plan_session.fallback_primary_agent().map(str::to_owned);
+                    crate::agent::runloop::unified::planning_workflow::resolve_plan_approval(
+                        ctx.plan_session,
+                        ctx.harness_emitter,
+                        ctx.thread_id,
+                        ctx.thread_id,
+                        vtcode_core::exec::events::PlanApprovalDecision::Cancel,
+                        false,
+                    );
+                    crate::agent::runloop::unified::planning_workflow::clear_stale_planning_recovery_directives(
+                        ctx.conversation_history,
+                    );
+                    crate::agent::runloop::unified::planning_workflow_state::transition_to_planning_workflow(
+                        ctx.tool_registry,
+                        ctx.session_stats,
+                        ctx.plan_session,
+                        ctx.handle,
+                        vtcode_core::core::interfaces::session::PlanningEntrySource::UserRequest,
+                        previous_agent,
+                        fallback_agent,
+                        true,
+                        true,
+                    )
+                    .await;
+                    if let Some(emitter) = ctx.harness_emitter {
+                        emitter
+                            .persist_checkpoint(
+                                &crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
+                                    &ctx.plan_session.recovery,
+                                    ctx.thread_id,
+                                    "planning-input",
+                                ),
+                            )
+                            .await?;
+                    }
+                }
+                ctx.plan_session.suppress_next_planning_exit();
                 return Ok(SlashCommandControl::SubmitPrompt(prompt));
             }
             Ok(control)

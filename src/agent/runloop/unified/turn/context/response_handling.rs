@@ -311,28 +311,29 @@ impl<'a> TurnProcessingContext<'a> {
             &mut self.plan_session.recovery,
             plan_text,
         );
-        self.plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
-        // The exhausted incident must not auto-present on session resume: the
-        // setup resume gate skips its synthetic continue only when the prompt
-        // was shown, and a synthetic turn cannot rearm (internal follow-ups
-        // never reset the budget), so it would burn a crippled turn.
-        self.plan_session.recovery.input_prompt_shown = true;
-        self.persist_planning_recovery().await?;
         self.renderer.line(
             MessageStyle::Warning,
             crate::agent::runloop::unified::planning_workflow_state::PLANNING_WORKFLOW_NO_APPROVAL_READY_PLAN_HINT,
         )?;
-        self.handle_assistant_response(
-            terminal_plan_rejection_message(PLANNING_PLAN_REJECTION_NOTICE, &error),
-            Vec::new(),
-            None,
-            false,
-            Some(uni::AssistantPhase::FinalAnswer),
-        )?;
         append_rejected_plan_draft_to_last_assistant(self.working_history, plan_text);
-        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-            reason: Some(TERMINAL_PLAN_REJECTION_REASON.to_string()),
-        }))
+        let retained_draft_index = self.working_history.len().checked_sub(1);
+        let detail = format!("the draft failed validation: {error}");
+        let fallback = terminal_plan_rejection_message(PLANNING_PLAN_REJECTION_NOTICE, &error);
+        let outcome = self
+            .await_planning_recovery_input_with_fallback(&detail, Some((&fallback, TERMINAL_PLAN_REJECTION_REASON)))
+            .await?;
+        if matches!(outcome, TurnHandlerOutcome::Continue) {
+            self.push_system_message(plan_repair_directive_for_error(&error));
+        } else if !retained_draft_index
+            .and_then(|index| self.working_history.get(index))
+            .zip(bounded_rejected_plan_draft(plan_text))
+            .is_some_and(|(message, draft)| {
+                message.role == uni::MessageRole::Assistant && message.content.as_text().contains(&draft)
+            })
+        {
+            append_rejected_plan_draft_to_last_assistant(self.working_history, plan_text);
+        }
+        Ok(outcome)
     }
 
     /// Schedule the one bounded plan-only retry allowed after a permanent

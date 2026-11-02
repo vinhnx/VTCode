@@ -585,8 +585,9 @@ impl<'a> TurnProcessingContext<'a> {
             )
             .await?;
 
-            let recovery_requires_approval = planning_active && self.plan_session.recovery.research_closed;
-            let require_confirmation = recovery_requires_approval
+            let explicit_approval_required = planning_active
+                && (self.plan_session.recovery.research_closed || self.plan_session.requires_explicit_plan_approval());
+            let require_confirmation = explicit_approval_required
                 || self.vt_cfg.map(|cfg| cfg.agent.require_plan_confirmation).unwrap_or(true);
             let supports_inline = self.renderer.supports_inline_ui();
             tracing::info!(
@@ -602,8 +603,8 @@ impl<'a> TurnProcessingContext<'a> {
                 plan_approval_route(
                     require_confirmation,
                     supports_inline,
-                    self.skip_confirmations && !recovery_requires_approval,
-                    self.full_auto && !recovery_requires_approval,
+                    self.skip_confirmations && !explicit_approval_required,
+                    self.full_auto && !explicit_approval_required,
                 )
             };
             tracing::info!(
@@ -634,8 +635,8 @@ impl<'a> TurnProcessingContext<'a> {
                     self.ctrl_c_notify,
                     PlanApprovalRequestContext {
                         plan: &plan,
-                        skip_confirmations: self.skip_confirmations && !recovery_requires_approval,
-                        full_auto: self.full_auto && !recovery_requires_approval,
+                        skip_confirmations: self.skip_confirmations && !explicit_approval_required,
+                        full_auto: self.full_auto && !explicit_approval_required,
                         context_usage_percent: self.context_manager.context_usage_percent(
                             vtcode_core::compaction::effective_context_budget(
                                 self.vt_cfg,

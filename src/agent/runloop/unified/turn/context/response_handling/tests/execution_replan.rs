@@ -110,6 +110,65 @@ async fn execution_mode_invalid_unapproved_plan_gets_tool_free_repair_and_reache
     );
 }
 #[tokio::test]
+async fn execution_mode_repaired_plan_waits_for_interactive_approval() {
+    use vtcode_ui::tui::app::{
+        InlineCommand, InlineEvent, InlineHandle, InlineListSelection, InlineSession, TransientEvent, TransientRequest,
+    };
+
+    let (command_tx, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(command_tx);
+    let mut session = InlineSession {
+        handle: handle.clone(),
+        events: event_rx,
+        worker: None,
+    };
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    event_tx
+        .send(InlineEvent::Transient(TransientEvent::Cancelled))
+        .expect("cancel approval");
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.set_skip_confirmations_for_test(false);
+    let events_path = backing.enable_harness_emitter();
+    let mut ctx = backing.turn_processing_context();
+    ctx.handle = &handle;
+    ctx.renderer = &mut renderer;
+    ctx.session = &mut session;
+
+    let first = ctx
+        .handle_text_response(String::new(), Vec::new(), None, Some("Invalid plan".into()), false)
+        .await
+        .expect("schedule repair");
+    assert!(matches!(first, TurnHandlerOutcome::Continue));
+    assert!(ctx.recovery_is_tool_free());
+    assert!(ctx.consume_recovery_pass());
+    let repaired = ctx
+        .handle_text_response(String::new(), Vec::new(), None, Some(EXECUTION_REVISION_PLAN.into()), false)
+        .await
+        .expect("present approval");
+    assert!(matches!(
+        repaired,
+        TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false })
+    ));
+    let mut approval_count = 0;
+    while let Ok(command) = command_rx.try_recv() {
+        if let InlineCommand::ShowTransient { request } = command
+            && let TransientRequest::List(list) = *request
+            && list
+                .items
+                .iter()
+                .any(|item| item.selection == Some(InlineListSelection::PlanApprovalExecute))
+        {
+            approval_count += 1;
+        }
+    }
+    assert_eq!(approval_count, 1);
+    let events = tokio::fs::read_to_string(events_path).await.expect("approval events");
+    assert_eq!(events.matches("\"type\":\"plan.approval.requested\"").count(), 1);
+    assert!(!events.contains("auto_accept"));
+}
+
+#[tokio::test]
 async fn execution_mode_invalid_unapproved_plan_repair_is_bounded() {
     const INVALID_PLAN: &str = "**Goal:** Improve README.md.\n\n1. Fix a link in README.md.\n";
     let mut backing = TestTurnProcessingBacking::new(4).await;

@@ -46,6 +46,27 @@ fn does_not_exit_when_user_wants_to_keep_planning() {
         PlanningIntent::StayInPlanning
     );
     assert_eq!(detect_planning_intent("Continue planning for now.", false), PlanningIntent::StayInPlanning);
+    assert_eq!(detect_planning_intent("Do not approve yet", false), PlanningIntent::None);
+    assert_eq!(detect_planning_intent("Don't accept this plan", false), PlanningIntent::None);
+    assert_eq!(detect_planning_intent("Do not yet approve the plan", false), PlanningIntent::None);
+    assert_eq!(detect_planning_intent("Please do not immediately accept this plan", false), PlanningIntent::None);
+    assert_eq!(
+        detect_planning_intent("Do not under any circumstances approve the plan", false),
+        PlanningIntent::None
+    );
+    assert_eq!(
+        detect_planning_intent("No schema changes. I approve the plan", false),
+        PlanningIntent::ExitAndImplement
+    );
+    assert_eq!(
+        detect_planning_intent("Yes. Please explain the tradeoffs before making changes", false),
+        PlanningIntent::None
+    );
+    assert_eq!(detect_planning_intent("Please approve this plan", false), PlanningIntent::ExitAndImplement);
+    assert_eq!(
+        detect_planning_intent("Do not use plan mode but approve the plan", false),
+        PlanningIntent::ExitAndImplement
+    );
 }
 
 #[test]
@@ -95,6 +116,12 @@ fn detects_explicit_planning_requests() {
     assert!(detect_enter_planning_intent("make a plan for this"));
     assert!(detect_enter_planning_intent("before implementing, create a plan"));
     assert!(detect_enter_planning_intent("outline the implementation plan"));
+    assert!(detect_enter_planning_intent("use plan mode, refine @README.md"));
+    assert!(detect_enter_planning_intent("Do not use plan mode; create a plan instead"));
+    assert!(!detect_enter_planning_intent("Do not use plan mode, implement directly"));
+    assert!(!detect_enter_planning_intent("Don't switch to plan mode"));
+    assert!(!detect_enter_planning_intent("Never enter plan mode"));
+    assert!(!detect_enter_planning_intent("Do not under any circumstances use plan mode; implement the fix"));
 }
 
 #[test]
@@ -483,6 +510,35 @@ fn extract_turn_config_honors_request_user_input_setting_in_planning_workflow() 
 
     let turn_cfg = extract_turn_config(Some(&cfg), true, true);
     assert!(!turn_cfg.request_user_input_enabled);
+}
+
+#[tokio::test]
+async fn planning_steering_resets_draft_rank_only_for_user_input() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    let events_path = backing.enable_harness_emitter();
+    {
+        let ctx = backing.turn_loop_context();
+        ctx.plan_session.recovery.best_draft = Some("previous draft".to_owned());
+        ctx.plan_session.recovery.best_draft_defects = Some(0);
+    }
+    let mut history = Vec::new();
+    let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
+    backing.queue_synthetic_follow_up_input_for_test("synthetic continuation");
+    handle_steering_messages(&mut backing.turn_loop_context(), &mut history, &mut result)
+        .await
+        .expect("synthetic steering");
+    assert_eq!(backing.turn_loop_context().plan_session.recovery.best_draft_defects, Some(0));
+
+    backing.queue_follow_up_input_for_test("Plan a different task");
+    handle_steering_messages(&mut backing.turn_loop_context(), &mut history, &mut result)
+        .await
+        .expect("user steering");
+    let recovery = &backing.turn_loop_context().plan_session.recovery;
+    assert!(recovery.best_draft_defects.is_none());
+    assert_eq!(recovery.best_draft.as_deref(), Some("previous draft"));
+    let events = tokio::fs::read_to_string(events_path).await.expect("steering checkpoint");
+    assert_eq!(events.matches("planning-recovery").count(), 1);
 }
 
 #[tokio::test]

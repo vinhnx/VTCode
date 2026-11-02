@@ -101,6 +101,10 @@ pub const ENTER_PHRASES: &[&str] = &[
     "write a plan",
     "come up with a plan",
     "plan this",
+    "use plan mode",
+    "use planning mode",
+    "enter plan mode",
+    "switch to plan mode",
     "stay in planning workflow",
     "keep planning",
     "continue planning",
@@ -167,6 +171,32 @@ pub fn normalize_plan_intent(text: &str) -> String {
         .collect()
 }
 
+fn is_plan_intent_negation(word: &str) -> bool {
+    matches!(word, "not" | "never" | "no" | "avoid" | "without" | "t")
+}
+
+fn has_unnegated_phrase(normalized: &str, phrase: &str, whole_word: bool) -> bool {
+    normalized.match_indices(phrase).any(|(index, _)| {
+        let Some(prefix) = normalized.get(..index) else {
+            return false;
+        };
+        let Some(suffix) = normalized.get(index..).and_then(|rest| rest.strip_prefix(phrase)) else {
+            return false;
+        };
+        if whole_word
+            && (prefix.chars().next_back().is_some_and(|character| !character.is_whitespace())
+                || suffix.chars().next().is_some_and(|character| !character.is_whitespace()))
+        {
+            return false;
+        }
+        !prefix
+            .split_whitespace()
+            .rev()
+            .take_while(|word| !matches!(*word, "but" | "however" | "instead" | "then"))
+            .any(is_plan_intent_negation)
+    })
+}
+
 /// Whether the normalized text expresses an exit-and-implement intent.
 ///
 /// Mirrors the runloop's detection priority: direct commands (exact), approval
@@ -176,11 +206,13 @@ pub fn normalize_plan_intent(text: &str) -> String {
 pub fn matches_exit_intent(normalized: &str) -> bool {
     let trimmed = normalized.trim();
     EXIT_DIRECT_COMMANDS.contains(&trimmed)
-        || APPROVAL_WORDS
+        || APPROVAL_WORDS.iter().any(|word| has_unnegated_phrase(normalized, word, true))
+        || APPROVAL_PHRASES
             .iter()
-            .any(|word| normalized.split_whitespace().any(|tok| tok == *word))
-        || APPROVAL_PHRASES.iter().any(|phrase| normalized.contains(phrase))
-        || EXIT_TRIGGER_PHRASES.iter().any(|phrase| normalized.contains(phrase))
+            .any(|phrase| has_unnegated_phrase(normalized, phrase, false))
+        || EXIT_TRIGGER_PHRASES
+            .iter()
+            .any(|phrase| has_unnegated_phrase(normalized, phrase, false))
 }
 
 /// Whether the normalized text keeps the user in plan mode (highest priority).
@@ -191,7 +223,9 @@ pub fn matches_stay_intent(normalized: &str) -> bool {
 /// Whether the normalized text is an explicit request to enter plan mode
 /// (excluding the `/plan` slash command, which callers check separately).
 pub fn matches_enter_intent(normalized: &str) -> bool {
-    ENTER_PHRASES.iter().any(|phrase| normalized.contains(phrase))
+    ENTER_PHRASES
+        .iter()
+        .any(|phrase| has_unnegated_phrase(normalized, phrase, false))
 }
 
 /// Whether the normalized assistant text contains an implementation prompt cue.
@@ -214,4 +248,67 @@ pub fn is_execution_mode_alias(input: &str) -> bool {
 pub fn is_implementation_alias(input: &str) -> bool {
     let normalized = input.trim().to_ascii_lowercase();
     EXECUTION_MODE_ALIASES.iter().any(|alias| *alias == normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_exit(text: &str) -> bool {
+        matches_exit_intent(&normalize_plan_intent(text))
+    }
+
+    fn is_enter(text: &str) -> bool {
+        matches_enter_intent(&normalize_plan_intent(text))
+    }
+
+    #[test]
+    fn normalization_splits_contractions_for_negation_matching() {
+        // The `t` negation entry depends on apostrophes splitting words.
+        assert_eq!(normalize_plan_intent("Don't!"), "don t ");
+    }
+
+    #[test]
+    fn exit_intent_matches_unnegated_approvals_and_triggers() {
+        for text in [
+            "approve",
+            "looks good to me",
+            "lgtm",
+            "please proceed to implement now",
+            "do not cancel but approve",
+        ] {
+            assert!(is_exit(text), "{text}");
+        }
+    }
+
+    #[test]
+    fn exit_intent_rejects_negated_approvals_and_lookalikes() {
+        for text in [
+            "disapprove",
+            "do not approve yet",
+            "don't approve",
+            "never approve without asking",
+            "no changes",
+        ] {
+            assert!(!is_exit(text), "{text}");
+        }
+    }
+
+    #[test]
+    fn enter_intent_matches_plan_mode_requests() {
+        for text in [
+            "use plan mode, refine readme",
+            "please make a plan first",
+            "switch to plan mode",
+        ] {
+            assert!(is_enter(text), "{text}");
+        }
+    }
+
+    #[test]
+    fn enter_intent_rejects_negated_requests() {
+        for text in ["don't use plan mode", "do not make a plan, just implement it"] {
+            assert!(!is_enter(text), "{text}");
+        }
+    }
 }

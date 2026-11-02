@@ -489,6 +489,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     agent_touched_paths: &agent_touched_paths,
                     turn_progress: &turn_progress,
                     next_turn_input: &next_turn_input,
+                    thread_id: &turn_run_id.0,
                     turn_id: &turn_id,
                     executing_approved_plan,
                     active_task_follow_up,

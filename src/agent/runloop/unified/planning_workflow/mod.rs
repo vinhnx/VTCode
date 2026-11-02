@@ -275,13 +275,17 @@ const EXECUTION_MODE_RECOVERY_RESET_DIRECTIVE: &str = "Execution mode is active.
 /// already been closed. Return the number removed so callers can include a
 /// useful diagnostic without rendering extra user-facing noise.
 pub(crate) fn clear_stale_recovery_directives_for_execution(history: &mut Vec<uni::Message>) -> usize {
-    let history_len_before = history.len();
-    history.retain(|message| !is_stale_recovery_directive(message));
-    let removed = history_len_before.saturating_sub(history.len());
+    let removed = clear_stale_planning_recovery_directives(history);
     if removed > 0 {
         history.push(uni::Message::system(EXECUTION_MODE_RECOVERY_RESET_DIRECTIVE.to_string()));
     }
     removed
+}
+
+pub(crate) fn clear_stale_planning_recovery_directives(history: &mut Vec<uni::Message>) -> usize {
+    let history_len_before = history.len();
+    history.retain(|message| !is_stale_recovery_directive(message));
+    history_len_before.saturating_sub(history.len())
 }
 
 fn is_stale_recovery_directive(message: &uni::Message) -> bool {

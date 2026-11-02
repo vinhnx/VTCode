@@ -608,6 +608,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let input_status_state = InputStatusState::default();
     let dismissed_memory_cleanup_fingerprint: Option<(usize, usize)> = None;
     let prefer_latest_queued_input_once = false;
+    if resume_ref.is_some() && tool_registry.is_planning_active() {
+        plan_session.mark_explicit_plan_request();
+    }
     if resume_ref.is_some()
         && tool_registry.is_planning_active()
         && let Some(emitter) = harness_emitter.as_ref()

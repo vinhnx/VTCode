@@ -384,6 +384,9 @@ fn planning_workflow_persistence_policy_assigns_plan_lifecycle_to_runtime() {
     assert!(line.contains("approval controls only after successful persistence"));
     assert!(line.contains("Checklists do not persist plans"));
     assert!(line.contains("Resume cancelled planning only on fresh input"));
+    assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("Exhausted plan validation or recovery waits for retry"));
+    assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("Explicit Plan mode requires approval even in full-auto"));
+    assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("User answers never approve implementation"));
 }
 #[test]
 fn test_minimal_prompt_token_count() {
