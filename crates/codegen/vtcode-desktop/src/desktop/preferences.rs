@@ -23,10 +23,11 @@ use super::localization::UiLanguage;
 
 const MAX_RECENT_WORKSPACES: usize = 8;
 const DEFAULT_SIDEBAR_WIDTH: f32 = 270.0;
-/// Fits the five-tab inspector rail without scrolling at the default UI
-/// size (the rail needs ~407px plus its insets); narrower widths stay usable
-/// through the tab scroller.
-const DEFAULT_INSPECTOR_WIDTH: f32 = 440.0;
+/// Fits the five-tab inspector rail plus its trailing close control without
+/// scrolling at the default UI size (the rail needs ~407px plus its insets,
+/// the rail gap, and the close button); narrower widths stay usable through
+/// the tab scroller.
+pub(super) const DEFAULT_INSPECTOR_WIDTH: f32 = 474.0;
 pub(super) const MIN_PANE_WIDTH: f32 = 180.0;
 pub(super) const MAX_PANE_WIDTH: f32 = 560.0;
 /// Smallest UI base size: keeps the tiniest labels (`text_xs` = 0.75rem) at

@@ -103,8 +103,9 @@ impl DesktopView {
 
     /// Tab rail header: the segmented control keeps the compact size (five
     /// tabs share the rail) with tracked reveal for keyboard and
-    /// programmatic selection. The rail shares the `px_3` content spine,
-    /// and the tighter bottom keeps the tabs attached to their panel.
+    /// programmatic selection, plus a trailing close control that hides the
+    /// card. The rail shares the `px_3` content spine, and the tighter
+    /// bottom keeps the tabs attached to their panel.
     fn render_inspector_tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         div()
@@ -132,25 +133,47 @@ impl DesktopView {
             }))
             .child(
                 div()
-                    .id("inspector-tabs-focus")
-                    .test_support()
-                    .track_focus(&self.inspector_focus)
+                    .flex()
+                    .items_center()
+                    .gap_2()
                     .child(
-                        desktop_tab_bar("inspector-tabs")
-                            // Five tabs share a narrow rail, so the inspector keeps the
-                            // compact size; settings uses the medium default.
+                        div()
+                            .id("inspector-tabs-focus")
+                            .test_support()
+                            .flex_1()
+                            .min_w_0()
+                            .track_focus(&self.inspector_focus)
+                            .child(
+                                desktop_tab_bar("inspector-tabs")
+                                    // Five tabs share a narrow rail, so the inspector keeps the
+                                    // compact size; settings uses the medium default.
+                                    .small()
+                                    .track_scroll(&self.inspector_tabs_scroll)
+                                    .selected_index(
+                                        InspectorTab::ALL
+                                            .iter()
+                                            .position(|tab| *tab == self.inspector_tab)
+                                            .unwrap_or_default(),
+                                    )
+                                    .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                        view.select_inspector_tab(*index, window, cx)
+                                    }))
+                                    .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                            ),
+                    )
+                    .child(
+                        desktop_button("close-inspector")
+                            .icon(IconName::X)
+                            .ghost()
                             .small()
-                            .track_scroll(&self.inspector_tabs_scroll)
-                            .selected_index(
-                                InspectorTab::ALL
-                                    .iter()
-                                    .position(|tab| *tab == self.inspector_tab)
-                                    .unwrap_or_default(),
+                            .flex_shrink_0()
+                            .accessibility_label(rust_i18n::t!("app.navigation.hide_panel").to_string())
+                            .tooltip_with_action(
+                                rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
+                                &ToggleInspector,
+                                Some(key_context::DESKTOP),
                             )
-                            .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                view.select_inspector_tab(*index, window, cx)
-                            }))
-                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                            .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
                     ),
             )
     }

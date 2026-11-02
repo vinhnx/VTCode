@@ -261,6 +261,28 @@ pub(super) fn pane_divider(
     }
 }
 
+/// Inspector resize-handle paint: the inspector is a separated card floating
+/// on the chrome, so a resting hairline would read as a panel border. An idle
+/// handle paints nothing while keeping the kit's 1px geometry, so layout
+/// never shifts between states; any pointer engagement delegates to the kit
+/// divider, keeping the hover/press/drag pill that advertises the resize
+/// affordance. The band, cursor, drag, splitter role, and keyboard handling
+/// stay with the handle itself.
+pub(super) fn inspector_resize_appearance() -> ResizeHandleRenderer {
+    let kit = resize_handle_appearance();
+    Rc::new(move |handle: &ResizeHandleContext, window: &mut Window, cx: &mut App| {
+        if handle.state() == ResizeHandleState::Idle {
+            let idle = div().flex_none().flex().map(|line| match handle.axis() {
+                Axis::Horizontal => line.w(px(1.)).h_full(),
+                _ => line.h(px(1.)).w_full(),
+            });
+            Some(idle.into_any_element())
+        } else {
+            kit(handle, window, cx)
+        }
+    })
+}
+
 /// Navigation group header: an eyebrow label for a sidebar-like rail. Both the
 /// settings navigation and the configuration group rail are navigation chrome,
 /// not content sections, so they share this instead of sentence-case section

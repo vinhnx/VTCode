@@ -9,7 +9,10 @@ use std::time::{Duration, Instant};
 
 use chrono::Timelike;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, StyledExt, TextViewStyle};
+use gpui_kit::base::{
+    Disableable, FocusTrapElement, FocusableExt, InteractiveElementExt, ResizeHandleContext, ResizeHandleRenderer,
+    ResizeHandleState, StyledExt, TextViewStyle,
+};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{
@@ -36,7 +39,7 @@ use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, Me
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::radio::Radio;
-use gpui_kit::component::resizable::{HandleEdge, resize_handle};
+use gpui_kit::component::resizable::{HandleEdge, resize_handle, resize_handle_appearance};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::select::{Select, SelectEvent};
 use gpui_kit::component::shimmer::ShimmerText;

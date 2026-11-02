@@ -620,7 +620,7 @@ impl DesktopView {
             zen_mode: true,
             zen_drag_armed: false,
             sidebar_width: 270.0,
-            inspector_width: 440.0,
+            inspector_width: preferences::DEFAULT_INSPECTOR_WIDTH,
             resizing: None,
         }
     }

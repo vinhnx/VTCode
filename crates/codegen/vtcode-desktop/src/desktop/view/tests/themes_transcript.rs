@@ -285,10 +285,10 @@ fn pane_splitters_expose_accessibility_and_keyboard_resize(cx: &mut TestAppConte
         }
         assert!(view.read(cx).inspector_resize_focus.is_focused(window), "Tab reaches the inspector splitter");
         window.press("left", cx);
-        assert_eq!(view.read(cx).inspector_width, 450.);
+        assert_eq!(view.read(cx).inspector_width, 484.);
         window.press("shift-right", cx);
-        assert_eq!(view.read(cx).inspector_width, 400.);
-        assert_eq!(view.read(cx).preferences.inspector_width, Some(400.));
+        assert_eq!(view.read(cx).inspector_width, 434.);
+        assert_eq!(view.read(cx).preferences.inspector_width, Some(434.));
     })
     .unwrap();
 }
@@ -621,6 +621,24 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         // Collapsing again hides the patch view but keeps the card.
         window.click("diff-change-1", cx);
         assert!(!view.read(cx).transcript.get(0).unwrap().expanded);
+
+        // Narrow-conversation regression: the header actions stay inside the
+        // card (and clickable) even at the widest inspector setting, with the
+        // title truncating instead of the buttons overflowing.
+        view.update(cx, |view, cx| {
+            view.inspector_width = crate::desktop::preferences::MAX_PANE_WIDTH;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("diff-change-1", cx);
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded);
+        assert!(window.try_find("diff-lines-change-1").is_some());
+        window.click("copy-patch-change-1", cx);
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().as_deref(),
+            Some(updated_patch),
+            "copy stays clickable at the narrowest conversation width"
+        );
     })
     .unwrap();
 }

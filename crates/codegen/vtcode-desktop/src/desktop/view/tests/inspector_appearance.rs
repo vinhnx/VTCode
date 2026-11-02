@@ -428,7 +428,7 @@ fn inspector_tabs_fit_without_scrolling_at_default_width(cx: &mut TestAppContext
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(
-            (view.read(cx).inspector_width - 440.).abs() < f32::EPSILON,
+            (view.read(cx).inspector_width - 474.).abs() < f32::EPSILON,
             "baseline pins the default width this fit is measured against"
         );
         let bar = window.find("inspector-tabs-focus").bounds();

@@ -786,7 +786,7 @@ impl DesktopView {
             rust_i18n::t!("app.transcript.applied").to_string()
         };
         let toggle_id = id.clone();
-        let mut stats = div().flex().items_center().gap_2().text_sm();
+        let mut stats = div().flex().items_center().gap_2().text_sm().flex_shrink_0();
         if let Some(additions) = diff.additions {
             stats = stats.child(div().text_color(colors.success).child(format!("+{additions}")));
         }
@@ -794,49 +794,25 @@ impl DesktopView {
             stats = stats.child(div().text_color(colors.danger).child(format!("−{deletions}")));
         }
 
-        let mut header = div()
-            .w_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            .px_3()
-            .py_2()
-            .bg(colors.secondary)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().font_medium().child(item.title.clone()))
-                    .child(stats)
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(if diff.failed {
-                                colors.danger
-                            } else {
-                                themes::muted_text(&colors)
-                            })
-                            .child(status_label),
-                    ),
-            )
-            .child(
-                desktop_button(format!("diff-{}", item.id))
-                    .label(if item.expanded {
-                        rust_i18n::t!("app.transcript.hide_diff").to_string()
-                    } else {
-                        rust_i18n::t!("app.transcript.show_diff").to_string()
-                    })
-                    .ghost()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.transcript.toggle_diff(&toggle_id);
-                        cx.notify();
-                    })),
-            );
-
+        // Trailing actions share one shrink-proof group (see panel_header):
+        // the toggle and copy buttons must never overflow the card, so the
+        // leading title truncates instead when the conversation narrows.
+        let mut actions = div().flex().items_center().gap_2().flex_shrink_0().child(
+            desktop_button(format!("diff-{}", item.id))
+                .label(if item.expanded {
+                    rust_i18n::t!("app.transcript.hide_diff").to_string()
+                } else {
+                    rust_i18n::t!("app.transcript.show_diff").to_string()
+                })
+                .ghost()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.transcript.toggle_diff(&toggle_id);
+                    cx.notify();
+                })),
+        );
         if !diff.patch.is_empty() {
             let copy_id = id.clone();
-            header = header.child(
+            actions = actions.child(
                 desktop_button(format!("copy-patch-{}", item.id))
                     .label(rust_i18n::t!("app.transcript.copy_patch").to_string())
                     .ghost()
@@ -856,6 +832,38 @@ impl DesktopView {
                     })),
             );
         }
+
+        let header = div()
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_3()
+            .py_2()
+            .bg(colors.secondary)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_w_0()
+                    .flex_1()
+                    .child(div().font_medium().min_w_0().truncate().child(item.title.clone()))
+                    .child(stats)
+                    .child(
+                        div()
+                            .text_sm()
+                            .flex_shrink_0()
+                            .text_color(if diff.failed {
+                                colors.danger
+                            } else {
+                                themes::muted_text(&colors)
+                            })
+                            .child(status_label),
+                    ),
+            )
+            .child(actions);
 
         let mut panel = div()
             .relative()

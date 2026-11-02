@@ -52,7 +52,15 @@ impl DesktopView {
             ResizeEdge::Sidebar => &self.sidebar_resize_focus,
             ResizeEdge::Inspector => &self.inspector_resize_focus,
         };
-        resize_handle::<ResizeEdge, ResizeDragPreview>(id, Axis::Horizontal)
+        let handle = resize_handle::<ResizeEdge, ResizeDragPreview>(id, Axis::Horizontal);
+        // The inspector is a separated card, not a docked pane: its edge
+        // paints no resting hairline (see inspector_resize_appearance).
+        let handle = if edge == ResizeEdge::Inspector {
+            handle.with_appearance(inspector_resize_appearance())
+        } else {
+            handle
+        };
+        handle
             .inside(placement)
             .on_drag(edge, |_, _, _, cx| cx.new(|_| ResizeDragPreview))
             .on_drag_move(cx.listener(|this, event: &DragMoveEvent<ResizeEdge>, _, cx| {
