@@ -69,7 +69,7 @@ fn done_closes_the_about_dialog(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn acknowledgments_opens_settings_at_the_vtcode_tab(cx: &mut TestAppContext) {
+fn acknowledgments_opens_the_viewer_at_the_third_party_notices(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     open_about(window, &view, cx);
     cx.update_window(window, |_, window, cx| {
@@ -80,11 +80,36 @@ fn acknowledgments_opens_settings_at_the_vtcode_tab(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let state = view.read(cx);
         assert!(!state.about_open, "acknowledgments must close the dialog");
-        assert_eq!(state.current_route(), Route::Settings, "acknowledgments must open Settings");
         assert_eq!(
-            state.settings_tab,
-            super::super::settings::SettingsTab::VtCode,
-            "third-party notices live under Settings → VT Code"
+            state
+                .license_viewer
+                .as_ref()
+                .map(super::super::licenses::LicenseViewerState::document),
+            Some(super::super::licenses::LicenseDocument::Notices),
+            "acknowledgments open the in-app third-party notices"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn license_button_opens_the_viewer_at_the_mit_text(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_about(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("about-license", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let state = view.read(cx);
+        assert!(!state.about_open, "License must close the About dialog");
+        assert_eq!(
+            state
+                .license_viewer
+                .as_ref()
+                .map(super::super::licenses::LicenseViewerState::document),
+            Some(super::super::licenses::LicenseDocument::Mit),
+            "License opens the in-app MIT text"
         );
     });
 }

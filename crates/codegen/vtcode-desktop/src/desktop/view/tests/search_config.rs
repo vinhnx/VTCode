@@ -31,7 +31,7 @@ fn reopen_settings_search(window: AnyWindowHandle, view: &Entity<DesktopView>, c
 fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut TestAppContext) {
     let (window, view) = open_settings_search(cx);
     cx.update_window(window, |_, window, cx| {
-        window.within("command-palette").input("Open source licenses", cx);
+        window.within("command-palette").input("license", cx);
         window.render_frame(cx);
         let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
         assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
@@ -42,8 +42,9 @@ fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::VtCode);
-        assert_eq!(window.find("open-source-licenses").role(), Some(gpui_kit::Role::Button));
-        assert_eq!(window.find("open-source-licenses").label(), Some("Open source licenses"));
+        assert_eq!(window.find("open-vtcode-license").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("open-vtcode-license").label(), Some("VT Code license"));
+        assert_eq!(window.find("open-third-party-notices").label(), Some("Third-party notices"));
     })
     .unwrap();
     reopen_settings_search(window, &view, cx);

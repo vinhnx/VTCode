@@ -98,7 +98,8 @@ pub(super) mod i18n {
     pub const FILE_PREVIEW_COPY: &str = "app.file_preview.copy";
     pub const FILES_REFRESH_TOOLTIP: &str = "app.files.refresh_tooltip";
     pub const INSPECTOR_EMPTY_ACTIVITY_TITLE: &str = "app.inspector.empty_activity_title";
-    pub const LICENSES_TITLE: &str = "app.settings.licenses.title";
+    pub const LICENSES_TITLE: &str = "app.licenses.title";
+    pub const LICENSES_VIEW: &str = "app.licenses.view";
     pub const NAVIGATION_CLOSE_THREAD: &str = "app.navigation.close_thread";
     pub const NAVIGATION_NEW_THREAD: &str = "app.navigation.new_thread";
     pub const NAVIGATION_SEARCH_COMMANDS: &str = "app.navigation.search_commands";
@@ -164,7 +165,7 @@ mod tests {
     /// completeness stays with the per-namespace localization tests.
     #[test]
     fn shared_i18n_keys_resolve_in_english() {
-        const KEYS: [&str; 61] = [
+        const KEYS: [&str; 62] = [
             i18n::BROWSER_BROWSE_THREADS,
             i18n::COMPOSER_ADD_CONTEXT,
             i18n::COMPOSER_ATTACHMENTS_LIMIT,
@@ -186,6 +187,7 @@ mod tests {
             i18n::FILES_REFRESH_TOOLTIP,
             i18n::INSPECTOR_EMPTY_ACTIVITY_TITLE,
             i18n::LICENSES_TITLE,
+            i18n::LICENSES_VIEW,
             i18n::NAVIGATION_CLOSE_THREAD,
             i18n::NAVIGATION_NEW_THREAD,
             i18n::NAVIGATION_SEARCH_COMMANDS,

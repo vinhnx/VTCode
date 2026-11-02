@@ -441,11 +441,7 @@ fn palette_badges_copy_is_localized_for_every_language() {
 #[test]
 fn settings_diagnostics_copy_is_localized_for_every_language() {
     assert_localized(
-        &[
-            "app.settings.licenses.locate_failed",
-            "app.settings.storage.byte_one",
-            "app.settings.storage.bytes_many",
-        ],
+        &["app.settings.storage.byte_one", "app.settings.storage.bytes_many"],
         &[
             ("vi", "app.settings.storage.byte_one"),
             ("es", "app.settings.storage.byte_one"),
@@ -460,9 +456,6 @@ fn settings_diagnostics_copy_is_localized_for_every_language() {
     );
     for language in UiLanguage::ALL {
         let locale = language.locale();
-        let failed =
-            rust_i18n::t!("app.settings.licenses.locate_failed", locale = locale, error = "demo-error").to_string();
-        assert!(failed.contains("demo-error"), "{locale}: {failed}");
         let many = rust_i18n::t!("app.settings.storage.bytes_many", locale = locale, n = 42).to_string();
         assert!(many.contains("42"), "{locale}: {many}");
     }

@@ -374,5 +374,6 @@ figure it out together.
 
 ## License
 
-First-party code is **MIT OR Apache-2.0** under [LICENSE](LICENSE). Third-party code keeps its original licenses,
-listed in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
+First-party code is **MIT OR Apache-2.0**, available under either [LICENSE-MIT](LICENSE-MIT) or
+[LICENSE](LICENSE) (Apache-2.0). Third-party code keeps its original licenses, listed in
+[THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).

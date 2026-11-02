@@ -333,6 +333,9 @@ impl Render for DesktopView {
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
         }
+        if self.license_viewer.is_some() {
+            body = body.child(self.render_license_viewer(cx));
+        }
         if !(self.current_route() == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch)
             && !self.palette_kind.is_composer_popup()
             && let Some(state) = self.palette.clone()

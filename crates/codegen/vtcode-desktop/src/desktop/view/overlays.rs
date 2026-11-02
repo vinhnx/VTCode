@@ -126,6 +126,10 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        if self.license_viewer.is_some() {
+            self.discard_license_viewer();
+            cx.notify();
+        }
         self.focus_composer(window, cx);
         cx.notify();
     }
@@ -221,6 +225,9 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        // Entries can reach Settings while the viewer is open (deeplinks, the
+        // slash command); the viewer would layer over the page it came from.
+        self.discard_license_viewer();
         self.route_history.open(Route::Settings);
         if self.settings_tab == settings::SettingsTab::Storage {
             self.maybe_request_storage_summary(cx);
@@ -255,6 +262,7 @@ impl DesktopView {
             && (self.config_editor.is_some()
                 || self.shortcut_capture.is_some()
                 || self.palette.is_some()
+                || self.license_viewer.is_some()
                 || self.config_page_open
                 || self.route_history.can_back())
     }
@@ -266,6 +274,10 @@ impl DesktopView {
     pub(super) fn go_route_back(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if self.current_route() == Route::Workspace {
             return false;
+        }
+        if self.license_viewer.is_some() {
+            self.close_license_viewer(window, cx);
+            return true;
         }
         if self.config_editor.is_some() {
             if self.config_write_pending {
@@ -308,6 +320,7 @@ impl DesktopView {
         if self.current_route() != Route::Settings {
             return;
         }
+        self.discard_license_viewer();
         self.teardown_settings();
         self.route_history.dismiss_to_workspace();
         // See close_browser: route close always lands in the composer.
@@ -413,6 +426,9 @@ impl DesktopView {
         } else if self.full_access_confirm.is_some() {
             self.disarm_double_escape();
             self.cancel_full_access_confirm(window, cx);
+        } else if self.license_viewer.is_some() {
+            self.disarm_double_escape();
+            self.close_license_viewer(window, cx);
         } else if self.attachment_picker.is_some() {
             self.disarm_double_escape();
             self.close_attachment_picker(window, cx);

@@ -280,4 +280,5 @@ The resulting browser app is available at <https://vinhnx.github.io/VTCode/> wit
 with the exact origin `https://vtcode.vinhnx.chatgpt.site`. Both deployments start in fallback mode; use the
 [WebMCP deployment reference](../../docs/reference/webmcp.md) for pairing, origin-trial, and verification details.
 
-The WebMCP app is covered by the repository's [MIT OR Apache-2.0 license](../../LICENSE).
+The WebMCP app is covered by the repository's [MIT OR Apache-2.0 license](../../LICENSE-MIT)
+(see also [Apache-2.0](../../LICENSE)).

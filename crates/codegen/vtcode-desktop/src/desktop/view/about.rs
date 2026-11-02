@@ -48,13 +48,14 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Third-party notices live in Settings → VT Code; route there and close.
+    /// Third-party notices: open the in-app viewer at the notices overview.
     fn open_acknowledgments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.disarm_double_escape();
-        self.about_open = false;
-        self.settings_tab = settings::SettingsTab::VtCode;
-        self.open_settings(window, cx);
-        cx.notify();
+        self.open_license_viewer(licenses::LicenseDocument::Notices, window, cx);
+    }
+
+    /// First-party dual license: open the in-app viewer at the MIT text.
+    fn open_license(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_license_viewer(licenses::LicenseDocument::Mit, window, cx);
     }
 
     /// Centered brand card over the shared modal scrim: logo tile, name,
@@ -110,23 +111,33 @@ impl DesktopView {
                             .child(rust_i18n::t!("app.about.version", version = env!("CARGO_PKG_VERSION")).to_string()),
                     )
                     // HIG about windows carry the copyright line, kept small
-                    // and muted below the version.
+                    // and muted below the version, with the license it is
+                    // released under on the same block.
                     .child(
                         div()
                             .id("about-copyright")
                             .test_support()
                             .text_xs()
                             .text_color(colors.muted_foreground)
-                            .child("Copyright 2025 Vinh Nguyen"),
+                            .child("Copyright 2025 Vinh Nguyen · MIT OR Apache-2.0"),
                     )
                     .child(hairline())
                     .child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .items_center()
                             .justify_end()
                             .gap_2()
                             .w_full()
+                            .child(
+                                desktop_button("about-license")
+                                    .label(rust_i18n::t!("app.licenses.about_license").to_string())
+                                    .ghost()
+                                    .on_click(cx.listener(|view, _, window, cx| {
+                                        view.open_license(window, cx);
+                                    })),
+                            )
                             .child(
                                 desktop_button("about-acknowledgments")
                                     .label(rust_i18n::t!("app.about.acknowledgments").to_string())

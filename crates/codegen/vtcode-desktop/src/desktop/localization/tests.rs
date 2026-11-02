@@ -93,9 +93,22 @@ fn license_settings_copy_is_translated_and_interpolates_errors() {
     for language in UiLanguage::ALL {
         let locale = language.locale();
         for key in [
-            "app.settings.licenses.title",
-            "app.settings.licenses.description",
-            "app.settings.licenses.view",
+            "app.licenses.title",
+            "app.licenses.description",
+            "app.licenses.first_party_title",
+            "app.licenses.first_party_description",
+            "app.licenses.third_party_title",
+            "app.licenses.third_party_description",
+            "app.licenses.view",
+            "app.licenses.viewer_description",
+            "app.licenses.notices",
+            "app.licenses.dependencies",
+            "app.licenses.license_texts",
+            "app.licenses.third_party_group",
+            "app.licenses.copy",
+            "app.licenses.close",
+            "app.licenses.open_in_editor",
+            "app.licenses.about_license",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
@@ -103,10 +116,17 @@ fn license_settings_copy_is_translated_and_interpolates_errors() {
                 assert_ne!(value, rust_i18n::t!(key, locale = "en").to_string(), "{locale}/{key}");
             }
         }
-        let error = rust_i18n::t!("app.settings.licenses.error", locale = locale, error = "example-error").to_string();
+        let error = rust_i18n::t!(
+            "app.licenses.open_error",
+            locale = locale,
+            document = "LICENSE-MIT",
+            error = "example-error"
+        )
+        .to_string();
+        assert!(error.contains("LICENSE-MIT"), "{locale}: {error}");
         assert!(error.contains("example-error"), "{locale}: {error}");
         if language != UiLanguage::English {
-            assert_ne!(error, "Could not open third-party notices: example-error", "{locale}");
+            assert_ne!(error, "Could not open LICENSE-MIT: example-error", "{locale}");
         }
     }
 }
