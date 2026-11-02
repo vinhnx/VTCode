@@ -125,7 +125,7 @@ inbox and drain after the window opens. Same-workspace links load directly throu
 confirm included); other workspaces navigate through the pending path. Either way the CLI falls back to the
 argv launch when no bundle claims the scheme.
 
-The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.8.0 setup](https://gpui-kit.com/docs/installation/).
+The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.8.1 setup](https://gpui-kit.com/docs/installation/).
 
 ## Runtime and session behavior
 
@@ -918,7 +918,7 @@ Reviewed Zed commit `347f171a3fd00a3b672382d78348b37bd969d17c`:
 [ownership/data flow](https://github.com/zed-industries/zed/blob/347f171a3fd00a3b672382d78348b37bd969d17c/crates/gpui/src/_ownership_and_data_flow.rs),
 and [examples](https://github.com/zed-industries/zed/tree/347f171a3fd00a3b672382d78348b37bd969d17c/crates/gpui/examples),
 particularly `a11y.rs` and `popover.rs`. Applied stable roles/labels, retained entity/subscription ownership,
-and anchored/deferred popovers using the APIs actually available through pinned GPUI Kit 0.8.0.
+and anchored/deferred popovers using the APIs actually available through pinned GPUI Kit 0.8.1.
 These are original VT Code integrations; no main-branch APIs or example implementation were copied.
 
 Desktop `/config` opens a dedicated configuration page grouped by the shared CLI catalog. Choose a category to inspect
