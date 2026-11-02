@@ -130,3 +130,7 @@ https://github.com/longbridge/gpui-kit/releases/tag/v0.9.0
 ---
 
 contribute back to OSS with learning from this project. check gotchas and decicions.
+
+---
+
+desktop app: check chat input labels seems not read and respect the font settings? the label size is fixed and not dynamic -> fix it
