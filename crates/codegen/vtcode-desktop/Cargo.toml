@@ -20,7 +20,7 @@ workspace = true
 anyhow = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
-gpui-kit = { version = "=0.8.0", features = ["syntect"] }
+gpui-kit = { version = "=0.8.1", features = ["syntect"] }
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSButton", "NSControl", "NSFont", "NSFontDescriptor", "NSImage", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "objc2-core-foundation"] }
 objc2-foundation = "0.3.2"
@@ -38,7 +38,7 @@ vtcode-exec-events = { workspace = true }
 vtcode-ui = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
-gpui-kit = { version = "=0.8.0", features = ["test-support"] }
+gpui-kit = { version = "=0.8.1", features = ["test-support"] }
 image = { workspace = true }
 tempfile = { workspace = true }
 vtcode-config = { workspace = true }

@@ -26,7 +26,7 @@ anyhow = { workspace = true }
 bytes = "1.11"
 hashbrown = { workspace = true }
 memchr = { workspace = true }
-parking_lot = "0.12"
+parking_lot = "0.13"
 path-clean = { workspace = true }
 shell-escape = "0.1"
 shell-words = { workspace = true }
