@@ -51,6 +51,10 @@ fn composer_copy_is_localized_for_every_language() {
             "app.composer.queued_count",
             "app.composer.edit_queued",
             "app.composer.queue_dropped",
+            "app.composer.background_operation",
+            "app.composer.background_operation_tooltip",
+            "app.composer.force_cancel",
+            "app.composer.force_cancel_tooltip",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

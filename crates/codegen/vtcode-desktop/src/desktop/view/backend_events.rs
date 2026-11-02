@@ -715,6 +715,9 @@ impl DesktopView {
                     protocol::method::TURN_CANCEL => {
                         self.status = rust_i18n::t!("app.service.cancel_accepted").to_string();
                     }
+                    protocol::method::EXEC_FORCE_CANCEL | protocol::method::EXEC_BACKGROUND => {
+                        self.apply_exec_command_response(method.as_str());
+                    }
                     _ => {}
                 }
             }

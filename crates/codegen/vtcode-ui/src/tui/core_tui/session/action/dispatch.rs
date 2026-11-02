@@ -40,6 +40,10 @@ pub(crate) fn dispatch_rebindable_action(session: &mut Session, action: Action) 
             session.mark_dirty();
             Some(InlineEvent::BackgroundOperation)
         }
+        Action::ForceCancel => {
+            session.mark_dirty();
+            Some(InlineEvent::ForceCancelPtySession)
+        }
         Action::OpenModelPicker => {
             session.mark_dirty();
             Some(InlineEvent::Submit("/model".into()))

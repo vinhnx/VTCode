@@ -846,6 +846,31 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             }
             Ok((json!({ "cancelRequested": true }), false))
         }
+        method::EXEC_FORCE_CANCEL | method::EXEC_BACKGROUND => {
+            let params: protocol::SessionIdParams = parse_params(&request.params)?;
+            let input = {
+                let state = context.state.lock().await;
+                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
+                    bail!("session is not selected");
+                }
+                let runtime = state
+                    .runtime
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("selected session is not running"))?;
+                runtime.input.clone()
+            };
+            // No active-turn gate: a stuck foreground session can outlive its
+            // turn, and the escape hatch must work whenever sessions exist.
+            let event = if request.method == method::EXEC_FORCE_CANCEL {
+                InlineEvent::ForceCancelPtySession
+            } else {
+                InlineEvent::BackgroundOperation
+            };
+            if input.send(event).is_err() {
+                bail!("selected session runtime has stopped");
+            }
+            Ok((json!({ "accepted": true }), false))
+        }
         method::TURN_QUEUE_TAKE_LATEST => {
             let params: protocol::TurnQueueTakeLatestParams = parse_params(&request.params)?;
             let (result, status) = {

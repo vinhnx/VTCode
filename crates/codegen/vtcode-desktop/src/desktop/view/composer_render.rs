@@ -314,19 +314,42 @@ impl DesktopView {
                     ))
                 });
         if self.running {
-            model_actions = model_actions.child(
-                desktop_button("cancel-turn")
-                    .tooltip_with_action(
-                        rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
-                        &CancelRun,
-                        Some(key_context::DESKTOP),
-                    )
-                    .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
-                    .icon(IconName::Square)
-                    .danger()
-                    .when(self.zen_mode, |button| button.small())
-                    .dispatches_desktop_action(CancelRun, self.focus_handle.clone()),
-            );
+            model_actions = model_actions
+                .child(
+                    desktop_button("background-exec")
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.composer.background_operation_tooltip").to_string(),
+                            &BackgroundOperation,
+                            Some(key_context::DESKTOP),
+                        )
+                        .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
+                        .icon(IconName::ArrowDown)
+                        .ghost()
+                        .when(self.zen_mode, |button| button.small())
+                        .on_click(cx.listener(|this, _, _, cx| this.background_foreground_session(cx))),
+                )
+                .child(
+                    desktop_button("force-cancel-exec")
+                        .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
+                        .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
+                        .icon(IconName::X)
+                        .danger()
+                        .when(self.zen_mode, |button| button.small())
+                        .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
+                )
+                .child(
+                    desktop_button("cancel-turn")
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
+                            &CancelRun,
+                            Some(key_context::DESKTOP),
+                        )
+                        .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
+                        .icon(IconName::Square)
+                        .danger()
+                        .when(self.zen_mode, |button| button.small())
+                        .dispatches_desktop_action(CancelRun, self.focus_handle.clone()),
+                );
         } else {
             model_actions = model_actions.child(
                 desktop_button("send-prompt")

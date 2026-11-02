@@ -11,7 +11,7 @@
 //! settings/<tab>            (tab names share the /settings aliases)
 //! config | config/<path>
 //! palette/<kind>            (commands, models, fonts/ui, …)
-//! command/<id>              (the 33 configurable shortcut ids)
+//! command/<id>              (the 34 configurable shortcut ids)
 //! action/<verb>[/<args>]    (sessions, files, models, …)
 //! ```
 //!

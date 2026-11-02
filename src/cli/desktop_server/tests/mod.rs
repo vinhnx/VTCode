@@ -185,6 +185,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
 
 mod config_auth;
 mod config_restart;
+mod exec_commands;
 mod model_review;
 mod secret_store;
 mod session_history;

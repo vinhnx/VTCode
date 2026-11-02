@@ -19,6 +19,7 @@ pub(super) enum CommandId {
     Inspector,
     ZenMode,
     Cancel,
+    BackgroundOperation,
     Dismiss,
     Settings,
     SettingsSearch,
@@ -45,7 +46,7 @@ pub(super) enum CommandId {
 }
 
 impl CommandId {
-    pub(super) const ALL: [Self; 33] = [
+    pub(super) const ALL: [Self; 34] = [
         Self::Commands,
         Self::ConversationSearch,
         Self::NewSession,
@@ -56,6 +57,7 @@ impl CommandId {
         Self::Inspector,
         Self::ZenMode,
         Self::Cancel,
+        Self::BackgroundOperation,
         Self::Dismiss,
         Self::Settings,
         Self::SettingsSearch,
@@ -93,6 +95,7 @@ impl CommandId {
             Self::Inspector => "inspector",
             Self::ZenMode => "zen_mode",
             Self::Cancel => "cancel",
+            Self::BackgroundOperation => "background_operation",
             Self::Dismiss => "dismiss",
             Self::Settings => "settings",
             Self::SettingsSearch => "settings_search",
@@ -164,7 +167,7 @@ impl ShortcutCommand {
     }
 }
 
-pub(super) const COMMANDS: [ShortcutCommand; 33] = [
+pub(super) const COMMANDS: [ShortcutCommand; 34] = [
     ShortcutCommand {
         id: CommandId::Commands,
         label_key: "app.shortcuts.commands_label",
@@ -224,6 +227,12 @@ pub(super) const COMMANDS: [ShortcutCommand; 33] = [
         label_key: "app.shortcuts.cancel_label",
         description_key: "app.shortcuts.cancel_description",
         default_binding: "cmd-.",
+    },
+    ShortcutCommand {
+        id: CommandId::BackgroundOperation,
+        label_key: "app.shortcuts.background_operation_label",
+        description_key: "app.shortcuts.background_operation_description",
+        default_binding: "cmd-shift-d",
     },
     ShortcutCommand {
         id: CommandId::Dismiss,
@@ -377,6 +386,7 @@ pub(super) fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
         CommandId::Inspector => Box::new(ToggleInspector),
         CommandId::ZenMode => Box::new(ToggleZenMode),
         CommandId::Cancel => Box::new(CancelRun),
+        CommandId::BackgroundOperation => Box::new(BackgroundOperation),
         CommandId::Dismiss => Box::new(DismissOverlay),
         CommandId::Settings => Box::new(OpenSettings),
         CommandId::SettingsSearch => Box::new(OpenSettingsSearch),
@@ -600,22 +610,22 @@ mod tests {
     #[gpui_kit::test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            assert_eq!(bindings(&BTreeMap::new(), cx).unwrap().len(), 35);
+            assert_eq!(bindings(&BTreeMap::new(), cx).unwrap().len(), 36);
             assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())]), cx).is_ok());
             assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())]), cx).is_ok());
             assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())]), cx).is_ok());
-            assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())]), cx).unwrap().len(), 34);
+            assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())]), cx).unwrap().len(), 35);
             assert_eq!(
                 bindings(&BTreeMap::from([("settings_search".into(), String::new())]), cx)
                     .unwrap()
                     .len(),
-                33
+                34
             );
             assert_eq!(
                 bindings(&BTreeMap::from([("settings".into(), String::new())]), cx)
                     .unwrap()
                     .len(),
-                33,
+                34,
                 "unbinding Settings removes both its desktop and in-settings bindings"
             );
             assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())]), cx).is_err());
@@ -693,6 +703,7 @@ mod tests {
             "inspector",
             "zen_mode",
             "cancel",
+            "background_operation",
             "dismiss",
             "settings",
             "settings_search",
@@ -828,7 +839,7 @@ mod tests {
         cx.update(|cx| {
             let loaded = bindings(&BTreeMap::from([("model".into(), "secondary-s".into())]), cx)
                 .expect("secondary- resolves on the host OS");
-            assert_eq!(loaded.len(), 35, "full table builds with the secondary override");
+            assert_eq!(loaded.len(), 36, "full table builds with the secondary override");
             #[cfg(target_os = "macos")]
             let expected = "cmd-s";
             #[cfg(not(target_os = "macos"))]

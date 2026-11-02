@@ -107,6 +107,7 @@ mod configuration;
 mod configuration_render;
 mod curated;
 mod deeplinks;
+mod exec_controls;
 mod files_panel;
 mod full_access_confirm;
 mod inspector_changes;
@@ -341,6 +342,7 @@ actions!(
         NextReviewFile,
         PreviousReviewFile,
         CancelRun,
+        BackgroundOperation,
         QueueBatched,
         OpenPromptHistory,
         TakeLatestQueued,

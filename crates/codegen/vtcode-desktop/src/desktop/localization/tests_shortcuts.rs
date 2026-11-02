@@ -94,6 +94,8 @@ fn shortcuts_copy_is_localized_for_every_language() {
             "app.shortcuts.a11y_not_set",
             "app.shortcuts.a11y_invalid",
             "app.shortcuts.invalid_shortcut",
+            "app.shortcuts.background_operation_label",
+            "app.shortcuts.background_operation_description",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");

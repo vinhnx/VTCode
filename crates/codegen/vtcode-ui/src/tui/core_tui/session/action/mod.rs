@@ -20,6 +20,8 @@ pub enum Action {
     Exit,
     /// Run the current operation in the background.
     BackgroundOperation,
+    /// Force-terminate stuck foreground exec sessions (escape hatch).
+    ForceCancel,
     /// Open the model picker dialog.
     OpenModelPicker,
     /// Clear the terminal screen.
@@ -60,6 +62,7 @@ impl Action {
             Action::Interrupt => "interrupt",
             Action::Exit => "exit",
             Action::BackgroundOperation => "background_operation",
+            Action::ForceCancel => "force_cancel",
             Action::OpenModelPicker => "open_model_picker",
             Action::ClearScreen => "clear_screen",
             Action::ScrollPageUp => "scroll_page_up",
@@ -84,6 +87,7 @@ impl Action {
             Action::Interrupt,
             Action::Exit,
             Action::BackgroundOperation,
+            Action::ForceCancel,
             Action::OpenModelPicker,
             Action::ClearScreen,
             Action::ScrollPageUp,
@@ -221,6 +225,13 @@ fn default_bindings() -> HashMap<Action, Vec<(KeyCode, KeyModifiers)>> {
         vec![
             (KeyCode::Char('b'), KeyModifiers::CONTROL),
             (KeyCode::Char('B'), KeyModifiers::CONTROL),
+        ],
+    );
+    m.insert(
+        ForceCancel,
+        vec![
+            (KeyCode::Char('x'), KeyModifiers::CONTROL),
+            (KeyCode::Char('X'), KeyModifiers::CONTROL),
         ],
     );
     m.insert(
@@ -703,8 +714,12 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Char('I'), KeyModifiers::ALT);
         assert_eq!(store.resolve(&key), Some(Action::FocusInput));
 
-        // Unbound → None
+        // Ctrl+X → ForceCancel
         let key = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL);
+        assert_eq!(store.resolve(&key), Some(Action::ForceCancel));
+
+        // Unbound → None
+        let key = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL);
         assert_eq!(store.resolve(&key), None);
     }
 

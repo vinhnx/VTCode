@@ -31,6 +31,10 @@ pub const TURN_SUBMIT: &str = "turn/submit";
 pub const TURN_CANCEL: &str = "turn/cancel";
 /// Pop the newest queued message back for editing.
 pub const TURN_QUEUE_TAKE_LATEST: &str = "turn/queue/take-latest";
+/// Force-terminate the selected session's foreground exec sessions.
+pub const EXEC_FORCE_CANCEL: &str = "session/exec/force-cancel";
+/// Move the selected session's foreground exec session to the background.
+pub const EXEC_BACKGROUND: &str = "session/exec/background";
 /// Respond to a pending interaction.
 pub const INTERACTION_RESPOND: &str = "interaction/respond";
 /// Discover active provider/model setup.

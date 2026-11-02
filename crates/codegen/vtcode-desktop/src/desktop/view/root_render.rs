@@ -251,6 +251,11 @@ impl Render for DesktopView {
                 }))
             })
             .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
+            .when(self.running, |body| {
+                body.on_action(
+                    cx.listener(|view, _: &BackgroundOperation, _, cx| view.background_foreground_session(cx)),
+                )
+            })
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
             .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
             .on_action(cx.listener(|view, _: &OpenThreadBrowser, window, cx| view.open_thread_browser(window, cx)))
