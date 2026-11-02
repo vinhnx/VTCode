@@ -40,8 +40,8 @@
 
 ## Overview
 
-VT Code works on your repository from your terminal or its native macOS app: explore, plan, edit, and verify
-with the model you choose. It owns context, tool calls, and execution policy, so long tasks stay auditable and
+VT Code works on your repository from the terminal or its native macOS app. Explore, plan, edit, and verify with
+the model you choose. VT Code owns context, tool calls, and execution policy, so long tasks stay auditable and
 resumable.
 
 | At a glance      | What you get                                                                         |
@@ -77,11 +77,15 @@ Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-The installer also attempts to add the optional `ripgrep` and `ast-grep` search tools. On macOS 15+ it also offers
-the VT Code desktop app from the prebuilt release asset and asks before installing (default location `~/Applications`).
-Desktop installation is best-effort: a missing asset or failed install only warns, so the CLI install still succeeds.
-Releases without a desktop asset fall back to a from-source build. Pass `--without-desktop` to skip it, or
-`--with-desktop` to fail hard when it is unavailable. See the [installer guide](./docs/installation/NATIVE_INSTALLERS.md).
+The installer also attempts to add the optional `ripgrep` and `ast-grep` search tools. On macOS 15+, it offers the
+VT Code desktop app from the prebuilt release asset and asks before installing it to `~/Applications` by default.
+Desktop installation is best-effort: a missing asset or failed install only warns, and the CLI install still succeeds.
+Releases without a desktop asset fall back to a from-source build. Desktop flags:
+
+- `--without-desktop` skips the desktop app.
+- `--with-desktop` fails the install if the desktop app is unavailable.
+
+See the [installer guide](./docs/installation/NATIVE_INSTALLERS.md) for details.
 
 To manage installation yourself, use Homebrew or Cargo:
 
@@ -150,10 +154,10 @@ Common commands:
 
 ### Interactive
 
-Use `vtcode` to explore, plan, and implement changes in the TUI. For larger tasks, start with
-[read-only planning](./docs/guides/planning-workflow.md) and review the
-[turn diff](./docs/development/diff-preview.md) before committing. `/explain` then summarizes the outcome,
-changes, decisions, and verification without another model call; see the
+Use `vtcode` to explore, plan, and implement changes in the TUI. For larger tasks, begin with
+[read-only planning](./docs/guides/planning-workflow.md), then review the
+[turn diff](./docs/development/diff-preview.md) before committing. Run `/explain` to summarize the outcome,
+changes, decisions, and verification without another model call. See the
 [explanation options](./docs/user-guide/commands.md#execution-explanations) and the
 [interactive guide](./docs/user-guide/interactive-mode.md) for controls.
 
@@ -335,7 +339,7 @@ issue. Details: [security policy](./docs/SECURITY.md).
 
 ## Community
 
-You can contribute code, fix docs, or report what broke in a release. You can also fork the repository and
+Contribute code, fix docs, or report what broke in a release. You can also fork the repository and
 adapt it for your own use.
 
 - [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) - something looks off? Tell us,

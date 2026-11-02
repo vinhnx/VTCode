@@ -271,7 +271,13 @@ fn default_bindings() -> HashMap<Action, Vec<(KeyCode, KeyModifiers)>> {
         ],
     );
     m.insert(JumpToLastChange, vec![(KeyCode::End, KeyModifiers::CONTROL)]);
-    m.insert(FocusInput, vec![(KeyCode::Char('i'), KeyModifiers::ALT), (KeyCode::Char('I'), KeyModifiers::ALT)]);
+    m.insert(
+        FocusInput,
+        vec![
+            (KeyCode::Char('i'), KeyModifiers::ALT),
+            (KeyCode::Char('I'), KeyModifiers::ALT),
+        ],
+    );
 
     m
 }

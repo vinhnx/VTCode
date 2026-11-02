@@ -14,6 +14,8 @@ CRITICAL: check desktop app, for plan mode proposal to build. VT Code plan propo
 
 '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 10.46.40 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 10.46.37 AM.png'
 
+it seems thatt the plan and build modes interactive doesn't work properly on desktop app, it has been working well before on the CLI.
+
 ---
 
 add visual sync for the utils pane '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 10.47.11 AM.png' also add a button to close it.
@@ -73,3 +75,57 @@ refine readme with both screenshots and updated instructions. /Users/vinhnguyenx
 check and fix desktop themes doesn't grouped by modes (light/dark) in the settings
 
 '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 11.01.13 AM.png'
+
+---
+
+use /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/resources/gif/demo-desktop.mov as hero demo.
+
+---
+
+CRITICAL: check vtcode doesn't work ? what is Prompt kept — checkpoint unavailable. ?
+
+> VT Code (0.181.0) Build · Meta AI Muse-Spark-1.3-Contributor (1M) · high
+> ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> Refine and update @README.md for better structure and wordings.
+> Prompt kept — checkpoint unavailable. Wait a moment and retry.
+> MCP tools are ready. Use /mcp tools to inspect the catalog.
+> ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> Refine and update @README.md for better structure and wordings.
+> Prompt kept — checkpoint unavailable. Wait a moment and retry.
+> ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> Refine and update @README.md for better structure and wordings.
+> Prompt kept — checkpoint unavailable. Wait a moment and retry.
+
+is it because I have laucched a desktop app process?
+
+remove multi session or filesnap lock -> Help me reason through this problem step by step. Review the context,
+challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the
+simplest practical approach before implementation.
+
+it should not be the case when user want to run multiple vtcode instance-> Help me reason through this problem step
+by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the
+overall design. Recommend the simplest practical approach before implementation. and fix
+
+---
+
+CRITICAL: changing the modes/models/effort causing the desktop app to open a new thread, it should stay in the same thread and continue there. the configuration should persist.
+
+this is not happening as expected. CLI seems to keep the thread correctly.
+
+---
+
+For both cli and desktop app, show human-readable provider names in the model picker list instead of codes. also regroup and sort and move the frontier company and models to top. Move OpenAI, Anthropic to top. Then open source ones (HuggingFace, Ollama, LM Studio, etc).
+
+---
+
+click on a notification should deeplink and open to the related information.
+
+---
+
+revamp and refine model effort picker design, https://gpui-kit.com/component/slider/
+
+maybe implement a vertical slider for effort selection. make it special and intuitive for users. premium feel.
+
+---
+
+for zen mode, when activated, hide distractions and focus on the main content. move and group the chat input accessory buttons like models/effort, build modes, approval modes together. keep it minimal and simple with clean layout, and must focused on the main content. and easy to toggle on/off.
