@@ -5,6 +5,74 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.1 - 2026-11-02
+
+### Highlights
+
+#### Bug Fixes
+
+- Publish vtcode-desktop-protocol to crates.io (59edae70) (@vinhnx)
+- Pin desktop workflow nextest to repo-required version (723c7175) (@vinhnx)
+- Skip Liquid Glass catalog on SDKs older than macOS 26 (827f8929) (@vinhnx)
+- Allow iTerm2 icon install from any macOS terminal; refresh stale VS Code icon docs (505af907)
+- Accept edit/edits in scope-review expectations (3cad2153)
+- Adapt desktop to gpui-pre 0.3.10 and re-vendor macos cursor patch (0a1b4026)
+- Preserve thread across config changes (7c88841c)
+- Keep thread on config responses (93ffa224)
+- Interview the user when plan validation exhausts (2c4c6c3e)
+- Diagnose missing-toolchain verification failures and scope markdown checks (eeee8f24)
+- Preserve installer errors and guide manual install (b59b4e44)
+- Bump rio-vt to 0.5.29 for RUSTSEC-2026-0430 (033d608d)
+- Correct display width and shimmer test probe (70b27de1)
+- Let a latched stop win over queued overlay input (5d88c1a4)
+- Persist model selection and map effort on config/select (b09755b5)
+- Proceed degraded on deterministic failures instead of wedging turns (837735cf)
+- Give settings panels and sections horizontal air (c94cb8f9)
+- Make cancel reliably stop the active run (5fc386d4)
+
+#### Documentation
+
+- Link desktop app download, fix admonitions for crates.io (1e477501) (@vinhnx)
+- Add copy-paste Rex program-registry icon request (01df8728)
+- Polish README wording and add desktop demo video (716ed219)
+- Thread-preserving model switch (c0abb618)
+- Docs: update README and desktop workspace with demo video and appearance images (cdcb3cca)
+- Update README for clarity and consistency, improve demo video description (3343a325)
+- Reflow workspace guide tables and fix lint errors (c6700608)
+- Correct stale gpui-kit 0.8.0 references to pinned 0.8.1 (c87525e3)
+
+#### Features
+
+- Build and upload macOS desktop app with release.sh (30a3f0b9) (@vinhnx)
+- Link the desktop app from release notes automatically (26c67eae) (@vinhnx)
+- Emit ConEmu OSC 9;4 tab progress on allowlisted terminals (d78ef6e1)
+- Offer prebuilt macOS app install in installer and updater (94ab8f09)
+- Install command, startup nudge, Gatekeeper notes, install docs (1b8995fb)
+- Proceed with recorded exclusions instead of blocking turns (9a625d29)
+- Share default search paths between pipe and PTY commands (b89bf22a)
+- Add in-app license and open-source viewer (23c5c2d2)
+- Sync inspector visuals and add rail close control (65a9c636)
+- Add force-cancel and background exec controls (e0e3d693)
+- Add bidirectional CLI thread handoff (/desktop, /cli) (69bc1744)
+- Navigate history with horizontal trackpad scroll (7ff3634d)
+
+### Other Changes
+
+#### Performance
+
+- Collapse consecutive transcript remeasures (9ef69a9f)
+
+#### Refactors
+
+- Split over-budget session event modules (267abea4)
+- Move desktop request router into dispatch module (78fd7b81)
+- Route settings rows and nav selection through shared builders (c31d008b)
+
+#### Tests
+
+- Pin chat font-size scaling with geometry regressions (d2648bf1)
+- Cover stepper e2e and production-frame font sync (1a1d1421)
+
 ## 0.181.0 - 2026-11-01
 
 ### Highlights
