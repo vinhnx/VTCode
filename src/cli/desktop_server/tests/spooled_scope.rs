@@ -248,16 +248,16 @@ fn review_scope_is_bounded_to_existing_workspace_directories() {
     std::fs::create_dir(root.join("src")).unwrap();
     std::fs::create_dir(root.join(" spaced ")).unwrap();
     std::fs::write(root.join("file"), "not a directory").unwrap();
-    assert_eq!(resolve_review_scope(&root, None).unwrap(), root);
-    assert_eq!(resolve_review_scope(&root, Some("src")).unwrap(), root.join("src"));
-    assert_eq!(resolve_review_scope(&root, Some(" spaced ")).unwrap(), root.join(" spaced "));
-    assert!(resolve_review_scope(&root, Some("file")).is_err());
-    assert!(resolve_review_scope(&root, Some(outside.path().to_str().unwrap())).is_err());
-    assert!(resolve_review_scope(&root, Some(&"x".repeat(4097))).is_err());
+    assert_eq!(dispatch::resolve_review_scope(&root, None).unwrap(), root);
+    assert_eq!(dispatch::resolve_review_scope(&root, Some("src")).unwrap(), root.join("src"));
+    assert_eq!(dispatch::resolve_review_scope(&root, Some(" spaced ")).unwrap(), root.join(" spaced "));
+    assert!(dispatch::resolve_review_scope(&root, Some("file")).is_err());
+    assert!(dispatch::resolve_review_scope(&root, Some(outside.path().to_str().unwrap())).is_err());
+    assert!(dispatch::resolve_review_scope(&root, Some(&"x".repeat(4097))).is_err());
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(outside.path(), root.join("escape")).unwrap();
-        assert!(resolve_review_scope(&root, Some("escape")).is_err());
+        assert!(dispatch::resolve_review_scope(&root, Some("escape")).is_err());
     }
 }
 #[test]

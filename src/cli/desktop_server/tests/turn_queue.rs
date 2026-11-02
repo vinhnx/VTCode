@@ -187,7 +187,9 @@ async fn take_latest_request_pops_newest_for_editing() {
         params: serde_json::json!({ "sessionId": "session" }),
     };
     for (expected_text, expected_depth) in [(Some("newer"), 1), (Some("older"), 0)] {
-        let (result, stop) = handle_request_inner(&context, &take_request).await.expect("take-latest");
+        let (result, stop) = dispatch::handle_request_inner(&context, &take_request)
+            .await
+            .expect("take-latest");
         assert!(!stop);
         let taken: protocol::TurnQueueTakeLatestResult = serde_json::from_value(result).expect("result");
         assert_eq!(taken.text.as_deref(), expected_text);
@@ -196,7 +198,9 @@ async fn take_latest_request_pops_newest_for_editing() {
         assert_eq!(status.method, protocol::method::TURN_QUEUE_STATUS);
         assert_eq!(status.params["queueDepth"], expected_depth);
     }
-    let (result, _) = handle_request_inner(&context, &take_request).await.expect("empty take-latest");
+    let (result, _) = dispatch::handle_request_inner(&context, &take_request)
+        .await
+        .expect("empty take-latest");
     let taken: protocol::TurnQueueTakeLatestResult = serde_json::from_value(result).expect("result");
     assert_eq!(taken.text, None);
     assert_eq!(taken.queue_depth, 0);
@@ -206,7 +210,7 @@ async fn take_latest_request_pops_newest_for_editing() {
         params: serde_json::json!({ "sessionId": "other" }),
         ..take_request
     };
-    assert!(handle_request_inner(&context, &foreign).await.is_err(), "wrong session rejected");
+    assert!(dispatch::handle_request_inner(&context, &foreign).await.is_err(), "wrong session rejected");
 
     drop(exit_sender);
     runtime_task.abort();
