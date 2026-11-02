@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use crossterm::style::Stylize;
 use vtcode_core::cli::args::{DependenciesSubcommand, ManagedDependency};
 use vtcode_core::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
@@ -18,9 +18,25 @@ async fn handle_install(dependency: ManagedDependency) -> Result<()> {
     match dependency {
         ManagedDependency::SearchTools => {
             println!("{} Installing the optional search tools bundle", "→".cyan());
-            install_ripgrep()?;
-            install_ast_grep().await?;
-            Ok(())
+            // Attempt both tools even if the first fails so one command
+            // reports the full bundle state (issue #802).
+            let ripgrep_result = install_ripgrep();
+            let ast_grep_result = install_ast_grep().await;
+            match (&ripgrep_result, &ast_grep_result) {
+                (Ok(()), Ok(())) => Ok(()),
+                _ => {
+                    if let Err(err) = &ripgrep_result {
+                        println!("{} ripgrep install failed: {err:#}", "✗".red());
+                    }
+                    if let Err(err) = &ast_grep_result {
+                        println!("{} ast-grep install failed: {err:#}", "✗".red());
+                    }
+                    // Full errors (including manual install guides) are printed
+                    // above; return a short summary so main does not repeat
+                    // them on stderr.
+                    Err(anyhow!("search-tools bundle installation failed"))
+                }
+            }
         }
         ManagedDependency::Ripgrep => {
             install_ripgrep()?;
