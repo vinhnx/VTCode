@@ -15,8 +15,9 @@ the applicable ownership/lifecycle improvements, and verification boundaries.
 To run the app:
 
 - macOS 15 or newer, on Apple Silicon or Intel.
-- One-time Gatekeeper approval on first launch: local builds are signed ad hoc (no Developer ID, no notarization),
-  so right-click the app and choose Open, or allow it once in Settings > Privacy & Security.
+- One-time Gatekeeper approval on first launch: builds are ad hoc signed (no Developer ID, no notarization)
+  unless the release notes say otherwise, so right-click the app and choose Open, or allow it once in
+  Settings > Privacy & Security.
 - Provider credentials configured for the CLI (see below); the desktop service reuses the CLI's configuration,
   credentials, workspace trust, and sandbox policy.
 
@@ -29,6 +30,14 @@ it; or run `scripts/package-desktop-macos.sh` directly):
 - Xcode command line tools (`xcode-select --install`) for the linker and macOS SDK; the packaging script also
   requires `codesign`, `ditto`, `sips`, `iconutil`, and `plutil`.
 - Build time: the release build compiles the GUI and its matching CLI helper from source and takes several minutes.
+
+## Download a release build
+
+Every release ships a prebuilt Apple Silicon app on
+[GitHub Releases](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**): download
+`vtcode-desktop-<version>-aarch64-apple-darwin.zip`, unzip, and drag **VT Code.app** to `~/Applications`.
+Verify with the matching `.sha256` sidecar or `checksums.txt`. On Intel Macs, install through
+`scripts/install.sh` (builds from source by default) or package from a checkout as below.
 
 ## Build and launch
 
