@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -57,9 +58,11 @@ impl CopilotProvider {
     async fn client(
         &self,
         model: &ResolvedCopilotModel,
+        request: &LLMRequest,
         tools: &[ToolDefinition],
     ) -> Result<Arc<CopilotAcpClient>, LLMError> {
-        let tool_signature = copilot_tool_signature(tools);
+        let tools_disabled = matches!(request.tool_choice, Some(crate::provider::ToolChoice::None));
+        let tool_signature = copilot_tool_signature(tools, tools_disabled);
         if let Some(client) = self.cached_client(model, &tool_signature).await {
             return Ok(client);
         }
@@ -76,8 +79,9 @@ impl CopilotProvider {
 
         let llm_tools: Vec<ToolDefinition> = tools.to_vec();
 
+        let auth_config = self.request_auth_config(request);
         let created = Arc::new(
-            CopilotAcpClient::connect(&self.auth_config, &self.workspace_root, model.raw_model.as_deref(), &llm_tools)
+            CopilotAcpClient::connect(&auth_config, &self.workspace_root, model.raw_model.as_deref(), &llm_tools)
                 .await
                 .map_err(map_copilot_error)?,
         );
@@ -105,6 +109,16 @@ impl CopilotProvider {
                 cached.raw_model.as_deref() == model.raw_model.as_deref() && cached.tool_signature == tool_signature
             })
             .map(|cached| cached.client.clone())
+    }
+
+    fn request_auth_config(&self, request: &LLMRequest) -> Cow<'_, CopilotAuthConfig> {
+        if matches!(request.tool_choice, Some(crate::provider::ToolChoice::None)) {
+            let mut config = self.auth_config.clone();
+            config.available_tools.clear();
+            Cow::Owned(config)
+        } else {
+            Cow::Borrowed(&self.auth_config)
+        }
     }
 
     fn resolve_model(&self, request: &LLMRequest) -> Result<ResolvedCopilotModel, LLMError> {
@@ -303,7 +317,7 @@ impl CopilotProvider {
         self.validate_request(&request)?;
         let model = self.resolve_model(&request)?;
         let transcript = self.build_transcript(&request)?;
-        let client = self.client(&model, tools).await?;
+        let client = self.client(&model, &request, copilot_request_tools(&request, tools)).await?;
         client.start_prompt(transcript).await.map_err(map_copilot_error)
     }
 }
@@ -372,7 +386,7 @@ impl LLMProvider for CopilotProvider {
         self.validate_request(&request)?;
         let model = self.resolve_model(&request)?;
         let transcript = self.build_transcript(&request)?;
-        let client = self.client(&model, &[]).await?;
+        let client = self.client(&model, &request, &[]).await?;
         let prompt_session = client.start_prompt(transcript).await.map_err(map_copilot_error)?;
         self.stream_from_session(model, prompt_session).await
     }
@@ -517,7 +531,15 @@ fn map_stop_reason(stop_reason: &str) -> crate::provider::FinishReason {
     }
 }
 
-fn copilot_tool_signature(tools: &[ToolDefinition]) -> String {
+fn copilot_request_tools<'a>(request: &LLMRequest, tools: &'a [ToolDefinition]) -> &'a [ToolDefinition] {
+    if matches!(request.tool_choice, Some(crate::provider::ToolChoice::None)) {
+        &[]
+    } else {
+        tools
+    }
+}
+
+fn copilot_tool_signature(tools: &[ToolDefinition], tools_disabled: bool) -> String {
     let mut signature_parts = tools
         .iter()
         .filter_map(|tool| {
@@ -526,7 +548,7 @@ fn copilot_tool_signature(tools: &[ToolDefinition]) -> String {
         })
         .collect::<Vec<_>>();
     signature_parts.sort_unstable();
-    signature_parts.join("|")
+    format!("{}:{}", if tools_disabled { "none" } else { "enabled" }, signature_parts.join("|"))
 }
 
 fn normalize_copilot_model_id(model: &str) -> Option<Option<String>> {
@@ -550,14 +572,41 @@ fn normalize_copilot_model_id(model: &str) -> Option<Option<String>> {
 #[cfg(test)]
 mod tests {
     use super::CopilotProvider;
-    use super::normalize_copilot_model_id;
-    use crate::provider::{ContentPart, LLMProvider, LLMRequest, Message, ToolCall};
+    use super::{copilot_request_tools, copilot_tool_signature, normalize_copilot_model_id};
+    use crate::provider::{ContentPart, LLMProvider, LLMRequest, Message, ToolCall, ToolDefinition};
     use std::path::PathBuf;
     use std::sync::Arc;
     use vtcode_config::constants::models::copilot as copilot_models;
 
     fn provider() -> CopilotProvider {
         CopilotProvider::from_config(None, None, Some(PathBuf::from("/tmp")))
+    }
+
+    #[test]
+    fn tool_free_prompt_session_omits_separately_supplied_tools() {
+        let tools = vec![ToolDefinition::function(
+            "lookup".to_owned(),
+            "Look up saved data".to_owned(),
+            serde_json::json!({"type": "object"}),
+        )];
+        let mut request = LLMRequest {
+            tool_choice: Some(crate::provider::ToolChoice::None),
+            ..Default::default()
+        };
+        assert!(copilot_request_tools(&request, &tools).is_empty());
+        assert!(provider().request_auth_config(&request).available_tools.is_empty());
+        assert_ne!(
+            copilot_tool_signature(&tools, false),
+            copilot_tool_signature(copilot_request_tools(&request, &tools), true)
+        );
+        assert_ne!(
+            copilot_tool_signature(&[], false),
+            copilot_tool_signature(&[], true),
+            "built-in tool policy must distinguish cached clients even without custom tools"
+        );
+        request.tool_choice = Some(crate::provider::ToolChoice::Auto);
+        assert_eq!(copilot_request_tools(&request, &tools).len(), 1);
+        assert_eq!(provider().request_auth_config(&request).available_tools, ["view", "glob", "grep"]);
     }
 
     #[test]

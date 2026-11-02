@@ -86,7 +86,7 @@ pub use response::{
     NormalizedStreamEvent, ReasoningSource, Usage,
 };
 pub use responses_continuation::{
-    PreparedResponsesRequest, ResponsesContinuationState, prepare_openai_responses_request,
+    PreparedResponsesRequest, ResponsesContinuationState, ResponsesContinuationStore, prepare_openai_responses_request,
     prepare_responses_continuation_request, records_responses_continuation_state, responses_continuation_key,
     supports_responses_chaining, uses_incremental_responses_history,
 };

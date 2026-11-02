@@ -312,7 +312,7 @@ async fn initialize_connection(transport: &Arc<StdioTransport>, sidecar_cfg: &Ag
             json!({
                 "clientInfo": {
                     "name": "vtcode",
-                    "title": "VT Code",
+                    "title": vtcode_core::config::constants::app::DISPLAY_NAME,
                     "version": env!("CARGO_PKG_VERSION"),
                 },
                 "capabilities": {

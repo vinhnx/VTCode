@@ -25,7 +25,7 @@ use vtcode_utility_tool_specs::parse_mcp_tool;
 use super::{McpClient, McpSandboxContext, RmcpClient};
 use super::{
     McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo,
-    TIMEZONE_ARGUMENT, build_headers, ensure_timezone_argument, schema_requires_field,
+    TIMEZONE_ARGUMENT, apply_ui_extension_gate, build_headers, ensure_timezone_argument, schema_requires_field,
 };
 
 pub struct McpProvider {
@@ -40,6 +40,8 @@ pub struct McpProvider {
     config: McpProviderConfig,
     /// Stored elicitation handler for reconnection.
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+    /// Whether to advertise the MCP Apps UI extension, retained for reconnects.
+    advertise_ui_apps: bool,
     /// Sandbox inherited by stdio launches and reconnects.
     sandbox_context: Option<McpSandboxContext>,
     pub(crate) semaphore: Arc<Semaphore>,
@@ -59,6 +61,7 @@ impl McpProvider {
         config: McpProviderConfig,
         elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
         sandbox_context: Option<McpSandboxContext>,
+        advertise_ui_apps: bool,
     ) -> Result<Self> {
         if config.name.trim().is_empty() {
             return Err(anyhow!("MCP provider name cannot be empty"));
@@ -102,7 +105,7 @@ impl McpProvider {
 
                 let bearer_token = if let Some(oauth) = http.oauth.as_ref() {
                     McpOAuthService::new()
-                        .resolve_access_token(&config.name, oauth)
+                        .resolve_access_token_for_resource(&config.name, oauth, &http.endpoint)
                         .await?
                         .ok_or_else(|| {
                             anyhow!(
@@ -141,6 +144,7 @@ impl McpProvider {
             client: ArcSwap::from_pointee(client),
             config,
             elicitation_handler,
+            advertise_ui_apps,
             sandbox_context,
             semaphore: Arc::new(Semaphore::new(max_requests)),
             caches: Mutex::new(ProviderCaches::default()),
@@ -566,10 +570,14 @@ impl McpProvider {
         }
 
         // Create a fresh client from the stored config.
-        let new_provider =
-            McpProvider::connect(self.config.clone(), self.elicitation_handler.clone(), self.sandbox_context.clone())
-                .await
-                .with_context(|| format!("MCP reconnect failed for provider '{}'", self.name))?;
+        let new_provider = McpProvider::connect(
+            self.config.clone(),
+            self.elicitation_handler.clone(),
+            self.sandbox_context.clone(),
+            self.advertise_ui_apps,
+        )
+        .await
+        .with_context(|| format!("MCP reconnect failed for provider '{}'", self.name))?;
 
         // Swap inner client.
         {
@@ -581,11 +589,7 @@ impl McpProvider {
         self.invalidate_caches();
 
         // Re-initialise (handshake + tool refresh).
-        let init_params = InitializeRequestParams::new(
-            rmcp::model::ClientCapabilities::default(),
-            super::utils::build_client_implementation(),
-        )
-        .with_protocol_version(latest_protocol_version());
+        let init_params = build_reconnect_initialize_params(self.advertise_ui_apps);
         self.initialize(init_params, startup_timeout, tool_timeout, allowlist)
             .await
             .with_context(|| format!("MCP re-initialization failed for provider '{}'", self.name))?;
@@ -607,6 +611,14 @@ impl McpProvider {
     }
 }
 
+/// Build initialize params for a provider reconnect, retaining the UI advertisement.
+fn build_reconnect_initialize_params(advertise_ui_apps: bool) -> InitializeRequestParams {
+    let mut capabilities = rmcp::model::ClientCapabilities::default();
+    apply_ui_extension_gate(&mut capabilities, advertise_ui_apps);
+    InitializeRequestParams::new(capabilities, super::utils::build_client_implementation())
+        .with_protocol_version(latest_protocol_version())
+}
+
 // Servers may reorder lists between calls; a stable order keeps LLM prompt-cache prefixes valid.
 fn filter_tools_sorted(provider: &str, tools: Vec<Tool>, allowlist: &McpAllowListConfig) -> Vec<McpToolInfo> {
     let mut filtered: Vec<McpToolInfo> = tools
@@ -620,6 +632,8 @@ fn filter_tools_sorted(provider: &str, tools: Vec<Tool>, allowlist: &McpAllowLis
                 output_schema: parsed.output_schema,
                 provider: provider.to_owned(),
                 name: parsed.name,
+                ui: parsed.ui,
+                visibility: parsed.visibility,
             }
         })
         .collect();
@@ -805,7 +819,7 @@ mod tests {
             }),
             ..McpProviderConfig::default()
         };
-        super::McpProvider::connect(config, None, None)
+        super::McpProvider::connect(config, None, None, false)
             .await
             .expect("stdio provider connects")
     }
@@ -820,7 +834,7 @@ mod tests {
             }),
             ..McpProviderConfig::default()
         };
-        super::McpProvider::connect(config, None, None)
+        super::McpProvider::connect(config, None, None, false)
             .await
             .expect("http provider connects")
     }
@@ -897,5 +911,36 @@ mod tests {
             .map(|prompt| prompt.name)
             .collect();
         assert_eq!(sorted_prompts, ["Explain", "review", "review2"]);
+    }
+
+    #[test]
+    fn reconnect_initialize_params_gate_ui_extension_on_flag() {
+        let advertised = super::build_reconnect_initialize_params(true);
+        assert!(
+            advertised
+                .capabilities
+                .extensions
+                .as_ref()
+                .is_some_and(|extensions| extensions.contains_key("io.modelcontextprotocol/ui")),
+        );
+        let silent = super::build_reconnect_initialize_params(false);
+        assert_eq!(silent.capabilities.extensions, None);
+    }
+
+    #[tokio::test]
+    async fn connect_retains_ui_advertisement_flag_for_reconnects() {
+        let config = McpProviderConfig {
+            name: "flagged".to_string(),
+            transport: McpTransportConfig::Stdio(McpStdioServerConfig {
+                command: "true".to_string(),
+                args: Vec::new(),
+                working_directory: None,
+            }),
+            ..McpProviderConfig::default()
+        };
+        let provider = super::McpProvider::connect(config, None, None, true)
+            .await
+            .expect("stdio provider connects");
+        assert!(provider.advertise_ui_apps);
     }
 }

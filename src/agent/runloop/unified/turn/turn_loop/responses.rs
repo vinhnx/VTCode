@@ -9,11 +9,9 @@ use super::post_tool_recovery::POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON;
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-use crate::agent::runloop::unified::turn::tool_outcomes::helpers::FAILED_VERIFICATION_FIX_ALLOWANCE;
 use anyhow::Result;
 use vtcode_core::core::agent::refusal;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::tools::tool_intent::{GENERIC_VERIFIER_DESCRIPTION, VERIFIER_SHELL_FORM_NOTE};
 use vtcode_core::utils::ansi::MessageStyle;
 
 /// defined in crates/codegen/vtcode-core/src/tools/registry?" task produced 4 identical
@@ -31,19 +29,9 @@ pub(crate) const ASSISTANT_TEXT_RESPONSE_CAP_REASON: &str =
     "Turn blocked after repeated assistant responses reached the safety cap; the latest response was preserved.";
 pub(crate) const PENDING_VERIFICATION_BLOCK_REASON: &str =
     "Turn blocked after repeated unverified assistant responses; verification is still pending.";
-/// Final response for a turn blocked on the verification gate. The block
-/// happens after bounded autonomous recovery whether or not a project verifier
-/// was detected, so it states only that recovery ran and names the verifier
-/// generically; the shell-form rule comes from [`VERIFIER_SHELL_FORM_NOTE`] so
-/// it cannot drift from the classifier.
+/// The durable reason names the missing checks and their observed evidence.
 fn pending_verification_final_response() -> String {
-    format!(
-        "The turn is blocked because verification is still pending after bounded autonomous recovery. \
-         Inspection-only checks do not clear the verification gate. To clear it, run \
-         {GENERIC_VERIFIER_DESCRIPTION} with `exec_command`, standalone or as a pure `&&` chain of verifiers, \
-         and let it exit 0. {VERIFIER_SHELL_FORM_NOTE} Then type `continue` to resume with the gate preserved. \
-         A failed verifier grants {FAILED_VERIFICATION_FIX_ALLOWANCE} fix-up edits before the next verification."
-    )
+    "Completion remains unverified. Preserve the changes and passing evidence; resolve the missing checks before claiming success. Type `continue` to resume.".to_string()
 }
 const CONTEXT_CAPACITY_FINAL_RESPONSE: &str = "The turn is blocked because context capacity or compaction failed. \
     The retained tool outputs and progress are preserved; resume the request or switch \
@@ -189,6 +177,9 @@ pub(crate) const POST_TOOL_RECOVERY_REASON_PLAN_MODE: &str = "Planning research 
 /// directive only says \"respond with plain text\"; in plan mode the agent must
 /// instead finalize the `<proposed_plan>` from gathered research, otherwise it
 /// loops emitting `<invoke>` research calls during the tool-free recovery pass.
+/// Test-only: the retry sites that selected this are non-plan paths, so prod
+/// never references it; tests pin its text as a fixture.
+#[cfg(test)]
 pub(crate) const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE: &str = "Recovery: in plan mode, tools are disabled for this pass, so the next step is to finalize the plan. Emit the `<proposed_plan>` from the research already gathered in this conversation — Summary, numbered steps on single lines (`Action -> files: [src/parser.rs] -> verify: [cargo check --locked]`), Validation, Assumptions — every step with a concrete file, symbol, or behavior target and one concrete `verify:` command or observable check. Valid examples are `verify: [cargo nextest run -p vtcode]`, `verify: [rg -n 'symbol' src/file.rs]`, `verify: [sed -n '1,40p' docs/file.md]`, and `verify: [grep -n 'symbol' src/file.rs]`; invalid examples are `verify: [run checks]`, `verify: [check later]`, and `verify: [git diff --check]`. Each comma-separated verify item must independently be concrete. At most one intro line may appear outside the block; tool calls and `<tool_call>`/`<invoke>`/`<function=...>` markup are discarded, so the response should contain none.";
 pub(super) const APPROVED_PLAN_STALE_PAUSE_RECOVERY_DIRECTIVE: &str = "Approved-plan execution recovery: the previous response stated that tools were disabled or implementation was paused, but the planning approval is complete and the write-capable build agent is active. The next step is the next concrete implementation action: use task_tracker and run an edit or verification command. No further confirmation is needed, and a pause or status-only message does not advance the approved plan.";
 
@@ -265,15 +256,16 @@ pub(crate) fn format_blocked_turn_final_response(reason: &str) -> String {
         // with its own next step; wrapping it would repeat that guidance.
         return reason.trim().to_string();
     }
-    if reason.contains(PENDING_VERIFICATION_BLOCK_REASON) {
-        pending_verification_final_response()
-    } else if reason.contains(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON) {
-        CONTEXT_CAPACITY_FINAL_RESPONSE.to_string()
-    } else if budget_exhaustion_cause(reason).is_some() {
+    if budget_exhaustion_cause(reason).is_some() {
         format!(
             "The turn stopped: {}. Continue from the retained conversation and pending task state; reuse gathered evidence and report remaining work and verification explicitly.",
             reason_clause(reason)
         )
+    } else if super::super::tool_outcomes::helpers::is_pending_verification_block(reason) {
+        let evidence = vtcode_commons::formatting::truncate_byte_budget(reason, 2000, " [truncated]");
+        format!("{}\n\n{evidence}", pending_verification_final_response())
+    } else if reason.contains(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON) {
+        CONTEXT_CAPACITY_FINAL_RESPONSE.to_string()
     } else if reason.contains("tool-call limit")
         || reason.contains("Recovery tool-call limit")
         || reason.contains("Blocked tool-call limit")
@@ -480,8 +472,8 @@ pub(super) fn completed_turn_requires_final_response(result: &TurnLoopResult, pr
 /// so mid-turn `start_planning` is exempt from the final-response guard
 /// before that switch is applied to `pending_primary_agent`.
 pub(super) fn is_primary_agent_handoff(
-    pending_primary_agent: &Option<String>,
-    pending_plan_execution_target: &Option<crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget>,
+    pending_primary_agent: Option<&str>,
+    pending_plan_execution_target: Option<&crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget>,
     deferred_plan_entry_switch: bool,
 ) -> bool {
     pending_primary_agent.is_some() || pending_plan_execution_target.is_some() || deferred_plan_entry_switch

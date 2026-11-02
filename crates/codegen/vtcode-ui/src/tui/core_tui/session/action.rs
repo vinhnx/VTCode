@@ -44,6 +44,9 @@ pub enum Action {
     GeneratePromptSuggestion,
     /// Jump to the most recent transcript change, pinned to the bottom edge.
     JumpToLastChange,
+    /// Dismiss key-capturing overlays, pickers, and search states and return
+    /// to the composer input, without Esc's interrupt or rewind side effects.
+    FocusInput,
 }
 
 impl Action {
@@ -67,6 +70,7 @@ impl Action {
             Action::ToggleTranscriptRenderMode => "toggle_transcript_render_mode",
             Action::GeneratePromptSuggestion => "generate_prompt_suggestion",
             Action::JumpToLastChange => "jump_to_last_change",
+            Action::FocusInput => "focus_input",
         }
     }
 
@@ -90,6 +94,7 @@ impl Action {
             Action::ToggleTranscriptRenderMode,
             Action::GeneratePromptSuggestion,
             Action::JumpToLastChange,
+            Action::FocusInput,
         ]
     }
 
@@ -266,6 +271,7 @@ fn default_bindings() -> HashMap<Action, Vec<(KeyCode, KeyModifiers)>> {
         ],
     );
     m.insert(JumpToLastChange, vec![(KeyCode::End, KeyModifiers::CONTROL)]);
+    m.insert(FocusInput, vec![(KeyCode::Char('i'), KeyModifiers::ALT), (KeyCode::Char('I'), KeyModifiers::ALT)]);
 
     m
 }
@@ -680,6 +686,12 @@ mod tests {
         // Alt+Up → EditQueue
         let key = KeyEvent::new(KeyCode::Up, KeyModifiers::ALT);
         assert_eq!(store.resolve(&key), Some(Action::EditQueue));
+
+        // Alt+I → FocusInput (both cases, like the other Alt chords)
+        let key = KeyEvent::new(KeyCode::Char('i'), KeyModifiers::ALT);
+        assert_eq!(store.resolve(&key), Some(Action::FocusInput));
+        let key = KeyEvent::new(KeyCode::Char('I'), KeyModifiers::ALT);
+        assert_eq!(store.resolve(&key), Some(Action::FocusInput));
 
         // Unbound → None
         let key = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL);

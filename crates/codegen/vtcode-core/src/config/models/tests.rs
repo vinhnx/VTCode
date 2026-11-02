@@ -95,9 +95,12 @@ fn test_provider_defaults() {
 #[test]
 fn test_provider_service_tier_support() {
     assert!(Provider::OpenAI.supports_service_tier(models::openai::GPT_5_6_SOL));
-    assert!(Provider::OpenAI.supports_service_tier(models::openai::GPT_5_1));
+    assert!(Provider::OpenAI.supports_service_tier(models::openai::GPT_5_6_TERRA));
     assert!(!Provider::OpenAI.supports_service_tier(models::openai::GPT_OSS_20B));
     assert!(!Provider::Anthropic.supports_service_tier(models::openai::GPT_5_6_SOL));
+    // Oct 2026 deprecation: `gpt-5.1` left `SUPPORTED_MODELS`, so it no longer
+    // advertises the native OpenAI `service_tier` parameter.
+    assert!(!Provider::OpenAI.supports_service_tier(models::openai::GPT_5_1));
 }
 
 #[test]
@@ -203,6 +206,8 @@ fn test_reexported_model_id_provider_types() {
 
 #[test]
 fn test_moonshot_and_openrouter_minimax_variants() {
+    assert_eq!(models::moonshot::KIMI_K3_1_PRO.parse::<ModelId>().unwrap(), ModelId::MoonshotKimiK31Pro);
+    assert_eq!(ModelId::MoonshotKimiK31Pro.provider(), Provider::Moonshot);
     assert_eq!(models::moonshot::KIMI_K3.parse::<ModelId>().unwrap(), ModelId::MoonshotKimiK3);
     assert_eq!(ModelId::MoonshotKimiK3.provider(), Provider::Moonshot);
 }

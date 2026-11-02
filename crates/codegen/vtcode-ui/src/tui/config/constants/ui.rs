@@ -1,10 +1,6 @@
 // Shared config defaults retain their existing TUI import paths.
 pub use vtcode_config::constants::ui::{
-    DEFAULT_INLINE_VIEWPORT_ROWS, MODAL_CONTENT_HORIZONTAL_PADDING, MODAL_CONTENT_VERTICAL_PADDING, MODAL_HEIGHT_RATIO,
-    MODAL_INSTRUCTIONS_BULLET, MODAL_INSTRUCTIONS_TITLE, MODAL_LIST_MIN_HEIGHT, MODAL_MAX_HEIGHT_RATIO,
-    MODAL_MAX_WIDTH_RATIO, MODAL_MIN_HEIGHT, MODAL_MIN_WIDTH, MODAL_WIDTH_RATIO, SLASH_PALETTE_CONTENT_PADDING,
-    SLASH_PALETTE_HINT_PRIMARY, SLASH_PALETTE_HINT_SECONDARY, SLASH_PALETTE_HORIZONTAL_MARGIN,
-    SLASH_PALETTE_MIN_HEIGHT, SLASH_PALETTE_MIN_WIDTH, SLASH_PALETTE_TOP_OFFSET,
+    DEFAULT_INLINE_VIEWPORT_ROWS, MODAL_INSTRUCTIONS_BULLET, MODAL_MIN_HEIGHT, MODAL_MIN_WIDTH,
 };
 
 pub const TOOL_OUTPUT_MODE_COMPACT: &str = vtcode_config::constants::ui::TOOL_OUTPUT_MODE_COMPACT;
@@ -107,7 +103,6 @@ pub const INLINE_PTY_HEADER_LABEL: &str = "Terminal";
 pub const INLINE_PTY_RUNNING_LABEL: &str = "running";
 pub const INLINE_PTY_STATUS_LIVE: &str = "LIVE";
 pub const INLINE_PTY_STATUS_DONE: &str = "DONE";
-pub const INLINE_PTY_PLACEHOLDER: &str = vtcode_config::constants::ui::INLINE_PTY_PLACEHOLDER;
 pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "┃";
 pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "┃ ";
 /// Prefix for the synthetic `..` row that ascends one directory. Row kind
@@ -118,7 +113,7 @@ pub const INLINE_LIST_SCROLL_PADDING: u16 = 1;
 pub const INLINE_LIST_MAX_ROWS: usize = 10;
 pub const INLINE_LIST_MAX_ROWS_MULTILINE: usize = 20;
 pub const MODAL_LIST_SUMMARY_FILTER_LABEL: &str = "Filter";
-pub const MODAL_LIST_SUMMARY_SEPARATOR: &str = " • ";
+pub const MODAL_LIST_SUMMARY_SEPARATOR: &str = vtcode_config::constants::ui::META_BULLET_SEPARATOR;
 pub const MODAL_LIST_SUMMARY_MATCHES_LABEL: &str = "Matches";
 pub const MODAL_LIST_SUMMARY_TOTAL_LABEL: &str = "of";
 pub const MODAL_LIST_SUMMARY_NO_MATCHES: &str = "No matches";
@@ -153,12 +148,6 @@ pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = vtcode_config::constants::ui:
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP;
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Tab next agent • Shift+Tab previous agent • Enter run/queue • Ctrl+Enter queue • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
-pub const WELCOME_TEXT_WIDTH: usize = vtcode_config::constants::ui::WELCOME_TEXT_WIDTH;
-pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_SECTION_TITLE;
-pub const WELCOME_SHORTCUT_HINT_PREFIX: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_HINT_PREFIX;
-pub const WELCOME_SHORTCUT_SEPARATOR: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_SEPARATOR;
-pub const WELCOME_SHORTCUT_INDENT: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_INDENT;
-pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_SECTION_TITLE;
 pub const WELCOME_SLASH_COMMAND_LIMIT: usize = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_LIMIT;
 pub const WELCOME_SLASH_COMMAND_PREFIX: &str = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_PREFIX;
 pub const WELCOME_SLASH_COMMAND_INTRO: &str = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_INTRO;

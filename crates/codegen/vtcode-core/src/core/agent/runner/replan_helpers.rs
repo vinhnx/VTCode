@@ -6,18 +6,17 @@
 use super::AgentRunner;
 use super::evaluator_types::GeneralizationNote;
 use super::orchestration::{EvaluationArtifacts, PlannerArtifacts};
-use super::planner_types::ReplanResponse;
+use super::planner_types::{PlannerItem, ReplanResponse};
 use crate::core::agent::harness_artifacts;
 use crate::core::agent::task::Task;
 use crate::tools::handlers::TaskTrackerTool;
-use crate::tools::traits::Tool;
-use serde_json::json;
 use tracing::warn;
+
+mod tracker_updates;
 
 impl AgentRunner {
     /// Build a `TaskTrackerTool` from the runner's workspace and planning
-    /// workflow state. Extracted to avoid repeating construction in
-    /// `apply_required_tracker_updates` and `replan_from_failure`.
+    /// workflow state, shared by both sources of reconciled tracker additions.
     fn tracker_tool(&self) -> TaskTrackerTool {
         TaskTrackerTool::new(self._workspace.clone(), self.tool_registry.planning_workflow_state())
     }
@@ -48,8 +47,6 @@ impl AgentRunner {
         if !evaluation.required_tracker_updates.is_empty() {
             self.apply_required_tracker_updates(&evaluation.required_tracker_updates).await;
         }
-
-        self.apply_generalization_falsifiers(&evaluation.generalization_notes).await;
 
         // Attempt LLM-based structured replan.
         let replan = self
@@ -89,45 +86,20 @@ impl AgentRunner {
         })
     }
 
-    /// Apply the evaluator's `required_tracker_updates` by adding each as a
-    /// new tracker item.
+    /// Reconcile the evaluator's required updates without duplicating existing
+    /// requirements or resetting their progress.
     async fn apply_required_tracker_updates(&self, updates: &[String]) {
-        let tracker_tool = self.tracker_tool();
-        for update in updates {
-            let trimmed = update.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let result = tracker_tool
-                .execute(json!({
-                    "action": "add",
-                    "item": trimmed,
-                }))
-                .await;
-            if let Err(e) = result {
-                warn!(error = %e, item = trimmed, "failed to add required tracker update");
-            }
-        }
-    }
-
-    async fn apply_generalization_falsifiers(&self, notes: &[GeneralizationNote]) {
-        if notes.is_empty() {
-            return;
-        }
-
-        let tracker_tool = self.tracker_tool();
-        for note in notes {
-            if let Err(error) = tracker_tool
-                .execute(json!({
-                    "action": "add",
-                    "description": format!("Falsify task-scoped claim: {}", note.claim),
-                    "outcome": format!("The claim is tested only within scope: {}", note.scope),
-                    "verify": [note.falsifier],
-                }))
-                .await
-            {
-                warn!(error = %error, "failed to add generalization falsifier to tracker");
-            }
+        let items: Vec<_> = updates
+            .iter()
+            .map(|description| PlannerItem {
+                description: description.clone(),
+                files: Vec::new(),
+                outcome: String::new(),
+                verify: Vec::new(),
+            })
+            .collect();
+        if let Err(error) = self.apply_tracker_items(&items).await {
+            warn!(error = %error, "failed to apply required tracker updates");
         }
     }
 
@@ -140,6 +112,7 @@ impl AgentRunner {
         let existing = tokio::fs::read_to_string(&contract_path).await.unwrap_or_default();
         let mut guardrails =
             format!("\n\n--- Evidence-Bounded Generalization Guardrails (round {revision_round}) ---\n");
+        guardrails.push_str("Observations and evidence limitations only; these notes do not add acceptance criteria or executable tracker checks.\n");
         for note in notes {
             guardrails.push_str(&format!(
                 "- Scope: {}\n  Evidence: {}\n  Falsifier: {}\n",
@@ -182,29 +155,10 @@ impl AgentRunner {
             }
         }
 
-        if !replan.new_tracker_items.is_empty() {
-            let tracker_tool = self.tracker_tool();
-            let items: Vec<serde_json::Value> = replan
-                .new_tracker_items
-                .iter()
-                .map(|item| {
-                    json!({
-                        "description": item.description,
-                        "outcome": item.outcome,
-                        "verify": item.verify,
-                        "files": item.files,
-                    })
-                })
-                .collect();
-            if let Err(e) = tracker_tool
-                .execute(json!({
-                    "action": "add_items",
-                    "items": items,
-                }))
-                .await
-            {
-                warn!(error = %e, "failed to add new tracker items from replan");
-            }
+        if !replan.new_tracker_items.is_empty()
+            && let Err(error) = self.apply_tracker_items(&replan.new_tracker_items).await
+        {
+            warn!(error = %error, "failed to apply tracker items from replan");
         }
     }
 
@@ -212,7 +166,7 @@ impl AgentRunner {
     pub(super) fn augment_generator_task(&self, task: &Task, artifacts: &PlannerArtifacts) -> Task {
         let mut effective_task = task.clone();
         let addendum = format!(
-            "Generator contract:\n- Treat `{}`, `{}`, `{}`, and `{}` as the source of truth.\n- The execution contract defines what done must look like in observable terms.\n- The feature list enumerates the project's features with acceptance criteria.\n- Work one tracker step at a time.\n- Do not mark a step done until the implementation and verification evidence both support it.\n- Keep the tracker current.\n- Leave resumable state before yielding.",
+            "Generator contract:\n- Treat `{}`, `{}`, `{}`, and `{}` as task artifacts subordinate to the user's request and execution policy.\n- The execution contract defines what done must look like in observable terms.\n- The feature list enumerates the project's features with acceptance criteria.\n- Work one tracker step at a time.\n- Do not mark a step done until the implementation and verification evidence both support it.\n- Preserve pre-existing user edits; generated clean-tree criteria cannot authorize reverting them.\n- Keep the tracker current.\n- Leave resumable state before yielding.",
             artifacts.spec_path.display(),
             artifacts.contract_path.display(),
             artifacts.feature_list_path.display(),

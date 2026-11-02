@@ -6,6 +6,7 @@ mod responses_stream;
 mod sse;
 mod stream;
 mod tag_sanitizer;
+mod tool_call_indexes;
 mod tool_output;
 mod usage;
 mod utf8;
@@ -29,6 +30,7 @@ pub(crate) use stream::{
     handle_openai_compatible_chunk, parse_openai_tool_calls, process_openai_stream,
 };
 pub use tag_sanitizer::TagStreamSanitizer;
+pub(crate) use tool_call_indexes::ToolCallIndexes;
 pub(crate) use tool_output::{
     function_output_value_from_message_content, parse_compacted_output_messages,
     tool_result_content_from_message_content,

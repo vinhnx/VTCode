@@ -107,13 +107,13 @@ fn prompter() -> DefaultPermissionPrompter<FakeRegistry> {
 // -- Option construction tests (no ACP connection needed) ---------------
 
 #[derive(Clone, Debug)]
-#[allow(
-    dead_code,
-    reason = "Intentional compatibility, platform, test, or API-shape suppression."
-)]
 struct TestOption {
     option_id: String,
     name: String,
+    #[allow(
+        dead_code,
+        reason = "Fixture field kept so decoded ACP payloads keep their wire shape."
+    )]
     kind: String,
 }
 

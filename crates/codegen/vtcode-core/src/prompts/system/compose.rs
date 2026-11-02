@@ -263,7 +263,7 @@ pub(super) fn stable_prompt_sections_digest(sections: &[PromptSection]) -> u64 {
 pub fn apply_coordinator_role_guidance(prompt: &mut String, coordinator_active: bool) {
     use crate::prompts::sections::{SectionBoundaryMode, find_prompt_section_bounds};
 
-    const ORDINARY_DELEGATION: &str = "- Delegate only sizeable, independent work to subagents; keep small tasks and verification in the main thread.";
+    const ORDINARY_DELEGATION: &str = "- Prefer skills and tool search here; delegate only sizeable parallel work, discardable fresh-context tasks, or tool-choice conflicts to subagents, and keep verification here.";
     const COORDINATOR_DELEGATION: &str = "- As coordinator, delegate execution and verification to scheduler-owned matrix workers; keep decisions in the main thread.";
 
     if !coordinator_active && !prompt.contains("## Coordinator Role") && !prompt.contains(COORDINATOR_DELEGATION) {

@@ -2,7 +2,6 @@ use crate::models::{Provider, ProviderModelSupport};
 
 use super::ModelId;
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 mod capability_generated {
     include!(concat!(env!("OUT_DIR"), "/model_capabilities.rs"));
 }
@@ -265,11 +264,15 @@ impl ModelId {
                 | ModelId::ZaiGlm53Flash
                 | ModelId::ZaiGlm53Flashx
                 | ModelId::OllamaGlm53FlashCloud
+                | ModelId::OllamaMinimaxM31FlashCloud
                 | ModelId::MergeGatewayZaiGlm53Flash
                 | ModelId::MergeGatewayZaiGlm53Flashx
                 | ModelId::HuggingFaceGlm53FlashTogether
                 | ModelId::MiMoV26Flash
                 | ModelId::MergeGatewayXiaomimimoMimoV26Flash
+                | ModelId::MinimaxM31Flash
+                | ModelId::MergeGatewayMinimaxM31Flash
+                | ModelId::OpenRouterMinimaxM31FlashFree
         )
     }
 
@@ -303,11 +306,15 @@ impl ModelId {
                 | ModelId::ZaiGlm53Flash
                 | ModelId::ZaiGlm53Flashx
                 | ModelId::OllamaGlm53FlashCloud
+                | ModelId::OllamaMinimaxM31FlashCloud
                 | ModelId::MergeGatewayZaiGlm53Flash
                 | ModelId::MergeGatewayZaiGlm53Flashx
                 | ModelId::HuggingFaceGlm53FlashTogether
                 | ModelId::VercelDeepseekFlash
                 | ModelId::MergeGatewayXiaomimimoMimoV26Flash
+                | ModelId::MinimaxM31Flash
+                | ModelId::MergeGatewayMinimaxM31Flash
+                | ModelId::OpenRouterMinimaxM31FlashFree
         )
     }
 
@@ -332,6 +339,7 @@ impl ModelId {
                 | ModelId::MergeGatewayOpenAIGpt6Astra
                 | ModelId::MergeGatewayOpenAIGpt6Sol
                 | ModelId::MergeGatewayOpenAIGpt61Sol
+                | ModelId::MergeGatewayOpenAIGpt61Terra
                 | ModelId::MergeGatewayOpenAIGpt6Luna
                 | ModelId::ClaudeSonnet5
                 | ModelId::ClaudeSonnet55
@@ -360,8 +368,10 @@ impl ModelId {
                 | ModelId::HuggingFaceMinimaxM3Novita
                 | ModelId::StepFun5Preview
                 | ModelId::OpenRouterMoonshotaiKimiK3
+                | ModelId::MoonshotKimiK31Pro
                 | ModelId::MoonshotKimiK3
                 | ModelId::MergeGatewayMoonshotKimiK3
+                | ModelId::MergeGatewayMoonshotKimiK31Pro
                 | ModelId::OllamaGlm53Cloud
                 | ModelId::OllamaGlm53FlashCloud
                 | ModelId::OllamaDeepSeekV41FlashCloud
@@ -413,7 +423,7 @@ impl ModelId {
             // Gemini generations
             // OpenAI generations
             ModelId::GPT6Astra | ModelId::GPT6Sol | ModelId::GPT6Luna => "6",
-            ModelId::GPT61Sol => "6.1",
+            ModelId::GPT61Sol | ModelId::GPT61Terra => "6.1",
             ModelId::GPT56Sol | ModelId::GPT56Terra | ModelId::GPT56Luna => "5.6",
             ModelId::OpenAIGptOss20b | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
@@ -460,6 +470,7 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaMinimaxM3Cloud => "minimax-m3",
+            ModelId::OllamaMinimaxM31FlashCloud => "minimax-m3.1",
             ModelId::OllamaGlm53Cloud => "glm-5.3",
             ModelId::OllamaGemma4 => "gemma-4",
             ModelId::LlamaCppGemma426bA4b => "4",
@@ -467,12 +478,15 @@ impl ModelId {
             ModelId::LlamaCppGptOss20b => "oss",
             // MiniMax models
             ModelId::MinimaxM3 => "M3",
+            ModelId::MinimaxM31Flash | ModelId::MergeGatewayMinimaxM31Flash => "M3.1",
             // StepFun models
             ModelId::StepFun37Flash => "3.7",
             ModelId::StepFun5Preview => "5",
             // Moonshot models
+            ModelId::MoonshotKimiK31Pro => "k3.1",
             ModelId::MoonshotKimiK3 => "k3",
             ModelId::MergeGatewayMoonshotKimiK3 => "k3",
+            ModelId::MergeGatewayMoonshotKimiK31Pro => "k3.1",
             // Hugging Face generations
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
@@ -501,13 +515,14 @@ impl ModelId {
             ModelId::MergeGatewayOpenAIGpt6Astra
             | ModelId::MergeGatewayOpenAIGpt6Sol
             | ModelId::MergeGatewayOpenAIGpt6Luna => "6",
-            ModelId::MergeGatewayOpenAIGpt61Sol => "6.1",
+            ModelId::MergeGatewayOpenAIGpt61Sol | ModelId::MergeGatewayOpenAIGpt61Terra => "6.1",
             // Vercel AI Gateway models
             ModelId::VercelAnthropicClaudeSonnet5 => "5",
             ModelId::VercelAnthropicClaudeOpus5 => "5",
             ModelId::VercelAnthropicClaudeOpus55 => "5.5",
             ModelId::VercelAnthropicClaudeHaiku45 => "4.5",
             ModelId::VercelOpenAiGpt56Sol | ModelId::VercelOpenAiGpt56Luna => "5.6",
+            ModelId::VercelOpenAiGpt6Sol | ModelId::VercelOpenAiGpt6Luna => "6",
             ModelId::VercelOpenAiGpt6Astra => "6",
             ModelId::VercelGoogleGemini38Flash => "3.8",
             ModelId::VercelDeepseekFlash => "4.1",

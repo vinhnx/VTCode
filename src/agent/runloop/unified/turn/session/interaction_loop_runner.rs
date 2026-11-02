@@ -5,6 +5,8 @@ use anyhow::Result;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
+use vtcode_core::core::agent::runtime::RuntimeSteering;
+use vtcode_core::exec::events::planning::PlanningOutcome;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::session::SessionId;
@@ -19,6 +21,7 @@ use crate::agent::runloop::unified::inline_events::{
 };
 use crate::agent::runloop::unified::model_selection::{ModelSwitchCompactionTargets, finalize_model_selection};
 use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::session_setup::refresh_local_agents;
 use crate::agent::runloop::unified::settings_interactive::{reload_state_from_disk, show_settings_palette};
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
@@ -68,6 +71,101 @@ fn idle_completion_outcome(
         .then_some(InteractionOutcome::BackgroundCompletionReady)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum PlanningModelSelection {
+    Waiting,
+    Accepted,
+    Dismissed,
+}
+
+fn planning_model_selection(
+    plan_session: &mut PlanningWorkflowSessionState,
+    picker_active: bool,
+    accepted: bool,
+) -> PlanningModelSelection {
+    if !plan_session.recovery.model_selection_pending || !plan_session.model_picker_opened {
+        return PlanningModelSelection::Waiting;
+    }
+    if !accepted && picker_active {
+        return PlanningModelSelection::Waiting;
+    }
+    plan_session.recovery.model_selection_pending = false;
+    plan_session.model_picker_opened = false;
+    if accepted {
+        plan_session.begin_explicit_recovery_cycle();
+        PlanningModelSelection::Accepted
+    } else {
+        plan_session.recovery.outcome = PlanningOutcome::AwaitingInput;
+        PlanningModelSelection::Dismissed
+    }
+}
+
+fn queue_planning_model_recovery(
+    plan_session: &mut PlanningWorkflowSessionState,
+    steering: &mut RuntimeSteering,
+) -> Result<()> {
+    if let Err(error) = steering.try_queue_synthetic_follow_up_input(
+        crate::agent::runloop::unified::turn::tool_outcomes::helpers::plan_mode_continue_follow_up(),
+    ) {
+        plan_session.recovery.outcome = PlanningOutcome::AwaitingInput;
+        plan_session.recovery.input_prompt_shown = true;
+        return Err(error.into());
+    }
+    Ok(())
+}
+
+async fn persist_planning_model_selection(ctx: &InteractionLoopContext<'_>) -> Result<()> {
+    if let Some(emitter) = ctx.harness_emitter {
+        emitter
+            .persist_checkpoint(&crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
+                &ctx.plan_session.recovery,
+                ctx.thread_id,
+                "planning-input",
+            ))
+            .await?;
+    }
+    Ok(())
+}
+
+async fn finish_planning_model_selection(
+    ctx: &mut InteractionLoopContext<'_>,
+    picker_active: bool,
+) -> Result<Option<InteractionOutcome>> {
+    if !ctx.plan_session.recovery.model_selection_pending || !ctx.plan_session.model_picker_opened {
+        return Ok(None);
+    }
+    let accepted = ctx.session_stats.take_accepted_model_selection();
+    let selection = planning_model_selection(ctx.plan_session, picker_active, accepted);
+    if selection == PlanningModelSelection::Waiting {
+        return Ok(None);
+    }
+    ctx.handle.set_activity_state(vtcode_commons::ui_protocol::ActivityState::Idle);
+    if let Err(error) = persist_planning_model_selection(ctx).await {
+        ctx.plan_session.recovery.outcome = PlanningOutcome::AwaitingInput;
+        ctx.renderer.line(
+            MessageStyle::Error,
+            &format!(
+                "Planning model selection could not be saved. Planning is waiting for your input. Details: {error}"
+            ),
+        )?;
+        return Ok(None);
+    }
+    if selection == PlanningModelSelection::Accepted {
+        if let Err(error) = queue_planning_model_recovery(ctx.plan_session, ctx.runtime_steering) {
+            persist_planning_model_selection(ctx).await?;
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "The selected model is ready, but planning could not resume. Retry when ready. Details: {error}"
+                ),
+            )?;
+            return Ok(None);
+        }
+        return Ok(Some(InteractionOutcome::BackgroundCompletionReady));
+    }
+    Ok(None)
+}
+
 #[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
@@ -94,6 +192,27 @@ pub(super) async fn run_interaction_loop_impl(
     const STATUS_REFRESH_INTERVAL: Duration = Duration::from_millis(200);
 
     loop {
+        if ctx.plan_session.recovery.model_selection_pending && !ctx.plan_session.model_picker_opened {
+            ctx.session_stats.take_accepted_model_selection();
+            ctx.plan_session.model_picker_opened = true;
+            if let slash_command_handler::CommandProcessingResult::Outcome(outcome) =
+                slash_command_handler::handle_input_commands("/model", ctx, state).await?
+            {
+                return Ok(outcome);
+            }
+            if let Some(outcome) = finish_planning_model_selection(ctx, state.model_picker_state.is_some()).await? {
+                return Ok(outcome);
+            }
+        }
+        // Publish any settings change applied since the previous iteration
+        // (idle `/model`, live config reload, settings palette) so a busy-turn
+        // picker opened while a request is in flight reads current values.
+        crate::agent::runloop::unified::session_settings::publish_settings_if_changed(
+            ctx.settings_snapshot,
+            &ctx.config.provider,
+            &ctx.config.model,
+            ctx.config.reasoning_effort,
+        );
         let mut workspace_config_reloaded = false;
         let should_refresh_status = last_status_refresh.elapsed() >= STATUS_REFRESH_INTERVAL;
         if should_refresh_status {
@@ -141,6 +260,13 @@ pub(super) async fn run_interaction_loop_impl(
                         }
                     }
                     workspace_config_reloaded = true;
+                    // Refresh the busy-picker snapshot too: a picker opened
+                    // after the reload must see current custom providers,
+                    // provider order, auth routes, and `service_tier`.
+                    crate::agent::runloop::unified::session_settings::publish_vt_cfg(
+                        ctx.settings_snapshot,
+                        ctx.vt_cfg.as_ref(),
+                    );
                 }
             }
         }
@@ -172,6 +298,7 @@ pub(super) async fn run_interaction_loop_impl(
                         .map(|cfg| cfg.agent.tool_documentation_mode)
                         .unwrap_or_default(),
                     ctx.renderer,
+                    ctx.session_stats,
                     state.mcp_catalog_initialized,
                     state.last_mcp_refresh,
                     state.last_known_mcp_tools,
@@ -215,7 +342,6 @@ pub(super) async fn run_interaction_loop_impl(
             handle: ctx.handle,
             interrupts,
             ctrl_c_notice_displayed: state.ctrl_c_notice_displayed,
-            default_placeholder: ctx.default_placeholder,
             queued_inputs: state.queued_inputs,
             prefer_latest_queued_input_once: state.prefer_latest_queued_input_once,
             model_picker_state: state.model_picker_state,
@@ -249,7 +375,12 @@ pub(super) async fn run_interaction_loop_impl(
 
         let inline_action = poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await?;
         sync_mcp_approval_policy_for_context(ctx);
+        if let Some(outcome) = finish_planning_model_selection(ctx, state.model_picker_state.is_some()).await? {
+            return Ok(outcome);
+        }
 
+        ctx.pending_background_completions
+            .observe_terminal_exec_results(ctx.tool_registry);
         if matches!(&inline_action, InlineLoopAction::Continue) {
             let completion_drain = drain_background_completions(
                 ctx.background_completion_receiver.as_mut(),
@@ -529,10 +660,12 @@ pub(super) async fn run_interaction_loop_impl(
                 }
                 ModelPickerProgress::Cancelled => {
                     *state.model_picker_state = None;
+                    finish_planning_model_selection(ctx, false).await?;
                     continue;
                 }
                 ModelPickerProgress::Exit => {
                     *state.model_picker_state = None;
+                    finish_planning_model_selection(ctx, false).await?;
                     return Ok(InteractionOutcome::Exit { reason: SessionEndReason::Exit });
                 }
                 ModelPickerProgress::Completed(selection) => {
@@ -579,6 +712,9 @@ pub(super) async fn run_interaction_loop_impl(
                                         ),
                             )?;
                         }
+                    }
+                    if let Some(outcome) = finish_planning_model_selection(ctx, false).await? {
+                        return Ok(outcome);
                     }
                     continue;
                 }
@@ -699,6 +835,15 @@ pub(super) async fn run_interaction_loop_impl(
             uni::MessageContent::Text(text) => uni::Message::user(text),
             uni::MessageContent::Parts(parts) => uni::Message::user_with_parts(parts),
         };
+        // Tag the submitted prompt so archives can distinguish it from
+        // harness-injected `User`-role steering during reverse history.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        let tokens = user_message.estimate_tokens();
+        let user_message =
+            user_message.with_metadata(vtcode_commons::message_metadata::MessageMetadata::user_input(now, tokens));
 
         let prompt_message_index = ctx.conversation_history.len();
         ctx.conversation_history.push(user_message);

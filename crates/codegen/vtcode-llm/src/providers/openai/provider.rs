@@ -83,6 +83,7 @@ pub struct OpenAIProvider {
     prompt_cache_enabled: bool,
     prompt_cache_hints_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
+    prompt_cache_options_models: Vec<String>,
     model_behavior: Option<ModelConfig>,
     websocket_mode: bool,
     responses_store: Option<bool>,
@@ -194,6 +195,7 @@ impl OpenAIProvider {
             prompt_cache_enabled: false,
             prompt_cache_hints_enabled: true,
             prompt_cache_settings: Default::default(),
+            prompt_cache_options_models: Vec::new(),
             responses_api_modes: Mutex::new(HashMap::new()),
             model_behavior: None,
             websocket_mode: false,
@@ -277,6 +279,11 @@ impl OpenAIProvider {
         }
         provider.supported_models_override = supported_models_override;
         provider
+    }
+
+    pub(crate) fn with_prompt_cache_options_models(mut self, models: Vec<String>) -> Self {
+        self.prompt_cache_options_models = models;
+        self
     }
 
     pub(crate) fn with_api_format_override(mut self, api_format: Option<CustomProviderApiFormat>) -> Self {
@@ -373,6 +380,7 @@ impl OpenAIProvider {
             prompt_cache_enabled,
             prompt_cache_hints_enabled,
             prompt_cache_settings,
+            prompt_cache_options_models: Vec::new(),
             model_behavior,
             websocket_mode,
             responses_store,
@@ -749,6 +757,8 @@ impl OpenAIProvider {
             prompt_cache_key,
             include_prompt_cache_retention: self.prompt_cache_hints_enabled
                 && backend_defaults.include_prompt_cache_retention,
+            supports_prompt_cache_options: self.requested_prompt_cache_ttl(&request.model).is_some(),
+            prompt_cache_ttl: self.prompt_cache_settings.prompt_cache_ttl,
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_ref().map(|r| r.as_str()),
             include_explicit_cache_breakpoints: self.prompt_cache_hints_enabled && is_native_openai,
             default_service_tier,
@@ -776,9 +786,9 @@ impl OpenAIProvider {
         response_json: Value,
         model: String,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        let include_cached_prompt_tokens = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        let response =
-            response_parser::parse_chat_response(response_json, model.clone(), include_cached_prompt_tokens)?;
+        // Server caching can occur even when local hints or diagnostics are off.
+        // Billing usage must not depend on those optional controls.
+        let response = response_parser::parse_chat_response(response_json, model.clone(), true)?;
         Ok(Self::normalize_reasoning_output(&model, response))
     }
 
@@ -787,8 +797,7 @@ impl OpenAIProvider {
         response_json: Value,
         model: String,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        let response = parse_responses_completion(response_json, model.clone(), include_metrics)?;
+        let response = parse_responses_completion(response_json, model.clone(), true)?;
         Ok(Self::normalize_reasoning_output(&model, response))
     }
 }

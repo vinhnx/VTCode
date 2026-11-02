@@ -64,6 +64,10 @@ External-change conflicts are checked under mutation leases before disk-based
 patch matching or preview planning, preserving the conflict resolution workflow.
 Successful native transfers and deletions refresh tracked descendants in the
 conflict monitor, so the agent's own writes do not appear as external changes.
+An exit-zero, untruncated single-file shell read refreshes the conflict baseline
+only when its complete returned bytes exactly match the current file. Partial,
+spooled, failed, or compound output cannot refresh it. Conflict reload returns
+the same snapshot that becomes the new baseline, so a later change remains visible.
 Advisory recursive deletion can unlink symlinks without following them. Recursive
 copy still resolves every source and destination entry inside the workspace.
 

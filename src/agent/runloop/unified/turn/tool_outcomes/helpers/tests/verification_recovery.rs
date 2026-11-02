@@ -2,9 +2,9 @@ use super::*;
 
 #[test]
 fn verification_snapshot_bundle_round_trips_without_drift() {
-    let tracker = LoopTracker::with_verification_snapshot((true, FAILED_VERIFICATION_FIX_ALLOWANCE));
-    assert_eq!(tracker.verification_snapshot(), (true, FAILED_VERIFICATION_FIX_ALLOWANCE));
-    let cleared = LoopTracker::with_verification_snapshot((false, FAILED_VERIFICATION_FIX_ALLOWANCE));
+    let tracker = LoopTracker::with_verification_snapshot((true, 2));
+    assert_eq!(tracker.verification_snapshot(), (true, 0));
+    let cleared = LoopTracker::with_verification_snapshot((false, 0));
     assert_eq!(cleared.verification_snapshot(), (false, 0));
 }
 

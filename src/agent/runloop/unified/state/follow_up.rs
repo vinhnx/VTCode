@@ -58,6 +58,7 @@ impl SessionStats {
             self.follow_up_prompt_streak = 0;
             self.turn_stalled = false;
             self.turn_stall_reason = None;
+            self.verification_auto_recovery_turns = 0;
             self.reset_verification_recovery_episode();
             self.reset_tracker_continuation_budget();
             self.tracker_completed_count_high_water = 0;

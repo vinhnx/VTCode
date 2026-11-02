@@ -100,5 +100,5 @@ Translations are available at <https://www.contributor-covenant.org/translations
 
 ## Contact
 
-For questions about this Code of Conduct or to report violations, please contact the project maintainers at [INSERT
-CONTACT METHOD].
+For questions about this Code of Conduct or to report violations, contact the maintainer at
+`vinhnguyen2308 [at] gmail [dot] com`. Reports are handled privately.

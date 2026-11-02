@@ -120,7 +120,7 @@ async fn generate_suggestions_via_llm(
         let _ = write!(user_msg, "\nOutput (truncated):\n```\n{snippet}\n```");
     }
 
-    let request = uni::LLMRequest {
+    let mut request = uni::LLMRequest {
         messages: Arc::new(vec![uni::Message::user(user_msg)]),
         system_prompt: Some(Arc::clone(&SUGGESTION_SYSTEM_PROMPT)),
         model: model.to_string(),
@@ -130,7 +130,10 @@ async fn generate_suggestions_via_llm(
         ..Default::default()
     };
 
-    let response = match provider.generate(request).await {
+    // Sampling is per-route: Anthropic Messages rejects it outright, so the
+    // shared auxiliary budget resolves the wire-safe values for this model.
+    request.set_auxiliary_output_budget(provider, 256);
+    let response = match provider.generate_auxiliary(request).await {
         Ok(resp) => resp,
         Err(err) => {
             tracing::debug!(error = %err, "LLM suggestion generation failed; using fallback");

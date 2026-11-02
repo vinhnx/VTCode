@@ -68,14 +68,11 @@ pub use vtcode_skills::versioning::{
 // ---------------------------------------------------------------------------
 // Staying sub-modules (depend on vtcode-core internals)
 // ---------------------------------------------------------------------------
-pub mod auto_verification;
 pub mod cli_bridge;
 pub mod discovery;
-pub mod enhanced_harness;
 pub mod executor;
 pub mod loader;
 pub mod manager;
-pub mod skill_file_tracker;
 mod skill_policy;
 pub mod streaming;
 pub mod validation;

@@ -35,6 +35,8 @@ pub enum ModelId {
     GPT6Sol,
     /// GPT-6.1 Sol - Near-Astra performance for complex coding, computer use, and professional work at a lower cost
     GPT61Sol,
+    /// GPT-6.1 Terra - Fast, efficient model for visual reasoning, precise computer use, and clear, natural writing
+    GPT61Terra,
     /// GPT-6 Luna - Fast cost-efficient model in the GPT-6 series for high-volume latency-sensitive workloads
     GPT6Luna,
     /// GPT-5.6 Sol - Frontier model for complex professional work in the GPT-5.6 family
@@ -120,8 +122,12 @@ pub enum ModelId {
     MergeGatewayXaiGrok47,
     /// MiniMax H3 through Merge Gateway
     MergeGatewayMinimaxH3,
+    /// MiniMax M3.1 Flash through Merge Gateway
+    MergeGatewayMinimaxM31Flash,
     /// Moonshot Kimi K3 through Merge Gateway
     MergeGatewayMoonshotKimiK3,
+    /// Moonshot Kimi K3.1 Pro through Merge Gateway
+    MergeGatewayMoonshotKimiK31Pro,
     /// Thinking Machines Inkling through Merge Gateway
     MergeGatewayThinkingMachinesInkling,
     /// Z.AI GLM-5.3 Flash through Merge Gateway
@@ -150,6 +156,8 @@ pub enum ModelId {
     MergeGatewayOpenAIGpt6Sol,
     /// OpenAI GPT-6.1 Sol through Merge Gateway
     MergeGatewayOpenAIGpt61Sol,
+    /// OpenAI GPT-6.1 Terra through Merge Gateway
+    MergeGatewayOpenAIGpt61Terra,
     /// OpenAI GPT-6 Luna through Merge Gateway
     MergeGatewayOpenAIGpt6Luna,
     /// Xiaomi MiMo V2.6 Pro through Merge Gateway
@@ -216,6 +224,8 @@ pub enum ModelId {
     MiMoV26ProUltraspeed,
 
     // Moonshot models
+    /// Kimi K3.1 Pro - Moonshot.ai's 3T-class open-weight flagship post-trained from K3, 1M context
+    MoonshotKimiK31Pro,
     /// Kimi K3 - Moonshot.ai's 2.8T parameter flagship with Delta Attention, native vision, 1M context
     MoonshotKimiK3,
 
@@ -244,6 +254,8 @@ pub enum ModelId {
     OllamaGptOss120bCloud,
     /// MiniMax-M3 Cloud - Cloud-hosted MiniMax-M3 model served via Ollama Cloud
     OllamaMinimaxM3Cloud,
+    /// MiniMax M3.1 Flash Cloud - ultra-efficient multimodal MiniMax M3.1 Flash served via Ollama Cloud
+    OllamaMinimaxM31FlashCloud,
     /// GLM-5.2 Cloud - Cloud-hosted GLM-5.2 flagship model served via Ollama Cloud
     /// GLM-5.3 Cloud - Cloud-hosted GLM-5.3 flagship model served via Ollama Cloud
     OllamaGlm53Cloud,
@@ -272,9 +284,13 @@ pub enum ModelId {
     // MiniMax models
     /// MiniMax-M3 - Frontier multimodal coding model with 1M context
     MinimaxM3,
+    /// MiniMax-M3.1-Flash - Latest ultra-efficient multimodal model via OpenRouter
+    OpenRouterMinimaxM31FlashFree,
+    /// MiniMax-M3.1-Flash - Latest ultra-efficient multimodal model with 1M context and tunable thinking depth
+    MinimaxM31Flash,
 
     // OpenRouter models
-    /// DeepSeek V4.1 Flash - Latest flash model via OpenRouter
+    /// DeepSeek V4.1 Flash 1017 - Latest flash model via OpenRouter
     OpenRouterDeepSeekFlash,
     /// OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter
     OpenRouterOpenAIGptOss120b,
@@ -341,6 +357,10 @@ pub enum ModelId {
     VercelOpenAiGpt6Astra,
     /// GPT-5.6 Luna served through the Vercel AI Gateway
     VercelOpenAiGpt56Luna,
+    /// GPT-6 Sol served through the Vercel AI Gateway
+    VercelOpenAiGpt6Sol,
+    /// GPT-6 Luna served through the Vercel AI Gateway
+    VercelOpenAiGpt6Luna,
     /// GPT-5.3 Codex served through the Vercel AI Gateway
     /// Gemini 3.1 Pro Preview served through the Vercel AI Gateway
     /// Gemini 3.8 Flash served through the Vercel AI Gateway

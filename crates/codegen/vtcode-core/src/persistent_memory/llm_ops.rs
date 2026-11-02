@@ -61,7 +61,7 @@ fn build_memory_json_request(
         )
     };
 
-    Ok(LLMRequest {
+    let mut request = LLMRequest {
         model: route.model.clone(),
         temperature: Some(route.temperature),
         output_format: supports_native_json.then(|| {
@@ -75,7 +75,16 @@ fn build_memory_json_request(
         }),
         messages: std::sync::Arc::new(vec![Message::user(prompt)]),
         ..Default::default()
-    })
+    };
+    // Anthropic Messages (API 2026-10-21) rejects sampling; the shared
+    // auxiliary budget drops it for routes that do. This request keeps the
+    // route's own output budget, so only the sampling fields are cleared.
+    if provider.sampling_overrides(&request.model).drops_sampling_params(false, false) {
+        request.temperature = None;
+        request.top_p = None;
+        request.top_k = None;
+    }
+    Ok(request)
 }
 
 fn parse_memory_json_response<T>(text: &str, context: &str) -> Result<T>

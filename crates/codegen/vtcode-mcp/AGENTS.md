@@ -19,9 +19,12 @@
 ## Rules
 
 - `cli.rs` stays in vtcode-core (depends on `crate::cli::input_hardening`). Re-export facade in vtcode-core (`mcp/mod.rs`) must stay in sync. `rmcp_client` is `pub(crate)` -- not part of the public API. `convert_to_rmcp()` is `pub(crate)` -- internal JSON bridge. Treat discovered server text as bounded untrusted resource content; retain host policy around it and keep enforcement in registration/tool policy.
+- Tool results preserve public content and `structuredContent` exactly; omit protocol `_meta` at result, content-block, and embedded-resource envelopes. Never recursively strip application data or derive error messages from metadata.
 
 ## Gotchas
 
 - `enhanced_config.rs` uses `#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]`. `rmcp-reqwest` is a renamed `reqwest` with rustls features -- not the same as the workspace `reqwest`. `DEFAULT_ENV_VARS` is platform-conditional (`#[cfg(unix)]` / `#[cfg(windows)]`). `McpSandboxContext` is optional for unsandboxed `McpClient::new`; session setup must pass it through initial, pooled, and reconnect stdio launches, whose stderr is bounded and redacted.
+- HTTP OAuth token resolution must include the actual configured endpoint so a token cannot be reused for a different MCP resource.
 - `list_changed` refreshes are burst-coalesced and token-bucket limited; throttled notifications must retain a dirty bit for one refresh after refill.
 - LLM-visible tool/resource/prompt lists must be deterministic: sorted in `provider.rs` (`filter_*_sorted`), providers iterated via `providers_sorted_by_name` in `client.rs`; on name collisions the first provider by name wins.
+- Shell-based transport tests are Unix-only. Reap dump-producing children under a timeout before reading their files; file existence does not prove complete output.

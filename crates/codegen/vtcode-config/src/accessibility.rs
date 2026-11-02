@@ -10,12 +10,20 @@ pub(crate) fn reduce_motion_preference() -> Option<bool> {
 }
 
 #[cfg(target_os = "windows")]
+#[expect(
+    unsafe_code,
+    reason = "Reduced-motion preference is only exposed through the Win32 `SystemParametersInfoW` ABI; the standard library has no safe binding for it."
+)]
 fn detect_reduce_motion_preference() -> Option<bool> {
     use std::ffi::c_void;
 
     const SPI_GETCLIENTAREAANIMATION: u32 = 0x1042;
 
     #[link(name = "user32")]
+    // SAFETY: Declares the documented `user32!SystemParametersInfoW` ABI
+    // (`UINT, UINT, PVOID, UINT -> BOOL`); `#[link]` binds the symbol from the
+    // system `user32` library, and the call site below passes a live `BOOL`
+    // whose pointer and lifetime match the declared signature.
     unsafe extern "system" {
         fn SystemParametersInfoW(action: u32, param: u32, value: *mut c_void, flags: u32) -> i32;
     }

@@ -19,64 +19,24 @@
 pub mod file_search;
 pub mod markdown_store;
 
+mod atomic_write;
+mod snapshot;
+mod storage;
+
+pub use storage::{IndexStorage, MarkdownIndexStorage};
+
 use anyhow::Result;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use ignore::{DirEntry, Walk};
 use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
 use std::fs;
-use std::io::{BufWriter, ErrorKind, Write};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
-
-/// Persistence backend for [`SimpleIndexer`].
-pub trait IndexStorage: Send + Sync {
-    /// Prepare any directories or resources required for persistence.
-    fn init(&self, index_dir: &Path) -> Result<()>;
-
-    /// Persist an indexed file entry.
-    fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()>;
-
-    /// Whether this backend expects full-snapshot persistence.
-    ///
-    /// Snapshot-aware backends receive the complete in-memory index on each
-    /// update so on-disk state stays consistent across single-file and
-    /// directory indexing flows.
-    fn prefers_snapshot_persistence(&self) -> bool {
-        false
-    }
-
-    /// Remove a previously persisted file entry.
-    ///
-    /// Defaults to a no-op to keep existing custom storage backends compatible.
-    fn remove(&self, _index_dir: &Path, _file_path: &Path) -> Result<()> {
-        Ok(())
-    }
-
-    /// Persist a batch of indexed file entries.
-    ///
-    /// Defaults to calling [`IndexStorage::persist`] for each entry, keeping
-    /// existing custom storage backends compatible.
-    fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
-        for entry in entries {
-            self.persist(index_dir, entry)?;
-        }
-        Ok(())
-    }
-
-    /// Persist a batch of indexed file entries borrowed from the in-memory cache.
-    ///
-    /// Defaults to cloning the borrowed entries and delegating to
-    /// [`IndexStorage::persist_batch`] so existing custom storage backends remain
-    /// compatible.
-    fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
-        let owned = entries.iter().map(|entry| (*entry).clone()).collect::<Vec<_>>();
-        self.persist_batch(index_dir, &owned)
-    }
-}
 
 /// Directory traversal filter hook for [`SimpleIndexer`].
 pub trait TraversalFilter: Send + Sync {
@@ -85,76 +45,22 @@ pub trait TraversalFilter: Send + Sync {
 
     /// Determine if the indexer should process the provided file.
     fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool;
-}
 
-/// Markdown-backed [`IndexStorage`] implementation.
-#[derive(Debug, Default, Clone)]
-pub struct MarkdownIndexStorage;
-
-impl IndexStorage for MarkdownIndexStorage {
-    fn init(&self, index_dir: &Path) -> Result<()> {
-        fs::create_dir_all(index_dir)?;
-        Ok(())
+    /// Metadata-aware variant of [`TraversalFilter::should_index_file`].
+    ///
+    /// The default implementation delegates to [`TraversalFilter::should_index_file`],
+    /// so existing filters keep their exact behavior. Filters whose file check
+    /// starts with an existence test should override this to reuse `metadata`
+    /// instead of stat-ing the path a second time.
+    fn should_index_file_with_metadata(
+        &self,
+        path: &Path,
+        metadata: &fs::Metadata,
+        config: &SimpleIndexerConfig,
+    ) -> bool {
+        let _ = metadata;
+        self.should_index_file(path, config)
     }
-
-    fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()> {
-        fs::create_dir_all(index_dir)?;
-        let file_name = format!("{}.md", calculate_hash(&entry.path));
-        let index_path = index_dir.join(file_name);
-        let file = fs::File::create(index_path)?;
-        let mut writer = BufWriter::new(file);
-        writeln!(writer, "# File Index: {}", entry.path)?;
-        writeln!(writer)?;
-        write_markdown_fields(&mut writer, entry)?;
-        writer.flush()?;
-        Ok(())
-    }
-
-    fn prefers_snapshot_persistence(&self) -> bool {
-        true
-    }
-
-    fn remove(&self, index_dir: &Path, file_path: &Path) -> Result<()> {
-        let file_name = format!("{}.md", calculate_hash(file_path.to_string_lossy().as_ref()));
-        let index_path = index_dir.join(file_name);
-        match fs::remove_file(index_path) {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(err.into()),
-        }
-    }
-
-    fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
-        persist_markdown_snapshot(index_dir, entries.iter())
-    }
-
-    fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
-        persist_markdown_snapshot(index_dir, entries.iter().copied())
-    }
-}
-
-fn persist_markdown_snapshot<'a>(index_dir: &Path, entries: impl IntoIterator<Item = &'a FileIndex>) -> Result<()> {
-    let entries = entries.into_iter().collect::<Vec<_>>();
-
-    fs::create_dir_all(index_dir)?;
-    let temp_path = index_dir.join(".index.md.tmp");
-    let final_path = index_dir.join("index.md");
-    let file = fs::File::create(&temp_path)?;
-    let mut writer = BufWriter::new(file);
-
-    writeln!(writer, "# Workspace File Index")?;
-    writeln!(writer)?;
-    writeln!(writer, "- **Entries**: {}", entries.len())?;
-    writeln!(writer)?;
-
-    for entry in entries {
-        write_markdown_entry(&mut writer, entry)?;
-    }
-
-    writer.flush()?;
-    fs::rename(temp_path, final_path)?;
-    cleanup_legacy_markdown_entries(index_dir)?;
-    Ok(())
 }
 
 /// Default traversal filter powered by [`SimpleIndexerConfig`].
@@ -167,25 +73,16 @@ impl TraversalFilter for ConfigTraversalFilter {
     }
 
     fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
-        if !path.is_file() {
-            return false;
-        }
+        path.is_file() && snapshot::has_indexable_file_name(path, config)
+    }
 
-        // Skip hidden files when configured.
-        if config.ignore_hidden && path.file_name().and_then(|n| n.to_str()).is_some_and(|s| s.starts_with('.')) {
-            return false;
-        }
-
-        // Always skip known sensitive files regardless of config.
-        if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
-            && (vtcode_commons::exclusions::is_sensitive_file(file_name)
-                || file_name == ".gitignore"
-                || file_name == ".git")
-        {
-            return false;
-        }
-
-        true
+    fn should_index_file_with_metadata(
+        &self,
+        path: &Path,
+        metadata: &fs::Metadata,
+        config: &SimpleIndexerConfig,
+    ) -> bool {
+        metadata.is_file() && snapshot::has_indexable_file_name(path, config)
     }
 }
 
@@ -288,6 +185,21 @@ pub struct FileIndex {
     tags: Vec<String>,
 }
 
+impl FileIndex {
+    /// Crate-internal constructor so the snapshot parser (a sibling module)
+    /// can rebuild entries from disk; fields stay private to this module.
+    pub(crate) fn from_parts(
+        path: String,
+        hash: String,
+        modified: u64,
+        size: u64,
+        language: String,
+        tags: Vec<String>,
+    ) -> Self {
+        Self { path, hash, modified, size, language, tags }
+    }
+}
+
 /// Simple search result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
@@ -357,6 +269,32 @@ impl SimpleIndexer {
         self.storage.init(self.config.index_dir())
     }
 
+    /// Populate the index cache from the persisted snapshot so re-index runs
+    /// can skip unchanged files (see [`Self::index_directory`]). Entries
+    /// outside the workspace root, in excluded directories, with hidden
+    /// or sensitive names, or with `..` segments are discarded so a tampered
+    /// snapshot can never surface files the indexer would refuse to index.
+    /// Existence is deliberately unchecked: the re-index diff needs deleted
+    /// files' entries to prune them. A missing or malformed snapshot leaves
+    /// the cache empty and never fails. Returns the hydrated count.
+    pub fn hydrate_from_snapshot(&mut self) -> usize {
+        let root = self.config.workspace_root().to_path_buf();
+        let mut hydrated = 0;
+        for entry in snapshot::load_snapshot_entries(self.config.index_dir()) {
+            let path = Path::new(&entry.path);
+            if path.starts_with(&root)
+                && !snapshot::has_parent_reference(path)
+                && (self.is_allowed_path(path) || !self.is_excluded_path(path))
+                && snapshot::has_indexable_file_name(path, &self.config)
+            {
+                self.index_cache.insert(entry.path.clone(), entry);
+                hydrated += 1;
+            }
+        }
+        tracing::debug!(hydrated, total = self.index_cache.len(), "index cache hydrated from snapshot");
+        hydrated
+    }
+
     /// Get the workspace root path.
     pub fn workspace_root(&self) -> &Path {
         self.config.workspace_root()
@@ -402,32 +340,91 @@ impl SimpleIndexer {
     /// Index all files in directory recursively.
     /// Respects .gitignore, .ignore, and other ignore files.
     /// SECURITY: Always skips hidden files and sensitive data (.env, .git, etc.)
+    ///
+    /// Hydrated entries matching size and mtime are served without a read or
+    /// hash (see `cached_or_built_index`); an unchanged directory also skips
+    /// the whole-snapshot rewrite.
     pub fn index_directory(&mut self, dir_path: &Path) -> Result<()> {
         let walker = self.build_walker(dir_path);
 
         let mut entries = Vec::new();
+        let mut rebuilt_any = false;
 
         for entry in walker.filter_map(|e| e.ok()) {
             let path = entry.path();
 
             // Only index files, not directories
             if entry.file_type().is_some_and(|ft| ft.is_file())
-                && let Some(index) = self.build_file_index(path)?
+                && let Some(index) = self.cached_or_built_index(path, &mut rebuilt_any)?
             {
                 entries.push(index);
             }
         }
 
         if self.storage.prefers_snapshot_persistence() {
-            self.apply_snapshot_directory_update(dir_path, &entries)?;
-        } else {
-            entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-            self.storage.persist_batch(self.config.index_dir(), &entries)?;
+            if rebuilt_any || self.cached_subdirectory_differs(dir_path, &entries) {
+                self.apply_snapshot_directory_update(dir_path, &entries)?;
+            }
+            self.prune_orphaned_content(dir_path);
+            return Ok(());
         }
 
+        entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+        self.storage.persist_batch(self.config.index_dir(), &entries)?;
         self.replace_cached_entries(dir_path, &entries);
 
         Ok(())
+    }
+
+    /// Serve a cached [`FileIndex`] when size and mtime still match the
+    /// hydrated entry, avoiding a full read + SHA-256 per unchanged file;
+    /// otherwise build. Sets `rebuilt_any` when a file is built so the caller
+    /// can skip no-op snapshot rewrites (entry-set drops are caught by the
+    /// caller's directory diff). `modified` is second-granularity: a
+    /// same-second, same-size rewrite is picked up by the next run.
+    fn cached_or_built_index(&mut self, file_path: &Path, rebuilt_any: &mut bool) -> Result<Option<FileIndex>> {
+        // Stat once and reuse the metadata for the unchanged screen, the
+        // traversal filter, and the rebuilt entry instead of stat-ing up to
+        // four times per file (filter, screen, filter, mtime).
+        let metadata = match fs::metadata(file_path) {
+            Ok(metadata) => metadata,
+            Err(_) => {
+                // Missing/unreadable: preserve `build_file_index` semantics,
+                // which maps missing files to `None` unless a custom filter
+                // claims the path (in which case the read error propagates).
+                let built = self.build_file_index(file_path)?;
+                *rebuilt_any |= built.is_some();
+                return Ok(built);
+            }
+        };
+
+        let cache_key = file_path.to_string_lossy().into_owned();
+        if let Some(cached) = self.index_cache.get(cache_key.as_str())
+            && self.should_process_file_path_with_metadata(file_path, &metadata)
+            && let Ok(modified) = metadata.modified()
+            && let Ok(elapsed) = modified.duration_since(SystemTime::UNIX_EPOCH)
+            && elapsed.as_secs() == cached.modified
+            && metadata.len() == cached.size
+        {
+            return Ok(Some(cached.clone()));
+        }
+
+        let built = self.build_file_index_with_metadata(file_path, &metadata)?;
+        *rebuilt_any |= built.is_some();
+        Ok(built)
+    }
+
+    /// Whether the walked entries differ from the cached entries under
+    /// `dir_path`. Deletions show up here; additions and content changes set
+    /// `rebuilt_any` in [`Self::cached_or_built_index`] instead.
+    fn cached_subdirectory_differs(&self, dir_path: &Path, entries: &[FileIndex]) -> bool {
+        let walked = entries.iter().map(|entry| entry.path.as_str()).collect::<HashSet<_>>();
+        self.index_cache
+            .keys()
+            .filter(|path| Path::new(path).starts_with(dir_path))
+            .map(String::as_str)
+            .collect::<HashSet<_>>()
+            != walked
     }
 
     /// Discover all files in directory recursively without indexing them.
@@ -653,9 +650,7 @@ impl SimpleIndexer {
 
     #[inline]
     fn get_modified_time(&self, file_path: &Path) -> Result<u64> {
-        let metadata = fs::metadata(file_path)?;
-        let modified = metadata.modified()?;
-        Ok(modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs())
+        metadata_modified_secs(&fs::metadata(file_path)?)
     }
 
     #[inline]
@@ -682,10 +677,47 @@ impl SimpleIndexer {
             }
         };
 
+        let modified = self.get_modified_time(file_path)?;
+        Ok(Some(self.finish_file_index(file_path, content, modified)))
+    }
+
+    /// [`Self::build_file_index`] reusing an already-observed `metadata`.
+    ///
+    /// Used by the directory-walk hot loop so each file is stat-ed once.
+    /// A file that vanishes between the stat and the read maps to `None`,
+    /// matching the legacy path's existence re-check. (A custom filter that
+    /// accepts nonexistent paths would have surfaced the read error in the
+    /// legacy path; here the transient delete is skipped instead.)
+    fn build_file_index_with_metadata(
+        &mut self,
+        file_path: &Path,
+        metadata: &fs::Metadata,
+    ) -> Result<Option<FileIndex>> {
+        if !self.should_process_file_path_with_metadata(file_path, metadata) {
+            return Ok(None);
+        }
+
+        let content = match fs::read_to_string(file_path) {
+            Ok(text) => text,
+            Err(err) => {
+                if err.kind() == ErrorKind::InvalidData || err.kind() == ErrorKind::NotFound {
+                    return Ok(None);
+                }
+                return Err(err.into());
+            }
+        };
+
+        let modified = metadata_modified_secs(metadata)?;
+        Ok(Some(self.finish_file_index(file_path, content, modified)))
+    }
+
+    /// Assemble a [`FileIndex`] from already-read content and mtime, and cache
+    /// the content for hash-verified searches.
+    fn finish_file_index(&mut self, file_path: &Path, content: String, modified: u64) -> FileIndex {
         let index = FileIndex {
             path: file_path.to_string_lossy().into_owned(),
             hash: calculate_hash(&content),
-            modified: self.get_modified_time(file_path)?,
+            modified,
             size: content.len() as u64,
             language: self.detect_language(file_path),
             tags: vec![],
@@ -694,7 +726,7 @@ impl SimpleIndexer {
         self.content_cache
             .insert(index.path.clone(), (index.hash.clone(), Arc::from(content)));
 
-        Ok(Some(index))
+        index
     }
 
     #[inline]
@@ -709,11 +741,25 @@ impl SimpleIndexer {
 
     #[inline]
     fn should_process_file_path(&self, path: &Path) -> bool {
+        self.should_process_with(path, || self.should_index_file_path(path))
+    }
+
+    #[inline]
+    fn should_process_file_path_with_metadata(&self, path: &Path, metadata: &fs::Metadata) -> bool {
+        self.should_process_with(path, || self.filter.should_index_file_with_metadata(path, metadata, &self.config))
+    }
+
+    /// Allowed/excluded scope gate shared by both file filters.
+    ///
+    /// Allowed directories bypass exclusion; everywhere else an excluded path
+    /// short-circuits before the (potentially stat-ing) filter runs.
+    #[inline]
+    fn should_process_with(&self, path: &Path, indexable: impl FnOnce() -> bool) -> bool {
         if self.is_allowed_path(path) {
-            return self.should_index_file_path(path);
+            return indexable();
         }
 
-        !self.is_excluded_path(path) && self.should_index_file_path(path)
+        !self.is_excluded_path(path) && indexable()
     }
 
     fn build_walker(&self, dir_path: &Path) -> Walk {
@@ -744,6 +790,14 @@ impl SimpleIndexer {
 
         self.index_cache
             .extend(entries.iter().cloned().map(|entry| (entry.path.clone(), entry)));
+    }
+
+    /// Drop content entries under `dir_path` without an index entry (deleted,
+    /// rejected, or unindexable); content for still-indexed files is kept so
+    /// searches avoid a disk read.
+    fn prune_orphaned_content(&mut self, dir_path: &Path) {
+        self.content_cache
+            .retain(|path, _| !Path::new(path).starts_with(dir_path) || self.index_cache.contains_key(path.as_str()));
     }
 
     fn apply_snapshot_file_update(&mut self, cache_key: String, next_entry: Option<FileIndex>) -> Result<()> {
@@ -868,579 +922,12 @@ fn calculate_hash(content: &str) -> String {
     vtcode_commons::utils::calculate_sha256(content.as_bytes())
 }
 
-fn write_markdown_entry(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
-    writeln!(writer, "## {}", entry.path)?;
-    writeln!(writer)?;
-    write_markdown_fields(writer, entry)?;
-    writeln!(writer)?;
-    Ok(())
-}
-
-fn write_markdown_fields(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
-    writeln!(writer, "- **Path**: {}", entry.path)?;
-    writeln!(writer, "- **Hash**: {}", entry.hash)?;
-    writeln!(writer, "- **Modified**: {}", entry.modified)?;
-    writeln!(writer, "- **Size**: {} bytes", entry.size)?;
-    writeln!(writer, "- **Language**: {}", entry.language)?;
-    writeln!(writer, "- **Tags**: {}", entry.tags.join(", "))?;
-    Ok(())
-}
-
-fn cleanup_legacy_markdown_entries(index_dir: &Path) -> Result<()> {
-    for entry in fs::read_dir(index_dir)? {
-        let entry = entry?;
-        let file_name = entry.file_name();
-        let file_name = file_name.to_string_lossy();
-        if is_legacy_markdown_entry_name(file_name.as_ref()) {
-            fs::remove_file(entry.path())?;
-        }
-    }
-    Ok(())
-}
-
+/// Second-granularity mtime shared by the index builder and the unchanged
+/// screen so both observe the same clock reading for one stat.
 #[inline]
-fn is_legacy_markdown_entry_name(file_name: &str) -> bool {
-    let Some(hash_part) = file_name.strip_suffix(".md") else {
-        return false;
-    };
-    hash_part.len() == 64 && hash_part.bytes().all(|byte| byte.is_ascii_hexdigit())
+fn metadata_modified_secs(metadata: &fs::Metadata) -> Result<u64> {
+    Ok(metadata.modified()?.duration_since(SystemTime::UNIX_EPOCH)?.as_secs())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use std::sync::{Arc, Mutex};
-    use tempfile::tempdir;
-
-    #[test]
-    fn skips_hidden_directories_by_default() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let hidden_dir = workspace.join(".private");
-        fs::create_dir_all(&hidden_dir)?;
-        fs::write(hidden_dir.join("secret.txt"), "classified")?;
-
-        let visible_dir = workspace.join("src");
-        fs::create_dir_all(&visible_dir)?;
-        fs::write(visible_dir.join("lib.rs"), "fn main() {}")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_directory(workspace)?;
-
-        assert!(indexer.find_files("secret\\.txt$")?.is_empty());
-        assert!(!indexer.find_files("lib\\.rs$")?.is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn can_include_hidden_directories_when_configured() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let hidden_dir = workspace.join(".cache");
-        fs::create_dir_all(&hidden_dir)?;
-        fs::write(hidden_dir.join("data.log"), "details")?;
-
-        let config = SimpleIndexerConfig::new(workspace.to_path_buf()).ignore_hidden(false);
-        let mut indexer = SimpleIndexer::with_config(config);
-        indexer.init()?;
-        indexer.index_directory(workspace)?;
-
-        let results = indexer.find_files("data\\.log$")?;
-        assert_eq!(results.len(), 1);
-
-        Ok(())
-    }
-
-    #[test]
-    fn indexes_allowed_directories_inside_hidden_excluded_parents() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let allowed_dir = workspace.join(".vtcode").join("external");
-        fs::create_dir_all(&allowed_dir)?;
-        fs::write(allowed_dir.join("plugin.toml"), "name = 'demo'")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_directory(workspace)?;
-
-        let results = indexer.find_files("plugin\\.toml$")?;
-        assert_eq!(results.len(), 1);
-
-        Ok(())
-    }
-
-    #[test]
-    fn reindexing_prunes_deleted_files_from_cache() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let file_path = workspace.join("notes.txt");
-        fs::write(&file_path, "remember this")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_directory(workspace)?;
-        assert_eq!(indexer.find_files("notes\\.txt$")?.len(), 1);
-
-        fs::remove_file(&file_path)?;
-        indexer.index_directory(workspace)?;
-
-        assert!(indexer.find_files("notes\\.txt$")?.is_empty());
-        assert!(indexer.all_files().is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn index_file_skips_excluded_paths() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let index_dir = workspace.join(".vtcode").join("index");
-        fs::create_dir_all(&index_dir)?;
-        let generated_index = index_dir.join("index.md");
-        fs::write(&generated_index, "# generated")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_file(&generated_index)?;
-
-        assert!(indexer.all_files().is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn index_file_removes_stale_entry_when_file_becomes_unreadable() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let file_path = workspace.join("notes.txt");
-        fs::write(&file_path, "remember this")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_file(&file_path)?;
-        assert!(
-            indexer
-                .find_files("notes\\.txt$")?
-                .iter()
-                .any(|file| file.ends_with("notes.txt"))
-        );
-
-        fs::write(&file_path, [0xFF, 0xFE, 0xFD])?;
-        indexer.index_file(&file_path)?;
-
-        assert!(indexer.find_files("notes\\.txt$")?.is_empty());
-
-        let index_content = fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
-        assert!(!index_content.contains(file_path.to_string_lossy().as_ref()));
-
-        Ok(())
-    }
-
-    #[test]
-    fn index_file_maintains_markdown_snapshot_across_updates() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let first = workspace.join("first.txt");
-        let second = workspace.join("second.txt");
-        fs::write(&first, "one")?;
-        fs::write(&second, "two")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_file(&first)?;
-        indexer.index_file(&second)?;
-
-        let index_dir = workspace.join(".vtcode").join("index");
-        let files = fs::read_dir(&index_dir)?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
-        assert_eq!(files, vec!["index.md".to_string()]);
-
-        let index_content = fs::read_to_string(index_dir.join("index.md"))?;
-        assert!(index_content.contains(first.to_string_lossy().as_ref()));
-        assert!(index_content.contains(second.to_string_lossy().as_ref()));
-
-        Ok(())
-    }
-
-    #[test]
-    fn index_directory_writes_markdown_snapshot_without_manual_init() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        fs::write(workspace.join("notes.txt"), "remember this")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.index_directory(workspace)?;
-
-        let index_content = fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
-        assert!(index_content.contains(workspace.join("notes.txt").to_string_lossy().as_ref()));
-
-        Ok(())
-    }
-
-    #[test]
-    fn get_file_content_clamps_ranges_without_panicking() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let file_path = workspace.join("notes.txt");
-        fs::write(&file_path, "first\nsecond")?;
-
-        let indexer = SimpleIndexer::new(workspace.to_path_buf());
-        let file_path = file_path.to_string_lossy().into_owned();
-
-        assert_eq!(indexer.get_file_content(&file_path, Some(5), None)?, "");
-        assert_eq!(indexer.get_file_content(&file_path, Some(0), Some(1))?, "1: first\n");
-        assert_eq!(indexer.get_file_content(&file_path, Some(2), Some(1))?, "");
-
-        Ok(())
-    }
-
-    #[test]
-    fn supports_custom_storage_backends() -> Result<()> {
-        #[derive(Clone, Default)]
-        struct MemoryStorage {
-            records: Arc<Mutex<Vec<FileIndex>>>,
-        }
-
-        impl MemoryStorage {
-            fn new(records: Arc<Mutex<Vec<FileIndex>>>) -> Self {
-                Self { records }
-            }
-        }
-
-        impl IndexStorage for MemoryStorage {
-            fn init(&self, _index_dir: &Path) -> Result<()> {
-                Ok(())
-            }
-
-            fn persist(&self, _index_dir: &Path, entry: &FileIndex) -> Result<()> {
-                let mut guard = self.records.lock().expect("lock poisoned");
-                guard.push(entry.clone());
-                Ok(())
-            }
-        }
-
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        fs::write(workspace.join("notes.txt"), "remember this")?;
-
-        let records: Arc<Mutex<Vec<FileIndex>>> = Arc::new(Mutex::new(Vec::new()));
-        let storage = MemoryStorage::new(records.clone());
-
-        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let mut indexer = SimpleIndexer::with_config(config).with_storage(Arc::new(storage));
-        indexer.init()?;
-        indexer.index_directory(workspace)?;
-
-        let entries = records.lock().expect("lock poisoned");
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].path, workspace.join("notes.txt").to_string_lossy().into_owned());
-
-        Ok(())
-    }
-
-    #[test]
-    fn custom_filters_can_skip_files() -> Result<()> {
-        #[derive(Default)]
-        struct SkipRustFilter {
-            inner: ConfigTraversalFilter,
-        }
-
-        impl TraversalFilter for SkipRustFilter {
-            fn should_descend(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
-                self.inner.should_descend(path, config)
-            }
-
-            fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
-                if path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
-                {
-                    return false;
-                }
-
-                self.inner.should_index_file(path, config)
-            }
-        }
-
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        fs::write(workspace.join("lib.rs"), "fn main() {}")?;
-        fs::write(workspace.join("README.md"), "# Notes")?;
-
-        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let mut indexer = SimpleIndexer::with_config(config).with_filter(Arc::new(SkipRustFilter::default()));
-        indexer.init()?;
-        indexer.index_directory(workspace)?;
-
-        assert!(indexer.find_files("lib\\.rs$")?.is_empty());
-        assert!(!indexer.find_files("README\\.md$")?.is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn custom_filters_can_skip_directories() -> Result<()> {
-        #[derive(Default)]
-        struct SkipGeneratedFilter {
-            inner: ConfigTraversalFilter,
-        }
-
-        impl TraversalFilter for SkipGeneratedFilter {
-            fn should_descend(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
-                if path.ends_with("generated") {
-                    return false;
-                }
-
-                self.inner.should_descend(path, config)
-            }
-
-            fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
-                self.inner.should_index_file(path, config)
-            }
-        }
-
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let generated_dir = workspace.join("generated");
-        fs::create_dir_all(&generated_dir)?;
-        fs::write(generated_dir.join("skip.txt"), "ignore me")?;
-        fs::write(workspace.join("README.md"), "# Notes")?;
-
-        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let indexer = SimpleIndexer::with_config(config).with_filter(Arc::new(SkipGeneratedFilter::default()));
-        let files = indexer.discover_files(workspace);
-
-        assert!(!files.iter().any(|file| file.ends_with("skip.txt")));
-        assert!(files.iter().any(|file| file.ends_with("README.md")));
-
-        Ok(())
-    }
-
-    #[test]
-    fn discover_dir_entries_is_shallow_and_ignore_aware() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        fs::create_dir_all(workspace.join("src"))?;
-        fs::create_dir_all(workspace.join("node_modules"))?;
-        fs::create_dir_all(workspace.join(".git"))?;
-        fs::write(workspace.join("README.md"), "# Notes")?;
-        fs::write(workspace.join("src").join("lib.rs"), "fn main() {}")?;
-        fs::write(workspace.join("node_modules").join("dep.js"), "x")?;
-        fs::write(workspace.join(".git").join("config"), "x")?;
-
-        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let indexer = SimpleIndexer::with_config(config);
-        let entries = indexer.discover_dir_entries(workspace);
-
-        let names: Vec<String> = entries
-            .iter()
-            .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
-            .collect();
-
-        assert_eq!(entries.len(), 2, "expected exactly README.md and src, got {names:?}");
-        assert!(names.contains(&"README.md".to_string()));
-        assert!(names.contains(&"src".to_string()));
-
-        let (_, src_is_dir) = entries.iter().find(|(p, _)| p.ends_with("src")).unwrap();
-        assert!(*src_is_dir);
-
-        Ok(())
-    }
-
-    #[test]
-    fn indexing_multiple_directories_preserves_existing_cache_entries() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let src_dir = workspace.join("src");
-        let docs_dir = workspace.join("docs");
-        fs::create_dir_all(&src_dir)?;
-        fs::create_dir_all(&docs_dir)?;
-        fs::write(src_dir.join("lib.rs"), "fn main() {}")?;
-        fs::write(docs_dir.join("guide.md"), "# Guide")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_directory(&src_dir)?;
-        indexer.index_directory(&docs_dir)?;
-
-        assert!(indexer.find_files("lib\\.rs$")?.iter().any(|file| file.ends_with("lib.rs")));
-        assert!(indexer.find_files("guide\\.md$")?.iter().any(|file| file.ends_with("guide.md")));
-
-        let index_content = fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
-        assert!(index_content.contains(src_dir.join("lib.rs").to_string_lossy().as_ref()));
-        assert!(index_content.contains(docs_dir.join("guide.md").to_string_lossy().as_ref()));
-
-        Ok(())
-    }
-
-    #[test]
-    fn batch_indexing_writes_single_markdown_file() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        fs::write(workspace.join("lib.rs"), "fn main() {}")?;
-        fs::write(workspace.join("README.md"), "# Notes")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-        indexer.index_directory(workspace)?;
-
-        let index_dir = workspace.join(".vtcode").join("index");
-        let files = fs::read_dir(&index_dir)?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
-        assert_eq!(files, vec!["index.md".to_string()]);
-
-        let index_content = fs::read_to_string(index_dir.join("index.md"))?;
-        assert!(index_content.contains(workspace.join("lib.rs").to_string_lossy().as_ref()));
-        assert!(index_content.contains(workspace.join("README.md").to_string_lossy().as_ref()));
-
-        Ok(())
-    }
-
-    #[test]
-    fn batch_indexing_removes_legacy_hashed_entries() -> Result<()> {
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        fs::write(workspace.join("lib.rs"), "fn main() {}")?;
-
-        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
-        indexer.init()?;
-
-        let legacy_file_name = format!("{}.md", calculate_hash("legacy-path"));
-        let legacy_file_path = workspace.join(".vtcode").join("index").join(&legacy_file_name);
-        fs::write(&legacy_file_path, "# legacy")?;
-        assert!(legacy_file_path.exists());
-
-        indexer.index_directory(workspace)?;
-
-        assert!(!legacy_file_path.exists());
-        let files = fs::read_dir(workspace.join(".vtcode").join("index"))?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
-        assert_eq!(files, vec!["index.md".to_string()]);
-
-        Ok(())
-    }
-
-    #[test]
-    fn snapshot_storage_uses_default_ref_batch_persistence() -> Result<()> {
-        #[derive(Clone, Default)]
-        struct SnapshotMemoryStorage {
-            snapshots: Arc<Mutex<Vec<Vec<FileIndex>>>>,
-        }
-
-        impl SnapshotMemoryStorage {
-            fn new(snapshots: Arc<Mutex<Vec<Vec<FileIndex>>>>) -> Self {
-                Self { snapshots }
-            }
-        }
-
-        impl IndexStorage for SnapshotMemoryStorage {
-            fn init(&self, _index_dir: &Path) -> Result<()> {
-                Ok(())
-            }
-
-            fn persist(&self, _index_dir: &Path, _entry: &FileIndex) -> Result<()> {
-                Ok(())
-            }
-
-            fn prefers_snapshot_persistence(&self) -> bool {
-                true
-            }
-
-            fn persist_batch(&self, _index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
-                self.snapshots.lock().expect("lock poisoned").push(entries.to_vec());
-                Ok(())
-            }
-        }
-
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let file_path = workspace.join("notes.txt");
-        fs::write(&file_path, "remember this")?;
-
-        let snapshots = Arc::new(Mutex::new(Vec::new()));
-        let storage = SnapshotMemoryStorage::new(snapshots.clone());
-
-        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let mut indexer = SimpleIndexer::with_config(config).with_storage(Arc::new(storage));
-        indexer.index_file(&file_path)?;
-
-        let snapshots = snapshots.lock().expect("lock poisoned");
-        assert_eq!(snapshots.len(), 1);
-        assert_eq!(snapshots[0].len(), 1);
-        assert_eq!(snapshots[0][0].path, workspace.join("notes.txt").to_string_lossy().into_owned());
-
-        Ok(())
-    }
-
-    #[test]
-    fn snapshot_index_file_rolls_back_cache_when_persist_fails() -> Result<()> {
-        #[derive(Clone, Default)]
-        struct FlakySnapshotStorage {
-            persist_count: Arc<Mutex<usize>>,
-        }
-
-        impl IndexStorage for FlakySnapshotStorage {
-            fn init(&self, _index_dir: &Path) -> Result<()> {
-                Ok(())
-            }
-
-            fn persist(&self, _index_dir: &Path, _entry: &FileIndex) -> Result<()> {
-                Ok(())
-            }
-
-            fn prefers_snapshot_persistence(&self) -> bool {
-                true
-            }
-
-            fn persist_batch(&self, _index_dir: &Path, _entries: &[FileIndex]) -> Result<()> {
-                let mut count = self.persist_count.lock().expect("lock poisoned");
-                *count += 1;
-                if *count == 2 {
-                    anyhow::bail!("simulated snapshot persistence failure");
-                }
-                Ok(())
-            }
-        }
-
-        let temp = tempdir()?;
-        let workspace = temp.path();
-        let first = workspace.join("first.txt");
-        let second = workspace.join("second.txt");
-        fs::write(&first, "one")?;
-        fs::write(&second, "two")?;
-
-        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let storage = Arc::new(FlakySnapshotStorage::default());
-        let mut indexer = SimpleIndexer::with_config(config).with_storage(storage);
-
-        indexer.index_file(&first)?;
-        assert!(
-            indexer
-                .find_files("first\\.txt$")?
-                .iter()
-                .any(|path| path.ends_with("first.txt"))
-        );
-
-        let err = indexer.index_file(&second).expect_err("second persist should fail");
-        assert!(err.to_string().contains("simulated snapshot persistence failure"));
-        assert!(
-            indexer
-                .find_files("first\\.txt$")?
-                .iter()
-                .any(|path| path.ends_with("first.txt"))
-        );
-        assert!(indexer.find_files("second\\.txt$")?.is_empty());
-
-        Ok(())
-    }
-}
+mod tests;

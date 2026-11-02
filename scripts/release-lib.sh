@@ -4,6 +4,7 @@
 # Source: source "$(dirname "${BASH_SOURCE[0]}")/release-lib.sh"
 
 [ -z "${SCRIPT_DIR:-}" ] && SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 # Shared four-target Homebrew formula transformation.
 # shellcheck disable=SC1091
@@ -377,7 +378,7 @@ check_clean_tree() {
 
 ensure_cargo_release() {
 	if ! command -v cargo-release >/dev/null 2>&1; then
-		print_error 'cargo-release is not installed. Install it with `cargo install cargo-release`.'
+		print_error 'cargo-release is not installed. Install it with: cargo install cargo-release'
 		exit 1
 	fi
 }
@@ -393,7 +394,7 @@ trigger_docs_rs_rebuild() {
 	fi
 	print_distribution "Triggering docs.rs rebuild for version $version..."
 	local crates=(
-		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-webmcp vtcode-memory vtcode-macros
+		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-desktop-protocol vtcode-webmcp vtcode-memory vtcode-macros
 		vtcode-config vtcode-indexer vtcode-bash-runner vtcode-utility-tool-specs vtcode-eval
 		vtcode-safety vtcode-a2a vtcode-llm vtcode-skills vtcode-agent-plugins vtcode-ui vtcode-mcp
 		vtcode-core vtcode-acp vtcode

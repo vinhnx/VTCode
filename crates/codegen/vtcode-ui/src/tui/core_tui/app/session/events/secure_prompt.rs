@@ -90,6 +90,17 @@ pub(crate) fn handle_secure_prompt_key(
             session.mark_dirty();
             None
         }
+        // FocusInput cancels exactly like Esc — clear the secret scratch and
+        // close — so "back to typing" never strands on the masked field.
+        // Ahead of the Char arm (which would otherwise insert the chord's
+        // character), behind the structural keys so a pathological rebind
+        // can never shadow Esc/Enter.
+        _ if session.core.resolve_rebindable_action(&key) == Some(Action::FocusInput) => {
+            session.core.input_manager.clear();
+            session.close_overlay();
+            session.mark_dirty();
+            None
+        }
         KeyCode::Char(ch) => {
             // Readline-style Ctrl+<ch> editing/navigation (no Alt/Cmd).
             // These double as the legacy macOS mappings for terminals that

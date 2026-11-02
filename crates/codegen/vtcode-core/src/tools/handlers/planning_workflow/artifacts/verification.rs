@@ -288,6 +288,23 @@ fn is_verification_wrapper(word: &str) -> bool {
         .any(|wrapper| word.eq_ignore_ascii_case(wrapper))
 }
 
+fn is_concrete_file_test(value: &str) -> bool {
+    let Ok(words) = shell_words::split(value) else {
+        return false;
+    };
+    match words.as_slice() {
+        [command, flag, path]
+            if command == "test" && matches!(flag.as_str(), "-e" | "-f" | "-d" | "-s" | "-r" | "-w" | "-x") =>
+        {
+            !path.is_empty()
+                && !path.starts_with('-')
+                && !path.chars().any(is_shell_metacharacter)
+                && find_placeholder_tokens(path).is_empty()
+        }
+        _ => false,
+    }
+}
+
 fn is_actual_command_token(raw_word: &str) -> bool {
     let word = raw_word.trim_matches(|character: char| matches!(character, '`' | '"' | '\''));
     let bare_word = word.trim_matches(|character: char| character.is_ascii_punctuation());
@@ -628,6 +645,68 @@ fn is_concrete_git_verification(value: &str) -> bool {
     })
 }
 
+/// Scope review is an explicit step category, never inferred from a Git command.
+/// Both `scope` and `scoped` phrasing qualify when paired with a review verb.
+pub(super) fn is_scope_review_action(action: &str) -> bool {
+    let words = action.to_ascii_lowercase().replace('-', " ");
+    let words: Vec<&str> = words
+        .split_whitespace()
+        .map(|word| word.trim_matches(|character: char| character.is_ascii_punctuation()))
+        .collect();
+    (words.contains(&"scope") || words.contains(&"scoped"))
+        && words
+            .iter()
+            .any(|word| matches!(*word, "review" | "check" | "confirm" | "verify"))
+}
+
+pub(super) fn is_concrete_file_target(value: &str) -> bool {
+    let path = value.trim().trim_matches(['`', '\'', '"']);
+    is_concrete_target(path)
+        && (Path::new(path).extension().is_some() || path.contains('/') || path.contains('\\'))
+        && !path
+            .chars()
+            .any(|character| matches!(character, ';' | '&' | '|' | '$' | '<' | '>' | '*' | '?'))
+}
+
+/// Listing checks establish workspace scope, not source or behavior correctness.
+fn is_scope_listing(words: &[&str]) -> bool {
+    let Some(start) = git_verification_command_start(words) else {
+        return false;
+    };
+    match words.get(start + 1) {
+        Some(&"status") => true,
+        Some(&"diff") => words
+            .iter()
+            .skip(start + 2)
+            .any(|arg| matches!(*arg, "--name-only" | "--name-status" | "--stat" | "--shortstat" | "--numstat")),
+        _ => false,
+    }
+}
+
+/// Tolerate the bracket-group conjunction emitted by retained planning drafts.
+/// Each command remains a separate scope check in generated trackers.
+pub(super) fn parse_scope_review_checks(value: &str) -> Vec<String> {
+    parse_bracket_list(&value.replace("] and [", "], ["))
+}
+
+pub(super) fn is_scope_review_command(value: &str) -> bool {
+    if value.contains(['\n', '\r']) {
+        return false;
+    }
+    let words = verification_words(value);
+    let Some(start) = git_verification_command_start(&words) else {
+        return false;
+    };
+    matches!(words.get(start + 1), Some(&"status" | &"diff"))
+        && !words.iter().skip(start + 1).any(|word| is_git_command_token(word))
+        && words.iter().all(|word| !contains_shell_metacharacter(word))
+        && words.iter().skip(start + 2).all(|arg| {
+            !["--check", "--output", "--ext-diff", "--exec", "--no-index"]
+                .iter()
+                .any(|flag| arg.starts_with(flag))
+        })
+}
+
 /// Luu agentic-testing: fresh-context independent re-derivation counts as verification.
 /// Accepts `independent-rederive <target> (fresh context, no helper reuse)`
 /// so high-risk steps can require an oracle independent of production helpers.
@@ -845,11 +924,15 @@ pub(super) fn validate_concrete_verification(value: &str) -> Result<(), Verifica
         return Ok(());
     }
 
+    if is_concrete_file_test(value) {
+        return Ok(());
+    }
+
     let words = verification_words(value);
     if git_verification_command_start(&words).is_some()
         || (value.contains(['\n', '\r']) && words.iter().any(|word| is_git_command_token(word)))
     {
-        return is_concrete_git_verification(value)
+        return (!is_scope_listing(&words) && is_concrete_git_verification(value))
             .then_some(())
             .ok_or(VerificationValidationError::NotConcrete);
     }

@@ -76,6 +76,14 @@ impl Default for DiffOptions<'_> {
 }
 
 /// A diff hunk with old/new ranges and semantic lines.
+///
+/// # Contract (Creusot-style)
+///
+/// - Requires: `old_start` and `new_start` are one-based starts (`0` only for
+///   empty-side hunks such as `@@ -0,0 +1 @@`).
+/// - Ensures (hunk invariant): `lines` contains exactly `old_lines`
+///   old-side entries (Context + Deletion) and exactly `new_lines` new-side
+///   entries (Context + Addition). See [`DiffHunk::counts_match`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiffHunk {
@@ -89,6 +97,22 @@ pub struct DiffHunk {
     pub new_lines: usize,
     /// Lines contained in the hunk.
     pub lines: Vec<DiffLine>,
+}
+
+impl DiffHunk {
+    /// Pearlite-style logical predicate: do the embedded lines satisfy the
+    /// declared old/new counts?
+    ///
+    /// # Ensures
+    ///
+    /// Returns `true` iff old-side lines equal `old_count` and new-side lines
+    /// equal `new_count`. Total (terminating): iterates `lines` once.
+    #[must_use]
+    pub fn counts_match(&self, old_count: usize, new_count: usize) -> bool {
+        let old_side = self.lines.iter().filter(|line| line.kind != DiffLineKind::Addition).count();
+        let new_side = self.lines.iter().filter(|line| line.kind != DiffLineKind::Deletion).count();
+        old_side == old_count && new_side == new_count
+    }
 }
 
 /// The semantic role of a line inside a hunk.
@@ -215,9 +239,14 @@ pub struct DiffChangeCounts {
 
 impl DiffChangeCounts {
     /// Total changed lines.
+    ///
+    /// # Ensures
+    ///
+    /// Returns `additions.saturating_add(deletions)`: overflow-free
+    /// (Creusot absence-of-overflow obligation). Total and pure.
     #[must_use]
     pub const fn total(self) -> usize {
-        self.additions + self.deletions
+        self.additions.saturating_add(self.deletions)
     }
 }
 

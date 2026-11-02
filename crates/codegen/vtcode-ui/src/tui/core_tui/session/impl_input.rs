@@ -33,6 +33,12 @@ impl Session {
                 if !segments.is_empty()
         ) || matches!(
             &command,
+            InlineCommand::AppendLines { lines }
+                if lines
+                    .iter()
+                    .any(|line| line.kind == InlineMessageKind::Agent && !line.segments.is_empty())
+        ) || matches!(
+            &command,
             InlineCommand::AppendPastedMessage { kind: InlineMessageKind::Agent, text, .. }
                 if !text.is_empty()
         ) || matches!(
@@ -54,10 +60,20 @@ impl Session {
         }
 
         match command {
+            InlineCommand::Diagnostic(diagnostic) => self.upsert_diagnostic(*diagnostic),
             InlineCommand::AppendLine { kind, segments } => {
                 let previous_max_offset = self.current_max_scroll_offset();
                 self.clear_thinking_spinner_if_active(kind);
                 self.push_line(kind, segments);
+                self.adjust_scroll_after_change(previous_max_offset);
+                self.request_transcript_clear();
+            }
+            InlineCommand::AppendLines { lines } => {
+                let previous_max_offset = self.current_max_scroll_offset();
+                for line in lines {
+                    self.clear_thinking_spinner_if_active(line.kind);
+                    self.push_line(line.kind, line.segments);
+                }
                 self.adjust_scroll_after_change(previous_max_offset);
                 self.request_transcript_clear();
             }

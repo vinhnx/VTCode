@@ -25,7 +25,7 @@ available.
 
 Whitelist entries may be a built-in provider key or a `name` from `[[custom_providers]]`. Matching is case-insensitive.
 
-See the [Configuration guide](../config/config.md#provider-whitelisting) for full details.
+See the [Configuration guide](../config/models.md#provider-whitelisting) for full details.
 
 ## Custom providers
 
@@ -76,6 +76,7 @@ include:
 - `supports_vision`
 - `supports_structured_output`
 - `supports_parallel_tool_calls`
+- `supports_prompt_cache_options` — opt-in support for `prompt_cache_options.ttl` on `openai-responses` routes
 - `supports_context_caching`
 - `supports_responses_compaction`
 - `supports_context_edits`
@@ -113,8 +114,9 @@ When VT Code resolves a model's runtime shape, values are applied in this order,
 
 Sampling values resolve on the same chain with one extra global layer beneath the provider: profile → provider default →
 `agent.temperature` / `agent.reasoning_effort` globals → built-in per-task limits (`max_tokens` only). Simple sub-tasks
-force `reasoning_effort = "minimal"` regardless of a profile pin, and reasoning-rejecting backends (native
-Anthropic/MiniMax, or `api_format = "anthropic-messages"` profiles) drop `temperature` while reasoning is active.
+force `reasoning_effort = "minimal"` regardless of a profile pin, and Anthropic Messages backends (native
+Anthropic/MiniMax, or `api_format = "anthropic-messages"` profiles) drop `temperature`, `top_p`, and `top_k` on every
+request: Anthropic API version `2026-10-21` rejects them outright, so a pinned value never reaches the wire.
 
 An explicit boolean `false` is honored at every level. Omitting `api_format` preserves autodetection, while an explicit
 value selects that API shape.
@@ -124,6 +126,17 @@ accept sampling only while reasoning effort resolves to `none` (pinned values ar
 `gpt-5`/`gpt-5-mini`/`gpt-5-nano` never receive sampling parameters, and `gpt-6-astra`, `gpt-6-sol`, and `gpt-6-luna`
 never receive sampling parameters (`temperature`/`top_p` are unsupported by the GPT-6 family). Prefer neutral model IDs
 on gateways if you need pinned values on such names.
+
+### Custom Responses cache lifetime
+
+Set `supports_prompt_cache_options = true` in the custom provider defaults or an exact model profile only when the
+endpoint accepts OpenAI Responses cache options. Profiles override provider defaults, including explicit `false`;
+absence disables this capability. The flag does not enable it on `openai-chat`, `auto`, or Anthropic routes.
+Select the lifetime globally with `prompt_cache.providers.openai.prompt_cache_ttl = "12h"` (default: `"30m"`).
+Both the global prompt-cache switch and the OpenAI provider cache switch must remain enabled. This opt-in does
+not enable native-only comparison diagnostics or explicit breakpoints. Endpoint errors are surfaced without a
+silent TTL downgrade. Check the endpoint's pricing before enabling longer writes; see the
+[prompt-caching guide](../tools/PROMPT_CACHING_GUIDE.md#openai).
 
 ### Validate the configuration
 
@@ -142,7 +155,7 @@ vtcode ask "Summarize this repository"
 
 Worked examples: [Atlas Cloud](./atlascloud.md), [OmniRoute](./omniroute.md), and
 [Tsubasa](./tsubasa.md) (single-prompt text requests). See the
-[Configuration guide](../config/config.md#custom_providers) for the complete field reference and precedence rules.
+[Configuration guide](../config/models.md#custom_providers) for the complete field reference and precedence rules.
 
 ## Collapsed tool-result disclosure
 
@@ -239,7 +252,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - VT Code applies a compact GPT-5.4 prompt contract rather than a verbatim cookbook prompt: compact outputs, low-risk
   follow-through, dependency-aware tool use, completeness checks, verification, and conditional grounding/citation
   rules.
-- Deprecated models (gpt-5, gpt-5-mini, gpt-5-nano, o3, o4-mini, gpt-5-codex, gpt-5.1-codex, etc.) are removed from the
+- Deprecated models (gpt-5, gpt-5-mini, gpt-5-nano, o3, o4-mini, gpt-5-codex, gpt-5.1-codex, gpt-5.1, gpt-5.3-codex,
+  gpt-5.4-nano, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, etc.) are removed from the
   model picker but retained in routing constants for backward compatibility with existing configs.
 - **GPT-6 Astra (`gpt-6-astra`):** most capable OpenAI model for end-to-end agentic work (1,050,000 context, 128k max
   output, reasoning `low`/`medium`/`high`/`xhigh`/`max`). The catalog drives its Responses API route, sampling and
@@ -253,6 +267,10 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   lower cost ($2 input / $10 output per 1M, 1,050,000 context, 128k max output, reasoning `low`/`medium`
   (default)/`high`/`xhigh`/`max` — `none`/`minimal` unsupported). Same Responses API route, GPT-6 prompt contract,
   explicit cache breakpoints, and `30m` cache TTL as Astra/Sol; sampling and logprobs unsupported.
+- **GPT-6.1 Terra (`gpt-6.1-terra`):** fast, efficient model for visual reasoning, precise computer use, and clear,
+  natural writing ($1 input / $5 output per 1M, 1,050,000 context, 128k max output, reasoning `none`/`low`/`medium`
+  (default)/`high`/`xhigh`/`max`). Same Responses API route, GPT-6 prompt contract, explicit cache breakpoints, and
+  `30m` cache TTL as 6.1 Sol; sampling and logprobs unsupported. Tool calling requires the Responses API.
 - **GPT-6 Luna (`gpt-6-luna`):** fast cost-efficient GPT-6 model for high-volume latency-sensitive workloads (1,050,000
   context, 128k max output, reasoning `low`/`medium`/`high`/`xhigh`/`max`, default `medium`). Same Responses API route,
   GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as Astra; sampling and logprobs unsupported.
@@ -386,9 +404,10 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Curated picker models:** `openai/gpt-5.5`, `anthropic/claude-opus-5`, `anthropic/claude-opus-5-5`,
   `anthropic/claude-sonnet-5`, `anthropic/claude-sonnet-5-5`, `google/gemini-3.6-flash`, `google/gemini-3.7-flash`,
   `google/gemini-4-argon`, `deepseek/deepseek-v4-pro-0813`, `deepseek/deepseek-v4-flash-0731`, `xai/grok-4.6`, `qwen/qwen3.8-max`,
-  `minimax/minimax-h3`, `moonshot/kimi-k3`, `thinkingmachines/inkling`, `zai/glm-5.3-flash`,
+  `minimax/minimax-h3`, `minimax/minimax-m3.1-flash`, `moonshot/kimi-k3`, `moonshot/kimi-k3.1-pro`,
+  `thinkingmachines/inkling`, `zai/glm-5.3-flash`,
   `zai/glm-5.3-flashx`, `openai/gpt-5.6-luna`, `openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, `openai/gpt-6-astra`,
-  `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `openai/gpt-6-luna`, `mistral/mistral-large-4-0`,
+  `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `openai/gpt-6.1-terra`, `openai/gpt-6-luna`, `mistral/mistral-large-4-0`,
   and `meta/muse-spark-open`
 - **Features:** Native Responses, streaming, tool calling, structured outputs, authenticated paginated model catalog,
   cache-backed picker metadata, and arbitrary explicit Merge route IDs
@@ -423,6 +442,7 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   `openrouter/tencent/hy3-preview`, `openrouter/x-ai/grok-build-0.1`, `openrouter/x-ai/grok-4.6`,
   `openrouter/xiaomi/mimo-v2.6-pro`, `openrouter/xiaomi/mimo-v2.6-flash`, `openrouter/xiaomi/mimo-v2.6-pro-ultraspeed`,
   `openrouter/poolside/laguna-m.1:free`, `openrouter/poolside/laguna-s-2.1:free`,
+  `openrouter/minimax/minimax-m3.1-flash:free`,
   `openrouter/google/gemini-3.5-flash-lite`, `openrouter/google/gemini-3.6-flash`, `openrouter/google/gemini-3.7-flash`,
   and `openrouter/qwen/qwen3.8-27b`
 - **Xiaomi MiMo models:**
@@ -489,8 +509,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Configuration:** Local usage needs no key; set `OLLAMA_API_KEY` to access Ollama Cloud
 - **Default model:** `gpt-oss:20b` (local); any locally available model works
 - **Curated picker catalog:** `gpt-oss:20b`, `gemma4`, plus cloud models `deepseek-v4-flash:cloud`,
-  `deepseek-v4-pro:cloud`, `nemotron-3-ultra:cloud`, `kimi-k3:cloud`, `minimax-m3:cloud`, and `glm-5.2:cloud` (also
-  `gpt-oss:120b-cloud` via the OpenAI OSS support)
+  `deepseek-v4-pro:cloud`, `nemotron-3-ultra:cloud`, `kimi-k3:cloud`, `minimax-m3:cloud`, `minimax-m3.1-flash:cloud`,
+  and `glm-5.2:cloud` (also `gpt-oss:120b-cloud` via the OpenAI OSS support)
 - **Cloud models:** Use IDs like `gpt-oss:120b-cloud` with `OLLAMA_BASE_URL=https://ollama.com`
 - **Custom Models:** Use the `custom-ollama` option in the model picker to enter any locally or cloud-available model ID
 - **Base URL:** Configurable via `OLLAMA_BASE_URL` environment variable (defaults to `http://localhost:11434`)
@@ -582,6 +602,7 @@ including tools like Claude Code.
 - **Auth:** `MOONSHOT_API_KEY` environment variable
 - **Setup:** Set `MOONSHOT_API_KEY` from Moonshot platform, then configure `provider = "moonshot"` in `vtcode.toml`
 - **Models:**
+  - `kimi-k3.1-pro` — 3T-class open-weight flagship post-trained from K3, 1M context
   - `kimi-k3` — 2.8T parameter flagship with Delta Attention, native vision, 1M context
   - `kimi-k2.7-code` — most capable coding model with long-horizon coding breakthrough, 256K context
   - `kimi-k2.5` — enhanced reasoning model
@@ -611,8 +632,9 @@ including tools like Claude Code.
 - **Auth:** `MINIMAX_API_KEY` environment variable
 - **Setup:** Set `MINIMAX_API_KEY` from MiniMax platform, then configure `provider = "minimax"` in `vtcode.toml`
 - **Models:**
+  - `MiniMax-M3.1-Flash` — latest ultra-efficient multimodal model, 1M context, tunable thinking depth (`low`–`max`)
   - `MiniMax-M3` — frontier multimodal coding model, 1M context
-  - `MiniMax-M2.5` — efficient model for general tasks
+  - `MiniMax-M2.7` — efficient model for general tasks
 - **Default:** `MiniMax-M3`
 - **Features:** Streaming, tool calling
 

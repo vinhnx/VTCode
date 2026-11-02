@@ -22,6 +22,8 @@ fn base_context<'a>(default_responses_include: Option<&'a [String]>) -> Response
         prompt_cache_key: None,
         include_prompt_cache_retention: false,
         prompt_cache_retention: None,
+        supports_prompt_cache_options: false,
+        prompt_cache_ttl: None,
         include_explicit_cache_breakpoints: true,
         default_service_tier: None,
         default_response_store: None,
@@ -42,6 +44,24 @@ fn request() -> provider::LLMRequest {
         model: models::openai::GPT_5.to_string(),
         stream: true,
         ..Default::default()
+    }
+}
+
+#[test]
+fn responses_forced_function_choice_uses_flat_native_shape() {
+    let mut request = request();
+    request.tools = Some(std::sync::Arc::new(vec![provider::ToolDefinition::function(
+        "lookup".into(),
+        "Look up a value".into(),
+        json!({"type": "object"}),
+    )]));
+    request.tool_choice = Some(provider::ToolChoice::function("lookup".into()));
+    for supports_allowed_tools in [false, true] {
+        let mut context = base_context(None);
+        context.supports_tools = true;
+        context.supports_allowed_tools = supports_allowed_tools;
+        let payload = build_responses_request(&request, &context).unwrap();
+        assert_eq!(payload["tool_choice"], json!({"type": "function", "name": "lookup"}));
     }
 }
 
@@ -226,6 +246,7 @@ fn gpt6_astra_uses_prompt_cache_options_ttl() {
     let mut ctx = base_context(None);
     ctx.include_prompt_cache_retention = true;
     ctx.prompt_cache_retention = Some("24h");
+    ctx.supports_prompt_cache_options = true;
 
     let payload = build_responses_request(&gpt6_astra_request(), &ctx).expect("astra responses request should build");
 
@@ -307,6 +328,7 @@ fn gpt6_sol_luna_omit_sampling_and_use_cache_ttl() {
         let mut ctx = base_context(None);
         ctx.include_prompt_cache_retention = true;
         ctx.prompt_cache_retention = Some("24h");
+        ctx.supports_prompt_cache_options = true;
         let payload = build_responses_request(&request, &ctx).expect("gpt-6 responses request should build");
         assert_eq!(payload.pointer("/prompt_cache_options/ttl").and_then(Value::as_str), Some("30m"));
         assert!(payload.get("prompt_cache_retention").is_none());
@@ -328,6 +350,7 @@ fn gpt6_sol_luna_receive_gpt6_addendum() {
 fn cache_ctx() -> ResponsesRequestContext<'static> {
     let mut ctx = base_context(None);
     ctx.include_prompt_cache_retention = true;
+    ctx.supports_prompt_cache_options = true;
     ctx
 }
 
@@ -338,6 +361,41 @@ fn gpt56_request(messages: Vec<provider::Message>) -> provider::LLMRequest {
         stream: true,
         ..Default::default()
     }
+}
+
+#[test]
+fn stable_prefix_profile_writes_only_instructions_on_supported_native_routes() {
+    for model in [models::openai::GPT_5_6_LUNA, models::openai::GPT_6_LUNA] {
+        let mut request = gpt56_request(vec![provider::Message::user("Disposable suffix A".into())]);
+        request.model = model.into();
+        request.system_prompt = Some(system_with_dynamics().into());
+        request.prompt_cache_profile = Some(provider::PromptCacheProfile::StablePrefix);
+        let ctx = cache_ctx();
+        let first = build_responses_request(&request, &ctx).unwrap();
+        request.messages = vec![provider::Message::user("Disposable suffix B".into())].into();
+        let second = build_responses_request(&request, &ctx).unwrap();
+        assert_eq!(first.pointer("/prompt_cache_options/mode"), Some(&json!("explicit")));
+        assert_eq!(count_explicit_breakpoints(&first), 1);
+        assert_eq!(first["input"][0], second["input"][0]);
+        assert_ne!(first["input"][1], second["input"][1]);
+        let mut compat = cache_ctx();
+        compat.include_explicit_cache_breakpoints = false;
+        let payload = build_responses_request(&request, &compat).unwrap();
+        assert!(payload.pointer("/prompt_cache_options/mode").is_none());
+        assert_eq!(count_explicit_breakpoints(&payload), 0);
+        request.prompt_cache_profile = None;
+        let interactive = build_responses_request(&request, &ctx).unwrap();
+        assert!(interactive.pointer("/prompt_cache_options/mode").is_none());
+    }
+    let mut legacy = gpt56_request(vec![provider::Message::user("Suffix".into())]);
+    legacy.model = models::openai::GPT_5_1_MINI.into();
+    legacy.system_prompt = Some("Stable instructions".into());
+    legacy.prompt_cache_profile = Some(provider::PromptCacheProfile::StablePrefix);
+    let mut legacy_ctx = cache_ctx();
+    legacy_ctx.supports_prompt_cache_options = false;
+    let payload = build_responses_request(&legacy, &legacy_ctx).unwrap();
+    assert!(payload.get("prompt_cache_options").is_none());
+    assert_eq!(count_explicit_breakpoints(&payload), 0);
 }
 
 fn count_explicit_breakpoints(payload: &Value) -> usize {
@@ -460,7 +518,9 @@ fn gpt55_and_older_get_no_explicit_breakpoint() {
     ]);
     request.model = models::openai::GPT_5.to_string();
 
-    let payload = build_responses_request(&request, &cache_ctx()).expect("request should build");
+    let mut legacy_ctx = cache_ctx();
+    legacy_ctx.supports_prompt_cache_options = false;
+    let payload = build_responses_request(&request, &legacy_ctx).expect("request should build");
 
     assert_eq!(count_explicit_breakpoints(&payload), 0, "older models reject the breakpoint field");
     assert!(payload.get("prompt_cache_options").is_none());

@@ -5,9 +5,7 @@ use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::agent::result_reducers::{project_model_tool_result, reduce_tool_result};
 use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
-use vtcode_core::llm::{
-    LightweightFeature, collect_single_response, create_provider_for_model_route, resolve_lightweight_route,
-};
+use vtcode_core::llm::{LightweightFeature, create_provider_for_model_route, resolve_lightweight_route};
 use vtcode_core::tools::SpooledOutputReference;
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 
@@ -344,7 +342,7 @@ async fn summarize_tool_output_with_provider(
         "Tool: {tool_name}\n\nOutput:\n{}\n\nReturn a concise summary that preserves the actionable details VT Code should remember for the next model turn.",
         truncate_text_for_model(serialized_output, TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS).0
     );
-    let request = LLMRequest {
+    let mut request = LLMRequest {
         messages: Arc::new(vec![LlmMessage::user(prompt)]),
         system_prompt: Some(Arc::from(TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT)),
         model: model.to_string(),
@@ -353,7 +351,11 @@ async fn summarize_tool_output_with_provider(
         stream: false,
         ..Default::default()
     };
-    let response = collect_single_response(provider, request)
+    // Anthropic Messages (API 2026-10-21) rejects sampling outright; the
+    // shared auxiliary budget drops it for routes that do.
+    request.set_auxiliary_output_budget(provider, TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS);
+    let response = provider
+        .generate_auxiliary(request)
         .await
         .context("tool output summarization failed")?;
     Ok(response.content_text().trim().to_string())

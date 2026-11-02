@@ -46,13 +46,19 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
 - Resume: restored sessions use the same current-request adoption gate before probing workspace tracker state or
   auto-queuing one continuation turn. Restoring an informational session does not adopt an unrelated checklist.
 - Plan mode: while planning is active and no validated plan is ready for approval, **recoverable blocked** planning ends
-  (budget / safety-cap / tool-free recovery, including blocked-tool fuse trips and turns ending without a
-  harness-visible final assistant response) auto-queue another planning turn (same `cross_turn_turns` budget).
-  Deterministic empty-turn fallbacks cannot self-loop: after 2 consecutive empty fallback turns the gate closes and the
-  user must `continue` manually. Ordinary completed planning turns are not auto-continued — they may be interview or
-  approval handoffs. Planning never auto-approves or auto-implements. Plan-mode and tracker auto-continue share the
-  `cross_turn_turns` episode budget; a planning episode can exhaust it for later tracker auto-continue until a genuine
-  user turn resets the episode.
+  (budget / safety-cap / tool-free recovery, including blocked-tool fuse trips, turns ending without a
+  harness-visible final assistant response, and a failed tool-free synthesis that
+  *did not produce an approval-ready plan*) auto-queue another planning turn (same `cross_turn_turns` budget).
+  Deterministic empty-turn fallbacks and empty tool-free synthesis handoffs cannot self-loop: after 2 consecutive
+  turns that end without any plan synthesis the gate closes and the user must `continue` manually. Before that
+  handoff, one bounded salvage is allowed per turn when the synthesis response recorded completion tokens but no
+  extractable final content (reasoning-heavy models ending inside a thinking run), or when a tool-free pass dropped
+  native tool calls that displaced plan-like reasoning; a genuinely empty response goes straight to the handoff. The
+  handoff detail reports the captured evidence (token count or dropped calls) instead of asserting a plain empty
+  response, while keeping the marker text the consecutive-empty gate matches on. Ordinary completed
+  planning turns are not auto-continued — they may be interview or approval handoffs. Planning never auto-approves or
+  auto-implements. Plan-mode and tracker auto-continue share the `cross_turn_turns` episode budget; a planning episode
+  can exhaust it for later tracker auto-continue until a genuine user turn resets the episode.
 - Preflight validation: the existing per-turn failure cap first schedules tool-free synthesis, followed by at most one
   fresh corrective turn. Runtime state controls this decision, independently of assistant refusal prose. Repeating a
   rejected tool/category/argument identity ends automatic recovery immediately; reordered JSON keys and changes to
@@ -397,6 +403,14 @@ the pipeline's exit status belongs to the tail command and the model would other
 when it tripped, and transcript block reasons are truncated (~600 chars) with a pointer to the handoff file, which
 retains the full reason.
 
+Loop-family and repeated-shell keys retain a readable prefix plus a digest of the full normalized value when it
+exceeds the prefix limit. Commands, paths, and search patterns that differ only after that limit must remain distinct;
+genuine repeats still advance the same streak. These keys control loop detection, not execution authorization.
+
+Recognized planning/security preflight denials return `retryable: false` with policy guidance even at the denial
+circuit limit. Correctable arguments retain their bounded recovery allowance; policy denials cannot initiate schema
+repair or replenish that allowance. Permitted alternatives still pass normal admission.
+
 The assistant text-response safety cap distinguishes finished work from a stalled loop. When the cap fires after the
 harness promoted the latest commentary to a final answer and the anti-blind checkpoint is clear (and planning is not
 active), the turn ends `Completed` — the model had concluded and the loop merely re-prompted past its answer. The cap
@@ -411,6 +425,9 @@ minimal resume artifact (envelope + summary + retained users only).
 requested deadline expires, then returns one bounded result. A deadline does not terminate an in-progress process; the
 returned session ID is reusable for a later wait. Wait time is excluded from the ordinary per-turn harness wall-clock
 budget, while cancellation, shutdown, safety policy, and the configured long-running-command ceiling remain active.
+The per-turn tool wall-clock budget accumulates time in tool execution, counting a parallel group once; time waiting for
+model responses is not charged. Explicit input and command waits are excluded from that accumulation.
+Setting `agent.harness.max_tool_wall_clock_secs` to `0` disables this per-turn limit.
 
 Non-draining inspection returns the latest bounded output snapshot. A sliding head/tail preview, including a same-length
 update or a reset after another reader drains output, replaces the previous snapshot. Draining waits append new chunks.
@@ -492,11 +509,14 @@ diagnostics do not hide external locations. The same display rule is used for ge
 canonical workspace paths reached through symlinks; planning lifecycle events reuse the same display value, and it does
 not change the path used for I/O.
 
-Steering follow-ups are persisted as UUID-tagged intents. The schema-v3 session envelope keeps at most 16 pending
-intents and a 64-ID applied window. Recovery replays only pending IDs absent from both the applied window and tagged
-user history; the public `FollowUpInput(String)` message shape remains unchanged. Intents are applied to live history at
-the next turn-loop iteration boundary (after the current tool-call batch) and acknowledged only after the post-turn
-history checkpoint succeeds.
+Steering follow-ups are persisted as UUID-tagged intents with provenance: genuine steering input is `user_input`, while
+harness continuations and recovery prompts are `synthetic`. Provenance survives mid-turn and turn-boundary application,
+resume recovery, and envelope recovery; intents written before provenance existed default to `user_input`. The schema-v3
+session envelope keeps at most 16 pending intents and a 64-ID applied window. Recovery replays only pending IDs absent
+from both the applied window and tagged history; the public `FollowUpInput(String)` message shape remains unchanged.
+Mid-turn intents are appended as steering arrives; other pending intents enter live history at the next turn-loop
+iteration boundary (after the current tool-call batch). Both are acknowledged only after the post-turn history
+checkpoint succeeds.
 
 ## Budget and Limits
 
@@ -633,3 +653,19 @@ The subagent layer now supports loop-engineering primitives:
   (Ok/TokenLimitReached/CostLimitReached/StepLimitReached).
 
 See [Loop Engineering](../loop-engineering.md) for the full design.
+
+## Completion and recovery quick reference
+
+| Observed state | Runtime behavior |
+| --- | --- |
+| Current-generation local checks pass | Reuse the evidence and accept the final answer once. |
+| Remote evidence unavailable | Disclose the limitation; a build does not prove remote rendering. |
+| Rate-limited fetch origin | At most two attempts per user request; wait at most five seconds within deadline. |
+| Tool policy denies execution | Stop immediately; never suggest Python or shell bypasses. |
+| Exec terminal result already returned | Retain canonical/UI completion, suppress autonomous continuation. |
+| Unobserved background result | Deliver to active work through existing continuation handling. |
+| Required local check still missing | Preserve bounded recovery, then blocked handoff if exhausted. |
+| Internal continuation | Retain request budgets, original goal, and existing few-shot examples. |
+
+See [completion verification](../development/completion-verification.md) for evidence,
+approval, timer-accounting, and retry boundaries.

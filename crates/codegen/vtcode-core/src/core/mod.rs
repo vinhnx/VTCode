@@ -41,7 +41,6 @@ pub mod interfaces;
 pub mod loop_detector;
 pub mod memory_pool;
 pub mod message_metadata;
-pub mod orchestrator_retry;
 pub mod pending_actions;
 pub mod performance_profiler;
 pub mod prompt_caching;

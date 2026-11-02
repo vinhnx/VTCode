@@ -22,6 +22,7 @@ mod presentation;
 
 pub(crate) use self::classification::{
     deterministic_error_diagnosis, deterministic_output_diagnosis, deterministic_preflight_diagnosis,
+    policy_denial_next_action,
 };
 pub(crate) fn bounded_output_evidence(tool_name: &str, args: &Value, output: &Value) -> String {
     evidence::build_output_evidence(tool_name, args, output)
@@ -221,6 +222,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn preflight_diagnosis_keeps_policy_guidance_at_the_circuit_limit() {
+        for circuit_tripped in [false, true] {
+            for (error, alternative) in [
+                ("Command security check failed: command injection", "simpler literal command"),
+                ("tool denied by planning workflow", "command -v"),
+            ] {
+                let diagnosis =
+                    deterministic_preflight_diagnosis(tool_names::EXEC_COMMAND, error, circuit_tripped, false);
+                assert!(diagnosis.likely_cause.contains("policy"));
+                assert!(diagnosis.next_action.contains("Do not retry"));
+                assert!(diagnosis.next_action.contains(alternative));
+                assert!(!diagnosis.next_action.contains("malformed"));
+                assert!(!diagnosis.next_action.contains("declared schema"));
+                // A tripped circuit arms a tool-free recovery pass, so the
+                // guidance must not invite a tool call that cannot run.
+                assert_eq!(
+                    diagnosis.next_action.contains("Tools are disabled for the next pass"),
+                    circuit_tripped,
+                    "policy guidance must match the armed recovery state: {error}"
+                );
+            }
+            let malformed = deterministic_preflight_diagnosis(
+                tool_names::EXEC_COMMAND,
+                "Missing required argument: cmd",
+                circuit_tripped,
+                false,
+            );
+            if circuit_tripped {
+                assert!(malformed.next_action.contains("tools are disabled"));
+                assert!(!malformed.next_action.contains("retry once"));
+            } else {
+                assert!(malformed.next_action.contains("declared schema, then retry once"));
+            }
+        }
+    }
+
+    #[test]
     fn revision_suffix_preserves_bounded_corrective_action_and_is_idempotent() {
         let action = format!("{} Verify exact target before writing.", "x".repeat(270));
         let diagnosis = ToolFailureDiagnosis::new("exit 1", "unknown", &action)
@@ -264,7 +302,7 @@ mod tests {
             assert!(
                 selected
                     .next_action
-                    .ends_with("Inspect the verifier output, revise the fix hypothesis, then re-verify standalone.")
+                    .ends_with("Compare verifier to request/artifact; revise the fix hypothesis or a faulty generated assertion without weakening criteria. Metadata is not a pass; re-verify.")
             );
             assert!(selected.next_action.len() <= DIAGNOSIS_MAX_ACTION_BYTES);
         }
@@ -719,6 +757,37 @@ mod tests {
         let diagnosis = deterministic_error_diagnosis(&error, "execution");
         assert!(diagnosis.next_action.contains("do not bypass safeguards"));
         assert!(diagnosis.likely_cause.contains("active policy"));
+    }
+
+    #[test]
+    fn web_fetch_tool_policy_denial_names_tool_boundary() {
+        let error = ToolExecutionError::new(
+            tool_names::WEB_FETCH,
+            vtcode_core::tools::registry::ToolErrorType::PolicyViolation,
+            "tool denied by policy: Tool 'web_fetch' execution denied by policy",
+        );
+
+        let diagnosis = deterministic_error_diagnosis(&error, "execution");
+
+        assert!(diagnosis.likely_cause.contains("web_fetch tool"));
+        assert!(diagnosis.likely_cause.contains("before URL validation"));
+        assert!(diagnosis.next_action.contains("web_fetch approval"));
+        assert!(diagnosis.next_action.contains("do not bypass"));
+    }
+
+    #[test]
+    fn web_fetch_domain_denial_names_url_boundary() {
+        let error = ToolExecutionError::new(
+            tool_names::WEB_FETCH,
+            vtcode_core::tools::registry::ToolErrorType::PermissionDenied,
+            "Domain 'github.com' is not in the whitelist. Only explicitly allowed domains are permitted.",
+        );
+
+        let diagnosis = deterministic_error_diagnosis(&error, "execution");
+
+        assert!(diagnosis.likely_cause.contains("domain or network safety policy"));
+        assert!(diagnosis.next_action.contains("allowed_domains/mode"));
+        assert!(diagnosis.next_action.contains("approved URL"));
     }
 
     #[test]

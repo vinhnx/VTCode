@@ -209,7 +209,7 @@ fn decision_for_category_with_tool(
     policy.decision_for_category(category, attempt_index, retry_after)
 }
 
-pub(crate) fn category_was_retryable(error: &VtCodeError) -> bool {
+fn category_was_retryable(error: &VtCodeError) -> bool {
     error.category.is_retryable() && !error.is_misconfiguration()
 }
 
@@ -254,6 +254,7 @@ fn tool_execution_text(error: &ToolExecutionError) -> String {
 /// Callers match on this instead of re-deriving the
 /// `if decision.retryable { sleep(decision.delay.expect(...)) }` pattern.
 #[derive(Debug)]
+#[must_use = "retry steps must be handled before another attempt"]
 pub enum RetryStep {
     /// Wait `delay` then retry; `error` is the failure being retried.
     Backoff {

@@ -1,0 +1,8 @@
+_version: 2
+gpui_component:
+  Input:
+    Copy: {sv: "Kopiera", uk: "Копіювати", vi: "Sao chép", es: "Copiar", fr: "Copier", ja: "コピー", de: "Kopieren", it: "Copia", zh-CN: "复制", zh-TW: "複製", zh-HK: "複製", pt-BR: "Copiar", ko: "복사", nl: "Kopiëren", ru: "Копировать", id: "Salin", tr: "Kopyala", pl: "Kopiuj", hi: "कॉपी करें"}
+    Select All: {sv: "Markera allt", uk: "Вибрати все", vi: "Chọn tất cả", es: "Seleccionar todo", fr: "Tout sélectionner", ja: "すべて選択", de: "Alles auswählen", it: "Seleziona tutto", zh-CN: "全选", zh-TW: "全選", zh-HK: "全選", pt-BR: "Selecionar tudo", ko: "모두 선택", nl: "Alles selecteren", ru: "Выделить всё", id: "Pilih Semua", tr: "Tümünü Seç", pl: "Zaznacz wszystko", hi: "सभी चुनें"}
+  Attachment:
+    Remove: {sv: "Ta bort", uk: "Видалити", vi: "Xóa", es: "Quitar", fr: "Supprimer", ja: "削除", de: "Entfernen", it: "Rimuovi", zh-CN: "移除", zh-TW: "移除", zh-HK: "移除", pt-BR: "Remover", ko: "제거", nl: "Verwijderen", ru: "Удалить", id: "Hapus", tr: "Kaldır", pl: "Usuń", hi: "हटाएँ"}
+    Retry: {sv: "Försök igen", uk: "Повторити", vi: "Thử lại", es: "Reintentar", fr: "Réessayer", ja: "再試行", de: "Erneut versuchen", it: "Riprova", zh-CN: "重试", zh-TW: "重試", zh-HK: "重試", pt-BR: "Tentar novamente", ko: "다시 시도", nl: "Opnieuw proberen", ru: "Повторить", id: "Coba Lagi", tr: "Yeniden Dene", pl: "Spróbuj ponownie", hi: "पुनः प्रयास करें"}

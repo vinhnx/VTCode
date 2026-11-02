@@ -108,7 +108,7 @@ impl Session {
                 text.push_str(&super::text_utils::strip_ansi_codes(&segment.text));
             }
         }
-        let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let collapsed = vtcode_commons::formatting::collapse_whitespace(&text);
         let max_width = usize::from(width);
         if UnicodeWidthStr::width(collapsed.as_str()) <= max_width {
             return Line::from(collapsed);

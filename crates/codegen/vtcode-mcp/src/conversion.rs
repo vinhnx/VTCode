@@ -14,7 +14,7 @@
 
 use serde_json::{Map, Value};
 
-use crate::types::McpToolInfo;
+use crate::types::{McpToolInfo, McpToolVisibility};
 use vtcode_llm::provider::ToolDefinition;
 
 /// Default prefix applied to MCP tool names so they don't collide with
@@ -69,6 +69,10 @@ fn definition_to_mcp_tool(tool: &ToolDefinition, provider: &str) -> Option<McpTo
         input_schema: func.parameters.clone(),
         // Native tool definitions carry no output schema today.
         output_schema: None,
+        // Native tool definitions carry no MCP Apps linkage today.
+        ui: None,
+        // Native tool definitions are model tools; nothing restricts them.
+        visibility: McpToolVisibility::default(),
     })
 }
 
@@ -132,6 +136,8 @@ mod tests {
                 "required": ["url"]
             }),
             output_schema: None,
+            ui: None,
+            visibility: McpToolVisibility::default(),
         }
     }
 

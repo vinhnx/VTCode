@@ -10,6 +10,12 @@ pub const MAX_UNTRUSTED_SKILL_INSTRUCTIONS_BYTES: usize = 32 * 1024;
 
 const TRUNCATION_MARKER: &str = "\n[…untrusted skill instructions truncated…]";
 
+/// Maximum number of bundled resource files listed in the prompt fence.
+///
+/// Keeps the wrapper lean; the full list stays available through the skill tool.
+/// Used by both the listing loop and the "+N more" count so they cannot drift.
+const MAX_LISTED_SKILL_RESOURCES: usize = 32;
+
 /// Render activation instructions for a loaded skill.
 ///
 /// Single call site for executor paths so directory + resource context
@@ -68,13 +74,13 @@ pub fn render_untrusted_skill_instructions_with_context<S: AsRef<str>>(
         let mut sorted: Vec<&str> = resources.iter().map(|s| s.as_ref()).collect();
         sorted.sort_unstable();
         // Cap listing to avoid prompt bloat; full list available via skill tool.
-        for resource in sorted.into_iter().take(32) {
+        for resource in sorted.into_iter().take(MAX_LISTED_SKILL_RESOURCES) {
             rendered.push_str("  <file>");
             rendered.push_str(&escape_xml(resource));
             rendered.push_str("</file>\n");
         }
-        if resources.len() > 32 {
-            rendered.push_str(&format!("  <!-- +{} more files -->\n", resources.len() - 32));
+        if resources.len() > MAX_LISTED_SKILL_RESOURCES {
+            rendered.push_str(&format!("  <!-- +{} more files -->\n", resources.len() - MAX_LISTED_SKILL_RESOURCES));
         }
         rendered.push_str("</skill_resources>");
     }

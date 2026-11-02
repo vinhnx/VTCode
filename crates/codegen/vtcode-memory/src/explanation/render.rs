@@ -2,7 +2,7 @@ use super::*;
 use std::fmt::Write;
 
 fn line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    vtcode_commons::formatting::collapse_whitespace(text)
 }
 fn short(text: &str) -> String {
     line(&public_text(text, 240))

@@ -18,15 +18,11 @@ pub(crate) fn is_legacy_openai_base_url(base_url: &str) -> bool {
         .ends_with("/v1/openai")
 }
 
-/// Whether the request will put tool definitions on the wire. Tool-free
-/// recovery keeps definitions for cache stability unless the route has no
-/// tool-capable vendor (then definitions are omitted so synthesis can still
-/// run). Only requests that actually send tools consult the no-tool-vendor
-/// cache.
-pub(crate) fn native_request_sends_tools(request: &LLMRequest, tool_vendor_missing: bool) -> bool {
-    let tools_present = request.tools.as_ref().is_some_and(|tools| !tools.is_empty());
-    let recovery_without_vendor = matches!(request.tool_choice, Some(ToolChoice::None)) && tool_vendor_missing;
-    tools_present && !recovery_without_vendor
+/// Whether the request puts callable tool definitions on the wire. Tool-free
+/// synthesis omits the catalog independently of cached vendor capabilities.
+pub(crate) fn native_request_sends_tools(request: &LLMRequest) -> bool {
+    request.tools.as_ref().is_some_and(|tools| !tools.is_empty())
+        && !matches!(request.tool_choice, Some(ToolChoice::None))
 }
 
 /// Builds the terminal error for a failed Merge Gateway request, appending

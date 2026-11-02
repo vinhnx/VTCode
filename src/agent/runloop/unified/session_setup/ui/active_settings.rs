@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use tokio::sync::{Notify, mpsc};
-use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineEvent, InlineHandle, TransientEvent, TransientSubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerStart, ModelPickerState};
-use crate::agent::runloop::unified::session_settings::SessionSettingsControl;
+use crate::agent::runloop::unified::session_settings::{
+    SessionSettingsControl, SettingsSnapshot, SharedSettingsSnapshot, publish_settings_if_changed,
+    read_settings_snapshot,
+};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 enum Picker {
@@ -19,15 +21,12 @@ pub(super) async fn run(
     settings: mpsc::UnboundedSender<SessionSettingsControl>,
     handle: InlineHandle,
     config: AgentConfig,
-    vt_cfg: Option<VTCodeConfig>,
     ctrl_c_state: Arc<CtrlCState>,
     ctrl_c_notify: Arc<Notify>,
+    settings_snapshot: SharedSettingsSnapshot,
 ) {
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let mut picker = None;
-    let mut provider = config.provider;
-    let mut model = config.model;
-    let mut effort = config.reasoning_effort;
     while let Some(event) = events.recv().await {
         match event {
             InlineEvent::Steer(input) => {
@@ -48,14 +47,20 @@ pub(super) async fn run(
                             "The busy-turn model picker takes no arguments; opening the picker.",
                         );
                     }
+                    // Read the shared snapshot at open time: it carries any
+                    // idle `/model` change applied by the interaction loop, and
+                    // the live config refreshed on reload, so the picker opens
+                    // with current values rather than the spawn-time seed.
+                    let SettingsSnapshot { provider, model, effort, vt_cfg } =
+                        read_settings_snapshot(&settings_snapshot);
                     match ModelPickerState::new(
                         &mut renderer,
-                        vt_cfg.clone(),
+                        vt_cfg.as_deref().cloned(),
                         effort,
                         vt_cfg.as_ref().and_then(|cfg| cfg.provider.openai.service_tier),
                         Some(config.workspace.clone()),
-                        provider.clone(),
-                        model.clone(),
+                        provider,
+                        model,
                         Some(Arc::clone(&ctrl_c_state)),
                         Some(Arc::clone(&ctrl_c_notify)),
                     )
@@ -63,9 +68,12 @@ pub(super) async fn run(
                     {
                         Ok(ModelPickerStart::InProgress(state)) => picker = Some(Picker::Model(Box::new(state))),
                         Ok(ModelPickerStart::Completed { state, selection }) => {
-                            provider.clone_from(&selection.provider);
-                            model.clone_from(&selection.model);
-                            effort = selection.reasoning;
+                            publish_settings_if_changed(
+                                &settings_snapshot,
+                                &selection.provider,
+                                &selection.model,
+                                selection.reasoning,
+                            );
                             let _ = settings.send(SessionSettingsControl::Model { picker: Box::new(state), selection });
                             let _ = renderer.line(MessageStyle::Info, "Model selected; pending the next request.");
                         }
@@ -81,9 +89,15 @@ pub(super) async fn run(
                 match picker.take() {
                     Some(Picker::Model(mut state)) => match state.handle_list_selection(&mut renderer, selection) {
                         Ok(ModelPickerProgress::Completed(selection)) => {
-                            provider.clone_from(&selection.provider);
-                            model.clone_from(&selection.model);
-                            effort = selection.reasoning;
+                            // Publish optimistically so a second busy picker
+                            // opened before the request boundary is applied is
+                            // already fresh.
+                            publish_settings_if_changed(
+                                &settings_snapshot,
+                                &selection.provider,
+                                &selection.model,
+                                selection.reasoning,
+                            );
                             let _ = settings.send(SessionSettingsControl::Model { picker: state, selection });
                             let _ = renderer.line(MessageStyle::Info, "Model selected; pending the next request.");
                         }

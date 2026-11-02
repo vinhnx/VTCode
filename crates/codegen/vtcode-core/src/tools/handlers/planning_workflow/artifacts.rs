@@ -17,7 +17,7 @@ pub use tracker::{
 };
 pub use validation::{
     CANONICAL_STEP_FORMAT, PLANNING_VERIFY_INVALID_EXAMPLES, PLANNING_VERIFY_VALID_EXAMPLES, PlanValidationReport,
-    validate_plan_content,
+    retain_plan_recovery_draft, validate_plan_content,
 };
 
 pub(super) const PLAN_TRACKER_START: &str = "<!-- vtcode:plan-tracker:start -->";

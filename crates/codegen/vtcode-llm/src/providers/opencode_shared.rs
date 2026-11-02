@@ -205,7 +205,7 @@ impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
 
         let stream = async_stream::try_stream! {
             let mut receiver = event_rx;
-            let _abort_guard = super::common::TaskAbortGuard(handle);
+            let _abort_guard = vtcode_commons::TaskGuard::with_label(handle, "opencode-compatible-stream");
             while let Some(event) = receiver.recv().await {
                 yield event?;
             }

@@ -78,7 +78,6 @@ impl OpenAIProvider {
 
         loop {
             let model = request.model.clone();
-            let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
             let mut openai_request = self.convert_to_openai_responses_format(&request)?;
             openai_request["stream"] = Value::Bool(true);
             let openai_request = self.maybe_strip_flex_service_tier(&request.model, &openai_request);
@@ -86,7 +85,7 @@ impl OpenAIProvider {
             let StreamingHttpFailure { status, headers, error_text, client_request_id } =
                 match self.send_http_streaming_request(&request, &openai_request, true).await? {
                     StreamingHttpResponse::Success(response) => {
-                        return Ok(self.responses_normalized_stream(response, model, include_metrics));
+                        return Ok(self.responses_normalized_stream(response, model));
                     }
                     StreamingHttpResponse::Failure(failure) => failure,
                 };
@@ -165,20 +164,17 @@ impl OpenAIProvider {
 
         loop {
             let model = request.model.clone();
-            let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
             let mut openai_request = self.convert_to_openai_responses_format(&request)?;
             openai_request["stream"] = Value::Bool(true);
             let openai_request = self.maybe_strip_flex_service_tier(&request.model, &openai_request);
             self.log_ultrafast_websocket_hint(&request.model, &openai_request);
-            let StreamingHttpFailure { status, headers, error_text, client_request_id } = match self
-                .send_http_streaming_request(&request, &openai_request, true)
-                .await?
-            {
-                StreamingHttpResponse::Success(response) => {
-                    return Ok(stream_decoder::create_responses_stream(response, model, include_metrics, None, None));
-                }
-                StreamingHttpResponse::Failure(failure) => failure,
-            };
+            let StreamingHttpFailure { status, headers, error_text, client_request_id } =
+                match self.send_http_streaming_request(&request, &openai_request, true).await? {
+                    StreamingHttpResponse::Success(response) => {
+                        return Ok(stream_decoder::create_responses_stream(response, model, true, None, None));
+                    }
+                    StreamingHttpResponse::Failure(failure) => failure,
+                };
 
             if is_model_not_found(status, &error_text) {
                 if let Some(fallback_model) = fallback_model_if_not_found(&request.model)
@@ -242,12 +238,7 @@ impl OpenAIProvider {
         }))
     }
 
-    fn responses_normalized_stream(
-        &self,
-        response: reqwest::Response,
-        model: String,
-        include_metrics: bool,
-    ) -> LLMNormalizedStream {
+    fn responses_normalized_stream(&self, response: reqwest::Response, model: String) -> LLMNormalizedStream {
         let parse_model = model.clone();
         create_responses_normalized_stream(
             response,
@@ -255,10 +246,10 @@ impl OpenAIProvider {
                 provider_name: "OpenAI",
                 emit_reasoning: Self::model_supports_reasoning_summaries(&model),
                 model,
-                include_cached_prompt_metrics: include_metrics,
+                include_cached_prompt_metrics: true,
             },
             move |value| {
-                let response = parse_responses_completion(value, parse_model.clone(), include_metrics)?;
+                let response = parse_responses_completion(value, parse_model.clone(), true)?;
                 Ok(Self::normalize_reasoning_output(&parse_model, response))
             },
         )
@@ -286,7 +277,7 @@ impl OpenAIProvider {
                 };
                 headers::apply_turn_metadata(
                     headers::apply_client_request_id(builder, &client_request_id),
-                    &request.metadata,
+                    request.metadata.as_ref(),
                 )
                 .json(payload)
             })
@@ -305,7 +296,7 @@ impl OpenAIProvider {
             );
             // Downgrade once; classify a failed retry through the caller's usual fallback path.
             let (response, request_id) = self
-                .retry_without_service_tier(url, &request.metadata, payload, responses)
+                .retry_without_service_tier(url, request.metadata.as_ref(), payload, responses)
                 .await?;
             return Ok(StreamingHttpResponse::from_response(response, request_id).await);
         }

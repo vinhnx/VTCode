@@ -7,7 +7,7 @@
       .adaptive { fill: #000; }
     }
   </style>
-  <text x="60" y="100" font-family="SF Pro Display,-apple-system,BlinkMacSystemFont,sans-serif" font-size="72" font-weight="600" letter-spacing="2" class="adaptive">
+  <text x="400" y="105" text-anchor="middle" font-family="SF Pro Display,-apple-system,BlinkMacSystemFont,sans-serif" font-size="72" font-weight="600" letter-spacing="2" class="adaptive">
     &gt; VT Code
   </text>
 </svg>

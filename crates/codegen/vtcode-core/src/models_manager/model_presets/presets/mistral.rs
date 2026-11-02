@@ -1,6 +1,8 @@
 //! mistral_presets — provider preset definitions for mistral.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_ladder_medium_high;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn mistral_presets() -> Vec<ModelPreset> {
@@ -13,16 +15,7 @@ pub(crate) fn mistral_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_medium_high(),
             is_default: true,
             upgrade: None,
             show_in_picker: true,
@@ -37,16 +30,7 @@ pub(crate) fn mistral_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_medium_high(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -61,16 +45,7 @@ pub(crate) fn mistral_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_medium_high(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -84,16 +59,7 @@ pub(crate) fn mistral_presets() -> Vec<ModelPreset> {
             description: "Hybrid model unifying instruct, reasoning, and coding (119B params, 6.5B active)".to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_medium_high(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -107,10 +73,7 @@ pub(crate) fn mistral_presets() -> Vec<ModelPreset> {
             description: "Frontier-class multimodal model with 256k context".to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,

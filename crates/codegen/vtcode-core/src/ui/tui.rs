@@ -11,10 +11,10 @@
 pub use vtcode_commons::ui_protocol::{
     CompactActivityMetadata, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
     InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LayoutModeOverride,
-    PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig, SessionSurface,
-    SlashCommandItem, ThinkingBlockState, ToolOutputId, UiMode, WizardModalMode, WizardStep, convert_style,
-    theme_from_color_fields,
+    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, InlineTranscriptLine,
+    LayoutModeOverride, PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig,
+    SessionSurface, SlashCommandItem, ThinkingBlockState, ToolOutputId, UiMode, WizardModalMode, WizardStep,
+    convert_style, theme_from_color_fields,
 };
 
 pub use vtcode_commons::ui_protocol::KeyboardProtocolSettings;
@@ -37,7 +37,7 @@ mod headless {
 
     use super::{
         CompactActivityMetadata, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
-        InlineSegment, SecurePromptConfig, ToolOutputId,
+        InlineSegment, InlineTranscriptLine, SecurePromptConfig, ToolOutputId,
     };
 
     use crate::ui::theme::ThemeStyles;
@@ -76,6 +76,7 @@ mod headless {
     /// Minimal command surface used by tests and headless sinks.
     #[derive(Clone, Debug)]
     pub enum InlineCommand {
+        Diagnostic(Box<vtcode_commons::diagnostics::Diagnostic>),
         AppendLine {
             kind: InlineMessageKind,
             segments: Vec<InlineSegment>,
@@ -93,6 +94,9 @@ mod headless {
             count: usize,
             kind: InlineMessageKind,
             lines: Vec<Vec<InlineSegment>>,
+        },
+        AppendLines {
+            lines: Vec<InlineTranscriptLine>,
         },
         RecordToolOutput {
             id: ToolOutputId,
@@ -122,6 +126,7 @@ mod headless {
     /// Headless handle; commands go to an optional test sink and otherwise discard.
     #[derive(Clone, Debug)]
     pub struct InlineHandle {
+        diagnostic_observer: vtcode_commons::diagnostics::DiagnosticObserver,
         sender: Option<UnboundedSender<InlineCommand>>,
         deferred_events: Arc<Mutex<VecDeque<InlineEvent>>>,
         next_tool_output_id: Arc<AtomicU64>,
@@ -132,6 +137,7 @@ mod headless {
     impl InlineHandle {
         pub fn new_for_tests(sender: UnboundedSender<InlineCommand>) -> Self {
             Self {
+                diagnostic_observer: Default::default(),
                 sender: Some(sender),
                 deferred_events: Arc::new(Mutex::new(VecDeque::new())),
                 next_tool_output_id: Arc::new(AtomicU64::new(0)),
@@ -164,10 +170,50 @@ mod headless {
             }
         }
 
+        pub fn set_diagnostic_sink(&self, sink: vtcode_commons::diagnostics::DiagnosticSink) -> anyhow::Result<()> {
+            self.diagnostic_observer.set_sink(sink)
+        }
+        pub fn diagnostic(&self, diagnostic: vtcode_commons::diagnostics::Diagnostic) {
+            self.present_diagnostic(self.diagnostic_observer.prepare(&diagnostic));
+        }
+        pub fn present_diagnostic(&self, diagnostic: vtcode_commons::diagnostics::Diagnostic) {
+            if self.sender.is_none() {
+                vtcode_commons::diagnostics::stderr_diagnostic(&diagnostic);
+                return;
+            }
+            self.send_command(InlineCommand::Diagnostic(Box::new(vtcode_commons::diagnostics::redact_diagnostic(
+                &diagnostic,
+            ))));
+        }
+
+        #[track_caller]
+        fn try_append_diagnostic(&self, kind: InlineMessageKind, text: &str) -> bool {
+            let severity = match kind {
+                InlineMessageKind::Error => vtcode_commons::diagnostics::DiagnosticSeverity::Error,
+                InlineMessageKind::Warning => vtcode_commons::diagnostics::DiagnosticSeverity::Warning,
+                _ => return false,
+            };
+            if !text.trim().is_empty() {
+                self.diagnostic(vtcode_commons::diagnostics::legacy_ui_diagnostic(severity, text));
+            }
+            true
+        }
+
+        #[track_caller]
         pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
+            if matches!(kind, InlineMessageKind::Error | InlineMessageKind::Warning) {
+                let text = segments.iter().map(|segment| segment.text.as_str()).collect::<String>();
+                if self.try_append_diagnostic(kind, &text) {
+                    return;
+                }
+            }
             self.send_command(InlineCommand::AppendLine { kind, segments });
         }
+        #[track_caller]
         pub fn append_pasted_message(&self, kind: InlineMessageKind, text: String, line_count: usize) {
+            if self.try_append_diagnostic(kind, &text) {
+                return;
+            }
             self.send_command(InlineCommand::AppendPastedMessage { kind, text, line_count });
         }
         pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
@@ -175,6 +221,28 @@ mod headless {
         }
         pub fn replace_last(&self, count: usize, kind: InlineMessageKind, lines: Vec<Vec<InlineSegment>>) {
             self.send_command(InlineCommand::ReplaceLast { count, kind, lines });
+        }
+        #[track_caller]
+        pub fn append_lines(&self, lines: Vec<InlineTranscriptLine>) {
+            if lines.is_empty() {
+                self.send_command(InlineCommand::AppendLines { lines });
+                return;
+            }
+            let mut pending = Vec::new();
+            for line in lines {
+                if matches!(line.kind, InlineMessageKind::Error | InlineMessageKind::Warning) {
+                    if !pending.is_empty() {
+                        self.send_command(InlineCommand::AppendLines { lines: std::mem::take(&mut pending) });
+                    }
+                    let text = line.segments.iter().map(|segment| segment.text.as_str()).collect::<String>();
+                    self.try_append_diagnostic(line.kind, &text);
+                } else {
+                    pending.push(line);
+                }
+            }
+            if !pending.is_empty() {
+                self.send_command(InlineCommand::AppendLines { lines: pending });
+            }
         }
         pub fn record_tool_output(&self, lines: Vec<String>) -> ToolOutputId {
             let id = self.next_tool_output_id.fetch_add(1, Ordering::Relaxed);
@@ -309,6 +377,8 @@ mod headless {
         pub show_transcript_review_shortcut_guide: bool,
         pub show_transcript_review_close_button: bool,
         pub diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode,
+        /// Syntax highlighting for the code surfaces the TUI renders itself.
+        pub syntax_highlighting: vtcode_config::loader::SyntaxHighlightingConfig,
         pub customization: (),
     }
 

@@ -36,6 +36,94 @@ impl QueuedInput {
 /// discard is never silent.
 pub(crate) const MAX_QUEUED_INPUTS: usize = 256;
 
+/// Push one item with the soft FIFO cap, returning the number of oldest
+/// inputs discarded. Shared by the TUI queue state and the desktop service
+/// queue so cap semantics cannot drift: the newest submission is always kept.
+pub(crate) fn push_capped(queue: &mut VecDeque<QueuedInput>, item: QueuedInput) -> usize {
+    queue.push_back(item);
+    // Enforce a soft FIFO cap: drop the oldest only after the newest has
+    // been accepted so rapid influx cannot grow the queue without bound.
+    let mut dropped = 0;
+    while queue.len() > MAX_QUEUED_INPUTS {
+        queue.pop_front();
+        dropped += 1;
+    }
+    dropped
+}
+
+/// Pop the next submission plus every following batchable text-only
+/// submission for the same agent, joined into ONE combined prompt so several
+/// queued Ctrl+Enter messages reach the model in a single turn instead of one
+/// turn each. Non-batchable items (plain Enter, attachments, agent changes)
+/// stop the batch and dispatch alone on their own turns.
+///
+/// This is the shared drain core behind [`InlineQueueState::take_batched_submission`]
+/// and the desktop service queue; both surfaces dispatch identical batches.
+pub(crate) fn pop_batched_submission(
+    queue: &mut VecDeque<QueuedInput>,
+    prefer_latest_once: &mut bool,
+) -> Option<QueuedInput> {
+    // A Ctrl+Enter "run the latest now" promotion must stay a single-turn
+    // dispatch: merging the newest item with older FIFO items would batch
+    // turns the user asked to run individually.
+    let promoted_latest = *prefer_latest_once;
+    let mut batch = if promoted_latest {
+        *prefer_latest_once = false;
+        queue.pop_back()?
+    } else {
+        queue.pop_front()?
+    };
+    // Only batchable (Ctrl+Enter) submissions coalesce, and never a
+    // submission carrying attachments — the association between an image
+    // and its message must stay intact. A plain Enter that reached the
+    // front must also dispatch alone and never absorb following items.
+    if !batch.batchable || promoted_latest || batch.input.has_attachments() {
+        tracing::debug!(
+            target: "vtcode_ui::queue",
+            batched_count = 1,
+            text_bytes = batch.input.text.len(),
+            "queue submission drained (single, non-batchable)"
+        );
+        return Some(batch);
+    }
+    let primary_agent = batch.primary_agent.clone();
+    let mut batched_count = 1usize;
+    const MAX_BATCH_ITEMS: usize = 32;
+    // Cap the combined prompt so a user hammering Ctrl+Enter hundreds of
+    // times cannot build one unbounded message.
+    const MAX_BATCH_BYTES: usize = 64 * 1024;
+    while batched_count < MAX_BATCH_ITEMS {
+        let Some(next) = queue.front() else {
+            break;
+        };
+        if !next.batchable || next.input.has_attachments() || next.primary_agent != primary_agent {
+            break;
+        }
+        // Cap the COMBINED prompt: merging `next` must not exceed the
+        // budget, otherwise one large queued message could overshoot it.
+        let needs_separator = !batch.input.text.trim().is_empty() && !next.input.text.trim().is_empty();
+        let merged_len = batch.input.text.len() + usize::from(needs_separator) * 2 + next.input.text.len();
+        if merged_len > MAX_BATCH_BYTES {
+            break;
+        }
+        let Some(next) = queue.pop_front() else {
+            break;
+        };
+        batched_count += 1;
+        if needs_separator {
+            batch.input.text.push_str("\n\n");
+        }
+        batch.input.text.push_str(&next.input.text);
+    }
+    tracing::debug!(
+        target: "vtcode_ui::queue",
+        batched_count,
+        text_bytes = batch.input.text.len(),
+        "queue submission drained"
+    );
+    Some(batch)
+}
+
 pub(crate) struct InlineQueueState<'a> {
     handle: &'a InlineHandle,
     queued_inputs: &'a mut VecDeque<QueuedInput>,
@@ -66,89 +154,17 @@ impl<'a> InlineQueueState<'a> {
     }
 
     pub(crate) fn push(&mut self, input: SubmittedInput, primary_agent: Option<String>) {
-        self.queued_inputs.push_back(QueuedInput::new(input, primary_agent));
-        // Enforce a soft FIFO cap: drop the oldest only after the newest has
-        // been accepted so rapid influx cannot grow the queue without bound.
-        while self.queued_inputs.len() > MAX_QUEUED_INPUTS {
-            self.queued_inputs.pop_front();
-            self.dropped_since_notice += 1;
-        }
+        self.dropped_since_notice += push_capped(self.queued_inputs, QueuedInput::new(input, primary_agent));
         self.mark_sync_dirty();
     }
 
-    pub(crate) fn take_next_submission(&mut self) -> Option<QueuedInput> {
-        let result = if *self.prefer_latest_once {
-            *self.prefer_latest_once = false;
-            self.queued_inputs.pop_back()
-        } else {
-            self.queued_inputs.pop_front()
-        };
+    /// Pop the next submission plus every following batchable item, joined
+    /// into ONE combined prompt. See [`pop_batched_submission`] for the
+    /// batching contract shared with the desktop service queue.
+    pub(crate) fn take_batched_submission(&mut self) -> Option<QueuedInput> {
+        let result = pop_batched_submission(self.queued_inputs, self.prefer_latest_once);
         self.mark_sync_dirty();
         result
-    }
-
-    /// Pop the next submission plus every following batchable text-only
-    /// submission for the same agent, joined into ONE combined prompt so
-    /// several queued Ctrl+Enter messages reach the model in a single turn
-    /// instead of one turn each. Non-batchable items (plain Enter, attachments,
-    /// agent changes) stop the batch and dispatch alone on their own turns.
-    pub(crate) fn take_batched_submission(&mut self) -> Option<QueuedInput> {
-        // A Ctrl+Enter "run the latest now" promotion must stay a single-turn
-        // dispatch: merging the newest item with older FIFO items would batch
-        // turns the user asked to run individually.
-        let promoted_latest = *self.prefer_latest_once;
-        let mut batch = self.take_next_submission()?;
-        // Only batchable (Ctrl+Enter) submissions coalesce, and never a
-        // submission carrying attachments — the association between an image
-        // and its message must stay intact. A plain Enter that reached the
-        // front must also dispatch alone and never absorb following items.
-        if !batch.batchable || promoted_latest || batch.input.has_attachments() {
-            tracing::debug!(
-                target: "vtcode_ui::queue",
-                batched_count = 1,
-                text_bytes = batch.input.text.len(),
-                "queue submission drained (single, non-batchable)"
-            );
-            self.mark_sync_dirty();
-            return Some(batch);
-        }
-        let primary_agent = batch.primary_agent.clone();
-        let mut batched_count = 1usize;
-        const MAX_BATCH_ITEMS: usize = 32;
-        // Cap the combined prompt so a user hammering Ctrl+Enter hundreds of
-        // times cannot build one unbounded message.
-        const MAX_BATCH_BYTES: usize = 64 * 1024;
-        while batched_count < MAX_BATCH_ITEMS {
-            let Some(next) = self.queued_inputs.front() else {
-                break;
-            };
-            if !next.batchable || next.input.has_attachments() || next.primary_agent != primary_agent {
-                break;
-            }
-            // Cap the COMBINED prompt: merging `next` must not exceed the
-            // budget, otherwise one large queued message could overshoot it.
-            let needs_separator = !batch.input.text.trim().is_empty() && !next.input.text.trim().is_empty();
-            let merged_len = batch.input.text.len() + usize::from(needs_separator) * 2 + next.input.text.len();
-            if merged_len > MAX_BATCH_BYTES {
-                break;
-            }
-            let Some(next) = self.queued_inputs.pop_front() else {
-                break;
-            };
-            batched_count += 1;
-            if needs_separator {
-                batch.input.text.push_str("\n\n");
-            }
-            batch.input.text.push_str(&next.input.text);
-        }
-        tracing::debug!(
-            target: "vtcode_ui::queue",
-            batched_count,
-            text_bytes = batch.input.text.len(),
-            "queue submission drained"
-        );
-        self.mark_sync_dirty();
-        Some(batch)
     }
 
     pub(crate) fn prefer_latest_next(&mut self) {
@@ -245,9 +261,9 @@ mod tests {
         queue.push("third".into(), Some("review".to_string()));
 
         // The queue is strict FIFO: first queued runs first.
-        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("first"));
-        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("second"));
-        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("third"));
+        assert_eq!(queue.take_batched_submission().map(|queued| queued.input.text).as_deref(), Some("first"));
+        assert_eq!(queue.take_batched_submission().map(|queued| queued.input.text).as_deref(), Some("second"));
+        assert_eq!(queue.take_batched_submission().map(|queued| queued.input.text).as_deref(), Some("third"));
     }
 
     #[test]
@@ -264,9 +280,9 @@ mod tests {
 
         queue.prefer_latest_next();
 
-        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("third"));
-        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("first"));
-        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("second"));
+        assert_eq!(queue.take_batched_submission().map(|queued| queued.input.text).as_deref(), Some("third"));
+        assert_eq!(queue.take_batched_submission().map(|queued| queued.input.text).as_deref(), Some("first"));
+        assert_eq!(queue.take_batched_submission().map(|queued| queued.input.text).as_deref(), Some("second"));
     }
 
     #[test]
@@ -442,11 +458,11 @@ mod tests {
         queue.push("first".into(), Some("planner".to_string()));
         queue.push("second".into(), Some("builder".to_string()));
 
-        let first = queue.take_next_submission().expect("first queued input");
+        let first = queue.take_batched_submission().expect("first queued input");
         assert_eq!(first.input.text, "first");
         assert_eq!(first.primary_agent.as_deref(), Some("planner"));
 
-        let latest = queue.take_next_submission().expect("second queued input");
+        let latest = queue.take_batched_submission().expect("second queued input");
         assert_eq!(latest.input.text, "second");
         assert_eq!(latest.primary_agent.as_deref(), Some("builder"));
     }
@@ -463,7 +479,7 @@ mod tests {
         let second = vtcode_ui::tui::app::ContentPart::image("second", "image/jpeg");
         queue.push(SubmittedInput::new("see images", vec![first.clone(), second.clone()]), None);
 
-        let queued = queue.take_next_submission().expect("queued input");
+        let queued = queue.take_batched_submission().expect("queued input");
         assert_eq!(queued.input.text, "see images");
         assert_eq!(queued.input.attachments, vec![first, second]);
     }
@@ -485,9 +501,9 @@ mod tests {
 
         // Promotion reset: oldest dispatches first, not the newest.
         // FIFO order intact after interrupt preservation.
-        assert_eq!(queue.take_next_submission().map(|q| q.input.text).as_deref(), Some("first"));
-        assert_eq!(queue.take_next_submission().map(|q| q.input.text).as_deref(), Some("second"));
-        assert!(queue.take_next_submission().is_none());
+        assert_eq!(queue.take_batched_submission().map(|q| q.input.text).as_deref(), Some("first"));
+        assert_eq!(queue.take_batched_submission().map(|q| q.input.text).as_deref(), Some("second"));
+        assert!(queue.take_batched_submission().is_none());
     }
 
     #[test]
@@ -545,8 +561,10 @@ mod tests {
         let mut snapshots = 0usize;
         while let Ok(command) = rx.try_recv() {
             match command {
-                InlineCommand::AppendLine { kind: InlineMessageKind::Warning, segments } => {
-                    warnings.push(segments.into_iter().map(|s| s.text).collect::<String>());
+                InlineCommand::Diagnostic(diagnostic)
+                    if diagnostic.severity == vtcode_commons::diagnostics::DiagnosticSeverity::Warning =>
+                {
+                    warnings.push(diagnostic.summary);
                 }
                 InlineCommand::SetQueuedInputs { .. } => snapshots += 1,
                 _ => {}

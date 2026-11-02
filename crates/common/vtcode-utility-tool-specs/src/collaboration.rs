@@ -158,7 +158,51 @@ pub fn close_agent_parameters() -> Value {
     })
 }
 
+/// Model-visible description of the `ask_session` tool.
+pub const ASK_SESSION_DESCRIPTION: &str = "Ask a question of a peer CLI session running in this workspace. The peer sees the question on its next turn and can reply with answer_session; answers arrive back as notices. Use list_sessions to discover live peers first. Delivery is best-effort: the peer must be running to receive it.";
+
 #[must_use]
+pub fn ask_session_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["session", "question"],
+        "properties": {
+            "session": {"type": "string", "description": "Target peer session id (see list_sessions)."},
+            "question": {"type": "string", "description": "Question text for the peer session."},
+            "ttl_secs": {"type": "integer", "description": "Seconds the question stays deliverable. Defaults to 3600; clamped to 60..86400."}
+        }
+    })
+}
+
+/// Model-visible description of the `answer_session` tool.
+pub const ANSWER_SESSION_DESCRIPTION: &str = "Answer a question received from a peer CLI session. Pass the message_id of the ask_session message you are replying to so the asker can match the reply.";
+
+#[must_use]
+pub fn answer_session_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["message_id", "answer"],
+        "properties": {
+            "message_id": {"type": "string", "description": "Message id of the question being answered."},
+            "answer": {"type": "string", "description": "Answer text for the asking session."},
+            "ttl_secs": {"type": "integer", "description": "Seconds the answer stays deliverable. Defaults to 3600; clamped to 60..86400."}
+        }
+    })
+}
+
+/// Model-visible description of the `list_sessions` tool.
+pub const LIST_SESSIONS_DESCRIPTION: &str = "List live peer CLI sessions in this workspace that can receive ask_session messages. Returns session ids with their last-seen times.";
+
+#[must_use]
+pub fn list_sessions_parameters() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "include_self": {"type": "boolean", "description": "Include the calling session in the results.", "default": false}
+        }
+    })
+}
+
 pub fn request_user_input_description() -> &'static str {
     "Request user input for one to three short questions. Blocks the agent loop until the user responds. Returns the user's answers mapped by question id. Canonical HITL tool for the Planning workflow."
 }
@@ -343,6 +387,22 @@ mod tests {
             wait["properties"]["timeout_ms"]["description"],
             json!("Optional wait timeout in milliseconds. Uses the session default timeout when omitted.")
         );
+    }
+
+    #[test]
+    fn session_messaging_schemas_require_routing_fields() {
+        let ask = ask_session_parameters();
+        assert_eq!(ask["required"], json!(["session", "question"]));
+        assert_eq!(ask["properties"]["session"]["type"], json!("string"));
+        assert_eq!(ask["properties"]["question"]["type"], json!("string"));
+
+        let answer = answer_session_parameters();
+        assert_eq!(answer["required"], json!(["message_id", "answer"]));
+        assert_eq!(answer["properties"]["message_id"]["type"], json!("string"));
+
+        let list = list_sessions_parameters();
+        assert!(list.get("required").is_none(), "list takes optional filters only");
+        assert_eq!(list["properties"]["include_self"]["type"], json!("boolean"));
     }
 
     #[test]

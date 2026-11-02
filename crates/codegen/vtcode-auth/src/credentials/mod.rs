@@ -104,7 +104,9 @@ impl CustomApiKeyStorage {
     /// Create storage scoped to a validated credential identity.
     pub fn for_identity(identity: CredentialIdentity) -> Result<Self> {
         let provider = identity.provider().to_owned();
-        let user = format!("api_key_{}_{}", identity.provider(), identity.key_name());
+        // The old underscore-separated account could represent multiple
+        // provider/key pairs. Do not read it without a verifiable identity.
+        let user = format!("api_key:v2:{}:{}", identity.provider(), identity.key_name());
         Ok(Self {
             provider,
             identity: Some(identity),
@@ -152,7 +154,7 @@ impl CustomApiKeyStorage {
         if let Some(key) = self.load(mode)? {
             return Ok(Some(key));
         }
-        if !allow_legacy || self.identity.is_none() {
+        if !allow_legacy || self.identity.is_none() || legacy_provider_account_is_ambiguous(&self.provider) {
             return Ok(None);
         }
 
@@ -186,7 +188,7 @@ impl CustomApiKeyStorage {
     /// legacy fallback.
     pub fn clear_with_legacy_fallback(&self, mode: AuthCredentialsStoreMode, clear_legacy: bool) -> Result<()> {
         self.clear(mode)?;
-        if clear_legacy && self.identity.is_some() {
+        if clear_legacy && self.identity.is_some() && !legacy_provider_account_is_ambiguous(&self.provider) {
             Self::new(&self.provider).clear(mode)?;
         }
         Ok(())
@@ -221,6 +223,15 @@ impl CustomApiKeyStorage {
         tracing::warn!(self.provider);
         self.load(mode)
     }
+}
+
+// A legacy provider-only account `api_key_<provider>` can also be an old
+// scoped account when the provider ends in `__` followed only by digits or
+// underscores: the final portion could be a valid underscore-prefixed key.
+fn legacy_provider_account_is_ambiguous(provider: &str) -> bool {
+    provider.rsplit_once("__").is_some_and(|(prefix, suffix)| {
+        !prefix.is_empty() && suffix.bytes().all(|byte| byte == b'_' || byte.is_ascii_digit())
+    })
 }
 
 /// Migrate plain-text API keys from a config map into secure storage.
@@ -395,6 +406,29 @@ mod tests {
 
     #[test]
     #[serial]
+    fn ambiguous_old_accounts_are_not_assigned_to_either_identity() {
+        let _guard = TestAuthDirGuard::new();
+        let old = CredentialStorage::new("vtcode", "api_key_a___B".to_owned());
+        old.store_with_mode("ambiguous", AuthCredentialsStoreMode::File)
+            .expect("store old account");
+        let first = CustomApiKeyStorage::for_provider_key("a_", "_B").expect("first identity");
+        let second = CustomApiKeyStorage::for_provider_key("a", "__B").expect("second identity");
+        assert_eq!(first.load(AuthCredentialsStoreMode::File).expect("first load"), None);
+        assert_eq!(second.load(AuthCredentialsStoreMode::File).expect("second load"), None);
+        first.store("first", AuthCredentialsStoreMode::File).expect("store first");
+        second.store("second", AuthCredentialsStoreMode::File).expect("store second");
+        assert_eq!(first.load(AuthCredentialsStoreMode::File).expect("first reload").as_deref(), Some("first"));
+        assert_eq!(second.load(AuthCredentialsStoreMode::File).expect("second reload").as_deref(), Some("second"));
+        assert_eq!(
+            old.load_with_mode(AuthCredentialsStoreMode::File)
+                .expect("old remains")
+                .as_deref(),
+            Some("ambiguous")
+        );
+    }
+
+    #[test]
+    #[serial]
     fn default_identity_lazily_migrates_provider_only_storage() {
         let _guard = TestAuthDirGuard::new();
         let legacy = CustomApiKeyStorage::new("mimo");
@@ -418,6 +452,42 @@ mod tests {
                 .as_deref(),
             Some("legacy-key")
         );
+    }
+
+    #[test]
+    #[serial]
+    fn ambiguous_provider_only_fallback_is_neither_loaded_nor_cleared() {
+        let _guard = TestAuthDirGuard::new();
+        // This could be provider `a` with key `_1`, or provider-only `a__1`.
+        let old = CredentialStorage::new("vtcode", "api_key_a__1");
+        old.store_with_mode("other-identity", AuthCredentialsStoreMode::File)
+            .expect("store ambiguous account");
+        let target = CustomApiKeyStorage::for_provider_key("a__1", "A_1_API_KEY").expect("target identity");
+        assert_eq!(
+            target
+                .load_with_legacy_fallback(AuthCredentialsStoreMode::File, true)
+                .expect("load"),
+            None
+        );
+        target
+            .clear_with_legacy_fallback(AuthCredentialsStoreMode::File, true)
+            .expect("clear target");
+        assert_eq!(
+            old.load_with_mode(AuthCredentialsStoreMode::File)
+                .expect("old remains")
+                .as_deref(),
+            Some("other-identity")
+        );
+    }
+
+    #[test]
+    fn legacy_provider_ambiguity_distinguishes_valid_account_boundaries() {
+        for provider in ["a__", "a__1", "a___1", "___"] {
+            assert!(legacy_provider_account_is_ambiguous(provider), "{provider}");
+        }
+        for provider in ["a", "a_b", "a__b", "a__1b", "__"] {
+            assert!(!legacy_provider_account_is_ambiguous(provider), "{provider}");
+        }
     }
 
     #[test]

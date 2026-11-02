@@ -214,10 +214,21 @@ impl CommandTool {
 // CommandTool is kept for internal command preparation in the PTY system.
 
 #[derive(Debug, Clone)]
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 pub(crate) struct CommandInvocation {
+    #[allow(
+        dead_code,
+        reason = "Internal command-invocation record kept for PTY preparation and Debug output."
+    )]
     pub(crate) program: String,
+    #[allow(
+        dead_code,
+        reason = "Internal command-invocation record kept for PTY preparation and Debug output."
+    )]
     pub(crate) args: Vec<String>,
+    #[allow(
+        dead_code,
+        reason = "Internal command-invocation record kept for PTY preparation and Debug output."
+    )]
     pub(crate) display: String,
 }
 

@@ -31,7 +31,7 @@ async fn mcp_login_reports_missing_provider() {
     fs::write(&config_path, "").expect("write config");
     let _guard = ConfigOverrideGuard::set(config_path);
 
-    let err = handle_mcp_command(McpCommands::Login(LoginArgs { name: "mock".to_string() }))
+    let err = handle_mcp_command(McpCommands::Login(LoginArgs { name: "mock".to_string() }), temp_dir.path())
         .await
         .expect_err("login should require a configured provider");
 
@@ -45,7 +45,7 @@ async fn mcp_logout_reports_missing_provider() {
     fs::write(&config_path, "").expect("write config");
     let _guard = ConfigOverrideGuard::set(config_path);
 
-    let err = handle_mcp_command(McpCommands::Logout(LogoutArgs { name: "mock".to_string() }))
+    let err = handle_mcp_command(McpCommands::Logout(LogoutArgs { name: "mock".to_string() }), temp_dir.path())
         .await
         .expect_err("logout should require a configured provider");
 

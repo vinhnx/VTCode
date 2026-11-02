@@ -1,12 +1,21 @@
 ---
 feature: shell-handler-output-cap
-status: delivered
-updated: 2026-09-12
+status: superseded
+updated: 2026-10-18
 branch: fix/tools-shell-handler-output-cap
 commits: ea36ec7b0..c08c617fc
 ---
 
 # Shell Handler Output Cap
+
+> **Superseded (2026-10-18).** `ShellHandler` was part of the never-registered
+> Codex-compatible `tools/handlers` dyn layer and has been removed. The `shell`
+> tool name still resolves — as an alias of `unified_exec` — through
+> `tool_intent::canonical_command_session_tool_name`, so the model-visible preview
+> budget this report describes now lives on the live `exec_command` path
+> (`tools/registry/output_processing.rs` + `output_spooler.rs`), which additionally
+> spools oversized output. The report below is kept as the delivery record for
+> `c08c617fc`; the file it describes no longer exists.
 
 ## Report
 

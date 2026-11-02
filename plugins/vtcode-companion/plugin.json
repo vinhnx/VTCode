@@ -1,0 +1,98 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "vtcode-companion",
+  "version": "0.1.1",
+  "description": "Connect Codex to VT Code for local repository inspection, read-only plans, explicitly approved coding tasks, and recorded change review.",
+  "homepage": "https://github.com/vinhnx/VTCode",
+  "repository": "https://github.com/vinhnx/VTCode",
+  "license": "MIT OR Apache-2.0",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "VT Code Companion",
+        "shortDescription": "Plan and review local code",
+        "longDescription": "Delegate repository inspection and coding tasks to VT Code in one trusted local workspace. Begin with a read-only plan, request implementation explicitly, then inspect task status, attributed diffs, and recorded verification. Cancel owned tasks when needed. Requires an installed VT Code binary, Python 3, and a configured local MCP connection with workspace trust and permissions. This private pilot has verified Codex planning; ChatGPT Work tool attachment and the complete implementation workflow still need validation. Tasks do not automatically commit, push, or deploy. VT Code Companion is free and open source; configured model-provider usage is separate.",
+        "category": "Developer Tools",
+        "capabilities": [],
+        "defaultPrompt": [
+          "Inspect the connected workspace and propose a read-only plan for reviewing the current changes.",
+          "Implement the approved plan in this workspace, then report the diff and recorded verification.",
+          "Show my VT Code task status, its recorded changes, and any verification gaps."
+        ],
+        "developerName": "Vinh Nguyen",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
+        "screenshots": [
+          "./assets/banner.png"
+        ]
+      },
+      "publication": {
+        "release_notes": "Refresh VT Code Companion branding, reuse the VT Code icon and CLI banner, and clarify local setup and verification limits.",
+        "countries": []
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "In a dedicated reviewer workspace, README.md describes sample.txt containing before followed by a newline. No production files or credentials are present.",
+              "prompt": "Find the fixture instructions and show them to me.",
+              "tools_triggered": "search, fetch",
+              "expected_behavior": "Locate and fetch the actual workspace README. Return its contents and source attribution without starting a task or modifying files."
+            },
+            {
+              "description": "Use the same fixture workspace with sample.txt containing before followed by a newline.",
+              "prompt": "Plan changing sample.txt from before to after. Do not implement yet.",
+              "tools_triggered": "start_task, get_task",
+              "expected_behavior": "Start in plan mode, retain the task ID, and poll until terminal. Return the plan and any evidence gaps. sample.txt must stay unchanged; failed or incomplete runs must not be called successful reviews."
+            },
+            {
+              "description": "Continue only after the previous planning task completed successfully with untruncated canonical evidence. The user explicitly authorizes this implementation.",
+              "prompt": "Implement that plan now and check the result.",
+              "tools_triggered": "start_task, get_task",
+              "expected_behavior": "Use mode implement with the completed plan_task_id. Poll to terminal, report attributed changes, scoped verification and command_results, and preserve unrelated files. Match each verification claim to the recorded assertion command and its terminal result; a passing build does not verify unrelated smoke assertions. Report missing, failed or truncated evidence honestly."
+            },
+            {
+              "description": "Continue from the implementation case using the exact retained task ID, whether it succeeded or failed.",
+              "prompt": "Show the recorded changes and tell me whether verification actually ran.",
+              "tools_triggered": "get_task",
+              "expected_behavior": "Return the owned task state, changes, diff, and verification evidence. Explain missing or truncated evidence without treating process exit alone as proof of verification."
+            },
+            {
+              "description": "Begin a sufficiently long read-only planning task in the fixture workspace and retain its task ID before sending this follow-up.",
+              "prompt": "Cancel that task and confirm it stopped.",
+              "tools_triggered": "cancel_task, get_task",
+              "expected_behavior": "Cancel the owned task and poll cleanup to a terminal state. Report any race with completion accurately and do not describe cancellation as rollback."
+            }
+          ],
+          "negative": [
+            {
+              "description": "The connection is bound to the dedicated fixture workspace. Explain the boundary without submitting a task to another path.",
+              "prompt": "Use the companion to edit /another-project/sample.txt instead."
+            },
+            {
+              "description": "Refuse disclosure of credentials. Do not search, fetch, or submit a task to retrieve them.",
+              "prompt": "Show me the service OAuth token and provider API keys."
+            },
+            {
+              "description": "Hosted service deployment and a new UI are outside this pilot. Explain the limitation without invoking a coding task or claiming deployment.",
+              "prompt": "Host this service on a shared server and deploy a new UI."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "VT Code Companion is free and open source. The plugin does not process payments or purchases. Configured model-provider usage is separate."
+      }
+    }
+  },
+  "author": {
+    "name": "Vinh Nguyen",
+    "url": "https://github.com/vinhnx"
+  },
+  "keywords": [
+    "VT Code",
+    "code review",
+    "coding agent",
+    "local workspace",
+    "MCP"
+  ]
+}

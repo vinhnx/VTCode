@@ -10,7 +10,8 @@ pub const ANTHROPIC_CLAUDE_HAIKU_4_5: &str = "anthropic/claude-haiku-4.5";
 pub const OPENAI_GPT_5_6_SOL: &str = "openai/gpt-5.6-sol";
 pub const OPENAI_GPT_6_ASTRA: &str = "openai/gpt-6-astra";
 pub const OPENAI_GPT_5_6_LUNA: &str = "openai/gpt-5.6-luna";
-pub const OPENAI_GPT_5_3_CODEX: &str = "openai/gpt-5.3-codex";
+pub const OPENAI_GPT_6_SOL: &str = "openai/gpt-6-sol";
+pub const OPENAI_GPT_6_LUNA: &str = "openai/gpt-6-luna";
 pub const GOOGLE_GEMINI_3_1_PRO_PREVIEW: &str = "google/gemini-3.1-pro-preview";
 pub const GOOGLE_GEMINI_3_8_FLASH: &str = "google/gemini-3.8-flash";
 pub const DEEPSEEK_FLASH: &str = "deepseek/deepseek-v4.1-flash";
@@ -30,7 +31,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     OPENAI_GPT_5_6_SOL,
     OPENAI_GPT_6_ASTRA,
     OPENAI_GPT_5_6_LUNA,
-    OPENAI_GPT_5_3_CODEX,
+    OPENAI_GPT_6_SOL,
+    OPENAI_GPT_6_LUNA,
     GOOGLE_GEMINI_3_1_PRO_PREVIEW,
     GOOGLE_GEMINI_3_8_FLASH,
     DEEPSEEK_FLASH,

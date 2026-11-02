@@ -1,0 +1,6 @@
+_version: 2
+app:
+  about:
+    version: {en: "Version %{version}", vi: "Phiên bản %{version}", es: "Versión %{version}", fr: "Version %{version}", ja: "バージョン %{version}", de: "Version %{version}", it: "Versione %{version}", zh-CN: "版本 %{version}", zh-TW: "版本 %{version}", zh-HK: "版本 %{version}", pt-BR: "Versão %{version}", ko: "버전 %{version}", nl: "Versie %{version}", sv: "Version %{version}", uk: "Версія %{version}", hi: "संस्करण %{version}", pl: "Wersja %{version}", tr: "Sürüm %{version}", ru: "Версия %{version}", id: "Versi %{version}"}
+    acknowledgments: {en: "Acknowledgments", vi: "Lời cảm ơn", es: "Reconocimientos", fr: "Remerciements", ja: "謝辞", de: "Danksagungen", it: "Riconoscimenti", zh-CN: "致谢", zh-TW: "致謝", zh-HK: "致謝", pt-BR: "Agradecimentos", ko: "감사의 말", nl: "Met dank aan", sv: "Tack till", uk: "Подяки", hi: "आभार", pl: "Podziękowania", tr: "Teşekkürler", ru: "Благодарности", id: "Ucapan Terima Kasih"}
+    done: {en: "Done", vi: "Xong", es: "Listo", fr: "Terminé", ja: "完了", de: "Fertig", it: "Fatto", zh-CN: "完成", zh-TW: "完成", zh-HK: "完成", pt-BR: "Concluído", ko: "완료", nl: "Gereed", sv: "Klar", uk: "Готово", hi: "पूर्ण", pl: "Gotowe", tr: "Bitti", ru: "Готово", id: "Selesai"}

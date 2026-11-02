@@ -25,6 +25,9 @@ use links::{
 };
 use sink::{contains_markdown_fence, looks_like_diff};
 
+/// Canonical diagnostic persistence callback installed by the runtime.
+pub use vtcode_commons::diagnostics::DiagnosticSink;
+
 /// Renderer with deferred output buffering
 pub struct AnsiRenderer {
     writer: AutoStream<io::Stdout>,
@@ -50,6 +53,8 @@ pub struct AnsiRenderer {
     /// Needed for `unified_exec` follow-ups: the tool name alone cannot tell a
     /// session poll from a command launch.
     session_body: bool,
+    diagnostic_sink: Option<DiagnosticSink>,
+    diagnostic_history: std::collections::VecDeque<vtcode_commons::diagnostics::Diagnostic>,
 }
 
 #[cfg(test)]

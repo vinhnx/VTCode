@@ -220,10 +220,13 @@ impl DiffDocument {
     }
 }
 fn one_based_u32(index: usize) -> Option<u32> {
+    // Ensures: `None` on out-of-`u32` input, else `Some(index + 1)` without
+    // overflow (checked_add). Total and pure.
     u32::try_from(index).ok()?.checked_add(1)
 }
 
 fn hunk_start_from_lines(lines: &[DiffLine], old_side: bool) -> usize {
+    // Requires: none. Ensures: returns >= 1 (one-based hunk start fallback).
     let line_number = lines
         .iter()
         .find_map(|line| if old_side { line.old_line } else { line.new_line });
@@ -242,7 +245,8 @@ fn validate_hunk_counts(
     expected_old_lines: usize,
     expected_new_lines: usize,
 ) -> Result<(), ParseDiffError> {
-    if hunk.old_lines == expected_old_lines && hunk.new_lines == expected_new_lines {
+    // Pearlite-style ensures: `Ok` iff the hunk invariant holds.
+    if hunk.counts_match(expected_old_lines, expected_new_lines) {
         Ok(())
     } else {
         Err(ParseDiffError::new("hunk line counts do not match header"))
@@ -255,9 +259,13 @@ fn assign_omitted_hunk_tail_line_numbers(
     expected_old_lines: usize,
     expected_new_lines: usize,
 ) {
+    // Requires: every `tail` entry indexes `hunk.lines`.
+    // Ensures (^hunk): tail lines receive end-anchored numbers; other lines
+    // unchanged. Termination: single pass over `tail` (variant: remaining).
     if tail.is_empty() {
         return;
     }
+    debug_assert!(tail.iter().all(|&index| index < hunk.lines.len()));
     let old_tail_count = tail
         .iter()
         .filter(|&&index| hunk.lines[index].kind != DiffLineKind::Addition)
@@ -294,6 +302,12 @@ fn assign_omitted_hunk_tail_line_numbers(
     }
 }
 /// Computes a structured diff and passes non-empty hunks to a formatter.
+///
+/// # Contract
+///
+/// - Requires: nothing (any `&str` pair accepted).
+/// - Ensures: identical inputs yield an empty bundle without invoking
+///   `formatter`; otherwise the bundle carries the computed hunks.
 pub fn compute_diff<F>(old: &str, new: &str, options: DiffOptions<'_>, formatter: F) -> DiffBundle
 where
     F: FnOnce(&[DiffHunk], &DiffOptions<'_>) -> String,
@@ -313,11 +327,22 @@ pub(crate) fn split_lines_with_terminator(text: &str) -> Vec<String> {
     split_line_slices(text).into_iter().map(str::to_owned).collect()
 }
 
+/// Splits `text` into line slices that retain their terminators.
+///
+/// # Contract
+///
+/// - Requires: valid UTF-8 `&str` (type-enforced).
+/// - Ensures: concatenation of the result equals `text`; every boundary lies
+///   after `\n`, `\r`, or `\r\n`, hence on a UTF-8 char boundary (ASCII
+///   terminators are single-byte). Empty input yields no lines.
+/// - Termination: variant is `text.len() - index` (strictly decreases).
 pub(crate) fn split_line_slices(text: &str) -> Vec<&str> {
     let mut lines = Vec::new();
     let mut start = 0usize;
     let bytes = text.as_bytes();
     let mut index = 0usize;
+    // Loop invariant: `start <= index <= text.len()`, `text[start..]` holds
+    // the unsplit suffix, and all pushed slices are char-boundary ranges.
     while index < bytes.len() {
         if bytes[index] != b'\n' && bytes[index] != b'\r' {
             index += 1;
@@ -328,11 +353,13 @@ pub(crate) fn split_line_slices(text: &str) -> Vec<&str> {
         } else {
             index + 1
         };
+        debug_assert!(text.is_char_boundary(start) && text.is_char_boundary(end));
         lines.push(&text[start..end]);
         start = end;
         index = end;
     }
     if start < text.len() {
+        debug_assert!(text.is_char_boundary(start));
         lines.push(&text[start..]);
     }
     lines

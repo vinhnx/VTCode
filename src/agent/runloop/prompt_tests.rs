@@ -64,15 +64,133 @@ fn test_should_accept_refinement_rejects_role_play() {
 }
 
 #[test]
-fn test_finalize_refined_prompt_uses_canonical_diagnostic_tools() {
-    let refined = finalize_refined_prompt("debug the failing command".to_string());
+fn refinement_request_preserves_input_and_defines_rewrite_contract() {
+    let raw = "Review `src/parser.rs`; do not edit files or run commands.";
+    let request = refinement_request(&PlainRoute, raw, "test-model", &["low", "high"], 0.3);
+    assert_eq!(request.messages.len(), 1);
+    assert_eq!(request.messages[0].content.as_text(), raw);
+    let system = request.system_prompt.as_deref().unwrap();
+    assert!(system.contains("Do not answer or execute it"));
+    assert!(system.contains("negations, authorization limits, paths, identifiers"));
+    assert!(system.contains("Add no requirements or facts"));
+    assert!(system.contains("return it unchanged"));
+    assert!(system.contains("Return only the rewritten request"));
+    assert!(system.contains("without changing files"));
+    assert_eq!(request.reasoning_effort, Some(ReasoningEffortLevel::Low));
+    assert_eq!(request.temperature, None);
+    assert!(matches!(request.tool_choice, Some(uni::ToolChoice::None)));
+    assert!(request.tools.is_none());
+}
 
-    assert!(refined.contains("`exec_command`"));
-    assert!(refined.contains("`code_search`"));
-    assert!(!refined.contains("search_dispatch"));
-    assert!(!refined.contains("command_session"));
-    assert!(!refined.contains("debug_agent"));
-    assert!(!refined.contains("search_tools"));
+#[test]
+fn refinement_request_keeps_sampling_only_for_routes_that_accept_it() {
+    use vtcode_core::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, SamplingOverrides};
+
+    #[derive(Clone, Copy)]
+    struct SamplingRoute {
+        drops_sampling: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl LLMProvider for SamplingRoute {
+        fn name(&self) -> &str {
+            "sampling-route"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Err(LLMError::Provider { message: "test route".to_string(), metadata: None })
+        }
+
+        fn sampling_overrides(&self, _model: &str) -> SamplingOverrides {
+            SamplingOverrides {
+                suppresses_sampling: self.drops_sampling,
+                ..Default::default()
+            }
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    let short = refinement_request(
+        &SamplingRoute { drops_sampling: false },
+        "Review the parser without edits",
+        "plain",
+        &[],
+        0.2,
+    );
+    assert_eq!(short.temperature, Some(0.2));
+
+    // Anthropic Messages rejects sampling outright, so a route without
+    // advertised efforts must not carry the refinement temperature either.
+    let anthropic_short = refinement_request(
+        &SamplingRoute { drops_sampling: true },
+        "Review the parser without edits",
+        "plain",
+        &[],
+        0.2,
+    );
+    assert_eq!(anthropic_short.temperature, None);
+}
+
+/// Route with the default (sampling-accepting) policy.
+struct PlainRoute;
+
+#[async_trait::async_trait]
+impl vtcode_core::llm::provider::LLMProvider for PlainRoute {
+    fn name(&self) -> &str {
+        "plain-route"
+    }
+
+    async fn generate(
+        &self,
+        _request: vtcode_core::llm::provider::LLMRequest,
+    ) -> Result<vtcode_core::llm::provider::LLMResponse, vtcode_core::llm::provider::LLMError> {
+        Err(vtcode_core::llm::provider::LLMError::Provider { message: "test route".to_string(), metadata: None })
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn validate_request(
+        &self,
+        _request: &vtcode_core::llm::provider::LLMRequest,
+    ) -> Result<(), vtcode_core::llm::provider::LLMError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn refinement_request_bounds_output_and_omits_unsupported_effort() {
+    let short = refinement_request(&PlainRoute, "Review the parser without edits", "plain", &[], 0.2);
+    let long = refinement_request(&PlainRoute, &"parser context ".repeat(10_000), "reasoning", &["high"], 0.4);
+    assert!(short.max_tokens.is_some_and(|tokens| (2048..8192).contains(&tokens)));
+    assert_eq!(long.max_tokens, Some(8192));
+    assert_eq!(short.reasoning_effort, None);
+    assert_eq!(long.reasoning_effort, None);
+    assert_eq!(short.temperature, Some(0.2));
+    assert_eq!(long.temperature, None);
+}
+
+#[test]
+fn accepted_refinement_rejects_incomplete_or_tool_call_responses() {
+    let raw = "Review parser errors without changing files";
+    let complete = uni::LLMResponse {
+        content: Some(raw.to_string()),
+        finish_reason: uni::FinishReason::Stop,
+        ..Default::default()
+    };
+    assert_eq!(accepted_refinement(raw, complete.clone()), Some(raw.to_string()));
+    for finish_reason in [uni::FinishReason::Length, uni::FinishReason::ToolCalls] {
+        assert_eq!(accepted_refinement(raw, uni::LLMResponse { finish_reason, ..complete.clone() }), None);
+    }
+    assert_eq!(accepted_refinement(raw, uni::LLMResponse { content: None, ..complete }), None);
 }
 
 // Vibe coding tests

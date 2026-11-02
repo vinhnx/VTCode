@@ -7,37 +7,52 @@ header = """
 # Changelog
 
 All notable changes to vtcode will be documented in this file.
+
+<!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
+<!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
+
 """
+# NOTE: The body below is written so that `markdownlint` (see
+# `docs/development/markdown-quality.md`) passes on regenerated output:
+#   - MD022: headings are surrounded by exactly one blank line.
+#   - MD032: lists are surrounded by exactly one blank line.
+#   - MD009: the author space lives inside the `{% if %}`, so a missing remote
+#     username can never leave a trailing space.
+#   - MD012: no block emits two blank lines, so consecutive groups and versions
+#     stay single-spaced.
+# git-cliff's `\` line-continuation swallows the newline that follows it AND any
+# blank lines / indentation after it, up to the next non-whitespace character.
+# A blank line therefore survives only when the preceding line does NOT end with
+# `\`. Re-run `git-cliff --config cliff.toml -o /tmp/changelog.md` and lint the
+# result when editing this template.
 
 body = """
 {% if version %}\
-    ## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
-
+## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else %}\
-    ## [unreleased]
-
-{% endif %}\
+## [unreleased]
+{% endif %}
 ### Highlights
+
 {% for group, commits in commits | group_by(attribute="group") %}\
 {% if group == "Features" or group == "Bug Fixes" or group == "Documentation" %}\
-
 #### {{ group | upper_first }}
 
 {% for commit in commits %}\
-    - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
-{% endfor %}\
+- {{ commit.message | split(pat="\n") | first | trim | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}){% if commit.remote.username %} (@{{ commit.remote.username }}){% endif %}
+{% endfor %}
 {% endif %}\
 {% endfor %}\
 
 ### Other Changes
+
 {% for group, commits in commits | group_by(attribute="group") %}\
 {% if group != "Features" and group != "Bug Fixes" and group != "Documentation" %}\
-
 #### {{ group | upper_first }}
 
 {% for commit in commits %}\
-    - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
-{% endfor %}\
+- {{ commit.message | split(pat="\n") | first | trim | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}){% if commit.remote.username %} (@{{ commit.remote.username }}){% endif %}
+{% endfor %}
 {% endif %}\
 {% endfor %}\
 """
@@ -48,7 +63,12 @@ footer = ""
 trim = true
 
 # Postprocessors for changelog entries
-postprocessors = []
+postprocessors = [
+    # Collapse accidental double blank lines inside generated entries so the
+    # output stays MD012-clean. Applied per release section, so it must not
+    # touch the single separator blank that follows each section.
+    { pattern = '\n{3,}', replace = "\n\n" },
+]
 
 [git]
 # Parse commits according to conventional commits format

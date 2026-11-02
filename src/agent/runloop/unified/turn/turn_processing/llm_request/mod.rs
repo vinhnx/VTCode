@@ -73,7 +73,6 @@ use snapshot::{is_openai_prompt_cache_enabled, is_session_affinity_key_enabled, 
 use streaming::HarnessStreamingBridge;
 #[cfg(test)]
 use vtcode_core::config::build_openai_prompt_cache_key;
-use vtcode_core::utils::transcript::MessageStyle;
 
 async fn run_standard_stream_attempt(
     ctx: &mut TurnProcessingContext<'_>,
@@ -129,6 +128,8 @@ pub(crate) async fn execute_llm_request(
         parallel_cfg_opt,
         false,
         None,
+        #[cfg(test)]
+        None,
     )
     .await
 }
@@ -154,6 +155,8 @@ impl TurnProcessingContext<'_> {
             parallel_cfg_opt,
             suppress_output,
             loop_tracker,
+            #[cfg(test)]
+            None,
         )
         .await
     }
@@ -169,7 +172,9 @@ async fn execute_llm_request_with_options_impl(
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
     suppress_output: bool,
     mut loop_tracker: Option<&mut LoopTracker>,
+    #[cfg(test)] request_messages_override: Option<Arc<Vec<uni::Message>>>,
 ) -> Result<(uni::LLMResponse, bool)> {
+    let suppress_output = suppress_output || ctx.tool_registry.completion_verification_pending();
     let turn_snapshot = capture_turn_request_snapshot(ctx, active_model, tool_free_recovery);
     let active_model = turn_snapshot.active_model.clone();
     let supports_non_streaming = ctx.provider_client.supports_non_streaming(&active_model);
@@ -199,6 +204,11 @@ async fn execute_llm_request_with_options_impl(
     tracing::debug!(target: "vtcode.response_latency", operation_id = ctx.handle.current_progress_operation().map(|op| op.id()),
         request_assembly_ms = assembly_started_at.elapsed().as_secs_f64() * 1000.0, step = step_count, "request assembled");
     let mut request = initial_request.request;
+    // Exercise defensive repair of an already assembled request in tests.
+    #[cfg(test)]
+    if let Some(messages) = request_messages_override {
+        request.messages = messages;
+    }
     let has_tools = initial_request.has_tools;
     let runtime_tools = initial_request.runtime_tools;
     let continuation_messages = initial_request.continuation_messages;
@@ -209,8 +219,17 @@ async fn execute_llm_request_with_options_impl(
     let action_suggestion = extract_action_from_messages(ctx.working_history);
 
     let max_retries = llm_retry_attempts(ctx.vt_cfg.map(|cfg| cfg.agent.max_task_retries));
+    let max_retries = if ctx.is_planning_active() && ctx.plan_session.recovery.research_closed {
+        let available = vtcode_core::exec::events::planning::PlanningRecoverySnapshot::MAX_REQUESTS
+            .saturating_sub(ctx.plan_session.recovery.requests_used)
+            .saturating_add(1); // The outer admission already reserved this dispatch.
+        max_retries.min(usize::from(available))
+    } else {
+        max_retries
+    };
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
+    let mut provider_dispatches = 0usize;
     let mut stream_fallback_used = false;
     let mut compacted_tool_retry_used = false;
     let mut dropped_previous_response_id_for_retry = false;
@@ -223,9 +242,38 @@ async fn execute_llm_request_with_options_impl(
     let mut request_timer = Instant::now();
 
     let mut attempt = 0usize;
+    let mut recovery_dispatches = 0usize;
     while attempt < max_retries {
+        if ctx.is_planning_active() && ctx.plan_session.recovery.research_closed {
+            if recovery_dispatches > 0 {
+                if ctx.plan_session.recovery.outcome
+                    == vtcode_core::exec::events::planning::PlanningOutcome::Researching
+                    || !crate::agent::runloop::unified::planning_workflow::recovery_state::admit_request(
+                        &mut ctx.plan_session.recovery,
+                    )
+                {
+                    llm_result = Err(anyhow::anyhow!("planning recovery allowance exhausted; awaiting input"));
+                    break;
+                }
+                ctx.persist_planning_recovery().await?;
+            }
+            recovery_dispatches += 1;
+        }
         attempts_made = attempt + 1;
         if attempt > 0 {
+            ctx.renderer
+                .diagnostic(&retry::provider_retry_diagnostic(retry::ProviderRetryReport {
+                    turn_id: &ctx.harness_state.turn_id.0,
+                    step_count,
+                    provider: &turn_snapshot.provider_name,
+                    model: &active_model,
+                    attempt: attempt + 1,
+                    provider_dispatches,
+                    max_attempts: max_retries,
+                    category: last_error_category.as_ref().map(|category| category.user_label()),
+                    reason: last_error_preview.as_deref(),
+                    outcome: retry::ProviderRetryOutcome::Retrying,
+                }))?;
             ctx.handle
                 .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::Retrying);
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
@@ -320,6 +368,7 @@ async fn execute_llm_request_with_options_impl(
         }
 
         ctx.harness_state.reset_streamed_response_event_emitted();
+        provider_dispatches = provider_dispatches.saturating_add(1);
         let step_result = if use_streaming {
             let mut stream_bridge =
                 HarnessStreamingBridge::new(ctx.harness_emitter, &ctx.harness_state.turn_id.0, step_count, attempt + 1);
@@ -328,12 +377,7 @@ async fn execute_llm_request_with_options_impl(
                 strip_proposed_plan_blocks: turn_snapshot.planning_active,
                 suppress_output,
                 suppress_output_signal: (turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY)
-                    .then(|| {
-                        Arc::new(AtomicBool::new(
-                            suppress_output
-                                || loop_tracker.as_ref().is_some_and(|tracker| tracker.verification_is_pending()),
-                        ))
-                    }),
+                    .then(|| Arc::new(AtomicBool::new(suppress_output))),
             };
             let progress_handle = ctx.handle.clone();
             let progress_operation = ctx.handle.current_progress_operation();
@@ -614,7 +658,6 @@ async fn execute_llm_request_with_options_impl(
                     ctx.tool_registry
                         .reconcile_source_projection_change(&request.messages, normalized.as_ref());
                     request.messages = Arc::new(normalized.into_owned());
-                    attempts_made = attempts_made.saturating_add(1);
                     tracing::warn!(
                         target: "vtcode.llm.retry",
                         "repaired provider-facing tool history; retrying unmatched-tool-result request once"
@@ -643,7 +686,17 @@ async fn execute_llm_request_with_options_impl(
                             ctx.session_stats.stream_timeout_billing_advisory(&turn_snapshot.provider_name)
                         {
                             tracing::warn!("{advisory}");
-                            let _ = ctx.renderer.line(MessageStyle::Warning, &advisory);
+                            ctx.renderer.diagnostic(&vtcode_commons::diagnostics::Diagnostic {
+                                severity: vtcode_commons::diagnostics::DiagnosticSeverity::Warning,
+                                code: "provider.stream_billing_advisory".into(),
+                                summary: "The provider may bill the timed-out stream. Retrying may add cost.".into(),
+                                agent_details: advisory,
+                                correlation_id: format!(
+                                    "provider-billing:{}:{}",
+                                    ctx.harness_state.turn_id.0, turn_snapshot.provider_name
+                                ),
+                                actions: Vec::new(),
+                            })?;
                         }
                         crate::agent::runloop::unified::turn::turn_helpers::display_status(
                             ctx.renderer,
@@ -737,12 +790,32 @@ async fn execute_llm_request_with_options_impl(
     {
         last_error_preview = Some(compact_error_message(&err.to_string(), 180));
     }
+    if attempts_made > 1 || provider_dispatches > 1 {
+        ctx.renderer
+            .diagnostic(&retry::provider_retry_diagnostic(retry::ProviderRetryReport {
+                turn_id: &ctx.harness_state.turn_id.0,
+                step_count,
+                provider: &turn_snapshot.provider_name,
+                model: &active_model,
+                attempt: attempts_made,
+                provider_dispatches,
+                max_attempts: max_retries,
+                category: last_error_category.as_ref().map(|category| category.user_label()),
+                reason: last_error_preview.as_deref(),
+                outcome: if llm_result.is_ok() {
+                    retry::ProviderRetryOutcome::Succeeded
+                } else {
+                    retry::ProviderRetryOutcome::Stopped
+                },
+            }))?;
+    }
     emit_llm_retry_metrics(
         ctx,
         step_count,
         &active_model,
         turn_snapshot.planning_active,
         attempts_made,
+        provider_dispatches,
         max_retries,
         llm_result.is_ok(),
         stream_fallback_used,
@@ -760,8 +833,17 @@ async fn execute_llm_request_with_options_impl(
         #[derive(serde::Serialize)]
         struct PromptCacheMetricsRecord<'a> {
             kind: &'static str,
+            scope: &'static str,
             turn: usize,
+            run_id: &'a str,
+            turn_id: &'a str,
+            provider: &'a str,
             model: &'a str,
+            requested_model: &'a str,
+            input_tokens: u64,
+            cache_read_tokens_reported: Option<u32>,
+            cache_write_tokens_reported: Option<u32>,
+            elapsed_ms: u128,
             prompt_tokens: u32,
             completion_tokens: u32,
             total_tokens: u32,
@@ -776,10 +858,21 @@ async fn execute_llm_request_with_options_impl(
         let cache_read_tokens = usage.cache_read_tokens_or_fallback();
         let cache_creation_tokens = usage.cache_creation_tokens_or_zero();
         let cache_hit_ratio = metrics::prompt_cache_hit_ratio(ctx.provider_client.name(), usage);
+        let reported_cache_usage = metrics::ReportedCacheUsage::from_usage(usage);
         let record = PromptCacheMetricsRecord {
             kind: "prompt_cache_metrics",
+            scope: "foreground",
             turn: step_count,
-            model: &active_model,
+            run_id: &ctx.harness_state.run_id.0,
+            turn_id: &ctx.harness_state.turn_id.0,
+            provider: ctx.provider_client.name(),
+            model: &response.model,
+            requested_model: &active_model,
+            input_tokens: vtcode_core::llm::usage_cost::normalized_turn_usage(ctx.provider_client.name(), usage)
+                .input_tokens,
+            cache_read_tokens_reported: reported_cache_usage.read_tokens,
+            cache_write_tokens_reported: reported_cache_usage.write_tokens,
+            elapsed_ms: request_timer.elapsed().as_millis(),
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,

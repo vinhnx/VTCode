@@ -1,6 +1,7 @@
 //! mimo_presets — provider preset definitions for mimo.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::constants::models::mimo as mimo_models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
@@ -13,10 +14,7 @@ pub(crate) fn mimo_presets() -> Vec<ModelPreset> {
             description: "Xiaomi's flagship reasoning model with advanced capabilities (1M context)".to_string(),
             provider: Provider::MiMo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: true,
             upgrade: None,
             show_in_picker: true,
@@ -31,10 +29,7 @@ pub(crate) fn mimo_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::MiMo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -49,10 +44,7 @@ pub(crate) fn mimo_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::MiMo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,

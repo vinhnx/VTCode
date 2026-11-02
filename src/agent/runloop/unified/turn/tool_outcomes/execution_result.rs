@@ -29,7 +29,7 @@ use self::auto_permission_probe::push_tool_response_with_auto_permission_probe;
 pub(crate) use self::failure_diagnosis::{
     ToolFailureDiagnosis, bounded_diagnostic_field, bounded_error_evidence, bounded_output_evidence,
     deterministic_error_diagnosis, deterministic_output_diagnosis, deterministic_preflight_diagnosis,
-    escape_untrusted_evidence, render_and_emit, render_diagnosis,
+    escape_untrusted_evidence, policy_denial_next_action, render_and_emit, render_diagnosis,
 };
 use self::failure_diagnosis::{diagnose_error, diagnose_output};
 use self::failure_path::{
@@ -287,7 +287,7 @@ async fn handle_success<'a>(
     // the model-facing response attempt so UI/rendering failures cannot
     // suppress the durable diagnosis item or change its ordering.
     if let Some(diagnosis) = diagnosis.as_ref() {
-        render_and_emit(t_ctx.ctx, tool_name, diagnosis);
+        render_and_emit(t_ctx.ctx, Some(&tool_call_id), tool_name, diagnosis);
     }
     response_result?;
     // Skip signature recording for loop-detected stubs: a loop-detected result is
@@ -413,6 +413,7 @@ async fn handle_failure<'a>(
     }
 
     let diagnosis = diagnose_error(t_ctx.ctx, tool_name, args_val, error, "execution").await;
+    let diagnostic_tool_call_id = tool_call_id.clone();
     finalize_failed_tool_response(
         t_ctx,
         tool_call_id,
@@ -424,7 +425,7 @@ async fn handle_failure<'a>(
         batch_spinner,
     )
     .await;
-    render_and_emit(t_ctx.ctx, tool_name, &diagnosis);
+    render_and_emit(t_ctx.ctx, Some(&diagnostic_tool_call_id), tool_name, &diagnosis);
 
     if blocked_or_denied_failure {
         t_ctx.ctx.harness_state.record_denied_tool_call();
@@ -491,6 +492,7 @@ async fn handle_timeout(
     record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::Timeout).await;
 
     let diagnosis = diagnose_error(t_ctx.ctx, tool_name, args_val, error, "timeout").await;
+    let diagnostic_tool_call_id = tool_call_id.clone();
     finalize_failed_tool_response(
         t_ctx,
         tool_call_id,
@@ -502,7 +504,7 @@ async fn handle_timeout(
         batch_spinner,
     )
     .await;
-    render_and_emit(t_ctx.ctx, tool_name, &diagnosis);
+    render_and_emit(t_ctx.ctx, Some(&diagnostic_tool_call_id), tool_name, &diagnosis);
 
     Ok(())
 }
@@ -515,7 +517,14 @@ async fn handle_cancelled(
 ) -> Result<()> {
     let display_tool = tool_action_label(tool_name, args_val);
     let error_msg = format!("Tool '{display_tool}' execution cancelled");
-    t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
+    t_ctx.ctx.renderer.diagnostic(&vtcode_commons::diagnostics::Diagnostic {
+        severity: vtcode_commons::diagnostics::DiagnosticSeverity::Info,
+        code: "tool.cancelled".into(),
+        summary: error_msg.clone(),
+        agent_details: "The tool was cancelled; its result cannot count as completed verification.".into(),
+        correlation_id: format!("tool:{tool_call_id}"),
+        actions: Vec::new(),
+    })?;
 
     let error_content = serde_json::json!({"error": error_msg});
     push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, error_content.to_string(), None)

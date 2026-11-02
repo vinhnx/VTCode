@@ -3,6 +3,10 @@
     "deepwiki": {
       "type": "http",
       "url": "https://mcp.deepwiki.com/mcp"
+    },
+    "cve-now": {
+      "type": "http",
+      "url": "https://mcp.cve.now/mcp"
     }
   }
 }

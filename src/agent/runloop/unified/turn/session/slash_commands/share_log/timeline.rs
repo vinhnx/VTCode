@@ -15,6 +15,8 @@ use vtcode_core::core::threads::ThreadEventRecord;
 use vtcode_core::exec::events::{PatchChangeKind, ThreadEvent, ThreadItemDetails};
 use vtcode_core::llm::provider as uni;
 
+#[path = "timeline/formatting.rs"]
+mod formatting;
 #[path = "timeline/presentation.rs"]
 mod presentation;
 
@@ -128,7 +130,7 @@ pub(super) fn render_session_timeline_html(export: &TimelineExport, session_log_
 }
 
 pub(super) fn redact_timeline_export(export: &TimelineExport) -> TimelineExport {
-    presentation::redact_timeline_export(export)
+    formatting::redact_timeline_export(export)
 }
 
 fn build_session_overview(
@@ -270,6 +272,7 @@ mod tests {
                         exit_code,
                         spool_path: None,
                         status: ToolCallStatus::Failed,
+                        app_previews: Vec::new(),
                     })),
                 },
             });
@@ -644,5 +647,22 @@ mod tests {
         assert_eq!(row.status.as_deref(), Some("completed"));
         assert!(row.summary.contains("exit 0"));
         assert!(row.body.contains("Finished dev"));
+    }
+
+    #[test]
+    fn timeline_renders_sandbox_denial_with_refused_uris() {
+        use vtcode_core::exec::events::AppSandboxDeniedEvent;
+        let event = ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+            tool: "mcp::demo::get_time".into(),
+            tier: "off".into(),
+            uris: vec!["ui://demo/app.html".into(), "ui://demo/other.html".into()],
+        }));
+        let rows = timeline_rows_from_thread_events(&[sample_event_record(7, event)]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status.as_deref(), Some("failed"));
+        assert!(rows[0].summary.contains("mcp::demo::get_time"), "summary: {}", rows[0].summary);
+        assert!(rows[0].body.contains("tier: off"), "body: {}", rows[0].body);
+        assert!(rows[0].body.contains("ui://demo/app.html"));
+        assert!(rows[0].body.contains("ui://demo/other.html"));
     }
 }

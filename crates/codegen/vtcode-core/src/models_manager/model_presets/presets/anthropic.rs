@@ -1,6 +1,7 @@
 //! anthropic_presets — provider preset definitions for anthropic.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
@@ -15,27 +16,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Extended capability for the hardest coding and agentic tasks".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the hardest coding and agentic tasks"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -53,27 +38,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Extended capability for the hardest coding and agentic tasks".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the hardest coding and agentic tasks"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -91,27 +60,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Extended capability for the most capability-sensitive workloads".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the most capability-sensitive workloads"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -129,27 +82,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Extended capability for the most capability-sensitive workloads".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the most capability-sensitive workloads"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -167,27 +104,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Extended capability for the hardest coding and agentic tasks".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the hardest coding and agentic tasks"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -205,27 +126,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Extended capability for the hardest coding and agentic tasks".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the hardest coding and agentic tasks"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -243,27 +148,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Extended capability for the hardest coding and agentic tasks".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Extended capability for the hardest coding and agentic tasks"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -281,27 +170,11 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::XHigh,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Recommended Opus 4.8 effort for coding and agentic work".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort for intelligence-demanding tasks"
-                        .to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Recommended Opus 4.8 effort for coding and agentic work"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort for intelligence-demanding tasks"),
             ],
             is_default: false,
             upgrade: None,
@@ -319,22 +192,10 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Default adaptive effort".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum adaptive effort".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::High, "Default adaptive effort"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive effort"),
             ],
             is_default: false,
             upgrade: None,

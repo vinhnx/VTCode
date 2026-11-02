@@ -207,7 +207,7 @@ pub(super) fn show_memory_actions_modal(
             if let Some(warning) = lightweight_route.warning.as_deref() {
                 let warning = warning.trim();
                 if !warning.is_empty() {
-                    subtitle.push_str(" • ");
+                    subtitle.push_str(vtcode_config::constants::ui::META_BULLET_SEPARATOR);
                     subtitle.push_str(warning);
                 }
             }

@@ -41,7 +41,7 @@ async fn test_pipe_process_echo() -> anyhow::Result<()> {
     let (program, args) = shell_command("echo hello");
     let env: HashMap<String, String> = std::env::vars().collect();
 
-    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, &None).await?;
+    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, None).await?;
 
     let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
     let text = String::from_utf8_lossy(&output);
@@ -49,6 +49,24 @@ async fn test_pipe_process_echo() -> anyhow::Result<()> {
     assert!(text.contains("hello"), "expected 'hello' in output: {text:?}");
     assert_eq!(code, 0, "expected exit code 0");
 
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_pipe_process_borrowed_arg0() -> anyhow::Result<()> {
+    let env = HashMap::new();
+    let args = ["-c".to_string(), "printf '%s' \"$0\"".to_string()];
+    let spawned = spawn_pipe_process("/bin/sh", &args, Path::new("."), &env, Some("borrowed-argv-zero")).await?;
+    let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
+    assert_eq!(output, b"borrowed-argv-zero");
+    assert_eq!(code, 0);
+
+    let spawned =
+        spawn_pipe_process_no_stdin("/bin/sh", &args, Path::new("."), &env, Some("no-stdin-argv-zero")).await?;
+    let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
+    assert_eq!(output, b"no-stdin-argv-zero");
+    assert_eq!(code, 0);
     Ok(())
 }
 
@@ -66,7 +84,7 @@ async fn test_pipe_process_round_trips_stdin() -> anyhow::Result<()> {
     ];
     let env: HashMap<String, String> = std::env::vars().collect();
 
-    let spawned = spawn_pipe_process(&python, &args, Path::new("."), &env, &None).await?;
+    let spawned = spawn_pipe_process(&python, &args, Path::new("."), &env, None).await?;
     let writer = spawned.session.writer_sender();
     writer.send(b"roundtrip\n".to_vec()).await?;
 
@@ -85,7 +103,7 @@ async fn test_pipe_process_no_stdin() -> anyhow::Result<()> {
     let (program, args) = shell_command("echo no_stdin_test");
     let env: HashMap<String, String> = std::env::vars().collect();
 
-    let spawned = spawn_pipe_process_no_stdin(&program, &args, Path::new("."), &env, &None).await?;
+    let spawned = spawn_pipe_process_no_stdin(&program, &args, Path::new("."), &env, None).await?;
 
     let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
     let text = String::from_utf8_lossy(&output);
@@ -127,7 +145,7 @@ async fn test_process_handle_terminate() -> anyhow::Result<()> {
     };
 
     let env: HashMap<String, String> = std::env::vars().collect();
-    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, &None).await?;
+    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, None).await?;
 
     // Give it a moment to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -150,7 +168,7 @@ async fn test_pipe_process_detaches_from_parent_session() -> anyhow::Result<()> 
 
     let env: HashMap<String, String> = std::env::vars().collect();
     let (program, args) = shell_command("echo $$; sleep 0.2");
-    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, &None).await?;
+    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, None).await?;
 
     let mut output_rx = spawned.output_rx;
     let pid_bytes = tokio::time::timeout(Duration::from_millis(500), output_rx.recv()).await??;
@@ -201,7 +219,7 @@ async fn test_pipe_drains_stderr() -> anyhow::Result<()> {
     let args = vec!["-c".to_string(), script.to_string()];
     let env: HashMap<String, String> = std::env::vars().collect();
 
-    let spawned = spawn_pipe_process(&python, &args, Path::new("."), &env, &None).await?;
+    let spawned = spawn_pipe_process(&python, &args, Path::new("."), &env, None).await?;
 
     let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
     let text = String::from_utf8_lossy(&output);
@@ -260,7 +278,7 @@ async fn test_pipe_legacy_output_receiver_does_not_wait_for_reliable_consumer() 
     let script = "i=0; while [ $i -lt 20000 ]; do printf 'line-%05d\\n' \"$i\"; i=$((i+1)); done";
     let (program, args) = shell_command(script);
     let env: HashMap<String, String> = std::env::vars().collect();
-    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, &None).await?;
+    let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, None).await?;
 
     // This intentionally leaves `reliable_output_rx` untouched. Public legacy
     // callers must still drain the child through `output_rx` and receive its

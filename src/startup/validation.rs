@@ -190,7 +190,7 @@ pub(super) async fn validate_startup_configuration(
                 // non-fatal — the runtime provider validator catches truly
                 // invalid models when a request is actually made.
                 for error in &result.errors {
-                    eprintln!("Configuration warning: {error}");
+                    vtcode_commons::diagnostics::stderr(format_args!("Configuration warning: {error}"));
                 }
             }
             // Non-fatal: log but don't abort startup for config validation errors.
@@ -200,7 +200,7 @@ pub(super) async fn validate_startup_configuration(
         }
         Ok(_) => {}
         Err(e) if !quiet => {
-            eprintln!("could not validate configured model catalog: {e}");
+            vtcode_commons::diagnostics::stderr(format_args!("could not validate configured model catalog: {e}"));
         }
         Err(_) => {}
     }

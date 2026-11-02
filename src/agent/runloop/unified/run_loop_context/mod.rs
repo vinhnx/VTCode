@@ -180,7 +180,7 @@ pub(crate) struct HarnessTurnState {
     pub run_id: TurnRunId,
     pub turn_id: TurnId,
     pub phase: TurnPhase,
-    pub turn_started_at: Instant,
+    pub tool_wall_clock_elapsed: Duration,
     /// Time spent waiting for explicit user input or an already-running
     /// command is excluded from the ordinary per-turn harness wall-clock budget.
     wait_started_at: Option<Instant>,

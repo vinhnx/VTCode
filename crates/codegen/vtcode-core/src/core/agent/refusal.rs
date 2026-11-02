@@ -116,7 +116,7 @@ fn fallback_sentence(response: &LLMResponse, details: &[Value], recommended_mode
 fn bounded_explanation(content: &str) -> String {
     // Collapse whitespace so a multi-paragraph refusal message reads as one
     // sentence inside the notice.
-    let collapsed = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    let collapsed = vtcode_commons::formatting::collapse_whitespace(content);
     vtcode_commons::formatting::truncate_within(&collapsed, MAX_EXPLANATION_CHARS, "...")
 }
 

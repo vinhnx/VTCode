@@ -14,7 +14,10 @@
 | Authentication    | **\*\***                                                                                                                                                                              |
 | Tool calls        | Supported                                                                                                                                                                             |
 | Streaming usage   | Supported via native Responses SSE                                                                                                                                                    |
-| Reasoning effort  | Forwarded per route: `reasoning_effort` (OpenAI/xAI/Moonshot/ZAI) or `thinking.budget_tokens` (Anthropic/Gemini/DeepSeek/Qwen/MiniMax/Thinking Machines); unknown routes omitted |
+| Reasoning effort  | Per-route reasoning_effort or thinking.budget_tokens; unknown routes omitted. See the provider guide.                                                                                 |
+
+Native Merge requests currently omit text verbosity. Use explicit prompt output requirements; direct OpenAI settings
+do not imply gateway support. See [evaluation guidance](../development/prompt-model-evaluation.md).
 
 Curated routes:
 
@@ -27,12 +30,13 @@ anthropic/claude-sonnet-5-5
 google/gemini-3.6-flash
 google/gemini-3.7-flash
 google/gemini-4-argon
-deepseek/deepseek-v4-pro-0813
-deepseek/deepseek-v4-flash-0731
+deepseek/deepseek-v4.1-flash-1017
 xai/grok-4.6
 qwen/qwen3.8-max
 minimax/minimax-h3
+minimax/minimax-m3.1-flash
 moonshot/kimi-k3
+moonshot/kimi-k3.1-pro
 thinkingmachines/inkling
 zai/glm-5.3-flash
 zai/glm-5.3-flashx
@@ -42,6 +46,7 @@ openai/gpt-5.6-terra
 openai/gpt-6-astra
 openai/gpt-6-sol
 openai/gpt-6.1-sol
+openai/gpt-6.1-terra
 openai/gpt-6-luna
 xiaomimimo/mimo-v2.6-pro
 xiaomimimo/mimo-v2.6-flash
@@ -57,7 +62,7 @@ vtcode --provider merge-gateway --model default_routing
 For arbitrary valid Merge routes:
 
 ```bash
-vtcode --provider merge-gateway --model deepseek/deepseek-v4-pro
+vtcode --provider merge-gateway --model deepseek/deepseek-v4.1-flash-1017
 ```
 
 Create keys in the [Merge dashboard](https://dashboard.merge.dev/). See the

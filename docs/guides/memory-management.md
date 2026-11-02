@@ -65,7 +65,10 @@ Authored guidance files can import other files inline with `@path/to/file.md`.
 - Imports expand at the location of the `@path` line, not at the end of the file.
 - Relative imports resolve from the containing file.
 - The default recursive import limit is `5`, controlled by `agent.instruction_import_max_depth`.
-- Imports are limited to the workspace or VT Code user-config roots.
+- Workspace and custom guidance may import only workspace files. User guidance may also import from VT Code
+  user-config roots; workspace files imported from user guidance retain the workspace limit.
+- Workspace guidance and rule discovery skip symlink targets outside the workspace.
+- Rule path patterns are limited to 4,096 bytes and use bounded wildcard matching.
 - Use `agent.instruction_excludes` to skip specific `AGENTS.md` or `.vtcode/rules/` paths by glob.
 
 ## Persistent Memory

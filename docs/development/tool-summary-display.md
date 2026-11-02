@@ -68,7 +68,8 @@ Explicit `expanded` mode preserves the existing per-call summary and live-output
 ## Exec-session calls (`write_stdin` and the session readers)
 
 Exec-session calls repeat on every poll or wait of a long command, so their transcript rows stay minimal: the session
-identity plus an explicit wait deadline is the only parameter row shown (`└ Session run-2d5752f2 · wait up to 600s`), and the
+identity plus an explicit wait deadline is the only parameter row shown
+(`└ Session run-2d5752f2 · wait up to 600s`), and the
 generic stream label is dropped next to it so the header reads `• Wait for command session`, `• Read command session`, or
 `• Send command input` (action-aware: pure waits no longer misrender as sends) instead of appending
 `Use write_stdin output`. Output-token caps, yield windows, and the raw stdin payload are not rendered; the model still
@@ -83,7 +84,8 @@ is a click target: activating it opens the Tool Output Viewer on that call's rec
 is terminal text, so it renders plain in the theme's PTY body color plus `DIMMED`, matching the design-system dim tier
 used by reasoning: git-diff detection and `LS_COLORS` per-line styling are skipped, because both misfire on build logs
 (`PASS … .rs` picked up file-type colors). Stdin echo rows (`$ …`) sit on the same dim tier. Headers
-(`• Wait for command session`, `• Read command session`, `• Send command input`, `└ Session …`) keep normal tool brightness so the call stays identifiable. The spooled branch
+(`• Wait for command session`, `• Read command session`, `• Send command input`, `└ Session …`) keep normal
+tool brightness so the call stays identifiable. The spooled branch
 already bounds to six rows (three head, three tail). Complete output stays in the tool-output viewer, Transcript Review,
 and the spool file referenced in the spool message; only the rendered preview is bounded.
 

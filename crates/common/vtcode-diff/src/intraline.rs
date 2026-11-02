@@ -7,6 +7,14 @@ use similar::{ChangeTag, TextDiff};
 use super::types::{Chunk, DiffDisplayKind, DiffDisplayLine, WordChangedRanges, default_inline_timeout};
 
 /// Computes a character-level diff with adjacent chunks coalesced.
+///
+/// # Contract
+///
+/// - Requires: `old` and `new` are valid UTF-8 `&str` (enforced by the type).
+/// - Ensures: every returned [`Chunk`] borrows a char-boundary slice of its
+///   side, and concatenating Equal+Delete reconstructs `old` while
+///   Equal+Insert reconstructs `new`.
+/// - Termination: iterates `similar` changes once (variant: remaining changes).
 #[must_use]
 pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
     if old == new {
@@ -54,10 +62,24 @@ pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
 }
 
 fn push_chunk<'a>(chunks: &mut Vec<Chunk<'a>>, tag: ChangeTag, start: usize, end: usize, old: &'a str, new: &'a str) {
+    // Invariant (Creusot requires): `start..end` must be a char-boundary
+    // slice of the selected side. Offsets are built by summing `value.len()`
+    // partitions of `old`/`new`, so contiguity holds; debug-assert it so a
+    // violated invariant crashes loud in release (debug-assertions stay on).
+    debug_assert!(start <= end, "chunk range must not be inverted");
     let chunk = match tag {
-        ChangeTag::Equal => Chunk::Equal(&old[start..end]),
-        ChangeTag::Delete => Chunk::Delete(&old[start..end]),
-        ChangeTag::Insert => Chunk::Insert(&new[start..end]),
+        ChangeTag::Equal => {
+            debug_assert!(old.is_char_boundary(start) && old.is_char_boundary(end));
+            Chunk::Equal(&old[start..end])
+        }
+        ChangeTag::Delete => {
+            debug_assert!(old.is_char_boundary(start) && old.is_char_boundary(end));
+            Chunk::Delete(&old[start..end])
+        }
+        ChangeTag::Insert => {
+            debug_assert!(new.is_char_boundary(start) && new.is_char_boundary(end));
+            Chunk::Insert(&new[start..end])
+        }
     };
     chunks.push(chunk);
 }
@@ -101,6 +123,14 @@ pub(crate) fn annotate_word_level_diffs_with_timeout(lines: &mut [DiffDisplayLin
 }
 
 /// Computes byte-safe word-level changed ranges for a line pair.
+///
+/// # Contract
+///
+/// - Requires: nothing beyond valid `&str` inputs.
+/// - Ensures: every returned range is a char-boundary range within its side,
+///   and an empty input or an over-budget pair (`> 16_384` bytes) yields no
+///   ranges. Overflow-free: offsets advance with `saturating_add`.
+/// - Termination: single pass over `similar` changes.
 #[must_use]
 pub fn word_level_changed_ranges(old: &str, new: &str) -> (WordChangedRanges, WordChangedRanges) {
     if old.is_empty() || new.is_empty() || old.len().saturating_add(new.len()) > 16_384 {
@@ -121,16 +151,16 @@ pub fn word_level_changed_ranges(old: &str, new: &str) -> (WordChangedRanges, Wo
         let length = change.value().len();
         match change.tag() {
             ChangeTag::Equal => {
-                old_offset += length;
-                new_offset += length;
+                old_offset = old_offset.saturating_add(length);
+                new_offset = new_offset.saturating_add(length);
             }
             ChangeTag::Delete => {
-                push_range(&mut old_ranges, old_offset, old_offset + length);
-                old_offset += length;
+                push_range(&mut old_ranges, old_offset, old_offset.saturating_add(length));
+                old_offset = old_offset.saturating_add(length);
             }
             ChangeTag::Insert => {
-                push_range(&mut new_ranges, new_offset, new_offset + length);
-                new_offset += length;
+                push_range(&mut new_ranges, new_offset, new_offset.saturating_add(length));
+                new_offset = new_offset.saturating_add(length);
             }
         }
     }
@@ -138,6 +168,9 @@ pub fn word_level_changed_ranges(old: &str, new: &str) -> (WordChangedRanges, Wo
 }
 
 fn push_range(ranges: &mut WordChangedRanges, start: usize, end: usize) {
+    // Invariant: ranges stay ordered and coalesced (`prior_end == start`
+    // extends instead of pushing). Callers pass saturating offsets.
+    debug_assert!(start <= end, "intraline range must not be inverted");
     match ranges.last_mut() {
         Some((_, prior_end)) if *prior_end == start => *prior_end = end,
         _ => ranges.push((start, end)),

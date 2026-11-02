@@ -3,8 +3,8 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use vtcode_core::core::agent::harness_kernel::{PreparedToolBatch, PreparedToolBatchKind};
 
 use super::{
-    PreparedToolCall, ToolOutcomeContext, ValidationTransition, block_mutation_until_verification,
-    finalize_validation_result, flush_budget_synthesis_directives, validate_tool_call,
+    PreparedToolCall, ToolOutcomeContext, ValidationTransition, finalize_validation_result,
+    flush_budget_synthesis_directives, validate_tool_call,
 };
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_pipeline::{
@@ -103,6 +103,24 @@ impl ValidatedToolCall<'_> {
     }
 }
 
+fn reject_expired_wall_clock(ctx: &mut TurnProcessingContext<'_>, call: &ValidatedToolCall<'_>) -> bool {
+    let Some(notice) = ctx.harness_state.record_wall_clock_exhaustion_notice() else {
+        return false;
+    };
+    let message = if notice.first_notice {
+        notice.exhaustion.policy_violation_message()
+    } else {
+        notice.exhaustion.skipped_call_message()
+    };
+    ctx.push_rejected_tool_response(
+        call.call_id(),
+        Some(&call.prepared.canonical_name),
+        Some(&call.prepared.effective_args),
+        super::build_turn_budget_error_content(message),
+    );
+    true
+}
+
 #[cfg(test)]
 fn planned_execution_group_stats(
     validated_calls: &[ValidatedToolCall<'_>],
@@ -182,6 +200,21 @@ where
 }
 
 async fn execute_parallel_group<'a, 'b>(
+    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
+    validated_calls: Vec<ValidatedToolCall<'_>>,
+    batch_tracker: &mut crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome,
+) -> Result<Option<TurnHandlerOutcome>> {
+    let started = std::time::Instant::now();
+    let excluded_before = t_ctx.ctx.harness_state.tool_clock_checkpoint();
+    let result = execute_parallel_group_inner(t_ctx, validated_calls, batch_tracker).await;
+    t_ctx
+        .ctx
+        .harness_state
+        .record_tool_wall_clock(started.elapsed(), excluded_before);
+    result
+}
+
+async fn execute_parallel_group_inner<'a, 'b>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     validated_calls: Vec<ValidatedToolCall<'_>>,
     batch_tracker: &mut crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome,
@@ -448,50 +481,11 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
             continue;
         };
 
-        match block_mutation_until_verification(
-            t_ctx.ctx,
-            t_ctx.repeated_tool_attempts,
-            tool_call.call_id(),
-            tool_call.tool_name(),
-            args,
-        )? {
-            super::MutationVerificationResult::Allowed => {}
-            super::MutationVerificationResult::Blocked => continue,
-            super::MutationVerificationResult::Outcome(outcome) => {
-                if t_ctx.ctx.harness_state.blocked_tool_recovery_pending() {
-                    super::drain_blocked_tool_recovery_responses(t_ctx.ctx, &tool_calls[index + 1..]);
-                }
-                super::flush_blocked_tool_recovery(t_ctx.ctx);
-                return Ok(Some(outcome));
-            }
-        }
-
         let validation_result = validate_tool_call(t_ctx.ctx, tool_call.call_id(), tool_call.tool_name(), args).await?;
         match finalize_validation_result(t_ctx.ctx, tool_call.call_id(), tool_call.tool_name(), args, validation_result)
         {
             ValidationTransition::Proceed(prepared) => {
-                // A PreToolUse hook may have rewritten the arguments inside
-                // validate_tool_call; re-evaluate the mutation guard against
-                // the arguments that will actually execute.
-                match block_mutation_until_verification(
-                    t_ctx.ctx,
-                    t_ctx.repeated_tool_attempts,
-                    tool_call.call_id(),
-                    &prepared.canonical_name,
-                    &prepared.effective_args,
-                )? {
-                    super::MutationVerificationResult::Allowed => {
-                        validated_calls.push(ValidatedToolCall { tool_call, prepared });
-                    }
-                    super::MutationVerificationResult::Blocked => continue,
-                    super::MutationVerificationResult::Outcome(outcome) => {
-                        if t_ctx.ctx.harness_state.blocked_tool_recovery_pending() {
-                            super::drain_blocked_tool_recovery_responses(t_ctx.ctx, &tool_calls[index + 1..]);
-                        }
-                        super::flush_blocked_tool_recovery(t_ctx.ctx);
-                        return Ok(Some(outcome));
-                    }
-                }
+                validated_calls.push(ValidatedToolCall { tool_call, prepared });
             }
             ValidationTransition::Return(Some(outcome)) => {
                 if matches!(&outcome, TurnHandlerOutcome::Break(TurnLoopResult::Cancelled | TurnLoopResult::Exit))
@@ -551,6 +545,12 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
         let group = validated_calls.by_ref().take(len).collect::<Vec<_>>();
         match kind {
             PreparedToolBatchKind::ParallelReadonly => {
+                if t_ctx.ctx.harness_state.wall_clock_exhausted() {
+                    for call in &group {
+                        reject_expired_wall_clock(t_ctx.ctx, call);
+                    }
+                    continue;
+                }
                 if let Some(outcome) = execute_parallel_group(t_ctx, group, &mut batch_tracker).await? {
                     if t_ctx.ctx.harness_state.blocked_tool_recovery_pending() {
                         for remaining in validated_calls.by_ref() {
@@ -571,6 +571,9 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
             PreparedToolBatchKind::Sequential => {
                 let mut group_iter = group.into_iter().enumerate();
                 while let Some((_group_index, validated_call)) = group_iter.next() {
+                    if reject_expired_wall_clock(t_ctx.ctx, &validated_call) {
+                        continue;
+                    }
                     let tool_call_id = validated_call.call_id().to_string();
                     let tool_name = validated_call.prepared.canonical_name;
                     let args = validated_call.prepared.effective_args;
@@ -601,6 +604,8 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
             }
         }
     }
+
+    flush_budget_synthesis_directives(t_ctx.ctx);
 
     if batch_tracker.entries.len() > 1 {
         let stats = batch_tracker.stats();
@@ -650,15 +655,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
     args_val: serde_json::Value,
     batch_tracker: Option<&mut crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome>,
 ) -> Result<Option<TurnHandlerOutcome>> {
-    match block_mutation_until_verification(ctx, repeated_tool_attempts, tool_call_id.as_str(), tool_name, &args_val)? {
-        super::MutationVerificationResult::Allowed => {}
-        super::MutationVerificationResult::Blocked => return Ok(None),
-        super::MutationVerificationResult::Outcome(outcome) => return Ok(Some(outcome)),
-    }
-
-    // Reset only after the final mutation guard. Permission or hook rewrites
-    // can change a call's intent after initial preflight; a rewritten mutation
-    // blocked above must not be mistaken for productive tool progress.
+    // Validated tool progress resets the assistant text-response streak.
     ctx.harness_state.reset_assistant_text_response_streak();
 
     // Show pre-execution indicator for file modification operations
@@ -785,6 +782,21 @@ mod tests {
         );
 
         assert_eq!(stats, (1, 1, 2));
+    }
+
+    #[tokio::test]
+    async fn prevalidated_call_is_rejected_when_prior_group_exhausted_wall_clock() {
+        let mut backing = super::super::tests::TestContextBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        let call = validated_call("later-call", tools::READ_FILE, true, true, serde_json::json!({"path":"sample.txt"}));
+        ctx.harness_state.tool_wall_clock_elapsed = std::time::Duration::from_secs(59);
+        assert!(!super::reject_expired_wall_clock(&mut ctx, &call));
+        ctx.harness_state.tool_wall_clock_elapsed += std::time::Duration::from_secs(1);
+        assert!(super::reject_expired_wall_clock(&mut ctx, &call));
+        assert!(ctx.working_history.iter().any(|message| {
+            message.tool_call_id.as_deref() == Some("later-call")
+                && message.content.as_text().contains("wall clock budget")
+        }));
     }
 
     #[test]

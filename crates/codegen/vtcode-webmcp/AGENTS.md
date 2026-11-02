@@ -6,7 +6,7 @@
 
 ## Modules
 
-- `protocol` — versioned browser/server messages. `pairing` — expiring one-time codes, sessions, origin binding, revocation, and atomic replacement. `event_hub` — bounded replay and slow-client handling for runtime events. `runtime` — adapter traits and result types used by active and headless sessions. `filesystem` — canonicalized, digest-checked headless workspace adapter using `vtcode-diff` for authoritative diffs. `remote_mcp` — authenticated read-only Streamable HTTP and legacy SSE transports.
+- `protocol` — versioned browser/server messages. `pairing` — expiring one-time codes, sessions, origin binding, revocation, and atomic replacement. `event_hub` — bounded replay and slow-client handling for runtime events. `runtime` — adapter traits and result types used by active and headless sessions. `filesystem` — canonicalized, digest-checked headless workspace adapter using `vtcode-diff` for authoritative diffs. `remote_mcp` — authenticated Streamable HTTP and legacy SSE transports (read-only by default). `companion` — opt-in task DTOs and binary-owned backend contract.
 - `server` — Axum WebSocket transport and request dispatch.
 - `error.rs` — crate error types.
 
@@ -18,7 +18,8 @@
 - Commands are argv-based and allowlisted; only bounded check invocations may run, and never invoke a shell.
 - Browser listings, reads, and check sandboxes must apply the central component-sensitive-file exclusions. Filesystem access must use bound directory handles with no-follow traversal where supported; compare-and-replace must operate on the opened handle and fail closed when that guarantee is unavailable.
 - The listener is loopback-only; remote access requires a TLS-terminating reverse proxy.
-- Remote MCP accepts only proxy-injected internal bearer tokens; redact token values, keep its Origin policy separate, and never add a file-serving route.
+- Companion task tools require an explicitly supplied backend; start/cancel retain conservative action annotations. Never launch processes in this crate; incomplete task evidence retains failed checks and invalidates positive proof. Historical command results grant no verification credit; binary-owned projection bounds and sanitizes command facts without exposing output streams. Recorded change evidence must use the existing relative-path and sensitive-component filters.
+- Remote MCP accepts only proxy-injected internal bearer tokens; redact token values, keep its Origin policy separate, and never add a file-serving route. Local stdio uses the same handler without HTTP authentication state; keep stdout protocol-only and leave process/trust/cleanup ownership in the binary.
 - Multi-file mutations use serialized compare-and-rollback; preserve fail-closed behavior when rollback itself fails. Keep proposal count/byte budgets and subscriber count/byte budgets bounded.
 - Active turn requests may carry a proposal identity; revalidate its stored snapshots and hand off the adapter-generated authoritative diff. Never trust or forward the browser-rendered diff as the source of truth.
 - Pairing TTL is the one-time-code lifetime and authenticated-session inactivity lease; authenticated browser traffic may refresh it, and an in-flight authenticated operation may pin its lease until completion. Expiry checks outside an operation remain read-only.

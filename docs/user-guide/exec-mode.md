@@ -34,6 +34,13 @@ tool-call limit increases of +100 are granted without prompting; set
 policy blocks. You can capture the final summary separately with `--last-message-file` or persist the raw JSON stream
 with `--events`. Use `--json` when you want to see the live JSONL feed on stdout.
 
+### Full access is not full-auto
+
+**Full access** (`vtcode --full-access`, `/permissions`, or the Desktop permission control) is a separate interactive
+session mode: it disables the process sandbox and auto-approves promptable calls without a tool allowlist, and it is
+never persisted. It cannot be combined with full-auto, and selecting it does not grant or persist full-auto workspace
+trust. See [Security Guide](../guides/security.md) for the retained restrictions.
+
 ### Granting workspace trust
 
 If the workspace has not been trusted yet, exec mode resolves trust in this order:

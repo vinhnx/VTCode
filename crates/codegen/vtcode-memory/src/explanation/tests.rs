@@ -63,6 +63,7 @@ fn cancelled_calls_are_distinct_from_errors_and_do_not_verify() {
                 exit_code,
                 spool_path: None,
                 status,
+                app_previews: Vec::new(),
             })),
         );
     }
@@ -628,6 +629,7 @@ fn incomplete_or_failed_tool_output_cannot_verify_a_completed_invocation() {
             output: String::new(),
             exit_code: Some(0),
             status,
+            app_previews: Vec::new(),
         }))
     };
     log.append(&ThreadEvent::ItemUpdated(ItemUpdatedEvent {
@@ -766,6 +768,7 @@ fn async_verifier_aliases_complete_once_and_use_launch_time_for_freshness() {
                 output: String::new(),
                 exit_code,
                 status,
+                app_previews: Vec::new(),
             }))
         };
         item(&log, "a", "launch:output", None, output(ToolCallStatus::Completed, None));
@@ -947,6 +950,7 @@ fn verifier_freshness_uses_execution_start_instead_of_streamed_argument_start() 
                 output: String::new(),
                 status,
                 exit_code,
+                app_previews: Vec::new(),
             })),
         };
         log.append(&ThreadEvent::ItemStarted(ItemStartedEvent { item: invocation(ToolCallStatus::InProgress, None) }))

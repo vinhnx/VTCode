@@ -1,14 +1,22 @@
 use hashbrown::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::warn;
 
 use vtcode_agent_plugins::{LoadedPlugin, plugin_roots_for};
 use vtcode_config::mcp::McpProviderConfig;
 
+/// Discover plugin MCP servers from the workspace and user plugin roots.
 pub fn discover_plugin_mcp_providers(workspace_root: &Path) -> Vec<McpProviderConfig> {
-    let mut providers = Vec::new();
+    discover_plugin_mcp_providers_in_roots(&plugin_roots_for(workspace_root))
+}
 
-    let roots = plugin_roots_for(workspace_root);
+/// Discover plugin MCP servers from explicit plugin roots.
+///
+/// Roots are visited in order with each root scanned at most once. Callers that
+/// already resolved roots pass them here instead of scanning the host home
+/// directory again through [`discover_plugin_mcp_providers`].
+pub(crate) fn discover_plugin_mcp_providers_in_roots(roots: &[PathBuf]) -> Vec<McpProviderConfig> {
+    let mut providers = Vec::new();
 
     // Deduplicate roots so a workspace under the home directory does not cause
     // the same plugin root to be scanned twice.
@@ -16,7 +24,7 @@ pub fn discover_plugin_mcp_providers(workspace_root: &Path) -> Vec<McpProviderCo
     let mut unique_roots = Vec::new();
     for root in roots {
         if seen.insert(root.clone()) {
-            unique_roots.push(root);
+            unique_roots.push(root.clone());
         }
     }
 

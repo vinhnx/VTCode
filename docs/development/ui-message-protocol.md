@@ -14,7 +14,9 @@ names/types, and handle method signatures. They add no runtime state or allocati
 
 | Shared variant | Payload | Handle method |
 | --- | --- | --- |
+| `Diagnostic` | Boxed canonical diagnostic with incident identity | `diagnostic` |
 | `AppendLine` | Message kind and ordered styled segments | `append_line` |
+| `AppendLines` | Ordered transcript lines (kind plus segments each) | `append_lines` |
 | `AppendPastedMessage` | Kind, literal text, supplied line count | `append_pasted_message` |
 | `Inline` | Kind and one styled segment | `inline` |
 | `ReplaceLast` | Replacement count, kind, nested segment rows, optional link rows | `replace_last`, `replace_last_with_links` |
@@ -30,6 +32,15 @@ recomputed, replacement row order and empty rows are retained, `None` links stay
 distinct from `Some(empty)`, and segment styles retain their existing `Arc`.
 App-only capture/review commands and transient/deferred input are not generated
 by these macros.
+
+`AppendLines` is the batched transcript append path. `AnsiRenderer` buffers lines
+with `begin_transcript_batch`/`end_transcript_batch` (or `transcript_batch`, which
+flushes even on error) and delivers them as one command. The core session appends
+every line under the same follow-scroll rule as `AppendLine` (a pinned view stays
+at the bottom; a scrolled-up view keeps its position), so resume and rewind — which
+start from the bottom — paint the final transcript in a single frame. The runner
+also folds adjacent queued `AppendLine`s into one `AppendLines` command, bounded by
+a raw-command budget, so a streamed burst paints in one frame without starving input.
 
 ## Common control forwarding
 
@@ -111,3 +122,13 @@ Full core-frame regressions cover transcript, input, and status at 120×40 and
 44×18, including restoration after Escape. PTY output and buffered render tests
 establish these contracts; rendered host acceptance still requires a live visual
 walkthrough.
+
+## Operational diagnostics
+
+`Diagnostic` carries the canonical exec-event payload through both protocols.
+The session replaces an incident by `correlation_id`, retains its complete payload,
+and renders its summary for every severity. Click or F8 toggles details locally;
+an informational incident keeps a machine-readable payload out of the transcript;
+Transcript Review retains the complete details. The existing Markdown renderer
+owns wrapping and plan-wrapper removal. See [diagnostics](diagnostics.md) for
+redaction, canonical persistence, headless behavior, and the producer audit.

@@ -225,32 +225,26 @@ const fn default_tracker_auto_continue() -> bool {
 const fn default_tracker_cross_turn_turns() -> u8 {
     32
 }
-/// Autonomous recovery policy for the anti-blind-editing verification gate.
+/// Completion verification and bounded corrective recovery.
 ///
-/// After 6 consecutive successful mutations without verification, text-only
-/// responses no longer block the turn immediately: the harness grants bounded
-/// directive retries naming the exact project verifier, then (when
-/// `auto_execute` is set) runs that verifier itself through the normal tool
-/// pipeline instead of forcing the user to type `continue`. A verifier that
-/// keeps failing escalates to a manual blocked handoff carrying the failure
-/// log after `max_consecutive_failures` consecutive failures.
+/// Editing remains available while checks are missing. At completion, run
+/// missing checks through the normal pipeline. At most one corrective pass
+/// per request is allowed; legacy numeric settings remain parseable and may
+/// disable or tighten this bound, never expand it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VerificationAutoRecoveryConfig {
-    /// Run the detected project verifier through the normal tool pipeline
-    /// when the model exhausts its directive retries without verifying.
-    /// Default: true. Set to false to restore directive-only recovery.
+    /// Run missing interactive completion checks through the normal pipeline.
+    /// Default: true. False disables automatic interactive execution and
+    /// corrective recovery; headless mandatory verification remains required.
     #[serde(default = "default_verification_auto_execute")]
     pub auto_execute: bool,
-    /// Bounded in-turn directive retries granted when the model emits text
-    /// instead of a verifier while the gate is pending. Each grant resets the
-    /// text-response streak once and injects a project-aware directive.
-    /// Default: 2.
+    /// Legacy in-turn recovery bound. Zero disables the corrective pass;
+    /// nonzero values permit at most one pass. Default: 2 for compatibility.
     #[serde(default = "default_verification_in_turn_attempts")]
     pub in_turn_attempts: u8,
-    /// Autonomous cross-turn recovery turns scheduled after a
-    /// verification-blocked turn before a manual blocked handoff is written.
-    /// Default: 2.
+    /// Legacy cross-turn recovery bound. Zero disables the corrective pass;
+    /// nonzero values permit at most one pass per request. Default: 2 for compatibility.
     #[serde(default = "default_verification_cross_turn_turns")]
     pub cross_turn_turns: u8,
     /// Explicit verifier command overriding project-marker detection

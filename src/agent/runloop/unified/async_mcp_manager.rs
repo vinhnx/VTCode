@@ -647,8 +647,14 @@ mod tests {
         fs::write(plugin_root.join("bin/server"), "#!/bin/sh\necho ok").expect("write server");
 
         let providers = discover_plugin_mcp_providers(workspace.path());
-        assert_eq!(providers.len(), 1);
-        assert_eq!(providers[0].name, "test-plugin.plugin-server");
+        // Discovery also scans the machine's `~/.agents/plugins`, so assert on the
+        // fixture plugin's contribution rather than the total provider count.
+        let fixture_provider_names = providers
+            .iter()
+            .map(|provider| provider.name.as_str())
+            .filter(|name| name.starts_with("test-plugin."))
+            .collect::<Vec<_>>();
+        assert_eq!(fixture_provider_names, vec!["test-plugin.plugin-server"]);
 
         let mut config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         config.providers.extend(providers);

@@ -89,46 +89,6 @@ pub(crate) async fn handle_manage_secrets(
             handle_migrate_secrets(&mut ctx, target).await?;
             Ok(SlashCommandControl::Continue)
         }
-        SecretCommandAction::Help => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Secret management — store API keys securely (keyring or encrypted file).")?;
-            ctx.renderer.line(MessageStyle::Output, "")?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /secret                          Interactive secret manager (TUI)")?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /secret list                     Show all provider key statuses")?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /secret status [provider] [key]  Check a specific provider's key")?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /secret add <provider> [key]     Store a new API key securely")?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /secret delete <provider> [key]  Remove a stored key")?;
-            ctx.renderer.line(
-                MessageStyle::Output,
-                "  /secret migrate [provider]       Move keys from .env to secure storage",
-            )?;
-            ctx.renderer.line(MessageStyle::Output, "")?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Providers: openai, anthropic, openrouter, copilot, google, bedrock, mistral, groq, ...",
-            )?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "OAuth/subscription providers (openai, openrouter, copilot) use /login instead of /secret.",
-            )?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /login openai     ChatGPT subscription auth (no API key needed)")?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /login openrouter  OpenRouter OAuth")?;
-            ctx.renderer
-                .line(MessageStyle::Output, "  /login copilot    GitHub Copilot managed auth")?;
-            ctx.renderer.line(MessageStyle::Output, "")?;
-            ctx.renderer.line(
-                MessageStyle::Output,
-                "Get your API key from the provider's platform page (e.g. https://platform.openai.com/api-keys).",
-            )?;
-            Ok(SlashCommandControl::Continue)
-        }
     }
 }
 
@@ -307,6 +267,19 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, target: SecretTarg
         )?;
         return Ok(SecretEntryOutcome::Continue);
     }
+    // The secure prompt is a modal: without inline UI the wait below would
+    // wedge the turn until cancel. Desktop users get the native Settings
+    // form instead; everyone else can use the terminal command.
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "API key entry needs an interactive surface. In VT Code Desktop, store the key from Settings → VT Code; or run `vtcode secret add {}` in a terminal.",
+                target.provider_name
+            ),
+        )?;
+        return Ok(SecretEntryOutcome::Continue);
+    }
     let label = target.label.as_str();
     let env_key = target.env_key.as_str();
     let prompt_label = format!("{} API key ({})", label, env_key);
@@ -436,6 +409,19 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, target: SecretT
         ctx.renderer.line(
             MessageStyle::Info,
             &format!("{} does not use a static API key; use its configured authentication flow instead.", target.label),
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+    // Deletion confirms through the secure prompt modal, which does not
+    // exist without inline UI; fail closed with the terminal equivalent
+    // instead of wedging the turn until cancel.
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "API key deletion needs an interactive confirmation. Run `vtcode secret delete {}` in a terminal.",
+                target.provider_name
+            ),
         )?;
         return Ok(SlashCommandControl::Continue);
     }

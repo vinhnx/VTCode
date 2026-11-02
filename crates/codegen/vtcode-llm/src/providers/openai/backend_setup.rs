@@ -44,7 +44,6 @@ pub(crate) enum ChatGptSubscriptionAuthSource {
     /// Responses request/stream parity is moved behind Rig. Protected by
     /// `chatgpt_auth_backend_setup_keeps_compatibility_auth_behind_boundary`.
     /// Remove once no supported config path still needs the legacy auth shape.
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     CodexAppServerCompatibility,
 }
 
@@ -159,7 +158,6 @@ impl OpenAIBackendSetup {
         )
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) fn chatgpt_subscription_compatibility(base_url: String) -> Self {
         Self::new(
             OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::CodexAppServerCompatibility),

@@ -281,6 +281,11 @@ pub trait LLMProvider: Send + Sync {
         false
     }
 
+    /// Effective requested Responses cache lifetime, when cache options are emitted.
+    fn requested_prompt_cache_ttl(&self, _model: &str) -> Option<vtcode_config::core::prompt_cache::PromptCacheTtl> {
+        None
+    }
+
     /// Whether the provider supports vision (image analysis) for given model
     fn supports_vision(&self, _model: &str) -> bool {
         false
@@ -524,6 +529,10 @@ impl LLMProvider for ContextWindowProvider {
 
     fn supports_context_caching(&self, model: &str) -> bool {
         self.inner.supports_context_caching(model)
+    }
+
+    fn requested_prompt_cache_ttl(&self, model: &str) -> Option<vtcode_config::core::prompt_cache::PromptCacheTtl> {
+        self.inner.requested_prompt_cache_ttl(model)
     }
 
     fn supports_vision(&self, model: &str) -> bool {

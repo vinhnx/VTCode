@@ -68,12 +68,14 @@ impl FilteringMetrics {
     }
 
     pub fn avg_duration_ms(&self) -> u64 {
-        if self.total_operations > 0 {
-            let total: u64 = self.recent_operations.iter().map(|r| r.duration_ms).sum();
-            total / self.total_operations.min(self.recent_operations.len() as u64)
-        } else {
-            0
+        if self.total_operations == 0 {
+            return 0;
         }
+        let total: u64 = self.recent_operations.iter().map(|r| r.duration_ms).sum();
+        // `recent_operations` is a bounded ring buffer, and a deserialized
+        // snapshot can report operations with an empty window, so divide by the
+        // window we actually summed over rather than the lifetime counter.
+        total.checked_div(self.recent_operations.len() as u64).unwrap_or(0)
     }
 }
 
@@ -145,5 +147,30 @@ mod tests {
 
         assert_eq!(metrics.total_operations, 150);
         assert_eq!(metrics.recent_operations.len(), 100);
+    }
+
+    #[test]
+    fn avg_duration_uses_the_sampled_window_without_dividing_by_zero() {
+        let mut metrics = FilteringMetrics::new();
+        assert_eq!(metrics.avg_duration_ms(), 0, "no operations recorded");
+
+        metrics.record_operation("filter".to_owned(), 10, 5, 40);
+        metrics.record_operation("filter".to_owned(), 10, 5, 60);
+        assert_eq!(metrics.avg_duration_ms(), 50);
+
+        // A snapshot can report lifetime operations with an empty sample window
+        // (the ring buffer is not part of the summary contract).
+        let mut deserialized: FilteringMetrics = serde_json::from_value(serde_json::json!({
+            "total_operations": 7,
+            "total_input_bytes": 0,
+            "total_output_bytes": 0,
+            "operation_distribution": {},
+            "recent_operations": [],
+        }))
+        .expect("summary snapshot deserializes");
+        assert_eq!(deserialized.avg_duration_ms(), 0);
+
+        deserialized.recent_operations.clear();
+        assert_eq!(deserialized.avg_duration_ms(), 0);
     }
 }

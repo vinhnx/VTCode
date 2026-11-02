@@ -22,6 +22,7 @@ use crate::core::agent::types::AgentType;
 use crate::core::loop_detector::LoopDetector;
 use crate::llm::collect_single_response;
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolCall, ToolDefinition};
+use crate::metrics::MetricsCollector;
 use crate::skills::types::Skill;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::ToolRegistry;
@@ -34,7 +35,7 @@ use serde_json::Value;
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
@@ -807,16 +808,29 @@ pub async fn execute_skill_with_sub_llm(
 pub struct SkillToolAdapter {
     skill: Skill,
     fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
+    metrics: Option<Arc<MetricsCollector>>,
 }
 
 impl SkillToolAdapter {
     /// Create a new skill tool adapter
     pub fn new(skill: Skill) -> Self {
-        SkillToolAdapter { skill, fork_executor: None }
+        SkillToolAdapter { skill, fork_executor: None, metrics: None }
     }
 
     pub fn with_fork_executor(skill: Skill, fork_executor: Arc<dyn ForkSkillExecutor>) -> Self {
-        SkillToolAdapter { skill, fork_executor: Some(fork_executor) }
+        SkillToolAdapter {
+            skill,
+            fork_executor: Some(fork_executor),
+            metrics: None,
+        }
+    }
+
+    /// Attach a metrics collector so executions feed the skill health report.
+    /// Without one, executions run unrecorded.
+    #[must_use]
+    pub fn with_metrics(mut self, metrics: Arc<MetricsCollector>) -> Self {
+        self.metrics = Some(metrics);
+        self
     }
 
     /// Get reference to underlying skill
@@ -862,13 +876,18 @@ impl Tool for SkillToolAdapter {
     async fn execute(&self, args: Value) -> Result<Value> {
         info!("Skill tool executing: {}", self.skill.name());
 
+        let started = Instant::now();
         let result = if skill_runs_in_fork(&self.skill) {
-            self.execute_forked_skill(args).await?
+            self.execute_forked_skill(args).await
         } else {
-            self.execute_skill_with_lm(args).await?
+            self.execute_skill_with_lm(args).await
         };
+        if let Some(metrics) = &self.metrics {
+            let duration_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+            metrics.record_skill_execution(self.skill.name().to_string(), duration_ms, result.is_ok());
+        }
 
-        Ok(result)
+        result
     }
 
     fn name(&self) -> &str {

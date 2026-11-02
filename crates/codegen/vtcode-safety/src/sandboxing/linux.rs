@@ -55,10 +55,29 @@ pub fn landlock_supported() -> bool {
 }
 
 /// Return the kernel's Landlock ABI version, or `None` when unsupported.
+///
+/// # Contract
+///
+/// - Ensures: `Some(version)` with `version >= 1` when the kernel enforces
+///   Landlock (Linux 5.13+), and `None` for `ENOSYS`/`EOPNOTSUPP` or any other
+///   `-errno` result. Absence of overflow: the raw `c_long` is narrowed with
+///   `u32::try_from`, so a negative or oversized value maps to `None` instead
+///   of truncating. Total and pure (one syscall, no allocation).
+#[allow(
+    unsafe_code,
+    reason = "The Landlock ABI probe is a bare `landlock_create_ruleset` syscall; libc exposes no safe wrapper for it."
+)]
 fn probe_landlock_abi() -> Option<u32> {
     // landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)
     // returns the highest supported ABI version on success.
     const LANDLOCK_CREATE_RULESET_VERSION: libc::c_ulong = 1 << 0;
+    // SAFETY: `libc::syscall` is invoked with the documented
+    // `landlock_create_ruleset` version-probe arguments — a null ruleset
+    // pointer, a zero size, and the `LANDLOCK_CREATE_RULESET_VERSION` flag.
+    // With a null ruleset the kernel dereferences no user memory and writes
+    // nothing back; it only returns a `c_long` (a non-negative ABI version, or
+    // `-errno`), so no pointer-validity, aliasing, or initialization
+    // precondition can be violated.
     let version = unsafe {
         libc::syscall(
             libc::SYS_landlock_create_ruleset,

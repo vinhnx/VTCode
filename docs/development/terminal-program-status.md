@@ -7,22 +7,26 @@ See also Mitchell Hashimoto's rationale in
 the program that knows its state should report it over the pty, so inboxes and
 terminals do not have to guess from window-title spinners or screen contents,
 or integrate with per-inbox socket APIs.
-Reporting is disabled by default. Enable it in any normal configuration layer:
+Reporting is on by default. Disable it in any normal configuration layer:
 
 ```toml
 [ui.program_status]
-enabled = true
+enabled = false
 ```
 
 Valid live configuration reloads apply this setting. Disabling clears only the current session's owned subtree.
 Reports go to the interactive TUI's stderr terminal stream, only when stdin, stdout, and stderr are terminals.
-Headless, ACP, JSON, and redirected output remain silent. No terminal feature query or additional input reader is used.
+Headless, ACP, JSON, and redirected output remain silent, as do terminals whose `VTE_VERSION` predates the parser
+that safely ignores unknown OSC sequences (pre-0.54, mirroring Codex). No terminal feature query or additional
+input reader is used.
 
 ## Adoption and existing telemetry
 
-Keep reporting opt-in while terminal compatibility is being established. Conforming terminals ignore unknown OSC
-sequences, but wire tests do not prove how a terminal, recorder, or multiplexer handles them. Terminal names and
-`TERM` values alone do not establish support.
+Reporting shipped opt-in until terminal compatibility was established, then moved to on-by-default for Codex parity:
+conforming terminals ignore unknown OSC sequences, Codex emits unconditionally at scale with only a VTE-version
+guard, and VT Code keeps the stricter all-streams-terminal gate plus the same VTE guard. Wire tests still do not
+prove how every recorder or multiplexer handles the bytes, so the explicit `enabled = false` override stays
+available. Terminal names and `TERM` values alone do not establish support.
 
 The adapter projects current UI/runtime facts. It does not write another history file or feed ATIF or the trajectory
 logger. Keep these responsibilities distinct:
@@ -44,10 +48,35 @@ may still send one-time OSC 9 / OSC 777 / bell attention signals for HITL waits;
 records are state. OSC 133 shell integration continues to mark prompt/command boundaries; it cannot describe what
 the program is doing or whether it is stuck.
 
-Before adding an automatic mode, verify Rex presentation and representative unsupported terminals, recorders,
-multiplexers, and SSH paths. Positive terminfo `Pst` advertising can permit reports; its absence does not prove
-unsupported status. A protocol query reply is authoritative. Any future query must share the existing terminal
+Before the default-on change, Rex parsing was verified live (2026-10-31): vtcode-style child reports and
+root-style reports round-tripped through a scratch Rex session's `program_status` API with correct
+state/kind/progress/app/title/msg. Positive terminfo `Pst` advertising can permit reports; its absence does not
+prove unsupported status. A protocol query reply is authoritative. Any future query must share the existing terminal
 input reader and preserve startup/input ordering. Keep explicit enable/disable overrides available.
+
+## Terminal pane icons (Rex/Ghostty)
+
+Status records drive the working/blocked/completion chrome; the provider icon tile itself is resolved
+terminal-side from a built-in program registry keyed by the OSC 7501 `app` id (and the foreground process
+name). Rex ships icons for its known agents (Claude Code, Codex, OpenCode, …) but has no documented
+custom-program-icon mechanism, so a `vtcode` tile appears only after Rex maps the id. VT Code's side of that
+registration is fixed and ready:
+
+- `app` id: `vtcode` (emitted on every report; see `encode_report`)
+- Process names: `vtcode` (binary)
+- Artwork: `resources/icons/vtcode-mono.svg` (monochrome V mark, white on transparent for dark terminal
+  chrome), with `vtcode-mono-32.png` / `vtcode-mono-120.png` raster handoffs
+
+When requesting the mapping upstream, point at this section plus the icon files (Rex is closed-source beta
+with no public tracker; the channel is the private Rex Beta Discord). No CLI-side escape sequence can set
+profile artwork; do not fork the adapter to spoof another program's id.
+
+## iTerm2 session status (OSC 21337)
+
+Direct iTerm2 sessions (no tmux/screen) additionally receive the proprietary session-status pill alongside the
+7501 records, mirroring Codex: the parent state maps to `Idle` (green), `Working` (orange), or `Waiting` (blue)
+with the same generic detail label, finished states read as idle, and restoration clears the pill. Children,
+progress percents, and kinds stay 7501-only; the pill is one session-level status, deduplicated like the records.
 
 ## Lifecycle
 
@@ -106,13 +135,14 @@ and screen-reader settings remain independent.
 Run focused regressions with:
 
 ```sh
-cargo nextest run --locked --config-file .github/nextest.toml -p vtcode-commons -p vtcode-ui -p vtcode-config -p vtcode -p vtcode-core -E 'test(program_status) | test(background_completion) | test(local_agents)'
+cargo nextest run --locked --config-file .config/nextest.toml -p vtcode-commons -p vtcode-ui -p vtcode-config -p vtcode -p vtcode-core -E 'test(program_status) | test(background_completion) | test(local_agents)'
 ```
 
-PTY captures validate default-off silence, live enabling/disabling, cancellation, failure, wire ordering, and silence
-when any standard stream is redirected. On macOS they also check that `/usr/bin/script` retains the reports before
-restoration. These byte checks do not prove recorder playback presentation. Rex visual acceptance requires an
-installed Rex terminal; unit and PTY checks alone do not prove its presentation behavior.
+PTY captures validate explicit-disable silence, live enabling/disabling, cancellation, failure, wire ordering,
+and silence when any standard stream is redirected. On macOS they also check that `/usr/bin/script` retains the
+reports before restoration. These byte checks do not prove recorder playback presentation. Rex record parsing was
+verified live through its `program_status` API; visual icon-tile acceptance needs the upstream registry mapping
+described above.
 
 Manual acceptance should cover:
 

@@ -18,6 +18,8 @@ pub struct HarnessContext {
     session_id: Arc<ArcSwap<String>>,
     task_id: Arc<ArcSwapOption<String>>,
     pub(super) completion_verification: Arc<parking_lot::Mutex<super::completion_verification::CompletionVerification>>,
+    pub(super) fetch_origin_attempts: Arc<crate::tools::web_fetch::request_budget::FetchRequestBudget>,
+    pub(super) terminal_exec_results: Arc<parking_lot::Mutex<std::collections::HashSet<String>>>,
     pub(super) tracker_adopted: Arc<AtomicBool>,
     pub(super) decision_validator:
         Arc<parking_lot::RwLock<Option<crate::core::agent::events::DecisionEvidenceValidator>>>,
@@ -43,6 +45,8 @@ impl Default for HarnessContext {
             session_id: Arc::new(ArcSwap::from_pointee(session_id)),
             task_id: Arc::new(ArcSwapOption::empty()),
             tracker_adopted: Arc::default(),
+            fetch_origin_attempts: Arc::default(),
+            terminal_exec_results: Arc::default(),
             completion_verification: Arc::default(),
             decision_validator: Arc::default(),
         }
@@ -56,6 +60,8 @@ impl HarnessContext {
             session_id: Arc::new(ArcSwap::from_pointee(session_id.into())),
             task_id: Arc::new(ArcSwapOption::empty()),
             tracker_adopted: Arc::default(),
+            fetch_origin_attempts: Arc::default(),
+            terminal_exec_results: Arc::default(),
             completion_verification: Arc::default(),
             decision_validator: Arc::default(),
         }

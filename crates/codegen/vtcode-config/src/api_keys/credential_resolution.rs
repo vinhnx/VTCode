@@ -34,7 +34,7 @@ pub struct ResolvedCredential {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CredentialSource {
     /// Process environment variable — covers shell exports (e.g. `~/.zshrc`)
-    /// and values loaded from a workspace `.env` by `load_dotenv()`.
+    /// inherited by the process at launch.
     Env,
     /// Workspace `.env` file.
     Workspace,
@@ -83,6 +83,15 @@ pub fn get_api_key_with_mode(
     _sources: &ApiKeySources,
     storage_mode: crate::auth::AuthCredentialsStoreMode,
 ) -> Result<String> {
+    get_api_key_in_workspace_with_mode(provider, None, storage_mode)
+}
+
+/// Get an API key with optional workspace `.env` lookup and explicit storage mode.
+pub fn get_api_key_in_workspace_with_mode(
+    provider: &str,
+    workspace: Option<&Path>,
+    storage_mode: crate::auth::AuthCredentialsStoreMode,
+) -> Result<String> {
     let normalized_provider = provider.trim().to_lowercase();
     let inferred_env = api_key_env_var(&normalized_provider);
 
@@ -91,9 +100,14 @@ pub fn get_api_key_with_mode(
     // providers.
     match normalized_provider.as_str() {
         "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "llama-cpp" => {
-            return Ok(read_env_var(&inferred_env)
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_default());
+            if let Some(secret) = read_env_var(&inferred_env).filter(|value| !value.trim().is_empty()) {
+                return Ok(secret);
+            }
+            return Ok(match workspace {
+                Some(workspace) => crate::workspace_env::read_workspace_env_value(workspace, &inferred_env)?,
+                None => None,
+            }
+            .unwrap_or_default());
         }
         "copilot" => {
             return Err(anyhow::anyhow!(
@@ -108,7 +122,8 @@ pub fn get_api_key_with_mode(
         _ => {}
     }
 
-    if let Some(resolved) = resolve_credential_with_mode(&normalized_provider, &inferred_env, None, storage_mode)? {
+    if let Some(resolved) = resolve_credential_with_mode(&normalized_provider, &inferred_env, workspace, storage_mode)?
+    {
         if let Some(secret) = resolved.secret {
             return Ok(secret);
         }

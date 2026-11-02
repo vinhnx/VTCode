@@ -34,7 +34,7 @@ pub(crate) use request::{
     merge_system_prompt_with_history_directives, parse_client_prompt_common, resolve_model, sampling_param_f64,
     validate_request_common, validate_supported_models,
 };
-pub(crate) use streaming::{TaskAbortGuard, spawn_openai_compatible_stream};
+pub(crate) use streaming::spawn_openai_compatible_stream;
 pub use token_count::{
     execute_token_count_request, parse_prompt_tokens_from_count_response, strip_generation_controls_for_token_count,
 };

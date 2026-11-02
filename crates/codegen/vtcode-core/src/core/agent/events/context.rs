@@ -109,6 +109,45 @@ mod tests {
     }
 
     #[test]
+    fn session_message_sends_emit_correlated_harness_status() {
+        let mut tracker = ExecutionContextTracker::default();
+        let current = tracker.begin("sess-a", "turn", "Ask peer", InputOrigin::User);
+        let output = json!({"message_id": "msg-1", "to_session": "sess-b"});
+
+        for tool in ["ask_session", "answer_session"] {
+            let event = tracker.session_message_event("call", tool, &output).unwrap();
+            let ThreadEvent::ItemCompleted(completed) = event else {
+                panic!("status event expected for {tool}")
+            };
+            assert_eq!(completed.item.id, "call:session-message");
+            let context = completed.item.context.unwrap();
+            assert_eq!(context.task_id, current.task_id);
+            assert_eq!(context.actor_id, "sess-a");
+            let ThreadItemDetails::Harness(status) = completed.item.details else {
+                panic!("harness status expected for {tool}")
+            };
+            assert_eq!(status.event, crate::exec::events::HarnessEventKind::SessionMessageSent);
+            assert_eq!(status.session_id.as_deref(), Some("sess-b"));
+            assert_eq!(status.correlation_id.as_deref(), Some("msg-1"));
+        }
+
+        // Discovery and unrelated tools produce no status event.
+        assert!(tracker.session_message_event("call", "list_sessions", &output).is_none());
+        assert!(tracker.session_message_event("call", "exec_command", &output).is_none());
+        // Malformed outputs (missing routing fields) are ignored, not panicked on.
+        assert!(
+            tracker
+                .session_message_event("call", "ask_session", &json!({"to_session": "sess-b"}))
+                .is_none()
+        );
+        assert!(
+            tracker
+                .session_message_event("call", "ask_session", &json!({"message_id": "msg-1"}))
+                .is_none()
+        );
+    }
+
+    #[test]
     fn exec_session_mapping_is_bounded_and_isolates_actors_and_unrelated_sessions() {
         let mut tracker = ExecutionContextTracker::default();
         let original = tracker.begin("root", "turn-1", "Verify", InputOrigin::User);
@@ -359,6 +398,53 @@ impl ExecutionContextTracker {
         }))
     }
 
+    /// Preserve peer-messaging sends as harness status before tool-output compaction.
+    ///
+    /// Mirrors [`Self::delegation_status_event`]: a successful `ask_session` or
+    /// `answer_session` call fans out a `SessionMessageSent` event carrying the
+    /// peer session and the mailbox message id as `correlation_id`, so the
+    /// later `SessionMessageReceived` drain event can be linked to this send.
+    pub fn session_message_event(
+        &self,
+        call_item_id: &str,
+        tool_name: &str,
+        output: &serde_json::Value,
+    ) -> Option<ThreadEvent> {
+        use crate::config::constants::tools;
+        use crate::exec::events::{HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ThreadItem};
+        if !matches!(tool_name, tools::ASK_SESSION | tools::ANSWER_SESSION) {
+            return None;
+        }
+        let current = self.current.as_ref()?;
+        let message_id = output.get("message_id")?.as_str()?;
+        let to_session = output.get("to_session")?.as_str()?;
+        if message_id.is_empty() || to_session.is_empty() || to_session.len() > MAX_EXEC_ID_BYTES {
+            return None;
+        }
+        let item: HarnessEventItem = serde_json::from_value(serde_json::json!({
+            "event": HarnessEventKind::SessionMessageSent,
+            "message": format!("Message to session {to_session}"),
+            "task_id": current.task_id,
+            "session_id": to_session,
+            "correlation_id": message_id,
+        }))
+        .ok()?;
+        Some(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: format!("{call_item_id}:session-message"),
+                context: Some(Box::new(ItemContext {
+                    task_id: current.task_id.clone(),
+                    turn_id: current.turn_id.clone(),
+                    actor_id: current.actor_id.clone(),
+                    parent_actor_id: None,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    activity: None,
+                })),
+                details: ThreadItemDetails::Harness(Box::new(item)),
+            },
+        }))
+    }
+
     /// A new idle user request starts a task; other origins retain its root goal.
     pub fn begin(&mut self, actor: &str, turn: &str, input: &str, origin: InputOrigin) -> ExecutionContext {
         let previous = self.current.as_ref().filter(|_| origin != InputOrigin::User);
@@ -590,6 +676,7 @@ impl ExecutionContextTracker {
             exit_code,
             spool_path,
             output,
+            Vec::new(),
         );
         if let ThreadEvent::ItemCompleted(completed) = &mut event {
             completed.item.id = format!("{}:exec-session-output", launch.call_item_id);

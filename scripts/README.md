@@ -227,12 +227,10 @@ openai_api_key = "your_openai_api_key_here"
 
 ## Integration with CI/CD
 
-These scripts run the same checks as our GitHub Actions workflows:
+The repository's GitHub Actions workflows:
 
-- `ci.yml` - Main CI pipeline
-- `code-quality.yml` - Code quality checks
-- `development.yml` - Development workflow
-- `nightly.yml` - Nightly builds
+- `build-linux-windows.yml` - Release binary builds (Linux/Windows)
+- `webmcp.yml` - WebMCP browser editor typecheck, tests, and deploy
 
 ## Pre-commit Hooks
 

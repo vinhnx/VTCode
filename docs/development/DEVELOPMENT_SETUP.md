@@ -4,7 +4,8 @@ Canonical local setup for contributing to VT Code.
 
 ## Prerequisites
 
-- Rust toolchain (stable) via [rustup](https://rustup.rs/)
+- Rust toolchain (stable) via [rustup](https://rustup.rs/). The repository pins an exact release in
+  `rust-toolchain.toml`; see [Rust Toolchain and MSRV](./toolchain-updates.md) for the pin map and bump checklist.
 - Git
 - An LLM provider credential: either (a) a shell/workspace env var like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
   `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `STEPFUN_API_KEY`, or `MINIMAX_API_KEY`, (b) an
@@ -32,8 +33,11 @@ vtcode secret status mimo --key-name MIMO_TOKEN_PLAN_KEY
 ```
 
 Environment variables and workspace `.env` values take precedence over secure storage. Existing provider-only entries
-are migrated lazily only when the requested key is the provider default; non-default profiles require an explicit key
-name. Configured `[[custom_providers]]` and `[providers.<name>]` overrides use the same identity rules.
+are migrated lazily only when the requested key is the provider default and the legacy account is unambiguous;
+non-default profiles require an explicit key name. Configured `[[custom_providers]]` and `[providers.<name>]`
+overrides use the same identity rules.
+Workspace `.env` values are scoped to credential lookup. Older key-scoped secure-storage entries cannot be safely
+attributed and must be added again with `vtcode secret add`.
 
 For debug or release launches:
 
@@ -45,7 +49,12 @@ For debug or release launches:
 On macOS 14 and later, `run-debug.sh` packages the freshly built CLI into a local app bundle and uses `gktool` to
 prewarm Gatekeeper before launching it. This avoids the brief first-launch “Verifying…” sheet after a debug rebuild. If
 Gatekeeper cannot scan the bundle, the launcher stops instead of starting a process that could repeatedly show the sheet
-when VT Code starts its helpers.
+when VT Code starts its helpers. The bundle is only re-copied, re-signed, and re-scanned when the debug binary actually
+changed, so relaunching without edits skips that work and keeps the bundle signature stable for Gatekeeper's cache.
+
+`run-debug.sh` also forwards extra command-line arguments to the binary, so `./scripts/run-debug.sh --resume` runs a
+resumed debug session. It appends those arguments after the built-in defaults and after the `MODEL`, `PROVIDER`, and
+`WORKSPACE` environment variables, so an explicit argument overrides the environment-derived one.
 
 ## Daily Development Loop
 

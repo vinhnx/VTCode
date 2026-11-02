@@ -1,6 +1,7 @@
 //! lmstudio_presets — provider preset definitions for lmstudio.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn lmstudio_presets() -> Vec<ModelPreset> {
@@ -13,10 +14,7 @@ pub(crate) fn lmstudio_presets() -> Vec<ModelPreset> {
             description: "OpenAI's open-weight GPT-OSS 20B model served locally via LM Studio".to_string(),
             provider: Provider::LmStudio,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -30,10 +28,7 @@ pub(crate) fn lmstudio_presets() -> Vec<ModelPreset> {
             description: "Meta Llama 3.1 8B Instruct for general-purpose local inference".to_string(),
             provider: Provider::LmStudio,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -47,10 +42,7 @@ pub(crate) fn lmstudio_presets() -> Vec<ModelPreset> {
             description: "Google Gemma 3 12B IT for local inference".to_string(),
             provider: Provider::LmStudio,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,

@@ -1,6 +1,7 @@
 //! zai_presets — provider preset definitions for zai.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn zai_presets() -> Vec<ModelPreset> {
@@ -15,18 +16,9 @@ pub(crate) fn zai_presets() -> Vec<ModelPreset> {
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Max,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast, light reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum deep reasoning (default)".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast, light reasoning"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep thinking"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum deep reasoning (default)"),
             ],
             is_default: false,
             upgrade: None,
@@ -44,18 +36,9 @@ pub(crate) fn zai_presets() -> Vec<ModelPreset> {
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Max,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast, light reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum deep reasoning (default)".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast, light reasoning"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep thinking"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum deep reasoning (default)"),
             ],
             is_default: true,
             upgrade: None,
@@ -73,18 +56,9 @@ pub(crate) fn zai_presets() -> Vec<ModelPreset> {
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Max,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast, light reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum deep reasoning (default)".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast, light reasoning"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep thinking"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum deep reasoning (default)"),
             ],
             is_default: false,
             upgrade: None,
@@ -100,18 +74,9 @@ pub(crate) fn zai_presets() -> Vec<ModelPreset> {
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Max,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast, light reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum deep reasoning (default)".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast, light reasoning"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep thinking"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum deep reasoning (default)"),
             ],
             is_default: false,
             upgrade: None,

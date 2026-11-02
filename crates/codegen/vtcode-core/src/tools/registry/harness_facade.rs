@@ -14,6 +14,7 @@ impl ToolRegistry {
     /// history or explicit continuation. Internal turns must not reset this latch.
     pub fn begin_tracker_request(&self, adopted: bool) {
         self.execution_history.begin_tracker_request();
+        self.harness_context.fetch_origin_attempts.clear();
         if !adopted {
             self.set_required_completion_verifiers(Vec::new());
         }

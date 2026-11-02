@@ -39,7 +39,7 @@ pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
 pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode, GeminiPromptCacheSettings,
     MoonshotPromptCacheSettings, OpenAIPromptCacheKeyMode, OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings,
-    PromptCacheRetention, PromptCachingConfig, ProviderPromptCachingConfig, ZaiPromptCacheSettings,
+    PromptCacheRetention, PromptCacheTtl, PromptCachingConfig, ProviderPromptCachingConfig, ZaiPromptCacheSettings,
     build_openai_prompt_cache_key, build_session_affinity_prompt_cache_key, map_prompt_cache_key_for_provider,
     session_affinity_key_enabled, session_affinity_provider,
 };

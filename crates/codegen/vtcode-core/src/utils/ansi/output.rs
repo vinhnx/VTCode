@@ -13,6 +13,8 @@ use anyhow::{Result, anyhow};
 use std::io::Write;
 use unicode_width::UnicodeWidthStr;
 
+const RECENT_DIAGNOSTIC_LIMIT: usize = 128;
+
 impl AnsiRenderer {
     pub fn set_table_max_width(&mut self, max_width: Option<usize>) {
         if let Some(sink) = &mut self.sink {
@@ -25,18 +27,89 @@ impl AnsiRenderer {
         self.reasoning_visible || !matches!(style, MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis)
     }
 
-    fn is_diagnostic_error_style(style: MessageStyle) -> bool {
-        matches!(style, MessageStyle::Error | MessageStyle::ToolError)
+    /// Install the canonical event boundary after a thread sink exists.
+    pub fn set_diagnostic_sink(&mut self, sink: DiagnosticSink) {
+        self.diagnostic_sink = Some(sink);
+        self.diagnostic_history.clear();
     }
 
-    fn log_transcript_error(text: &str, style: MessageStyle, suppressed_in_tui: bool) {
-        tracing::error!(
-            target: "vtcode_transcript",
-            style = ?style,
-            suppressed_in_tui,
-            message = %text,
-            "diagnostic error output"
-        );
+    /// Display an operational diagnostic. Payloads must also be sanitized before event persistence.
+    pub fn diagnostic(&mut self, diagnostic: &vtcode_commons::diagnostics::Diagnostic) -> Result<()> {
+        self.display_diagnostic(diagnostic, true)
+    }
+
+    /// Restore an already-durable incident without emitting another event.
+    pub fn restore_diagnostic(&mut self, diagnostic: &vtcode_commons::diagnostics::Diagnostic) -> Result<()> {
+        self.display_diagnostic(diagnostic, false)
+    }
+
+    fn display_diagnostic(
+        &mut self,
+        diagnostic: &vtcode_commons::diagnostics::Diagnostic,
+        persist: bool,
+    ) -> Result<()> {
+        use vtcode_commons::diagnostics::{DiagnosticSeverity, redact_diagnostic};
+        self.flush_compact_command_group();
+        let mut diagnostic = redact_diagnostic(diagnostic);
+        let already_persisted = self.diagnostic_history.iter().any(|previous| previous == &diagnostic);
+        let persistence_error = if !persist || already_persisted {
+            None
+        } else {
+            self.diagnostic_sink.as_ref().and_then(|sink| sink(&diagnostic).err())
+        };
+        if !already_persisted && persistence_error.is_none() && self.diagnostic_sink.is_some() {
+            self.diagnostic_history
+                .retain(|previous| previous.correlation_id != diagnostic.correlation_id);
+            if self.diagnostic_history.len() == RECENT_DIAGNOSTIC_LIMIT {
+                let _ = self.diagnostic_history.pop_front();
+            }
+            self.diagnostic_history.push_back(diagnostic.clone());
+        }
+        if let Some(error) = &persistence_error {
+            if !diagnostic.agent_details.is_empty() {
+                diagnostic.agent_details.push_str("\n\n");
+            }
+            diagnostic
+                .agent_details
+                .push_str("Diagnostic persistence failed; this message may not be saved.\n");
+            diagnostic
+                .agent_details
+                .push_str(&vtcode_commons::sanitizer::sanitize_provider_diagnostic(error.to_string()));
+        }
+        let style = match diagnostic.severity {
+            DiagnosticSeverity::Info => MessageStyle::Info,
+            DiagnosticSeverity::Warning => MessageStyle::Warning,
+            DiagnosticSeverity::Error => MessageStyle::Error,
+        };
+        if let Some(sink) = &self.sink {
+            if persist && self.diagnostic_sink.is_none() {
+                // Secondary renderers retain their owning handle's canonical observer.
+                sink.handle.diagnostic(diagnostic.clone());
+            } else {
+                sink.handle.present_diagnostic(diagnostic.clone());
+            }
+            transcript::append(&diagnostic.text());
+        } else {
+            self.render_markdown(style, &diagnostic.text())?;
+        }
+        if let Some(error) = persistence_error {
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    #[track_caller]
+    fn legacy_diagnostic(&mut self, style: MessageStyle, text: &str) -> Result<()> {
+        if text.trim().is_empty() {
+            return Ok(());
+        }
+        use vtcode_commons::diagnostics::DiagnosticSeverity;
+        let severity = if matches!(style, MessageStyle::Warning) {
+            DiagnosticSeverity::Warning
+        } else {
+            DiagnosticSeverity::Error
+        };
+        self.diagnostic(&vtcode_commons::diagnostics::legacy_ui_diagnostic(severity, text))
     }
 
     pub(super) fn indent_for_style(&self, style: MessageStyle) -> &'static str {
@@ -168,11 +241,16 @@ impl AnsiRenderer {
     }
 
     /// Flush the buffer with the given style
+    #[track_caller]
     pub fn flush(&mut self, style: MessageStyle) -> Result<()> {
         self.flush_compact_command_group();
         if !self.should_render_style(style) {
             self.buffer.clear();
             return Ok(());
+        }
+        if matches!(style, MessageStyle::Error | MessageStyle::ToolError | MessageStyle::Warning) {
+            let text = std::mem::take(&mut self.buffer);
+            return self.legacy_diagnostic(style, &text);
         }
         let indent = self.indent_for_style(style);
         if let Some(sink) = &mut self.sink {
@@ -197,15 +275,14 @@ impl AnsiRenderer {
     }
 
     /// Convenience for writing a single line
+    #[track_caller]
     pub fn line(&mut self, style: MessageStyle, text: &str) -> Result<()> {
         self.flush_compact_command_group();
         if !self.should_render_style(style) {
             return Ok(());
         }
-        let suppress_transcript =
-            Self::is_diagnostic_error_style(style) && self.sink.is_some() && !self.show_diagnostics_in_transcript;
-        if Self::is_diagnostic_error_style(style) {
-            Self::log_transcript_error(text, style, self.sink.is_some());
+        if matches!(style, MessageStyle::Error | MessageStyle::ToolError | MessageStyle::Warning) {
+            return self.legacy_diagnostic(style, text);
         }
         if matches!(style, MessageStyle::Response | MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis) {
             return self.render_markdown(style, text);
@@ -242,14 +319,7 @@ impl AnsiRenderer {
         let dont_split = matches!(style, MessageStyle::Tool | MessageStyle::ToolDetail);
 
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline_with_transcript(
-                style.style(),
-                indent,
-                text,
-                Self::message_kind(style),
-                !suppress_transcript,
-                None,
-            )?;
+            sink.write_multiline_with_transcript(style.style(), indent, text, Self::message_kind(style), true, None)?;
             return Ok(());
         }
 
@@ -382,21 +452,20 @@ impl AnsiRenderer {
     }
 
     /// Write a line with a custom style while preserving the logical message kind.
+    #[track_caller]
     pub fn line_with_override_style(&mut self, fallback: MessageStyle, style: Style, text: &str) -> Result<()> {
         self.flush_compact_command_group();
         let tool_output_id = self.pending_tool_output_anchor.take();
         if !self.should_render_style(fallback) {
             return Ok(());
         }
-        let suppress_transcript =
-            Self::is_diagnostic_error_style(fallback) && self.sink.is_some() && !self.show_diagnostics_in_transcript;
-        if Self::is_diagnostic_error_style(fallback) {
-            Self::log_transcript_error(text, fallback, self.sink.is_some());
+        if matches!(fallback, MessageStyle::Error | MessageStyle::ToolError | MessageStyle::Warning) {
+            return self.legacy_diagnostic(fallback, text);
         }
         let kind = Self::message_kind(fallback);
         let indent = self.indent_for_style(fallback);
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline_with_transcript(style, indent, text, kind, !suppress_transcript, tool_output_id)?;
+            sink.write_multiline_with_transcript(style, indent, text, kind, true, tool_output_id)?;
             self.last_line_was_empty = text.trim().is_empty();
             return Ok(());
         }

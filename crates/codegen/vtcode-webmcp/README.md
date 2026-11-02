@@ -27,8 +27,13 @@ authenticated sessions remain valid; `replace_pairing_for_origin` intentionally 
 
 ## OpenAI-compatible remote MCP
 
+For a local plugin, `vtcode --workspace /absolute/path --quiet webmcp stdio --companion`
+serves the same MCP tools through process-owned stdin/stdout, with no listener or OAuth
+configuration. EOF shuts down the service and owned tasks. Omit `--companion` for read-only
+search/fetch. Workspace trust and exec permissions remain enforced by the binary.
+
 `vtcode webmcp serve` has an independent, opt-in read-only MCP surface. It mounts modern Streamable HTTP at `/mcp` and
-legacy HTTP+SSE at `/sse/`, with session messages at `/messages/{session_id}`. The only advertised tools are:
+legacy HTTP+SSE at `/sse/`, with session messages at `/messages/{session_id}`. The default advertised tools are:
 
 - `search({ query })` → `{ results: [{ id, title, url }] }`
 - `fetch({ id })` → `{ id, title, text, url, metadata? }`
@@ -38,6 +43,11 @@ deterministic and case-insensitive, with defaults of 20 results, 256 scanned fil
 Both tools return structured content and matching JSON text content and are marked read-only, non-destructive,
 idempotent, and closed world. Citation URLs are empty unless a prefix is configured; the crate never serves workspace
 files over HTTP.
+
+Companion coding tasks are a separate `--mcp --companion` opt-in. They add `start_task`, `get_task`, and
+`cancel_task` through a binary-owned exec service. See the [companion
+guide](../../../docs/development/vtcode-companion.md) for planning, permissions, cancellation, evidence, and
+packaging.
 
 The listener remains loopback-only. An external TLS proxy or identity provider must validate the public OAuth bearer,
 remove it, and inject an internal bearer token from the environment variable configured by `proxy_token_env`. VT Code

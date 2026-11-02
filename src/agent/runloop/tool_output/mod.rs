@@ -44,6 +44,7 @@ use vtcode_core::tools::continuation::{
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
+#[must_use]
 pub(crate) fn spooled_output_hint(path: &str) -> String {
     format!(
         "Large output was spooled to \"{path}\". Use exec_command with shell tools such as cat, sed, or rg to inspect details."
@@ -462,6 +463,10 @@ pub(crate) fn collect_inline_output(
                         .into_iter()
                         .map(|line| line.into_iter().map(|segment| segment.text).collect::<String>()),
                 );
+            }
+            vtcode_core::ui::InlineCommand::Diagnostic(diagnostic) => {
+                // This helper models the collapsed human transcript, not retained details.
+                lines.push(diagnostic.summary);
             }
             vtcode_core::ui::InlineCommand::RecordDiffReview(anchor) => {
                 lines.push(format!("RecordDiffReview {}", anchor.file_path));

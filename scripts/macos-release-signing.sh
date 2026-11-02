@@ -206,3 +206,157 @@ sign_and_notarize_macos_binary() {
     rm -rf "$work_dir"
     verify_macos_release_binary "$binary"
 }
+
+# Developer ID sign every executable inside a macOS .app bundle, then the bundle.
+#
+#   sign_macos_app_bundle <app-bundle>
+#
+# Nested code takes the shared release identifier; the bundle itself keeps the
+# identifier from its own Info.plist (CFBundleIdentifier), which is what
+# Gatekeeper and the notarization ticket bind to. No-op when packaging
+# unsigned (the ad hoc signature from package-desktop-macos.sh stands).
+sign_macos_app_bundle() {
+    if [[ $# -ne 1 ]]; then
+        echo "usage: sign_macos_app_bundle <app-bundle>" >&2
+        return 2
+    fi
+    local app=$1
+    if ! macos_release_signing_preflight; then
+        return 1
+    fi
+    if [[ "$_vtcode_macos_release_signing_mode" == "unsigned" ]]; then
+        return 0
+    fi
+    if [[ ! -d "$app/Contents/MacOS" ]]; then
+        printf 'Error: macOS app bundle is missing Contents/MacOS: %s\n' "$app" >&2
+        return 1
+    fi
+
+    local nullglob_was_set=0
+    shopt -q nullglob && nullglob_was_set=1
+    shopt -s nullglob
+    local -a nested_binaries=("$app"/Contents/MacOS/* "$app"/Contents/Helpers/*)
+    [[ "$nullglob_was_set" -eq 1 ]] || shopt -u nullglob
+
+    local nested
+    for nested in "${nested_binaries[@]}"; do
+        [[ -f "$nested" ]] || continue
+        if ! codesign --force --options runtime --timestamp \
+            --identifier "$VTCODE_MACOS_RELEASE_IDENTIFIER" \
+            --sign "$VTCODE_MACOS_SIGNING_IDENTITY" "$nested"; then
+            printf 'Error: failed to Developer ID sign bundled executable: %s\n' "$nested" >&2
+            return 1
+        fi
+    done
+    if ! codesign --force --options runtime --timestamp \
+        --sign "$VTCODE_MACOS_SIGNING_IDENTITY" "$app"; then
+        printf 'Error: failed to Developer ID sign macOS app bundle: %s\n' "$app" >&2
+        return 1
+    fi
+    if ! codesign --verify --deep --strict --verbose=2 "$app"; then
+        printf 'Error: signed macOS app bundle failed signature verification: %s\n' "$app" >&2
+        return 1
+    fi
+}
+
+# Submit a macOS distribution archive to Apple notarization and wait.
+#
+#   notarize_macos_archive <archive>
+#
+# No-op when packaging unsigned.
+notarize_macos_archive() {
+    if [[ $# -ne 1 ]]; then
+        echo "usage: notarize_macos_archive <archive>" >&2
+        return 2
+    fi
+    local archive=$1
+    if ! macos_release_signing_preflight; then
+        return 1
+    fi
+    if [[ "$_vtcode_macos_release_signing_mode" == "unsigned" ]]; then
+        return 0
+    fi
+    if [[ ! -f "$archive" ]]; then
+        printf 'Error: macOS distribution archive is missing: %s\n' "$archive" >&2
+        return 1
+    fi
+
+    local submission
+    if ! submission=$(xcrun notarytool submit "$archive" \
+        --keychain-profile "$VTCODE_MACOS_NOTARY_PROFILE" --wait --output-format json 2>&1); then
+        printf 'Error: Apple notarization failed for %s:\n%s\n' "$archive" "$submission" >&2
+        return 1
+    fi
+    if ! printf '%s\n' "$submission" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"Accepted"'; then
+        printf 'Error: Apple did not accept notarization for %s:\n%s\n' "$archive" "$submission" >&2
+        return 1
+    fi
+}
+
+# Staple the notarization ticket to a macOS app bundle after acceptance, so
+# offline Gatekeeper checks pass. No-op when packaging unsigned.
+#
+#   staple_macos_app_bundle <app-bundle>
+staple_macos_app_bundle() {
+    if [[ $# -ne 1 ]]; then
+        echo "usage: staple_macos_app_bundle <app-bundle>" >&2
+        return 2
+    fi
+    local app=$1
+    if ! macos_release_signing_preflight; then
+        return 1
+    fi
+    if [[ "$_vtcode_macos_release_signing_mode" == "unsigned" ]]; then
+        return 0
+    fi
+    if [[ ! -d "$app" ]]; then
+        printf 'Error: macOS app bundle is missing: %s\n' "$app" >&2
+        return 1
+    fi
+    local staple_output
+    if ! staple_output=$(xcrun stapler staple "$app" 2>&1); then
+        printf 'Error: failed to staple the notarization ticket to %s:\n%s\n' "$app" "$staple_output" >&2
+        return 1
+    fi
+}
+
+# Verify a macOS app bundle carries a notarized Developer ID signature.
+#
+#   verify_macos_app_bundle <app-bundle>
+#
+# No-op when packaging unsigned.
+verify_macos_app_bundle() {
+    if [[ $# -ne 1 ]]; then
+        echo "usage: verify_macos_app_bundle <app-bundle>" >&2
+        return 2
+    fi
+    local app=$1
+    if ! macos_release_signing_preflight; then
+        return 1
+    fi
+    if [[ ! -d "$app" ]]; then
+        printf 'Error: macOS app bundle is missing: %s\n' "$app" >&2
+        return 1
+    fi
+    if [[ "$_vtcode_macos_release_signing_mode" == "unsigned" ]]; then
+        return 0
+    fi
+
+    if ! codesign --verify --deep --strict --verbose=2 "$app"; then
+        printf 'Error: macOS app bundle has an invalid code signature: %s\n' "$app" >&2
+        return 1
+    fi
+
+    # No --type flag: spctl picks the assessment context for a bundle path
+    # itself (unlike --type execute, which is for bare executables).
+    local assessment
+    if ! assessment=$(spctl --assess --verbose=4 "$app" 2>&1); then
+        printf 'Error: Gatekeeper rejected the macOS app bundle: %s\n%s\n' "$app" "$assessment" >&2
+        return 1
+    fi
+    if ! printf '%s\n' "$assessment" | grep -Fq 'source=Notarized Developer ID'; then
+        printf 'Error: Gatekeeper did not report a notarized Developer ID signature for %s:\n%s\n' \
+            "$app" "$assessment" >&2
+        return 1
+    fi
+}

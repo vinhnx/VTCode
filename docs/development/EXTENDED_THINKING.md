@@ -21,7 +21,8 @@ All six models share these limits:
 - Effort levels: `low`, `medium`, `high`, `xhigh` and `max`.
 - A 64k default `max_tokens`.
 - A 1M-token context window.
-- Explicit `temperature`, `top_p` and `top_k` are rejected, so VT Code drops them.
+- Explicit `temperature`, `top_p` and `top_k` are rejected, so VT Code drops them. This applies to every Claude model
+  under API version `2026-10-21`, not only the six models above.
 - Server-side refusal fallbacks are available.
 
 ## Turning up-front thinking off
@@ -238,7 +239,8 @@ reasoning_effort = "xhigh"  # or "max" where natively supported
 - `max` is uncapped and has the highest token cost and latency. Reserve it for tasks where a wrong answer costs more
   than the extra inference spend; start at `high`, step up to `xhigh`, then `max` only on measured headroom.
 - Anthropic at `xhigh`/`max`: set `max_tokens` to at least 64k so the model has room to think across subagents and tool
-  calls (the Claude 5.x default is 64k); sampling parameters are rejected on every Claude 5.x model.
+  calls (the Claude 5.x default is 64k); sampling parameters are rejected on every model under API version
+  `2026-10-21`.
 - DeepSeek thinking mode ignores `temperature`, `top_p`, `presence_penalty`, and `frequency_penalty`; Kimi K3 fixes
   `temperature` to `1.0` and switching effort mid-conversation invalidates prefix-cache hits.
 - `reasoning.mode: pro`, `reasoning.context`, and multi-agent `ultra` are separate OpenAI axes and are not controlled by

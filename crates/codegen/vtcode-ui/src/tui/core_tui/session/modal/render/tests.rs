@@ -387,7 +387,7 @@ fn plan_approval_long_header_wraps_without_bullets_or_elision() {
         texts.iter().all(|text| !text.contains('•')),
         "wrapped plan header must not use bullets, got: {texts:?}"
     );
-    let normalized = texts.join(" ").split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = vtcode_commons::formatting::collapse_whitespace(&texts.join(" "));
     assert!(normalized.contains("non-interactively"), "full summary text must survive wrapping: {normalized}");
     assert!(
         normalized.contains("stable output ordering"),

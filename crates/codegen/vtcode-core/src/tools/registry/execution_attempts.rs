@@ -14,6 +14,21 @@ use crate::tools::safety_gateway::{SafetyContext, SafetyDecision, SafetyError as
 use crate::tools::tool_intent;
 
 use super::execution_kernel;
+
+// Scoped to one immutable request future, never shared by concurrent calls or
+// inherited by spawned tasks. Scope/sandbox changes require a new invocation.
+tokio::task_local! {
+    pub(super) static RETRY_APPROVAL: std::cell::RefCell<Option<RetryApproval>>;
+}
+
+pub(super) struct RetryApproval {
+    pub(super) tool_name: String,
+    pub(super) args: Value,
+    pub(super) policy_revision: u64,
+    pub(super) policy_gateway: std::sync::Arc<super::policy::ToolPolicyGateway>,
+    pub(super) policy: crate::tool_policy::ToolPolicy,
+}
+
 use super::{ToolErrorType, ToolExecutionError, ToolExecutionOutcome, ToolExecutionRequest, ToolRegistry};
 
 fn requests_unsandboxed_shell_permissions(tool_name: &str, args: &Value) -> bool {
@@ -97,7 +112,27 @@ impl ToolRegistry {
         }
     }
 
-    pub(super) async fn execute_tool_request_internal(&self, request: ToolExecutionRequest) -> ToolExecutionOutcome {
+    pub(super) async fn execute_tool_request_internal(
+        &self,
+        request: ToolExecutionRequest,
+        deadline: Option<Instant>,
+    ) -> ToolExecutionOutcome {
+        let fetch_budget = (request.tool_name == crate::config::constants::tools::WEB_FETCH).then(|| {
+            let request_deadline = Instant::now()
+                + Duration::from_secs(request.args.get("timeout_secs").and_then(Value::as_u64).unwrap_or(30).min(120));
+            crate::tools::web_fetch::request_budget::RequestBudget::new(
+                self.harness_context.fetch_origin_attempts.clone(),
+                deadline.map_or(request_deadline, |deadline| deadline.min(request_deadline)),
+            )
+        });
+        let attempts = RETRY_APPROVAL.scope(std::cell::RefCell::new(None), self.execute_tool_request_attempts(request));
+        match fetch_budget {
+            Some(budget) => budget.scope(attempts).await,
+            None => attempts.await,
+        }
+    }
+
+    async fn execute_tool_request_attempts(&self, request: ToolExecutionRequest) -> ToolExecutionOutcome {
         let execution_started_at = Instant::now();
         let tool_name = &request.tool_name;
         let policy = request.policy.clone();
@@ -121,7 +156,20 @@ impl ToolRegistry {
         );
         retry_policy.jitter = policy.retry_jitter.clamp(0.0, 1.0);
 
-        let max_attempts = retry_policy.max_attempts.max(1);
+        let max_attempts =
+            if matches!(tool_name.as_str(), crate::config::constants::tools::WEB_SEARCH | "search_web" | "websearch") {
+                // Paid search attempts require an explicit new call, even when a
+                // caller enables generic retries. Preserve the same rule for aliases.
+                1
+            } else if tool_name == crate::config::constants::tools::WEB_FETCH {
+                retry_policy.max_attempts.clamp(1, 2)
+            } else {
+                retry_policy.max_attempts.max(1)
+            };
+        let fetch_deadline = (tool_name == crate::config::constants::tools::WEB_FETCH)
+            .then(crate::tools::web_fetch::request_budget::RequestBudget::current)
+            .flatten()
+            .map(|budget| budget.deadline());
         let mut attempt_index: u32 = 0;
         let mut last_error: Option<ToolExecutionError> = None;
 
@@ -142,6 +190,7 @@ impl ToolRegistry {
                     &mut attempt_index,
                     max_attempts,
                     &mut last_error,
+                    fetch_deadline,
                 )
                 .await
                 {
@@ -176,6 +225,7 @@ impl ToolRegistry {
                             &mut attempt_index,
                             max_attempts,
                             &mut last_error,
+                            fetch_deadline,
                         )
                         .await
                         {
@@ -217,6 +267,7 @@ impl ToolRegistry {
                         &mut attempt_index,
                         max_attempts,
                         &mut last_error,
+                        fetch_deadline,
                     )
                     .await
                     {
@@ -258,9 +309,28 @@ impl ToolRegistry {
         attempt_index: &mut u32,
         max_attempts: u32,
         last_error: &mut Option<ToolExecutionError>,
+        fetch_deadline: Option<Instant>,
     ) -> Option<ToolExecutionError> {
-        let structured = retry_policy.apply_to_tool_execution_error(decorated, *attempt_index, Some(tool_name));
+        let terminal = decorated.error_type == ToolErrorType::PolicyViolation
+            || (!decorated.retryable
+                && decorated
+                    .debug_context
+                    .as_ref()
+                    .is_some_and(|context| context.metadata.iter().any(|(key, _)| key == "http_status")));
+        let mut structured = retry_policy.apply_to_tool_execution_error(decorated, *attempt_index, Some(tool_name));
+        if terminal {
+            structured.retryable = false;
+            return Some(structured);
+        }
         let retry_delay = structured.retry_after().or_else(|| structured.retry_delay());
+        if let Some(deadline) = fetch_deadline
+            && retry_delay.is_some_and(|delay| {
+                delay > Duration::from_secs(5) || delay >= deadline.saturating_duration_since(Instant::now())
+            })
+        {
+            structured.retryable = false;
+            return Some(structured);
+        }
         if structured.retryable
             && *attempt_index + 1 < max_attempts
             && let Some(delay) = retry_delay

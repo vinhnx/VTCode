@@ -80,6 +80,7 @@ pub struct ToolCallRecord {
 pub struct LoopDetector {
     recent_calls: VecDeque<ToolCallRecord>,
     tool_counts: HashMap<String, usize>,
+    hard_stopped_tools: HashSet<String>,
     last_warning: Option<Instant>,
     max_identical_call_limit: Option<usize>,
     custom_limits: HashMap<String, usize>,
@@ -117,6 +118,7 @@ impl LoopDetector {
         Self {
             recent_calls: VecDeque::with_capacity(DETECTION_WINDOW),
             tool_counts: HashMap::new(),
+            hard_stopped_tools: HashSet::new(),
             last_warning: None,
             max_identical_call_limit: normalized_limit,
             custom_limits: HashMap::new(),
@@ -161,6 +163,14 @@ impl LoopDetector {
 
     /// Record a tool call and return a warning or hard-stop message if a loop is detected.
     pub fn record_call(&mut self, tool_name: &str, args: &serde_json::Value) -> Option<String> {
+        let warning = self.record_call_inner(tool_name, args);
+        if warning.as_deref().is_some_and(|message| message.starts_with(HARD_STOP_PREFIX)) {
+            self.hard_stopped_tools.insert(tool_name.to_owned());
+        }
+        warning
+    }
+
+    fn record_call_inner(&mut self, tool_name: &str, args: &serde_json::Value) -> Option<String> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
@@ -323,6 +333,13 @@ impl LoopDetector {
             }
         }
 
+        let count_warning = self.check_for_loops(tool_name);
+        if count_warning
+            .as_deref()
+            .is_some_and(|message| message.starts_with(HARD_STOP_PREFIX))
+        {
+            return count_warning;
+        }
         if let Some(pattern_warning) = self.detect_patterns() {
             return Some(pattern_warning);
         }
@@ -371,11 +388,27 @@ impl LoopDetector {
             }
         }
 
-        self.check_for_loops(tool_name)
+        count_warning
     }
 
     fn check_for_loops(&mut self, tool_name: &str) -> Option<String> {
-        let count = self.tool_counts.get(tool_name).copied().unwrap_or(0);
+        // Shell and tracker tools multiplex distinct actions. Count normalized
+        // repetitions so updates to different tracker items/states are progress.
+        // Explicit operator limits retain their aggregate meaning.
+        let count = if (is_command_tool_name(base_tool_name(tool_name))
+            || base_tool_name(tool_name) == tools::TASK_TRACKER)
+            && !self.custom_limits.contains_key(tool_name)
+            && !self.custom_limits.contains_key(base_tool_name(tool_name))
+        {
+            self.recent_calls.back().map_or(0, |latest| {
+                self.recent_calls
+                    .iter()
+                    .filter(|call| call.tool_name == tool_name && call.args_hash == latest.args_hash)
+                    .count()
+            })
+        } else {
+            self.tool_counts.get(tool_name).copied().unwrap_or(0)
+        };
 
         // Determine tool-specific limits
         let max_calls = self.get_limit_for_tool(tool_name);
@@ -484,9 +517,7 @@ impl LoopDetector {
 
     /// Check if hard limit is exceeded (should halt execution)
     pub fn is_hard_limit_exceeded(&self, tool_name: &str) -> bool {
-        let count = self.tool_counts.get(tool_name).copied().unwrap_or(0);
-        let max_calls = self.get_limit_for_tool(tool_name);
-        count >= max_calls * HARD_LIMIT_MULTIPLIER
+        self.hard_stopped_tools.contains(tool_name)
     }
 
     /// Get current call count for a tool
@@ -502,6 +533,7 @@ impl LoopDetector {
     /// Reset tracking for specific tool (use after successful progress)
     pub fn reset_tool(&mut self, tool_name: &str) {
         self.tool_counts.remove(tool_name);
+        self.hard_stopped_tools.remove(tool_name);
         self.recent_calls.retain(|r| r.tool_name != tool_name);
     }
 
@@ -561,6 +593,7 @@ impl LoopDetector {
     pub fn reset(&mut self) {
         self.recent_calls.clear();
         self.tool_counts.clear();
+        self.hard_stopped_tools.clear();
         self.last_warning = None;
         self.norm_cache.clear();
         self.norm_cache_order.clear();
@@ -712,7 +745,13 @@ impl LoopDetector {
             let suffix_names: Vec<&str> = suffix.iter().map(|(n, _)| *n).collect();
             let prev_names: Vec<&str> = prev.iter().map(|(n, _)| *n).collect();
 
-            if suffix_names == prev_names && k >= 2 {
+            let has_distinct_tools = suffix_names
+                .first()
+                .is_some_and(|first| suffix_names.iter().any(|name| name != first));
+            if suffix_names == prev_names
+                && has_distinct_tools
+                && !suffix_names.iter().any(|name| is_command_tool_name(base_tool_name(name)))
+            {
                 return Some(format!(
                     "Oscillating tool pattern detected: [{}]\n\
                      The agent is repeating the same sequence of tools. \
@@ -733,976 +772,4 @@ impl Default for LoopDetector {
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn matrix_actions_are_distinct_but_repeated_status_still_hits_the_limit() {
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        for action in ["create", "start", "status"] {
-            detector.record_call(tools::MATRIX, &serde_json::json!({"action":action,"matrix_id":"work"}));
-            assert!(!detector.is_hard_limit_exceeded(tools::MATRIX));
-        }
-        assert!(
-            detector
-                .record_call(tools::MATRIX, &serde_json::json!({"action":"status","matrix_id":"work"}))
-                .is_some()
-        );
-        assert!(detector.is_hard_limit_exceeded(tools::MATRIX));
-    }
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn test_immediate_repetition_detection() {
-        let mut detector = LoopDetector::with_max_repeated_calls(3);
-        let args = json!({"path": "src/"});
-
-        // First two calls - no warning
-        assert!(detector.record_call(LEGACY_GREP_FILE, &args).is_none());
-        assert!(detector.record_call(LEGACY_GREP_FILE, &args).is_none());
-
-        // Third identical call - hard stop
-        let warning = detector.record_call(LEGACY_GREP_FILE, &args);
-        assert!(warning.is_some());
-        assert!(warning.unwrap().contains(HARD_STOP_PREFIX));
-    }
-
-    #[test]
-    fn test_command_tools_skip_identical_hard_stop() {
-        let mut detector = LoopDetector::new();
-        let args = json!({"command": "cargo test"});
-
-        assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
-        assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
-        assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
-    }
-
-    #[test]
-    fn test_exec_command_alias_skips_identical_hard_stop() {
-        let mut detector = LoopDetector::new();
-        let args = json!({"cmd": "cargo test"});
-
-        assert!(detector.record_call(tools::EXEC_COMMAND, &args).is_none());
-        assert!(detector.record_call(tools::EXEC_COMMAND, &args).is_none());
-        assert!(detector.record_call(tools::EXEC_COMMAND, &args).is_none());
-    }
-
-    #[test]
-    fn test_root_path_normalization() {
-        let mut detector = LoopDetector::with_max_repeated_calls(3);
-
-        // All these should be treated as identical
-        let paths = [
-            json!({"path": "."}),
-            json!({"path": ""}),
-            json!({"path": "././"}),
-            json!({"path": "//"}),
-            json!({}),
-        ];
-
-        for path in &paths[..2] {
-            assert!(detector.record_call(LEGACY_LIST_FILES, path).is_none());
-        }
-
-        // Third call with any root variation should trigger
-        let warning = detector.record_call(LEGACY_LIST_FILES, &paths[2]);
-        assert!(warning.is_some());
-
-        // Further root-only variations should continue to warn
-        for path in &paths[3..] {
-            assert!(detector.record_call(LEGACY_LIST_FILES, path).is_some());
-        }
-    }
-
-    #[test]
-    fn test_detects_repeated_calls() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let tool_name = "test_repeated_tool";
-        detector.set_tool_limit(tool_name, MAX_READONLY_TOOL_CALLS);
-        let args = json!({"path": "/src"});
-
-        // Repetition heuristics (pattern detection and soft limits) should warn eventually.
-        let mut saw_warning = false;
-        for _ in 0..MAX_READONLY_TOOL_CALLS {
-            if detector.record_call(tool_name, &args).is_some() {
-                saw_warning = true;
-            }
-        }
-        assert!(saw_warning);
-        assert_eq!(detector.get_call_count(tool_name), MAX_READONLY_TOOL_CALLS);
-    }
-
-    #[test]
-    fn test_hard_limit_enforcement() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let tool_name = "test_hard_limit_tool";
-        detector.set_tool_limit(tool_name, 2);
-        let args = json!({"pattern": "test"});
-
-        // Hard limit is 2x configured soft limit.
-        let hard_limit = 2 * HARD_LIMIT_MULTIPLIER;
-        let mut saw_warning = false;
-        for i in 0..hard_limit {
-            let result = detector.record_call(tool_name, &args);
-            if result.is_some() {
-                saw_warning = true;
-            }
-            if i >= hard_limit - 1 {
-                assert!(result.is_some());
-            }
-        }
-
-        assert!(saw_warning);
-        assert!(detector.is_hard_limit_exceeded(tool_name));
-    }
-
-    #[test]
-    fn test_different_tools_no_warning() {
-        let mut detector = LoopDetector::new();
-
-        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "/src"}));
-        detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "test"}));
-        detector.record_call(tools::READ_FILE, &json!({"path": "main.rs"}));
-
-        assert_eq!(detector.tool_counts.len(), 3);
-    }
-
-    #[test]
-    fn test_non_root_paths_distinct() {
-        let mut detector = LoopDetector::new();
-
-        // These should be treated as different calls
-        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "src"}));
-        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "docs"}));
-        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "tests"}));
-
-        // Count for each should be 1
-        assert_eq!(detector.tool_counts.get(LEGACY_LIST_FILES).copied().unwrap_or(0), 3);
-    }
-
-    #[test]
-    fn test_identical_calls_trigger_hard_limit() {
-        let mut detector = LoopDetector::with_max_repeated_calls(3);
-        let args = json!({"path": "."});
-
-        assert!(detector.record_call(tools::READ_FILE, &args).is_none());
-        assert!(detector.record_call(tools::READ_FILE, &args).is_none());
-
-        let warning = detector.record_call(tools::READ_FILE, &args);
-        assert!(warning.is_some());
-        assert!(detector.is_hard_limit_exceeded(tools::READ_FILE));
-    }
-
-    #[test]
-    fn test_normalize_args_removes_pagination() {
-        let args = json!({"path": "src", "page": 1, "per_page": 10});
-        let normalized = normalize_args_for_detection(LEGACY_LIST_FILES, &args);
-
-        assert!(normalized.get("page").is_none());
-        assert!(normalized.get("per_page").is_none());
-        assert_eq!(normalized.get("path").and_then(|v| v.as_str()), Some("src"));
-    }
-
-    #[test]
-    fn test_reset_tool_clears_specific_tool() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let args = json!({"path": "src"});
-
-        // Record calls for multiple tools
-        detector.record_call(LEGACY_LIST_FILES, &args);
-        detector.record_call(LEGACY_LIST_FILES, &args);
-        detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "test"}));
-
-        assert_eq!(detector.get_call_count(LEGACY_LIST_FILES), 2);
-        assert_eq!(detector.get_call_count(LEGACY_GREP_FILE), 1);
-
-        // Reset only list_files
-        detector.reset_tool(LEGACY_LIST_FILES);
-
-        assert_eq!(detector.get_call_count(LEGACY_LIST_FILES), 0);
-        assert_eq!(detector.get_call_count(LEGACY_GREP_FILE), 1);
-    }
-
-    #[test]
-    fn test_suggest_alternative_for_list_files() {
-        let detector = LoopDetector::new();
-        let suggestion = detector.suggest_alternative(LEGACY_LIST_FILES);
-
-        assert!(suggestion.is_some());
-        let msg = suggestion.unwrap();
-        assert!(msg.contains("code_search"));
-        assert!(msg.contains("file_types"));
-        assert!(msg.contains("subdirectories"));
-    }
-
-    #[test]
-    fn test_suggest_alternative_for_grep_file() {
-        let detector = LoopDetector::new();
-        let suggestion = detector.suggest_alternative(LEGACY_GREP_FILE);
-
-        assert!(suggestion.is_some());
-        let msg = suggestion.unwrap();
-        assert!(msg.contains("exec_command.cmd"));
-        assert!(msg.contains("definition or usage"));
-        assert!(msg.contains("pattern"));
-    }
-
-    #[test]
-    fn code_search_loop_fingerprint_uses_only_normalised_search_identity() {
-        let first = json!({
-            "query": " Widget ",
-            "path": " src ",
-            "file_types": [".rs", "python", "rust"],
-            "result_types": ["path", "definition", "path"],
-            "max_results": 5
-        });
-        let second = json!({
-            "query": "Widget",
-            "path": "src",
-            "file_types": ["rust", ".py"],
-            "result_types": ["definition", "path"],
-            "max_results": 100
-        });
-
-        assert_eq!(hash_normalized_args(tools::CODE_SEARCH, &first), hash_normalized_args(tools::CODE_SEARCH, &second));
-
-        for changed in [
-            json!({"query": "Other", "path": "src", "file_types": ["rust", "python"], "result_types": ["definition", "path"]}),
-            json!({"query": "Widget", "path": "tests", "file_types": ["rust", "python"], "result_types": ["definition", "path"]}),
-            json!({"query": "Widget", "path": "src", "file_types": ["rust"], "result_types": ["definition", "path"]}),
-            json!({"query": "Widget", "path": "src", "file_types": ["rust", "python"], "result_types": ["usage", "path"]}),
-        ] {
-            assert_ne!(
-                hash_normalized_args(tools::CODE_SEARCH, &first),
-                hash_normalized_args(tools::CODE_SEARCH, &changed)
-            );
-        }
-    }
-
-    #[test]
-    fn test_suggest_alternative_for_unknown_tool() {
-        let detector = LoopDetector::new();
-        let suggestion = detector.suggest_alternative("unknown_tool");
-
-        assert!(suggestion.is_some());
-        let msg = suggestion.unwrap();
-        assert!(msg.contains("root cause analysis"));
-    }
-
-    #[test]
-    fn test_faster_detection_with_lower_limit() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        detector.set_tool_limit(LEGACY_LIST_FILES, 3);
-        let args = json!({"path": "src"});
-
-        // First call - no warning
-        assert!(detector.record_call(LEGACY_LIST_FILES, &args).is_none());
-
-        // Second call - no warning
-        assert!(detector.record_call(LEGACY_LIST_FILES, &args).is_none());
-
-        // Third call - should trigger warning (soft limit = 3)
-        let warning = detector.record_call(LEGACY_LIST_FILES, &args);
-        assert!(warning.is_some());
-        assert!(warning.unwrap().contains("Loop detected"));
-    }
-
-    #[test]
-    fn test_file_operation_action_suffix_uses_action_specific_limit() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let tool_key = format!("{}::read", tools::UNIFIED_FILE);
-
-        for idx in 0..(MAX_WRITE_TOOL_CALLS * HARD_LIMIT_MULTIPLIER) {
-            let args = json!({"path": "src/main.rs", "offset_lines": idx + 1, "limit": 1});
-            let _ = detector.record_call(&tool_key, &args);
-        }
-
-        // Read action should not use write limits.
-        assert!(!detector.is_hard_limit_exceeded(&tool_key));
-    }
-
-    #[test]
-    fn test_file_operation_write_suffix_uses_write_limit() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let tool_key = format!("{}::write", tools::UNIFIED_FILE);
-
-        for idx in 0..(MAX_WRITE_TOOL_CALLS * HARD_LIMIT_MULTIPLIER) {
-            let args = json!({"path": format!("src/file_{idx}.rs"), "content": "x"});
-            let _ = detector.record_call(&tool_key, &args);
-        }
-
-        assert!(detector.is_hard_limit_exceeded(&tool_key));
-    }
-
-    #[test]
-    fn test_command_session_action_suffix_skips_identical_limit() {
-        let mut detector = LoopDetector::with_max_repeated_calls(3);
-        let tool_key = format!("{}::run", tools::UNIFIED_EXEC);
-        let args = json!({"command": "cargo check"});
-
-        assert!(detector.record_call(&tool_key, &args).is_none());
-        assert!(detector.record_call(&tool_key, &args).is_none());
-        assert!(detector.record_call(&tool_key, &args).is_none());
-    }
-
-    #[test]
-    fn test_repetitive_read_target_with_small_variations_triggers_hard_stop() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let tool_key = format!("{}::read", tools::UNIFIED_FILE);
-        let mut saw_hard_stop = false;
-
-        for offset in [1, 2, 1, 2, 1, 2, 1, 2] {
-            let args =
-                json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset, "limit": 20});
-            if let Some(warning) = detector.record_call(&tool_key, &args)
-                && warning.contains(HARD_STOP_PREFIX)
-            {
-                saw_hard_stop = true;
-            }
-        }
-
-        assert!(saw_hard_stop);
-        assert!(detector.is_hard_limit_exceeded(&tool_key));
-    }
-
-    #[test]
-    fn test_repetitive_read_target_with_many_ranges_is_not_hard_stopped() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let tool_key = format!("{}::read", tools::UNIFIED_FILE);
-
-        for offset in 1..=MAX_SIMILAR_READ_TARGET_CALLS {
-            let args = json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 40});
-            if let Some(warning) = detector.record_call(&tool_key, &args) {
-                assert!(!warning.contains(HARD_STOP_PREFIX));
-            }
-        }
-
-        assert!(!detector.is_hard_limit_exceeded(&tool_key));
-    }
-
-    #[test]
-    fn test_repetitive_read_target_grep_calls_do_not_break_streak() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
-
-        // Interleave grep calls between read_file calls on the same target.
-        // With the new logic, grep (read-only) does not break the streak.
-        // Use distinct offsets so variants stay above the threshold.
-        // Limit iterations so the navigation streak stays below the hard stop (7).
-        for offset in 1..=(MAX_SIMILAR_READ_TARGET_CALLS - 1) {
-            let _ = detector.record_call(
-                &read_tool,
-                &json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 20}),
-            );
-            let _ = detector.record_call(
-                LEGACY_GREP_FILE,
-                &json!({"pattern": "handle_loop_detection", "path": "crates/codegen/vtcode-core/src"}),
-            );
-        }
-
-        // Variants exceed the threshold, so no repetitive-read-target hard stop.
-        // But navigation hard stop may have fired (streak >= 7) -- check specifically
-        // for the repetitive-read-target condition instead.
-        assert!(!detector.is_hard_limit_exceeded(&read_tool));
-    }
-
-    #[test]
-    fn test_repetitive_read_target_same_params_with_grep_between_triggers_hard_stop() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
-
-        // Same offset repeated, with grep calls between reads.
-        // Grep doesn't break the streak, so the hard stop fires.
-        for _ in 0..MAX_SIMILAR_READ_TARGET_CALLS + 2 {
-            let _ = detector.record_call(&read_tool, &json!({"path": "Cargo.lock", "offset_lines": 1, "limit": 2000}));
-            let _ = detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
-        }
-
-        assert!(detector.is_hard_limit_exceeded(&read_tool));
-    }
-
-    #[test]
-    fn test_read_file_alias_cycling_triggers_identical_detection() {
-        // Simulates the exact failure from the transcript: LLM cycles through
-        // offset_lines, max_lines, chunk_lines, line_start/line_end, encoding
-        // for the same file. Normalization should collapse them to identical hashes.
-        let mut detector = LoopDetector::with_max_repeated_calls(3);
-
-        let call1 = json!({"path": "docs/README.md", "max_lines": 200});
-        let call2 = json!({"path": "docs/README.md", "offset_lines": 1, "limit": 200});
-        let call3 = json!({"path": "docs/README.md", "chunk_lines": 200});
-
-        // After normalization, all three should have: {path: "docs/README.md", offset: 1, limit: 200}
-        let n1 = normalize_args_for_detection(tools::READ_FILE, &call1);
-        let n2 = normalize_args_for_detection(tools::READ_FILE, &call2);
-        let n3 = normalize_args_for_detection(tools::READ_FILE, &call3);
-
-        // Verify aliases are normalized
-        assert!(n1.get("max_lines").is_none(), "max_lines should be removed");
-        assert!(n2.get("offset_lines").is_none(), "offset_lines should be removed");
-        assert!(n3.get("chunk_lines").is_none(), "chunk_lines should be removed");
-        assert_eq!(n1.get("limit"), n2.get("limit"));
-        assert_eq!(n2.get("limit"), n3.get("limit"));
-
-        // All three should trigger identical-call detection by call 3
-        assert!(detector.record_call(tools::READ_FILE, &call1).is_none());
-        assert!(detector.record_call(tools::READ_FILE, &call2).is_none());
-
-        let warning = detector.record_call(tools::READ_FILE, &call3);
-        assert!(warning.is_some(), "Third aliased call should be detected");
-        assert!(warning.unwrap().contains(HARD_STOP_PREFIX));
-    }
-
-    #[test]
-    fn test_read_file_encoding_and_action_are_stripped() {
-        let with_encoding = json!({"path": "foo.rs", "encoding": "utf-8", "offset_lines": 1, "max_lines": 200});
-        let without_encoding = json!({"path": "foo.rs", "offset_lines": 1, "max_lines": 200});
-
-        let n1 = normalize_args_for_detection(tools::READ_FILE, &with_encoding);
-        let n2 = normalize_args_for_detection(tools::READ_FILE, &without_encoding);
-
-        assert!(n1.get("encoding").is_none());
-        assert_eq!(n1, n2);
-    }
-
-    #[test]
-    fn test_line_start_line_end_normalized_to_offset_limit() {
-        let args = json!({"path": "foo.rs", "line_start": 1, "line_end": 200});
-        let normalized = normalize_args_for_detection(tools::READ_FILE, &args);
-
-        assert!(normalized.get("line_start").is_none());
-        assert!(normalized.get("line_end").is_none());
-        assert_eq!(normalized.get("offset").and_then(|v| v.as_u64()), Some(1));
-        assert_eq!(normalized.get("limit").and_then(|v| v.as_u64()), Some(200));
-    }
-
-    #[test]
-    fn test_start_line_end_line_normalized_to_offset_limit() {
-        let args = json!({"path": "Cargo.lock", "start_line": 550, "end_line": 590});
-        let normalized = normalize_args_for_detection(tools::READ_FILE, &args);
-
-        assert!(normalized.get("start_line").is_none());
-        assert!(normalized.get("end_line").is_none());
-        assert_eq!(normalized.get("offset").and_then(|v| v.as_u64()), Some(550));
-        assert_eq!(normalized.get("limit").and_then(|v| v.as_u64()), Some(41));
-    }
-
-    #[test]
-    fn test_navigation_loop_detection() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let list_args = serde_json::json!({"path": "src"});
-        let grep_args = serde_json::json!({"pattern": "fn", "path": "src/main.rs"});
-        let read_args = serde_json::json!({"path": "src/main.rs"});
-
-        // Sequence: A, B, C (where A=LIST, B=GREP, C=READ)
-        // 3 calls below the warning threshold of 4.
-        let sequence = [
-            (LEGACY_LIST_FILES, &list_args),
-            (LEGACY_GREP_FILE, &grep_args),
-            (tools::READ_FILE, &read_args),
-        ];
-
-        for (i, (tool, args)) in sequence.iter().enumerate() {
-            let res = detector.record_call(tool, args);
-            assert!(res.is_none(), "Call {} ({}) should not have triggered a warning", i + 1, tool);
-        }
-
-        // 4th call (any read-only) should trigger navigation loop warning (streak hits 4)
-        let warning = detector.record_call(LEGACY_GREP_FILE, &grep_args);
-        assert!(warning.is_some(), "4th call should have triggered a navigation loop warning");
-        assert!(warning.unwrap().contains("Navigation loop detected"));
-
-        // A mutating call should reset the streak
-        let write_args = serde_json::json!({"path": "src/new.rs", "content": "test"});
-        assert!(detector.record_call(tools::WRITE_FILE, &write_args).is_none());
-
-        // Subsequent read calls should start from 0; single call should be fine
-        assert!(detector.record_call(LEGACY_LIST_FILES, &list_args).is_none());
-    }
-
-    #[test]
-    fn write_edit_repeat_on_same_path_is_not_identical_loop() {
-        // Regression: two consecutive write_file calls to the same path with
-        // DIFFERENT content must not trigger the identical-call HARD STOP.
-        // The normalized hash nulls `content`, so without the write-tool
-        // exemption every edit would hash identically and halt the task.
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        let first = json!({"path": "src/main.rs", "content": "first draft"});
-        let second = json!({"path": "src/main.rs", "content": "corrected"});
-
-        assert!(detector.record_call(tools::WRITE_FILE, &first).is_none());
-        let warning = detector.record_call(tools::WRITE_FILE, &second);
-        assert!(warning.is_none(), "distinct edits to same path must not loop-stop: {warning:?}");
-        assert!(!detector.is_hard_limit_exceeded(tools::WRITE_FILE));
-    }
-
-    #[test]
-    fn apply_patch_repeat_on_same_file_is_not_identical_loop() {
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        let first = json!({"path": "src/main.rs", "diff": "old A", "mode": "edit"});
-        let second = json!({"path": "src/main.rs", "diff": "old B", "mode": "edit"});
-
-        assert!(detector.record_call(tools::APPLY_PATCH, &first).is_none());
-        assert!(detector.record_call(tools::APPLY_PATCH, &second).is_none());
-        assert!(!detector.is_hard_limit_exceeded(tools::APPLY_PATCH));
-    }
-
-    #[test]
-    fn exec_command_verification_read_uses_cmd_key() {
-        // Regression: exec_command's schema uses the `cmd` key (not `command`).
-        // A repeated `cat file` via exec_command must be detected as an
-        // identical read command; a repeated `cargo check` must be exempt.
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        let cat = json!({"cmd": "cat src/main.rs"});
-
-        assert!(detector.record_call(tools::EXEC_COMMAND, &cat).is_none());
-        let warning = detector.record_call(tools::EXEC_COMMAND, &cat);
-        assert!(warning.is_some(), "repeated `cat file` via exec_command.cmd should hit the identical limit");
-
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        let build = json!({"cmd": "cargo check"});
-        assert!(detector.record_call(tools::EXEC_COMMAND, &build).is_none());
-        assert!(
-            detector.record_call(tools::EXEC_COMMAND, &build).is_none(),
-            "repeated `cargo check` must be exempt from identical-call limits"
-        );
-    }
-
-    #[test]
-    fn exec_command_without_read_target_breaks_navigation_streak() {
-        // Regression: `exec_command` (production shell tool) must reset the
-        // readonly streak like other mutating tools, otherwise read -> build ->
-        // read -> build hits the navigation HARD STOP.
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-
-        // 4 consecutive reads of DIFFERENT files => navigation warning fires at 4
-        for i in 0..4 {
-            let read_args = json!({"path": format!("src/file_{i}.rs")});
-            let _ = detector.record_call(tools::READ_FILE, &read_args);
-        }
-        // A `cargo check` (no read target) breaks the streak
-        assert!(
-            detector
-                .record_call(tools::EXEC_COMMAND, &json!({"cmd": "cargo check"}))
-                .is_none()
-        );
-        // Reads after the break must not immediately hard-stop (streak restarted at 0)
-        let read_args = json!({"path": "src/file_4.rs"});
-        let warning = detector.record_call(tools::READ_FILE, &read_args);
-        assert!(warning.is_none(), "read after mutating exec_command must not hit navigation stop: {warning:?}");
-    }
-
-    #[test]
-    fn reset_clears_window_and_cache_order_state() {
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        let read = json!({"path": "src/main.rs"});
-        for _ in 0..4 {
-            let _ = detector.record_call(tools::READ_FILE, &read);
-        }
-        detector.reset();
-        assert_eq!(detector.norm_cache_order.len(), 0);
-        assert_eq!(detector.action_hash_window.len(), 0);
-        assert_eq!(detector.tool_counts.len(), 0);
-    }
-
-    #[test]
-    fn test_checkpoint_324_pattern_detected() {
-        // Simulates the exact failure from turn_324 checkpoint:
-        // Agent reads Cargo.lock with start_line/end_line (ignored), retries with
-        // different values, interleaves grep calls. With lowered navigation
-        // thresholds (streak >= 4 warns, >= 7 hard-stops), the navigation loop
-        // warning fires at call 4 and the repetitive-read-target hard stop
-        // fires at call 6.
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
-
-        // Call 1: read Cargo.toml (different target)
-        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.toml"}));
-        assert!(r.is_none());
-
-        // Call 2: read Cargo.lock
-        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock"}));
-        assert!(r.is_none());
-
-        // Call 3: read Cargo.lock (streak=2)
-        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock"}));
-        assert!(r.is_none());
-
-        // Call 4: grep Cargo.lock (read-only, does NOT break streak, streak=4)
-        // Navigation loop warning fires at streak 4 with the lowered threshold.
-        let r = detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
-        assert!(r.is_some(), "Navigation loop warning should fire at streak 4");
-        let msg = r.unwrap();
-        assert!(msg.contains("Navigation loop detected"));
-
-        // Call 5: read Cargo.lock with start_line (streak=5)
-        // Cooldown suppresses the navigation warning; no repetitive-read warning yet.
-        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock", "start_line": 550, "end_line": 590}));
-        assert!(r.is_none());
-
-        // Call 6: read Cargo.lock with different start_line (streak=6, variants=3)
-        // Repetitive-read-target HARD STOP fires: same_target_streak >= 4 && variants <= 3
-        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock", "start_line": 4400, "end_line": 4420}));
-        assert!(r.is_some(), "HARD STOP should fire at call 6");
-        let msg = r.unwrap();
-        assert!(msg.contains(HARD_STOP_PREFIX), "Expected hard stop, got: {msg}");
-        assert!(msg.contains("Cargo.lock"));
-        assert!(msg.contains("exact continuation range"));
-        assert!(detector.is_hard_limit_exceeded(&read_tool));
-    }
-
-    // --- file_operation read-action tests ---
-
-    #[test]
-    fn read_target_extracted_for_file_operation_read_action() {
-        let args = json!({"action": "read", "path": "src/lib.rs"});
-        let target = read_target_for_tool_call(tools::UNIFIED_FILE, &args);
-        assert_eq!(target.as_deref(), Some("src/lib.rs"));
-    }
-
-    #[test]
-    fn read_target_none_for_file_operation_write_action() {
-        let args = json!({"action": "write", "path": "src/lib.rs", "content": "fn main() {}"});
-        let target = read_target_for_tool_call(tools::UNIFIED_FILE, &args);
-        assert!(target.is_none());
-    }
-
-    #[test]
-    fn read_target_extracted_for_file_operation_with_read_suffix() {
-        let args = json!({"path": "src/main.rs"});
-        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
-        let target = read_target_for_tool_call(&read_tool, &args);
-        assert_eq!(target.as_deref(), Some("src/main.rs"));
-    }
-
-    #[test]
-    fn repetitive_read_target_fires_for_file_operation_read_action() {
-        let mut detector = LoopDetector::new();
-
-        // Use only 2 different offsets so variants stays <= MAX_SIMILAR_READ_TARGET_VARIANTS.
-        // With 4 calls to the same file, same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS
-        // and variants <= MAX_SIMILAR_READ_TARGET_VARIANTS => HARD STOP fires.
-        let offsets = [0, 100, 0, 100];
-        for (i, offset) in offsets.iter().enumerate() {
-            let result = detector
-                .record_call(tools::UNIFIED_FILE, &json!({"action": "read", "path": "src/lib.rs", "offset": offset}));
-            if i < offsets.len() - 1 {
-                assert!(result.is_none(), "call {i} should not trigger");
-            } else {
-                assert!(result.is_some(), "call {i} should trigger HARD STOP");
-                let msg = result.unwrap();
-                assert!(msg.contains(HARD_STOP_PREFIX), "Expected hard stop: {msg}");
-                assert!(msg.contains("src/lib.rs"));
-            }
-        }
-    }
-
-    // --- Global readonly budget tests ---
-
-    #[test]
-    fn global_readonly_budget_fires_at_limit() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let mut saw_hard_stop = false;
-
-        // Make MAX_TOTAL_READONLY_CALLS calls with different args to avoid per-tool detection
-        for i in 0..MAX_TOTAL_READONLY_CALLS {
-            let args = json!({"query": format!("pattern_{i}"), "path": "src/"});
-            if let Some(msg) = detector.record_call(tools::CODE_SEARCH, &args)
-                && msg.contains("global read-only budget")
-            {
-                saw_hard_stop = true;
-                break;
-            }
-        }
-
-        assert!(saw_hard_stop, "Global readonly budget should fire at {MAX_TOTAL_READONLY_CALLS}");
-        assert!(detector.is_hard_limit_exceeded(tools::CODE_SEARCH));
-    }
-
-    #[test]
-    fn global_readonly_budget_counts_across_different_tools() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let mut hard_stop_count = 0;
-
-        // Alternate between code_search and file_operation to evade per-tool limits.
-        for i in 0..MAX_TOTAL_READONLY_CALLS + 5 {
-            if i % 2 == 0 {
-                let args = json!({"query": format!("p_{i}"), "path": "src/"});
-                if let Some(msg) = detector.record_call(tools::CODE_SEARCH, &args)
-                    && msg.contains("global read-only budget")
-                {
-                    hard_stop_count += 1;
-                }
-            } else {
-                let args = json!({"action": "read", "path": format!("src/file_{i}.rs")});
-                if let Some(msg) = detector.record_call(tools::UNIFIED_FILE, &args)
-                    && msg.contains("global read-only budget")
-                {
-                    hard_stop_count += 1;
-                }
-            }
-        }
-
-        assert!(hard_stop_count > 0, "Global budget should fire when alternating tools");
-        assert_eq!(detector.total_readonly_calls(), MAX_TOTAL_READONLY_CALLS + 5);
-    }
-
-    #[test]
-    fn exhausted_global_readonly_budget_blocks_every_tool_and_says_so() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        for i in 0..MAX_TOTAL_READONLY_CALLS {
-            let args = json!({"query": format!("p_{i}"), "path": "src/"});
-            detector.record_call(tools::CODE_SEARCH, &args);
-        }
-
-        let edit = json!({"path": "src/new.rs", "content": "fn main() {}"});
-        let msg = detector
-            .record_call(tools::WRITE_FILE, &edit)
-            .expect("an edit after the budget is exhausted is also stopped");
-        assert!(msg.starts_with(HARD_STOP_PREFIX), "{msg}");
-        assert!(
-            msg.contains("so every further tool call this turn is blocked, including edits and commands."),
-            "{msg}"
-        );
-        assert!(!msg.contains("further read-only calls are blocked"), "{msg}");
-    }
-
-    #[test]
-    fn global_readonly_budget_resets_on_reset() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-
-        // Make some readonly calls
-        for i in 0..10 {
-            let args = json!({"query": format!("p_{i}"), "path": "src/"});
-            detector.record_call(tools::CODE_SEARCH, &args);
-        }
-        assert_eq!(detector.total_readonly_calls(), 10);
-
-        detector.reset();
-        assert_eq!(detector.total_readonly_calls(), 0);
-    }
-
-    #[test]
-    fn global_readonly_budget_not_incremented_by_mutating_tools() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-
-        // Make mutating calls
-        for i in 0..5 {
-            let args = json!({"path": format!("src/file_{i}.rs"), "content": "fn main() {}"});
-            detector.record_call(tools::WRITE_FILE, &args);
-        }
-
-        assert_eq!(detector.total_readonly_calls(), 0);
-    }
-
-    #[test]
-    fn lowered_navigation_loop_thresholds() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-
-        // Make 3 read-only calls (below threshold)
-        for i in 0..3 {
-            let args = json!({"query": format!("p_{i}"), "path": "src/"});
-            assert!(detector.record_call(tools::CODE_SEARCH, &args).is_none(), "Call {i} should not trigger warning");
-        }
-
-        // 4th call should trigger navigation loop warning (streak hits 4)
-        let args = json!({"query": "p_4", "path": "src/"});
-        let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(warning.is_some(), "Navigation loop warning should fire at streak 4");
-        assert!(warning.unwrap().contains("Navigation loop detected"));
-    }
-
-    #[test]
-    fn navigation_hard_stop_at_lowered_threshold() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-
-        // Make 7 read-only calls (new hard stop threshold)
-        for i in 0..6 {
-            let args = json!({"query": format!("p_{i}"), "path": "src/"});
-            detector.record_call(tools::CODE_SEARCH, &args);
-        }
-
-        // 7th call should trigger HARD STOP
-        let args = json!({"query": "p_7", "path": "src/"});
-        let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(warning.is_some(), "Navigation hard stop should fire at streak 7");
-        let msg = warning.unwrap();
-        assert!(msg.contains(HARD_STOP_PREFIX), "Expected hard stop: {msg}");
-        assert!(detector.is_hard_limit_exceeded(tools::CODE_SEARCH));
-    }
-
-    #[test]
-    fn subagent_navigation_hard_stop_at_5() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        detector.set_subagent_mode(true);
-
-        // Make 4 read-only calls (subagent warning at 3, but no hard stop yet)
-        for i in 0..4 {
-            let args = json!({"query": format!("p_{i}"), "path": "src/"});
-            detector.record_call(tools::CODE_SEARCH, &args);
-        }
-
-        // 5th call should trigger HARD STOP for subagent
-        let args = json!({"query": "p_5", "path": "src/"});
-        let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(warning.is_some(), "Subagent navigation hard stop should fire at streak 5");
-        let msg = warning.unwrap();
-        assert!(msg.contains(HARD_STOP_PREFIX), "Expected hard stop: {msg}");
-    }
-
-    #[test]
-    fn subagent_readonly_budget_at_20() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        detector.set_subagent_mode(true);
-
-        // Make 20 read-only calls with different args to avoid per-tool detection
-        for i in 0..20 {
-            let args = json!({"query": format!("unique_{i}"), "path": "src/"});
-            detector.record_call(tools::CODE_SEARCH, &args);
-        }
-
-        // 21st call should trigger global budget HARD STOP
-        let args = json!({"query": "final", "path": "src/"});
-        let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(warning.is_some(), "Subagent global read-only budget should fire at 20");
-        let msg = warning.unwrap();
-        assert!(msg.contains("global read-only budget is exhausted"), "Expected budget exhaustion: {msg}");
-        assert!(msg.contains("limit: 20"), "Expected limit 20 in message: {msg}");
-    }
-
-    #[test]
-    fn main_agent_readonly_budget_still_30() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        // NOT setting subagent mode -- default is false
-
-        // Make 30 read-only calls
-        for i in 0..30 {
-            let args = json!({"query": format!("unique_{i}"), "path": "src/"});
-            detector.record_call(tools::CODE_SEARCH, &args);
-        }
-
-        // 31st call should trigger global budget HARD STOP
-        let args = json!({"query": "final", "path": "src/"});
-        let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(warning.is_some(), "Main agent global read-only budget should fire at 30");
-        let msg = warning.unwrap();
-        assert!(msg.contains("limit: 30"), "Expected limit 30 in message: {msg}");
-    }
-
-    // --- canonicalize_command_for_detection tests ---
-
-    #[test]
-    fn canonicalize_command_v_to_verify() {
-        assert_eq!(canonicalize_command_for_detection("command -v ast-grep"), Some("__verify__:ast-grep".to_string()));
-    }
-
-    #[test]
-    fn canonicalize_which_to_verify() {
-        assert_eq!(canonicalize_command_for_detection("which ast-grep"), Some("__verify__:ast-grep".to_string()));
-    }
-
-    #[test]
-    fn canonicalize_help_to_verify() {
-        assert_eq!(canonicalize_command_for_detection("ast-grep --help"), Some("__verify__:ast-grep".to_string()));
-    }
-
-    #[test]
-    fn canonicalize_version_to_verify() {
-        assert_eq!(canonicalize_command_for_detection("ast-grep --version"), Some("__verify__:ast-grep".to_string()));
-    }
-
-    #[test]
-    fn canonicalize_short_help_to_verify() {
-        assert_eq!(canonicalize_command_for_detection("ast-grep -h"), Some("__verify__:ast-grep".to_string()));
-    }
-
-    #[test]
-    fn canonicalize_path_prefix_stripped() {
-        assert_eq!(
-            canonicalize_command_for_detection("command -v /usr/bin/ast-grep"),
-            Some("__verify__:ast-grep".to_string())
-        );
-    }
-
-    #[test]
-    fn canonicalize_cat_to_read() {
-        assert_eq!(canonicalize_command_for_detection("cat src/main.rs"), Some("__read__:src/main.rs".to_string()));
-    }
-
-    #[test]
-    fn canonicalize_head_to_read() {
-        assert_eq!(canonicalize_command_for_detection("head src/main.rs"), Some("__read__:src/main.rs".to_string()));
-    }
-
-    #[test]
-    fn canonicalize_arbitrary_command_returns_none() {
-        assert_eq!(canonicalize_command_for_detection("cargo check -p vtcode-core"), None);
-    }
-
-    #[test]
-    fn canonicalize_empty_command_returns_none() {
-        assert_eq!(canonicalize_command_for_detection(""), None);
-    }
-
-    #[test]
-    fn canonicalize_env_prefix_skips_to_real_tool() {
-        assert_eq!(
-            canonicalize_command_for_detection("env VAR=val ast-grep --help"),
-            Some("__verify__:ast-grep".to_string())
-        );
-    }
-
-    #[test]
-    fn canonicalize_env_prefix_with_path() {
-        assert_eq!(
-            canonicalize_command_for_detection("env PATH=/usr/bin ast-grep --version"),
-            Some("__verify__:ast-grep".to_string())
-        );
-    }
-
-    // --- Command normalization integration tests ---
-
-    #[test]
-    fn verification_commands_normalize_to_same_hash() {
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        let tool = tools::UNIFIED_EXEC;
-
-        // These should all normalize to __verify__:ast-grep
-        let args1 = json!({"command": "command -v ast-grep"});
-        let args2 = json!({"command": "which ast-grep"});
-        let _args3 = json!({"command": "ast-grep --help"});
-
-        assert!(detector.record_call(tool, &args1).is_none());
-        // Second call with equivalent command should trigger
-        let warning = detector.record_call(tool, &args2);
-        assert!(warning.is_some(), "which ast-grep should be detected as duplicate of command -v ast-grep");
-    }
-
-    #[test]
-    fn cat_commands_normalize_to_read_target() {
-        let mut detector = LoopDetector::with_max_repeated_calls(100);
-        let tool = tools::UNIFIED_EXEC;
-
-        // cat file should set read_target
-        let args = json!({"command": "cat src/main.rs"});
-        detector.record_call(tool, &args);
-
-        // Check that the last record has a read_target
-        let record = detector.recent_calls.back().unwrap();
-        assert_eq!(record.read_target.as_deref(), Some("src/main.rs"), "cat command should produce read_target");
-    }
-
-    #[test]
-    fn verification_spiral_detected_across_tools() {
-        let mut detector = LoopDetector::with_max_repeated_calls(2);
-        let tool = tools::UNIFIED_EXEC;
-
-        // Verification spiral: different commands checking the same tool
-        let args1 = json!({"command": "command -v ast-grep"});
-        let _args2 = json!({"command": "ast-grep --version 2>&1 | head -5"});
-
-        assert!(detector.record_call(tool, &args1).is_none());
-        // --version doesn't normalize (has pipe), so this shouldn't trigger
-        // via identical-call detection. But the first two `command -v` variants
-        // should be caught.
-    }
-}
+mod tests;

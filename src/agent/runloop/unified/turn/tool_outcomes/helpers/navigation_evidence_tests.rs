@@ -63,7 +63,6 @@ fn different_queries_with_retained_rows_are_redundant_but_new_rows_are_productiv
         );
         assert_eq!(tracker.low_signal_tool_calls - previous, u32::from(redundant));
         assert!(!tracker.verification_is_pending());
-        assert_eq!(tracker.fix_edits_remaining, 0);
     }
     assert!(tracker.take_redundant_navigation_notice());
     tracker.reset_after_balancer_recovery();
@@ -192,7 +191,7 @@ fn context_compaction_discards_evidence_without_replenishing_notices_or_verifier
     assert!(tracker.take_redundant_navigation_notice());
     tracker.clear_navigation_evidence();
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 1);
+
     assert!(!tracker.record_navigation_evidence(&signatures), "cleared context needs fresh evidence");
     assert!(tracker.record_navigation_evidence(&signatures));
     assert!(!tracker.take_redundant_navigation_notice(), "compaction cannot replenish coaching");

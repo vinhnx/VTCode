@@ -717,7 +717,7 @@ fn sanitize_function_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::{McpClientStatus, McpToolExecutor, McpToolInfo};
+    use crate::mcp::{McpClientStatus, McpToolExecutor, McpToolInfo, McpToolVisibility};
     use async_trait::async_trait;
     use serde_json::{Value, json};
     use std::path::PathBuf;
@@ -738,6 +738,8 @@ mod tests {
                 provider: "test".to_string(),
                 input_schema: json!({}),
                 output_schema: None,
+                ui: None,
+                visibility: McpToolVisibility::default(),
             }])
         }
 

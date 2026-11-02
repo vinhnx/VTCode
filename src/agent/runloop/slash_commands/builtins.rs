@@ -4,6 +4,9 @@ use anyhow::Result;
 use vtcode_core::skills::CommandSkillSpec;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_desktop_protocol::slash_command::{
+    WEBMCP_ROOTS_HELP, WEBMCP_TOOLS_HELP, WebmcpSlashCommand, WebmcpSlashCommandParseError, parse_webmcp_slash_command,
+};
 
 use super::flow::{
     handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command, handle_plan_command,
@@ -33,12 +36,10 @@ fn handle_fast_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
 
 // Each command is an independently testable function. The dispatch match in
 // `execute_built_in_command_skill` is the strict interface guard: adding a
-// new command requires a handler and a match-arm registration.
-//
-// Handlers that are only referenced through the dynamic dispatch match are
-// marked `#[allow(dead_code)]` because the compiler cannot prove they are used.
+// new command requires a handler and a match-arm registration, and that arm is
+// what keeps the handler live for rustc — no `#[allow(dead_code)]` is needed,
+// and adding one would hide a handler whose arm was dropped.
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_donate_command(renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     renderer.line(
         MessageStyle::Info,
@@ -47,7 +48,6 @@ fn handle_donate_command(renderer: &mut AnsiRenderer) -> Result<SlashCommandOutc
     Ok(SlashCommandOutcome::OpenDonateLinks)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_theme_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let mut tokens = args.split_whitespace();
     if let Some(next_theme) = tokens.next() {
@@ -74,7 +74,6 @@ fn handle_theme_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slash
     Ok(SlashCommandOutcome::Handled)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_init_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let mut force = false;
     for flag in args.split_whitespace() {
@@ -89,7 +88,6 @@ fn handle_init_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
     Ok(SlashCommandOutcome::InitializeWorkspace { force })
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_config_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     const USAGE: &str =
         "Usage: /config [memory|permissions|model|tasks|jobs|log|subprocess|notify|checkup|<path>|reset]";
@@ -147,14 +145,12 @@ fn handle_config_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slas
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_statusline_command(args: &str) -> Result<SlashCommandOutcome> {
     Ok(SlashCommandOutcome::StartStatuslineSetup {
         instructions: (!args.trim().is_empty()).then(|| args.trim().to_string()),
     })
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_title_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if !args.is_empty() {
         renderer.line(MessageStyle::Error, "Usage: /title")?;
@@ -163,7 +159,6 @@ fn handle_title_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slash
     Ok(SlashCommandOutcome::StartTerminalTitleSetup)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_clear_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     match args {
         "" => Ok(SlashCommandOutcome::ClearScreen),
@@ -193,7 +188,6 @@ fn handle_transcript_command(args: &str, renderer: &mut AnsiRenderer) -> Result<
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_compact_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     match parse_compact_command(args) {
         Ok(command) => Ok(SlashCommandOutcome::CompactConversation { command }),
@@ -209,7 +203,6 @@ fn handle_compact_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Sla
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_log_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let mut format = LogFormat::Text;
     let mut scope = LogScope::Thread;
@@ -230,7 +223,6 @@ fn handle_log_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCo
     Ok(SlashCommandOutcome::ShowLogViewer { format, scope, save })
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_notify_command(args: &str) -> Result<SlashCommandOutcome> {
     Ok(SlashCommandOutcome::Notify {
         message: if args.is_empty() {
@@ -241,7 +233,6 @@ fn handle_notify_command(args: &str) -> Result<SlashCommandOutcome> {
     })
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_checkup_command(
     args: &str,
     renderer: &mut AnsiRenderer,
@@ -257,13 +248,11 @@ fn handle_checkup_command(
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_update_command(args: &str) -> Result<SlashCommandOutcome> {
     let (check_only, install, force) = parse_update_args(args).map_err(anyhow::Error::msg)?;
     Ok(SlashCommandOutcome::Update { check_only, install, force })
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_mode_command(args: &str) -> Result<SlashCommandOutcome> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
@@ -273,7 +262,6 @@ fn handle_mode_command(args: &str) -> Result<SlashCommandOutcome> {
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_files_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let initial_filter = if args.trim().is_empty() {
         None
@@ -289,7 +277,6 @@ fn handle_files_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slash
     Ok(SlashCommandOutcome::Handled)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_share_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     match parse_session_log_export_format(args) {
         Ok(format) => Ok(SlashCommandOutcome::ShareLog { format }),
@@ -300,7 +287,6 @@ fn handle_share_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slash
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_history_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if !args.is_empty() {
         renderer.line(MessageStyle::Error, "Usage: /history")?;
@@ -309,7 +295,6 @@ fn handle_history_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Sla
     Ok(SlashCommandOutcome::StartHistoryPicker)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_skills_command(input: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let full_command = format!("/{input}");
     match crate::agent::runloop::parse_skill_command(&full_command) {
@@ -325,7 +310,6 @@ fn handle_skills_command(input: &str, renderer: &mut AnsiRenderer) -> Result<Sla
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_plugin_command(input: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let full_command = format!("/{input}");
     match crate::agent::runloop::parse_plugin_command(&full_command) {
@@ -341,7 +325,6 @@ fn handle_plugin_command(input: &str, renderer: &mut AnsiRenderer) -> Result<Sla
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_agent_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     match args.trim() {
         "" => Ok(SlashCommandOutcome::ManageAgents { action: AgentManagerAction::List }),
@@ -355,7 +338,6 @@ fn handle_agent_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slash
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_subprocesses_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     match parse_subprocesses_command(args) {
         Ok(action) => Ok(SlashCommandOutcome::ManageSubprocesses { action }),
@@ -376,43 +358,11 @@ async fn handle_help_command(args: &str, renderer: &mut AnsiRenderer, workspace:
     Ok(SlashCommandOutcome::Handled)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_status_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::ShowStatus)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_permissions_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::ShowPermissions)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_stop_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::StopAgent)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_pause_command(renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     renderer.line(MessageStyle::Info, "No active run to pause.")?;
     Ok(SlashCommandOutcome::Handled)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_model_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::StartModelSelection)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_new_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::NewSession)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_docs_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::OpenDocs)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_feedback_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if !args.is_empty() {
         renderer.line(MessageStyle::Error, "Usage: /feedback")?;
@@ -421,12 +371,6 @@ fn handle_feedback_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Sl
     Ok(SlashCommandOutcome::OpenFeedback)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_exit_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::Exit)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_copy_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if !args.is_empty() {
         renderer.line(MessageStyle::Error, "Usage: /copy")?;
@@ -435,7 +379,6 @@ fn handle_copy_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
     Ok(SlashCommandOutcome::CopyLatestAssistantReply)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_tasks_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if !args.is_empty() {
         renderer.line(MessageStyle::Error, "Usage: /tasks")?;
@@ -444,7 +387,6 @@ fn handle_tasks_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slash
     Ok(SlashCommandOutcome::ToggleTasksPanel)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_jobs_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if !args.is_empty() {
         renderer.line(MessageStyle::Error, "Usage: /jobs")?;
@@ -453,8 +395,9 @@ fn handle_jobs_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
     Ok(SlashCommandOutcome::ShowJobsPanel)
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    use vtcode_core::terminal_setup::terminals::iterm2::TerminalIconCommand;
+
     match args.trim().to_ascii_lowercase().as_str() {
         "" => Ok(SlashCommandOutcome::StartTerminalSetup),
         "install-iterm2-icon" => {
@@ -466,13 +409,25 @@ fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Res
             Ok(SlashCommandOutcome::Handled)
         }
         _ => {
-            renderer.line(MessageStyle::Error, "Usage: /terminal-setup [install-iterm2-icon|reset-iterm2-icon]")?;
+            match vtcode_core::terminal_setup::terminals::iterm2::parse_terminal_icon_command(args) {
+                Some(TerminalIconCommand::Show) => {
+                    vtcode_core::terminal_setup::terminals::iterm2::run_terminal_icon_show(renderer)?;
+                }
+                Some(TerminalIconCommand::Switch(preference)) => {
+                    vtcode_core::terminal_setup::terminals::iterm2::run_terminal_icon_switch(renderer, preference)?;
+                }
+                None => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Usage: /terminal-setup [install-iterm2-icon|reset-iterm2-icon|icon [light|dark|clear|tinted|dynamic]]",
+                    )?;
+                }
+            }
             Ok(SlashCommandOutcome::Handled)
         }
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_vim_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     match args.trim().to_ascii_lowercase().as_str() {
         "" => Ok(SlashCommandOutcome::ToggleVimMode { enable: None }),
@@ -485,72 +440,46 @@ fn handle_vim_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCo
     }
 }
 
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_webmcp_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
-    match args.trim() {
-        "" | "status" => return Ok(SlashCommandOutcome::ShowWebmcpStatus),
-        "help" => return Ok(SlashCommandOutcome::ShowWebmcpHelp),
-        "tools" => {
-            renderer.line(MessageStyle::Info, "WebMCP tools: workspace.list_files, workspace.read_file, patch.propose, patch.apply, checks.run, patch.revert, turn.request, cancel")?;
+    let command = match parse_webmcp_slash_command(args) {
+        Ok(command) => command,
+        Err(WebmcpSlashCommandParseError::InvalidConnectionArguments) => {
+            renderer.line(
+                MessageStyle::Error,
+                "Usage: /webmcp connect [--replace] <exact-browser-origin> (alias: pair; for example, /webmcp connect http://localhost:5173)",
+            )?;
+            return Ok(SlashCommandOutcome::Handled);
         }
-        "roots" => {
+        Err(WebmcpSlashCommandParseError::UnknownCommand) => {
+            renderer.line(
+                MessageStyle::Error,
+                "Usage: /webmcp [help|status|tools|roots|connect|pair [--replace] <origin>|unpair|stop]",
+            )?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+
+    match command {
+        WebmcpSlashCommand::Status => Ok(SlashCommandOutcome::ShowWebmcpStatus),
+        WebmcpSlashCommand::Help => Ok(SlashCommandOutcome::ShowWebmcpHelp),
+        WebmcpSlashCommand::Tools => {
+            renderer.line(MessageStyle::Info, WEBMCP_TOOLS_HELP)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+        WebmcpSlashCommand::Roots => {
+            renderer.line(MessageStyle::Info, WEBMCP_ROOTS_HELP)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+        WebmcpSlashCommand::ConnectHelp => {
             renderer.line(
                 MessageStyle::Info,
-                "Headless WebMCP roots are configured with [webmcp].allowed_roots or --allowed-root.",
+                "Usage: /webmcp connect [--replace] <exact-browser-origin> (alias: pair; for example, /webmcp connect http://localhost:5173)",
             )?;
+            Ok(SlashCommandOutcome::Handled)
         }
-        "pair" => renderer.line(
-            MessageStyle::Info,
-            "Usage: /webmcp pair [--replace] <exact-browser-origin> (for example, /webmcp pair http://localhost:5173)",
-        )?,
-        "unpair" => return Ok(SlashCommandOutcome::StopWebmcp),
-        pair_args if pair_args.starts_with("pair ") => {
-            let pair_args = pair_args.strip_prefix("pair ").unwrap_or_default();
-            if let Some((origin, replace)) = parse_webmcp_pair_args(pair_args) {
-                return Ok(SlashCommandOutcome::StartWebmcp { origin, replace });
-            }
-            renderer.line(
-                MessageStyle::Error,
-                "Usage: /webmcp pair [--replace] <exact-browser-origin> (for example, /webmcp pair http://localhost:5173)",
-            )?;
-        }
-        _ => {
-            renderer.line(
-                MessageStyle::Error,
-                "Usage: /webmcp [help|status|tools|roots|pair [--replace] <origin>|unpair]",
-            )?;
-        }
+        WebmcpSlashCommand::Connect { origin, replace } => Ok(SlashCommandOutcome::StartWebmcp { origin, replace }),
+        WebmcpSlashCommand::Unpair => Ok(SlashCommandOutcome::StopWebmcp),
     }
-    Ok(SlashCommandOutcome::Handled)
-}
-
-fn parse_webmcp_pair_args(args: &str) -> Option<(String, bool)> {
-    let tokens = args.split_whitespace().collect::<Vec<_>>();
-    if tokens.is_empty() {
-        return None;
-    }
-
-    let mut origin = None;
-    let mut replace = false;
-    let mut index = 0;
-    while index < tokens.len() {
-        match tokens[index] {
-            "--replace" if !replace => replace = true,
-            "--origin" if origin.is_none() => {
-                index += 1;
-                let value = tokens.get(index).copied()?;
-                if value.starts_with('-') {
-                    return None;
-                }
-                origin = Some(value);
-            }
-            token if origin.is_none() && !token.starts_with('-') => origin = Some(token),
-            _ => return None,
-        }
-        index += 1;
-    }
-
-    origin.map(|origin| (origin.to_string(), replace))
 }
 
 pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_skill(
@@ -573,6 +502,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "compact" | "context" => handle_compact_command(args, renderer),
         "copy" => handle_copy_command(args, renderer),
         "status" => Ok(SlashCommandOutcome::ShowStatus),
+        "splash" => Ok(SlashCommandOutcome::ShowSplash),
         "stop" => Ok(SlashCommandOutcome::StopAgent),
         "pause" => handle_pause_command(renderer),
         "update" => handle_update_command(args),

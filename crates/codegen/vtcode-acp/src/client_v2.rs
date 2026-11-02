@@ -54,14 +54,12 @@ pub(crate) struct AcpClientV2 {
     base_url: String,
 
     /// Local client identifier
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     client_id: String,
 
     /// Client capabilities
     capabilities: ClientCapabilities,
 
     /// Request timeout
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     timeout: Duration,
 
     /// Request ID counter for correlation

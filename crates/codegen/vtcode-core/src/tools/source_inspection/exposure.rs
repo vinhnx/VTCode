@@ -9,6 +9,37 @@ fn output_text(value: &Value) -> Option<&str> {
         .find_map(|key| value.get(key).and_then(Value::as_str))
 }
 
+fn complete_shell_output(args: &Value, output: &Value, text: &str, content: &str) -> bool {
+    if text != content
+        || output.get("exit_code").and_then(Value::as_i64) != Some(0)
+        || output.get("success").and_then(Value::as_bool) == Some(false)
+        || [
+            "cancelled",
+            "blocked",
+            "not_executed",
+            "termination_requested",
+            "truncated",
+            "result_ref_only",
+        ]
+        .iter()
+        .any(|key| output.get(key).and_then(Value::as_bool) == Some(true))
+        || output.get("output_truncated").and_then(Value::as_bool) == Some(true)
+        || output.get("spool_path").is_some()
+    {
+        return false;
+    }
+    let Some(command) = crate::tools::command_args::shell_command_text_with_args(args) else {
+        return false;
+    };
+    let Some(commands) = crate::tools::tool_intent::readonly::static_shell_command_words(&command) else {
+        return false;
+    };
+    let Ok(Some(words)) = crate::tools::command_args::command_words(args) else {
+        return false;
+    };
+    commands.as_slice() == [words]
+}
+
 fn read_support(name: &str, args: &Value, output: &Value) -> Option<String> {
     // Fingerprint the actual returned source, not decorative output metadata.
     let digest = if name == tools::CODE_SEARCH {
@@ -158,10 +189,14 @@ impl ToolRegistry {
 
     pub(crate) async fn observe_source_output(&self, name: &str, args: &Value, output: &Value) {
         let inspection = self.edited_file_monitor_ref().source_inspection();
-        if inspection.mode() == InspectionMode::Off || output.get("error").is_some() {
+        let inspection_enabled = inspection.mode() != InspectionMode::Off;
+        if output.get("error").is_some() {
             return;
         }
         if name == tools::CODE_SEARCH {
+            if !inspection_enabled {
+                return;
+            }
             let Some(support) = read_support(name, args, output) else {
                 return;
             };
@@ -204,6 +239,9 @@ impl ToolRegistry {
         };
         let file_read = name == tools::READ_FILE
             || (name == tools::UNIFIED_FILE && crate::tools::tool_intent::file_operation_action(args) == Some("read"));
+        if file_read && !inspection_enabled {
+            return;
+        }
         let target = if file_read {
             output.get("path").and_then(Value::as_str).map(|path| SourceReadTarget {
                 path: PathBuf::from(path),
@@ -224,6 +262,15 @@ impl ToolRegistry {
         let Ok(content) = tokio::fs::read_to_string(&path).await else {
             return;
         };
+        if !file_read
+            && complete_shell_output(args, output, text, &content)
+            && let Err(error) = self.edited_file_monitor_ref().record_read_text(&path, &content)
+        {
+            tracing::warn!(path = %path.display(), %error, "failed to record complete shell read");
+        }
+        if !inspection_enabled {
+            return;
+        }
         let source_lines: Vec<_> = content.lines().collect();
         let lines = if let Some(start) = raw_start {
             text.lines()

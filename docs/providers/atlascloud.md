@@ -94,6 +94,12 @@ The following examples mirror the validated Atlas chat pool used across recent A
   `openai/gpt-5.1-chat`
 - `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/gpt-4.1`, `openai/gpt-4.1-mini`, `openai/gpt-4.1-nano`
 - `openai/o1`, `openai/o3`, `openai/o3-mini`, `openai/o4-mini`, `anthropic/claude-sonnet-4.5-20250929`
+
+> Note (Oct 2026 OpenAI deprecations): `openai/gpt-5.1` shuts down Apr 1, 2027 (use `gpt-6-sol`);
+> `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/gpt-4.1`, `openai/gpt-4.1-mini`, and `openai/gpt-4.1-nano`
+> shut down Jan 14, 2027 / Oct 23, 2026 (use `gpt-6-luna`); `openai/o1`, `openai/o3-mini`, and `openai/o4-mini`
+> are deprecated (use `gpt-5.6-sol`/`gpt-5.6-terra`). Prefer neutral current IDs when configuring Atlas slugs.
+
 - `deepseek-ai/deepseek-v3.2`, `openai/gpt-5`, `openai/gpt-5-chat`, `openai/gpt-5-mini`, `openai/gpt-5-nano`
 - `openai/gpt-5.2`, `openai/gpt-5.2-chat`, `google/gemini-2.5-pro`, `anthropic/claude-opus-4.5-20251101`,
   `google/gemini-3-flash-preview`

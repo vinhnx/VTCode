@@ -37,6 +37,7 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::ToggleTasksPanel
         | SlashCommandOutcome::ShowJobsPanel
         | SlashCommandOutcome::ShowStatus
+        | SlashCommandOutcome::ShowSplash
         | SlashCommandOutcome::ShowTranscriptStats
         | SlashCommandOutcome::Explain { .. }
         | SlashCommandOutcome::ExportTranscript { .. }
@@ -131,6 +132,7 @@ async fn route_runtime_outcome(
         SlashCommandOutcome::ToggleTasksPanel => handlers::handle_toggle_tasks_panel(ctx).await,
         SlashCommandOutcome::ShowJobsPanel => handlers::handle_show_jobs_panel(ctx).await,
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
+        SlashCommandOutcome::ShowSplash => handlers::handle_show_splash(ctx).await,
         SlashCommandOutcome::ShowWebmcpStatus => handlers::handle_show_webmcp_status(ctx).await,
         SlashCommandOutcome::ShowWebmcpHelp => handlers::handle_show_webmcp_help(ctx).await,
         SlashCommandOutcome::StartWebmcp { origin, replace } => {

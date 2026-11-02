@@ -50,7 +50,7 @@ fn has_compaction_block(message: &Message) -> bool {
 pub(crate) fn build_messages(
     request: &LLMRequest,
     messages_to_process: &[Message],
-    messages_cache_control: &Option<CacheControl>,
+    messages_cache_control: Option<&CacheControl>,
     prompt_cache_settings: &AnthropicPromptCacheSettings,
     breakpoints_remaining: &mut usize,
     default_model: &str,
@@ -184,7 +184,7 @@ pub(crate) fn build_messages(
     // Rolling-anchor placement: identify qualifying user messages and place
     // breakpoints on the last two (primary + safety net anchor).
     if prompt_cache_settings.cache_user_messages
-        && let Some(cc) = messages_cache_control.as_ref()
+        && let Some(cc) = messages_cache_control
     {
         let qualifying: Vec<usize> = messages
             .iter()
@@ -483,9 +483,15 @@ mod tests {
         };
         let mut breakpoints_remaining = 4usize;
 
-        let messages =
-            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining, "")
-                .expect("build_messages");
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            cache_control.as_ref(),
+            &settings,
+            &mut breakpoints_remaining,
+            "",
+        )
+        .expect("build_messages");
 
         assert_eq!(message_anchor_flags(&messages), vec![false, true, true]);
         assert_eq!(breakpoints_remaining, 2);
@@ -500,9 +506,15 @@ mod tests {
         };
         let mut breakpoints_remaining = 0usize;
 
-        let messages =
-            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining, "")
-                .expect("build_messages");
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            cache_control.as_ref(),
+            &settings,
+            &mut breakpoints_remaining,
+            "",
+        )
+        .expect("build_messages");
 
         assert_eq!(message_anchor_flags(&messages), vec![false, false, false]);
         assert_eq!(breakpoints_remaining, 0);
@@ -517,9 +529,15 @@ mod tests {
         };
         let mut breakpoints_remaining = 1usize;
 
-        let messages =
-            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining, "")
-                .expect("build_messages");
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            cache_control.as_ref(),
+            &settings,
+            &mut breakpoints_remaining,
+            "",
+        )
+        .expect("build_messages");
 
         assert_eq!(message_anchor_flags(&messages), vec![false, false, true]);
         assert_eq!(breakpoints_remaining, 0);
@@ -540,9 +558,15 @@ mod tests {
         let settings = AnthropicPromptCacheSettings::default();
         let mut breakpoints_remaining = 4usize;
 
-        let messages =
-            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining, "")
-                .expect("build_messages");
+        let messages = build_messages(
+            &request,
+            &source_messages,
+            cache_control.as_ref(),
+            &settings,
+            &mut breakpoints_remaining,
+            "",
+        )
+        .expect("build_messages");
 
         // Both long messages qualify (default threshold is 256 chars); the short
         // middle message never receives an anchor.
@@ -610,7 +634,7 @@ mod tests {
         let messages = build_messages(
             &request,
             request.messages.as_ref(),
-            &None,
+            None,
             &AnthropicPromptCacheSettings::default(),
             &mut breakpoints_remaining,
             "",
@@ -665,7 +689,7 @@ mod tests {
         let error = build_messages(
             &request,
             &history,
-            &None,
+            None,
             &AnthropicPromptCacheSettings::default(),
             &mut breakpoints_remaining,
             "",
@@ -793,7 +817,7 @@ mod tests {
         let build = |history: &[Message]| {
             let request = LLMRequest::default();
             let mut breakpoints_remaining = 4usize;
-            build_messages(&request, history, &cache_control, &settings, &mut breakpoints_remaining, "")
+            build_messages(&request, history, cache_control.as_ref(), &settings, &mut breakpoints_remaining, "")
                 .expect("build_messages")
         };
 

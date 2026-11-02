@@ -32,10 +32,10 @@ impl ToolFailureTracker {
 
     /// Calculate backoff duration based on failure count.
     pub fn backoff_duration(&self) -> Duration {
-        let base_ms = 500;
-        let max_ms = 5_000;
+        let base_ms: u64 = 500;
+        let max_ms: u64 = 5_000;
         let failures = self.consecutive_failures.saturating_sub(5);
-        let backoff_ms = base_ms * 2_u64.pow(failures.min(8));
+        let backoff_ms = base_ms.saturating_mul(2_u64.saturating_pow(failures.min(8)));
         Duration::from_millis(backoff_ms.min(max_ms))
     }
 }

@@ -111,7 +111,11 @@ if create_compatibility_asset "$tmp/bad.tar.gz" "$tmp/should-not-exist" >/dev/nu
 else
     pass "missing binary rejected"
 fi
-[[ -e "$tmp/should-not-exist" ]] && fail_test "missing binary left output file" || pass "missing binary left no output"
+if [[ -e "$tmp/should-not-exist" ]]; then
+    fail_test "missing binary left output file"
+else
+    pass "missing binary left no output"
+fi
 
 # Multiple matching binaries.
 mkdir -p "$tmp/src4/a" "$tmp/src4/b"
@@ -216,8 +220,8 @@ normal_glob="$stage/vtcode-*.tar.gz $stage/vtcode-*.zip"
 # Simulate the two-phase upload the release script performs.
 # shellcheck disable=SC2086
 gh release upload "$version" $compat_glob --clobber
-# shellcheck disable=SC2086,SC2046
-gh release upload "$version" $(echo $normal_glob) --clobber
+# shellcheck disable=SC2086
+gh release upload "$version" $normal_glob --clobber
 
 first_compat_line=$(grep -n '\.tar\.gz\.compat' "$gh_calls" | head -1 | cut -d: -f1)
 first_normal_line=$(grep -nE '\.(tar\.gz|zip)([^.]|$)' "$gh_calls" \
@@ -236,6 +240,8 @@ echo "Testing upload_release_asset_with_retry..."
 sleep() { :; }
 retry_calls="$tmp/retry-calls"
 : >"$retry_calls"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     printf 'call\n' >>"$retry_calls"
     local remaining
@@ -281,6 +287,8 @@ echo "Testing download_ci_artifact_with_retry..."
 # succeeds, for any `gh` invocation including `run download`.
 download_calls="$tmp/download-calls"
 : >"$download_calls"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     printf 'call\n' >>"$download_calls"
     local remaining
@@ -325,6 +333,153 @@ else
     pass "download missing args rejected"
 fi
 
+echo "Testing ci_run_has_version_artifact / find_ci_run_for_version..."
+
+# Instrumented `gh` stub. `run list` returns two successful runs, newest first
+# (200 built the previous version, 100 built the requested one). `api` reports
+# each run's artifact names keyed by the run id in the artifacts URL.
+version_match_calls="$tmp/version-match-calls"
+: >"$version_match_calls"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
+gh() {
+    if [[ "$1" == "run" && "$2" == "list" ]]; then
+        printf 'call\n' >>"$version_match_calls"
+        printf '200\n100\n'
+        return 0
+    fi
+    if [[ "$1" == "api" ]]; then
+        printf 'call\n' >>"$version_match_calls"
+        local arg url=""
+        for arg in "$@"; do
+            [[ "$arg" == *"/runs/"* ]] && url="$arg"
+        done
+        local rid="${url#*runs/}"
+        rid="${rid%%/*}"
+        case "$rid" in
+        100) printf 'vtcode-9.9.9-x86_64-unknown-linux-gnu\nvtcode-9.9.9-x86_64-unknown-linux-musl\n' ;;
+        200) printf 'vtcode-9.9.8-x86_64-unknown-linux-gnu\n' ;;
+        esac
+        return 0
+    fi
+    return 1
+}
+export -f gh
+
+if ci_run_has_version_artifact 100 "9.9.9" && ! ci_run_has_version_artifact 100 "9.9.8"; then
+    pass "ci_run_has_version_artifact matches the version embedded in artifact names"
+else
+    fail_test "ci_run_has_version_artifact version matching"
+fi
+
+got=$(find_ci_run_for_version "9.9.9" 20 || true)
+if [[ "$got" == "100" ]]; then
+    pass "find_ci_run_for_version skips stale runs and finds the matching version"
+else
+    fail_test "find_ci_run_for_version: expected 100, got '$got'"
+fi
+
+# No run matches the requested version -> empty output and nonzero status.
+set +e
+got=$(find_ci_run_for_version "7.7.7" 20)
+rc=$?
+set -e
+if [[ "$rc" -ne 0 && -z "$got" ]]; then
+    pass "find_ci_run_for_version reports no match for an unbuilt version"
+else
+    fail_test "expected no match (rc=$rc, got '$got')"
+fi
+
+# API failure must fail closed (never adopt an unverified run).
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
+gh() { return 1; }
+export -f gh
+if ci_run_has_version_artifact 100 "9.9.9" >/dev/null 2>&1; then
+    fail_test "ci_run_has_version_artifact should fail closed on API error"
+else
+    pass "ci_run_has_version_artifact fails closed on API error"
+fi
+if find_ci_run_for_version "9.9.9" 20 >/dev/null 2>&1; then
+    fail_test "find_ci_run_for_version should fail closed on API error"
+else
+    pass "find_ci_run_for_version fails closed on API error"
+fi
+
+if find_ci_run_for_version >/dev/null 2>&1; then
+    fail_test "find_ci_run_for_version missing arg should fail"
+else
+    pass "find_ci_run_for_version missing arg rejected"
+fi
+
+echo "Testing local CI run filtering..."
+
+# Evaluate the actual jq expression against asymmetric rows. The existing
+# version-selection stub returns IDs directly and cannot catch filter drift.
+filtered_artifact_calls="$tmp/filtered-artifact-calls"
+: >"$filtered_artifact_calls"
+# Called indirectly by find_ci_run_for_version from the sourced helper.
+# shellcheck disable=SC2329
+gh() {
+    if [[ "$1" == "run" && "$2" == "list" ]]; then
+        shift 2
+        local filter=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+            --branch|--event)
+                # These server-side filters are intentionally avoided by the
+                # gh JSON-output compatibility path.
+                return 1
+                ;;
+            --jq)
+                filter="$2"
+                shift 2
+                ;;
+            *) shift ;;
+            esac
+        done
+        [[ -n "$filter" ]] || return 1
+        printf '%s\n' '[
+            {"databaseId":500,"conclusion":"success","headBranch":"main","event":"push"},
+            {"databaseId":400,"conclusion":"success","headBranch":"feature","event":"workflow_dispatch"},
+            {"databaseId":300,"conclusion":"failure","headBranch":"main","event":"workflow_dispatch"},
+            {"databaseId":200,"conclusion":"success","headBranch":"main","event":"workflow_dispatch"},
+            {"databaseId":100,"conclusion":"success","headBranch":"main","event":"workflow_dispatch"}
+        ]' | jq -r "$filter"
+        return
+    fi
+    if [[ "$1" == "api" ]]; then
+        local arg url=""
+        for arg in "$@"; do
+            [[ "$arg" == *"/runs/"* ]] && url="$arg"
+        done
+        local rid="${url#*runs/}"
+        rid="${rid%%/*}"
+        printf '%s\n' "$rid" >>"$filtered_artifact_calls"
+        if [[ "$rid" == "200" ]]; then
+            printf 'vtcode-9.9.8-x86_64-unknown-linux-gnu\n'
+        else
+            printf 'vtcode-9.9.9-x86_64-unknown-linux-gnu\n'
+        fi
+        return 0
+    fi
+    return 1
+}
+export -f gh
+
+got=$(find_ci_run_for_version "9.9.9" 20 || true)
+if [[ "$got" == "100" ]]; then
+    pass "local filtering selects only successful main dispatches with the requested artifact version"
+else
+    fail_test "local filtering: expected 100, got '$got'"
+fi
+filtered_calls=$(<"$filtered_artifact_calls")
+if [[ "$filtered_calls" == $'200\n100' ]]; then
+    pass "excluded CI runs cause no artifact API calls"
+else
+    fail_test "unexpected artifact lookup sequence: '$filtered_calls'"
+fi
+
 echo "Testing ensure_release_push_access..."
 
 # Save harness-provided tokens; the fallback path unsets them.
@@ -333,6 +488,8 @@ _saved_gh_token="${GH_TOKEN:-__unset__}"
 
 # Current auth already has push -> success, env tokens untouched.
 export GITHUB_TOKEN="pull-only-token"
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     if [[ "$1" == "api" ]]; then
         printf 'true'
@@ -351,6 +508,8 @@ else
 fi
 
 # Env token is pull-only but stored credentials have push -> auto-unset.
+# Invoked through the sourced release-assets.sh under test.
+# shellcheck disable=SC2329
 gh() {
     if [[ "$1" == "api" ]]; then
         if [[ -n "${GITHUB_TOKEN:-}" || -n "${GH_TOKEN:-}" ]]; then
@@ -397,6 +556,55 @@ fi
 # Restore harness tokens.
 if [[ "$_saved_github_token" == "__unset__" ]]; then unset GITHUB_TOKEN; else export GITHUB_TOKEN="$_saved_github_token"; fi
 if [[ "$_saved_gh_token" == "__unset__" ]]; then unset GH_TOKEN; else export GH_TOKEN="$_saved_gh_token"; fi
+
+echo "Testing desktop_archive_name (updater-safe shape)..."
+
+desktop_name=$(desktop_archive_name "0.181.0" "aarch64-apple-darwin")
+if [[ "$desktop_name" == "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" ]]; then
+    pass "desktop name is vtcode-desktop-<v>-<target>.zip"
+else
+    fail_test "desktop name: got $desktop_name"
+fi
+
+if desktop_archive_name "0.181.0" >/dev/null 2>&1; then
+    fail_test "desktop name missing arg should fail"
+else
+    pass "desktop name missing arg rejected"
+fi
+
+if [[ "$desktop_name" == vtcode-*.zip ]]; then
+    pass "desktop name rides the vtcode-*.zip upload queue glob"
+else
+    fail_test "desktop name must match the vtcode-*.zip upload glob: got $desktop_name"
+fi
+
+echo "Testing desktop asset never matches updater selection (load-bearing)..."
+
+# Mirror of `select_archive_asset` in src/updater/github.rs: the modern updater
+# requires EXACTLY ONE asset with starts_with("vtcode-") &&
+# ends_with("{target}.tar.gz"|"{target}.zip"). A desktop asset matching any CLI
+# target would make every self-update fail with "multiple compatible
+# archives". The legacy updater additionally matches `{target}.tar.gz`
+# substrings, which a .zip name must never contain.
+desktop_lower=$(printf '%s' "$desktop_name" | tr '[:upper:]' '[:lower:]')
+collision=0
+for item in "x86_64-apple-darwin:tar.gz" "aarch64-apple-darwin:tar.gz" \
+    "x86_64-unknown-linux-gnu:tar.gz" "x86_64-unknown-linux-musl:tar.gz" \
+    "aarch64-unknown-linux-gnu:tar.gz" "x86_64-pc-windows-msvc:zip"; do
+    target="${item%%:*}"
+    ext="${item##*:}"
+    if [[ "$desktop_lower" == vtcode-* && "$desktop_lower" == *"${target}.${ext}" ]]; then
+        fail_test "desktop asset collides with modern updater selection for $target"
+        collision=1
+    fi
+    if [[ "$desktop_lower" == *"${target}.tar.gz"* ]]; then
+        fail_test "desktop asset collides with legacy updater selection for $target"
+        collision=1
+    fi
+done
+if [[ "$collision" -eq 0 ]]; then
+    pass "desktop asset matches no updater selector for any CLI target"
+fi
 
 if [[ "$fail" -ne 0 ]]; then
     echo "FAIL: release-assets tests failed"

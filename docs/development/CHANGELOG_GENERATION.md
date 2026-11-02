@@ -26,6 +26,24 @@ The configuration file `cliff.toml` is located at the project root. It defines:
 - **Filtering**: Which commits to exclude (version bumps, release commits)
 - **Template**: The Markdown format for changelog entries
 
+### Lint-clean output
+
+`CHANGELOG.md` is linted by `scripts/check_markdown.py`, so the template is kept lint-clean by construction.
+When editing `cliff.toml`, regenerate and lint the result:
+
+```bash
+git-cliff --config cliff.toml -o /tmp/changelog.md
+npx --yes markdownlint-cli2@0.23.3 --config .markdownlint-cli2.jsonc /tmp/changelog.md
+```
+
+Keep exactly one blank line around headings and lists. git-cliff's `\` line-continuation swallows the newline
+*and* any following blank lines or indentation, so a blank line survives only when the preceding line does not
+end with `\`. Keep the author space inside the `{% if %}` for `commit.remote.username`, otherwise a missing
+username leaves a trailing space (MD009). The `header` emits a file-level `markdownlint-disable` for the rules
+that arbitrary commit subjects can violate: MD012 (a full regeneration leaves a blank line at end-of-file),
+MD013 (unbounded line length), MD024 (tags that normalize to the same version heading), and MD033 (subjects
+containing `<Type>`). These depend on commit text, not on the template.
+
 ### Commit Types
 
 The following conventional commit types are recognized:
@@ -175,7 +193,9 @@ The following commit patterns are automatically excluded from the changelog:
 - `update changelog` - Changelog update commits
 - `update TODO` / `update TODOs` / `update project TODO` (any case) - Owner-only `docs/project/TODO.md` churn
 - `update project` (exact, any case) - Owner-only project-file churn
-- Bare `Update ...` / `Updates ...` subjects (any case, e.g. `Update README`, `Update docs`) - Owner maintenance noise. Conventional commits that merely contain "update" (e.g. `docs: update ...`, `refactor: update TODO with ...`) are still included.
+- Bare `Update ...` / `Updates ...` subjects (any case, e.g. `Update README`, `Update docs`) - Owner
+  maintenance noise. Conventional commits that merely contain "update" (e.g. `docs: update ...`,
+  `refactor: update TODO with ...`) are still included.
 
 ### Subject-Line-Only Matching (important)
 

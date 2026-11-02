@@ -39,6 +39,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
+mod completion;
 mod config_helpers;
 mod constants;
 mod continuation;
@@ -48,6 +49,7 @@ mod evaluator_types;
 mod execute;
 mod execute_checks;
 mod execute_helpers;
+mod headless_planning;
 mod helpers;
 mod orchestration;
 mod output;
@@ -56,6 +58,7 @@ mod planner_types;
 pub mod prompt_alignment;
 mod replan_helpers;
 mod retry;
+mod runtime_prompt;
 mod summarize;
 mod summary;
 mod task_setup;
@@ -181,7 +184,7 @@ impl AgentRunner {
 
     fn runner_println(&self, args: std::fmt::Arguments) {
         if !self.quiet {
-            println!("{args}");
+            println!("{}", vtcode_commons::sanitizer::redact_secrets(args.to_string()));
         }
     }
 

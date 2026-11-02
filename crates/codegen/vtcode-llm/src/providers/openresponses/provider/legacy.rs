@@ -32,7 +32,7 @@ struct ChatCompletionDeltaWire<'a> {
 }
 
 impl OpenResponsesProvider {
-    fn build_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
+    pub(super) fn build_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
         let mut messages = Vec::new();
 
         if let Some(system) = &request.system_prompt {
@@ -106,6 +106,12 @@ impl OpenResponsesProvider {
                 })
                 .collect();
             payload["tools"] = json!(tools_json);
+        }
+
+        if payload.get("tools").is_some()
+            && let Some(choice) = &request.tool_choice
+        {
+            payload["tool_choice"] = choice.to_provider_format("openai");
         }
 
         Ok(payload)

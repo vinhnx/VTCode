@@ -23,6 +23,7 @@ impl ModelId {
             ModelId::GPT6Astra,
             ModelId::GPT6Sol,
             ModelId::GPT61Sol,
+            ModelId::GPT61Terra,
             ModelId::GPT6Luna,
             ModelId::GPT56Sol,
             ModelId::GPT56Terra,
@@ -63,7 +64,9 @@ impl ModelId {
             ModelId::MergeGatewayXaiGrok46,
             ModelId::MergeGatewayXaiGrok47,
             ModelId::MergeGatewayMinimaxH3,
+            ModelId::MergeGatewayMinimaxM31Flash,
             ModelId::MergeGatewayMoonshotKimiK3,
+            ModelId::MergeGatewayMoonshotKimiK31Pro,
             ModelId::MergeGatewayThinkingMachinesInkling,
             ModelId::MergeGatewayZaiGlm53Flash,
             ModelId::MergeGatewayZaiGlm53Flashx,
@@ -79,6 +82,7 @@ impl ModelId {
             ModelId::MergeGatewayOpenAIGpt6Astra,
             ModelId::MergeGatewayOpenAIGpt6Sol,
             ModelId::MergeGatewayOpenAIGpt61Sol,
+            ModelId::MergeGatewayOpenAIGpt61Terra,
             ModelId::MergeGatewayOpenAIGpt6Luna,
             ModelId::MergeGatewayXiaomimimoMimoV26Pro,
             ModelId::MergeGatewayXiaomimimoMimoV26Flash,
@@ -96,6 +100,7 @@ impl ModelId {
             ModelId::MiMoV26Flash,
             ModelId::MiMoV26ProUltraspeed,
             // Moonshot models
+            ModelId::MoonshotKimiK31Pro,
             ModelId::MoonshotKimiK3,
             // OpenCode Zen models
             // OpenCode Go models
@@ -110,6 +115,7 @@ impl ModelId {
             ModelId::OllamaGlm53Cloud,
             ModelId::OllamaGlm53FlashCloud,
             ModelId::OllamaMinimaxM3Cloud,
+            ModelId::OllamaMinimaxM31FlashCloud,
             ModelId::OllamaMistralLarge4Cloud,
             ModelId::OllamaMuseSparkOpenCloud,
             ModelId::OllamaDeepSeekV41FlashCloud,
@@ -121,6 +127,7 @@ impl ModelId {
             ModelId::LlamaCppGptOss20b,
             // MiniMax models
             ModelId::MinimaxM3,
+            ModelId::MinimaxM31Flash,
             // Hugging Face models
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
@@ -148,6 +155,8 @@ impl ModelId {
             ModelId::VercelOpenAiGpt56Sol,
             ModelId::VercelOpenAiGpt6Astra,
             ModelId::VercelOpenAiGpt56Luna,
+            ModelId::VercelOpenAiGpt6Sol,
+            ModelId::VercelOpenAiGpt6Luna,
             ModelId::VercelGoogleGemini38Flash,
             ModelId::VercelDeepseekFlash,
             ModelId::VercelMoonshotaiKimiK3,

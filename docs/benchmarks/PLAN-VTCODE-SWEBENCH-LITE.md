@@ -15,7 +15,8 @@ verify changes in an existing repository.
 - Suite and current leaderboards: <https://www.swebench.com/>
 - Evaluation/submission instructions: <https://www.swebench.com/submit.html>
 - Official experiments/submissions repository: <https://github.com/swe-bench/experiments>
-- Evaluation tooling: follow the current official instructions (the SWE-bench site recommends `sb-cli`; re-check its supported track and local/cloud requirements before running).
+- Evaluation tooling: follow the current official instructions (the SWE-bench site recommends `sb-cli`;
+  re-check its supported track and local/cloud requirements before running).
 - Evaluation tooling: follow current official instructions. The site recommends `sb-cli`; re-check
   its supported track and local/cloud requirements before running.
 
@@ -55,7 +56,9 @@ verify changes in an existing repository.
 - Verify the expected repository revision, workspace confinement, patch capture, and official test
   verification for each task.
 - Inspect failures by stage (setup, agent, patch capture, verifier) and check all logs/results for secrets.
-- Measure actual OpenAI spend, sandbox/compute spend, runtime, timeouts, and per-task usage. Project a full-suite budget as a planning estimate only; do not assume pilot cost scales perfectly or is a hard cap. Stop before the full run if the measured spend or failure rate exceeds the chosen budget.
+- Measure actual OpenAI spend, sandbox/compute spend, runtime, timeouts, and per-task usage. Project a
+  full-suite budget as a planning estimate only; do not assume pilot cost scales perfectly or is a hard
+  cap. Stop before the full run if the measured spend or failure rate exceeds the chosen budget.
 - Measure OpenAI and sandbox/compute spend, runtime, timeouts, and per-task usage. Treat a full-suite
   projection as an estimate, not a hard cap; pilot costs may not scale linearly. Stop before the full
   run if measured spend or failures exceed the approved budget.

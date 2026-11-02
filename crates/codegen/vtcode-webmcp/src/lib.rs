@@ -7,6 +7,8 @@
 
 #![deny(unsafe_code)]
 
+/// Opt-in companion task interface; execution remains binary-owned.
+pub mod companion;
 /// Error types shared by the bridge and adapters.
 pub mod error;
 /// Bounded canonical runtime event replay and subscription hub.
@@ -17,7 +19,7 @@ pub mod filesystem;
 pub mod pairing;
 /// Browser/server WebSocket protocol types.
 pub mod protocol;
-/// Read-only OpenAI-compatible remote MCP transport.
+/// Local stdio and authenticated remote MCP transports, read-only by default.
 pub mod remote_mcp;
 /// Runtime adapter traits and bridge result types.
 pub mod runtime;

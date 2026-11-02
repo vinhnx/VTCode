@@ -480,7 +480,30 @@ impl ToolExecutionError {
     #[must_use]
     pub fn from_tool_output(output: &Value) -> Option<Self> {
         let error_payload = output.get("error")?;
-        Self::from_error_payload(error_payload)
+        let mut error = Self::from_error_payload(error_payload)?;
+        if let Some(status) = output.get("http_status").and_then(Value::as_u64) {
+            error.category = if status == 429 {
+                ErrorCategory::RateLimit
+            } else {
+                ErrorCategory::Network
+            };
+            error.error_type = ToolErrorType::NetworkError;
+            error.retryable = status == 429 || (500..600).contains(&status);
+            let context = error.debug_context.get_or_insert_with(ToolErrorDebugContext::default);
+            context.metadata.push(("http_status".to_owned(), status.to_string()));
+        }
+        if output.get("error_type").and_then(Value::as_str) == Some("policy_blocked") {
+            error.error_type = ToolErrorType::PolicyViolation;
+            error.category = ErrorCategory::PermissionDenied;
+            error.retryable = false;
+        }
+        if let Some(action) = output.get("next_action").and_then(Value::as_str) {
+            error.recovery_suggestions = vec![Cow::Owned(action.to_owned())];
+        }
+        if let Some(delay) = output.get("retry_after_ms").and_then(Value::as_u64) {
+            error.retry_after_ms = Some(delay);
+        }
+        Some(error)
     }
 
     #[must_use]
@@ -536,7 +559,7 @@ impl ToolExecutionError {
 
     #[must_use]
     pub fn to_json_value(&self) -> Value {
-        json!({
+        let mut output = json!({
             "error": {
                 "tool_name": self.tool_name,
                 "error_type": self.error_type.as_str(),
@@ -556,7 +579,14 @@ impl ToolExecutionError {
                 "inspection_failure": self.inspection_failure,
                 "edit_failure": self.edit_failure,
             }
-        })
+        });
+        if let Some(context) = &self.debug_context
+            && let Some((_, status)) = context.metadata.iter().find(|(key, _)| key == "http_status")
+            && let Ok(status) = status.parse::<u16>()
+        {
+            output["error"]["http_status"] = json!(status);
+        }
+        output
     }
 }
 

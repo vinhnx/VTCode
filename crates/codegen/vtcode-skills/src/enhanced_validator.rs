@@ -4,7 +4,7 @@
 //! instead of failing on the first error.
 
 use crate::file_references::FileReferenceValidator;
-use crate::types::SkillManifest;
+use crate::types::{SkillManifest, resolve_skill_dir};
 use crate::validation_report::SkillValidationReport;
 use std::path::Path;
 
@@ -273,7 +273,7 @@ impl ComprehensiveSkillValidator {
         instructions: &str,
         report: &mut SkillValidationReport,
     ) {
-        let skill_root = skill_path.parent().unwrap_or(skill_path);
+        let skill_root = resolve_skill_dir(skill_path);
         let validator = FileReferenceValidator::new(skill_root.to_path_buf());
         let reference_errors = validator.validate_references(instructions);
 
@@ -316,6 +316,7 @@ impl Default for ComprehensiveSkillValidator {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use tempfile::TempDir;
 
     #[test]
     fn test_comprehensive_validation() {
@@ -336,5 +337,111 @@ mod tests {
 
         // Should have some suggestions for missing fields
         assert!(report.suggestions.iter().any(|s| s.field == Some("license".to_string())));
+    }
+
+    #[test]
+    fn directory_name_check_uses_skill_directory_not_its_parent() {
+        // Regression: validating with the skill directory (as the CLI does) must
+        // compare against the skill's own directory name, not its grandparent
+        // (e.g. "skills"), which produced a false "does not match directory
+        // name 'skills'" warning for every skill.
+        let temp = TempDir::new().expect("temp dir");
+        let skill_dir = temp.path().join("skills").join("my-skill");
+        std::fs::create_dir_all(&skill_dir).expect("create skill dir");
+
+        let manifest = SkillManifest {
+            name: "my-skill".to_string(),
+            description: "A test skill for validation".to_string(),
+            ..Default::default()
+        };
+
+        let validator = ComprehensiveSkillValidator::new();
+        let report = validator.validate_manifest(&manifest, &skill_dir);
+
+        assert!(
+            !report.generate_summary().contains("does not match directory name"),
+            "matching skill directory must not warn: {}",
+            report.generate_summary()
+        );
+    }
+
+    #[test]
+    fn directory_name_check_accepts_skill_md_path() {
+        // The same resolver must also accept the `SKILL.md` path (the shape
+        // `parse_skill_file` uses) and still compare against the skill directory.
+        let temp = TempDir::new().expect("temp dir");
+        let skill_dir = temp.path().join("skills").join("my-skill");
+        std::fs::create_dir_all(&skill_dir).expect("create skill dir");
+        std::fs::write(skill_dir.join("SKILL.md"), "# Body").expect("write SKILL.md");
+
+        let manifest = SkillManifest {
+            name: "my-skill".to_string(),
+            description: "A test skill for validation".to_string(),
+            ..Default::default()
+        };
+
+        let validator = ComprehensiveSkillValidator::new();
+        let report = validator.validate_manifest(&manifest, &skill_dir.join("SKILL.md"));
+
+        assert!(
+            !report.generate_summary().contains("does not match directory name"),
+            "SKILL.md path must resolve to the skill directory: {}",
+            report.generate_summary()
+        );
+    }
+
+    #[test]
+    fn file_references_resolve_against_skill_directory() {
+        // Regression: file references must be validated relative to the skill
+        // directory, not its parent, so an existing bundled resource resolves.
+        let temp = TempDir::new().expect("temp dir");
+        let skill_dir = temp.path().join("skills").join("ref-skill");
+        std::fs::create_dir_all(skill_dir.join("references")).expect("create references dir");
+        std::fs::write(skill_dir.join("references").join("guide.md"), "# Guide").expect("write reference");
+
+        let manifest = SkillManifest {
+            name: "ref-skill".to_string(),
+            description: "Reference skill".to_string(),
+            ..Default::default()
+        };
+        let instructions = "See references/guide.md for details.";
+
+        let validator = ComprehensiveSkillValidator::new();
+        let mut report = validator.validate_manifest(&manifest, &skill_dir);
+        validator.validate_file_references(&manifest, &skill_dir, instructions, &mut report);
+        report.finalize();
+
+        assert!(
+            !report.generate_summary().contains("File reference issue"),
+            "existing reference must resolve against the skill directory: {}",
+            report.generate_summary()
+        );
+    }
+
+    #[test]
+    fn file_references_report_missing_resource() {
+        // Asymmetric control: a genuinely missing resource is still flagged, so
+        // the root fix does not simply suppress all reference diagnostics.
+        let temp = TempDir::new().expect("temp dir");
+        let skill_dir = temp.path().join("skills").join("ref-skill");
+        std::fs::create_dir_all(&skill_dir).expect("create skill dir");
+
+        let manifest = SkillManifest {
+            name: "ref-skill".to_string(),
+            description: "Reference skill".to_string(),
+            ..Default::default()
+        };
+        let instructions = "See references/missing.md for details.";
+
+        let validator = ComprehensiveSkillValidator::new();
+        let mut report = validator.validate_manifest(&manifest, &skill_dir);
+        validator.validate_file_references(&manifest, &skill_dir, instructions, &mut report);
+        report.finalize();
+
+        assert!(
+            report.generate_summary().contains("File reference issue"),
+            "missing reference must still be flagged: {}",
+            report.generate_summary()
+        );
     }
 }

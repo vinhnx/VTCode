@@ -103,7 +103,7 @@ fn options_signature(options: &[RequestUserInputOption]) -> String {
 
 fn normalize_option_text(text: &str) -> String {
     let lowered = text.to_lowercase().replace("(recommended)", "");
-    lowered.split_whitespace().collect::<Vec<_>>().join(" ").trim().to_string()
+    vtcode_commons::formatting::collapse_whitespace(&lowered)
 }
 
 fn is_generic_planning_option_label(label: &str) -> bool {

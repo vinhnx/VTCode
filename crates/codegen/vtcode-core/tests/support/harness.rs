@@ -14,7 +14,10 @@ use vtcode_core::utils::error_messages::{ERR_CREATE_DIR, ERR_WRITE_FILE};
 /// Lightweight harness helper for tests needing a workspace and tool registry.
 pub struct TestHarness {
     temp_dir: TempDir,
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(
+        dead_code,
+        reason = "Test-harness accessor: each integration binary uses a different subset."
+    )]
     session_id: String,
 }
 
@@ -28,12 +31,14 @@ impl TestHarness {
         self.temp_dir.path()
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(
+        dead_code,
+        reason = "Test-harness accessor: each integration binary uses a different subset."
+    )]
     pub fn workspace_path(&self) -> PathBuf {
         self.temp_dir.path().to_path_buf()
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub fn write_file(&self, relative: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result<PathBuf> {
         let path = self.workspace().join(relative);
         if let Some(parent) = path.parent() {
@@ -44,14 +49,20 @@ impl TestHarness {
         Ok(path)
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(
+        dead_code,
+        reason = "Test-harness accessor: each integration binary uses a different subset."
+    )]
     pub async fn registry(&self) -> ToolRegistry {
         let registry = ToolRegistry::new(self.workspace_path()).await;
         registry.set_harness_session(self.session_id.clone());
         registry
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(
+        dead_code,
+        reason = "Test-harness accessor: each integration binary uses a different subset."
+    )]
     pub fn session_id(&self) -> &str {
         &self.session_id
     }

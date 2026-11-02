@@ -494,7 +494,7 @@ async fn raw_completion(
     user_prompt: String,
     max_tokens: Option<u32>,
 ) -> Result<String> {
-    let request = uni::LLMRequest {
+    let mut request = uni::LLMRequest {
         messages: Arc::new(vec![uni::Message::user(user_prompt)]),
         system_prompt: Some(Arc::from(system_prompt)),
         model: model.to_string(),
@@ -503,8 +503,16 @@ async fn raw_completion(
         stream: false,
         ..Default::default()
     };
-    match provider.generate(request.clone()).await.map_err(|err| anyhow!(err)) {
-        Ok(response) => Ok(response.content_text().trim().to_string()),
+    if let Some(limit) = max_tokens {
+        request.set_auxiliary_output_budget(provider, limit);
+    }
+    match provider
+        .generate_auxiliary(request.clone())
+        .await
+        .map_err(|err| anyhow!(err))
+        .and_then(review_response_text)
+    {
+        Ok(text) => Ok(text),
         Err(primary_err) => {
             let Some(fallback_model) = fallback_model.filter(|candidate| *candidate != model) else {
                 return Err(primary_err);
@@ -515,11 +523,23 @@ async fn raw_completion(
                 error = %primary_err,
                 "auto permission review lightweight request failed; retrying with main model"
             );
-            let fallback_request = uni::LLMRequest { model: fallback_model.to_string(), ..request };
-            let response = provider.generate(fallback_request).await.map_err(|err| anyhow!(err))?;
-            Ok(response.content_text().trim().to_string())
+            request.model = fallback_model.to_string();
+            if let Some(limit) = max_tokens {
+                request.set_auxiliary_output_budget(provider, limit);
+            }
+            let response = provider.generate_auxiliary(request).await.map_err(|err| anyhow!(err))?;
+            review_response_text(response)
         }
     }
+}
+
+fn review_response_text(response: uni::LLMResponse) -> Result<String> {
+    if response.finish_reason != uni::FinishReason::Stop
+        || response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
+    {
+        return Err(anyhow!("auto permission review returned an incomplete or tool-call response"));
+    }
+    Ok(response.content_text().trim().to_string())
 }
 
 fn parse_stage_two_decision(raw: &str) -> Result<StageTwoDecision> {
@@ -683,6 +703,17 @@ mod tests {
         fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn permission_review_rejects_truncated_allow_labels() {
+        let complete = LLMResponse {
+            content: Some("ALLOW".into()),
+            finish_reason: FinishReason::Stop,
+            ..Default::default()
+        };
+        assert_eq!(review_response_text(complete.clone()).unwrap(), "ALLOW");
+        assert!(review_response_text(LLMResponse { finish_reason: FinishReason::Length, ..complete }).is_err());
     }
 
     #[test]

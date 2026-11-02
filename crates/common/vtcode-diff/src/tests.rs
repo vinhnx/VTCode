@@ -95,6 +95,49 @@ fn parser_rejects_incomplete_hunk_body() {
 }
 
 #[test]
+fn hunk_counts_match_encodes_the_hunk_invariant() {
+    // Context counts on both sides, Deletion only old, Addition only new.
+    let hunk = DiffHunk {
+        old_start: 1,
+        old_lines: 3,
+        new_start: 1,
+        new_lines: 2,
+        lines: vec![
+            DiffLine {
+                kind: DiffLineKind::Context,
+                old_line: Some(1),
+                new_line: Some(1),
+                text: "a\n".to_owned(),
+            },
+            DiffLine {
+                kind: DiffLineKind::Deletion,
+                old_line: Some(2),
+                new_line: None,
+                text: "b\n".to_owned(),
+            },
+            DiffLine {
+                kind: DiffLineKind::Addition,
+                old_line: None,
+                new_line: Some(2),
+                text: "c\n".to_owned(),
+            },
+        ],
+    };
+    // Derived line counts are (old, new) = (2, 2): a partial/over-declared
+    // header must be rejected on both sides independently.
+    assert!(hunk.counts_match(2, 2));
+    assert!(!hunk.counts_match(3, 2));
+    assert!(!hunk.counts_match(2, 3));
+    assert!(!hunk.counts_match(3, 3));
+}
+
+#[test]
+fn change_counts_total_is_overflow_safe() {
+    let counts = DiffChangeCounts { additions: usize::MAX, deletions: 4 };
+    assert_eq!(counts.total(), usize::MAX);
+}
+
+#[test]
 fn parser_rejects_unknown_backslash_metadata_inside_hunk() {
     let error = DiffDocument::from_unified("@@ -1 +1 @@\n-old\n\\ unexpected marker\n+new\n")
         .expect_err("only Git's no-newline marker is valid inside a hunk");

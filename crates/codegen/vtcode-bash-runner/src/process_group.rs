@@ -21,6 +21,9 @@
 
 use std::io;
 
+#[cfg(windows)]
+mod windows;
+
 #[cfg(unix)]
 use nix::errno::Errno;
 #[cfg(target_os = "linux")]
@@ -201,13 +204,12 @@ pub fn kill_process_group(process_group_id: u32) -> io::Result<()> {
 /// Kill a specific process group ID with a specific signal.
 #[cfg(unix)]
 pub fn kill_process_group_with_signal(process_group_id: u32, signal: KillSignal) -> io::Result<()> {
-    use std::io::ErrorKind;
-
     let pgid = Pid::from_raw(process_group_id as libc::pid_t);
     if let Err(err) = signal::killpg(pgid, signal.as_nix_signal()) {
-        let io_err = nix_err_to_io(err);
-        if io_err.kind() != ErrorKind::NotFound {
-            return Err(io_err);
+        // ESRCH means cleanup has already completed. Rust does not classify
+        // it as ErrorKind::NotFound on every host (including macOS).
+        if err != Errno::ESRCH {
+            return Err(nix_err_to_io(err));
         }
     }
 
@@ -269,14 +271,7 @@ pub fn kill_child_process_group_with_signal(_child: &mut tokio::process::Child, 
 /// Kill a process by PID on Windows.
 #[cfg(windows)]
 pub fn kill_process(pid: u32) -> io::Result<()> {
-    let status = std::process::Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .status()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other("taskkill failed"))
-    }
+    windows::kill_process(pid)
 }
 
 /// No-op on non-Windows platforms.
@@ -311,7 +306,6 @@ fn is_process_running(pid: u32) -> bool {
 }
 
 #[cfg(not(unix))]
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn is_process_running(_pid: u32) -> bool {
     // On non-Unix, assume running (will fail gracefully)
     true
@@ -401,8 +395,8 @@ pub fn graceful_kill_process_group(
     {
         let _ = initial_signal;
         let pid_arg = pid.to_string();
-        match std::process::Command::new("taskkill").args(["/PID", &pid_arg, "/T"]).status() {
-            Ok(status) if status.success() => {
+        match std::process::Command::new("taskkill").args(["/PID", &pid_arg, "/T"]).output() {
+            Ok(output) if output.status.success() => {
                 std::thread::sleep(grace_period);
                 match kill_process(pid) {
                     Ok(()) => GracefulTerminationResult::ForcefulKill,
@@ -443,6 +437,21 @@ pub async fn graceful_kill_process_group_default_async(pid: u32) -> GracefulTerm
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn process_group_cleanup_is_idempotent_after_child_exit() {
+        use std::os::unix::process::CommandExt;
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "exit 0"])
+            .process_group(0)
+            .spawn()
+            .expect("spawn isolated group");
+        let pid = child.id();
+        assert!(child.wait().expect("reap child").success());
+        assert!(kill_process_group(pid).is_ok());
+        assert!(kill_process_group_with_signal(pid, KillSignal::Int).is_ok());
+    }
 
     #[test]
     fn test_set_parent_death_signal_no_panic() {

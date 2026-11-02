@@ -2,7 +2,7 @@
 name = "vtcode-ui"
 version.workspace = true
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Unified UI crate for VT Code: design system, theme registry, and TUI framework"
 license.workspace = true
@@ -68,6 +68,10 @@ default = []
 # `hotpath/tokio` enables tokio channel/mutex wrappers used by the tui_hotpath
 # channel demo (article: channel throughput + Max queue as OOM early warning).
 profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-alloc", "hotpath/tokio"]
+# hotpath Cloud CI (`.github/workflows/hotpath-benchmark.yml`): report upload
+# metadata and Callgrind instruction counts for the merged `tui_hotpath` run.
+hotpath-cloud = ["profiling", "hotpath/hotpath-cloud"]
+hotpath-callgrind = ["profiling", "hotpath/hotpath-callgrind"]
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard          = { workspace = true }

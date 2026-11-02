@@ -82,6 +82,32 @@ fn thread_event_round_trip() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn permission_events_preserve_optional_tool_call_ids() -> Result<(), Box<dyn Error>> {
+    let event = ThreadEvent::PermissionResolved(PermissionResolvedEvent {
+        tool_name: "web_fetch".to_string(),
+        tool_call_id: Some("call-123".to_string()),
+        decision: PermissionDecision::Allow,
+        wait_ms: 2,
+    });
+
+    let json = serde_json::to_value(&event)?;
+    assert_eq!(json["tool_call_id"], "call-123");
+    let restored: ThreadEvent = serde_json::from_value(json)?;
+    assert_eq!(restored, event);
+
+    let legacy = serde_json::json!({
+        "type": "permission.requested",
+        "tool_name": "web_fetch"
+    });
+    let parsed: ThreadEvent = serde_json::from_value(legacy)?;
+    let ThreadEvent::PermissionRequested(requested) = parsed else {
+        panic!("expected permission.requested");
+    };
+    assert_eq!(requested.tool_call_id, None);
+    Ok(())
+}
+
+#[test]
 fn turn_blocked_event_round_trip() -> Result<(), Box<dyn Error>> {
     let event = ThreadEvent::TurnBlocked(Box::new(TurnBlockedEvent {
         completed_at: None,
@@ -104,6 +130,21 @@ fn turn_blocked_event_round_trip() -> Result<(), Box<dyn Error>> {
     let legacy = serde_json::json!({"type": "turn.blocked", "message": "blocked"});
     let parsed: ThreadEvent = serde_json::from_value(legacy)?;
     assert!(matches!(parsed, ThreadEvent::TurnBlocked(_)));
+    Ok(())
+}
+
+#[test]
+fn app_sandbox_denied_event_round_trip() -> Result<(), Box<dyn Error>> {
+    let event = ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+        tool: "mcp::demo::get_time".to_string(),
+        tier: "off".to_string(),
+        uris: vec!["ui://demo/app.html".to_string()],
+    }));
+
+    let json = serde_json::to_string(&event)?;
+    assert!(json.contains("app.sandbox_denied"));
+    let restored: ThreadEvent = serde_json::from_str(&json)?;
+    assert_eq!(restored, event);
     Ok(())
 }
 
@@ -470,6 +511,7 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
                 output: "done".to_string(),
                 exit_code: Some(0),
                 status: ToolCallStatus::Completed,
+                app_previews: Vec::new(),
             })),
         },
     });
@@ -478,6 +520,59 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
     let restored: ThreadEvent = serde_json::from_str(&json)?;
 
     assert_eq!(restored, event);
+    Ok(())
+}
+
+#[test]
+fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<dyn Error>> {
+    let item = ToolOutputItem {
+        call_id: "tool_1".to_string(),
+        tool_call_id: None,
+        spool_path: None,
+        output: "done".to_string(),
+        exit_code: Some(0),
+        status: ToolCallStatus::Completed,
+        app_previews: vec![AppPreviewItem {
+            uri: "ui://demo/app.html".to_string(),
+            mime_type: Some("text/html;profile=mcp-app".to_string()),
+            bytes: 4312,
+            blocks: 1,
+            ui: Some(AppUiPosture {
+                connect_domains: vec!["https://api.example.com".to_string()],
+                permissions: vec!["camera".to_string()],
+                ..AppUiPosture::default()
+            }),
+        }],
+    };
+
+    let value = serde_json::to_value(&item)?;
+    assert_eq!(value["app_previews"][0]["uri"], "ui://demo/app.html");
+    assert_eq!(value["app_previews"][0]["ui"]["connect_domains"], serde_json::json!(["https://api.example.com"]));
+    // Empty lists are omitted; absent fields decode to empty.
+    assert!(value["app_previews"][0]["ui"].get("frame_domains").is_none());
+    let restored: ToolOutputItem = serde_json::from_value(value)?;
+    assert_eq!(restored, item);
+
+    let bare = ToolOutputItem {
+        call_id: "tool_1".to_string(),
+        tool_call_id: None,
+        spool_path: None,
+        output: "done".to_string(),
+        exit_code: Some(0),
+        status: ToolCallStatus::Completed,
+        app_previews: Vec::new(),
+    };
+    let value = serde_json::to_value(&bare)?;
+    assert!(value.get("app_previews").is_none());
+
+    // Legacy payloads without the field decode to empty previews.
+    let legacy = serde_json::json!({
+        "call_id": "tool_1",
+        "output": "done",
+        "status": "completed",
+    });
+    let restored: ToolOutputItem = serde_json::from_value(legacy)?;
+    assert!(restored.app_previews.is_empty());
     Ok(())
 }
 
@@ -498,6 +593,7 @@ fn harness_item_round_trip() -> Result<(), Box<dyn Error>> {
                 duration_ms: None,
                 task_id: None,
                 session_id: None,
+                correlation_id: None,
                 exec_session_id: None,
                 status: None,
                 transcript_path: None,
@@ -530,6 +626,7 @@ fn background_completion_harness_item_preserves_terminal_identity() -> Result<()
                 duration_ms: None,
                 task_id: Some("task".to_string()),
                 session_id: Some("child-session".to_string()),
+                correlation_id: None,
                 exec_session_id: Some("exec-session".to_string()),
                 status: Some("stopped".to_string()),
                 transcript_path: Some("/tmp/transcript.jsonl".to_string()),
@@ -566,6 +663,7 @@ fn blocked_handoff_resolved_uses_stable_wire_name() -> Result<(), Box<dyn Error>
                 duration_ms: None,
                 task_id: None,
                 session_id: None,
+                correlation_id: None,
                 exec_session_id: None,
                 status: None,
                 transcript_path: None,

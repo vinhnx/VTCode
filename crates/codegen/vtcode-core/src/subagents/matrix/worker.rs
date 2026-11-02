@@ -3,6 +3,7 @@ use crate::core::agent::runner::{AgentRunner, RunnerSettings};
 use crate::core::agent::task::{Task, TaskOutcome};
 use crate::core::threads::ThreadBootstrap;
 use crate::exec::events::matrix::*;
+use crate::primary_agent::ActivePrimaryAgent;
 use crate::tools::registry::ToolRegistry;
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
@@ -86,6 +87,9 @@ pub(super) async fn execute(
         .await?;
         runner.set_quiet(true);
         runner.set_subagent_mode(true);
+        // Attach the worker spec's own tool/permission policy so concrete
+        // tool admission evaluates worker-local denies, not just globals.
+        runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
         let registry = runner.tool_registry();
         let worker_context = MatrixWorkerContext::new(assignment.clone());
         registry.set_matrix_worker(worker_context.clone());

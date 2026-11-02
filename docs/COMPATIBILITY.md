@@ -5,18 +5,19 @@ VT Code ecosystem.
 
 ## Quick Reference
 
-| Feature               | Linux | macOS | Windows  | WASM    | Notes                                                                                                                                                 |
-| --------------------- | ----- | ----- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core CLI              | Yes   | Yes   | Yes      | No      | Full terminal agent support                                                                                                                           |
-| TUI Interface         | Yes   | Yes   | Yes      | No      | Requires crossterm                                                                                                                                    |
-| Keyring Auth          | Yes   | Yes   | Yes      | No      | OS-specific backends                                                                                                                                  |
-| MCP Protocol          | Yes   | Yes   | Yes      | No      | Model Context Protocol                                                                                                                                |
-| ACP Client            | Yes   | Yes   | Yes      | Partial | Agent Client Protocol                                                                                                                                 |
-| WebMCP browser bridge | Yes   | Yes   | No       | No      | First-class authenticated bridge; filesystem access requires Unix directory-handle support and the browser client is a separate supported WebMCP page |
-| File Watching         | Yes   | Yes   | Yes      | No      | notify crate                                                                                                                                          |
-| Desktop Notifications | Yes   | Yes   | Yes      | No      | Optional feature                                                                                                                                      |
-| Bash Runner           | Yes   | Yes   | Improved | No      | Windows uses PowerShell with cross-platform process groups                                                                                            |
-| PTY Sessions          | Yes   | Yes   | Partial  | No      | Limited on Windows                                                                                                                                    |
+| Feature               | Linux | macOS   | Windows  | WASM    | Notes                                                                                                                                                 |
+| --------------------- | ----- | -----   | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core CLI              | Yes   | Yes     | Yes      | No      | Full terminal agent support                                                                                                                           |
+| TUI Interface         | Yes   | Yes     | Yes      | No      | Requires crossterm                                                                                                                                    |
+| Desktop Workspace     | No    | Partial | No       | No      | Local GPUI app for macOS 15+ (Apple Silicon or Intel); ad hoc signed only, no Developer ID trust or notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
+| Keyring Auth          | Yes   | Yes     | Yes      | No      | OS-specific backends                                                                                                                                  |
+| MCP Protocol          | Yes   | Yes     | Yes      | No      | Model Context Protocol                                                                                                                                |
+| ACP Client            | Yes   | Yes     | Yes      | Partial | Agent Client Protocol                                                                                                                                 |
+| WebMCP browser bridge | Yes   | Yes     | No       | No      | First-class authenticated bridge; filesystem access requires Unix directory-handle support and the browser client is a separate supported WebMCP page |
+| File Watching         | Yes   | Yes     | Yes      | No      | notify crate                                                                                                                                          |
+| Desktop Notifications | Yes   | Yes     | Yes      | No      | Optional feature                                                                                                                                      |
+| Bash Runner           | Yes   | Yes     | Improved | No      | Windows uses PowerShell with cross-platform process groups                                                                                            |
+| PTY Sessions          | Yes   | Yes     | Partial  | No      | Limited on Windows                                                                                                                                    |
 
 **Legend:** Yes = Fully Supported | Partial = Partial Support | No = Not Supported
 
@@ -24,37 +25,41 @@ VT Code ecosystem.
 
 ## Minimum Supported Rust Version (MSRV)
 
-### Current MSRV: Rust 1.98.1
+### Current MSRV: Rust 1.99.1
 
-All VT Code crates require Rust 1.98.1 or later due to dependencies (ratatui 0.30, darling 0.23, sysinfo 0.37, zip 8.1).
+All VT Code crates require Rust 1.99.1 or later due to dependencies (ratatui 0.30, darling 0.23, sysinfo 0.37, zip 8.1).
+The pin is workspace-wide and guarded; see [Rust Toolchain and MSRV](./development/toolchain-updates.md) before changing
+it.
 
 ### Crate Version Matrix
 
 | Crate                     | Version  | MSRV   | Edition | Published | Notes                                                      |
 | ------------------------- | -------- | ------ | ------- | --------- | ---------------------------------------------------------- |
-| vtcode                    | 0.133.21 | 1.98.1 | 2024    | Yes       | Binary crate                                               |
-| vtcode-core               | 0.133.21 | 1.98.1 | 2024    | Yes       | Main runtime                                               |
-| vtcode-config             | 0.133.21 | 1.98.1 | 2024    | Yes       | Configuration                                              |
-| vtcode-diff               | 0.162.3  | 1.93   | 2024    | Yes       | Bounded structured diffs and semantic terminal rows        |
-| vtcode-commons            | 0.133.21 | 1.98.1 | 2024    | Yes       | Shared primitives                                          |
-| vtcode-indexer            | 0.133.21 | 1.98.1 | 2024    | Yes       | File indexing + markdown storage                           |
-| vtcode-bash-runner        | 0.133.21 | 1.98.1 | 2024    | Yes       | Shell execution                                            |
-| vtcode-exec-events        | 0.133.21 | 1.98.1 | 2024    | Yes       | Event schemas                                              |
-| vtcode-webmcp             | 0.147.4  | 1.93   | 2024    | Yes       | Authenticated browser bridge and bounded workspace adapter |
-| vtcode-memory             | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-eval               | 0.135.4  | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-acp                | 0.133.21 | 1.98.1 | 2024    | Yes       | Agent Communication Protocol                               |
-| vtcode-auth               | 0.133.21 | 1.98.1 | 2024    | Yes       | OAuth/PKCE                                                 |
-| vtcode-macros             | 0.133.21 | 1.98.1 | 2024    | Yes       | Proc macros                                                |
-| vtcode-ui                 | 0.133.21 | 1.98.1 | 2024    | Yes       | TUI framework                                              |
-| vtcode-utility-tool-specs | 0.133.21 | 1.98.1 | 2024    | Yes       | Tool schemas                                               |
-| vtcode-safety             | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-a2a                | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-mcp                | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-llm                | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-skills             | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-agent-plugins      | 0.133.21 | 1.98.1 | 2024    | No        | Agent Plugins loader                                       |
-| xtask                     | 0.133.21 | 1.98.1 | 2024    | No        | Internal build tasks                                       |
+| vtcode                    | 0.133.21 | 1.99.1 | 2024    | Yes       | Binary crate                                               |
+| vtcode-core               | 0.133.21 | 1.99.1 | 2024    | Yes       | Main runtime                                               |
+| vtcode-config             | 0.133.21 | 1.99.1 | 2024    | Yes       | Configuration                                              |
+| vtcode-diff               | 0.162.3  | 1.99.1 | 2024    | Yes       | Bounded structured diffs and semantic terminal rows        |
+| vtcode-commons            | 0.133.21 | 1.99.1 | 2024    | Yes       | Shared primitives                                          |
+| vtcode-indexer            | 0.133.21 | 1.99.1 | 2024    | Yes       | File indexing + markdown storage                           |
+| vtcode-bash-runner        | 0.133.21 | 1.99.1 | 2024    | Yes       | Shell execution                                            |
+| vtcode-exec-events        | 0.133.21 | 1.99.1 | 2024    | Yes       | Event schemas                                              |
+| vtcode-webmcp             | 0.147.4  | 1.99.1 | 2024    | Yes       | Authenticated browser bridge and bounded workspace adapter |
+| vtcode-memory             | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-eval               | 0.135.4  | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-acp                | 0.133.21 | 1.99.1 | 2024    | Yes       | Agent Communication Protocol                               |
+| vtcode-auth               | 0.133.21 | 1.99.1 | 2024    | Yes       | OAuth/PKCE                                                 |
+| vtcode-macros             | 0.133.21 | 1.99.1 | 2024    | Yes       | Proc macros                                                |
+| vtcode-ui                 | 0.133.21 | 1.99.1 | 2024    | Yes       | TUI framework                                              |
+| vtcode-desktop            | 0.180.5  | 1.99.1 | 2024    | No        | macOS GPUI app (publish=false)                             |
+| vtcode-desktop-protocol   | 0.181.0  | 1.99.1 | 2024    | Yes       | Desktop JSON-RPC contract (required by the vtcode binary)  |
+| vtcode-utility-tool-specs | 0.133.21 | 1.99.1 | 2024    | Yes       | Tool schemas                                               |
+| vtcode-safety             | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-a2a                | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-mcp                | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-llm                | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-skills             | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-agent-plugins      | 0.133.21 | 1.99.1 | 2024    | No        | Agent Plugins loader                                       |
+| xtask                     | 0.133.21 | 1.99.1 | 2024    | No        | Internal build tasks                                       |
 
 ---
 
@@ -72,14 +77,15 @@ All VT Code crates require Rust 1.98.1 or later due to dependencies (ratatui 0.3
 
 ### macOS
 
-| Feature               | Status | Dependencies           | Notes                                                                                                                             |
-| --------------------- | ------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Keychain (Keyring)    | Yes    | Security Framework     | Native macOS keychain                                                                                                             |
-| Desktop Notifications | Yes    | `mac-notification-sys` | Native NSUserNotification; sent via the Finder bundle (`com.apple.finder`) to avoid the Apple Events automation permission prompt |
-| PTY Sessions          | Yes    | `libc`                 | Full Unix PTY support                                                                                                             |
-| File Permissions      | Yes    | `libc`                 | Unix permission model                                                                                                             |
-| Signal Handling       | Yes    | `signal-hook`          | POSIX signals                                                                                                                     |
-| Touch ID Auth         | No     | -                      | Not yet implemented                                                                                                               |
+| Feature               | Status  | Dependencies           | Notes                                                                                                                             |
+| --------------------- | ------  | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Keychain (Keyring)    | Yes     | Security Framework     | Native macOS keychain                                                                                                             |
+| Desktop Notifications | Yes     | `mac-notification-sys` | Native NSUserNotification; sent via the Finder bundle (`com.apple.finder`) to avoid the Apple Events automation permission prompt |
+| PTY Sessions          | Yes     | `libc`                 | Full Unix PTY support                                                                                                             |
+| File Permissions      | Yes     | `libc`                 | Unix permission model                                                                                                             |
+| Signal Handling       | Yes     | `signal-hook`          | POSIX signals                                                                                                                     |
+| Touch ID Auth         | No      | -                      | Not yet implemented                                                                                                               |
+| Desktop Workspace     | Partial | GPUI Kit               | Local app build on macOS 15+; ad hoc signing, no notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
 
 ### Windows
 

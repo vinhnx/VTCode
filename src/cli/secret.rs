@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::terminal::enable_raw_mode;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -16,12 +16,12 @@ use vtcode_core::cli::args::{MigrateArgs, SecretSubcommand};
 use vtcode_core::config::models::Provider;
 
 #[derive(Clone)]
-struct SecretTarget {
-    provider_name: String,
-    label: String,
-    env_key: String,
-    local: bool,
-    managed_auth: bool,
+pub(crate) struct SecretTarget {
+    pub(crate) provider_name: String,
+    pub(crate) label: String,
+    pub(crate) env_key: String,
+    pub(crate) local: bool,
+    pub(crate) managed_auth: bool,
 }
 
 pub async fn handle_secret_command(
@@ -47,7 +47,7 @@ pub async fn handle_secret_command(
     }
 }
 
-fn secret_target(config: &VTCodeConfig, name: &str, key_name: Option<&str>) -> Result<SecretTarget> {
+pub(crate) fn secret_target(config: &VTCodeConfig, name: &str, key_name: Option<&str>) -> Result<SecretTarget> {
     let provider_name = name.trim().to_ascii_lowercase();
     if provider_name.is_empty() {
         anyhow::bail!("Provider name cannot be empty.");
@@ -192,7 +192,9 @@ async fn handle_add(target: SecretTarget, workspace: &Path, storage_mode: AuthCr
     let key = if io::stdin().is_terminal() {
         prompt_hidden_input(&format!("{} API key: ", label))?
     } else {
-        eprintln!("Warning: stdin is not a terminal — the pasted key will be visible.");
+        vtcode_commons::diagnostics::stderr(format_args!(
+            "Warning: stdin is not a terminal — the pasted key will be visible."
+        ));
         print!("{} API key: ", label);
         io::stdout().flush()?;
         let mut input = String::new();
@@ -343,7 +345,7 @@ async fn handle_migrate(
                 skipped += 1;
             }
             Err(err) => {
-                eprintln!("Failed to migrate {}: {}", env_key, err);
+                vtcode_commons::diagnostics::stderr(format_args!("Failed to migrate {}: {}", env_key, err));
                 failed += 1;
             }
         }
@@ -366,7 +368,14 @@ fn prompt_hidden_input(prompt: &str) -> Result<String> {
         anyhow::bail!("Cannot prompt for hidden input: stdin is not a terminal");
     }
 
-    let _raw = enable_raw_mode().with_context(|| "Failed to enable raw mode for secret input")?;
+    enable_raw_mode().with_context(|| "Failed to enable raw mode for secret input")?;
+    struct RawModeGuard;
+    impl Drop for RawModeGuard {
+        fn drop(&mut self) {
+            let _ = disable_raw_mode();
+        }
+    }
+    let _raw = RawModeGuard;
 
     {
         let mut stdout = io::stdout();
@@ -394,6 +403,7 @@ fn prompt_hidden_input(prompt: &str) -> Result<String> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum KeyAction {
     Continue,
     Submit,
@@ -401,15 +411,19 @@ enum KeyAction {
 }
 
 fn handle_key(event: Event, buffer: &mut String) -> Result<KeyAction> {
+    handle_key_with_writer(event, buffer, &mut io::stdout())
+}
+
+fn handle_key_with_writer(event: Event, buffer: &mut String, stdout: &mut impl Write) -> Result<KeyAction> {
     let Event::Key(key) = event else {
         return Ok(KeyAction::Continue);
     };
     if key.kind != KeyEventKind::Press {
         return Ok(KeyAction::Continue);
     }
-    let mut stdout = io::stdout();
     match key.code {
         KeyCode::Enter => Ok(KeyAction::Submit),
+        KeyCode::Esc => Ok(KeyAction::Abort),
         KeyCode::Char('c') if key.modifiers.contains(event::KeyModifiers::CONTROL) => Ok(KeyAction::Abort),
         KeyCode::Char('d') if key.modifiers.contains(event::KeyModifiers::CONTROL) => Ok(KeyAction::Submit),
         KeyCode::Char('u') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
@@ -450,5 +464,28 @@ fn handle_key(event: Event, buffer: &mut String) -> Result<KeyAction> {
             Ok(KeyAction::Continue)
         }
         _ => Ok(KeyAction::Continue),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_input_masks_characters_and_escape_cancels_without_submission() {
+        let mut buffer = String::new();
+        let mut displayed = Vec::new();
+        for character in "private-key-42".chars() {
+            let event = Event::Key(event::KeyEvent::new(KeyCode::Char(character), event::KeyModifiers::NONE));
+            assert_eq!(
+                handle_key_with_writer(event, &mut buffer, &mut displayed).expect("keypress"),
+                KeyAction::Continue
+            );
+        }
+        assert_eq!(buffer, "private-key-42");
+        assert_eq!(displayed, b"**************");
+        let escape = Event::Key(event::KeyEvent::new(KeyCode::Esc, event::KeyModifiers::NONE));
+        assert_eq!(handle_key_with_writer(escape, &mut buffer, &mut displayed).expect("escape"), KeyAction::Abort);
+        assert_eq!(displayed, b"**************");
     }
 }

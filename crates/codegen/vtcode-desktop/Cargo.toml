@@ -1,0 +1,45 @@
+[package]
+name = "vtcode-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.99.1"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Local macOS desktop workspace for VT Code"
+license.workspace = true
+publish = false
+readme = "README.md"
+
+[[bin]]
+name = "vtcode-desktop"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+gpui-kit = { version = "=0.8.0", features = ["syntect"] }
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSButton", "NSControl", "NSFont", "NSFontDescriptor", "NSImage", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "objc2-core-foundation"] }
+objc2-foundation = "0.3.2"
+plist = "1"
+pulldown-cmark = "0.13.4"
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rust-i18n = "=4.2.4"
+tokio = { workspace = true }
+url = { workspace = true }
+vtcode-commons = { workspace = true }
+vtcode-desktop-protocol = { workspace = true }
+vtcode-exec-events = { workspace = true }
+vtcode-ui = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+gpui-kit = { version = "=0.8.0", features = ["test-support"] }
+image = { workspace = true }
+tempfile = { workspace = true }
+vtcode-config = { workspace = true }
+

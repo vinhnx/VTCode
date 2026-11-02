@@ -30,11 +30,7 @@ fn workspace_skill_dir(workspace: &std::path::Path, name: &str) -> PathBuf {
 }
 
 fn list_label_for_manifest(manifest: &SkillManifest) -> &'static str {
-    match manifest.variety {
-        vtcode_core::skills::types::SkillVariety::BuiltIn => "built_in",
-        vtcode_core::skills::types::SkillVariety::SystemUtility => "system_utility",
-        vtcode_core::skills::types::SkillVariety::AgentSkill => "agent_skill",
-    }
+    manifest.variety.as_str()
 }
 
 /// Skill-related command actions
@@ -62,6 +58,8 @@ pub(crate) enum SkillCommandAction {
     Info { name: String },
     /// Regenerate skills index file
     RegenerateIndex,
+    /// Show session skill health (usage, success, prune candidates)
+    Doctor,
 }
 
 /// Result of a skill command
@@ -81,6 +79,8 @@ pub(crate) enum SkillCommandOutcome {
         slash_name: String,
         input: String,
     },
+    /// Render the session skill health report (metrics live in the registry)
+    Doctor,
     /// Error occurred
     Error { message: String },
 }
@@ -122,6 +122,7 @@ Management:
   /skills --info <name>                   Show skill details
   /skills --use <name> <input>            Execute skill with input
   /skills --regenerate-index              Regenerate skills index file
+  /skills --doctor                        Show session skill health (usage, prune candidates)
 
 Shortcuts:
   /skills -l [query], /skills -s <query>, /skills -h, /skills --regen"#;
@@ -391,6 +392,10 @@ Shortcuts:
                 }),
             }
         }
+
+        // Metrics live in the session tool registry, which this layer cannot
+        // see; the slash handler renders the report at the apply site.
+        SkillCommandAction::Doctor => Ok(SkillCommandOutcome::Doctor),
     }
 }
 

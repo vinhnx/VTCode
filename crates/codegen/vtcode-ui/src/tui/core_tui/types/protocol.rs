@@ -248,12 +248,13 @@ pub type PreviewCallback = Arc<dyn Fn(Option<&InlineListSelection>) -> anyhow::R
 
 #[derive(Clone)]
 pub struct InlineHandle {
+    pub(crate) diagnostic_observer: vtcode_commons::diagnostics::DiagnosticObserver,
     pub(crate) sender: UnboundedSender<InlineCommand>,
 }
 
 impl InlineHandle {
     pub fn new_for_tests(sender: UnboundedSender<InlineCommand>) -> Self {
-        Self { sender }
+        Self { sender, diagnostic_observer: Default::default() }
     }
 
     fn send_command(&self, command: InlineCommand) {
@@ -361,6 +362,6 @@ impl InlineSession {
     }
 
     pub fn clone_inline_handle(&self) -> InlineHandle {
-        InlineHandle { sender: self.handle.sender.clone() }
+        self.handle.clone()
     }
 }

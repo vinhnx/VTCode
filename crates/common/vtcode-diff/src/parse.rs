@@ -1,11 +1,24 @@
 //! Unified-diff header and metadata parsing helpers.
+//!
+//! Contract discipline follows Creusot: each parser documents its
+//! requires/ensures and rejects out-of-range input with `None` instead of
+//! panicking (absence-of-panic obligation).
 
+/// Parses `@@ -old +new @@` starts, elided counts defaulting to one.
+///
+/// # Ensures
+///
+/// `Some((old_start, new_start))` only for well-formed hunk headers;
+/// otherwise `None`. Total and pure.
 pub(crate) fn parse_hunk_starts(line: &str) -> Option<(u32, u32)> {
     let (old, _, new, _) = parse_hunk_range(line)?;
     Some((old, new))
 }
 
 pub(crate) fn parse_hunk_range(line: &str) -> Option<(u32, usize, u32, usize)> {
+    // Requires: `line` starts with `@@ ` (checked via strip_prefix).
+    // Ensures: counts parse as `u32`/`usize` without overflow panic; `None`
+    // on any malformed shape.
     let body = line.strip_prefix("@@ ")?.split(" @@").next()?;
     let mut parts = body.split_whitespace();
     let (old_start, old_count) = parse_range(parts.next()?, '-')?;

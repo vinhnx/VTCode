@@ -20,7 +20,6 @@ pub(crate) struct AcpClient {
     registry: AgentRegistry,
 
     /// Request timeout
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     timeout: Duration,
 }
 

@@ -84,10 +84,10 @@ pub(crate) fn perform_queued_runtime_relaunch() {
         }
     }
 
-    eprintln!("warning: VT Code updated but could not restart automatically.");
-    eprintln!("warning: restart it manually with `{manual_command}`.");
+    vtcode_commons::diagnostics::stderr(format_args!("warning: VT Code updated but could not restart automatically."));
+    vtcode_commons::diagnostics::stderr(format_args!("warning: restart it manually with `{manual_command}`."));
     if let Some(err) = last_error {
-        eprintln!("warning: last relaunch attempt failed: {err}");
+        vtcode_commons::diagnostics::stderr(format_args!("warning: last relaunch attempt failed: {err}"));
     }
 }
 

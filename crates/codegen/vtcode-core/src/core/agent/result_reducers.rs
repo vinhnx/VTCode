@@ -10,6 +10,7 @@ use std::borrow::Cow;
 use serde_json::Value;
 
 use crate::config::constants::tools;
+use crate::mcp::{MCP_APP_DISCLOSURE_KEY, MCP_APP_SUPPRESSED_KEY};
 use crate::tools::tool_intent;
 
 /// Reduce a tool result to be more token-efficient.
@@ -39,21 +40,38 @@ pub fn reduce_tool_result(tool_name: &str, result: Value) -> Value {
 /// pipeline-output / event path, not from the model-facing string this is
 /// applied to, so removing it here is display-safe.
 ///
-/// Returns a borrowed value when no stripping is needed (non-tracker tools or
-/// results without a `view` field) so the common path pays zero allocation.
+/// The MCP app-disclosure object (`uiDisclosure`, derived from server `_meta`)
+/// is likewise display-only: SEP-1865 states `_meta` is "not intended for
+/// model context", and the URIs, origins, and permission requests it carries
+/// are server-controlled. The `off`-tier suppression marker (`uiSuppressed`)
+/// is display-only for the same reason. The event path keeps both for
+/// TUI/desktop rendering; only the model projection drops them.
+///
+/// Returns a borrowed value when no stripping is needed so the common path
+/// pays zero allocation.
 pub fn strip_tui_display_fields<'a>(tool_name: &str, value: &'a Value) -> Cow<'a, Value> {
-    let canonical = tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
-    if canonical != tools::TASK_TRACKER && canonical != tools::MATRIX {
-        return Cow::Borrowed(value);
-    }
     let Some(obj) = value.as_object() else {
         return Cow::Borrowed(value);
     };
-    if !obj.contains_key("view") {
+    let canonical = tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
+    let strip_view = (canonical == tools::TASK_TRACKER || canonical == tools::MATRIX) && obj.contains_key("view");
+    // Both app keys are namespaced to the MCP execution path; no other tool
+    // writes them, so their presence alone marks them for stripping.
+    let strip_disclosure = obj.contains_key(MCP_APP_DISCLOSURE_KEY);
+    let strip_suppressed = obj.contains_key(MCP_APP_SUPPRESSED_KEY);
+    if !strip_view && !strip_disclosure && !strip_suppressed {
         return Cow::Borrowed(value);
     }
     let mut stripped = obj.clone();
-    stripped.remove("view");
+    if strip_view {
+        stripped.remove("view");
+    }
+    if strip_disclosure {
+        stripped.remove(MCP_APP_DISCLOSURE_KEY);
+    }
+    if strip_suppressed {
+        stripped.remove(MCP_APP_SUPPRESSED_KEY);
+    }
     Cow::Owned(Value::Object(stripped))
 }
 
@@ -359,5 +377,53 @@ mod tests {
             json!(true),
             "byte-capped page must warn that the chunk tail is not in content"
         );
+    }
+
+    #[test]
+    fn strip_disclosure_removes_server_meta_from_mcp_result() {
+        let result = json!({
+            "content": [{"type": "text", "text": "12:00"}],
+            "spool_path": ".vtcode/context/tool_outputs/mcp",
+            "uiDisclosure": {
+                "ui://demo/app.html": {"sandbox": "allow", "mimeType": "text/html;profile=mcp-app"},
+                "ui://demo/blocked.html": {"sandbox": "deny", "reason": "CSP violation"},
+            },
+        });
+        let stripped = strip_tui_display_fields("mcp__demo__get_time", &result);
+        assert!(stripped.get("uiDisclosure").is_none(), "server _meta must not reach the model");
+        assert_eq!(stripped["content"][0]["text"], "12:00", "text fallback must survive stripping");
+        assert_eq!(stripped["spool_path"], ".vtcode/context/tool_outputs/mcp");
+        assert!(result.get("uiDisclosure").is_some(), "event path keeps the original disclosure");
+    }
+
+    #[test]
+    fn strip_disclosure_removes_empty_disclosure_object() {
+        let result = json!({"content": [{"type": "text", "text": "ok"}], "uiDisclosure": {}});
+        let stripped = strip_tui_display_fields("mcp__demo__get_time", &result);
+        assert!(stripped.get("uiDisclosure").is_none(), "even an empty disclosure key must go");
+        assert_eq!(stripped["content"][0]["text"], "ok");
+    }
+
+    #[test]
+    fn strip_suppressed_removes_off_tier_marker() {
+        let result = json!({
+            "content": [{"type": "text", "text": "ok"}],
+            "uiSuppressed": ["ui://demo/app.html"],
+        });
+        let stripped = strip_tui_display_fields("mcp__demo__get_time", &result);
+        assert!(stripped.get("uiSuppressed").is_none(), "suppression marker must not reach the model");
+        assert_eq!(stripped["content"][0]["text"], "ok");
+        assert!(result.get("uiSuppressed").is_some(), "event path keeps the marker");
+    }
+
+    #[test]
+    fn model_projection_strips_disclosure_for_mcp_tools() {
+        let result = json!({
+            "content": [{"type": "text", "text": "12:00"}],
+            "uiDisclosure": {"ui://demo/app.html": {"sandbox": "allow"}},
+        });
+        let projected = project_model_tool_result("mcp__demo__get_time", &json!({}), &result);
+        assert!(projected.get("uiDisclosure").is_none());
+        assert_eq!(projected["content"][0]["text"], "12:00");
     }
 }

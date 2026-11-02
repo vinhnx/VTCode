@@ -5,6 +5,9 @@ pub const DEFAULT_TERMINAL_TITLE_ITEMS: &[&str] = &["spinner", "project"];
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct TerminalTitleConfig {
+    /// Ordered title items; `None` resolves to `["spinner", "project"]`
+    /// (spinner enabled by default), and an empty array disables VT
+    /// Code-managed titles.
     #[serde(default)]
     pub items: Option<Vec<String>>,
 }
@@ -26,6 +29,13 @@ impl TerminalTitleConfig {
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
+
+    #[test]
+    fn shipped_default_items_lead_with_the_spinner() {
+        // The shipped binary must always manage the title with the activity
+        // spinner first; single source in `data/default_config.toml` mirrors it.
+        assert_eq!(DEFAULT_TERMINAL_TITLE_ITEMS, ["spinner", "project"]);
+    }
 
     #[test]
     fn serde_defaults_when_terminal_title_table_is_missing() {

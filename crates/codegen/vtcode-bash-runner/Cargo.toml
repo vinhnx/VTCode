@@ -2,7 +2,7 @@
 name = "vtcode-bash-runner"
 version.workspace = true
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 description = "Cross-platform shell execution helpers extracted from VT Code"
 license.workspace = true
 readme = "README.md"
@@ -46,6 +46,9 @@ vtcode-exec-events = { workspace = true, optional = true }
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
 nix = { workspace = true, features = ["user", "signal", "process"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [lib]
 doctest = false

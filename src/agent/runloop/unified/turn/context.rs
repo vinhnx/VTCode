@@ -9,6 +9,7 @@
 
 mod continuation;
 mod message_history;
+mod planning_recovery;
 mod response_handling;
 mod runtime_context;
 mod tool_response_events;
@@ -38,9 +39,14 @@ use self::message_history::{
     should_suppress_redundant_diff_recap,
 };
 pub(crate) use self::message_history::{last_user_message, last_user_message_index};
+/// Production surface: `result_handler.rs` passes the frozen empty-synthesis
+/// detail into the handoff builder so a wording change updates the message and
+/// the auto-continue marker match together instead of silently diverging.
+pub(crate) use self::response_handling::PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL;
+pub(crate) use self::response_handling::planning_tokens_without_content_handoff_detail;
 pub(crate) use self::runtime_context::{
-    LLMContext, ToolContext, TurnHandlerOutcome, TurnOutcomeContext, TurnProcessingContext, TurnProcessingContextParts,
-    TurnProcessingResult, TurnProcessingState, UIContext,
+    LLMContext, NoOutputFacts, ToolContext, TurnHandlerOutcome, TurnOutcomeContext, TurnProcessingContext,
+    TurnProcessingContextParts, TurnProcessingResult, TurnProcessingState, UIContext,
 };
 use crate::agent::runloop::mcp_events;
 #[cfg(test)]
@@ -51,16 +57,11 @@ use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 
 #[derive(Clone, Debug)]
 pub(crate) enum TurnLoopResult {
-    Completed {
-        #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-        plan_approved_execution_pending: bool,
-    },
+    Completed { plan_approved_execution_pending: bool },
     Aborted,
     Cancelled,
     Exit,
-    Blocked {
-        reason: Option<String>,
-    },
+    Blocked { reason: Option<String> },
 }
 
 #[derive(Clone, Debug)]
@@ -248,7 +249,6 @@ impl<'a> TurnProcessingContext<'a> {
         self.is_recovery_active() && self.recovery_pass_used() && self.recovery_is_tool_free()
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) fn switch_to_tool_free_recovery(&mut self) -> bool {
         self.harness_state.switch_to_tool_free_recovery()
     }
@@ -269,12 +269,12 @@ impl<'a> TurnProcessingContext<'a> {
         self.harness_state.recovery_retry_count()
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(dead_code, reason = "Recovery counter kept on the live turn context.")]
     pub(crate) fn post_tool_recovery_cycles(&self) -> u8 {
         self.harness_state.post_tool_recovery_cycles()
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(dead_code, reason = "Recovery counter kept on the live turn context.")]
     pub(crate) fn increment_post_tool_recovery_cycle(&mut self) -> u8 {
         self.harness_state.increment_post_tool_recovery_cycle()
     }

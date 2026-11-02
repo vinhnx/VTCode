@@ -143,8 +143,10 @@ async fn diagnose_with_route(
     .context("tool failure diagnosis request timed out")?
     .context("tool failure diagnosis request failed")?;
 
-    if response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
-        bail!("tool failure diagnosis unexpectedly returned tool calls");
+    if response.finish_reason != vtcode_core::llm::provider::FinishReason::Stop
+        || response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
+    {
+        bail!("tool failure diagnosis returned an incomplete or tool-call response");
     }
 
     Ok(response.content_text().trim().to_string())
@@ -166,11 +168,10 @@ async fn request_diagnosis_with_provider(
             serde_json::to_string(&schema).unwrap_or_else(|_| "{}".to_string())
         )
     };
-    let request = LLMRequest {
+    let mut request = LLMRequest {
         messages: Arc::new(vec![LlmMessage::user(prompt)]),
         system_prompt: Some(Arc::from(DIAGNOSIS_SYSTEM_PROMPT)),
         model: route.model.clone(),
-        max_tokens: Some(DIAGNOSIS_MAX_OUTPUT_TOKENS),
         // Omit sampling controls so the auxiliary request remains valid for
         // models that reject explicit temperature/top-p/top-k parameters.
         temperature: None,
@@ -187,6 +188,7 @@ async fn request_diagnosis_with_provider(
         }),
         ..Default::default()
     };
+    request.set_auxiliary_output_budget(provider, DIAGNOSIS_MAX_OUTPUT_TOKENS);
 
     collect_single_response(provider, request)
         .await
@@ -224,4 +226,70 @@ pub(super) fn parse_model_diagnosis(raw: &str) -> Option<ToolFailureDiagnosis> {
         super::evidence::bounded_field(&parsed.next_action),
     );
     (diagnosis.is_complete() && diagnosis.is_safe_model_output()).then_some(diagnosis)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+    use vtcode_core::config::types::ReasoningEffortLevel;
+    use vtcode_core::llm::provider::{FinishReason, LLMError, LLMResponse};
+
+    struct DiagnosisProvider {
+        finish: FinishReason,
+    }
+
+    #[async_trait::async_trait]
+    impl LLMProvider for DiagnosisProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+        fn supports_non_streaming(&self, _: &str) -> bool {
+            true
+        }
+        fn supports_reasoning(&self, _: &str) -> bool {
+            true
+        }
+        fn supported_reasoning_efforts(&self, _: &str) -> &'static [&'static str] {
+            &["low", "high"]
+        }
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            assert_eq!(request.max_tokens, Some(2208));
+            assert_eq!(request.reasoning_effort, Some(ReasoningEffortLevel::Low));
+            assert_eq!(request.temperature, None);
+            assert!(request.tools.is_none());
+            Ok(LLMResponse {
+                content: Some(r#"{"observed":"exit 127","likely_cause":"command unavailable","next_action":"Check command availability"}"#.into()),
+                finish_reason: self.finish.clone(),
+                ..Default::default()
+            })
+        }
+        fn supported_models(&self) -> Vec<String> {
+            vec![]
+        }
+        fn validate_request(&self, _: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn diagnosis_reserves_reasoning_and_rejects_truncated_json() {
+        for finish in [FinishReason::Stop, FinishReason::Length] {
+            let expected_complete = finish == FinishReason::Stop;
+            let mut backing = TestTurnProcessingBacking::new(4).await;
+            backing.set_provider(Box::new(DiagnosisProvider { finish }));
+            let mut ctx = backing.turn_processing_context();
+            let route = vtcode_core::llm::ModelRoute {
+                provider_name: ctx.config.provider.clone(),
+                model: ctx.config.model.clone(),
+            };
+            let result = diagnose_with_route(&mut ctx, &route, "exit 127: command not found").await;
+            if expected_complete {
+                let parsed = parse_model_diagnosis(&result.unwrap()).unwrap();
+                assert_eq!(parsed.observed, "exit 127");
+            } else {
+                assert!(result.is_err(), "complete-looking JSON cannot override a truncated finish reason");
+            }
+        }
+    }
 }

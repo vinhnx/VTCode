@@ -3,19 +3,27 @@
 //! `Styles` is re-exported from `vtcode-commons::styling`.
 //! Print convenience functions remain here because they depend on `anstream`.
 
-use anstream::println as styled_println;
+use anstream::{eprintln as styled_eprintln, println as styled_println};
 use anstyle::Style;
 
 pub use vtcode_commons::styling::Styles;
 
 /// Print a styled error message
 pub fn error(message: &str) {
-    styled_println!("{}{}{}", Styles::render(&Styles::error()), message, Styles::render_reset());
+    let diagnostic = vtcode_commons::diagnostics::legacy_ui_diagnostic(
+        vtcode_commons::diagnostics::DiagnosticSeverity::Error,
+        message,
+    );
+    styled_eprintln!("{}{}{}", Styles::render(&Styles::error()), diagnostic.text(), Styles::render_reset());
 }
 
 /// Print a styled warning message
 pub fn warning(message: &str) {
-    styled_println!("{}{}{}", Styles::render(&Styles::warning()), message, Styles::render_reset());
+    let diagnostic = vtcode_commons::diagnostics::legacy_ui_diagnostic(
+        vtcode_commons::diagnostics::DiagnosticSeverity::Warning,
+        message,
+    );
+    styled_eprintln!("{}{}{}", Styles::render(&Styles::warning()), diagnostic.text(), Styles::render_reset());
 }
 
 /// Print a styled success message

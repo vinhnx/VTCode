@@ -23,6 +23,7 @@ use crate::error_category::{ErrorCategory, classify_anyhow_error};
 
 /// Typed retry policy shared across runtime layers.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[must_use]
 pub struct RetryPolicy {
     /// Maximum number of total attempts, including the initial call.
     pub max_attempts: u32,
@@ -58,6 +59,7 @@ impl RetryPolicy {
         Self::from_retries(max_retries, Duration::from_millis(base_delay_ms), Duration::from_millis(max_delay_ms), 2.0)
     }
 
+    #[must_use]
     pub fn delay_for_attempt(&self, attempt_index: u32) -> Duration {
         let multiplier = self.multiplier.powi(attempt_index as i32);
         let base_delay = Duration::try_from_secs_f64(self.initial_delay.as_secs_f64() * multiplier)
@@ -152,6 +154,7 @@ impl Default for RetryPolicy {
 
 /// Result of classifying a failure for retry handling.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use = "retry decisions must be handled before another attempt"]
 pub struct RetryDecision {
     pub category: ErrorCategory,
     pub retryable: bool,

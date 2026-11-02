@@ -42,10 +42,16 @@ pub enum EscalationDecision {
         /// Human-readable reason for the escalation.
         reason: String,
         /// The tool name that triggered escalation.
-        #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+        #[allow(
+            dead_code,
+            reason = "Escalation payload field; the handoff writer reads only the reason today."
+        )]
         tool_name: String,
         /// Serialized arguments for the blocked-handoff report.
-        #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+        #[allow(
+            dead_code,
+            reason = "Escalation payload field; the handoff writer reads only the reason today."
+        )]
         args: serde_json::Value,
     },
 }

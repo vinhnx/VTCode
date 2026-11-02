@@ -11,7 +11,7 @@ crates/codegen/vtcode-core/src/core/agent/runner/tool_args.rs | Tool argument va
 crates/codegen/vtcode-core/src/llm/providers/lmstudio/client.rs | Model download progress is intentional terminal feedback.
 crates/codegen/vtcode-core/src/marketplace/installer.rs | Marketplace installation progress is intentionally human-readable.
 crates/codegen/vtcode-core/src/marketplace/testing.rs | Marketplace smoke-test helper prints human-readable status.
-crates/codegen/vtcode-core/src/mcp/cli.rs | MCP CLI entrypoint prints user-facing status and result output.
+crates/codegen/vtcode-core/src/mcp/cli/** | MCP CLI entrypoint prints user-facing status and result output.
 crates/codegen/vtcode-core/src/plugins/validation.rs | Plugin validation output is intentionally formatted for direct terminal display.
 crates/codegen/vtcode-core/src/tool_policy/manager.rs | Tool policy summaries are intentionally rendered for the user.
 crates/codegen/vtcode-core/src/tools/ripgrep_installer/mod.rs | Dependency installer progress and remediation are intentionally terminal-facing.
@@ -26,3 +26,6 @@ crates/codegen/vtcode-ui/src/tui/session_options.rs | TUI startup errors are rep
 crates/codegen/vtcode-ui/src/tui/core_tui/runner/signal.rs | Emergency SIGTERM cleanup notice must reach the terminal after restore_tui(), outside the TUI render loop.
 crates/codegen/vtcode-bash-runner/src/process.rs | Output stream lag warnings are user-facing diagnostics from the pty runner.
 crates/common/vtcode-commons/src/startup_trace.rs | Pre-tracing startup phase recorder; tracing is not initialized at this point, so phases are reported via eprintln!.
+crates/codegen/vtcode-desktop/src/desktop/view/bootstrap.rs:31 | Desktop keybinding fallback diagnostic before any window exists; the GUI binary has no logging pipeline, so stderr is the only channel.
+crates/common/vtcode-commons/src/diagnostics.rs:67 | stderr_diagnostic intentionally renders redacted pre-UI diagnostics to stderr by contract.
+patches/gpui-pre-macos/src/window_appearance.rs:22 | Vendored upstream GPUI fork; not modified in-repo.

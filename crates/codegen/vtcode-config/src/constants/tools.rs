@@ -145,6 +145,12 @@ pub const WAIT_AGENT: &str = "wait_agent";
 pub const RESUME_AGENT: &str = "resume_agent";
 /// Close a delegated child agent.
 pub const CLOSE_AGENT: &str = "close_agent";
+/// Ask a peer CLI session in this workspace a question.
+pub const ASK_SESSION: &str = "ask_session";
+/// Answer a question received from a peer CLI session.
+pub const ANSWER_SESSION: &str = "answer_session";
+/// List live peer CLI sessions in this workspace.
+pub const LIST_SESSIONS: &str = "list_sessions";
 
 /// Cleanup-only child-agent tools that must remain available regardless of the
 /// active primary agent's tool policy, so restricted primaries can still join or

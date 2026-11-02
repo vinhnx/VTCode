@@ -30,6 +30,7 @@ pub(crate) struct PrimaryAgentSessionOption {
     pub allowed_local_tools: Option<HashSet<String>>,
     pub denied_local_tools: HashSet<String>,
     pub permissions: AgentPermissionsConfig,
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +129,20 @@ impl PrimaryAgentCatalog {
         self.options.iter().find(|option| option.id == resolved)
     }
 
+    /// The selected agent's permission policy for dispatch-time evaluation
+    /// against the concrete call. Unknown agents have no policy and deny.
+    #[must_use]
+    pub(crate) fn permissions_for(&self, primary_agent: &str) -> Option<&AgentPermissionsConfig> {
+        self.option_for(primary_agent).map(|option| &option.permissions)
+    }
+
+    /// Whether the selected agent is read-only, in which case mutating calls
+    /// must additionally satisfy the planning-workflow gate at dispatch.
+    #[must_use]
+    pub(crate) fn is_read_only_agent(&self, primary_agent: &str) -> bool {
+        self.option_for(primary_agent).is_some_and(|option| option.read_only)
+    }
+
     /// Returns `true` if the resolved primary agent's permission policy permits
     /// (allow/ask/auto) the given local tool. Unknown agents deny by default.
     ///
@@ -187,6 +202,7 @@ fn primary_agent_option_from_spec(spec: &SubagentSpec) -> PrimaryAgentSessionOpt
         allowed_local_tools,
         denied_local_tools,
         permissions: spec.permissions.clone(),
+        read_only: spec.is_read_only(),
     }
 }
 
@@ -364,7 +380,7 @@ pub(crate) fn text_chunk(text: impl Into<String>) -> acp::ContentChunk {
 
 pub(crate) fn agent_implementation_info(title_override: Option<String>) -> acp::Implementation {
     acp::Implementation::new("vtcode", env!("CARGO_PKG_VERSION"))
-        .title(title_override.or_else(|| Some("VT Code".to_string())))
+        .title(title_override.or_else(|| Some(vtcode_config::constants::app::DISPLAY_NAME.to_string())))
 }
 
 fn command_input_hint(name: &str) -> Option<String> {
@@ -454,7 +470,11 @@ mod tests {
 
     #[test]
     fn build_available_commands_includes_templates_and_deduplicates_names() {
-        let slash_command = SlashCommandInfo { name: "status", description: "Show status" };
+        let slash_command = SlashCommandInfo {
+            name: "status",
+            description: "Show status",
+            category: "tools",
+        };
         let templates = vec![
             PromptTemplate {
                 name: "custom-plan".to_string(),

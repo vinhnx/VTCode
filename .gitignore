@@ -850,6 +850,11 @@ TODO2.md
 .pi/
 resources/vhs/.vtcode/
 .agents/
+!.agents/
+.agents/*
+!.agents/plugins/
+.agents/plugins/*
+!.agents/plugins/marketplace.json
 GEMINI.md
 vtcode.toml
 

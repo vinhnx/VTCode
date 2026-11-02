@@ -1,7 +1,7 @@
 //! # Utility Functions and Helpers
 //!
 //! This module provides various utility functions and helpers used throughout VT Code,
-//! including configuration management, safety utilities, and common operations.
+//! including configuration management, path utilities, and common operations.
 //!
 //! ## Modules Overview
 //!
@@ -9,11 +9,6 @@
 //! - **User Preferences**: Theme settings, UI preferences, cache configuration
 //! - **Provider Configuration**: LLM provider settings and API keys
 //! - **Dotfile Management**: `.vtcode` directory and configuration files
-//!
-//! ### Safety Utilities (`safety`)
-//! - **Path Validation**: Workspace boundary checking
-//! - **Command Sanitization**: Safe command execution
-//! - **Input Validation**: User input sanitization
 //!
 //! ### ANSI and Colors (`ansi`, `colors`)
 //! - **Terminal Colors**: ANSI color codes and styling
@@ -48,21 +43,6 @@
 //!     save_user_config(&prefs).await?;
 //!
 //!     Ok(())
-//! }
-//! ```
-//!
-//! ### Path Safety
-//! ```rust,ignore
-//! use vtcode_core::utils::safety::validate_workspace_path;
-//! use std::path::PathBuf;
-//!
-//! let workspace = PathBuf::from("/home/user/project");
-//! let file_path = PathBuf::from("src/main.rs");
-//!
-//! // Validate path is within workspace
-//! match validate_workspace_path(&workspace, &file_path) {
-//!     Ok(valid_path) => println!("Safe path: {}", valid_path.display()),
-//!     Err(e) => eprintln!("Unsafe path: {}", e),
 //! }
 //! ```
 //!
@@ -120,7 +100,6 @@ pub mod image_processing;
 pub mod message_style;
 pub mod migration;
 pub mod path;
-pub mod safety;
 pub mod serde_helpers;
 pub mod session_archive;
 pub mod session_debug;

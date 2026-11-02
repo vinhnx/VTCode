@@ -36,6 +36,8 @@ impl TurnProcessingContext<'_> {
                 output: ToolOutputPayload {
                     aggregated_output: rejection_text.to_owned(),
                     spool_path: None,
+                    app_previews: Vec::new(),
+                    suppressed_apps: Vec::new(),
                 },
             },
         );
@@ -119,6 +121,7 @@ impl TurnProcessingContext<'_> {
             exit_code,
             output.spool_path.as_deref(),
             output.aggregated_output,
+            output.app_previews,
         ));
     }
 }

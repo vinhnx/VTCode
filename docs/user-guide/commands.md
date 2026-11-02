@@ -27,7 +27,7 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode mcp`                                                           | Manage Model Context Protocol servers                               |
 | `vtcode a2a`                                                           | Agent2Agent protocol client and server                              |
 | `vtcode acp`                                                           | Start the Agent Client Protocol bridge for editors                  |
-| `vtcode webmcp`                                                        | Authenticated browser editor bridge                                 |
+| `vtcode webmcp`                                                        | Authenticated browser editor bridge and local MCP stdio service     |
 | `vtcode skills`                                                        | Manage Agent Skills (list, create, load, validate)                  |
 | `vtcode plugins`                                                       | Manage Agent Plugins (add, list, validate, remove)                  |
 | `vtcode dependencies` (`deps`)                                         | Install or check optional tools (ripgrep, ast-grep)                 |
@@ -39,6 +39,12 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode cleanup-snapshots`                                             | Prune old snapshots with a retention limit                          |
 | `vtcode update`                                                        | Check for and install binary updates from GitHub Releases           |
 | `vtcode man`                                                           | Generate or display man pages                                       |
+| `vtcode man --all-pages --output man/man1`                             | Write the main page and all visible command pages to a directory    |
+
+For a local MCP connection that exposes Companion coding tasks, use
+`vtcode webmcp stdio --companion` with an explicitly selected workspace. The
+[VT Code Companion guide](./vtcode-companion.md) covers package setup and host
+marketplaces. The CLI command does not install the plugin or configure a host.
 
 ## Fast mode
 
@@ -244,6 +250,10 @@ VT Code provides several quick actions directly in the chat input for faster wor
 - **Slash Commands (`/`)** — Type `/` at the start of input to access all available slash commands including `/files`,
   `/status`, and many more.
 
+Run `/splash` to inspect the current CLI workspace, session, tool registry, and WebMCP listener. It omits pairing
+credentials. In VT Code Desktop the same command opens Settings → Connections, refreshes bridge status, and shows the
+Desktop-to-CLI protocol handshake; a standalone CLI process cannot observe another process's Desktop connection.
+
 ## Configuration quick reference
 
 | Action                         | Command                         | Result                                                                       |
@@ -258,7 +268,10 @@ VT Code provides several quick actions directly in the chat input for faster wor
 
 Configuration resets preserve lower-precedence values and secure credentials. Interactive sessions live-reload safe
 changes from watched layers; malformed edits retain the last valid snapshot and show a warning. See the
-[configuration guide](../config/config.md) for layer precedence and live-reload details.
+[configuration guide](../config/config.md) for layer precedence and live-reload details. In VT Code Desktop, `/config`
+opens a dedicated configuration page with the same groups, search, and typed editors, and `/config <path>` deep-links
+into it; the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`, `memory`, `tasks`, `jobs`, `log`,
+`subprocess`, `notify`) stay with the CLI runtime, and layer resets use `vtcode config reset` in the terminal.
 
 ### Slash-command notes
 
@@ -301,6 +314,16 @@ changes from watched layers; malformed edits retain the last valid snapshot and 
   request, otherwise the next turn). Header, session metadata, and persisted defaults reflect the effective selection
   once applied.
 - `/feedback` opens the VT Code GitHub issue form in your browser to report a bug or request a feature.
+- `/donate` opens a picker with the project's support links (Buy Me a Coffee and GitHub Sponsors) and opens the
+  chosen one in your browser.
+- Sessions without the inline TUI surface (for example turns driven through the VT Code Desktop service) degrade
+  interactive slash commands to plain text so a turn never wedges on a missing picker or modal: `/permissions` reports
+  the effective mode, `/mode` prints the primary-agent list (`/mode <name>` still switches), `/docs` and `/feedback`
+  open the browser directly and print the URL, `/donate` prints both support links, `/login <provider>` for
+  browser-OAuth providers (Copilot stays available — it is CLI-driven) points at `vtcode login <provider>` in a
+  terminal, `/update` install points at `vtcode update install`, `/config reset` points at `vtcode config reset`,
+  `/clear` reports that the transcript is kept, `/stats` reports the disk event count, and `/secret add|delete`
+  point at the desktop Settings form or `vtcode secret` in a terminal instead of the secure prompt.
 
 ## WebMCP browser bridge
 
@@ -310,6 +333,8 @@ interactive TUI session. Use `/webmcp help` to print the guide without the statu
 ```text
 /webmcp
 /webmcp help
+/webmcp connect http://localhost:5173
+/webmcp connect --replace http://localhost:5173
 /webmcp pair http://localhost:5173
 /webmcp pair --replace http://localhost:5173
 /webmcp tools
@@ -317,8 +342,8 @@ interactive TUI session. Use `/webmcp help` to print the guide without the statu
 /webmcp unpair
 ```
 
-Use `/webmcp pair <origin>` when the browser must submit real agent turns to this same VT Code session. The printed
-WebSocket URL and one-time pairing code belong to that running TUI process.
+Use `/webmcp connect <origin>` (or its `/webmcp pair` alias) when the browser must submit real agent turns to this same
+VT Code session. The printed WebSocket URL and one-time pairing code belong to that running TUI process.
 
 For the published WebMCP app, use `https://vtcode.vinhnx.chatgpt.site` for the ChatGPT Site or
 `https://vinhnx.github.io` for the GitHub Pages page at `https://vinhnx.github.io/VTCode/`. The path is not part of the
@@ -358,6 +383,15 @@ editor. Exact origins are required; remote access must use `--allow-remote --pub
 TLS-terminating reverse proxy, and direct non-loopback binding is rejected. Browser confirmation cannot authorize a real
 write: terminal permission or the existing explicit full-auto allowlist remains authoritative. See
 [WebMCP bridge development](../development/webmcp.md).
+
+For a local coding companion, `vtcode webmcp stdio --companion` serves the same tools over stdin/stdout without a network
+listener or OAuth setup. The host must launch it with a fixed `--workspace`; workspace trust and permissions still apply.
+The optional `vtcode webmcp serve --mcp --companion` adds `start_task`, `get_task`, and
+`cancel_task` to the remote MCP surface. It requires preconfigured full-auto workspace trust and retains exec
+policy. Plan first, explicitly request implementation, then inspect recorded verification. See [companion setup and
+limits](../development/vtcode-companion.md).
+Read-only planning returns the final plan when inspection is sufficient; distinct shell inspections do not count as
+repetitions merely because they use `exec_command`. Task completion still does not imply verified implementation.
 
 For the browser walkthrough, including the WebMCP app, local pairing, connected drafts, and troubleshooting, see the
 [WebMCP browser bridge user guide](./webmcp.md).

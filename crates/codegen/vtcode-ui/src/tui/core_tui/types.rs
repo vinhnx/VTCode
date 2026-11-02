@@ -29,4 +29,5 @@ pub use selection::{
 pub use style::{
     InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
     InlineLinkRange, InlineLinkTarget, InlineSegment, InlineStatus, InlineTextStyle, InlineTheme, InlineTone,
+    InlineTranscriptLine,
 };

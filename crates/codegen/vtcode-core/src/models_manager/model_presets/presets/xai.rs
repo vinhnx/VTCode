@@ -1,4 +1,5 @@
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 
@@ -12,22 +13,10 @@ pub(crate) fn xai_presets() -> Vec<ModelPreset> {
             provider: Provider::XAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast, less thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking (default)".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Maximum reasoning depth (grok-4.6 and later)".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast, less thinking"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced thinking"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep thinking (default)"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Maximum reasoning depth (grok-4.6 and later)"),
             ],
             is_default: true,
             upgrade: None,
@@ -43,22 +32,10 @@ pub(crate) fn xai_presets() -> Vec<ModelPreset> {
             provider: Provider::XAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast, less thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking (default)".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::XHigh,
-                    description: "Maximum reasoning depth (grok-4.6 and later)".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast, less thinking"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced thinking"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep thinking (default)"),
+                reasoning_preset(ReasoningEffortLevel::XHigh, "Maximum reasoning depth (grok-4.6 and later)"),
             ],
             is_default: false,
             upgrade: None,
@@ -74,18 +51,9 @@ pub(crate) fn xai_presets() -> Vec<ModelPreset> {
             provider: Provider::XAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast, less thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced thinking".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking (default)".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast, less thinking"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced thinking"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep thinking (default)"),
             ],
             is_default: false,
             upgrade: None,

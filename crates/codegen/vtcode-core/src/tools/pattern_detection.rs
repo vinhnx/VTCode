@@ -43,11 +43,15 @@ pub struct PatternDetector {
 
 impl PatternDetector {
     /// Create new detector with sliding window size.
+    ///
+    /// A zero window is clamped to one: `slice::windows(0)` panics and the
+    /// occurrence count divides by the window size, so a degenerate caller
+    /// value would otherwise abort the analysis task.
     pub fn new(sequence_length: usize) -> Self {
         Self {
             events: Vec::with_capacity(64),
             patterns: HashMap::with_capacity(16),
-            sequence_length,
+            sequence_length: sequence_length.max(1),
             events_since_analysis: 0,
         }
     }
@@ -236,6 +240,25 @@ fn hash_sequence(seq: &[String]) -> u64 {
 mod tests {
     use super::*;
     use std::time::Instant;
+
+    #[test]
+    fn zero_window_is_clamped_to_one() {
+        // `windows(0)` panics and `events.len() / sequence_length` divides by the
+        // window size, so a degenerate window must not reach analysis.
+        let mut detector = PatternDetector::new(0);
+        let now = Instant::now();
+        for _ in 0..ANALYZE_INTERVAL {
+            detector.record_event(ToolEvent {
+                tool_name: "tool_a".into(),
+                success: true,
+                duration_ms: 10,
+                timestamp: now,
+            });
+        }
+
+        let patterns = detector.patterns();
+        assert!(patterns.iter().all(|p| p.sequence.len() == 1));
+    }
 
     #[test]
     fn test_pattern_detection() {

@@ -21,7 +21,10 @@ pub(crate) async fn handle_show_log_viewer(
     save: bool,
 ) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(MessageStyle::Error, "Log viewer requires inline UI mode.")?;
+        ctx.renderer.line(
+            MessageStyle::Error,
+            "Log viewer requires inline UI mode. Run vtcode in a terminal to browse logs.",
+        )?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -225,6 +228,10 @@ fn describe_event(event: &vtcode_core::exec::events::ThreadEvent) -> (&'static s
         vtcode_core::exec::events::ThreadEvent::ItemCompleted(e) => {
             ("item.completed", format!("type={}", item_type_label(&e.item.details)))
         }
+        vtcode_core::exec::events::ThreadEvent::AppSandboxDenied(e) => (
+            "app.sandbox_denied",
+            format!("tool={}, tier={}, refused={}", e.tool, e.tier, truncate(&e.uris.join(","), MAX_FIELD_DISPLAY_LEN)),
+        ),
         vtcode_core::exec::events::ThreadEvent::PermissionRequested(e) => {
             ("permission.requested", format!("tool={}", truncate(&e.tool_name, MAX_FIELD_DISPLAY_LEN)))
         }
@@ -312,5 +319,24 @@ fn truncate(s: &str, max: usize) -> &str {
         s
     } else {
         s.split_at(s.char_indices().nth(max).map(|(i, _)| i).unwrap_or(s.len())).0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn describe_event_names_denial_tool_tier_and_uris() {
+        use vtcode_core::exec::events::{AppSandboxDeniedEvent, ThreadEvent};
+        let (event_type, detail) = describe_event(&ThreadEvent::AppSandboxDenied(Box::new(AppSandboxDeniedEvent {
+            tool: "mcp::demo::get_time".to_string(),
+            tier: "off".to_string(),
+            uris: vec!["ui://demo/app.html".to_string(), "ui://demo/other.html".to_string()],
+        })));
+        assert_eq!(event_type, "app.sandbox_denied");
+        assert!(detail.contains("mcp::demo::get_time"), "detail: {detail}");
+        assert!(detail.contains("tier=off"), "detail: {detail}");
+        assert!(detail.contains("ui://demo/app.html"), "detail: {detail}");
     }
 }

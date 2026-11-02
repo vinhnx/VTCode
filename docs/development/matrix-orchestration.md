@@ -143,10 +143,10 @@ coordinator decision; changing a workspace cannot create an unlimited verificati
 
 ## Development verification
 
-Run the focused acceptance suites with the tracked nextest configuration and confirm that tests matched:
+Run the focused acceptance suites with the local nextest configuration and confirm that tests matched:
 
 ```sh
-cargo nextest run --locked --config-file .github/nextest.toml \
+cargo nextest run --locked --config-file .config/nextest.toml \
   -p vtcode -p vtcode-core -p vtcode-config -p vtcode-memory -p vtcode-llm \
   -p vtcode-exec-events -p vtcode-utility-tool-specs \
   -E 'test(matrix) | test(coordinator) | test(subagent_restart_at_cap) | test(build_child_config) | test(simultaneous_spawns)'

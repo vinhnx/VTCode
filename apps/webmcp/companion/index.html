@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="VT Code Companion: experimental local MCP integration for planning and reviewing code from Codex and ChatGPT Local Work.">
+  <link rel="icon" href="../favicon.ico" type="image/x-icon">
+  <title>VT Code Companion · Local integration</title>
+  <style>
+    :root { color-scheme: dark; font: 18px/1.65 system-ui, sans-serif; background: #111310; color: #efeee5; }
+    body { max-width: 880px; margin: auto; padding: 24px; }
+    nav, .actions { display: flex; gap: 24px; flex-wrap: wrap; }
+    nav { justify-content: space-between; }
+    a { color: #d5df9c; text-underline-offset: 4px; }
+    a:focus-visible { outline: 3px solid #d5df9c; outline-offset: 5px; }
+    header { margin: 48px 0; }
+    h1 { font-size: clamp(2rem, 7vw, 3.3rem); line-height: 1.15; margin: 16px 0; }
+    h2 { font-size: 1.4rem; margin-top: 40px; }
+    .label { color: #c9c4ac; font-size: .85rem; letter-spacing: .12em; }
+    .banner { width: 100%; height: auto; border-radius: 12px; margin-top: 24px; }
+    .actions a { border: 1px solid #70775a; border-radius: 8px; padding: 10px 18px; }
+    li { margin: 12px 0; }
+    code { overflow-wrap: anywhere; }
+    footer { border-top: 1px solid #42483a; margin-top: 48px; padding: 24px 0; color: #c9c4ac; }
+  </style>
+</head>
+<body>
+  <nav aria-label="VT Code navigation">
+    <a href="../">WebMCP editor</a>
+    <a href="https://github.com/vinhnx/VTCode">GitHub repository</a>
+  </nav>
+  <main>
+    <header>
+      <p class="label">EXPERIMENTAL · LOCAL MCP INTEGRATION</p>
+      <h1>VT Code Companion</h1>
+      <p>Delegate workspace inspection and read-only planning from Codex to your locally installed VT Code. Review the plan and evidence before explicitly requesting implementation.</p>
+      <img class="banner" src="../../../plugins/vtcode-companion/assets/banner.png" width="1774" height="887" alt="VT Code CLI branding: terminal prompt and vtcode command">
+    </header>
+    <div class="actions">
+      <a href="https://github.com/vinhnx/VTCode/blob/main/docs/user-guide/vtcode-companion.md">Local setup guide</a>
+      <a href="https://github.com/vinhnx/VTCode/issues">Report an issue</a>
+    </div>
+    <section aria-labelledby="workflow">
+      <h2 id="workflow">One workspace, a deliberate workflow</h2>
+      <ol>
+        <li>Build VT Code and generate a plugin bound to your binary and workspace.</li>
+        <li>Install through the local marketplace, restart ChatGPT desktop if needed, then select <strong>@VT Code Companion</strong> in a new Local Work chat and verify it can fetch the workspace README.</li>
+        <li>Request a read-only plan. Inspect coverage, truncation, and verification evidence.</li>
+        <li>Only after an explicit implementation request, try the experimental implementation mode and review its diff.</li>
+      </ol>
+      <p>VT Code enforces workspace trust and execution permissions. The workflow skill complements those policies. Setup never grants trust or installs the plugin automatically.</p>
+    </section>
+    <section aria-labelledby="support">
+      <h2 id="support">Current pilot support</h2>
+      <ul>
+        <li><strong>Codex:</strong> local discovery, workspace fetch, and planning demonstrated. Large reviews may still be partial or exceed output limits.</li>
+        <li><strong>Implementation:</strong> experimental; a live trial failed during evaluation. The complete workflow is not yet validated.</li>
+        <li><strong>ChatGPT Desktop / Local Work:</strong> experimental; install from the local Plugins Directory, select Companion in a new chat, and confirm tool discovery. A connected badge alone is not proof of tool access; one reported session did not expose Companion tools.</li>
+      </ul>
+      <p>This pilot requires Python 3, a compatible local host, and a configured VT Code installation. It does not provide web/mobile access or public registry installation.</p>
+    </section>
+    <section aria-labelledby="local">
+      <h2 id="local">Local execution, your model provider</h2>
+      <p>The MCP process uses local stdio and opens no network listener. Model requests can send prompts and repository context to your configured provider. VT Code Companion is free and open source; provider usage may incur charges.</p>
+      <p>The generated plugin contains machine-specific paths. Generate it on your own machine and keep it private. This website hosts information; it cannot run the MCP service or access your workspace.</p>
+      <p>Looking for the browser editor instead? <a href="../">Open WebMCP</a>.</p>
+    </section>
+  </main>
+  <footer>VT Code Companion by <a href="https://github.com/vinhnx">Vinh Nguyen</a> · Experimental repository integration · Public submission deferred</footer>
+</body>
+</html>

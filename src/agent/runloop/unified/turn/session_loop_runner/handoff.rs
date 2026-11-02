@@ -20,7 +20,9 @@ pub(super) const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved p
 pub(super) fn append_approved_plan_execution_input(runtime: &mut AgentRuntime) -> (String, usize) {
     let input = PLAN_APPROVED_EXECUTION_INPUT.to_string();
     let prompt_message_index = runtime.state.messages.len();
-    runtime.state.add_user_message(input.clone());
+    // Harness-owned execution handoff: user-role for provider steering, but not
+    // a prompt the user typed, so reverse history must not offer it.
+    runtime.state.add_synthetic_user_message(input.clone());
     (input, prompt_message_index)
 }
 

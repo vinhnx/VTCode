@@ -21,6 +21,36 @@ pub(super) async fn build_agent(workspace: &Path) -> ZedAgent {
 }
 
 pub(super) async fn build_agent_with_default_primary_agent(workspace: &Path, default_primary_agent: &str) -> ZedAgent {
+    build_agent_with_commands(workspace, default_primary_agent, CommandsConfig::default()).await
+}
+
+/// Build the fixture with an explicit command policy so a regression can run a
+/// command shape the default allow-list rejects.
+pub(super) async fn build_agent_with_commands(
+    workspace: &Path,
+    default_primary_agent: &str,
+    commands_config: CommandsConfig,
+) -> ZedAgent {
+    build_agent_with_policies(
+        workspace,
+        default_primary_agent,
+        commands_config,
+        vtcode_config::SandboxConfig::default(),
+        vtcode_config::core::permissions::PermissionsConfig::default(),
+        Vec::new(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments, reason = "test fixture mirrors the ZedAgent constructor")]
+pub(super) async fn build_agent_with_policies(
+    workspace: &Path,
+    default_primary_agent: &str,
+    commands_config: CommandsConfig,
+    sandbox_config: vtcode_config::SandboxConfig,
+    permissions_config: vtcode_config::core::permissions::PermissionsConfig,
+    providers_whitelist: Vec<String>,
+) -> ZedAgent {
     let core_config = CoreAgentConfig {
         model: "gpt-5.6-sol".to_string(),
         api_key: String::new(),
@@ -55,10 +85,13 @@ pub(super) async fn build_agent_with_default_primary_agent(workspace: &Path, def
         AuthCredentialsStoreMode::default(),
         AgentClientProtocolZedConfig::default(),
         ToolsConfig::default(),
-        CommandsConfig::default(),
+        commands_config,
         String::new(),
         Some("Zed".to_string()),
         primary_agents,
+        sandbox_config,
+        permissions_config,
+        providers_whitelist,
     )
     .await
 }

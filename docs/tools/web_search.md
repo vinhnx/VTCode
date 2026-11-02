@@ -1,11 +1,14 @@
 # Web Search Tool
 
-The `web_search` tool performs web searches and returns ranked results (title, URL, snippet) inline. Two providers are
-supported, selected in `vtcode.toml`:
+The `web_search` tool performs web searches and returns ranked results (title, URL, snippet) inline. The only built-in
+provider is keyless DuckDuckGo HTML search, selected by default through `auto` or explicitly with `duckduckgo`:
 
-- **`duckduckgo`** (default) — keyless DuckDuckGo HTML endpoint, no API key required. Best-effort; may be rate-limited
+- **`duckduckgo`** — keyless DuckDuckGo HTML endpoint, no API key required. Best-effort; may be rate-limited
   or anti-bot challenged.
-- **`youcom`** — the [You.com Search API](https://you.com/docs). Opt-in; requires a `YDC_API_KEY` environment variable.
+
+DuckDuckGo does not publish a dependable numeric quota for this HTML endpoint. Its responses can depend on
+request fingerprints and headers, so VTCode's limits are local safeguards rather than vendor guarantees: the
+default 3-second cooldown, 5-minute result cache, 12-request session budget, and 1 MiB response-body cap.
 
 ## Usage
 
@@ -19,10 +22,10 @@ The tool accepts a `query` string and optional `max_results`:
 
 Optional parameters:
 
-| Field         | Type     | Default        | Description                                    |
-| ------------- | -------- | -------------- | ---------------------------------------------- |
-| `query`       | `string` | —              | Search query (also accepts `pattern` as alias) |
-| `max_results` | `number` | config default | Cap returned results (max 20)                  |
+| Field         | Type      | Default        | Description                                 |
+| ------------- | --------- | -------------- | ------------------------------------------- |
+| `query`       | `string`  | —              | Nonblank search query, up to 500 characters |
+| `max_results` | `integer` | config default | Cap returned results (max 20)               |
 
 ## Output
 
@@ -38,7 +41,21 @@ Optional parameters:
 }
 ```
 
-The `provider` field reports which backend served the query (`"duckduckgo"` or `"youcom"`).
+The `provider` field reports the backend as `"duckduckgo"`.
+
+### Errors and anti-bot responses
+
+Admission and provider failures use a stable structured contract. For example, a cooldown response includes
+`error_type: "cooldown"`, `retryable: true`, `retry_after_ms`, `provider`, and `next_action`; an exhausted
+session includes `error_type: "session_cap"`, `retryable: false`, `request_budget_remaining: 0`, and
+`next_action`.
+
+HTTP 202, 403, or 429 responses, and HTML containing a challenge or CAPTCHA, are reported as
+`error_type: "antiban_blocked"` with `retryable: false`. Do not retry those responses immediately from the
+same network or session. Use a known result URL with `web_fetch` under its separate approval and domain rules,
+or ask the user whether to configure another backend in a future provider extension. Ordinary timeout and 5xx
+failures are marked retryable for at most one explicit retry after the supplied `next_action`; the tool does not
+automatically retry DuckDuckGo requests.
 
 ## Configuration
 
@@ -47,14 +64,14 @@ Configure via `vtcode.toml` under `[tools.web_search]`:
 ```toml
 [tools.web_search]
 # Provider: "auto" (default; aliases the keyless DuckDuckGo backend), "duckduckgo"
-# (keyless), or "youcom" (requires YDC_API_KEY)
+# (keyless)
 provider = "duckduckgo"
 
 # Default results per call (hard cap: 20)
 max_results = 5
 
 # Request timeout in seconds (max: 60)
-timeout_secs = 15
+timeout_secs = 20
 
 # Minimum gap between requests in milliseconds (default: 3000)
 cooldown_ms = 3000
@@ -66,39 +83,18 @@ cache_ttl_secs = 300
 session_max_requests = 12
 ```
 
-### You.com provider
-
-Set `provider = "youcom"` to route `web_search` through the You.com Search API (`POST https://ydc-index.io/v1/search`,
-the search service host used by the official You.com SDKs):
-
-```toml
-[tools.web_search]
-provider = "youcom"
-```
-
-Then export your API key (get one at [you.com/platform/api-keys](https://you.com/platform/api-keys)):
-
-```bash
-export YDC_API_KEY="***"
-```
-
-The key is read at request time and sent as the `X-API-Key` header; it is never written to logs or error messages. The
-request is sent to the fixed `https://ydc-index.io/v1/search` endpoint with redirects disabled, so the `X-API-Key`
-header can never be forwarded to a different origin or scheme by an upstream redirect; a 3xx response is surfaced as a
-structured error instead of followed. If the key is missing or rejected, the tool returns a structured error telling the
-agent how to fix the setup — no silent fallback, no crash. A missing key is reported before any network activity, so it
-does not consume the session request cap or trigger the cooldown.
-
-Result shape is identical to the DuckDuckGo provider, so downstream tool usage (`web_fetch` on a promising URL) works
-the same either way.
+Anti-bot challenges and non-success responses are reported as structured errors rather than cached as empty results.
 
 ## Guard Rails
 
 - **Cooldown** — prevents hammering the endpoint (default 3s between requests)
 - **Result cache** — identical queries served from memory (default 5min TTL, no network call)
 - **Session cap** — limits total outbound requests per session (default 12)
-- **Timeout** — per-request timeout (default 15s, max 60s)
+- **Timeout** — per-request timeout (default 20s, max 60s)
 - **Results cap** — max 20 results per call
+
+The cooldown, cache, session budget, and body cap are VTCode policy controls; none should be interpreted as a
+published DuckDuckGo quota.
 
 ## Related Tools
 

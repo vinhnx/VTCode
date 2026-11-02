@@ -351,8 +351,9 @@ TUI invariants found via hotpath (keep these):
 - Link projection fast-rejects when `may_contain_link_candidate_text` is false (no path chars and no `.`); bare
   workspace filenames still match via `.`.
 - Eviction uses `TranscriptReflowCache::evict_prefix`, never a full wipe.
-- Single-style ASCII prose uses `wrap_ascii_word_boundaries` (no grapheme clustering / `clip_line`); other lines keep
-  the full wrapper.
+- Single-style ASCII prose that fits returns the input line unchanged (no wrap work at all); overflowing lines use
+  `wrap_ascii_word_boundaries` (no grapheme clustering / `clip_line`); other lines keep the full wrapper. Never route
+  fitting lines into the slow path — that cost +440% `wrap_line` icount in hotpath PR #1.
 - Transcript lines are pre-wrapped to `content_width`; `TranscriptWidget` must not re-wrap in `Paragraph` every frame.
 - Common transcript frames (no queue overlay, no links, no indicator shimmer) paint via `paint_pre_wrapped_lines`
   (`Buffer::set_span`) — do not clone `Line`s into `Paragraph`. Bottom padding is empty space, not a reason to clone/pad
@@ -360,6 +361,18 @@ TUI invariants found via hotpath (keep these):
 - Header content paints via `Buffer::set_span`; the block title is cached (`header_block_title_cache`) and invalidated
   with `header_lines_cache`. Do not rebuild `Paragraph` + `Block::title(...)` every frame.
 - `build_input_render` is fingerprint-cached (size/content_len/cursor/flags).
+
+### hotpath Cloud CI
+
+`.github/workflows/hotpath-benchmark.yml` runs `tui_hotpath` as the `tui_hotpath` hotpath Cloud benchmark in merged
+mode: one `x-prod` build (`--features profiling,hotpath-cloud,hotpath-callgrind`) runs natively for timing and
+allocations, then under Valgrind Callgrind for instruction counts, and one merged report is judged against `main`
+under `hotpath/policy.toml` (instruction counts and allocations judged, timing shown only). Pull requests, forks
+included, store the report as an artifact; `hotpath-relay.yml` uploads it from the default branch. `x-prod` is used
+because `release` (and `bench`, which inherits it) strips symbols, which Callgrind attribution needs. Keep the
+workload deterministic: no wall-clock-dependent branches, no randomness, and identical work on a second run. Rust,
+Valgrind and the runner image are pinned; bump them in a dedicated pull request so `main` uploads a new baseline. See
+the [CI integration docs](https://hotpath.rs/ci_integration).
 
 ## TUI frame metrics
 
@@ -474,7 +487,7 @@ startup work is observable without adding work to normal launches.
   `session_setup_registry`) and re-drive the ready UI before hydration. Ratchet:
   `critical_path_avoids_registry_and_discovery`.
 - **Static-first typeable shell.** `initialize_session_shell` paints a typeable TUI (bootstrap placeholder + built-in
-  slash commands) _before_ `initialize_session_critical` builds `ToolRegistry`, discovers subagents, or constructs the
+  slash commands) *before* `initialize_session_critical` builds `ToolRegistry`, discovers subagents, or constructs the
   provider client. Keystrokes typed into the shell survive the ready re-drive (no respawn). Structural ratchet:
   `shell::tests::shell_module_avoids_heavy_init_before_paint`.
 - **Interactive first frame uses a critical/hydrate split.** `initialize_session_critical` builds the heavy session

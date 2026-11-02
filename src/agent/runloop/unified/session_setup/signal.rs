@@ -80,6 +80,7 @@ pub(crate) fn spawn_signal_handler(
     ctrl_c_notify: Arc<Notify>,
     async_mcp_manager: Option<Arc<AsyncMcpManager>>,
     cancel_token: CancellationToken,
+    terminal_enabled: bool,
 ) -> SignalHandlerGuard {
     let handle = tokio::spawn(async move {
         loop {
@@ -109,7 +110,7 @@ pub(crate) fn spawn_signal_handler(
                             )
                             .await;
                         }
-                        emergency_terminal_cleanup();
+                        emergency_terminal_cleanup(terminal_enabled);
                         break;
                     }
 
@@ -137,16 +138,22 @@ pub(crate) fn spawn_signal_handler(
     SignalHandlerGuard::new(handle)
 }
 
-fn emergency_terminal_cleanup() {
-    set_global_terminal_focused(false);
-    let _ = vtcode_ui::tui::panic_hook::restore_tui();
+fn emergency_terminal_cleanup(terminal_enabled: bool) {
+    if terminal_enabled {
+        set_global_terminal_focused(false);
+        let _ = vtcode_ui::tui::panic_hook::restore_tui();
+    }
     vtcode_commons::trace_flush::flush_trace_log();
     // Clear feedback for the double-Ctrl+C path: the graceful postamble in
     // `postamble::print_exit_summary` never runs here because `exit()` skips
     // async teardown. Without this the shell shows only a bare prompt and the
     // user cannot tell the terminal was restored cleanly.
-    eprintln!("\r\nInterrupted — exiting (Ctrl+C pressed twice). Terminal restored.");
-    let _ = std::io::Write::flush(&mut std::io::stdout());
+    if terminal_enabled {
+        eprintln!("\r\nInterrupted — exiting (Ctrl+C pressed twice). Terminal restored.");
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+    } else {
+        eprintln!("Interrupted — exiting after repeated stop requests.");
+    }
     let _ = std::io::Write::flush(&mut std::io::stderr());
     std::process::exit(130);
 }

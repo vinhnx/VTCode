@@ -97,15 +97,22 @@ impl WebhookNotifier {
         self.send_with_retry(&url, &json, config.authentication.as_deref()).await
     }
 
+    /// Retry delay before `attempt` (1-based) with unbounded exponential growth
+    /// guarded against overflow.
+    fn retry_delay(&self, attempt: u32) -> Duration {
+        let exponent = attempt.saturating_sub(1);
+        Duration::from_millis(self.retry_delay_ms.saturating_mul(2_u64.saturating_pow(exponent)))
+    }
+
     /// Send webhook with retry logic
     async fn send_with_retry(&self, url: &Url, json: &str, auth: Option<&str>) -> Result<(), WebhookError> {
         let mut last_error = None;
 
         for attempt in 0..=self.max_retries {
             if attempt > 0 {
-                let delay = self.retry_delay_ms * 2u64.pow(attempt - 1); // Exponential backoff
-                debug!("Retrying webhook delivery after {}ms (attempt {})", delay, attempt);
-                tokio::time::sleep(Duration::from_millis(delay)).await;
+                let delay = self.retry_delay(attempt); // Exponential backoff
+                debug!("Retrying webhook delivery after {:?} (attempt {})", delay, attempt);
+                tokio::time::sleep(delay).await;
             }
 
             match self.send_request(url, json, auth).await {
@@ -192,6 +199,19 @@ mod tests {
         let notifier = WebhookNotifier::with_settings(5, 2000);
         assert_eq!(notifier.max_retries, 5);
         assert_eq!(notifier.retry_delay_ms, 2000);
+    }
+
+    #[test]
+    fn test_webhook_retry_delay_doubles_and_saturates() {
+        let notifier = WebhookNotifier::with_settings(3, 1_000);
+        assert_eq!(notifier.retry_delay(1), Duration::from_millis(1_000));
+        assert_eq!(notifier.retry_delay(2), Duration::from_millis(2_000));
+        assert_eq!(notifier.retry_delay(3), Duration::from_millis(4_000));
+        assert_eq!(
+            notifier.retry_delay(u32::MAX),
+            Duration::from_millis(u64::MAX),
+            "an overflowing exponent must saturate instead of panicking"
+        );
     }
 
     #[test]

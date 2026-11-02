@@ -29,345 +29,38 @@ source "$SCRIPT_DIR/macos-release-signing.sh"
 # Changelog formatting and shared commit classification.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/release-changelog.sh"
+# Preflight checks, usage, and GitHub CLI authentication helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/release-preflight.sh"
+# Changelog generation and documentation map refresh helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/release-changelog-ops.sh"
+# Binary packaging, CI builds, and docs.rs rebuild helpers.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/release-build.sh"
+
+# Stop `gh` from probing the terminal for its background color.
+#
+# With stdout on a TTY, `gh` detects the color scheme by asking the terminal for
+# its background color (muesli/termenv `HasDarkBackground` -> `termStatusReport`:
+# an OSC 11 query plus an `ESC[6n` cursor-position report) and reading the reply
+# back from /dev/tty. The asset upload runs four `gh` processes concurrently;
+# they race for the same /dev/tty reply, the losers time out, and the unread
+# replies are later echoed to the screen as garbage escape sequences -- e.g.
+# `ESC]11;rgb:0000/0000/0000ESC\` followed by `ESC[52;1R`. `NO_COLOR` makes `gh`
+# skip the probe entirely, and `GH_SPINNER_DISABLED` replaces the motion spinner
+# with textual progress so the parallel upload lines stay readable.
+# Verified against gh 2.102.0: on a TTY it emits `ESC]11;?` + `ESC[6n`, and with
+# NO_COLOR set it emits neither. Both are `${VAR:-default}`, so they can be
+# overridden, but note that gh treats *any* set NO_COLOR as "no color" -- the
+# only way to get gh's colors (and the probe, and the leak) back is to keep
+# NO_COLOR unset entirely.
+export NO_COLOR=${NO_COLOR:-1}
+export GH_SPINNER_DISABLED=${GH_SPINNER_DISABLED:-1}
 
 # Temporary file to store release notes
 RELEASE_NOTES_FILE=$(mktemp)
 trap 'rm -f "$RELEASE_NOTES_FILE"' EXIT
-
-print_distribution() {
-	printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
-}
-
-package_release_archive() {
-	local target=$1
-	local binary_name=$2
-	local archive_path=$3
-	local release_dir="target/$target/release"
-	if [[ "$target" == *-apple-darwin ]]; then
-		sign_and_notarize_macos_binary "$release_dir/$binary_name"
-	fi
-
-	# Stage the binary plus the shared man page set into a temp dir so the
-	# archive layout matches what install.sh expects (vtcode at root,
-	# man/man1/*.1 alongside).
-	local stage_dir
-	stage_dir=$(mktemp -d)
-	cp "$release_dir/$binary_name" "$stage_dir/"
-	if [[ -d "$binaries_dir/man" ]]; then
-		cp -R "$binaries_dir/man" "$stage_dir/"
-	fi
-	tar -C "$stage_dir" -czf "$archive_path" .
-	rm -rf "$stage_dir"
-	if [[ "$target" == *-apple-darwin ]]; then
-		verify_macos_release_archive "$archive_path"
-	fi
-}
-
-show_usage() {
-	cat <<'USAGE'
-Usage: ./scripts/release.sh [version|level] [options]
-
-Version or level:
-  <version>           Release the specified semantic version (e.g. 1.2.3)
-  --patch             Increment patch version (default)
-  --minor             Increment minor version
-  --major             Increment major version
-
-Options:
-  --dry-run           Run in dry-run mode
-  --draft             Create the GitHub Release as a draft (hold publication
-                      until `gh release edit <tag> --draft=false` is run).
-                      Used to stage assets for smoke checks before publishing.
-  --skip-crates       Skip the crates.io publish handoff
-  --skip-binaries     Skip building and uploading binaries (and Homebrew update)
-  --skip-docs         Skip docs.rs rebuild trigger
-  --skip-release      Resume finalization for an already-tagged release: skip
-                      the local sanity build, cargo-release (version/tag/push),
-                      and the CI trigger, but still run Steps 4-6 (collect
-                      binaries, upload assets, Homebrew). Use with an explicit
-                      version, e.g. `./scripts/release.sh 0.171.5 --skip-release`.
-  --ci-only           Trigger CI for Linux/Windows only (skip local macOS build)
-                      Useful when macOS binaries already built locally
-  -h, --help          Show this help message
-
-Cost Optimization:
-  Default mode (recommended):
-    • macOS binaries: built locally (no CI cost, faster)
-    • Linux/Windows: built on GitHub Actions (free for public repos)
-
-  --ci-only mode (hybrid):
-    • Skip local macOS build
-    • Only trigger CI for Linux/Windows
-    • Use when you already have macOS binaries
-
-USAGE
-}
-
-# Changelog generation using git-cliff
-update_changelog_from_commits() {
-	local version=$1
-	local dry_run_flag=$2
-
-	print_info "Generating changelog for version $version using git-cliff..."
-
-	# Find the previous semver tag (handles both v0.82.0 and 0.82.0 formats)
-	local previous_version
-	previous_version=$(git tag | grep -E '^[vV]?[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^[vV]//' | sort -t. -k1,1rn -k2,2rn -k3,3rn | awk -v ver="$version" '$0 != ver {print; exit}')
-
-	if [[ -n "$previous_version" ]]; then
-		print_info "Previous version tag: $previous_version"
-	else
-		print_info "No previous semver tag found"
-	fi
-
-	# Check if git-cliff is available
-	if command -v git-cliff >/dev/null 2>&1; then
-		print_info "Using git-cliff for changelog generation"
-
-		# Set GitHub token for git-cliff if available
-		local github_token=""
-		if command -v gh >/dev/null 2>&1; then
-			github_token=$(gh auth token 2>/dev/null || true)
-		fi
-
-		# Set up git-cliff arguments
-		local cliff_args=("--config" "cliff.toml" "--tag" "$version")
-		if [[ -n "$github_token" ]]; then
-			export GITHUB_TOKEN="$github_token"
-		fi
-
-		if [[ "$dry_run_flag" == 'true' ]]; then
-			print_info "Dry run - would generate changelog with git-cliff"
-			if [[ -n "$previous_version" ]]; then
-				git-cliff "${cliff_args[@]}" --unreleased "${previous_version}..HEAD" 2>/dev/null || true
-			else
-				git-cliff "${cliff_args[@]}" --unreleased 2>/dev/null || true
-			fi
-			return 0
-		fi
-
-		# Generate changelog entry for the new version
-		local temp_changelog
-		temp_changelog=$(mktemp)
-
-		# Generate changelog for the specific version
-		# Use range from previous version to current if available
-		if [[ -n "$previous_version" ]]; then
-			print_info "Generating changelog from $previous_version to $version"
-			git-cliff "${cliff_args[@]}" --output "$temp_changelog" "${previous_version}..HEAD" 2>/dev/null ||
-				git-cliff "${cliff_args[@]}" --output "$temp_changelog" 2>/dev/null || true
-		else
-			git-cliff "${cliff_args[@]}" --output "$temp_changelog" 2>/dev/null || true
-		fi
-
-		if [[ -s "$temp_changelog" ]]; then
-			# Extract the new version section from git-cliff output
-			local changelog_content
-			changelog_content=$(cat "$temp_changelog")
-
-			# Extract content between first and second version headers (portable across macOS/Linux)
-			local version_section
-			version_section=$(echo "$changelog_content" | awk '/^## /{if(++n==2)exit} n==1' 2>/dev/null || true)
-
-			# Build Full Changelog URL
-			local full_changelog_url
-			if [[ -n "$previous_version" ]]; then
-				full_changelog_url="https://github.com/vinhnx/vtcode/compare/${previous_version}...${version}"
-			else
-				full_changelog_url="https://github.com/vinhnx/vtcode/releases/tag/${version}"
-			fi
-
-			# Save to global variable for release notes use (GitHub Release body)
-			{
-				echo "## What's Changed"
-				echo ""
-				if [[ -n "$version_section" ]]; then
-					echo "$version_section"
-				else
-					# Fallback: use full changelog if extraction failed
-					echo "$changelog_content"
-				fi
-				echo ""
-				echo "**Full Changelog**: ${full_changelog_url}"
-			} >"$RELEASE_NOTES_FILE"
-
-			if [[ -f CHANGELOG.md ]]; then
-				# A re-run must replace a stale section (e.g. an aborted
-				# `--minor` run that pre-inserted this version) instead of
-				# skipping: skipping leaves the file out of order and drops
-				# the real commits for this release.
-				if grep -q "^## $version " CHANGELOG.md; then
-					print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
-					remove_changelog_version_section "$version"
-				fi
-				# Insert git-cliff's generated content above the newest version
-				if [[ -n "$version_section" ]]; then
-					insert_changelog_entry "$version_section"
-				else
-					insert_changelog_entry "$changelog_content"
-				fi
-			else
-				# Create new changelog with git-cliff output
-				cp "$temp_changelog" CHANGELOG.md
-			fi
-
-			rm -f "$temp_changelog"
-		else
-			print_warning "git-cliff failed, falling back to built-in changelog generator"
-			update_changelog_builtin "$version" "$dry_run_flag"
-			return $?
-		fi
-	else
-		print_warning "git-cliff not found, using built-in changelog generator"
-		print_info "Install with: cargo install git-cliff"
-		update_changelog_builtin "$version" "$dry_run_flag"
-		return $?
-	fi
-
-	git add CHANGELOG.md
-	if ! git diff --cached --quiet; then
-		GIT_AUTHOR_NAME="vtcode-release-bot" \
-			GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-			GIT_COMMITTER_NAME="vtcode-release-bot" \
-			GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-			git commit -m "docs: update changelog for $version [skip ci]"
-		print_success "Changelog updated and committed for version $version"
-	else
-		print_info "No changes to CHANGELOG.md to commit."
-	fi
-}
-
-# Built-in changelog generation (fallback when git-cliff is not available)
-update_changelog_builtin() {
-	local version=$1
-	local dry_run_flag=$2
-
-	print_info "Generating changelog for version $version from commits (builtin)..."
-
-	# Find the most recent tag that follows SemVer (vX.Y.Z or X.Y.Z) in commit history
-	# We exclude the version we're about to release if it already exists as a tag
-	local previous_tag
-	previous_tag=$(git log --tags --simplify-by-decoration --pretty="format:%D" | grep -oE "tag: v?[0-9]+\.[0-9]+\.[0-9]+" | sed 's/tag: //;s/,.*//' | grep -vE "^(v)?${version}$" | head -n 1)
-
-	local commits_range="HEAD"
-	if [[ -n "$previous_tag" ]]; then
-		print_info "Generating changelog from $previous_tag to HEAD"
-		commits_range="$previous_tag..HEAD"
-	else
-		print_info "No previous tag found, getting all commits"
-	fi
-
-	local date_str
-	date_str=$(date +%Y-%m-%d)
-
-	# Generate structured changelog
-	print_info "Generating structured changelog from commits..."
-	local structured_changelog
-	structured_changelog=$(generate_structured_changelog "$commits_range")
-
-	# Save to global variable for release notes use (GitHub Release body)
-	{
-		echo "## What's Changed"
-		echo ""
-		echo "$structured_changelog"
-		echo ""
-		if [[ -n "$previous_tag" ]]; then
-			echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${previous_tag}...${version}"
-		else
-			echo "**Full Changelog**: https://github.com/vinhnx/vtcode/releases/tag/${version}"
-		fi
-	} >"$RELEASE_NOTES_FILE"
-
-	if [[ "$dry_run_flag" == 'true' ]]; then
-		print_info "Dry run - would update CHANGELOG.md"
-		print_info "Release notes preview:"
-		cat "$RELEASE_NOTES_FILE"
-		return 0
-	fi
-
-	# Format for CHANGELOG.md (with version header)
-	local changelog_entry
-	changelog_entry="## $version - $date_str"$'\n\n'
-	changelog_entry="${changelog_entry}${structured_changelog}"$'\n'
-
-	if [[ -f CHANGELOG.md ]]; then
-		if grep -q "^## $version " CHANGELOG.md; then
-			print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
-			remove_changelog_version_section "$version"
-		fi
-		# Insert new entry above the newest version
-		insert_changelog_entry "$changelog_entry"
-	else
-		{
-			printf '%s\n' "# Changelog - vtcode"
-			printf '%s\n' ""
-			printf '%s\n' "All notable changes to vtcode will be documented in this file."
-			printf '%s\n' ""
-			printf '%b\n' "$changelog_entry"
-		} >CHANGELOG.md
-	fi
-
-	git add CHANGELOG.md
-	if ! git diff --cached --quiet; then
-		GIT_AUTHOR_NAME="vtcode-release-bot" \
-			GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-			GIT_COMMITTER_NAME="vtcode-release-bot" \
-			GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-			git commit -m "docs: update changelog for $version [skip ci]"
-		print_success "Changelog updated and committed for version $version"
-	else
-		print_info "No changes to CHANGELOG.md to commit."
-	fi
-}
-
-check_branch() {
-	local current_branch
-	current_branch=$(git branch --show-current)
-	if [[ "$current_branch" != 'main' ]]; then
-		print_error 'You must be on the main branch to create a release'
-		exit 1
-	fi
-}
-
-check_clean_tree() {
-	if [[ -n "$(git status --porcelain)" ]]; then
-		print_error 'Working tree is not clean. Please commit or stash your changes.'
-		git status --short
-		exit 1
-	fi
-}
-
-ensure_cargo_release() {
-	if ! command -v cargo-release >/dev/null 2>&1; then
-		# shellcheck disable=SC2016
-		print_error 'cargo-release is not installed. Install it with `cargo install cargo-release`.'
-		exit 1
-	fi
-}
-
-trigger_docs_rs_rebuild() {
-	local version=$1
-	local dry_run_flag=$2
-
-	if [[ "$dry_run_flag" == 'true' ]]; then
-		print_info "Dry run - would trigger docs.rs rebuild for version $version"
-		return 0
-	fi
-
-	print_distribution "Triggering docs.rs rebuild for version $version..."
-	local crates=(
-		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-webmcp vtcode-memory vtcode-macros
-		vtcode-config vtcode-indexer vtcode-bash-runner vtcode-utility-tool-specs vtcode-eval
-		vtcode-safety vtcode-a2a vtcode-llm vtcode-skills vtcode-agent-plugins vtcode-ui vtcode-mcp
-		vtcode-core vtcode-acp vtcode
-	)
-	for crate in "${crates[@]}"; do
-		# Fire-and-forget rebuild pings; each is an independent HTTPS GET,
-		# so all 21 run concurrently instead of sequentially.
-		curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true &
-	done
-	wait 2>/dev/null || true
-}
 
 publish_homebrew_tap() {
 	local version=$1
@@ -580,34 +273,7 @@ main() {
 	ensure_cargo_release
 
 	# GitHub CLI authentication setup
-	if command -v gh >/dev/null 2>&1; then
-		print_info "Checking GitHub CLI authentication..."
-
-		if gh auth status >/dev/null 2>&1; then
-			print_info "Switching to GitHub account vinhnx..."
-			if unset GITHUB_TOKEN && gh auth switch -u vinhnx >/dev/null 2>&1; then
-				print_success "Switched to GitHub account vinhnx"
-			elif [[ "$dry_run" == 'true' ]]; then
-				print_info "Dry run - continuing without switching GitHub account"
-			else
-				print_error "Could not switch to GitHub account vinhnx. Run \`gh auth switch -u vinhnx\` or re-authenticate before releasing."
-				exit 1
-			fi
-		elif [[ "$dry_run" == 'true' ]]; then
-			print_info "GitHub CLI is not authenticated; dry run will continue without GitHub publishing."
-		else
-			print_error "GitHub CLI is not authenticated. Run \`gh auth login -h github.com\` before releasing."
-			exit 1
-		fi
-
-		# Skip the refresh step that causes hangs, assuming user has proper scopes.
-		print_info "GitHub CLI scopes refresh is skipped; re-authenticate manually if GitHub operations fail."
-	elif [[ "$dry_run" == 'true' ]]; then
-		print_info "GitHub CLI not found. Dry run will continue without GitHub publishing."
-	else
-		print_error "GitHub CLI not found. Install \`gh\` before releasing."
-		exit 1
-	fi
+	ensure_github_cli "$dry_run"
 
 	local current_version
 	current_version=$(get_current_version)
@@ -672,24 +338,7 @@ main() {
 	fi
 
 	# 0.5 Regenerate Documentation Map
-	print_info "Step 0.5: Regenerating documentation map and syncing assets..."
-	if [[ "$dry_run" == 'true' ]]; then
-		print_info "Dry run - would run: python3 scripts/generate_docs_map.py && python3 scripts/sync_embedded_assets.py"
-	else
-		python3 scripts/generate_docs_map.py
-		python3 scripts/sync_embedded_assets.py
-		git add docs/modules/vtcode_docs_map.md
-		if ! git diff --cached --quiet; then
-			GIT_AUTHOR_NAME="vtcode-release-bot" \
-				GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-				GIT_COMMITTER_NAME="vtcode-release-bot" \
-				GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-				git commit -m "docs: update documentation map [skip ci]"
-			print_success "Documentation map updated and committed"
-		else
-			print_info "Documentation map already up to date"
-		fi
-	fi
+	regenerate_docs_map "$dry_run"
 
 	# 1. Local sanity check (fast `cargo check`, no codegen/LTO).
 	# Skipped under --skip-release: the irreversible version bump already happened,
@@ -773,67 +422,7 @@ main() {
 	# Skipped under --skip-release: the CI run for this tag already exists and
 	# Step 4's fallback discovery reuses its successful artifacts.
 	if [[ "$skip_binaries" == 'false' && "$skip_release" == 'false' ]]; then
-		print_info "Step 3.5: Triggering CI for Linux and Windows builds..."
-
-		if [[ "$dry_run" == 'true' ]]; then
-			print_info "Dry run - would trigger CI workflow for $released_version"
-		else
-			# Push tags to ensure CI can checkout the correct ref
-			print_info "Pushing tags to GitHub..."
-			git push origin --tags --no-verify 2>/dev/null || true
-
-			# Trigger the build-linux-windows workflow
-			# Timestamp the dispatch (minus a 5-minute skew margin for local
-			# clock vs GitHub server drift): run selection below only accepts
-			# runs created after this point, so a delayed new run is never
-			# confused with the previous release's run. The margin keeps a
-			# fast local clock from excluding the real run.
-			local trigger_epoch trigger_time
-			trigger_epoch=$(($(date +%s) - 300))
-			if [[ "$(uname -s)" == "Darwin" ]]; then
-				trigger_time=$(date -u -r "$trigger_epoch" +%Y-%m-%dT%H:%M:%SZ)
-			else
-				trigger_time=$(date -u -d "@$trigger_epoch" +%Y-%m-%dT%H:%M:%SZ)
-			fi
-			if gh workflow run build-linux-windows.yml --field tag="$released_version"; then
-				print_success "CI workflow triggered for $released_version"
-
-				# Wait for CI to complete.
-				print_info "Waiting for CI builds to complete..."
-				local run_id=""
-
-				# Get the workflow run ID - wait for it to appear. GitHub can
-				# take several minutes to register a dispatched run, so poll
-				# for up to ~6 minutes before giving up.
-				local find_run_attempts=0
-				local max_find_attempts=36 # 36 x 10s ~= 6 minutes
-				while [[ -z "$run_id" && $find_run_attempts -lt $max_find_attempts ]]; do
-					sleep 10
-					# Newest run of this workflow created after the dispatch
-					# above (ISO-8601 Zulu timestamps sort lexicographically).
-					run_id=$(gh run list --workflow build-linux-windows.yml --limit 5 --json databaseId,createdAt --jq --arg since "$trigger_time" '[.[] | select(.createdAt > $since)] | .[0].databaseId // empty' 2>/dev/null || true)
-					find_run_attempts=$((find_run_attempts + 1))
-				done
-
-				if [[ -z "$run_id" ]]; then
-					print_warning "Could not find CI workflow run - will use macOS binaries only"
-				# `gh run watch` blocks until the run completes and exits
-				# nonzero unless the conclusion is success. CI jobs carry
-				# 45m timeouts, so a stalled run is bounded server-side.
-				elif gh run watch "$run_id" --exit-status >/dev/null 2>&1; then
-					print_success "CI builds completed successfully"
-					# Store run_id for later download
-					CI_RUN_ID="$run_id"
-				else
-					local conclusion
-					conclusion=$(gh run view "$run_id" --json conclusion --jq '.conclusion' 2>/dev/null || echo "unknown")
-					print_warning "CI build failed with conclusion: $conclusion - will use macOS binaries only"
-					gh run view "$run_id" --log || true
-				fi
-			else
-				print_warning "Failed to trigger CI workflow - will use macOS binaries only"
-			fi
-		fi
+		trigger_ci_builds "$released_version" "$dry_run"
 	fi
 
 	# GitHub Release Creation and Binary Upload via gh
@@ -922,18 +511,29 @@ main() {
 		# .cargo/config.toml being present on the build machine.
 		# --locked ensures the Cargo.lock matches Cargo.toml so the size-optimized
 		# release profile is actually used.
+		# cargo-auditable embeds the dependency list into the binary (.dep-v0
+		# section) so shipped archives are scannable with `cargo audit bin`.
+		# Optional: without it, builds proceed unchanged and the artifacts just
+		# lack self-description.
+		local -a cargo_cmd=(build)
+		if command -v cargo-auditable > /dev/null 2>&1; then
+			cargo_cmd=(auditable build)
+			print_info "cargo-auditable detected: binaries will embed dependency audit data"
+		else
+			print_warning "cargo-auditable not installed; release binaries will not embed dependency audit data (cargo install cargo-auditable --locked)"
+		fi
 		env CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS="-C link-arg=-Wl,-dead_strip" \
-			cargo build --locked --profile release --target x86_64-apple-darwin --jobs 4 &>/dev/null &
+			cargo "${cargo_cmd[@]}" --locked --profile release --target x86_64-apple-darwin --jobs 4 &>/dev/null &
 		local pid_x86=$!
 		env CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS="-C link-arg=-Wl,-dead_strip" \
-			cargo build --locked --profile release --target aarch64-apple-darwin --jobs 4 &>/dev/null &
+			cargo "${cargo_cmd[@]}" --locked --profile release --target aarch64-apple-darwin --jobs 4 &>/dev/null &
 		local pid_arm=$!
 
 		# Man pages must be ready before packaging (every archive embeds
 		# man/). This only blocks if gen-man outlasts the builds; the
 		# release compiles keep running concurrently.
 		if wait "$pid_man" 2>/dev/null; then
-			print_info "Generated $(ls "$man_stage" 2>/dev/null | wc -l | tr -d ' ') man pages"
+			print_info "Generated $(find "$man_stage" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ') man pages"
 		else
 			print_warning "Man page generation failed; archives will ship without man pages"
 		fi
@@ -987,6 +587,23 @@ main() {
 			print_warning "Failed to build macOS aarch64"
 		fi
 
+		# Build the macOS desktop app bundle and stage its distribution zip.
+		# Sequential after the arch CLI builds: packaging reuses their cargo
+		# cache via CARGO_BUILD_TARGET but compiles the GUI crate fresh, and a
+		# third concurrent release build would thrash the shared target dir.
+		# The zip + sha256 land in $binaries_dir where checksums.txt and the
+		# upload queue pick them up automatically.
+		print_info "Building macOS desktop app..."
+		local require_desktop="${RELEASE_REQUIRE_DESKTOP:-true}"
+		if build_macos_desktop_archive "$released_version" "$binaries_dir"; then
+			print_success "Built macOS desktop app"
+		elif [[ "$require_desktop" == "true" ]]; then
+			print_error "Desktop app build failed; aborting release (set RELEASE_REQUIRE_DESKTOP=false to ship CLI-only)"
+			exit 1
+		else
+			print_warning "Desktop app build failed; continuing without it (RELEASE_REQUIRE_DESKTOP=false)"
+		fi
+
 		# Download Linux and Windows binaries from CI artifacts
 		print_info "Downloading Linux and Windows binaries from CI..."
 
@@ -994,22 +611,40 @@ main() {
 		local run_id="${CI_RUN_ID:-}"
 
 		if [[ -z "$run_id" ]]; then
-			# Newest successful run (--limit 10: the newest runs may still be
-			# in progress, or may have failed).
-			run_id=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 10 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' 2>/dev/null | head -1 || true)
+			# Newest successful run that actually built THIS version. Falling
+			# back to the plain newest successful run would select the previous
+			# release's run while this version's CI is still queued/building;
+			# its artifacts are named for the old version, so every download
+			# misses and the release aborts. Match on the version embedded in
+			# the artifact names instead.
+			print_info "Looking for a successful CI run that built $released_version..."
+			run_id=$(find_ci_run_for_version "$released_version" 20 || true)
 		fi
 
 		if [[ -z "$run_id" ]]; then
 			# No success yet — the typical `--skip-release` resume while CI
 			# still builds. Wait for the newest active run instead of
 			# aborting into a macOS-only release.
+			# gh 2.102.0 quirk: server-side `--branch`/`--event` filters
+			# return `[]` with `--json` (see find_ci_run_for_version), so
+			# filter locally in jq instead.
 			local active_run=""
-			active_run=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 5 --json databaseId,status --jq '.[] | select(.status == "in_progress" or .status == "queued") | .databaseId' 2>/dev/null | head -1 || true)
+			active_run=$(gh run list --workflow build-linux-windows.yml --limit 5 --json databaseId,status,headBranch,event --jq '.[] | select((.status == "in_progress" or .status == "queued") and .headBranch == "main" and .event == "workflow_dispatch") | .databaseId' 2>/dev/null | head -1 || true)
 			if [[ -n "$active_run" ]]; then
 				print_info "CI run $active_run still in progress; waiting for completion..."
+				# `gh run watch` blocks until the run completes and exits
+				# nonzero unless the conclusion is success. CI jobs carry
+				# 45m timeouts, so a stalled run is bounded server-side. The
+				# active run is not guaranteed to be this version's (a retry of
+				# a previous version could still be building), so confirm it
+				# published this version's artifacts before adopting it.
 				if gh run watch "$active_run" --exit-status >/dev/null 2>&1; then
-					print_success "CI builds completed successfully"
-					run_id="$active_run"
+					if ci_run_has_version_artifact "$active_run" "$released_version"; then
+						print_success "CI builds completed successfully"
+						run_id="$active_run"
+					else
+						print_warning "CI run $active_run did not build $released_version - will use macOS binaries only"
+					fi
 				else
 					print_warning "CI run $active_run did not succeed - will use macOS binaries only"
 				fi
@@ -1078,6 +713,14 @@ main() {
 			rm -rf "$ci_artifacts_dir"
 		else
 			print_warning "No CI workflow run found - will use macOS binaries only"
+			# Surface what actually exists so a silent filter/API failure is
+			# diagnosable: the newest runs of this workflow with their
+			# conclusions (no --branch/--event filters — see the gh quirk
+			# documented in release-assets.sh find_ci_run_for_version).
+			gh run list --workflow build-linux-windows.yml --limit 5 \
+				--json databaseId,status,conclusion,createdAt,headBranch,event \
+				--jq '.[] | "  run \(.databaseId): status=\(.status) conclusion=\(.conclusion) branch=\(.headBranch) event=\(.event)"' \
+				2>/dev/null || true
 		fi
 
 		# Required target coverage for the legacy updater bridge. Every listed
@@ -1140,9 +783,11 @@ main() {
 			fi
 			compat_assets+=("$compat_path")
 			(
-				create_compatibility_asset "$normal_archive" "$compat_path" &&
-					{ [[ "$ctarget" != *-apple-darwin ]] || verify_macos_release_binary "$compat_path"; } ||
+				if ! create_compatibility_asset "$normal_archive" "$compat_path"; then
 					touch "$compat_status_dir/$(basename "$compat_path").failed"
+				elif [[ "$ctarget" == *-apple-darwin ]] && ! verify_macos_release_binary "$compat_path"; then
+					touch "$compat_status_dir/$(basename "$compat_path").failed"
+				fi
 			) &
 			compat_pids+=($!)
 		done
@@ -1313,6 +958,7 @@ main() {
 	print_info "Distribution:"
 	print_info "  ✓ Cargo (crates.io)"
 	print_info "  ✓ GitHub Releases (all platforms: macOS local + Linux/Windows CI)"
+	print_info "  ✓ macOS Desktop app (vtcode-desktop-<version>-<target>.zip + .sha256)"
 	print_info "  ✓ Homebrew (vinhnx/homebrew-tap/vtcode)"
 	print_info ""
 	print_info "Cost optimization:"

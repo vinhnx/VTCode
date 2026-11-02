@@ -1,6 +1,7 @@
 //! opencode_zen_presets — provider preset definitions for opencode_zen.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn opencode_zen_presets() -> Vec<ModelPreset> {
@@ -11,10 +12,7 @@ pub(crate) fn opencode_zen_presets() -> Vec<ModelPreset> {
         description: "OpenCode Zen gateway — curated, benchmarked models at cost".to_string(),
         provider: Provider::OpenCodeZen,
         default_reasoning_effort: ReasoningEffortLevel::Medium,
-        supported_reasoning_efforts: vec![ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Medium,
-            description: "Balanced".to_string(),
-        }],
+        supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
         is_default: true,
         upgrade: None,
         show_in_picker: true,

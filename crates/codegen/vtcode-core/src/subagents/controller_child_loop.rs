@@ -18,6 +18,7 @@ use crate::core::agent::task::Task;
 use crate::core::threads::{ThreadBootstrap, ThreadId, ThreadRuntimeHandle, ThreadSnapshot};
 use crate::hooks::{LifecycleHookEngine, SessionStartTrigger};
 use crate::llm::provider::Message;
+use crate::primary_agent::ActivePrimaryAgent;
 use crate::tools::exec_session::ExecSessionManager;
 use crate::tools::pty::{PtyManager, PtySize};
 use crate::utils::session_archive::{SessionArchive, find_session_by_identifier};
@@ -285,6 +286,11 @@ impl SubagentController {
         .await?;
         runner.set_quiet(true);
         runner.set_subagent_mode(true);
+        // Attach the child spec's own tool/permission policy so concrete
+        // tool admission evaluates child-local denies — not just the global
+        // policy. Name filtering alone cannot enforce argument- or
+        // resource-specific rules.
+        runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
         // When this child may delegate further, attach a child-scoped
         // controller so the subagent-lifecycle tools surface in its catalog
         // and grandchild spawns inherit the incremented depth. The controller

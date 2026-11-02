@@ -41,6 +41,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub header_context: &'a mut vtcode_ui::tui::app::InlineHeaderContext,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
+    pub settings_snapshot: &'a crate::agent::runloop::unified::session_settings::SharedSettingsSnapshot,
     pub input_activity_counter: &'a Arc<AtomicU64>,
     pub config: &'a mut AgentConfig,
     pub vt_cfg: &'a mut Option<VTCodeConfig>,

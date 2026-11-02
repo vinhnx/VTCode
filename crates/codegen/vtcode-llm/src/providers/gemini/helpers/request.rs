@@ -99,7 +99,7 @@ impl GeminiProvider {
             contents.pop();
         }
 
-        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice()))?;
+        let tool_spec = request_gemini_tool_spec(request)?;
         let tools = tool_spec.generate_tools;
         let uses_server_side_tools = tool_spec.uses_server_side_tools;
 
@@ -229,7 +229,7 @@ impl GeminiProvider {
             Self::HISTORY_DIRECTIVES_SECTION_HEADER,
         );
 
-        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice()))?;
+        let tool_spec = request_gemini_tool_spec(request)?;
         let generation_config = build_generation_config(self, request);
         let interaction_input = build_interaction_input(request)?;
 
@@ -525,6 +525,17 @@ fn gemini_interaction_built_in_tool(tool: &ToolDefinition) -> Result<Option<Inte
     }
 
     Ok(Some(InteractionTool::built_in(tool_type, config)))
+}
+
+// Function-calling NONE does not disable hosted search/code tools. Omit the
+// mixed catalog for synthesis; function-only catalogs retain native enforcement.
+fn request_gemini_tool_spec(request: &LLMRequest) -> Result<GeminiToolSpec, LLMError> {
+    let spec = collect_gemini_tool_spec(request.tools.as_deref().map(|tools| tools.as_slice()))?;
+    if spec.uses_server_side_tools && matches!(request.tool_choice, Some(ToolChoice::None)) {
+        collect_gemini_tool_spec(None)
+    } else {
+        Ok(spec)
+    }
 }
 
 pub(crate) fn collect_gemini_tool_spec(definitions: Option<&[ToolDefinition]>) -> Result<GeminiToolSpec, LLMError> {

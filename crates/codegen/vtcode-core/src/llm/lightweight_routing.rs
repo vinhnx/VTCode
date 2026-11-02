@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::str::FromStr;
 
-use crate::config::api_keys::{ApiKeySources, get_api_key_with_mode};
+use crate::config::api_keys::get_api_key_in_workspace_with_mode;
 use crate::config::constants::model_helpers;
 use crate::config::loader::VTCodeConfig;
 use crate::config::models::{ModelId, Provider, model_catalog_entry};
@@ -261,7 +261,15 @@ pub fn create_provider_for_model_route(
             api_key,
             openai_chatgpt_auth: runtime_config.openai_chatgpt_auth.clone(),
             copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
-            base_url: None,
+            base_url: route
+                .provider_name
+                .eq_ignore_ascii_case("anthropic")
+                .then(|| {
+                    vt_cfg
+                        .and_then(|cfg| cfg.provider_overrides.get("anthropic"))
+                        .and_then(|config| config.base_url.clone())
+                })
+                .flatten(),
             model: Some(route.model.clone()),
             prompt_cache: Some(runtime_config.prompt_cache.clone()),
             timeouts: None,
@@ -279,7 +287,7 @@ pub fn create_provider_for_model_route(
 
 /// Resolve the API key for a model route, using the runtime key when the route
 /// targets the same provider as the main model, or falling back to environment
-/// variables otherwise.
+/// variables, the workspace `.env`, or secure storage otherwise.
 pub fn resolve_api_key_for_model_route(route: &ModelRoute, runtime_config: &RuntimeAgentConfig) -> Option<String> {
     resolve_api_key_for_model_route_with_mode(route, runtime_config, AuthCredentialsStoreMode::default())
 }
@@ -298,7 +306,7 @@ pub fn resolve_api_key_for_model_route_with_mode(
         return Some(runtime_config.api_key.clone());
     }
 
-    get_api_key_with_mode(&route.provider_name, &ApiKeySources::default(), storage_mode).ok()
+    get_api_key_in_workspace_with_mode(&route.provider_name, Some(&runtime_config.workspace), storage_mode).ok()
 }
 
 fn feature_uses_shared_model(
@@ -421,6 +429,117 @@ mod tests {
             checkpointing_max_age_days: None,
             max_conversation_turns: 0,
             model_behavior: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn auxiliary_anthropic_route_sends_to_configured_endpoint() {
+        use crate::llm::provider::{LLMRequest, Message};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+        use tokio::time::{Duration, timeout};
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("local listener");
+        let address = listener.local_addr().expect("listener address");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept request");
+            let mut request = Vec::new();
+            let mut buffer = [0u8; 4096];
+            loop {
+                let count = stream.read(&mut buffer).await.expect("read request");
+                assert_ne!(count, 0, "request closed before headers");
+                request.extend_from_slice(&buffer[..count]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let body = r#"{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).await.expect("write response");
+            String::from_utf8(request).expect("request headers")
+        });
+
+        let mut runtime = runtime_config();
+        runtime.provider = "anthropic".to_string();
+        runtime.api_key = "fixture-anthropic-key".to_string();
+        let mut config = VTCodeConfig::default();
+        config.provider_overrides.entry("anthropic".to_string()).or_default().base_url =
+            Some(format!("http://{address}/gateway/v1"));
+        let route = ModelRoute {
+            provider_name: "anthropic".to_string(),
+            model: "claude-sonnet-5-5".to_string(),
+        };
+        let provider = create_provider_for_model_route(&route, &runtime, Some(&config)).expect("provider");
+        let response = timeout(
+            Duration::from_secs(5),
+            provider.generate(LLMRequest {
+                model: route.model,
+                messages: vec![Message::user("hello".to_string())].into(),
+                ..Default::default()
+            }),
+        )
+        .await
+        .expect("request timeout")
+        .expect("provider response");
+        assert_eq!(response.content.as_deref(), Some("ok"));
+        let request = timeout(Duration::from_secs(5), server)
+            .await
+            .expect("server timeout")
+            .expect("server task");
+        assert!(request.starts_with("POST /gateway/v1/messages HTTP/1.1\r\n"), "{request}");
+        assert!(request.to_ascii_lowercase().contains("x-api-key: fixture-anthropic-key\r\n"));
+    }
+
+    #[test]
+    fn route_credentials_use_runtime_workspace_and_inherited_environment() {
+        const CHILD: &str = "VTCODE_LIGHTWEIGHT_ROUTE_TEST_CHILD";
+        const KEY: &str = "VTCODE_ROUTE_ISOLATION_API_KEY";
+        if let Some(workspace) = std::env::var_os(CHILD) {
+            let mut runtime = runtime_config();
+            runtime.workspace = workspace.into();
+            let route = ModelRoute {
+                provider_name: "vtcode_route_isolation".to_string(),
+                model: "secondary".to_string(),
+            };
+            let expected = std::env::var(KEY).unwrap_or_else(|_| "workspace-key".to_string());
+            assert_eq!(
+                resolve_api_key_for_model_route_with_mode(&route, &runtime, AuthCredentialsStoreMode::File).as_deref(),
+                Some(expected.as_str())
+            );
+            assert_eq!(
+                resolve_api_key_for_model_route_with_mode(
+                    &main_model_route(&runtime),
+                    &runtime,
+                    AuthCredentialsStoreMode::File
+                )
+                .as_deref(),
+                Some("test-key")
+            );
+            return;
+        }
+
+        let workspace = tempfile::tempdir().expect("workspace");
+        let other = tempfile::tempdir().expect("other workspace");
+        std::fs::write(workspace.path().join(".env"), format!("{KEY}=workspace-key\n")).expect("workspace dotenv");
+        std::fs::write(other.path().join(".env"), format!("{KEY}=other-key\n")).expect("other dotenv");
+        for inherited in [None, Some("inherited-key")] {
+            let mut command = std::process::Command::new(std::env::current_exe().expect("test executable"));
+            command
+                .arg("--exact")
+                .arg("llm::lightweight_routing::tests::route_credentials_use_runtime_workspace_and_inherited_environment")
+                .env(CHILD, workspace.path())
+                .current_dir(other.path());
+            if let Some(value) = inherited {
+                command.env(KEY, value);
+            } else {
+                command.env_remove(KEY);
+            }
+            let output = command.output().expect("run isolated route test");
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
         }
     }
 

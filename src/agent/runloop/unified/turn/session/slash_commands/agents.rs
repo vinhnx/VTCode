@@ -13,7 +13,7 @@ use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::slash_commands::{AgentDefinitionScope, AgentManagerAction, SubprocessManagerAction};
 use crate::agent::runloop::unified::session_setup::refresh_local_agents;
 
-#[path = "agents_authoring.rs"]
+#[path = "agents_authoring/mod.rs"]
 mod authoring;
 #[path = "agents/runtime.rs"]
 mod runtime;

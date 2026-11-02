@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
+import { fileURLToPath } from "node:url";
 
 interface OriginTrialResult {
   readonly html: string;
@@ -51,6 +52,14 @@ export default defineConfig({
   // /VTCode/ and the ChatGPT Site at its host root. Relative assets work for
   // both paths and for the local Vite server.
   base: "./",
+  build: {
+    rollupOptions: {
+      input: {
+        editor: fileURLToPath(new URL("./index.html", import.meta.url)),
+        companion: fileURLToPath(new URL("./companion/index.html", import.meta.url)),
+      },
+    },
+  },
   // Keep fallback state scoped to this deployed WebMCP app version. Without
   // an explicit instance, every origin falls back to the development key and a
   // stale/empty browser snapshot can hide the deterministic seed workspace.

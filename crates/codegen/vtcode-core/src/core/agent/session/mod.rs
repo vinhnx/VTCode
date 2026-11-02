@@ -5,10 +5,9 @@ use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::core::pending_actions::PendingActions;
 use crate::core::state_schema::SchemaVersion;
 use crate::exec::events::Usage;
-use crate::llm::provider::{Message, ResponsesContinuationState, responses_continuation_key};
+use crate::llm::provider::{Message, ResponsesContinuationState, ResponsesContinuationStore};
 use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
 use crate::llm::request_gap::RequestGapTracker;
-use hashbrown::HashMap;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -87,7 +86,7 @@ pub struct AgentSessionState {
     pub stagnant_turns: usize,
     pub last_processed_message_idx: usize,
     /// Responses-style continuation state keyed by normalized provider/model pairs.
-    pub previous_response_chains: HashMap<(String, String), ResponsesContinuationState>,
+    pub previous_response_chains: ResponsesContinuationStore,
     /// Agent-local recent error diagnostics for interrupted or repeated tool failures.
     pub error_recovery: Arc<Mutex<ErrorRecoveryState>>,
     /// Pending tool actions that have been issued but not yet returned.
@@ -189,7 +188,7 @@ impl AgentSessionState {
             progress_hashes: VecDeque::with_capacity(16),
             stagnant_turns: 0,
             last_processed_message_idx: 0,
-            previous_response_chains: HashMap::new(),
+            previous_response_chains: ResponsesContinuationStore::default(),
             error_recovery: Arc::new(Mutex::new(ErrorRecoveryState::default())),
             pending_actions: PendingActions::new(100),
             consecutive_idle_turns: 0,
@@ -299,7 +298,7 @@ impl AgentSessionState {
     }
 
     pub fn previous_response_chain_for(&self, provider: &str, model: &str) -> Option<&ResponsesContinuationState> {
-        responses_continuation_key(provider, model).and_then(|key| self.previous_response_chains.get(&key))
+        self.previous_response_chains.get(provider, model)
     }
 
     pub fn set_previous_response_chain(
@@ -323,22 +322,11 @@ impl AgentSessionState {
         response_id: Option<&str>,
         messages: Arc<Vec<Message>>,
     ) {
-        let Some(key) = responses_continuation_key(provider, model) else {
-            return;
-        };
-        let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
-            self.previous_response_chains.remove(&key);
-            return;
-        };
-
-        self.previous_response_chains
-            .insert(key, ResponsesContinuationState { response_id: response_id.to_string(), messages });
+        self.previous_response_chains.set(provider, model, response_id, messages);
     }
 
     pub fn clear_previous_response_chain_for(&mut self, provider: &str, model: &str) {
-        if let Some(key) = responses_continuation_key(provider, model) {
-            self.previous_response_chains.remove(&key);
-        }
+        self.previous_response_chains.clear_for(provider, model);
     }
 
     pub fn clear_previous_response_chain(&mut self) {
@@ -367,16 +355,47 @@ impl AgentSessionState {
         self.add_user_message_with_intent(text, None);
     }
 
+    /// Add a harness-generated `User`-role notice (recovery nudge, tracker
+    /// continuation, evaluator retry).
+    ///
+    /// The role must stay `User` so the provider treats it as steering, but the
+    /// message is tagged synthetic so reverse history can skip it.
+    pub fn add_synthetic_user_message(&mut self, text: String) {
+        self.add_synthetic_user_message_with_intent(text, None);
+    }
+
+    /// Add a synthetic `User`-role message with its originating follow-up ID.
+    pub fn add_synthetic_user_message_with_intent(&mut self, text: String, intent_id: Option<String>) {
+        let metadata = Self::user_message_metadata(&text, intent_id, true);
+        self.push_user_message(text, metadata);
+    }
+
     /// Add a user message and optionally tag it with the steering intent that
     /// produced it. The tag survives message serialization for recovery.
     pub fn add_user_message_with_intent(&mut self, text: String, intent_id: Option<String>) {
+        let metadata = Self::user_message_metadata(&text, intent_id, false);
+        self.push_user_message(text, metadata);
+    }
+
+    fn user_message_metadata(
+        text: &str,
+        intent_id: Option<String>,
+        synthetic: bool,
+    ) -> crate::core::message_metadata::MessageMetadata {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let tokens = text.len().saturating_div(4); // rough estimate: ~4 chars per token
-        let metadata = crate::core::message_metadata::MessageMetadata::user_input(now, tokens);
-        let metadata = match intent_id {
+        let metadata = if synthetic {
+            crate::core::message_metadata::MessageMetadata::harness_notice(now, tokens)
+        } else {
+            crate::core::message_metadata::MessageMetadata::user_input(now, tokens)
+        };
+        match intent_id {
             Some(id) => metadata.with_intent_id(id),
             None => metadata,
-        };
+        }
+    }
+
+    fn push_user_message(&mut self, text: String, metadata: crate::core::message_metadata::MessageMetadata) {
         self.conversation.push(Content::user_text(text.as_str()));
         let msg = Message::user(text).with_metadata(metadata);
         // Role overhead (~4 tokens) + content tokens
@@ -799,6 +818,37 @@ mod tests {
         }
         let expected_serialized = serde_json::to_string(&payload).unwrap();
         assert_eq!(state.messages[0], Message::tool_response("call_1".to_string(), expected_serialized));
+    }
+
+    #[test]
+    fn harness_notices_are_tagged_synthetic_while_user_messages_are_not() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        state.add_user_message("fix the flaky test".to_string());
+        state.add_synthetic_user_message("It looks like you're repeating the same response.".to_string());
+        state.add_user_message_with_intent("steer: stop after this".to_string(), Some("intent-1".to_string()));
+
+        let sources: Vec<Option<&str>> = state
+            .messages
+            .iter()
+            .map(|message| message.metadata.as_ref().and_then(|metadata| metadata.source()))
+            .collect();
+        assert_eq!(sources, vec![Some("user_input"), Some("synthetic"), Some("user_input")]);
+        assert!(
+            state.messages[1]
+                .metadata
+                .as_ref()
+                .is_some_and(vtcode_commons::message_metadata::MessageMetadata::is_synthetic)
+        );
+        // Tags survive archive round-trips so reverse history can filter them.
+        let archived: Vec<crate::utils::session_archive::SessionMessage> =
+            state.messages.iter().map(Into::into).collect();
+        assert!(
+            archived[1]
+                .metadata
+                .as_deref()
+                .is_some_and(vtcode_commons::message_metadata::MessageMetadata::is_synthetic)
+        );
+        assert!(archived[0].metadata.as_deref().is_some_and(|m| !m.is_synthetic()));
     }
 
     #[test]

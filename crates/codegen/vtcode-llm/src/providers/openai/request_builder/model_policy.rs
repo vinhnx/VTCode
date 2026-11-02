@@ -69,7 +69,11 @@ pub(super) fn is_gpt56_model(model: &str) -> bool {
 pub(super) fn is_gpt6_model(model: &str) -> bool {
     matches!(
         model,
-        openai_models::GPT_6_ASTRA | openai_models::GPT_6_SOL | openai_models::GPT_6_1_SOL | openai_models::GPT_6_LUNA
+        openai_models::GPT_6_ASTRA
+            | openai_models::GPT_6_SOL
+            | openai_models::GPT_6_1_SOL
+            | openai_models::GPT_6_1_TERRA
+            | openai_models::GPT_6_LUNA
     )
 }
 

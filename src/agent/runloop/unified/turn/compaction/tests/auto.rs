@@ -57,7 +57,7 @@ async fn interactive_compaction_forks_matching_parent_prompt_and_ordered_tools()
             7,
         );
         let mut manager = test_context_manager();
-        manager.update_token_usage(&Some(Usage {
+        manager.update_token_usage(Some(&Usage {
             prompt_tokens: 900,
             completion_tokens: 10,
             total_tokens: 910,
@@ -141,8 +141,8 @@ async fn successful_manual_recovery_and_model_switch_compaction_reset_cache_stre
             cache_creation_tokens: Some(5212),
             ..Default::default()
         });
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
         let mut context = test_context_manager();
         compact_history_in_place_with_events(
             CompactionContext::new(
@@ -161,9 +161,9 @@ async fn successful_manual_recovery_and_model_switch_compaction_reset_cache_stre
         .await
         .unwrap()
         .expect("successful compaction");
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none(), "{trigger:?}");
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
-        assert!(stats.record_cache_turn_health("openai", &usage).is_some());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none(), "{trigger:?}");
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_some());
     }
 }
 
@@ -218,10 +218,11 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
 
     let mut history = tool_heavy_history(ROOMY_HISTORY_CYCLES);
     let original_len = history.len();
+    let estimated_tokens_before: usize = history.iter().map(Message::estimate_tokens).sum();
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("stub-roomy", "stub-model", Some("resp_123"), &[]);
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 900,
         completion_tokens: 10,
         total_tokens: 910,
@@ -246,6 +247,9 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
     .expect("history should compact");
 
     assert_eq!(outcome.original_len, original_len);
+    let estimated_tokens_after: usize = history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(outcome.estimated_tokens_before, Some(estimated_tokens_before));
+    assert_eq!(outcome.estimated_tokens_after, Some(estimated_tokens_after));
     // The history exceeds the continuity tail, so auto-compaction must strictly
     // shrink the message count (never report growth as success).
     assert!(
@@ -270,7 +274,7 @@ async fn auto_compaction_uses_the_effective_session_safety_ceiling() {
     let original_len = history.len();
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 496_000,
         completion_tokens: 10,
         total_tokens: 496_010,
@@ -311,10 +315,11 @@ async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
     let mut history = vec![Message::user("keep this prefix".to_string())];
     history.extend(tool_heavy_history(ROOMY_HISTORY_CYCLES));
     let original_len = history.len();
+    let estimated_tokens_before: usize = history.iter().map(Message::estimate_tokens).sum();
     let preserved_prefix = history[..1].to_vec();
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 900,
         completion_tokens: 10,
         total_tokens: 910,
@@ -338,6 +343,9 @@ async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
 
     assert_eq!(&history[..1], preserved_prefix.as_slice());
     assert_eq!(outcome.original_len, original_len);
+    let estimated_tokens_after: usize = history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(outcome.estimated_tokens_before, Some(estimated_tokens_before));
+    assert_eq!(outcome.estimated_tokens_after, Some(estimated_tokens_after));
     // The suffix exceeds the continuity tail, so it compacts to a summary
     // plus tail instead of being kept verbatim.
     assert!(
@@ -380,11 +388,12 @@ async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
     history.push(Message::user("current-turn".to_string()));
     history.push(Message::assistant("".to_string()));
     history.push(Message::tool_response("call-current".to_string(), "{\"ok\":true}".to_string()));
+    let estimated_tokens_before: usize = history.iter().map(Message::estimate_tokens).sum();
     let preserved_suffix = history[prefix_len..].to_vec();
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("stub-roomy", "stub-model", Some("resp-recovery"), &[]);
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 950,
         completion_tokens: 10,
         total_tokens: 960,
@@ -410,6 +419,9 @@ async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
     .expect("history should compact");
 
     assert_eq!(history[history.len() - preserved_suffix.len()..], preserved_suffix);
+    let estimated_tokens_after: usize = history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(outcome.estimated_tokens_before, Some(estimated_tokens_before));
+    assert_eq!(outcome.estimated_tokens_after, Some(estimated_tokens_after));
     assert!(
         outcome.compacted_len < outcome.original_len,
         "expected shrink, got {} -> {}",

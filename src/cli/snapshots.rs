@@ -18,11 +18,12 @@ pub async fn handle_snapshots_command(config: &CoreAgentConfig) -> Result<()> {
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| s.created_at.to_string());
             println!(
-                "  {:>2}. turn {:>3}  messages={:<4} files={:<3} created={}",
+                "  {:>2}. turn {:>3}  messages={:<4} files={:<3} session={:<12} created={}",
                 i + 1,
                 s.turn_number,
                 s.message_count,
                 s.file_count,
+                s.session_id.as_deref().unwrap_or("-"),
                 created
             );
             if !s.description.is_empty() {

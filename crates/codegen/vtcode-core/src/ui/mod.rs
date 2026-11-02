@@ -13,14 +13,10 @@ pub mod markdown;
 pub mod search;
 /// Slash command discovery and suggestion.
 pub mod slash;
-/// Streaming text buffer for incremental output.
-pub mod stream_buffer;
 /// Styled text helpers.
 pub mod styled;
 /// Syntax highlighting integration.
 pub mod syntax_highlight;
-/// Table formatting utilities.
-pub mod table_formatter;
 /// Terminal capability detection.
 pub mod terminal;
 /// Built-in theme definitions and active style accessors.

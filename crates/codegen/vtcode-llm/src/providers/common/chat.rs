@@ -75,11 +75,11 @@ fn data_url(mime_type: &str, data: &str) -> String {
 fn serialize_image_part(
     data: &str,
     mime_type: &str,
-    detail: &Option<crate::provider::ImageDetail>,
-    image_url: &Option<String>,
+    detail: Option<&crate::provider::ImageDetail>,
+    image_url: Option<&str>,
 ) -> Value {
     let url = if let Some(ext) = image_url {
-        ext.clone()
+        ext.to_owned()
     } else {
         data_url(mime_type, data)
     };
@@ -136,7 +136,12 @@ pub(crate) fn serialize_message_content_openai(content: &MessageContent) -> Valu
                     }
                     ContentPart::Image { data, mime_type, detail, image_url, .. } => {
                         has_non_text = true;
-                        serialized_parts.push(serialize_image_part(data, mime_type, detail, image_url));
+                        serialized_parts.push(serialize_image_part(
+                            data,
+                            mime_type,
+                            detail.as_ref(),
+                            image_url.as_deref(),
+                        ));
                     }
                     ContentPart::File { filename, file_id, file_data, file_url, .. } => {
                         if file_id.is_some() || file_data.is_some() {

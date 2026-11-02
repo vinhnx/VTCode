@@ -10,7 +10,7 @@ use vtcode_core::retry::RetryPolicy;
 use vtcode_core::retry::RetryPolicyCoreExt;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::tools::registry::{
-    ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionError, ToolExecutionRequest, ToolRegistry,
+    ExecSettlementMode, ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError, ToolExecutionRequest, ToolRegistry,
 };
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
@@ -183,11 +183,7 @@ async fn execute_tool_with_progress(
     .await;
 
     let remaining_timeout = deadline.saturating_duration_since(Instant::now());
-    if remaining_timeout < Duration::from_secs(1)
-        && matches!(status, ToolExecutionStatus::Failure { .. } | ToolExecutionStatus::Timeout { .. })
-    {
-        status = create_timeout_error(name, timeout_category, Some(tool_timeout));
-    }
+    status = apply_deadline_status(status, remaining_timeout, name, timeout_category, tool_timeout);
 
     let retries_used = status
         .error()
@@ -202,6 +198,32 @@ async fn execute_tool_with_progress(
         retry_allowed,
     );
     status
+}
+
+// Received HTTP failures and policy denials remain evidence near the deadline.
+// Only the outer timeout itself should replace it with a generic timeout.
+fn apply_deadline_status(
+    status: ToolExecutionStatus,
+    remaining: Duration,
+    name: &str,
+    category: ToolTimeoutCategory,
+    timeout: Duration,
+) -> ToolExecutionStatus {
+    let observed_terminal_failure = status.error().is_some_and(|error| {
+        error.error_type == ToolErrorType::PolicyViolation
+            || error
+                .debug_context
+                .as_ref()
+                .is_some_and(|context| context.metadata.iter().any(|(key, _)| key == "http_status"))
+    });
+    if remaining < Duration::from_secs(1)
+        && !observed_terminal_failure
+        && matches!(status, ToolExecutionStatus::Failure { .. } | ToolExecutionStatus::Timeout { .. })
+    {
+        create_timeout_error(name, category, Some(timeout))
+    } else {
+        status
+    }
 }
 
 #[allow(
@@ -289,9 +311,9 @@ async fn run_single_tool_attempt(
     progress_reporter.set_progress(20).await;
 
     let _progress_update_guard = {
-        use crate::agent::runloop::unified::progress::{ProgressUpdateGuard, spawn_elapsed_time_updater};
+        use crate::agent::runloop::unified::progress::spawn_elapsed_time_updater;
         let handle = spawn_elapsed_time_updater(progress_reporter.clone(), name.to_string(), 500);
-        ProgressUpdateGuard::new(handle)
+        vtcode_commons::TaskGuard::with_label(handle, "tool-progress-update")
     };
 
     let status = loop {
@@ -319,7 +341,9 @@ async fn run_single_tool_attempt(
             policy.retry_jitter = retry_policy.jitter;
 
             let request = ToolExecutionRequest::new(name.to_string(), args.clone()).with_policy(policy);
-            let outcome = registry.execute_public_tool_request(request).await;
+            let outcome = registry
+                .execute_public_tool_request_with_deadline(request, start_time + tool_timeout)
+                .await;
             let attempts = outcome.attempts.max(1);
             let total_duration_ms = outcome.total_duration.as_millis().min(u128::from(u64::MAX)) as u64;
             let last_error_category = outcome.last_error_category;
@@ -532,6 +556,52 @@ mod tests {
 
     use super::*;
     use crate::agent::runloop::unified::state::CtrlCState;
+
+    #[test]
+    fn near_deadline_http_failure_retains_status_guidance_and_retry_after() {
+        let error = ToolExecutionError::from_tool_output(&serde_json::json!({
+            "error":"HTTP request failed with status: 429", "http_status":429,
+            "retry_after_ms":6000, "next_action":"Disclose the external limitation."
+        }))
+        .unwrap();
+        let status = apply_deadline_status(
+            ToolExecutionStatus::Failure { error },
+            Duration::from_millis(10),
+            "web_fetch",
+            ToolTimeoutCategory::Default,
+            Duration::from_secs(30),
+        );
+        assert!(matches!(status, ToolExecutionStatus::Failure { .. }));
+        let wire = status.error().unwrap().to_json_value();
+        assert_eq!(wire["error"]["http_status"], 429);
+        assert_eq!(wire["error"]["retry_after_ms"], 6000);
+        assert_eq!(wire["error"]["recovery_suggestions"][0], "Disclose the external limitation.");
+        let denied = apply_deadline_status(
+            ToolExecutionStatus::Failure {
+                error: ToolExecutionError::policy_violation("web_fetch", "denied by policy"),
+            },
+            Duration::ZERO,
+            "web_fetch",
+            ToolTimeoutCategory::Default,
+            Duration::from_secs(30),
+        );
+        assert!(matches!(denied, ToolExecutionStatus::Failure { .. }));
+        assert_eq!(denied.error().unwrap().error_type, ToolErrorType::PolicyViolation);
+        assert!(!denied.error().unwrap().retryable);
+        let ordinary = ToolExecutionStatus::Failure {
+            error: ToolExecutionError::new("read_file", ToolErrorType::NetworkError, "connection reset"),
+        };
+        assert!(matches!(
+            apply_deadline_status(
+                ordinary,
+                Duration::ZERO,
+                "read_file",
+                ToolTimeoutCategory::Default,
+                Duration::from_secs(30)
+            ),
+            ToolExecutionStatus::Timeout { .. }
+        ));
+    }
 
     #[test]
     fn first_retry_backoff_is_non_zero_and_meaningful() {

@@ -84,16 +84,15 @@ impl OpenAIProvider {
         lease.send(&prepared.event).await?;
         let model = request.model.clone();
         let parse_model = model.clone();
-        let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
         let mut processor = ResponsesNormalizedStreamProcessor::new(
             ResponsesNormalizedStreamOptions {
                 provider_name: "OpenAI",
                 model,
                 emit_reasoning: Self::model_supports_reasoning_summaries(&request.model),
-                include_cached_prompt_metrics: include_metrics,
+                include_cached_prompt_metrics: true,
             },
             move |value| {
-                let response = parse_responses_completion(value, parse_model.clone(), include_metrics)?;
+                let response = parse_responses_completion(value, parse_model.clone(), true)?;
                 Ok(Self::normalize_reasoning_output(&parse_model, response))
             },
         );

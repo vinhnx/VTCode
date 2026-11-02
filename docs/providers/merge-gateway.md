@@ -61,12 +61,13 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `google/gemini-3.6-flash` | 1M | Yes | Google route |
 | `google/gemini-3.7-flash` | 1M | Yes | Google route |
 | `google/gemini-4-argon` | 1.05M | Yes | Google route, flagship reasoning model |
-| `deepseek/deepseek-v4-pro-0813` | 1M | No | DeepSeek route |
-| `deepseek/deepseek-v4-flash-0731` | 1M | No | DeepSeek route |
+| `deepseek/deepseek-v4.1-flash-1017` | 1M | No | DeepSeek route |
 | `xai/grok-4.6` | 500k | No | xAI route |
 | `qwen/qwen3.8-max` | 1M | Yes | Qwen route |
 | `minimax/minimax-h3` | 131k | No | MiniMax route |
+| `minimax/minimax-m3.1-flash` | 1M | Yes | MiniMax M3.1 Flash ultra-efficient multimodal route |
 | `moonshot/kimi-k3` | 1M | Yes | Moonshot route |
+| `moonshot/kimi-k3.1-pro` | 1M | Yes | Moonshot route, 3T-class open-weight flagship |
 | `thinkingmachines/inkling` | 1M | No | Thinking Machines route |
 | `zai/glm-5.3-flash` | 1.31M | Yes | Z.AI route (320B/18B hybrid attention, native vision) |
 | `zai/glm-5.3-flashx` | 1M | Yes | Z.AI high-speed route (Flash stack, up to 200 tok/s, native vision) |
@@ -76,6 +77,7 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `openai/gpt-6-astra` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6-sol` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6.1-sol` | 1.05M | Yes | OpenAI route |
+| `openai/gpt-6.1-terra` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6-luna` | 1.05M | Yes | OpenAI route |
 | `xiaomimimo/mimo-v2.6-pro` | 1M | Yes | Xiaomi MiMo route; reasoning controls omitted (gateway has no vendor serving reasoning jointly with tools) |
 | `xiaomimimo/mimo-v2.6-flash` | 1M | Yes | Xiaomi MiMo route; reasoning controls omitted (gateway has no vendor serving reasoning jointly with tools) |

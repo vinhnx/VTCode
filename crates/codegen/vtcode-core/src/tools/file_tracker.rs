@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
-use serde_json::Value;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -26,11 +25,6 @@ impl FileTracker {
                 "*.xml".to_string(),
             ],
         }
-    }
-
-    /// Add a custom file pattern to track
-    pub fn add_pattern(&mut self, pattern: String) {
-        self.tracked_patterns.push(pattern);
     }
 
     /// Scan for newly created or modified files matching tracked patterns
@@ -82,62 +76,6 @@ impl FileTracker {
         }
 
         Ok(new_files)
-    }
-
-    /// Check if a specific file exists and return its info
-    pub async fn verify_file_exists(&self, filename: &str) -> Result<Option<TrackedFile>> {
-        let file_path = self.workspace_root.join(filename);
-
-        match tokio::fs::metadata(&file_path).await {
-            Ok(metadata) if metadata.is_file() => {
-                let modified = metadata.modified().unwrap_or_else(|_| SystemTime::now());
-
-                Ok(Some(TrackedFile {
-                    absolute_path: file_path,
-                    size: metadata.len(),
-                    modified,
-                }))
-            }
-            Ok(_) => Ok(None),  // Not a file
-            Err(_) => Ok(None), // Doesn't exist
-        }
-    }
-
-    /// Get the absolute path of a file
-    pub fn get_absolute_path(&self, filename: &str) -> PathBuf {
-        self.workspace_root.join(filename)
-    }
-
-    /// Find all files matching a glob pattern
-    pub async fn find_files_matching_pattern(&self, pattern: &str) -> Result<Vec<PathBuf>> {
-        use tokio::task;
-        let workspace = self.workspace_root.clone();
-        let pattern = pattern.to_string();
-
-        task::spawn_blocking(move || {
-            let mut files = Vec::new();
-            let glob_pattern = match glob::Pattern::new(&pattern) {
-                Ok(p) => p,
-                Err(_) => return Ok(files),
-            };
-
-            let walker = vtcode_commons::walk::build_walker_single_threaded(&workspace).build();
-            for entry in walker.flatten() {
-                if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-                    continue;
-                }
-                let path = entry.path();
-                let relative = path.strip_prefix(&workspace).unwrap_or(path);
-                let relative_str = relative.to_string_lossy();
-                if glob_pattern.matches(&relative_str) {
-                    files.push(path.to_path_buf());
-                }
-            }
-
-            Ok(files)
-        })
-        .await
-        .context("Failed to spawn file search task")?
     }
 
     /// Generate a verification code snippet
@@ -193,16 +131,6 @@ mod system_time_serde {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| std::time::Duration::from_secs(0));
         serializer.serialize_u64(duration.as_secs())
-    }
-}
-
-impl TrackedFile {
-    pub fn to_json(&self) -> Value {
-        serde_json::json!({
-            "absolute_path": self.absolute_path.display().to_string(),
-            "size": self.size,
-            "modified": format!("{:?}", self.modified),
-        })
     }
 }
 

@@ -124,6 +124,11 @@ fn default_summary_prompt_preserves_required_compaction_context() {
     assert!(prompt.contains("file paths that were read or modified"));
     assert!(prompt.contains("test results and error messages"));
     assert!(prompt.contains("decisions with their reasoning"));
+    assert!(prompt.contains("completed, running, failed, and not-run checks"));
+    assert!(prompt.contains("observed exit codes"));
+    assert!(prompt.contains("pending session identifiers with their next poll action"));
+    assert!(prompt.contains("unresolved approvals and user restrictions"));
+    assert!(prompt.contains("Assistant claims are not verification evidence"));
 }
 
 #[test]

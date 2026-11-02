@@ -132,6 +132,25 @@ create_compatibility_asset() {
     return 0
 }
 
+# Print the desktop app distribution archive name for a release version.
+#
+#   desktop_archive_name <version> <macos-target>
+#
+# The name MUST keep the updater-safe shape `vtcode-desktop-<v>-<target>.zip`:
+# the v0.141.5+ updater requires exactly one asset matching
+# `starts_with("vtcode-") && ends_with("{target}.tar.gz"|"{target}.zip")`
+# (`select_archive_asset` in src/updater/github.rs), and the legacy updater
+# matches `{target}.tar.gz` substrings. A `.zip` macOS asset matches neither
+# selector, so it rides the normal upload queue without breaking CLI
+# self-update. Never rename this to `.tar.gz` or a Windows triple.
+desktop_archive_name() {
+    if [[ $# -ne 2 ]]; then
+        echo "usage: desktop_archive_name <version> <macos-target>" >&2
+        return 2
+    fi
+    printf 'vtcode-desktop-%s-%s.zip\n' "$1" "$2"
+}
+
 # Generate the aggregate checksum manifest for installable archives.
 #
 # Compatibility assets are intentionally excluded: updater versions that use
@@ -238,6 +257,66 @@ download_ci_artifact_with_retry() {
         sleep "$backoff"
         attempt=$((attempt + 1))
     done
+}
+
+# Return 0 when CI run <run-id> published a build artifact for <version>.
+#
+#   ci_run_has_version_artifact <run-id> <version>
+#
+# `build-linux-windows.yml` names its artifacts `vtcode-<tag>-<target>`, and a
+# `workflow_dispatch` run does NOT expose its `tag` input through the API
+# (`.inputs` is null), so the artifact name is the only reliable way to tell
+# which release a run built. Uses the `{owner}/{repo}` placeholder so it works
+# from any checkout of the repo. Returns nonzero on any API failure.
+ci_run_has_version_artifact() {
+    if [[ $# -ne 2 ]]; then
+        echo "usage: ci_run_has_version_artifact <run-id> <version>" >&2
+        return 2
+    fi
+    local run_id=$1
+    local version=$2
+    local names
+    names=$(gh api --paginate "repos/{owner}/{repo}/actions/runs/${run_id}/artifacts" \
+        --jq '.artifacts[].name' 2>/dev/null) || return 1
+    grep -qxF "vtcode-${version}-x86_64-unknown-linux-gnu" <<<"$names"
+}
+
+# Print the newest successful `build-linux-windows.yml` run that built
+# <version>, or nothing (nonzero) when no such run exists.
+#
+#   find_ci_run_for_version <version> [max-runs]
+#
+# Recency alone is not enough to identify a release's CI run. While a new
+# version's run is still queued or building, the newest *successful* run
+# belongs to the PREVIOUS version; its artifacts are named
+# `vtcode-<old-version>-...`, so every download of the new version's artifact
+# names misses and the release aborts with "Missing required release archive".
+# Filtering candidates by the version embedded in their artifact names skips
+# stale runs and finds the right one.
+#
+# gh 2.102.0 quirk (verified 2026-10-22): `gh run list --json ...` combined
+# with the server-side `--branch` or `--event` filters returns `[]` even when
+# matching runs exist (the same rows appear in plain-text output and in
+# `--json` without those filters). Filter `--branch main --event
+# workflow_dispatch` locally in `--jq` instead of passing them server-side.
+find_ci_run_for_version() {
+    if [[ $# -lt 1 || $# -gt 2 ]]; then
+        echo "usage: find_ci_run_for_version <version> [max-runs]" >&2
+        return 2
+    fi
+    local version=$1
+    local max_runs=${2:-20}
+    local candidate
+    while IFS= read -r candidate; do
+        [[ -n "$candidate" ]] || continue
+        if ci_run_has_version_artifact "$candidate" "$version"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done < <(gh run list --workflow build-linux-windows.yml --limit "$max_runs" \
+        --json databaseId,conclusion,headBranch,event \
+        --jq '.[] | select(.conclusion == "success" and .headBranch == "main" and .event == "workflow_dispatch") | .databaseId' 2>/dev/null)
+    return 1
 }
 
 # Ensure `gh` authenticates with push access to the release repo.

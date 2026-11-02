@@ -135,6 +135,19 @@ pub fn recent_sessions(workspace: &Path, n: usize) -> Vec<SessionSummary> {
     out
 }
 
+/// List summaries of sessions with a live process attached, most-recently-updated first.
+///
+/// Liveness is the flock-backed `session.lock` check, not the manifest
+/// `status` string, so crashed sessions that never emitted `thread.completed`
+/// are excluded. Used by peer-messaging discovery (`list_sessions`).
+#[must_use]
+pub fn live_sessions(workspace: &Path) -> Vec<SessionSummary> {
+    recent_sessions(workspace, usize::MAX)
+        .into_iter()
+        .filter(|summary| crate::retention::session_dir_is_live(&crate::session_dir(workspace, &summary.session_id)))
+        .collect()
+}
+
 /// Cross-session long-term-learning query: collect grounded facts from every
 /// session's derived memory envelope. This is how the agent learns across
 /// sessions without loading any history into context.

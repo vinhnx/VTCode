@@ -1,0 +1,858 @@
+use crate::llm::provider::Message;
+use hashbrown::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
+use vtcode_macros::StringNewtype;
+
+// ============================================================================
+// Context Manager: Call/Output Pairing Invariants (OpenAI Codex pattern)
+// ============================================================================
+
+/// Unique identifier for a tool call.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, StringNewtype)]
+pub struct ToolCallId(String);
+
+/// Status of a tool execution
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputStatus {
+    Success,
+    Failed,
+    Canceled,
+    Timeout,
+}
+
+impl OutputStatus {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::Failed => "failed",
+            Self::Canceled => "canceled",
+            Self::Timeout => "timeout",
+        }
+    }
+}
+
+/// Items that participate in call/output pairing for validation
+#[derive(Debug, Clone)]
+pub enum PairableHistoryItem {
+    /// Tool call without output (yet)
+    ToolCall { call_id: ToolCallId, tool_name: String },
+    /// Tool output for a previous call
+    ToolOutput { call_id: ToolCallId, status: OutputStatus },
+}
+
+/// Record of a missing output in conversation history
+#[derive(Debug, Clone)]
+pub struct MissingOutput {
+    pub call_id: ToolCallId,
+    pub tool_name: String,
+}
+
+/// Validation report for conversation history state
+#[derive(Debug, Default, Clone)]
+pub struct HistoryValidationReport {
+    /// Tool calls without corresponding outputs
+    pub missing_outputs: Vec<MissingOutput>,
+    /// Outputs without corresponding calls (orphans)
+    pub orphan_outputs: Vec<ToolCallId>,
+}
+
+impl HistoryValidationReport {
+    /// Check if history is in a valid state
+    pub fn is_valid(&self) -> bool {
+        self.missing_outputs.is_empty() && self.orphan_outputs.is_empty()
+    }
+
+    /// Get a human-readable summary
+    pub fn summary(&self) -> String {
+        if self.is_valid() {
+            "History invariants are valid".to_string()
+        } else {
+            format!("{} missing outputs, {} orphan outputs", self.missing_outputs.len(), self.orphan_outputs.len())
+        }
+    }
+
+    /// Filter out missing outputs that correspond to pending actions.
+    ///
+    /// A "missing output" is expected when the corresponding tool call is still
+    /// in flight (pending action). Removing these from the report prevents
+    /// false positives during crash recovery that would insert synthetic
+    /// outputs for tools that are legitimately still running.
+    pub fn exclude_pending(&mut self, is_pending: impl Fn(&str) -> bool) {
+        self.missing_outputs.retain(|m| !is_pending(m.call_id.as_str()));
+    }
+}
+
+#[cfg(test)]
+#[inline]
+pub(crate) fn record_turn_duration(
+    turn_durations: &mut Vec<u128>,
+    turn_total_ms: &mut u128,
+    turn_max_ms: &mut u128,
+    turn_count: &mut usize,
+    recorded: &mut bool,
+    start: &std::time::Instant,
+) {
+    if !*recorded {
+        let duration_ms = start.elapsed().as_millis();
+        turn_durations.push(duration_ms);
+        *turn_total_ms += duration_ms;
+        if duration_ms > *turn_max_ms {
+            *turn_max_ms = duration_ms;
+        }
+        *turn_count += 1;
+        *recorded = true;
+    }
+}
+
+/// API failure tracking for exponential backoff
+pub struct ApiFailureTracker {
+    pub consecutive_failures: u32,
+    pub last_failure: Option<std::time::Instant>,
+}
+
+impl Default for ApiFailureTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ApiFailureTracker {
+    pub fn new() -> Self {
+        Self { consecutive_failures: 0, last_failure: None }
+    }
+
+    pub fn record_failure(&mut self) {
+        self.consecutive_failures += 1;
+        self.last_failure = Some(std::time::Instant::now());
+    }
+
+    pub fn reset(&mut self) {
+        self.consecutive_failures = 0;
+        self.last_failure = None;
+    }
+
+    pub fn should_circuit_break(&self) -> bool {
+        self.consecutive_failures >= 3
+    }
+
+    pub fn backoff_duration(&self) -> Duration {
+        let base_ms = 1000;
+        let max_ms = 30000;
+        let backoff_ms = base_ms * 2_u64.pow(self.consecutive_failures.saturating_sub(1));
+        Duration::from_millis(backoff_ms.min(max_ms))
+    }
+}
+
+pub fn summarize_list(items: &[String]) -> String {
+    const MAX_ITEMS: usize = 5;
+    if items.is_empty() {
+        return "none".into();
+    }
+    let shown: Vec<&str> = items.iter().take(MAX_ITEMS).map(|s| s.as_str()).collect();
+    if items.len() > MAX_ITEMS {
+        format!("{} [+{} more]", shown.join(", "), items.len() - MAX_ITEMS)
+    } else {
+        shown.join(", ")
+    }
+}
+
+// ============================================================================
+// Standalone History Invariant Functions
+// ============================================================================
+
+/// Validate that conversation history maintains call/output invariants.
+pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationReport {
+    let mut call_map: HashMap<String, String> = HashMap::new();
+    let mut output_ids: HashSet<String> = HashSet::new();
+
+    // Scan messages to find tool calls and responses
+    for msg in messages {
+        // Tool calls: assistant messages with tool_calls field
+        if let Some(tool_calls) = &msg.tool_calls {
+            for tool_call in tool_calls {
+                call_map.insert(tool_call.id.clone(), msg.role.to_string());
+            }
+        }
+
+        // Tool responses: messages with tool_call_id set
+        if let Some(tool_call_id) = &msg.tool_call_id {
+            output_ids.insert(tool_call_id.clone());
+        }
+    }
+
+    // Find missing outputs (calls without corresponding responses)
+    let missing_outputs: Vec<_> = call_map
+        .keys()
+        .filter(|call_id| !output_ids.contains(*call_id))
+        .map(|call_id| MissingOutput {
+            call_id: ToolCallId::new(call_id.clone()),
+            tool_name: "unknown".to_string(),
+        })
+        .collect();
+
+    // Find orphan outputs (responses without matching calls)
+    let orphan_outputs: Vec<_> = output_ids
+        .iter()
+        .filter(|output_id| !call_map.contains_key(*output_id))
+        .map(|output_id| ToolCallId::new(output_id.clone()))
+        .collect();
+
+    HistoryValidationReport { missing_outputs, orphan_outputs }
+}
+
+const REQUEST_HISTORY_CANCELLATION_RESULT: &str =
+    "canceled: no tool result was recorded; this bounded placeholder preserves the tool-call protocol.";
+const REQUEST_HISTORY_AMBIGUOUS_RESULT: &str = "unattributed: multiple outstanding tool calls shared an ID, so their recorded results cannot be safely assigned; original results remain in session history.";
+const REQUEST_HISTORY_EMPTY_ID_RESULT: &str = "unattributed: the tool call had an empty ID, so no result can be safely matched; original history remains available.";
+
+#[derive(Debug)]
+struct MatchedRequestToolResult {
+    message_index: usize,
+    call_index: usize,
+}
+
+#[derive(Debug)]
+struct RequestToolBatch {
+    assistant_index: usize,
+    matched_calls: Vec<bool>,
+    results: Vec<MatchedRequestToolResult>,
+}
+
+#[derive(Debug, Default)]
+struct RequestHistoryAnalysis {
+    batches: Vec<RequestToolBatch>,
+    batch_by_assistant_index: HashMap<usize, usize>,
+    result_batch_by_index: HashMap<usize, usize>,
+    invalid_result_indices: HashSet<usize>,
+    duplicate_call_ids: HashSet<String>,
+    has_empty_call_id: bool,
+    ambiguous_calls: HashSet<(usize, usize)>,
+}
+
+impl RequestHistoryAnalysis {
+    fn needs_repair(&self) -> bool {
+        if !self.invalid_result_indices.is_empty() || !self.duplicate_call_ids.is_empty() || self.has_empty_call_id {
+            return true;
+        }
+
+        self.batches.iter().any(|batch| {
+            batch.matched_calls.iter().any(|matched| !matched)
+                || batch
+                    .results
+                    .iter()
+                    .enumerate()
+                    .any(|(offset, result)| result.message_index != batch.assistant_index + offset + 1)
+        })
+    }
+}
+
+fn analyze_request_history(messages: &[Message]) -> RequestHistoryAnalysis {
+    let mut analysis = RequestHistoryAnalysis::default();
+    let mut calls_by_id: HashMap<&str, Vec<(usize, usize)>> = HashMap::new();
+
+    for (message_index, message) in messages.iter().enumerate() {
+        if message.role != crate::llm::provider::MessageRole::Assistant {
+            continue;
+        }
+
+        let Some(tool_calls) = message.tool_calls.as_ref().filter(|calls| !calls.is_empty()) else {
+            continue;
+        };
+
+        let batch_index = analysis.batches.len();
+        let matched_calls = vec![false; tool_calls.len()];
+        analysis.batch_by_assistant_index.insert(message_index, batch_index);
+        analysis.batches.push(RequestToolBatch {
+            assistant_index: message_index,
+            matched_calls,
+            results: Vec::new(),
+        });
+
+        for (call_index, call) in tool_calls.iter().enumerate() {
+            analysis.has_empty_call_id |= call.id.is_empty();
+            calls_by_id.entry(call.id.as_str()).or_default().push((batch_index, call_index));
+        }
+    }
+
+    analysis.duplicate_call_ids = calls_by_id
+        .iter()
+        .filter(|(_, calls)| calls.len() > 1)
+        .map(|(id, _)| (*id).to_owned())
+        .collect();
+
+    for (message_index, message) in messages.iter().enumerate() {
+        let has_tool_call_id = message.tool_call_id.is_some();
+        let is_tool_result = message.role == crate::llm::provider::MessageRole::Tool;
+        if !is_tool_result && !has_tool_call_id {
+            continue;
+        }
+
+        let Some(tool_call_id) = message.tool_call_id.as_deref().filter(|id| !id.is_empty()) else {
+            analysis.invalid_result_indices.insert(message_index);
+            continue;
+        };
+
+        if !is_tool_result {
+            analysis.invalid_result_indices.insert(message_index);
+            continue;
+        }
+
+        let Some(candidates) = calls_by_id.get_mut(tool_call_id) else {
+            analysis.invalid_result_indices.insert(message_index);
+            continue;
+        };
+
+        let mut eligible = candidates.iter().copied().filter(|&(batch_index, call_index)| {
+            analysis.batches[batch_index].assistant_index < message_index
+                && !analysis.batches[batch_index].matched_calls[call_index]
+        });
+        let Some((batch_index, call_index)) = eligible.next() else {
+            // Results before their call and repeated results have no match.
+            analysis.invalid_result_indices.insert(message_index);
+            continue;
+        };
+        if let Some(second) = eligible.next() {
+            // Concurrent calls with the same ID are indistinguishable. Never
+            // attach an observed result to a guessed call or credit it as proof.
+            analysis.ambiguous_calls.insert((batch_index, call_index));
+            analysis.ambiguous_calls.insert(second);
+            analysis.ambiguous_calls.extend(eligible);
+            analysis.invalid_result_indices.insert(message_index);
+            continue;
+        }
+
+        analysis.batches[batch_index].matched_calls[call_index] = true;
+        analysis.batches[batch_index]
+            .results
+            .push(MatchedRequestToolResult { message_index, call_index });
+        analysis.result_batch_by_index.insert(message_index, batch_index);
+    }
+
+    analysis
+}
+
+/// Return whether the provider-facing message view needs tool-history repair.
+///
+/// This deliberately analyzes only the request view. Durable session history
+/// is repaired by its own crash-recovery path and is never changed here.
+pub fn request_history_needs_normalization(messages: &[Message]) -> bool {
+    analyze_request_history(messages).needs_repair()
+}
+
+/// Rebuild a shared provider-facing message view with each assistant
+/// tool-call batch followed immediately by its matching results.
+///
+/// The rebuild is request-scoped and idempotent: orphaned, causally early, and
+/// duplicate results are omitted; repeated call IDs are replaced along with
+/// their matching result IDs, while ambiguous concurrent results are not
+/// attributed to a guessed call; missing calls receive a bounded cancellation
+/// result; and messages interleaved between a call batch and its results move
+/// after the complete batch. A clean input is returned unchanged; repairs use
+/// copy-on-write and never mutate the source history.
+pub fn normalize_history_for_request_shared(messages: Arc<Vec<Message>>) -> Arc<Vec<Message>> {
+    let analysis = analyze_request_history(&messages);
+    if !analysis.needs_repair() {
+        return messages;
+    }
+
+    let mut normalized = Vec::with_capacity(messages.len());
+    let mut used_ids: HashSet<String> = messages
+        .iter()
+        .flat_map(|message| message.tool_calls.iter().flatten().map(|call| call.id.clone()))
+        .collect();
+    let mut next_repaired_id = 0usize;
+    let mut seen_duplicate_ids = HashSet::new();
+    for (message_index, message) in messages.iter().enumerate() {
+        if analysis.invalid_result_indices.contains(&message_index)
+            || analysis.result_batch_by_index.contains_key(&message_index)
+        {
+            continue;
+        }
+
+        let Some(&batch_index) = analysis.batch_by_assistant_index.get(&message_index) else {
+            normalized.push(message.clone());
+            continue;
+        };
+
+        let batch = &analysis.batches[batch_index];
+        let mut assistant = message.clone();
+        for call in assistant.tool_calls.iter_mut().flatten() {
+            if call.id.is_empty()
+                || (analysis.duplicate_call_ids.contains(&call.id) && !seen_duplicate_ids.insert(call.id.clone()))
+            {
+                let prefix = if call.id == "harness-auto-verify" || call.id.starts_with("harness-auto-verify-") {
+                    "harness-auto-verify-repaired"
+                } else {
+                    "vtcode-repaired-tool-call"
+                };
+                loop {
+                    let candidate = format!("{prefix}-{next_repaired_id}");
+                    next_repaired_id += 1;
+                    if used_ids.insert(candidate.clone()) {
+                        call.id = candidate;
+                        break;
+                    }
+                }
+            }
+        }
+        for matched_result in &batch.results {
+            let mut result = messages[matched_result.message_index].clone();
+            if let Some(call) = assistant
+                .tool_calls
+                .as_ref()
+                .and_then(|calls| calls.get(matched_result.call_index))
+            {
+                result.tool_call_id = Some(call.id.clone());
+            }
+            normalized.push(result);
+        }
+        let result_start = normalized.len() - batch.results.len();
+        normalized.insert(result_start, assistant.clone());
+        for (call_index, (call, matched)) in assistant.tool_calls.iter().flatten().zip(&batch.matched_calls).enumerate()
+        {
+            if !matched {
+                let result = if message
+                    .tool_calls
+                    .as_ref()
+                    .and_then(|calls| calls.get(call_index))
+                    .is_some_and(|call| call.id.is_empty())
+                {
+                    REQUEST_HISTORY_EMPTY_ID_RESULT
+                } else if analysis.ambiguous_calls.contains(&(batch_index, call_index)) {
+                    REQUEST_HISTORY_AMBIGUOUS_RESULT
+                } else {
+                    REQUEST_HISTORY_CANCELLATION_RESULT
+                };
+                normalized.push(Message::tool_response(call.id.clone(), result.to_owned()));
+            }
+        }
+    }
+
+    Arc::new(normalized)
+}
+
+/// Compatibility wrapper for callers that own a slice rather than shared
+/// request history. The shared implementation avoids cloning clean message
+/// histories; this wrapper retains the historical
+/// owned return type for small slice-based callers and tests.
+pub fn normalize_history_for_request(messages: &[Message]) -> Vec<Message> {
+    Arc::unwrap_or_clone(normalize_history_for_request_shared(Arc::new(messages.to_vec())))
+}
+
+/// Placeholder body for a cleared tool result. Mirrors Anthropic
+/// `clear_tool_uses` semantics as request-only shaping: the durable history
+/// and `ThreadEvent` log keep the original payload.
+const CLEARED_TOOL_RESULT_NOTE: &str = "Older tool result cleared to bound context growth. Full output remains in session logs; re-run the tool if raw bytes are needed.";
+
+/// Cap local clearing at 60% of the history capacity left after the request
+/// prefix and output reserve. Zero capacity is unknown; zero trigger or an
+/// explicit opt-out keeps clearing disabled.
+#[must_use]
+pub fn resolve_tool_result_clearing_trigger(
+    config: &crate::config::VTCodeConfig,
+    provider: &dyn crate::llm::provider::LLMProvider,
+    model: &str,
+    prompt_overhead_tokens: usize,
+    reserved_output_tokens: usize,
+) -> u64 {
+    let clearing = &config.agent.harness.tool_result_clearing;
+    if !clearing.enabled || clearing.trigger_tokens == 0 {
+        return 0;
+    }
+    let capacity = crate::compaction::effective_context_budget(Some(config), provider, model);
+    if capacity == 0 {
+        return clearing.trigger_tokens;
+    }
+    let history_budget = capacity
+        .saturating_sub(reserved_output_tokens)
+        .saturating_sub(prompt_overhead_tokens) as u64;
+    // Divide before multiplying, retaining the remainder to avoid overflow
+    // even at the largest representable context budget.
+    let cap = (history_budget / 5)
+        .saturating_mul(3)
+        .saturating_add((history_budget % 5) * 3 / 5)
+        .max(1);
+    clearing.trigger_tokens.min(cap)
+}
+
+/// Request-only local stand-in for Anthropic `clear_tool_uses_20250919`.
+///
+/// Providers without `context_management.edits` never get native tool-result
+/// clearing, so long histories keep paying full price for every old tool body
+/// on each request. Once estimated history tokens exceed `trigger_tokens`, this
+/// rewrites old tool-result *request* messages outside a bounded recent
+/// evidence window and the newest `keep_tool_uses` originating batches to a
+/// bounded stub. Small results stay intact when a stub would not save tokens.
+/// `clear_at_least_tokens` is a floor on reclaimed tokens (not a ceiling):
+/// clearing must stub all eligible non-retained results so
+/// re-running on full durable history cannot leave a permanently growing tail.
+///
+/// Contract (same as [`normalize_history_for_request`]):
+/// - never mutates durable session history or `ThreadEvent`s;
+/// - preserves `role`, `tool_call_id`, `origin_tool`, and message order so
+///   provider tool-pairing validation still passes;
+/// - idempotent: re-running on already-stubbed output is a no-op below the
+///   trigger and cannot re-clear stubs usefully.
+///
+/// When `clear_tool_inputs` is set, assistant `tool_calls[].function.arguments`
+/// and freeform `text` larger than 1 KiB for cleared results are replaced with
+/// a JSON placeholder. Small arguments retain usable command/path identity.
+pub fn clear_old_tool_results(
+    messages: &[Message],
+    trigger_tokens: u64,
+    keep_tool_uses: u32,
+    clear_at_least_tokens: u64,
+    clear_tool_inputs: bool,
+) -> Vec<Message> {
+    clear_old_tool_results_with_recent_batches(
+        messages,
+        trigger_tokens,
+        keep_tool_uses,
+        0,
+        clear_at_least_tokens,
+        clear_tool_inputs,
+    )
+}
+
+/// Request-only clearing that also protects the newest assistant tool-call
+/// batches by originating message order. Count-based protection is additive;
+/// unmatched results retain the compatibility wrapper's count-based fallback.
+pub fn clear_old_tool_results_with_recent_batches(
+    messages: &[Message],
+    trigger_tokens: u64,
+    keep_tool_uses: u32,
+    keep_recent_tool_batches: u32,
+    clear_at_least_tokens: u64,
+    clear_tool_inputs: bool,
+) -> Vec<Message> {
+    if trigger_tokens == 0 || messages.is_empty() {
+        return messages.to_vec();
+    }
+
+    let estimated_tokens: u64 = messages
+        .iter()
+        .map(|message| message.estimate_tokens() as u64)
+        .fold(0u64, u64::saturating_add);
+    if estimated_tokens < trigger_tokens {
+        return messages.to_vec();
+    }
+
+    let tool_indices: Vec<usize> = messages
+        .iter()
+        .enumerate()
+        .filter(|(_, message)| message.role == crate::llm::provider::MessageRole::Tool)
+        .map(|(index, _)| index)
+        .collect();
+    let keep = keep_tool_uses as usize;
+    if tool_indices.len() <= keep {
+        return messages.to_vec();
+    }
+
+    let mut cleared_tokens = 0u64;
+    let analysis = analyze_request_history(messages);
+    let mut retained_batches: HashSet<usize> = tool_indices
+        .iter()
+        .rev()
+        .take(keep)
+        .filter_map(|index| analysis.result_batch_by_index.get(index).copied())
+        .collect();
+    // Analysis records assistant messages in source order, independently of
+    // completion order and reused call IDs.
+    retained_batches.extend((0..analysis.batches.len()).rev().take(keep_recent_tool_batches as usize));
+    // Two batches can be only two short searches. Clearing everything before
+    // them discards the source needed for the pending edit, provoking rereads
+    // that the navigation guards correctly bound. Reserve half of the
+    // already capacity-capped trigger for recent complete evidence batches.
+    // This window stays bounded when rebuilding from full durable history.
+    let evidence_budget = trigger_tokens / 2;
+    let mut batch_tokens: Vec<u64> = analysis
+        .batches
+        .iter()
+        .map(|batch| messages[batch.assistant_index].estimate_tokens() as u64)
+        .collect();
+    for (&result_index, &batch_index) in &analysis.result_batch_by_index {
+        batch_tokens[batch_index] =
+            batch_tokens[batch_index].saturating_add(messages[result_index].estimate_tokens() as u64);
+    }
+    let mut retained_tokens = 0u64;
+    for (batch_index, &tokens) in batch_tokens.iter().enumerate().rev() {
+        let next_tokens = retained_tokens.saturating_add(tokens);
+        if next_tokens > evidence_budget {
+            break;
+        }
+        retained_tokens = next_tokens;
+        retained_batches.insert(batch_index);
+    }
+    let mut cleared_result_count = 0usize;
+    let mut cleared_calls_by_assistant: HashMap<usize, HashSet<&str>> = HashMap::new();
+    // Stub every eligible non-kept tool result (oldest-first). `clear_at_least_tokens`
+    // is a floor on reclaimed tokens; stopping early would leave a permanently
+    // growing tail on the next request that re-shapes full durable history.
+    let mut out = messages.to_vec();
+    for &tool_index in &tool_indices[..tool_indices.len() - keep] {
+        let batch_index = analysis.result_batch_by_index.get(&tool_index);
+        if batch_index.is_some_and(|index| retained_batches.contains(index)) {
+            continue;
+        }
+        let original = &messages[tool_index];
+        let original_tokens = original.estimate_tokens() as u64;
+        let stub = build_cleared_tool_result_stub(original);
+        let stub_tokens = stub.estimate_tokens() as u64;
+        if stub_tokens >= original_tokens {
+            continue;
+        }
+        if let Some(&batch_index) = batch_index
+            && let Some(call_id) = original.tool_call_id.as_deref()
+        {
+            cleared_calls_by_assistant
+                .entry(analysis.batches[batch_index].assistant_index)
+                .or_default()
+                .insert(call_id);
+        }
+        out[tool_index] = stub;
+        cleared_result_count += 1;
+        cleared_tokens = cleared_tokens.saturating_add(original_tokens.saturating_sub(stub_tokens));
+    }
+
+    // The floor is advisory: every eligible result is already stubbed. A
+    // protected batch or small results can leave less reclaimable than the
+    // configured floor.
+    if cleared_tokens < clear_at_least_tokens {
+        tracing::debug!(
+            cleared_tokens,
+            clear_at_least_tokens,
+            "tool-result clearing reclaimed less than the configured floor"
+        );
+    }
+
+    if clear_tool_inputs {
+        for (assistant_index, original_message) in out.iter_mut().enumerate() {
+            let Some(cleared_call_ids) = cleared_calls_by_assistant.remove(&assistant_index) else {
+                continue;
+            };
+            let mut message = original_message.clone();
+            let Some(tool_calls) = message.tool_calls.as_mut() else {
+                continue;
+            };
+            for call in tool_calls.iter_mut() {
+                if cleared_call_ids.contains(call.id.as_str()) {
+                    if let Some(function) = call.function.as_mut()
+                        && function.arguments.len() > RETAINED_TOOL_INPUT_BYTES
+                    {
+                        // Valid JSON placeholder: providers send `arguments`
+                        // verbatim; prose would break OpenAI tool-call parsing.
+                        function.arguments = CLEARED_TOOL_INPUT_PLACEHOLDER.to_string();
+                    }
+                    // Freeform custom tool payloads ride in `text`, not
+                    // `function.arguments` (see ToolCall::custom).
+                    if call.text.as_ref().is_some_and(|text| text.len() > RETAINED_TOOL_INPUT_BYTES) {
+                        call.text = Some(CLEARED_TOOL_INPUT_PLACEHOLDER.to_string());
+                    }
+                    call.thought_signature = None;
+                }
+            }
+            // Tiny arguments can be cheaper than the JSON placeholder. Do
+            // not spend more tokens on inputs than the results reclaimed.
+            let input_growth =
+                (message.estimate_tokens() as u64).saturating_sub(original_message.estimate_tokens() as u64);
+            if input_growth <= cleared_tokens {
+                *original_message = message;
+                cleared_tokens = cleared_tokens.saturating_sub(input_growth);
+            }
+        }
+    }
+
+    tracing::debug!(
+        original_tokens = estimated_tokens,
+        projected_tokens = out
+            .iter()
+            .map(|message| message.estimate_tokens() as u64)
+            .fold(0u64, u64::saturating_add),
+        cleared_result_count,
+        protected_batch_count = retained_batches.len(),
+        first_changed_message_index = messages.iter().zip(&out).position(|(before, after)| before != after),
+        "local tool-result clearing projection"
+    );
+    out
+}
+
+/// JSON placeholder for cleared tool-call inputs (must stay valid JSON).
+const CLEARED_TOOL_INPUT_PLACEHOLDER: &str = "{\"cleared\":\"tool_input\"}";
+// Keep ordinary command/path arguments intact instead of teaching providers
+// to emit synthetic arguments that cannot pass the tool's declared schema.
+const RETAINED_TOOL_INPUT_BYTES: usize = 1024;
+
+/// Whether request assembly should apply local [`clear_old_tool_results`].
+///
+/// Local clearing and Anthropic `clear_tool_uses` are mutually exclusive:
+/// native edits already reclaim tool bodies on the wire, so applying both
+/// would double-shape the same history.
+pub fn should_apply_local_tool_result_clearing(
+    provider_name: &str,
+    context_edits: bool,
+    clearing_enabled: bool,
+) -> bool {
+    clearing_enabled && !(provider_name.eq_ignore_ascii_case("anthropic") && context_edits)
+}
+
+fn build_cleared_tool_result_stub(original: &Message) -> Message {
+    let mut stub = original.clone();
+    // serde_json (not `{:?}`) so non-ASCII tool names / call ids stay valid JSON.
+    let body = serde_json::json!({
+        "cleared": "tool_result",
+        "reason": "tool_result_clearing",
+        "note": CLEARED_TOOL_RESULT_NOTE,
+        "tool": original.origin_tool.as_deref().unwrap_or("tool"),
+        "tool_call_id": original.tool_call_id.as_deref().unwrap_or(""),
+    })
+    .to_string();
+    stub.content = crate::llm::provider::MessageContent::Text(body);
+    stub
+}
+
+/// Find a split point that keeps tool-call outputs paired with their calls.
+pub fn safe_history_split_point(messages: &[Message], conversation_len: usize, preferred_split_at: usize) -> usize {
+    if preferred_split_at == 0 || preferred_split_at >= conversation_len {
+        return preferred_split_at;
+    }
+
+    let mut call_indices: HashMap<&str, usize> = HashMap::new();
+    for (i, msg) in messages.iter().enumerate() {
+        if let Some(tool_calls) = &msg.tool_calls {
+            for call in tool_calls {
+                call_indices.insert(&call.id, i);
+            }
+        }
+    }
+
+    let mut safe_split_at = preferred_split_at;
+    loop {
+        if safe_split_at == 0 {
+            break;
+        }
+
+        let has_orphan = ((safe_split_at + 1)..messages.len()).any(|i| {
+            messages
+                .get(i)
+                .and_then(|msg| msg.tool_call_id.as_ref())
+                .and_then(|id| call_indices.get(id.as_str()))
+                .is_some_and(|&call_idx| call_idx <= safe_split_at)
+        });
+
+        if !has_orphan {
+            break;
+        }
+
+        safe_split_at -= 1;
+    }
+
+    safe_split_at
+}
+
+/// Ensure all tool calls have corresponding outputs in the message list.
+pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
+    let report = validate_history_invariants(messages);
+
+    // Create synthetic outputs for missing calls in reverse order to avoid index shifting
+    for missing in report.missing_outputs.iter().rev() {
+        let synthetic_message = Message::tool_response(
+            missing.call_id.as_str().to_string(),
+            "canceled: Tool execution was interrupted. This synthetic output was created \
+             during history normalization to maintain conversation invariants."
+                .to_string(),
+        );
+
+        tracing::warn!("Creating synthetic output for call {} due to missing execution result", missing.call_id);
+
+        // Find the position to insert: right after the corresponding call
+        let insert_pos = messages
+            .iter()
+            .position(|msg| {
+                msg.tool_calls
+                    .as_ref()
+                    .is_some_and(|calls| calls.iter().any(|call| call.id == missing.call_id.as_str()))
+            })
+            .map(|pos| pos + 1);
+
+        if let Some(pos) = insert_pos {
+            messages.insert(pos, synthetic_message);
+        } else {
+            // If we can't find the call, just append the synthetic output
+            messages.push(synthetic_message);
+        }
+    }
+}
+
+/// Remove outputs without corresponding calls (orphaned outputs) from the message list.
+pub fn remove_orphan_outputs(messages: &mut Vec<Message>) {
+    let report = validate_history_invariants(messages);
+
+    if report.orphan_outputs.is_empty() {
+        return;
+    }
+
+    let orphan_ids: HashSet<String> = report.orphan_outputs.iter().map(|id| id.as_str().to_string()).collect();
+
+    let initial_len = messages.len();
+
+    // Retain only messages that either:
+    // - Don't have a tool_call_id (not a tool response)
+    // - Have a tool_call_id that matches an existing call
+    messages.retain(|msg| {
+        if let Some(tool_call_id) = msg.tool_call_id.as_ref()
+            && orphan_ids.contains(tool_call_id)
+        {
+            tracing::warn!("Removing orphan output for call {}", tool_call_id);
+            return false;
+        }
+        true
+    });
+
+    if messages.len() != initial_len {
+        tracing::info!("Removed {} orphan outputs", initial_len - messages.len());
+    }
+}
+
+/// Normalize history to enforce call/output pairing invariants.
+pub fn normalize_history(messages: &mut Vec<Message>) {
+    ensure_call_outputs_present(messages);
+    remove_orphan_outputs(messages);
+
+    // Log if issues were found
+    let report = validate_history_invariants(messages);
+    if !report.is_valid() {
+        tracing::warn!("History validation: {}", report.summary());
+    } else {
+        tracing::debug!("History normalized successfully");
+    }
+}
+
+/// Recover from crashed or interrupted session by fixing history invariants.
+pub fn recover_history_from_crash(messages: &mut Vec<Message>) {
+    let report = validate_history_invariants(messages);
+
+    if !report.missing_outputs.is_empty() {
+        tracing::warn!("Found {} missing outputs during recovery", report.missing_outputs.len());
+        ensure_call_outputs_present(messages);
+    }
+
+    if !report.orphan_outputs.is_empty() {
+        tracing::warn!("Found {} orphan outputs during recovery", report.orphan_outputs.len());
+        remove_orphan_outputs(messages);
+    }
+
+    if report.is_valid() {
+        tracing::debug!("History invariants are valid");
+    }
+}
+
+// ============================================================================
+// Tests: Context Manager - Call/Output Pairing Invariants
+// ============================================================================
+
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod tool_result_clearing_tests;

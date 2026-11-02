@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use std::fs::{self, File};
 use std::io;
+use vtcode_commons::safe_archive_relative_path;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ArchiveKind {
@@ -29,7 +30,7 @@ pub(super) fn extract_binary(
             let mut archive = tar::Archive::new(decoder);
             for entry in archive.entries().context("failed to read tar-gzip archive entries")? {
                 let mut entry = entry.context("failed to read tar-gzip archive entry")?;
-                let path = safe_archive_path(&entry.path().context("failed to read tar archive path")?)?;
+                let path = safe_archive_relative_path(&entry.path().context("failed to read tar archive path")?)?;
                 let entry_type = entry.header().entry_type();
                 if entry_type.is_symlink() || entry_type.is_hard_link() {
                     bail!("unsafe archive link: {}", path.display());
@@ -56,7 +57,7 @@ pub(super) fn extract_binary(
                 let path = entry
                     .enclosed_name()
                     .context("unsafe archive path: zip entry escapes extraction directory")?;
-                let path = safe_archive_path(&path)?;
+                let path = safe_archive_relative_path(&path)?;
                 if is_zip_symlink(&entry) {
                     bail!("unsafe archive link: {}", path.display());
                 }
@@ -79,24 +80,6 @@ pub(super) fn extract_binary(
         bail!("could not find {binary_name} in update archive");
     }
     Ok(output_path)
-}
-
-fn safe_archive_path(path: &Path) -> Result<PathBuf> {
-    if path.is_absolute() {
-        bail!("unsafe archive path: {}", path.display());
-    }
-
-    let mut safe_path = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::Normal(part) => safe_path.push(part),
-            std::path::Component::CurDir => {}
-            std::path::Component::RootDir | std::path::Component::Prefix(_) | std::path::Component::ParentDir => {
-                bail!("unsafe archive path: {}", path.display())
-            }
-        }
-    }
-    Ok(safe_path)
 }
 
 #[cfg(unix)]

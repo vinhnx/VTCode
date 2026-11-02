@@ -253,9 +253,26 @@ impl AgentRunner {
         let wall_clock_secs = self.config().agent.harness.max_tool_wall_clock_secs;
         let outcome = if wall_clock_secs > 0 {
             let budget = std::time::Duration::from_secs(wall_clock_secs);
-            match tokio::time::timeout(
-                budget,
-                self.tool_registry.execute_prepared_public_tool_request(prepared, policy),
+            let Some(deadline) = std::time::Instant::now().checked_add(budget) else {
+                let error = ToolExecutionError::new(
+                    resolved_tool_name,
+                    ToolErrorType::InvalidParameters,
+                    format!(
+                        "agent.harness.max_tool_wall_clock_secs={wall_clock_secs} exceeds the supported deadline range"
+                    ),
+                )
+                .with_surface("agent_runner");
+                return PreparedToolExecution {
+                    attempts: 1,
+                    total_duration: execution_started_at.elapsed(),
+                    last_error_category: Some(error.category),
+                    result: Err(error),
+                };
+            };
+            match tokio::time::timeout_at(
+                tokio::time::Instant::from_std(deadline),
+                self.tool_registry
+                    .execute_prepared_public_tool_request_until(prepared, policy, Some(deadline)),
             )
             .await
             {

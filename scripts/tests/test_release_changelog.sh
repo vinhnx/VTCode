@@ -21,6 +21,8 @@ forbidden_publication() {
 	return 99
 }
 cargo() { forbidden_publication; }
+# Tripwire: fails the test if the code under test publishes unexpectedly.
+# shellcheck disable=SC2329
 gh() { forbidden_publication; }
 curl() { forbidden_publication; }
 export -f cargo gh curl forbidden_publication
@@ -300,6 +302,37 @@ EOF
 )
 assert_equal "$(cat "$fixture_dir/changelogs/CHANGELOG.md")" "$expected" "legacy caller uses the shared insertion helper"
 
+# The release caller passes a command-substituted entry (no trailing newline);
+# the inserted entry must still be separated from the retained history by a blank
+# line so the previous `## version` heading keeps its blank line above (MD022).
+cat >"$fixture_dir/changelogs/CHANGELOG.md" <<'EOF'
+# Changelog
+
+Intro.
+
+## 1.0.0 - 2026-10-04
+
+Original version body.
+EOF
+(
+	cd "$fixture_dir/changelogs"
+	insert_changelog_entry "${entry_one%$'\n'}"
+)
+expected=$(
+	cat <<EOF
+# Changelog
+
+Intro.
+
+${entry_one%$'\n'}
+
+## 1.0.0 - 2026-10-04
+
+Original version body.
+EOF
+)
+assert_equal "$(cat "$fixture_dir/changelogs/CHANGELOG.md")" "$expected" "stripped entry keeps a blank line before retained history"
+
 # remove_changelog_version_section: middle removal keeps neighbors byte-identical.
 cat >"$fixture_dir/changelogs/CHANGELOG.md" <<'EOF'
 # Changelog
@@ -411,6 +444,8 @@ mkdir -p "$fixture_dir/uploads"
 : >"$fixture_dir/uploads/ok-a.bin"
 : >"$fixture_dir/uploads/sp ace.bin"
 : >"$fixture_dir/upload-calls"
+# Invoked through the sourced release script under test.
+# shellcheck disable=SC2329
 gh() {
 	printf '%s\n' "$(basename "$4")" >>"$fixture_dir/upload-calls"
 	return 0

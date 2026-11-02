@@ -67,6 +67,7 @@ pub(super) fn task_tracker_block_lines(output: &serde_json::Value, expanded: boo
 /// the default style. All colors come from theme tokens through the shared
 /// style bridge, so WCAG contrast holds by construction.
 pub(super) fn task_tracker_block_segments(lines: &[TrackerLine]) -> Vec<Vec<InlineSegment>> {
+    use vtcode_core::ui::markdown::CodeBlockWeight;
     use vtcode_core::ui::markdown::RenderMarkdownOptions;
     use vtcode_core::ui::theme;
     use vtcode_core::ui::tui::convert_style;
@@ -85,6 +86,7 @@ pub(super) fn task_tracker_block_segments(lines: &[TrackerLine]) -> Vec<Vec<Inli
         preserve_code_indentation: true,
         disable_code_block_table_reparse: false,
         table_max_width: None,
+        code_block_weight: CodeBlockWeight::Primary,
     };
     lines
         .iter()

@@ -2,7 +2,7 @@
 name = "vtcode-memory"
 version.workspace = true
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Unified per-session state store: append-only ThreadEvent log plus derived views, retention, and cross-session query."
 license.workspace = true

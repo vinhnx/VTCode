@@ -141,36 +141,105 @@ bold_is_bright = true
 
 ## Available Themes
 
-VT Code includes light and dark themes:
+VT Code includes light and dark themes. Run `/theme` to browse them (the picker shows each id and its
+light/dark scheme). The tables below cover the hand-curated entries; the authoritative catalog is the theme registry
+(`available_themes()` in `vtcode-ui`), which also registers the longbridge/gpui-kit sets and additional classic schemes
+(Dracula, GitHub, Atom One, Tomorrow, Nord, Material, Spacegray, and more). The gpui-kit sets are shared with the GPUI
+desktop client, so the same theme id renders the same palette in the terminal and in the desktop app.
 
-| Theme                | Mode  | Description                  |
-| -------------------- | ----- | ---------------------------- |
-| ciapre               | Dark  | Default warm amber theme     |
-| ciapre-dark          | Dark  | Alternative warm amber theme |
-| ciapre-blue          | Dark  | Blue variant of Ciapre       |
-| ansi-classic         | Dark  | Classic ANSI palette         |
-| vitesse-black        | Dark  | Pure black background        |
-| vitesse-dark         | Dark  | Dark gray background         |
-| vitesse-dark-soft    | Dark  | Softer dark background       |
-| vitesse-light        | Light | White background             |
-| vitesse-light-soft   | Light | Cream background             |
-| catppuccin-latte     | Light | Pastel light theme           |
-| catppuccin-frappe    | Dark  | Muted dark theme             |
-| catppuccin-macchiato | Dark  | Rich dark theme              |
-| catppuccin-mocha     | Dark  | Deep dark theme              |
+| Theme                        | Mode  | Description                       |
+| ---------------------------- | ----- | --------------------------------- |
+| ciapre                       | Dark  | Default warm amber theme          |
+| ciapre-dark                  | Dark  | Alternative warm amber theme      |
+| ciapre-blue                  | Dark  | Blue variant of Ciapre            |
+| ansi-classic                 | Dark  | Classic ANSI palette              |
+| mono                         | Dark  | Monochrome                        |
+| vitesse-black                | Dark  | Pure black background             |
+| vitesse-dark                 | Dark  | Dark gray background              |
+| vitesse-dark-soft            | Dark  | Softer dark background            |
+| vitesse-light                | Light | White background                  |
+| vitesse-light-soft           | Light | Cream background                  |
+| catppuccin-latte             | Light | Pastel light theme                |
+| catppuccin-frappe            | Dark  | Muted dark theme                  |
+| catppuccin-macchiato         | Dark  | Rich dark theme                   |
+| catppuccin-mocha             | Dark  | Deep dark theme                   |
+| solarized-dark               | Dark  | Solarized, expanded background    |
+| solarized-dark-hc            | Dark  | Solarized with higher contrast    |
+| solarized-light              | Light | Solarized light                   |
+| gruvbox-dark                 | Dark  | Gruvbox dark                      |
+| gruvbox-dark-hard            | Dark  | Gruvbox dark, hard background     |
+| gruvbox-light                | Light | Gruvbox light                     |
+| gruvbox-light-hard           | Light | Gruvbox light, hard background    |
+| gruvbox-material             | Dark  | Gruvbox Material                  |
+| gruvbox-material-dark        | Dark  | Gruvbox Material dark             |
+| gruvbox-material-light       | Light | Gruvbox Material light            |
+
+### gpui-kit theme sets
+
+Ported from <https://github.com/longbridge/gpui-kit/tree/main/themes> and shared with the desktop client:
+
+| Theme                      | Mode  | Set           |
+| -------------------------- | ----- | ------------- |
+| adventure                  | Dark  | Adventure     |
+| adventure-time             | Dark  | Adventure     |
+| alduin                     | Dark  | Alduin        |
+| asciinema                  | Dark  | Asciinema     |
+| aurora-light               | Light | Aurora        |
+| ayu-dark                   | Dark  | Ayu           |
+| ayu-light                  | Light | Ayu           |
+| everforest-dark            | Dark  | Everforest    |
+| everforest-light           | Light | Everforest    |
+| fahrenheit                 | Dark  | Fahrenheit    |
+| flexoki-dark               | Dark  | Flexoki       |
+| flexoki-light              | Light | Flexoki       |
+| harper                     | Dark  | Harper        |
+| hybrid-dark                | Dark  | Hybrid        |
+| hybrid-light               | Light | Hybrid        |
+| jellybeans                 | Dark  | Jellybeans    |
+| kibble                     | Dark  | Kibble        |
+| macos-classic-dark         | Dark  | macOS Classic |
+| macos-classic-light        | Light | macOS Classic |
+| mellifluous-dark           | Dark  | Mellifluous   |
+| mellifluous-light          | Light | Mellifluous   |
+| molokai-dark               | Dark  | Molokai       |
+| molokai-light              | Light | Molokai       |
+| spaceduck                  | Dark  | Spaceduck     |
+| tokyo-night                | Dark  | Tokyo         |
+| tokyo-storm                | Dark  | Tokyo         |
+| tokyo-moon                 | Dark  | Tokyo         |
+| twilight                   | Dark  | Twilight      |
+
+Multi-variant sets form a theme suite, so automatic light/dark switching stays inside the set (for example
+`everforest-dark` ⇄ `everforest-light`); sets without a light variant fall back to the default suggestion.
+Upstream `base.*` slots feed the ANSI hues; the brand color keeps its hue and is lifted toward the foreground only
+until it clears the contrast floor as terminal text.
 
 ## Theme Validation
 
 VT Code validates theme contrast at startup and logs warnings for colors that don't meet the configured minimum contrast
 ratio.
 
+## Desktop Sync
+
+The desktop app builds its full theme catalog from this registry (`builtin_theme_colors`), so every CLI theme is
+selectable on desktop. Sync between the two surfaces follows these rules:
+
+- Desktop → CLI: palette themes sync by id; the desktop-only System Light/Dark entries sync as their per-mode
+  default built-in theme. The CLI config writer accepts registry ids only.
+- CLI → Desktop: the service reports the effective CLI theme (unknown config values resolve to the default, matching
+  CLI startup), so follow/import always receives a registered id. Custom `.vtcode/theme.toml` color overrides do not
+  transfer; desktop follows the base registry theme.
+- Code syntax colors: the CLI maps UI themes to bat themes per id, while desktop code-token colors stay on the Kit
+  mode default (Kit 0.8.0 exposes no per-palette syntax-token API); desktop code-block surfaces follow the palette.
+
 ## API Reference
 
 For developers extending VT Code:
 
 ```rust
-use vtcode_core::ui::theme::{
+use vtcode_ui::theme::{
     ColorAccessibilityConfig,
+    builtin_theme_colors,
     set_color_accessibility_config,
     get_minimum_contrast,
     is_bold_bright_mode,

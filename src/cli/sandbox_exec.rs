@@ -43,7 +43,7 @@ pub fn try_run_sandbox_exec_mode() -> bool {
 
     let args: Vec<OsString> = argv.collect();
     if let Err(error) = launch(args) {
-        eprintln!("vtcode sandbox-exec: {error:#}");
+        vtcode_commons::diagnostics::stderr(format_args!("vtcode sandbox-exec: {error:#}"));
         std::process::exit(EXIT_LAUNCHER_ERROR);
     }
     unreachable!("sandbox launcher exec replaced the process");
@@ -160,7 +160,10 @@ fn exec_wrapped_command(command: Vec<OsString>) -> ! {
         std::io::ErrorKind::NotFound => EXIT_COMMAND_NOT_FOUND,
         _ => EXIT_COMMAND_NOT_EXECUTABLE,
     };
-    eprintln!("vtcode sandbox-exec: failed to exec {}: {error}", program.to_string_lossy());
+    vtcode_commons::diagnostics::stderr(format_args!(
+        "vtcode sandbox-exec: failed to exec {}: {error}",
+        program.to_string_lossy()
+    ));
     std::process::exit(exit_code);
 }
 

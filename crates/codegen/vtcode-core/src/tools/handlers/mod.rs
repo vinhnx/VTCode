@@ -1,30 +1,32 @@
-//! Tool handlers module (Codex-compatible compatibility layer)
-//!
-//! This module implements the handler pattern from OpenAI's Codex project,
-//! providing compatibility helpers around tool execution.
+//! Tool handlers module
 //!
 //! The authoritative public tool surface, name resolution, and catalog assembly
-//! live in `crate::tools::registry`. Keep router/adapter changes here scoped to
-//! compatibility and handler composition, not public registry policy.
+//! live in `crate::tools::registry`. This module holds the handler-side types
+//! and the tool implementations that the registry and runloop build on.
+//!
+//! The Codex-compatible execution scaffolding (`router`, `adapter`, `events`,
+//! `apply_patch_handler`, `shell_handler`, `list_dir_handler`,
+//! `tool_orchestrator`, `orchestrator`, `intercept_apply_patch`) was never
+//! registered as a live path and has been removed. `tools::SHELL` and the other
+//! command-session aliases resolve to `unified_exec` through
+//! `tool_intent::canonical_command_session_tool_name`, and the executor
+//! pipeline in `crate::tools::registry` owns dispatch. Do not reintroduce a
+//! parallel handler path that bypasses it.
 //!
 //! ## Key Components
 //!
-//! - [`tool_handler`]: Core traits and types (ToolHandler, ToolKind, ToolPayload, etc.)
+//! - [`tool_handler`]: Handler-side types still used by live code (`ToolCallError`,
+//!   `TurnContext`, `ToolSession`, approval/sandbox policy wrappers)
 //! - [`sandboxing`]: Approval, sandbox, and runtime traits (from Codex)
-//! - [`tool_orchestrator`]: Approval → sandbox → attempt → retry orchestration
-//! - [`orchestrator`]: Legacy compatibility shim over the active sandbox/orchestrator modules
-//! - [`events`]: Event emission for tool lifecycle (begin, success, failure)
-//! - [`router`]: Tool routing and dispatch (ToolRouter, DispatchRegistry, DispatchRegistryBuilder)
-//! - [`adapter`]: Bidirectional adapters between ToolHandler and Tool trait
 //! - [`turn_diff_tracker`]: Aggregates file diffs across patches in a turn
-//! - [`mod@intercept_apply_patch`]: Shell command interception for apply_patch
 //!
 //! ## Handlers
 //!
-//! - [`apply_patch_handler`]: Apply patch tool implementation
-//! - [`shell_handler`]: Shell command execution
+//! - [`compact`]: Tool description compaction
+//! - [`planning_workflow`]: Plan approval artifacts and workflow state
+//! - [`planning_task_tracker`], [`task_tracker`], [`task_tracking`]: Task trackers
 //! - [`read_file`]: File reading with line ranges
-//! - [`list_dir_handler`]: Directory listing
+//! - [`session_tool_catalog`]: Per-session tool catalog projection
 //!
 //! ## Usage
 //!
@@ -46,50 +48,21 @@
 //! ```
 
 // Core architecture modules
-pub mod adapter;
-pub mod apply_patch_handler;
-pub mod events;
-pub mod intercept_apply_patch;
-pub mod orchestrator;
-pub mod router;
 pub mod sandboxing;
 pub mod tool_handler;
-pub mod tool_orchestrator;
 pub mod turn_diff_tracker;
 
 // Handler implementations
 pub mod compact;
-pub mod list_dir_handler;
 pub mod planning_task_tracker;
 pub mod planning_workflow;
 pub mod read_file;
 pub mod session_tool_catalog;
 mod session_tool_projection;
-pub mod shell_handler;
 pub mod task_tracker;
 pub mod task_tracking;
 
 // Re-export main types for convenience
-
-// Apply patch handler
-pub use apply_patch_handler::{
-    ApplyPatchHandler, ApplyPatchRequest as ApplyPatchHandlerRequest, ApplyPatchRuntime, ApplyPatchToolArgs,
-    create_apply_patch_freeform_tool, create_apply_patch_json_tool,
-};
-
-// Events
-pub use events::{
-    ExecCommandInput, ExecCommandSource, ParsedCommand, ToolEmitter, ToolEventCtx, ToolEventFailureKind, ToolEventStage,
-};
-
-// Intercept apply patch
-pub use intercept_apply_patch::{
-    ApplyPatchError, ApplyPatchRequest, CODEX_APPLY_PATCH_ARG, intercept_apply_patch,
-    maybe_parse_apply_patch_from_command,
-};
-
-// List directory handler
-pub use list_dir_handler::{DirEntry, ListDirArgs, ListDirHandler, create_list_dir_tool};
 
 // New Sandboxing module (Codex-compatible)
 pub use sandboxing::{
@@ -100,22 +73,16 @@ pub use sandboxing::{
     with_cached_approval,
 };
 
-// Tool Orchestrator (Codex-compatible)
-pub use tool_orchestrator::ToolOrchestrator;
-
 // Turn Diff Tracker with Agent Trace support
 pub use turn_diff_tracker::{
     ChangeAttribution, FileChange, FileChangeKind, SharedTurnDiffTracker, TurnDiffTracker, new_shared_tracker,
 };
 
-// Shell handler
 pub use session_tool_catalog::{
     CatalogToolKind, DeferredToolPolicy, DeferredToolSearchKind, SessionSurface, SessionToolCatalog,
     SessionToolsConfig, ToolCatalogEntry, ToolCatalogSource, ToolModelCapabilities, ToolProfile, ToolSchemaEntry,
     anthropic_native_memory_enabled_for_runtime, deferred_tool_policy_for_runtime,
 };
-pub use shell_handler::{ShellHandler, create_shell_tool};
-
 // Planning workflow tools
 pub use planning_workflow::{PlanningWorkflowState, StartPlanningTool};
 
@@ -124,7 +91,6 @@ pub use planning_task_tracker::PlanningTaskTrackerTool;
 pub use task_tracker::TaskTrackerTool;
 
 // Core tool handler types
-pub use router::{DispatchRegistry, DispatchRegistryBuilder, ToolCall, ToolRouter, ToolRouterProvider};
 pub use tool_handler::{
     AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, Constrained, ContentItem, DiffTracker, FreeformTool,
     FreeformToolFormat, JsonSchema, McpToolResult, ResponsesApiTool, SandboxPermissions, SharedDiffTracker,

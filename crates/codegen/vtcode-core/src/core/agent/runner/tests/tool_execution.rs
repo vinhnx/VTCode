@@ -3,6 +3,146 @@
     reason = "Intentional compatibility, platform, or test-only suppression."
 )]
 use super::*;
+use crate::exec::events::ToolOutcome;
+
+/// Last model-facing tool message, parsed from the JSON string the runner
+/// pushes for a rejected call (`push_tool_error` with a `String` value).
+fn last_tool_message(runtime: &AgentRuntime) -> String {
+    let raw = runtime
+        .state
+        .messages
+        .last()
+        .map(|message| message.content.as_text().into_owned())
+        .expect("a tool message must be recorded");
+    let parsed: serde_json::Value = serde_json::from_str(&raw).expect("structured tool message");
+    parsed.as_str().expect("string tool message").to_string()
+}
+
+fn tool_invocation_outcome(events: &[ThreadEvent], tool_call_id: &str) -> Option<ToolOutcome> {
+    events.iter().find_map(|event| match event {
+        ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
+            ThreadItemDetails::ToolInvocation(details) if details.tool_call_id.as_deref() == Some(tool_call_id) => {
+                details.outcome
+            }
+            _ => None,
+        },
+        _ => None,
+    })
+}
+
+/// Register `tool_call_id`'s invocation item the way a streamed turn does, then
+/// run admission so the registered rejection branch (which records the outcome)
+/// is the one under test rather than the unregistered `tool_rejected` fallback.
+async fn admit_one_tool_call(
+    runner: &mut AgentRunner,
+    runtime: &mut AgentRuntime,
+    session_id: &str,
+    tool_name: &str,
+    args: serde_json::Value,
+) -> Vec<ThreadEvent> {
+    let provider = QueuedProvider::new(vec![tool_call_response(tool_name, args)]);
+    let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
+    let request = LLMRequest {
+        model: "gpt-5-codex".to_string(),
+        ..Default::default()
+    };
+    let turn = runtime
+        .run_turn_once(&mut provider_box, request, None)
+        .await
+        .expect("turn should succeed");
+    let tool_calls = turn.response.tool_calls.expect("tool call response");
+
+    let mut recorder = ExecEventRecorder::new(session_id, None, None);
+    recorder.record_thread_events(runtime.take_emitted_events());
+    runner
+        .execute_tool_call_batches(tool_calls, runtime, &mut recorder, "[single]", false, false)
+        .await
+        .expect("tool execution should finish");
+    recorder.into_events()
+}
+
+#[tokio::test]
+async fn planning_denial_reports_policy_denial_not_invalid_arguments() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-planning-denied")).await;
+    runner.enable_full_auto(&[tools::EXEC_COMMAND.to_string()]).await;
+    // Mirror the audited anomaly: a mutating command denied by the planning gate.
+    runner.tool_registry.enable_planning();
+    assert!(
+        !runner
+            .tool_registry
+            .is_planning_active_allowed(tools::EXEC_COMMAND, &json!({"cmd": "cargo build"}))
+    );
+
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-planning-denied".to_string(), 16, 4, 128_000), None, None);
+
+    let events = admit_one_tool_call(
+        &mut runner,
+        &mut runtime,
+        "thread-planning-denied",
+        tools::EXEC_COMMAND,
+        json!({"cmd": "cargo build"}),
+    )
+    .await;
+
+    let tool_error = last_tool_message(&runtime);
+    assert!(tool_error.contains("tool denied by planning workflow"), "{tool_error}");
+    // The gate's own remediation guidance must survive to the model.
+    assert!(tool_error.contains("blocked during planning"), "{tool_error}");
+    assert!(!tool_error.contains("Invalid arguments"), "{tool_error}");
+
+    assert_eq!(
+        tool_invocation_outcome(&events, "call-1"),
+        Some(ToolOutcome::HookDenied),
+        "a policy denial must not be recorded as a malformed-call outcome"
+    );
+
+    let denial = events
+        .iter()
+        .find_map(|event| {
+            let ThreadEvent::ItemUpdated(event) = event else {
+                return None;
+            };
+            let ThreadItemDetails::Reasoning(reasoning) = &event.item.details else {
+                return None;
+            };
+            let diagnostic = reasoning.diagnostic.as_deref()?;
+            if diagnostic.summary.starts_with("Tool 'exec_command' denied by policy:") {
+                assert_eq!(reasoning.stage.as_deref(), Some("diagnosis"));
+                Some(diagnostic)
+            } else {
+                None
+            }
+        })
+        .expect("policy denial must retain a canonical diagnostic summary");
+    assert_eq!(denial.code, "runtime.warning");
+    assert_eq!(denial.severity, crate::exec::events::DiagnosticSeverity::Warning);
+    assert!(!denial.correlation_id.is_empty(), "the incident must have a stable presentation identity");
+    assert!(!denial.summary.contains('\n'), "the human summary must remain single-line");
+    assert!(!denial.summary.contains("Invalid arguments"));
+}
+
+#[tokio::test]
+async fn malformed_arguments_still_report_invalid_tool() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-invalid-args")).await;
+    runner.enable_full_auto(&[tools::APPLY_PATCH.to_string()]).await;
+    // Planning is inactive: this is a genuine argument failure, not a policy stop.
+    assert!(!runner.tool_registry.is_planning_active());
+
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-invalid-args".to_string(), 16, 4, 128_000), None, None);
+
+    let events =
+        admit_one_tool_call(&mut runner, &mut runtime, "thread-invalid-args", tools::APPLY_PATCH, json!({})).await;
+
+    let tool_error = last_tool_message(&runtime);
+    assert!(tool_error.contains("Invalid arguments for tool 'apply_patch'"), "{tool_error}");
+    assert!(!tool_error.contains("denied by planning workflow"), "{tool_error}");
+
+    assert_eq!(tool_invocation_outcome(&events, "call-1"), Some(ToolOutcome::InvalidTool));
+}
 
 #[tokio::test]
 async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
@@ -458,4 +598,86 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     let events = recorder.into_events();
     let call_item_id = completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
     assert_eq!(completed_tool_output_count(&events, &tool_call_id, ToolCallStatus::Failed, &call_item_id), 1);
+}
+
+#[tokio::test]
+async fn headless_fetch_retries_use_the_remaining_tool_deadline() {
+    use crate::tools::registry::{ToolExecutionError, ToolRegistration};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct TransientFetch(Arc<AtomicUsize>);
+    #[async_trait]
+    impl Tool for TransientFetch {
+        async fn execute(&self, args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+            let budget = crate::tools::web_fetch::request_budget::RequestBudget::current();
+            let _transport = match &budget {
+                Some(budget) => Some(budget.lock_transport().await?),
+                None => None,
+            };
+            let url = url::Url::parse(args["url"].as_str().unwrap())?;
+            if let Some(budget) = &budget
+                && let Err(error) = budget.admit(&url)
+            {
+                return Ok(error.to_json_value());
+            }
+            let call = self.0.fetch_add(1, Ordering::SeqCst) + 1;
+            if call == 1 {
+                let output = json!({"error":"HTTP request failed with status: 429", "http_status":429,
+                    "retry_after_ms":1100, "next_action":"Disclose unavailable external evidence."});
+                Ok(budget.as_ref().map_or_else(
+                    || output.clone(),
+                    |budget| {
+                        budget
+                            .observe(&url, ToolExecutionError::from_tool_output(&output).unwrap())
+                            .to_json_value()
+                    },
+                ))
+            } else {
+                Ok(json!({"preview":"retrieved", "call":call}))
+            }
+        }
+        fn name(&self) -> &str {
+            tools::WEB_FETCH
+        }
+        fn description(&self) -> &str {
+            "Controlled transient fetch without network access"
+        }
+    }
+
+    for wall_clock_secs in [1, 3, 0, u64::MAX] {
+        let temp = TempDir::new().unwrap();
+        let mut config = VTCodeConfig::default();
+        config.agent.harness.max_tool_wall_clock_secs = wall_clock_secs;
+        config.agent.harness.max_tool_retries = 1;
+        let runner = make_runner(&temp, config, "headless-fetch-deadline").await;
+        let calls = Arc::new(AtomicUsize::new(0));
+        runner
+            .tool_registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                tools::WEB_FETCH,
+                CapabilityLevel::CodeSearch,
+                TransientFetch(calls.clone()),
+            ))
+            .await
+            .unwrap();
+        runner.tool_registry.allow_all_tools().await.unwrap();
+        let result = runner
+            .execute_tool_internal(tools::WEB_FETCH, &json!({"url":"https://example.com/page"}))
+            .await;
+        if wall_clock_secs == u64::MAX {
+            let error = result.expect_err("an unrepresentable budget must fail before dispatch, without panicking");
+            assert_eq!(error.error_type, crate::tools::registry::ToolErrorType::InvalidParameters);
+            assert!(error.message.contains("deadline range"));
+            assert_eq!(calls.load(Ordering::SeqCst), 0);
+        } else if wall_clock_secs == 1 {
+            let error = result.expect_err("the HTTP limitation must survive the short deadline");
+            assert_eq!(error.category, vtcode_commons::ErrorCategory::RateLimit);
+            assert_eq!(error.retry_after_ms, Some(1100));
+            assert_eq!(error.to_json_value()["error"]["http_status"], 429);
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+        } else {
+            assert_eq!(result.unwrap()["preview"], "retrieved");
+            assert_eq!(calls.load(Ordering::SeqCst), 2);
+        }
+    }
 }

@@ -2,7 +2,7 @@
 name = "vtcode-agent-plugins"
 version.workspace = true
 edition.workspace = true
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Agent Plugins loader for VT Code: portable plugin manifests, skill discovery, and MCP configuration."
 license.workspace = true

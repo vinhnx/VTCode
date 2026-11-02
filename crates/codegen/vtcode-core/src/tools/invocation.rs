@@ -161,6 +161,7 @@ impl ToolInvocation {
 
 /// Builder for ergonomic ToolInvocation construction.
 #[derive(Debug, Clone)]
+#[must_use = "build the invocation before discarding the builder"]
 pub struct InvocationBuilder {
     tool_name: CompactStr,
     args: Value,
@@ -214,6 +215,7 @@ impl InvocationBuilder {
     }
 
     /// Build the ToolInvocation.
+    #[must_use]
     pub fn build(self) -> ToolInvocation {
         ToolInvocation {
             id: self.id.unwrap_or_default(),

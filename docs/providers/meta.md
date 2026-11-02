@@ -36,13 +36,13 @@ required.
 
 ## Curated models
 
-| Model                        | Notes                                                                                   |
-| ---------------------------- | --------------------------------------------------------------------------------------- |
-| `muse-wonder-full-1.0`       | Most advanced Muse Wonder Full model for critical workflows (Muse Code subscription)   |
+| Model                        | Notes                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------- |
+| `muse-wonder-full-1.0`       | Most advanced Muse Wonder Full model for critical workflows (Muse Code subscription)  |
 | `muse-wonder-1.0`            | Frontier Muse Wonder model for coding, long-running agents, and advanced computer use |
-| `muse-spark-1.3`             | Default curated Standard-tier Muse Spark model                                          |
-| `muse-spark-1.3-contributor` | Opt-in Contributor-tier variant; review Meta's data-use terms before use                |
-| `muse-spark-1.1`             | Previous curated Standard-tier Muse Spark model                                         |
+| `muse-spark-1.3`             | Default curated Standard-tier Muse Spark model                                        |
+| `muse-spark-1.3-contributor` | Opt-in Contributor-tier variant; review Meta's data-use terms before use              |
+| `muse-spark-1.1`             | Previous curated Standard-tier Muse Spark model                                       |
 
 All five models are exposed through the `/model` picker and support streaming, function tools, structured output,
 multimodal input, and reasoning effort controls through Meta's OpenAI-compatible Chat Completions API.
@@ -54,8 +54,8 @@ See the [Meta model catalog](https://developer.meta.com/ai/models), [Muse Wonder
 
 ## Troubleshooting
 
-| Symptom                 | Resolution                                                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Missing credentials     | Set `META_API_KEY` or the documented `MODEL_API_KEY` variable.                                                              |
+| Symptom                 | Resolution                                                                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Missing credentials     | Set `META_API_KEY` or the documented `MODEL_API_KEY` variable.                                                                                            |
 | Model rejected          | Use one of `muse-wonder-1.0`, `muse-wonder-full-1.0`, `muse-spark-1.1`, `muse-spark-1.3`, or `muse-spark-1.3-contributor` for the official Meta provider. |
-| Custom endpoint failure | Confirm the endpoint implements Meta's `/v1/chat/completions` protocol and set `META_BASE_URL`.                             |
+| Custom endpoint failure | Confirm the endpoint implements Meta's `/v1/chat/completions` protocol and set `META_BASE_URL`.                                                           |

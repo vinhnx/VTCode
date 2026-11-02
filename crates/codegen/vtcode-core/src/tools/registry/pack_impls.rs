@@ -32,12 +32,14 @@ use crate::tools::registry::registration::ToolRegistration;
 use crate::tools::registry::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool, web_fetch_parameter_schema};
-use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
+use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool, web_search_parameter_schema};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION,
-    agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters,
-    list_files_parameters, mcp_parameters, search_tools_parameters, write_stdin_parameters,
+    AGENT_DESCRIPTION, ANSWER_SESSION_DESCRIPTION, ASK_SESSION_DESCRIPTION, EXEC_COMMAND_DESCRIPTION,
+    LIST_SESSIONS_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION, agent_parameters,
+    answer_session_parameters, apply_patch_parameters, ask_session_parameters, code_search_parameters, cron_parameters,
+    exec_command_parameters, list_files_parameters, list_sessions_parameters, mcp_parameters, search_tools_parameters,
+    write_stdin_parameters,
 };
 
 // ===========================================================================
@@ -194,6 +196,30 @@ impl ToolPack for MultiAgentPack {
             ToolRegistration::new("matrix", CapabilityLevel::Basic, false, ToolRegistry::matrix_executor)
                 .with_description(vtcode_utility_tool_specs::MATRIX_DESCRIPTION)
                 .with_parameter_schema(vtcode_utility_tool_specs::matrix_parameters()),
+            ToolRegistration::new(
+                tools::ASK_SESSION,
+                CapabilityLevel::Basic,
+                false,
+                ToolRegistry::ask_session_executor,
+            )
+            .with_description(ASK_SESSION_DESCRIPTION)
+            .with_parameter_schema(ask_session_parameters()),
+            ToolRegistration::new(
+                tools::ANSWER_SESSION,
+                CapabilityLevel::Basic,
+                false,
+                ToolRegistry::answer_session_executor,
+            )
+            .with_description(ANSWER_SESSION_DESCRIPTION)
+            .with_parameter_schema(answer_session_parameters()),
+            ToolRegistration::new(
+                tools::LIST_SESSIONS,
+                CapabilityLevel::Basic,
+                false,
+                ToolRegistry::list_sessions_executor,
+            )
+            .with_description(LIST_SESSIONS_DESCRIPTION)
+            .with_parameter_schema(list_sessions_parameters()),
         ];
         batch_register(inventory, registrations);
     }
@@ -266,6 +292,45 @@ impl ToolPack for SearchPack {
 // Web Pack
 // ===========================================================================
 
+/// Keep config failure independent of approval so permissive sessions cannot
+/// send requests using default network restrictions or a different credential mode.
+#[derive(Clone)]
+struct ConfiguredWebTool<T> {
+    inner: T,
+    config_load_failed: bool,
+}
+
+impl<T> ConfiguredWebTool<T> {
+    fn new(inner: T, config: &ToolConfigSnapshot) -> Self {
+        Self {
+            inner,
+            config_load_failed: config.web_config_load_failed,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: crate::tools::traits::Tool> crate::tools::traits::Tool for ConfiguredWebTool<T> {
+    async fn execute(&self, args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+        if self.config_load_failed {
+            return Err(super::ToolExecutionError::policy_violation(self.name(),
+                format!(
+                    "Web tools are disabled because workspace configuration could not be loaded. Fix vtcode.toml before retrying. Use [tools.web_search] provider = \"{}\".",
+                    vtcode_config::WebSearchProvider::Auto.backend_id(),
+                )
+            ).into());
+        }
+        self.inner.execute(args).await
+    }
+
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn description(&self) -> &str {
+        self.inner.description()
+    }
+}
+
 #[derive(Default)]
 pub struct WebPack;
 
@@ -281,15 +346,16 @@ impl ToolPack for WebPack {
         _plan_state: &PlanningWorkflowState,
         tool_config: &ToolConfigSnapshot,
     ) {
-        let web_fetch = WebFetchTool::from_config(&tool_config.web_fetch);
+        let web_fetch = ConfiguredWebTool::new(WebFetchTool::from_config(&tool_config.web_fetch), tool_config);
         let web_fetch_for_factory = web_fetch.clone();
         let web_fetch_factory = native_cgp_tool_factory(move || web_fetch_for_factory.clone());
 
-        let web_search = WebSearchTool::with_config(tool_config.web_search.clone());
+        let web_search =
+            ConfiguredWebTool::new(WebSearchTool::with_config(tool_config.web_search.clone()), tool_config);
         let web_search_for_factory = web_search.clone();
         let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
 
-        let defuddle = DefuddleTool::new();
+        let defuddle = ConfiguredWebTool::new(DefuddleTool::new(), tool_config);
         let defuddle_for_factory = defuddle.clone();
         let defuddle_factory = native_cgp_tool_factory(move || defuddle_for_factory.clone());
 
@@ -303,21 +369,7 @@ impl ToolPack for WebPack {
             ToolRegistration::from_tool_instance(tools::WEB_SEARCH, CapabilityLevel::Basic, web_search)
                 .with_native_cgp_factory(web_search_factory)
                 .with_description(WEB_SEARCH_DESCRIPTION)
-                .with_parameter_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query (a topic, question, or keywords)."
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (default: 8, max: 20)."
-                        }
-                    },
-                    "required": ["query"],
-                    "additionalProperties": false
-                }))
+                .with_parameter_schema(web_search_parameter_schema())
                 .with_permission(ToolPolicy::Prompt)
                 .with_aliases(["search_web", "websearch"]),
             ToolRegistration::from_tool_instance(tools::DEFUDDLE_FETCH, CapabilityLevel::Basic, defuddle)

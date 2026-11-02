@@ -16,6 +16,22 @@ when that evidence is unavailable, rather than filled in from model memory. This
 guidance presence and size tests across prompt profiles; it adds no automatic metadata scans or provider requests.
 Low prompt-cache reuse alone does not establish prefix churn; compare actual request or provider diagnostic evidence.
 
+Prompt refinement is opt-in (`agent.refine_prompts_enabled`, default `false`). Its tool-free request asks for a rewrite
+only, preserving intent, negations, authorization limits, paths, and identifiers without inventing context or requirements.
+It requests low reasoning effort only when the selected route advertises that level, rather than inheriting the primary
+task's effort. Sampling temperature is omitted on routes advertising reasoning levels. Each attempt has a ten-second
+timeout and an input-relative output allowance of 2,048–8,192 tokens, including reasoning where applicable. Incomplete
+or invalid responses are rejected; the existing route fallback is attempted when available, otherwise the original request
+is kept.
+Acceptance heuristics do not establish semantic equivalence; evaluate constraint preservation before enabling refinement.
+
+Interactive requests retain `agent.verbosity` for provider-specific serialization. Native OpenAI Responses sends text
+verbosity only on supported models; native Merge Gateway currently omits it. Prompt output requirements still apply.
+Fixed-length auxiliary verdicts use `LLMRequest::set_auxiliary_output_budget`: reasoning-capable routes receive 2,048
+tokens beyond the visible answer allowance, low effort only when advertised, and no sampling controls. Budgets are
+recomputed after a fallback model change. Incomplete or tool-call verdicts remain inconclusive; permission review
+cannot authorize a call from a truncated label. Existing deadlines and conservative fallback behavior remain in force.
+
 Attached files supply context, while workspace paths identify the files to read or edit. Compiled guidance
 keeps that distinction explicit: an attached filename does not prove the current on-disk contents.
 
@@ -56,6 +72,10 @@ existing mutation, verification, or successful compaction invalidates them.
 Tracker notes append rather than replace existing notes. Repeating an update to replace a prior note duplicates it;
 reuse the latest tracker result and update only when state changes.
 
+Headless evaluator tracker updates address only unmet requirements from the user's request or authorized execution
+contract and identify the missing observable check. Optional improvements and out-of-scope observations remain
+advisory residual risks or generalization notes; they cannot independently fail the run or expand its acceptance criteria.
+
 The literal ripgrep and declaration-outline backends own their children across cancellation (`kill_on_drop`) and
 explicitly kill and wait on stream errors or truncation, sharing the same stream-error cleanup helper. Nonzero backend
 exits retain their exit status in bounded unavailable-category context. Pattern `-e` and path `--` separators remain
@@ -89,6 +109,10 @@ The compiled guidance tells the model that its text between tool calls is what t
 what it will do before starting, updates only on findings, direction changes, or blockers, and finishes with the outcome
 first, then what changed, what it checked, and anything the user must do. Structured tool-call events remain the
 authoritative status signal. These are user-facing updates, not a transcript of every call.
+
+Small tasks normally need one paragraph or up to four bullets. Empty categories are omitted; requested detail and
+necessary evidence take precedence over this default. Optional structure requests conclusions and supporting evidence,
+not private chain-of-thought.
 
 The UI reports runtime phases automatically. Compiled guidance tells the model to avoid echoing those labels or
 inventing percentages, leaving its updates for findings and decisions. The runtime guidance presence and size tests

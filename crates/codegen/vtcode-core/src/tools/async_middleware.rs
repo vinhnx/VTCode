@@ -386,7 +386,7 @@ impl AsyncRetryMiddleware {
     }
 
     fn backoff_duration(&self, attempt: u32) -> std::time::Duration {
-        let backoff = self.initial_backoff_ms * 2_u64.pow(attempt);
+        let backoff = self.initial_backoff_ms.saturating_mul(2_u64.saturating_pow(attempt));
         std::time::Duration::from_millis(backoff.min(self.max_backoff_ms))
     }
 }
@@ -529,6 +529,19 @@ mod tests {
         let result2 = cache.execute(request, executor2).await;
         assert!(result2.from_cache);
         assert_eq!(result2.output, Some("result1".to_string())); // Returns cached value
+    }
+
+    #[test]
+    fn async_retry_backoff_saturates_and_respects_the_cap() {
+        let obs = Arc::new(ObservabilityContext::noop());
+        let middleware = AsyncRetryMiddleware::new(u32::MAX, 1_000, 5_000, obs);
+        assert_eq!(middleware.backoff_duration(0), std::time::Duration::from_millis(1_000));
+        assert_eq!(middleware.backoff_duration(1), std::time::Duration::from_millis(2_000));
+        assert_eq!(
+            middleware.backoff_duration(u32::MAX),
+            std::time::Duration::from_millis(5_000),
+            "an overflowing exponent must cap at max_backoff_ms instead of panicking"
+        );
     }
 
     #[tokio::test]

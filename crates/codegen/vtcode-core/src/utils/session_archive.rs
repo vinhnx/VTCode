@@ -10,12 +10,31 @@ mod shrink;
 mod snapshot;
 mod transcript;
 
+/// Instruction supplied to the model when tool output is collapsed in the UI.
+pub const COLLAPSED_TOOL_OUTPUT_NOTICE: &str = "Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.";
+
+/// Identify persisted model-only context that should not appear in a resumed transcript.
+pub fn is_internal_session_context(
+    role: crate::llm::provider::MessageRole,
+    text: &str,
+    clear_at: Option<crate::llm::provider::MessageClearAt>,
+) -> bool {
+    role == crate::llm::provider::MessageRole::System
+        && (clear_at.is_some()
+            || text.starts_with(crate::prompts::FEW_SHOT_SECTION_HEADER)
+            || text.starts_with("## Active Editor Context")
+            || text == COLLAPSED_TOOL_OUTPUT_NOTICE)
+}
+
 pub use self::archive::SessionArchive;
 #[cfg(test)]
 pub(crate) use self::identifier::generate_unique_archive_path;
 pub use self::identifier::{generate_session_archive_identifier, reserve_session_archive_identifier};
 pub(crate) use self::query::resolve_sessions_dir_for_archive_writes;
-pub use self::query::{find_session_by_id_or_name, find_session_by_identifier, list_recent_sessions};
+pub use self::query::{
+    delete_session_archive, find_session_by_id_or_name, find_session_by_identifier,
+    list_recent_session_summaries_in_workspace, list_recent_sessions, list_recent_sessions_in_workspace, sessions_dir,
+};
 #[cfg(test)]
 pub(crate) use self::retention::{SessionRetentionLimits, apply_session_retention_with_limits};
 #[cfg(test)]
@@ -40,8 +59,8 @@ pub(crate) use self::settings::{
     override_sessions_dir_for_tests, session_history_settings, set_test_env_override_path,
 };
 pub use self::snapshot::{
-    SessionListing, SessionProgress, SessionProgressArgs, SessionProgressPersistenceStatus, SessionSnapshot,
-    VerifiedSessionArchiveIdentifier, session_listing_matches_workspace, session_workspace_path,
+    SessionArchiveSummary, SessionListing, SessionProgress, SessionProgressArgs, SessionProgressPersistenceStatus,
+    SessionSnapshot, VerifiedSessionArchiveIdentifier, session_listing_matches_workspace, session_workspace_path,
 };
 
 const SESSION_FILE_PREFIX: &str = "session";
@@ -88,5 +107,5 @@ mod metadata_compat_tests {
 }
 
 #[cfg(test)]
-#[path = "session_archive_tests.rs"]
+#[path = "session_archive_tests/mod.rs"]
 mod tests;

@@ -35,7 +35,6 @@ pub mod snapshots;
 pub mod state;
 pub mod steering;
 pub mod task;
-pub mod task_history;
 pub mod tool_batching;
 pub mod tool_catalog;
 pub mod types;

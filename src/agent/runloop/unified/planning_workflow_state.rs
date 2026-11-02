@@ -8,6 +8,8 @@ use vtcode_ui::tui::app::InlineHandle;
 
 #[derive(Default)]
 pub(crate) struct PlanningWorkflowSessionState {
+    pub(crate) recovery: vtcode_core::exec::events::planning::PlanningRecoverySnapshot,
+    pub(crate) model_picker_opened: bool,
     interview_shown: bool,
     interview_pending: bool,
     turns: usize,
@@ -37,9 +39,10 @@ pub(crate) struct PlanningWorkflowSessionState {
     /// from the research already gathered instead of ending with an approval
     /// hint that has no draft behind it.
     plan_synthesis_retry_used: bool,
-    /// Counts automatic validation-repair prompts issued during the current
-    /// planning turn. The counter is deliberately turn-scoped so a failed
-    /// draft cannot consume the repair budget for every later user turn.
+    /// Legacy pre-guard empty-response latch. Once research closes, all
+    /// synthesis failures use the persisted shared request allowance.
+    empty_synthesis_salvage_used: bool,
+    /// Legacy pre-guard repair count; automatic turn boundaries never reset it.
     plan_validation_repair_reprompts: u8,
     /// Number of bounded planning retries waiting to be admitted through
     /// the turn loop. This is independent of the number of text responses
@@ -68,6 +71,12 @@ pub(crate) struct PlanningWorkflowSessionState {
     /// often blocks tools in the entry turn, and discarding would leave the
     /// execution agent selected while planning stays active.
     plan_entry_agent_switch_pending: bool,
+    /// Set when an execution-mode (planning-inactive) turn ends in terminal
+    /// plan rejection. Planning mode rearms via the recovery outcome
+    /// (`AwaitingInput`); execution mode has no recovery cycle, so this flag
+    /// lets the next explicit user turn reset the validation-repair budget
+    /// instead of terminally rejecting the first invalid draft again.
+    execution_plan_rejection_pending: bool,
 }
 
 /// Maximum number of pseudo-tool-call-markup re-prompts per planning session.
@@ -88,6 +97,7 @@ pub(crate) struct PendingPlanApproval {
 
 impl PlanningWorkflowSessionState {
     pub(crate) fn enter(&mut self, entry_source: PlanningEntrySource) {
+        self.recovery = Default::default();
         self.interview_shown = false;
         self.interview_pending = false;
         self.turns = 0;
@@ -98,6 +108,7 @@ impl PlanningWorkflowSessionState {
         self.recovery_exhausted = false;
         self.interview_denied = false;
         self.plan_synthesis_retry_used = false;
+        self.empty_synthesis_salvage_used = false;
         self.plan_validation_repair_reprompts = 0;
         self.bounded_planning_follow_ups_pending = 0;
         self.pseudo_tool_call_reprompts = 0;
@@ -105,14 +116,17 @@ impl PlanningWorkflowSessionState {
         self.fallback_primary_agent = None;
         self.pending_approval = None;
         self.plan_entry_agent_switch_pending = false;
+        self.execution_plan_rejection_pending = false;
     }
 
     pub(crate) fn exit(&mut self) {
+        self.recovery = Default::default();
         self.entry_source = None;
         self.budget_exhausted = false;
         self.recovery_exhausted = false;
         self.interview_denied = false;
         self.plan_synthesis_retry_used = false;
+        self.empty_synthesis_salvage_used = false;
         self.plan_validation_repair_reprompts = 0;
         self.bounded_planning_follow_ups_pending = 0;
         self.pseudo_tool_call_reprompts = 0;
@@ -120,6 +134,7 @@ impl PlanningWorkflowSessionState {
         self.fallback_primary_agent = None;
         self.pending_approval = None;
         self.plan_entry_agent_switch_pending = false;
+        self.execution_plan_rejection_pending = false;
     }
 
     /// Leave Planning after the artifact/tracker handoff while retaining the
@@ -130,13 +145,11 @@ impl PlanningWorkflowSessionState {
         self.pending_approval = pending_approval;
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     #[cfg(test)]
     pub(crate) fn interview_shown(&self) -> bool {
         self.interview_shown
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) fn mark_interview_shown(&mut self) {
         self.interview_shown = true;
         self.interview_pending = false;
@@ -150,12 +163,10 @@ impl PlanningWorkflowSessionState {
         self.turns = self.turns.saturating_add(1);
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) fn interview_pending(&self) -> bool {
         self.interview_pending
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) fn mark_interview_pending(&mut self) {
         self.interview_pending = true;
     }
@@ -177,12 +188,10 @@ impl PlanningWorkflowSessionState {
         }
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) fn interview_cycles_completed(&self) -> usize {
         self.interview_cycles_completed
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) fn last_interview_cancelled(&self) -> bool {
         self.last_interview_cancelled
     }
@@ -225,14 +234,46 @@ impl PlanningWorkflowSessionState {
         self.interview_pending = false;
     }
 
-    /// Reset the automatic validation-repair budget for a fresh planning turn.
+    /// Turn boundaries never replenish request-scoped corrective allowances.
     pub(crate) fn start_turn(&mut self) {
-        self.plan_validation_repair_reprompts = 0;
         self.bounded_planning_follow_ups_pending = 0;
     }
 
+    pub(crate) fn recovery_retry_allowed(&self) -> bool {
+        !self.budget_exhausted
+            && !self.recovery_exhausted
+            && self.recovery.requests_used < super::planning_workflow::recovery_state::MAX_PLANNING_RECOVERY_REQUESTS
+            && !matches!(
+                self.recovery.outcome,
+                vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
+                    | vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval
+            )
+    }
+
+    pub(crate) fn begin_explicit_recovery_cycle(&mut self) {
+        super::planning_workflow::recovery_state::begin_explicit_cycle(&mut self.recovery);
+        self.recovery_exhausted = false;
+        self.empty_synthesis_salvage_used = false;
+        self.plan_validation_repair_reprompts = 0;
+        self.plan_synthesis_retry_used = false;
+    }
+
+    /// One bounded salvage attempt per planning turn for a tool-free synthesis
+    /// that recorded completion tokens without extractable final content.
+    /// Gated off when the session budget/recovery is exhausted because the
+    /// salvage retry needs another provider request.
+    pub(crate) fn empty_synthesis_salvage_allowed(&self) -> bool {
+        self.recovery_retry_allowed() && (self.recovery.research_closed || !self.empty_synthesis_salvage_used)
+    }
+
+    pub(crate) fn mark_empty_synthesis_salvage_used(&mut self) {
+        self.empty_synthesis_salvage_used = true;
+    }
+
     pub(crate) fn plan_validation_repair_allowed(&self) -> bool {
-        self.plan_validation_repair_reprompts < MAX_PLAN_VALIDATION_REPAIR_REPROMPTS
+        self.recovery_retry_allowed()
+            && (self.recovery.research_closed
+                || self.plan_validation_repair_reprompts < MAX_PLAN_VALIDATION_REPAIR_REPROMPTS)
     }
 
     /// Generic bounded-planning-retry allowance shared by validation repair,
@@ -270,7 +311,10 @@ impl PlanningWorkflowSessionState {
     }
 
     pub(crate) fn interview_forcing_allowed(&self) -> bool {
-        !self.is_budget_exhausted() && !self.is_recovery_exhausted() && !self.is_interview_denied()
+        !self.recovery.research_closed
+            && !self.is_budget_exhausted()
+            && !self.is_recovery_exhausted()
+            && !self.is_interview_denied()
     }
 
     /// Queue a full switch to the plan primary agent for after the current
@@ -286,6 +330,18 @@ impl PlanningWorkflowSessionState {
     /// after final-response validation.
     pub(crate) fn take_plan_entry_agent_switch(&mut self) -> bool {
         std::mem::take(&mut self.plan_entry_agent_switch_pending)
+    }
+
+    /// Record a terminal execution-mode plan rejection. Consumed once by the
+    /// next explicit user turn (turn_prep), which rearms the repair budget.
+    pub(crate) fn mark_execution_plan_rejection_pending(&mut self) {
+        self.execution_plan_rejection_pending = true;
+    }
+
+    /// Take the pending execution-mode rejection rearm. Returns true once per
+    /// rejection; internal follow-ups must not consume it.
+    pub(crate) fn take_execution_plan_rejection_pending(&mut self) -> bool {
+        std::mem::take(&mut self.execution_plan_rejection_pending)
     }
 
     pub(crate) fn set_previous_primary_agent(&mut self, agent: Option<String>) {
@@ -657,7 +713,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_validation_repair_is_bounded_and_reset_at_turn_and_reentry() {
+    fn plan_validation_repair_survives_turn_boundaries_and_resets_on_explicit_cycle() {
         let mut state = PlanningWorkflowSessionState::default();
         state.enter(PlanningEntrySource::UserRequest);
         for attempt in 0..MAX_PLAN_VALIDATION_REPAIR_REPROMPTS {
@@ -678,8 +734,10 @@ mod tests {
         assert!(!state.bounded_planning_follow_up_allowed());
 
         state.start_turn();
-        assert!(state.plan_validation_repair_allowed(), "a fresh planning turn gets a fresh repair budget");
+        assert!(!state.plan_validation_repair_allowed(), "automatic turns cannot replenish repair allowances");
         assert!(!state.bounded_planning_follow_up_allowed(), "a fresh turn has no stale repair request");
+        state.begin_explicit_recovery_cycle();
+        assert!(state.plan_validation_repair_allowed());
         state.mark_plan_validation_repair_used();
         assert!(
             state.bounded_planning_follow_up_allowed(),
@@ -690,6 +748,36 @@ mod tests {
         state.enter(PlanningEntrySource::UserRequest);
         assert!(state.plan_validation_repair_allowed());
         assert!(!state.bounded_planning_follow_up_allowed(), "re-entry clears pending repair requests");
+    }
+
+    #[test]
+    fn empty_synthesis_salvage_survives_turn_boundaries_and_resets_on_explicit_cycle() {
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
+        assert!(state.empty_synthesis_salvage_allowed(), "a fresh planning turn starts with one salvage");
+
+        state.mark_empty_synthesis_salvage_used();
+        assert!(
+            !state.empty_synthesis_salvage_allowed(),
+            "one salvage per turn; a second empty synthesis must fall through to the handoff"
+        );
+
+        state.start_turn();
+        assert!(!state.empty_synthesis_salvage_allowed(), "automatic continuations cannot replenish salvage");
+        state.begin_explicit_recovery_cycle();
+        assert!(state.empty_synthesis_salvage_allowed());
+
+        // The salvage schedules a provider request, so exhausted budgets must
+        // refuse it rather than spending one more call that cannot succeed.
+        state.mark_budget_exhausted();
+        assert!(!state.empty_synthesis_salvage_allowed());
+        state.start_turn();
+        state.mark_recovery_exhausted();
+        assert!(!state.empty_synthesis_salvage_allowed());
+
+        state.exit();
+        state.enter(PlanningEntrySource::UserRequest);
+        assert!(state.empty_synthesis_salvage_allowed(), "re-entry clears the salvage latch");
     }
 
     #[test]

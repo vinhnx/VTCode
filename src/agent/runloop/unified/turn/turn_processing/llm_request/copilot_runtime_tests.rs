@@ -28,7 +28,7 @@ use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_routing::HitlDecision;
 use crate::agent::runloop::unified::turn::tool_outcomes::ToolFailureDiagnosis;
-use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{LoopTracker, mutation_blocked_until_verification};
+use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
 use tempfile::TempDir;
 use tokio::sync::{Notify, RwLock, mpsc::unbounded_channel};
 use vtcode_core::acp::ToolPermissionCache;
@@ -718,7 +718,7 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
 }
 
 #[tokio::test]
-async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
+async fn copilot_allows_mutating_tool_calls_while_completion_verification_is_pending() {
     let temp = TempDir::new().expect("temp workspace");
     let workspace = temp.path().to_path_buf();
     let target = workspace.join("blocked.rs");
@@ -764,13 +764,10 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
         ),
     ]);
     let mut loop_tracker = LoopTracker::new();
+    loop_tracker.mark_verification_pending();
     loop_tracker.consecutive_mutations =
         crate::agent::runloop::unified::turn::tool_outcomes::helpers::BLIND_EDITING_THRESHOLD - 1;
-    assert!(!mutation_blocked_until_verification(
-        &loop_tracker,
-        vtcode_core::config::constants::tools::APPLY_PATCH,
-        &json!({"patch": "*** Begin Patch\n*** End Patch\n"}),
-    ));
+
     let suppress_output_signal = Arc::new(AtomicBool::new(false));
     let suppress_output_signal_for_assertion = suppress_output_signal.clone();
 
@@ -848,17 +845,9 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
         .await
         .expect("blocked Copilot tool call should return a denial response");
 
-    match response {
-        CopilotToolCallResponse::Failure(failure) => {
-            assert!(failure.error.contains("verification"), "unexpected denial: {}", failure.error);
-        }
-        other => panic!("unexpected Copilot response: {other:?}"),
-    }
-    assert!(!blocked_target.exists(), "blocked mutation must not reach the tool pipeline");
-    assert_eq!(
-        runtime_host.harness_state.consecutive_assistant_text_responses, 1,
-        "a denied inline mutation is not a productive response-streak boundary"
-    );
+    assert!(matches!(response, CopilotToolCallResponse::Success(_)), "{response:?}");
+    assert!(blocked_target.exists(), "pending completion verification must permit edits");
+    assert_eq!(runtime_host.harness_state.consecutive_assistant_text_responses, 0);
 
     assert!(runtime_host.session_stats.verification_snapshot().0);
     let response = runtime_host
@@ -951,15 +940,6 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
         "successful inline verification must remain visible in authoritative turn state"
     );
 
-    let resumed_tracker = LoopTracker::with_verification_snapshot(runtime_host.session_stats.verification_snapshot());
-    assert!(!mutation_blocked_until_verification(
-        &resumed_tracker,
-        vtcode_core::config::constants::tools::APPLY_PATCH,
-        &json!({
-            "patch": "*** Begin Patch\n*** Add File: resumed.txt\n+mutation is unblocked\n*** End Patch\n"
-        }),
-    ));
-
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -1004,14 +984,7 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
             assert_eq!(matches!(response, CopilotToolCallResponse::Success(_)), exit_code == 0);
             let tracker = runtime_host.loop_tracker.as_deref().unwrap();
             assert_eq!(tracker.verification_is_pending(), exit_code != 0);
-            assert_eq!(
-                tracker.fix_edits_remaining,
-                if exit_code == 0 {
-                    0
-                } else {
-                    crate::agent::runloop::unified::turn::tool_outcomes::helpers::FAILED_VERIFICATION_FIX_ALLOWANCE
-                }
-            );
+
             assert_eq!(runtime_host.tool_registry.completion_verification_pending(), exit_code != 0);
         }
     }

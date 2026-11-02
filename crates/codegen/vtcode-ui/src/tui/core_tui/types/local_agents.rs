@@ -47,7 +47,8 @@ pub struct LocalAgentEntry {
 
 impl LocalAgentEntry {
     #[must_use]
-    pub(crate) fn is_loading(&self) -> bool {
+    /// Whether this entry represents live background work.
+    pub fn is_loading(&self) -> bool {
         match self.kind {
             LocalAgentKind::Delegated => {
                 matches!(self.status.as_str(), "queued" | "running" | "waiting")

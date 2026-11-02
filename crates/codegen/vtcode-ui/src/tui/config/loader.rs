@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-pub use super::SyntaxHighlightingConfig;
 use super::{
     AcpConfig, AgentConfig, AutomationConfig, ContextConfig, McpConfig, PromptCacheConfig, PtyConfig, SecurityConfig,
     ToolsConfig, UiConfig,
 };
+pub use vtcode_config::loader::SyntaxHighlightingConfig;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VTCodeConfig {

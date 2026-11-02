@@ -53,9 +53,15 @@ pub(crate) struct ZedAgent {
     primary_agents: PrimaryAgentCatalog,
     tool_loop_limit: usize,
     tool_call_delay: Option<Duration>,
+    permissions_config: vtcode_config::core::permissions::PermissionsConfig,
+    providers_whitelist: Vec<String>,
 }
 
 impl ZedAgent {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "constructor mirrors the interactive session wiring one config per policy area"
+    )]
     pub(crate) async fn new(
         config: CoreAgentConfig,
         allow_reasoning_effort_downgrade: bool,
@@ -66,6 +72,9 @@ impl ZedAgent {
         system_prompt: String,
         title: Option<String>,
         primary_agents: PrimaryAgentCatalog,
+        sandbox_config: vtcode_config::SandboxConfig,
+        permissions_config: vtcode_config::core::permissions::PermissionsConfig,
+        providers_whitelist: Vec<String>,
     ) -> Self {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
@@ -85,6 +94,9 @@ impl ZedAgent {
         {
             warn!(%error, "Failed to apply tools configuration to ACP tool registry");
         }
+        // Approved local commands must run under the operator's sandbox;
+        // without this the registry launches processes unsandboxed.
+        core_tool_registry.apply_sandbox_config(&sandbox_config);
         let local_definitions = core_tool_registry
             .model_tools(
                 SessionToolsConfig::full_public(
@@ -123,6 +135,8 @@ impl ZedAgent {
             primary_agents,
             tool_loop_limit,
             tool_call_delay,
+            permissions_config,
+            providers_whitelist,
         }
     }
 

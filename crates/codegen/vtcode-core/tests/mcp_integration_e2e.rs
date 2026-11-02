@@ -440,6 +440,44 @@ max_concurrent_requests = 1
     }
 
     #[tokio::test]
+    async fn test_mock_mcp_app_only_tool_is_hidden_and_rejected() {
+        if !is_python_available().await {
+            eprintln!("python3 not available, skipping app-only visibility test");
+            return;
+        }
+
+        let script_path = mock_mcp_server_path();
+        assert!(script_path.exists(), "mock MCP server script should exist");
+
+        let mut mcp_client = McpClient::new(build_mock_mcp_config(&script_path));
+        mcp_client.initialize().await.unwrap();
+
+        // The agent's tool list hides the app-only tool.
+        let tools = mcp_client.list_tools().await.unwrap();
+        assert_eq!(tools.iter().map(|tool| tool.name.as_str()).collect::<Vec<_>>(), ["echo"]);
+
+        // A direct model-originated call is rejected before reaching the server.
+        let err = mcp_client
+            .execute_tool("refresh_echo", serde_json::json!({}))
+            .await
+            .expect_err("app-only tool must be rejected");
+        assert!(err.to_string().contains("not available to the model"), "{err:?}");
+
+        // The visible tool still executes end to end.
+        let result = mcp_client
+            .execute_tool("echo", serde_json::json!({ "message": "hi" }))
+            .await
+            .unwrap();
+        let first_text = result
+            .get("content")
+            .and_then(|v| v.as_array())
+            .and_then(|content| content.first())
+            .and_then(|v| v.get("text"))
+            .and_then(|v| v.as_str());
+        assert_eq!(first_text, Some("echo:hi"));
+    }
+
+    #[tokio::test]
     async fn test_mock_mcp_shutdown_is_idempotent() {
         if !is_python_available().await {
             eprintln!("python3 not available, skipping mock MCP shutdown idempotency test");
@@ -469,6 +507,7 @@ max_concurrent_requests = 1
             max_events: 25,
             show_provider_names: false,
             renderers: HashMap::new(),
+            apps: vtcode_core::config::mcp::McpUiAppsTier::Off,
         };
 
         let full_config = vtcode_core::config::mcp::McpUiConfig {
@@ -476,6 +515,7 @@ max_concurrent_requests = 1
             max_events: 100,
             show_provider_names: true,
             renderers: HashMap::new(),
+            apps: vtcode_core::config::mcp::McpUiAppsTier::Off,
         };
 
         assert_eq!(compact_config.mode, McpUiMode::Compact);

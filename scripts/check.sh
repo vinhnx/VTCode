@@ -11,6 +11,7 @@
 set -e
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Configuration
@@ -18,7 +19,8 @@ SCRIPT_START=$(date +%s)
 
 # Timing helper
 print_timing() {
-    local end=$(date +%s)
+    local end
+    end=$(date +%s)
     local duration=$((end - SCRIPT_START))
     if [ $duration -lt 60 ]; then
         echo ""
@@ -83,7 +85,7 @@ run_vtcode_command() {
     fi
 
     if command -v cargo > /dev/null 2>&1 && [ -f "Cargo.toml" ]; then
-        RUSTC_WRAPPER= cargo run --quiet --bin vtcode -- "$@"
+        RUSTC_WRAPPER='' cargo run --quiet --bin vtcode -- "$@"
         return $?
     fi
 
@@ -111,7 +113,7 @@ run_rustfmt() {
 # Run clippy
 run_clippy() {
     print_status "Running clippy..."
-    if cargo clippy --workspace --all-targets --all-features -- -D warnings; then
+    if cargo clippy --locked --workspace --all-targets --all-features -- -D warnings; then
         print_success "No clippy warnings found!"
         return 0
     else
@@ -195,6 +197,32 @@ run_workflow_security_lint() {
     fi
 }
 
+# Release-artifact contract tests. These were only run by the
+# (now removed) ci.yml workflow, so keep them reachable from the local gate.
+run_release_contract_tests() {
+    print_status "Running release contract tests..."
+    local failed=0
+    if python3 scripts/tests/test_ci_load.py; then
+        print_success "CI-load contract tests passed."
+    else
+        print_error "CI-load contract tests failed."
+        failed=1
+    fi
+    if python3 scripts/tests/test_package_vtcode_companion.py; then
+        print_success "Companion packaging contract tests passed."
+    else
+        print_error "Companion packaging contract tests failed."
+        failed=1
+    fi
+    if [ "$failed" -eq 0 ]; then
+        print_success "Release contract tests passed."
+        return 0
+    else
+        print_error "Release contract tests failed."
+        return 1
+    fi
+}
+
 run_ast_grep_scan() {
     local require_binary="${1:-optional}"
     if [ "$require_binary" != "required" ]; then
@@ -242,6 +270,35 @@ run_zen_governance() {
         return 1
     fi
 }
+
+# Hard ceiling complementing the Zen soft signal: no tracked text file may
+# exceed 1000 lines except for capped entries in file_length_allowlist.txt.
+run_file_length_gate() {
+    print_status "Running file length gate (enforce, max 1000 lines)..."
+    if python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
+        print_success "File lengths within budget."
+        return 0
+    else
+        print_error "File length gate failed (see findings above)."
+        return 1
+    fi
+}
+
+# Catch platform-gated `unsafe` drift that host-only clippy cannot see: every
+# `unsafe` needs a `SAFETY:` marker and an `unsafe_code` allowance, even in code
+# that only compiles for another `#[cfg(target_os)]`.
+run_unsafe_docs_gate() {
+    print_status "Running unsafe-docs gate (enforce)..."
+    if python3 scripts/check_unsafe_docs.py --mode enforce --allowlist scripts/unsafe_allowlist.txt; then
+        print_success "unsafe-docs gate passed."
+        return 0
+    else
+        print_error "unsafe-docs gate failed (see findings above)."
+        return 1
+    fi
+}
+
+# run_cargo_deny is provided by scripts/common.sh (shared with check-dev.sh).
 
 run_agent_legibility_checks() {
     print_status "Running agent legibility checks (warn mode)..."
@@ -346,8 +403,12 @@ main() {
     run_rustfmt || ((failed_checks++))
     run_shell_scripts_lint || ((failed_checks++))
     run_workflow_security_lint || ((failed_checks++))
+    run_release_contract_tests || ((failed_checks++))
     run_structured_logging_lint || ((failed_checks++))
     run_zen_governance || ((failed_checks++))
+    run_file_length_gate || ((failed_checks++))
+    run_unsafe_docs_gate || ((failed_checks++))
+    run_cargo_deny || ((failed_checks++))
     run_agent_legibility_checks || ((failed_checks++))
     run_ast_grep_scan || ((failed_checks++))
     run_clippy || ((failed_checks++))
@@ -416,7 +477,11 @@ case "${1:-}" in
         echo "  docs    - Generate documentation"
         echo "  legibility - Run agent legibility hotspot checks"
         echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
+        echo "  contracts - Run release-artifact contract tests"
         echo "  zen     - Run Zen governance checks (warn mode)"
+        echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
+        echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"
+        echo "  deny    - Audit dependencies with cargo-deny (RustSec advisories, licenses, bans, sources)"
         echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
         echo "  help    - Show this help message"
         echo ""
@@ -424,6 +489,15 @@ case "${1:-}" in
         ;;
     "zen")
         run_zen_governance
+        ;;
+    "file-length")
+        run_file_length_gate
+        ;;
+    "unsafe-docs")
+        run_unsafe_docs_gate
+        ;;
+    "deny")
+        run_cargo_deny required
         ;;
     "legibility")
         run_agent_legibility_checks
@@ -434,8 +508,11 @@ case "${1:-}" in
     "workflow-security")
         run_workflow_security_lint
         ;;
+    "contracts")
+        run_release_contract_tests
+        ;;
     "miri")
-        run_miri
+        run_miri "${@:2}"
         ;;
     *)
         main

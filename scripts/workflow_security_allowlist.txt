@@ -1,0 +1,11 @@
+# Scoped exceptions to scripts/check_workflow_security.sh trigger bans.
+# Format: one `<workflow path>:<trigger>` per line, `#` comments ignored.
+# Entries must reference an existing workflow that still contains the trigger;
+# stale entries fail the gate. Keep exceptions narrow: the banned triggers run
+# privileged code in response to untrusted events, so only allow workflows that
+# never check out or execute pull-request code.
+#
+# Benchmark relay runs the pinned reusable hotpath workflow from the default
+# branch. It downloads the benchmark artifact and uploads the report; it never
+# checks out or runs PR code. Docs: https://hotpath.rs/ci_integration
+.github/workflows/hotpath-relay.yml:workflow_run

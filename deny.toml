@@ -1,0 +1,99 @@
+# cargo-deny configuration for VT Code: RustSec advisories, license compliance,
+# duplicate dependencies, and crate sources.
+#
+# Run in CI via .github/workflows/deny.yml (cargo-deny-action) and locally via
+# `./scripts/check.sh deny` (or `cargo deny --locked check` — --locked precedes
+# the subcommand).
+#
+# The [licenses] allow list mirrors the `accepted` list in about.toml
+# (cargo-about, THIRD-PARTY-NOTICES generation) — keep both in sync when a new
+# license enters the tree. See about.toml for per-license rationale.
+
+[graph]
+# Audit the dependency graph of every shipped target instead of just the CI
+# host, so target-gated dependencies (gpui, notify-rust, clipboard stacks) are
+# always covered by the advisories check. Keep in sync with the release build
+# matrix in .github/workflows/build-linux-windows.yml plus the macOS desktop
+# runner in desktop-macos.yml.
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+]
+
+[advisories]
+version = 2
+# The lockfile must stay free of yanked crates (e.g. clipboard-win 5.4.1 was
+# yanked; resolved by bumping to 5.4.3). Fail rather than warn.
+yanked = "deny"
+# Unmaintained advisories with `patched = []` that cannot be fixed from VT Code:
+# every chain below is already at the latest upstream release. Each ignore must
+# carry a reason and be re-evaluated when its parent crate releases.
+ignore = [
+  # bincode 1.x is unmaintained; pulled in by syntect 5.3.0 (latest release)
+  # for Sublime syntax definitions. No patched release; re-check when
+  # syntect migrates off bincode 1.x.
+  { id = "RUSTSEC-2025-0141", reason = "unmaintained bincode 1.x, transitive via syntect (latest); no patched release" },
+  # yaml-rust is unmaintained; pulled in by syntect 5.3.0 (latest release).
+  # No patched release; re-check when syntect migrates off yaml-rust.
+  { id = "RUSTSEC-2024-0320", reason = "unmaintained yaml-rust, transitive via syntect (latest); no patched release" },
+  # paste is unmaintained; pulled in via image 0.25 -> exr -> pulp/rav1e, all
+  # at their latest releases. No patched release.
+  { id = "RUSTSEC-2024-0436", reason = "unmaintained paste, transitive via image/exr (latest); no patched release" },
+  # zvariant, zbus_names, zvariant_derive were merged into zbus 6.0 as its
+  # `wire`/`names` modules. The fix requires zbus 6, but the latest
+  # notify-rust (4.18.2, our only consumer via vtcode-core notifications)
+  # still requires zbus ^5. Re-check on every notify-rust release.
+  { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
+  # The following four are unmaintained, unreachable-from-workspace lockfile
+  # entries in the gpui/resvg rendering stack (target-gated dependencies).
+  # They disappear on the next lockfile regeneration that drops them.
+  { id = "RUSTSEC-2024-0384", reason = "unmaintained instant, transitive via gpui stack (target-gated); no patched release" },
+  { id = "RUSTSEC-2025-0134", reason = "unmaintained rustls-pemfile, transitive via gpui stack (target-gated); no patched release" },
+  { id = "RUSTSEC-2026-0206", reason = "unmaintained rustybuzz, transitive via usvg/resvg stack (target-gated); no patched release" },
+  { id = "RUSTSEC-2026-0192", reason = "unmaintained ttf-parser, transitive via gpui/resvg stack (target-gated); no patched release" },
+]
+
+[licenses]
+version = 2
+# Mirrors about.toml `accepted` (same rationale comments live there).
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-1-Clause",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "0BSD",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "LGPL-2.1-or-later",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "NCSA",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Unlicense",
+  "WTFPL",
+  "Zlib",
+]
+
+[bans]
+# Informational: multiple versions of the same crate are common in large trees.
+# Warn so drift stays visible without failing CI on every transitive bump.
+multiple-versions = "warn"
+
+[sources]
+# Only crates.io is allowed as a registry source; any git dependency must be
+# explicitly added to allow-git below.
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

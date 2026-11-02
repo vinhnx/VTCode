@@ -171,12 +171,12 @@ pub(super) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
     options.push(
         ui_list::action(
             "Stop",
-            "Stop the current turn and wait for input",
+            "Stop the turn and synthesize from the outputs already gathered",
             None,
             Tone::Neutral,
             Some(InlineListSelection::ToolApproval(false)),
         )
-        .with_search_value("stop no exit cancel done".to_string()),
+        .with_search_value("stop no exit cancel done synthesize".to_string()),
     );
 
     let default_increment = viable_increments.first().copied().unwrap_or(remaining_headroom);
@@ -406,5 +406,45 @@ mod tests {
         while let Ok(command) = command_receiver.try_recv() {
             assert!(!matches!(command, InlineCommand::ShowTransient { .. }), "at-cap must not show a grant modal");
         }
+    }
+
+    #[tokio::test]
+    async fn stop_row_stays_searchable_by_its_synthesize_wording() {
+        let (command_sender, mut command_receiver) = mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(command_sender);
+        let mut session = TestSession {
+            handle: handle.clone(),
+            events: VecDeque::from([InlineEvent::Cancel]),
+        };
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let result = prompt_tool_loop_limit_increase(
+            &handle,
+            &mut session,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            20,
+            60,
+            Some("build"),
+        )
+        .await
+        .expect("cancel is a denial");
+        assert_eq!(result, None);
+
+        let mut stop_search = None;
+        while let Ok(command) = command_receiver.try_recv() {
+            if let InlineCommand::ShowTransient { request } = command
+                && let TransientRequest::List(list) = request.as_ref()
+            {
+                stop_search = list
+                    .items
+                    .iter()
+                    .find(|item| item.title == "Stop")
+                    .and_then(|item| item.search_value.clone());
+            }
+        }
+        let stop_search = stop_search.expect("tool-loop modal shows a Stop row");
+        assert!(stop_search.contains("synthesize"), "type-ahead must match the subtitle wording: {stop_search}");
     }
 }

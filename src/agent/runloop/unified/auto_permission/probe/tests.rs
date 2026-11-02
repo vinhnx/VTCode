@@ -7,6 +7,9 @@ struct ScriptedProvider {
     choice: Option<&'static str>,
     decisions_error: bool,
     generation: Option<&'static str>,
+    generation_finish: uni::FinishReason,
+    generation_tool_call: bool,
+    fallback_generation: Option<&'static str>,
     decisions_delay: Duration,
     generation_delay: Duration,
     usage: bool,
@@ -21,6 +24,9 @@ impl Default for ScriptedProvider {
             choice: Some("SAFE"),
             decisions_error: false,
             generation: Some("SUSPECT"),
+            generation_finish: uni::FinishReason::Stop,
+            generation_tool_call: false,
+            fallback_generation: None,
             decisions_delay: Duration::ZERO,
             generation_delay: Duration::ZERO,
             usage: true,
@@ -79,17 +85,28 @@ impl uni::LLMProvider for ScriptedProvider {
         panic!("probe must use isolated auxiliary generation: {}", request.model)
     }
     async fn generate_auxiliary(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+        let content = if request.model == "gpt-6-astra" {
+            self.fallback_generation.or(self.generation)
+        } else {
+            self.generation
+        };
         self.generation_requests.lock().unwrap().push(request);
         tokio::time::sleep(self.generation_delay).await;
-        let Some(content) = self.generation else {
+        let Some(content) = content else {
             return Err(uni::LLMError::Provider { message: "generation error".into(), metadata: None });
         };
         Ok(uni::LLMResponse {
             content: Some(content.into()),
             model: "gpt-6-luna".into(),
-            tool_calls: None,
+            tool_calls: self.generation_tool_call.then(|| {
+                vec![uni::ToolCall::function(
+                    "probe_call".into(),
+                    "unexpected_tool".into(),
+                    "{}".into(),
+                )]
+            }),
             usage: self.usage.then(|| usage(311, 2)),
-            finish_reason: uni::FinishReason::Stop,
+            finish_reason: self.generation_finish.clone(),
             reasoning: None,
             reasoning_details: None,
             organization_id: None,
@@ -174,8 +191,9 @@ async fn decisions_probe_inconclusive_and_http_error_fall_back_to_configured_pro
         let requests = provider.generation_requests.lock().unwrap();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].model, "gpt-6-luna");
-        assert_eq!(requests[0].max_tokens, Some(256));
+        assert_eq!(requests[0].max_tokens, Some(2056));
         assert_eq!(requests[0].reasoning_effort, Some(ReasoningEffortLevel::Low));
+        assert_eq!(requests[0].temperature, None);
         assert_eq!(requests[0].messages[0].content.as_text(), provider.decisions_inputs.lock().unwrap()[0]);
         assert_eq!(stats.total_usage().input_tokens, if error { 311 } else { 448 });
         assert_eq!(stats.total_usage().output_tokens, 2);
@@ -211,8 +229,10 @@ async fn decisions_disabled_and_ineligible_paths_do_not_dispatch_decisions_and_k
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].model, "gpt-6-luna");
         assert_eq!(requests[1].model, "gpt-6-astra");
-        assert_eq!(requests[0].max_tokens, Some(8));
-        assert!(requests[0].reasoning_effort.is_none());
+        assert_eq!(requests[0].max_tokens, Some(2056));
+        assert_eq!(requests[1].max_tokens, Some(2056));
+        assert_eq!(requests[0].reasoning_effort, Some(ReasoningEffortLevel::Low));
+        assert_eq!(requests[1].reasoning_effort, Some(ReasoningEffortLevel::Low));
     }
 }
 
@@ -232,6 +252,83 @@ async fn decisions_probe_missing_usage_and_both_inconclusive_results_do_not_beco
     let (result, stats) = run(&mut provider, true).await;
     assert!(result.unwrap().is_none());
     assert!(stats.total_cost_usd().is_none());
+}
+
+#[tokio::test]
+async fn completed_generation_labels_use_one_request_and_original_advisory() {
+    for (label, suspect) in [("SAFE", false), ("SUSPECT", true)] {
+        let mut provider = ScriptedProvider { generation: Some(label), ..Default::default() };
+        let (result, stats) = run(&mut provider, false).await;
+        let warning = result.unwrap();
+        assert_eq!(warning.as_ref().map(|warning| warning.warning.as_str()), suspect.then_some(PROBE_WARNING_TEXT));
+        assert_eq!(provider.generation_requests.lock().unwrap().len(), 1);
+        assert_eq!(stats.total_usage().input_tokens, 311);
+    }
+}
+
+#[tokio::test]
+async fn invalid_completed_labels_are_terminal_for_both_endpoints() {
+    for decisions in [false, true] {
+        let mut provider = ScriptedProvider {
+            choice: Some("INVALID"),
+            generation: Some("INVALID"),
+            fallback_generation: Some("SAFE"),
+            ..Default::default()
+        };
+        let (result, _) = run(&mut provider, decisions).await;
+        assert_eq!(result.unwrap_err().to_string(), "inconclusive prompt-injection probe");
+        assert_eq!(provider.decisions_inputs.lock().unwrap().len(), usize::from(decisions));
+        assert_eq!(provider.generation_requests.lock().unwrap().len(), usize::from(!decisions));
+    }
+}
+
+#[tokio::test]
+async fn generation_failure_can_recover_on_the_main_model() {
+    let mut provider = ScriptedProvider {
+        generation: None,
+        fallback_generation: Some("SAFE"),
+        ..Default::default()
+    };
+    assert!(run(&mut provider, false).await.0.unwrap().is_none());
+    let requests = provider.generation_requests.lock().unwrap();
+    assert_eq!(
+        requests.iter().map(|request| request.model.as_str()).collect::<Vec<_>>(),
+        ["gpt-6-luna", "gpt-6-astra"]
+    );
+}
+
+#[tokio::test]
+async fn tool_call_response_cannot_establish_safety_and_keeps_retry_limits() {
+    for decisions in [false, true] {
+        let mut provider = ScriptedProvider {
+            choice: None,
+            generation: Some("SAFE"),
+            generation_tool_call: true,
+            ..Default::default()
+        };
+        let (result, stats) = run(&mut provider, decisions).await;
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "prompt-injection probe returned an incomplete or tool-call response"
+        );
+        let attempts = if decisions { 1 } else { 2 };
+        assert_eq!(provider.generation_requests.lock().unwrap().len(), attempts);
+        assert_eq!(stats.total_usage().input_tokens, if decisions { 448 } else { 622 });
+    }
+}
+
+#[tokio::test]
+async fn truncated_safe_probe_is_inconclusive_and_preserves_usage() {
+    let mut provider = ScriptedProvider {
+        generation: Some("SAFE"),
+        generation_finish: uni::FinishReason::Length,
+        ..Default::default()
+    };
+    let (result, stats) = run(&mut provider, false).await;
+    assert!(result.is_err(), "a truncated SAFE label must not establish safety");
+    assert_eq!(provider.generation_requests.lock().unwrap().len(), 2);
+    assert_eq!(stats.total_usage().input_tokens, 622);
+    assert_eq!(stats.total_usage().output_tokens, 4);
 }
 
 #[tokio::test]

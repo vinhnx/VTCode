@@ -4,7 +4,7 @@ use vtcode_core::llm::provider as uni;
 use super::super::response_processing::prepare_tool_calls;
 use super::PLANNING_WORKFLOW_REMINDER;
 use super::interview_payload::build_fallback_question;
-use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
+use crate::agent::runloop::unified::turn::context::{NoOutputFacts, TurnProcessingResult};
 
 pub(super) fn strip_assistant_text(processing_result: TurnProcessingResult) -> TurnProcessingResult {
     match processing_result {
@@ -19,8 +19,8 @@ pub(super) fn strip_assistant_text(processing_result: TurnProcessingResult) -> T
             reasoning,
             reasoning_details,
         },
-        TurnProcessingResult::TextResponse { .. } => TurnProcessingResult::Empty,
-        TurnProcessingResult::Empty | TurnProcessingResult::Refusal { .. } => processing_result,
+        TurnProcessingResult::TextResponse { .. } => TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
+        TurnProcessingResult::Empty { .. } | TurnProcessingResult::Refusal { .. } => processing_result,
     }
 }
 
@@ -59,7 +59,7 @@ pub(super) fn maybe_append_planning_workflow_reminder(processing_result: TurnPro
                 proposed_plan,
             }
         }
-        TurnProcessingResult::Empty | TurnProcessingResult::Refusal { .. } => processing_result,
+        TurnProcessingResult::Empty { .. } | TurnProcessingResult::Refusal { .. } => processing_result,
     }
 }
 
@@ -113,7 +113,7 @@ pub(super) fn inject_planning_workflow_interview(
             reasoning_details,
         },
         TurnProcessingResult::Refusal { .. } => processing_result,
-        TurnProcessingResult::Empty => TurnProcessingResult::ToolCalls {
+        TurnProcessingResult::Empty { .. } => TurnProcessingResult::ToolCalls {
             tool_calls: prepare_tool_calls(vec![call]),
             assistant_text: String::new(),
             reasoning: Vec::new(),

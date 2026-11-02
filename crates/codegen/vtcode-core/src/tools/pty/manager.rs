@@ -237,6 +237,9 @@ impl PtyManager {
                 sandbox_active,
             );
 
+            #[cfg(unix)]
+            apply_process_owner(&mut builder, &exec_program, &exec_args)?;
+
             let pty_system = native_pty_system();
             let pair = pty_system.openpty(size).context("failed to allocate PTY pair")?;
 
@@ -580,6 +583,9 @@ impl PtyManager {
             sandbox_active,
         );
 
+        #[cfg(unix)]
+        apply_process_owner(&mut builder, &exec_program, &exec_args)?;
+
         let child = pair
             .slave
             .spawn_command(builder)
@@ -836,6 +842,21 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
     fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {
         ensure_path_within_workspace(candidate, &self.workspace_root).map(|_| ())
     }
+}
+
+/// Apply lifetime ownership after environment/sandbox selection, retaining the
+/// builder's PTY, cwd, and environment policy and the admitted command's argv.
+#[cfg(unix)]
+fn apply_process_owner(builder: &mut CommandBuilder, program: &str, args: &[String]) -> Result<()> {
+    use vtcode_bash_runner::process_owner::{OWNER_SOCKET_ENV, OwnedCommand};
+    if let Some(owned) = OwnedCommand::from_environment(program.as_ref(), args, None)? {
+        let argv = builder.get_argv_mut();
+        argv.clear();
+        argv.push(owned.executable.into_os_string());
+        argv.extend(owned.arguments);
+        builder.env(OWNER_SOCKET_ENV, owned.owner_socket);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

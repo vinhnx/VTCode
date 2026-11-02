@@ -100,6 +100,7 @@ pub enum PipeStdinMode {
 
 /// Options for spawning a pipe-based process.
 #[derive(Clone)]
+#[must_use = "spawn options must be passed to a spawn function"]
 pub struct PipeSpawnOptions {
     /// The program to execute.
     program: String,
@@ -170,10 +171,29 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
         anyhow::bail!("missing program for pipe spawn");
     }
 
+    #[cfg(unix)]
+    let owned = crate::process_owner::OwnedCommand::from_environment(
+        opts.program.as_ref(),
+        opts.args.iter(),
+        opts.arg0.as_deref().map(std::ffi::OsStr::new),
+    )?;
+
+    #[cfg(unix)]
+    let mut command = match &owned {
+        Some(owned) => {
+            let mut command = Command::new(&owned.executable);
+            command.args(&owned.arguments);
+            command
+        }
+        None => Command::new(&opts.program),
+    };
+    #[cfg(not(unix))]
     let mut command = Command::new(&opts.program);
 
     #[cfg(unix)]
-    if let Some(ref arg0) = opts.arg0 {
+    if owned.is_none()
+        && let Some(ref arg0) = opts.arg0
+    {
         command.arg0(arg0);
     }
 
@@ -204,9 +224,16 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
         }
     }
 
-    for arg in &opts.args {
-        command.arg(arg);
+    #[cfg(unix)]
+    if let Some(owned) = &owned {
+        // Environment filtering remains authoritative; add only this private
+        // lifetime endpoint after applying the admitted command's environment.
+        command.env(crate::process_owner::OWNER_SOCKET_ENV, &owned.owner_socket);
+    } else {
+        command.args(&opts.args);
     }
+    #[cfg(not(unix))]
+    command.args(&opts.args);
 
     match opts.stdin_mode {
         PipeStdinMode::Piped => {
@@ -335,6 +362,12 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
 
 /// Spawn a process using regular pipes (no PTY), returning handles for stdin, output, and exit.
 ///
+/// Copies the borrowed arguments, environment, and optional `arg0` into owned
+/// spawn options. `arg0` overrides Unix `argv[0]`; other platforms ignore it.
+///
+/// # Errors
+/// Returns launch or pipe setup failures with process context.
+///
 /// # Example
 /// ```ignore
 /// use vtcode_bash_runner::pipe::spawn_process;
@@ -342,7 +375,7 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
 /// use std::path::Path;
 ///
 /// let env: HashMap<String, String> = std::env::vars().collect();
-/// let spawned = spawn_process("echo", &["hello".into()], Path::new("."), &env, &None).await?;
+/// let spawned = spawn_process("echo", &["hello".into()], Path::new("."), &env, None).await?;
 /// let output_rx = spawned.output_rx;
 /// let exit_code = spawned.exit_rx.await?;
 /// ```
@@ -351,14 +384,14 @@ pub async fn spawn_process(
     args: &[String],
     cwd: &Path,
     env: &HashMap<String, String>,
-    arg0: &Option<String>,
+    arg0: Option<&str>,
 ) -> Result<SpawnedProcess> {
     let opts = PipeSpawnOptions {
         program: program.to_string(),
         args: args.to_vec(),
         cwd: cwd.to_path_buf(),
         env: Some(env.clone()),
-        arg0: arg0.clone(),
+        arg0: arg0.map(str::to_owned),
         stdin_mode: PipeStdinMode::Piped,
         lossless_output: false,
     };
@@ -368,19 +401,23 @@ pub async fn spawn_process(
 /// Spawn a process using regular pipes, but close stdin immediately.
 ///
 /// This is useful for commands that should see EOF on stdin immediately.
+/// Borrowed inputs and Unix `arg0` have the same semantics as [`spawn_process`].
+///
+/// # Errors
+/// Returns launch or pipe setup failures with process context.
 pub async fn spawn_process_no_stdin(
     program: &str,
     args: &[String],
     cwd: &Path,
     env: &HashMap<String, String>,
-    arg0: &Option<String>,
+    arg0: Option<&str>,
 ) -> Result<SpawnedProcess> {
     let opts = PipeSpawnOptions {
         program: program.to_string(),
         args: args.to_vec(),
         cwd: cwd.to_path_buf(),
         env: Some(env.clone()),
-        arg0: arg0.clone(),
+        arg0: arg0.map(str::to_owned),
         stdin_mode: PipeStdinMode::Null,
         lossless_output: false,
     };
@@ -417,7 +454,7 @@ mod tests {
         base_args.push("hello".to_string());
 
         let env: HashMap<String, String> = std::env::vars().collect();
-        let spawned = spawn_process(&program, &base_args, Path::new("."), &env, &None).await?;
+        let spawned = spawn_process(&program, &base_args, Path::new("."), &env, None).await?;
 
         let exit_code = spawned.exit_rx.await.unwrap_or(-1);
         assert_eq!(exit_code, 0);
@@ -442,7 +479,7 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         let env: HashMap<String, String> = HashMap::new();
 
-        let spawned = spawn_process("sh", &["-c".into(), "echo ok".into()], dir.path(), &env, &None)
+        let spawned = spawn_process("sh", &["-c".into(), "echo ok".into()], dir.path(), &env, None)
             .await
             .expect("spawn");
 

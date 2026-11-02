@@ -2,6 +2,71 @@ use super::*;
 use crate::provider::tool::sanitize_tool_description;
 use serde_json::json;
 
+struct AuxiliaryBudgetProvider;
+
+#[async_trait::async_trait]
+impl LLMProvider for AuxiliaryBudgetProvider {
+    fn name(&self) -> &str {
+        "auxiliary-budget-test"
+    }
+    fn supports_reasoning(&self, model: &str) -> bool {
+        model != "plain"
+    }
+    fn supported_reasoning_efforts(&self, model: &str) -> &'static [&'static str] {
+        match model {
+            "low" => &["low", "high"],
+            "high-only" => &["high"],
+            _ => &[],
+        }
+    }
+    async fn generate(&self, _: LLMRequest) -> Result<LLMResponse, LLMError> {
+        panic!("budget policy must not make provider requests")
+    }
+    fn supported_models(&self) -> Vec<String> {
+        vec![]
+    }
+    fn validate_request(&self, _: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn auxiliary_output_budget_reserves_reasoning_and_recomputes_after_model_change() {
+    let mut request = LLMRequest {
+        model: "low".into(),
+        reasoning_effort: Some(vtcode_config::types::ReasoningEffortLevel::High),
+        temperature: Some(0.3),
+        top_p: Some(0.8),
+        top_k: Some(10),
+        ..Default::default()
+    };
+    request.set_auxiliary_output_budget(&AuxiliaryBudgetProvider, 80);
+    assert_eq!(request.max_tokens, Some(2128));
+    assert_eq!(request.reasoning_effort, Some(vtcode_config::types::ReasoningEffortLevel::Low));
+    assert_eq!(request.verbosity, Some(vtcode_config::types::VerbosityLevel::Low));
+    assert!(request.temperature.is_none() && request.top_p.is_none() && request.top_k.is_none());
+    request.model = "plain".into();
+    request.set_auxiliary_output_budget(&AuxiliaryBudgetProvider, 8);
+    assert_eq!(request.max_tokens, Some(8));
+    assert_eq!(request.reasoning_effort, None);
+}
+
+#[test]
+fn auxiliary_output_budget_handles_implicit_reasoning_and_arithmetic_boundaries() {
+    let mut request = LLMRequest { model: "high-only".into(), ..Default::default() };
+    request.set_auxiliary_output_budget(&AuxiliaryBudgetProvider, 160);
+    assert_eq!(request.max_tokens, Some(2208));
+    assert_eq!(request.reasoning_effort, None);
+    request.model = "implicit".into();
+    request.set_auxiliary_output_budget(&AuxiliaryBudgetProvider, u32::MAX);
+    assert_eq!(request.max_tokens, Some(u32::MAX));
+    request.model = "plain".into();
+    request.temperature = Some(0.2);
+    request.set_auxiliary_output_budget(&AuxiliaryBudgetProvider, 0);
+    assert_eq!(request.max_tokens, Some(1));
+    assert_eq!(request.temperature, Some(0.2));
+}
+
 #[tokio::test]
 async fn decisions_context_window_wrapper_forwards_capability_and_request() {
     struct DecisionsProvider;

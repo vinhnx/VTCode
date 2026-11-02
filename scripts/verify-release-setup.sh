@@ -106,7 +106,8 @@ test_npm_package() {
         if jq -e '.bin' npm/package.json >/dev/null 2>&1; then
             print_success "package.json has 'bin' field"
             
-            local bin_path=$(jq -r '.bin.vtcode' npm/package.json 2>/dev/null || echo "")
+            local bin_path
+            bin_path=$(jq -r '.bin.vtcode' npm/package.json 2>/dev/null || echo "")
             if [[ "$bin_path" == "bin/vtcode" ]]; then
                 print_success "package.json bin field points to bin/vtcode"
             else
@@ -144,7 +145,8 @@ test_npm_package() {
         fi
         
         # Check file size (should be ~1KB)
-        local size=$(wc -c < "npm/bin/vtcode")
+        local size
+        size=$(wc -c < "npm/bin/vtcode")
         if [[ $size -gt 100 && $size -lt 2000 ]]; then
             print_success "npm/bin/vtcode has reasonable size ($size bytes)"
         else
@@ -281,12 +283,14 @@ test_github_release() {
         print_success "Can list GitHub releases"
         
         # Show latest release
-        local latest=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "unknown")
+        local latest
+        latest=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "unknown")
         print_info "Latest release: $latest"
         
         # Check if latest release has assets
         if [[ "$latest" != "unknown" ]]; then
-            local asset_count=$(gh release view "$latest" --json assets -q '.assets | length' 2>/dev/null || echo "0")
+            local asset_count
+            asset_count=$(gh release view "$latest" --json assets -q '.assets | length' 2>/dev/null || echo "0")
             print_info "Assets in latest release: $asset_count"
             
             if [[ $asset_count -gt 0 ]]; then
@@ -315,7 +319,8 @@ test_account_switch() {
     
     # Show current account
     if command -v gh &> /dev/null && gh auth status >/dev/null 2>&1; then
-        local account=$(gh auth status --hostname github.com 2>&1 | grep "Active account:" | awk '{print $3}' || echo "unknown")
+        local account
+        account=$(gh auth status --hostname github.com 2>&1 | grep "Active account:" | awk '{print $3}' || echo "unknown")
         print_info "Current account: $account"
     fi
 }

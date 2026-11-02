@@ -537,12 +537,17 @@ use_root_config = true
     #[tokio::test]
     async fn load_exec_vt_config_preserves_launch_primary_agent_metadata_for_same_workspace() {
         let workspace = tempfile::tempdir().expect("workspace");
+        let mut launch_config = VTCodeConfig::default();
+        launch_config.permissions.deny = vec!["bash".into(), "edit".into()];
+        launch_config.automation.full_auto.allowed_tools = vec!["read_file".into()];
 
-        let loaded = load_exec_vt_config(&VTCodeConfig::default(), workspace.path(), workspace.path(), true)
+        let loaded = load_exec_vt_config(&launch_config, workspace.path(), workspace.path(), true)
             .await
             .expect("same-workspace config should load");
 
         assert!(loaded.primary_agent_explicitly_configured);
+        assert_eq!(loaded.config.permissions.deny, ["bash", "edit"]);
+        assert_eq!(loaded.config.automation.full_auto.allowed_tools, ["read_file"]);
     }
 
     #[test]

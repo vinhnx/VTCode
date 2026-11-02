@@ -14,7 +14,13 @@ The registry keeps one execution path. These private modules divide ownership:
 
 `execute_public_tool_request` delegates directly to the request-attempt lifecycle.
 The prepared-request wrapper constructs the policy snapshot and requires fresh
-safety admission. Preflight validation and safety admission are separate flags;
+safety admission. Headless prepared calls pass the same absolute deadline to
+registry retries and the outer timeout. An HTTP failure whose Retry-After cannot
+fit the remaining budget is returned as HTTP evidence instead of being replaced
+by a later generic timeout. A zero wall-clock setting disables the outer bound;
+transport timeouts and retry limits still apply. Unrepresentable wall-clock
+budgets return a configuration-parameter error before dispatch instead of panicking.
+Preflight validation and safety admission are separate flags;
 neither grants operator approval for unsandboxed shell execution.
 
 The request lifecycle rejects approval-required shell requests before attempting
@@ -100,3 +106,8 @@ Run the request lifecycle tests and registry regressions with:
 ```sh
 cargo nextest run --locked -p vtcode-core -E 'test(execution_attempts) | test(tools::registry)'
 ```
+
+The deadline comparison follows the same ownership principle as OpenAI Codex's
+[`codex-rs/codex-mcp/src/binding.rs`](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/codex-mcp/src/binding.rs)
+(Apache-2.0, copyright 2025 OpenAI): pass remaining time to lower execution layers.
+This is a design comparison, not a claim that upstream has identical retry guarantees.

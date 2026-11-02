@@ -230,10 +230,14 @@ impl FileSearchRpcHandler {
             })
             .collect();
 
+        // Derive truncation from the authoritative total count, not page
+        // saturation: a page that happens to be exactly full is complete.
+        let truncated = results.total_match_count > matches.len();
+
         Ok(json!({
             "matches": matches,
             "total_match_count": results.total_match_count,
-            "truncated": matches.len() >= max_results,
+            "truncated": truncated,
         }))
     }
 
@@ -397,5 +401,42 @@ mod tests {
         assert_eq!(deserialized.path, "src/main.rs");
         assert_eq!(deserialized.score, 100u32);
         assert_eq!(deserialized.indices, Some(vec![4u32, 5u32]));
+    }
+
+    #[tokio::test]
+    async fn search_files_truncated_reflects_total_match_count() {
+        let workspace = tempfile::tempdir().unwrap();
+        let file_names = [
+            "zzsearchmatch_one.txt",
+            "zzsearchmatch_two.txt",
+            "zzsearchmatch_three.txt",
+        ];
+        for name in file_names {
+            std::fs::write(workspace.path().join(name), b"x").unwrap();
+        }
+
+        let request = |max_results: usize| SearchFilesRequest {
+            pattern: "zzsearchmatch".to_string(),
+            workspace_root: workspace.path().to_path_buf(),
+            max_results,
+            exclude_patterns: Vec::new(),
+            respect_gitignore: false,
+        };
+
+        // An exactly full page that also holds every match is complete.
+        let complete_page = FileSearchRpcHandler::handle_search_files(&json!(request(file_names.len())), None)
+            .await
+            .unwrap();
+        assert_eq!(complete_page["matches"].as_array().unwrap().len(), file_names.len());
+        assert_eq!(complete_page["total_match_count"], file_names.len());
+        assert_eq!(complete_page["truncated"], false);
+
+        // A page smaller than the total match count is truncated.
+        let short_page = FileSearchRpcHandler::handle_search_files(&json!(request(2)), None)
+            .await
+            .unwrap();
+        assert_eq!(short_page["matches"].as_array().unwrap().len(), 2);
+        assert_eq!(short_page["total_match_count"], file_names.len());
+        assert_eq!(short_page["truncated"], true);
     }
 }

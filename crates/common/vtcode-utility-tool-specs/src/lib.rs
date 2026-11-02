@@ -19,14 +19,19 @@ mod responses_api;
 mod tool_kind;
 
 pub use collaboration::{
-    AGENT_DESCRIPTION, SUBAGENT_REASONING_EFFORT_VALUES, agent_parameters, close_agent_parameters,
-    request_user_input_description, request_user_input_parameters, resume_agent_parameters, send_input_parameters,
-    spawn_agent_parameters, spawn_background_subprocess_parameters, wait_agent_parameters,
+    AGENT_DESCRIPTION, ANSWER_SESSION_DESCRIPTION, ASK_SESSION_DESCRIPTION, LIST_SESSIONS_DESCRIPTION,
+    SUBAGENT_REASONING_EFFORT_VALUES, agent_parameters, answer_session_parameters, ask_session_parameters,
+    close_agent_parameters, list_sessions_parameters, request_user_input_description, request_user_input_parameters,
+    resume_agent_parameters, send_input_parameters, spawn_agent_parameters, spawn_background_subprocess_parameters,
+    wait_agent_parameters,
 };
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
 pub use matrix::{MATRIX_DESCRIPTION, matrix_parameters};
 #[cfg(feature = "mcp")]
-pub use mcp_tool::{ParsedMcpTool, parse_mcp_tool};
+pub use mcp_tool::{
+    MCP_UI_EXTENSION_ID, MCP_UI_RESOURCE_MIME_TYPE, MCP_UI_RESOURCE_SCHEME, McpToolVisibility, McpUiResourceMeta,
+    McpUiToolMeta, ParsedMcpTool, parse_mcp_tool, parse_ui_resource_meta,
+};
 pub use responses_api::{FreeformTool, FreeformToolFormat, ResponsesApiTool};
 pub(crate) use tool_kind::{CanonicalToolMeta, TokenBucket, ToolKind, ToolNamespace};
 

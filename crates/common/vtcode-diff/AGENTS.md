@@ -19,6 +19,7 @@
 - All expensive diff and intraline paths require explicit bounds or deadlines.
 - Layout emits semantic rows; applications supply syntax and color policy.
 - Shared responsive constants keep side-by-side and unified gutter decisions consistent across renderers; measured widths are post-indent/content widths.
+- Public and internal functions document Creusot-style contracts: `Requires`/`Ensures`/`Termination` in the doc comment, with loop invariants inline. Invariants that must hold are enforced with `debug_assert!` (kept in release) plus total `saturating_*`/checked arithmetic on offsets and counts — never plain `+` on user-scaled values. `DiffHunk::counts_match` is the executable form of the hunk invariant; `validate_hunk_counts` delegates to it.
 
 ## Dependencies
 

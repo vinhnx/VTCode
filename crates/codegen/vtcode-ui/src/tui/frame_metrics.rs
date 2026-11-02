@@ -27,10 +27,9 @@ pub fn initialize_from_env() {
     if enabled() {
         return;
     }
-    let on = std::env::var_os(ENV_FLAG).is_some_and(|value| {
-        let value = value.to_string_lossy();
-        matches!(value.as_ref(), "1" | "true" | "yes" | "on")
-    });
+    // Canonical env-flag set (1/true/yes/on/debug, trimmed, case-insensitive) via
+    // the shared parser instead of re-declaring the accepted values here.
+    let on = vtcode_commons::utils::env_flag_enabled(ENV_FLAG);
     ENABLED.store(on, Ordering::Relaxed);
 }
 

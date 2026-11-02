@@ -1,25 +1,98 @@
 //! Archived history-picker prompt cleaning: harness filtering and wrapper stripping.
 //!
 //! Extracted from `session_bootstrap.rs` so bootstrap/thread setup stays
-//! separate from user-typed text recovery. No behavior change; history order
-//! and asymmetric wrapper handling are preserved and covered by
-//! `session_bootstrap/tests.rs`.
+//! separate from user-typed text recovery. History order and asymmetric
+//! wrapper handling are preserved and covered by `session_bootstrap/tests.rs`.
 
 use crate::agent::runloop::unified::turn::is_internal_harness_follow_up;
 use crate::agent::runloop::unified::webmcp::{
     TURN_HANDOFF_DIFF_OPEN, TURN_HANDOFF_DIFF_TAG_OPEN, TURN_HANDOFF_PREFIX, TURN_HANDOFF_REQUEST_HEADER,
     is_turn_handoff,
 };
+use crate::cli::exec::{
+    EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX, EXEC_TASK_INSTRUCTIONS_PREFIX, REVIEW_TASK_INSTRUCTIONS_PREFIX,
+};
+use vtcode_commons::message_metadata::MessageMetadata;
+
+/// Stable openings of harness-authored prompts that are stored as ordinary
+/// `User`-role turns but were never typed by the user.
+///
+/// These cover AgentRunner recovery injections that legacy archives did not
+/// tag as synthetic. Exec task scaffolding is structural (see
+/// [`looks_like_exec_task_prompt`]) so a user prompt that merely starts with
+/// "Task:" is never dropped.
+const HARNESS_PROMPT_PREFIXES: &[&str] = &[
+    EXEC_TASK_INSTRUCTIONS_PREFIX,
+    EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX,
+    REVIEW_TASK_INSTRUCTIONS_PREFIX,
+    "It looks like you're repeating the same response.",
+    "No tool calls or completion for ",
+    "You have reached the tool-call iteration limit of ",
+    "Evaluator rejected the candidate implementation in round ",
+    "The following tool calls were blocked by the safety escalation gate:",
+    "I've tried multiple approaches but the safety escalation gate keeps blocking my tool calls:",
+    "Durable matrix results: ",
+    "This is the final planning turn within the configured budget.",
+    "Task tracker steps still open: ",
+    "The harness task tracker could not be loaded",
+    "Run a verifier and observe its terminal exit before completing changed code.",
+    "Verification failed: ",
+    "Unverified: ",
+];
+
+/// True for the headless exec/review/eval task frame
+/// (`Task: <title>` followed by `Description: <prompt>`).
+///
+/// The two-line shape is the structural signature produced by
+/// `core::agent::conversation::build_conversation`; matching the shape instead
+/// of the bare `Task: ` prefix keeps genuine prompts that start with "Task:"
+/// in reverse history.
+fn looks_like_exec_task_prompt(trimmed: &str) -> bool {
+    let mut lines = trimmed.lines();
+    let Some(first) = lines.next() else {
+        return false;
+    };
+    first.starts_with("Task: ") && lines.next().is_some_and(|line| line.starts_with("Description: "))
+}
+
+/// True when an archived `User`-role message is machine-authored.
+///
+/// Non-`user_input` provenance (`synthetic`, `llm_response`, `tool_result`,
+/// `system`) is authoritative and rejected. `user_input` still runs the stable
+/// opening checks: legacy archives tagged some harness recovery notices as
+/// `user_input`, so the prefix list remains the safety net for them. The
+/// structural exec-task frame is skipped only for trusted `user_input`
+/// metadata, because legacy task frames carry no metadata at all.
+fn is_harness_authored_prompt(trimmed: &str, metadata: Option<&MessageMetadata>) -> bool {
+    let source = metadata.and_then(MessageMetadata::source);
+    if source.is_some_and(|source| source != "user_input") {
+        return true;
+    }
+    let trusted_user_input = source == Some("user_input");
+    if !trusted_user_input && looks_like_exec_task_prompt(trimmed) {
+        return true;
+    }
+    HARNESS_PROMPT_PREFIXES.iter().any(|prefix| trimmed.starts_with(prefix))
+}
 
 /// Map one archived message body to a history-picker entry.
 ///
 /// Returns `None` for empty, harness-generated, or wrapper-only content so
 /// reverse history only surfaces genuine user-typed prompts.
+#[cfg(test)]
 pub(super) fn archived_prompt_content(trimmed: &str) -> Option<String> {
+    archived_prompt_content_with_metadata(trimmed, None)
+}
+
+/// `archived_prompt_content` with archived provenance metadata.
+pub(super) fn archived_prompt_content_with_metadata(
+    trimmed: &str,
+    metadata: Option<&MessageMetadata>,
+) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    if is_internal_harness_follow_up(trimmed) {
+    if is_internal_harness_follow_up(trimmed) || is_harness_authored_prompt(trimmed, metadata) {
         return None;
     }
     let cleaned = clean_archived_user_content(trimmed);
@@ -27,7 +100,7 @@ pub(super) fn archived_prompt_content(trimmed: &str) -> Option<String> {
     if cleaned_trimmed.is_empty() {
         return None;
     }
-    if is_internal_harness_follow_up(cleaned_trimmed) {
+    if is_internal_harness_follow_up(cleaned_trimmed) || is_harness_authored_prompt(cleaned_trimmed, metadata) {
         return None;
     }
     Some(cleaned)

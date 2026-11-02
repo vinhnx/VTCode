@@ -767,6 +767,24 @@ fn every_error_response_has_next_action() {
 }
 
 #[test]
+fn contextual_policy_denial_preserves_reason_and_approval_guidance() {
+    let err =
+        anyhow::anyhow!("domain docs.example is blocked by configured allowlist").context("request validation failed");
+    let response = web_fetch_error_response("https://docs.example/guide", 1000, 5, &err);
+    assert_eq!(response["error_type"], "policy_blocked");
+    assert!(
+        response["error"]
+            .as_str()
+            .unwrap()
+            .contains("domain docs.example is blocked by configured allowlist")
+    );
+    let action = response["next_action"].as_str().unwrap();
+    assert!(action.contains("web_fetch approval and domain restrictions"));
+    assert!(action.contains("do not bypass"));
+    assert!(response.get("http_status").is_none());
+}
+
+#[test]
 fn extract_http_status_delegates_to_classify_helpers() {
     // The local function delegates to `classify_helpers::extract_http_status`,
     // which is the canonical parser. These cases mirror the helpers'
@@ -778,4 +796,121 @@ fn extract_http_status_delegates_to_classify_helpers() {
     );
     assert_eq!(extract_http_status("status:  500 Internal"), Some(500));
     assert_eq!(extract_http_status("no status here"), None);
+}
+
+#[test]
+fn http_retry_after_survives_model_error_conversion() {
+    let failure = errors::HttpFetchFailure { status: 429, retry_after_ms: Some(9000) };
+    let output = web_fetch_error_response("https://example.com/", 1000, 30, &failure.into());
+    let error = crate::tools::registry::ToolExecutionError::from_tool_output(&output).unwrap();
+    let wire = error.to_json_value();
+    assert_eq!(wire["error"]["http_status"], 429);
+    assert_eq!(wire["error"]["retry_after_ms"], 9000);
+    assert!(
+        wire["error"]["recovery_suggestions"][0]
+            .as_str()
+            .unwrap()
+            .contains("At most two")
+    );
+    assert_eq!(errors::retry_after_ms("6"), Some(6000));
+    assert_eq!(errors::retry_after_ms("18446744073709551615"), Some(u64::MAX));
+    assert_eq!(errors::retry_after_ms("Wed, 21 Oct 2015 07:28:00 GMT"), Some(0));
+    assert_eq!(errors::retry_after_ms("not a delay"), None);
+}
+
+#[tokio::test]
+async fn redirected_aliases_and_direct_fetches_share_the_response_origins_budget() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let target_sends = Arc::new(AtomicUsize::new(0));
+    let alias_sends = Arc::new(AtomicUsize::new(0));
+    let target_count = target_sends.clone();
+    let alias_count = alias_sends.clone();
+    let server = tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut bytes = [0_u8; 1024];
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                let count = stream.read(&mut bytes).await.unwrap();
+                if count == 0 {
+                    break;
+                }
+                request.extend_from_slice(&bytes[..count]);
+            }
+            let request = String::from_utf8_lossy(&request);
+            let response = if request.to_ascii_lowercase().contains("host: limited.example:") {
+                target_count.fetch_add(1, Ordering::SeqCst);
+                "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    .to_owned()
+            } else {
+                alias_count.fetch_add(1, Ordering::SeqCst);
+                format!(
+                    "HTTP/1.1 302 Found\r\nLocation: http://limited.example:{}/resource\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    address.port()
+                )
+            };
+            stream.write_all(response.as_bytes()).await.unwrap();
+        }
+    });
+    let shared = Arc::new(request_budget::FetchRequestBudget::default());
+    let budget = request_budget::RequestBudget::new(shared.clone(), Instant::now() + Duration::from_secs(5));
+    let redirect_budget = budget.clone();
+    // Real HTTP transport with fixed test-only DNS mappings; production URL
+    // policy remains exercised separately by the rejection tests above.
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .resolve("first.example", address)
+        .resolve("second.example", address)
+        .resolve("third.example", address)
+        .resolve("limited.example", address)
+        .timeout(Duration::from_secs(2))
+        .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+            follow_with_budget(attempt, Some(&redirect_budget))
+        }))
+        .build()
+        .unwrap();
+    let fetch = |host: &str| format!("http://{host}:{}/resource", address.port());
+    let first = fetch_response(&client, &fetch("first.example"), 100, 5, Some(&budget))
+        .await
+        .unwrap_err();
+    let error = web_fetch_error_response("first.example", 100, 5, &first);
+    assert_eq!(error["error"]["http_status"], 429);
+    assert!(
+        error["error"]["debug_context"]["metadata"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry[0] == "effective_origin" && entry[1].as_str().unwrap().contains("limited.example") })
+    );
+    let second = fetch_response(&client, &fetch("second.example"), 100, 5, Some(&budget))
+        .await
+        .unwrap_err();
+    assert_eq!(web_fetch_error_response("second.example", 100, 5, &second)["error"]["http_status"], 429);
+    let third = fetch("third.example");
+    let direct = fetch("limited.example");
+    let (alias, direct) = tokio::join!(
+        fetch_response(&client, &third, 100, 5, Some(&budget)),
+        fetch_response(&client, &direct, 100, 5, Some(&budget)),
+    );
+    for failure in [alias.unwrap_err(), direct.unwrap_err()] {
+        let output = web_fetch_error_response("test", 100, 5, &failure);
+        assert_eq!(output["error"]["http_status"], 429);
+        assert_eq!(output["error"]["retryable"], false);
+    }
+    assert_eq!(target_sends.load(Ordering::SeqCst), 2, "only two requests may reach the limiting server");
+    assert_eq!(alias_sends.load(Ordering::SeqCst), 3, "redirect sources retain independent accounting");
+    shared.clear();
+    assert!(
+        fetch_response(&client, &fetch("limited.example"), 100, 5, Some(&budget))
+            .await
+            .is_err()
+    );
+    assert_eq!(target_sends.load(Ordering::SeqCst), 3, "a genuine request reset admits a fresh send");
+    server.abort();
 }

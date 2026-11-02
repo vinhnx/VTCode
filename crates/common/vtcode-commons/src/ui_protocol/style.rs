@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use anstyle::{Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 
+use super::InlineMessageKind;
+
 /// Inline text styling with foreground/background color and text effects.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InlineTextStyle {
@@ -95,6 +97,16 @@ impl InlineTextStyle {
 pub struct InlineSegment {
     pub text: String,
     pub style: Arc<InlineTextStyle>,
+}
+
+/// One transcript line carried by a batched append.
+///
+/// Resume and rewind reload the transcript as one batch so the viewport paints
+/// the final state once instead of scrolling through intermediate frames.
+#[derive(Clone, Debug)]
+pub struct InlineTranscriptLine {
+    pub kind: InlineMessageKind,
+    pub segments: Vec<InlineSegment>,
 }
 
 /// A clickable link target inside a transcript line.

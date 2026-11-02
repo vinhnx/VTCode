@@ -55,14 +55,17 @@ enabled = true
 [agent.persistent_memory.memories]
 generate_memories = true
 use_memories = true
-# extract_model = "gpt-4.1-mini"
-# consolidation_model = "gpt-4.1-mini"
+# extract_model = "gpt-6-luna"
+# consolidation_model = "gpt-6-luna"
 
 [telemetry]
 atif_enabled = true
 bottleneck_tracing = false
 
 [ui]
+# Application icon artwork: "dynamic" follows the active light/dark mode,
+# "light", "dark", "clear", and "tinted" pin one variant.
+# app_icon = "dynamic"
 # When omitted, reduced motion uses VTCODE_REDUCE_MOTION first, then a supported
 # OS accessibility preference (Windows, macOS, GNOME/KDE/XFCE on Linux).
 # Explicit true or false always wins.
@@ -80,3 +83,8 @@ exec_command = "prompt"
 write_stdin = "prompt"
 apply_patch = "prompt"
 code_search = "allow"
+
+# Optional OpenAI Responses minimum cache lifetime (30m by default).
+# 12h writes cost 2.5x ordinary input; 30m writes cost 1.25x.
+[prompt_cache.providers.openai]
+# prompt_cache_ttl = "12h"

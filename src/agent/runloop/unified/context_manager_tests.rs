@@ -197,7 +197,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
     assert_eq!(manager.current_token_usage(), 0);
 
     // Update with first response: prompt-side pressure becomes authoritative.
-    manager.update_token_usage(&Some(uni::Usage {
+    manager.update_token_usage(Some(&uni::Usage {
         prompt_tokens: 1000,
         completion_tokens: 500,
         total_tokens: 1500,
@@ -209,7 +209,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
     assert_eq!(manager.current_token_usage(), 1000);
 
     // Update with second response: usage tracks latest prompt pressure, not cumulative output.
-    manager.update_token_usage(&Some(uni::Usage {
+    manager.update_token_usage(Some(&uni::Usage {
         prompt_tokens: 2500,
         completion_tokens: 800,
         total_tokens: 3300,
@@ -225,7 +225,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
 fn test_update_token_usage_falls_back_when_prompt_missing() {
     let mut manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
-    manager.update_token_usage(&Some(uni::Usage {
+    manager.update_token_usage(Some(&uni::Usage {
         prompt_tokens: 0,
         completion_tokens: 800,
         total_tokens: 3300,
@@ -237,6 +237,29 @@ fn test_update_token_usage_falls_back_when_prompt_missing() {
 
     // Fallback estimate = total - completion.
     assert_eq!(manager.current_token_usage(), 2500);
+}
+
+#[test]
+fn unknown_or_absent_usage_preserves_known_prompt_pressure() {
+    let mut manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let known = uni::Usage { prompt_tokens: 137, ..Default::default() };
+    let unknown = uni::Usage::default();
+    let output_only = uni::Usage {
+        completion_tokens: 29,
+        total_tokens: 29,
+        ..Default::default()
+    };
+    let inconsistent = uni::Usage {
+        completion_tokens: 43,
+        total_tokens: 17,
+        ..Default::default()
+    };
+
+    manager.update_token_usage(Some(&known));
+    for usage in [None, Some(&unknown), Some(&output_only), Some(&inconsistent)] {
+        manager.update_token_usage(usage);
+        assert_eq!(manager.current_token_usage(), 137);
+    }
 }
 
 #[test]
@@ -280,7 +303,7 @@ async fn build_system_prompt_ignores_token_usage_updates() {
         .await
         .expect("prompt before token update");
 
-    manager.update_token_usage(&Some(uni::Usage {
+    manager.update_token_usage(Some(&uni::Usage {
         prompt_tokens: 180_000,
         completion_tokens: 2_000,
         total_tokens: 182_000,

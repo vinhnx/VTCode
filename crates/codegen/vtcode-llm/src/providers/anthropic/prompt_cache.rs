@@ -48,7 +48,7 @@ pub fn messages_cache_ttl_for_profile(
 ) -> &'static str {
     match profile {
         Some(PromptCacheProfile::BudgetContinuation) => get_profile_cache_ttl(settings),
-        None => get_messages_cache_ttl(settings),
+        None | Some(PromptCacheProfile::StablePrefix) => get_messages_cache_ttl(settings),
     }
 }
 

@@ -1,0 +1,941 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
+use anyhow::{Context, Result};
+use vtcode_core::llm::provider as uni;
+use vtcode_core::persistent_memory::{
+    MemoryMissingField, MemoryOpCandidate, MemoryOpKind, MemoryOpPlan, cleanup_persistent_memory,
+    forget_planned_persistent_memory_matches, list_persistent_memory_candidates, normalize_whitespace,
+    persist_remembered_memory_plan, persistent_memory_status, plan_forget_persistent_memory,
+    plan_remember_persistent_memory, truncate_for_fact,
+};
+use vtcode_core::session::SessionId;
+use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode, WizardStep};
+
+use crate::agent::runloop::slash_commands::SlashCommandOutcome;
+use crate::agent::runloop::unified::display::{display_user_message, reset_inline_input};
+use crate::agent::runloop::unified::turn::session::interaction_loop::{
+    InteractionLoopContext, InteractionOutcome, InteractionState,
+};
+use crate::agent::runloop::unified::turn::session::slash_commands::{
+    SlashCommandContext, SlashCommandControl, handle_outcome,
+};
+use crate::agent::runloop::unified::ui_interaction::start_loading_status;
+use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
+
+const MEMORY_MISSING_QUESTION_ID: &str = "memory.missing";
+const MEMORY_CONFIRM_ACCEPT: &str = "memory.confirm.accept";
+const MEMORY_CONFIRM_CANCEL: &str = "memory.confirm.cancel";
+const MEMORY_CLEANUP_ACCEPT: &str = "memory.cleanup.accept";
+const MEMORY_CLEANUP_CANCEL: &str = "memory.cleanup.cancel";
+const MEMORY_MATCH_PREVIEW_LIMIT: usize = 5;
+const MEMORY_DISABLED_HINT: &str = "Persistent memory is disabled. Use `/config memory` to enable it.";
+
+fn persistent_memory_enabled(ctx: &InteractionLoopContext<'_>) -> bool {
+    ctx.vt_cfg
+        .as_ref()
+        .map(vtcode_core::config::loader::VTCodeConfig::persistent_memory_enabled)
+        .unwrap_or(true)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MemoryPromptIntent {
+    Remember { request: String },
+    Forget { request: String },
+    Show,
+}
+
+enum MemoryPromptConfirmation {
+    Confirmed,
+    Cancelled,
+    Unavailable,
+}
+
+fn memory_operation_notice(intent: &MemoryPromptIntent) -> &'static str {
+    match intent {
+        MemoryPromptIntent::Remember { .. } => "Memory save requested. VT Code is preparing a normalized note.",
+        MemoryPromptIntent::Forget { .. } => "Memory removal requested. VT Code is matching normalized notes.",
+        MemoryPromptIntent::Show => "Opening persistent memory view.",
+    }
+}
+
+fn start_memory_loading(
+    ctx: &InteractionLoopContext<'_>,
+    state: &InteractionState<'_>,
+    message: impl Into<String>,
+) -> crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner {
+    start_loading_status(ctx.handle, state.input_status_state, message)
+}
+
+fn cleanup_fingerprint(status: &vtcode_core::persistent_memory::PersistentMemoryStatus) -> (usize, usize) {
+    (status.cleanup_status.suspicious_facts, status.cleanup_status.suspicious_summary_lines)
+}
+
+fn should_suppress_cleanup_confirmation(
+    dismissed_fingerprint: Option<(usize, usize)>,
+    status: &vtcode_core::persistent_memory::PersistentMemoryStatus,
+) -> bool {
+    dismissed_fingerprint == Some(cleanup_fingerprint(status))
+}
+
+pub(crate) async fn handle_memory_prompt(
+    input: &str,
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<Option<InteractionOutcome>> {
+    let Some(intent) = detect_memory_prompt_intent(input) else {
+        return Ok(None);
+    };
+
+    ctx.renderer.line(MessageStyle::Info, memory_operation_notice(&intent))?;
+
+    match intent {
+        MemoryPromptIntent::Show => handle_show_memory_intent(ctx, state).await,
+        MemoryPromptIntent::Remember { request } => {
+            let prior_assistant_reply = prior_assistant_reply_for_memory_request(&request, ctx.conversation_history);
+            if !persistent_memory_enabled(ctx) {
+                respond_to_memory_prompt(ctx, input, MEMORY_DISABLED_HINT)?;
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            }
+
+            if !maybe_cleanup_before_memory_mutation(ctx, state, input).await? {
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            }
+
+            let Some(plan) =
+                resolve_remember_plan(ctx, state, input, &request, prior_assistant_reply.as_deref()).await?
+            else {
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            };
+            if plan.kind == MemoryOpKind::Noop {
+                respond_to_memory_prompt(
+                    ctx,
+                    input,
+                    plan.message
+                        .as_deref()
+                        .unwrap_or("No durable memory note was identified, so nothing changed."),
+                )?;
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            }
+
+            match confirm_memory_plan(ctx, state, "Save Memory Note", "save", &describe_memory_plan(&plan)).await? {
+                MemoryPromptConfirmation::Confirmed => {}
+                MemoryPromptConfirmation::Cancelled => {
+                    respond_to_memory_prompt(ctx, input, "Cancelled memory save.")?;
+                    return Ok(Some(InteractionOutcome::DirectToolHandled));
+                }
+                MemoryPromptConfirmation::Unavailable => {
+                    respond_to_memory_prompt(
+                        ctx,
+                        input,
+                        "Memory updates require the inline confirmation UI. Open `/config memory` in inline UI to continue.",
+                    )?;
+                    return Ok(Some(InteractionOutcome::DirectToolHandled));
+                }
+            }
+
+            let save_spinner = start_memory_loading(ctx, state, "Saving memory note...");
+            let reply = match persist_remembered_memory_plan(ctx.config, ctx.vt_cfg.as_ref(), &plan).await {
+                Ok(Some(report)) if report.added_facts > 0 => match verify_saved_memory_plan(ctx, &plan).await {
+                    Ok(true) => format!(
+                        "Saved and verified {} normalized memory note(s) under {}.",
+                        report.added_facts,
+                        report.directory.display()
+                    ),
+                    Ok(false) => format!(
+                        "Saved {} normalized memory note(s) under {}, but verification failed. Open `/config memory` to inspect the saved note.",
+                        report.added_facts,
+                        report.directory.display()
+                    ),
+                    Err(err) => format!(
+                        "Saved {} normalized memory note(s) under {}, but verification failed: {err}. Open `/config memory` to inspect the saved note.",
+                        report.added_facts,
+                        report.directory.display()
+                    ),
+                },
+                Ok(Some(report)) => format!(
+                    "No new memory note was added. The normalized fact may already exist in {}.",
+                    report.directory.display()
+                ),
+                Ok(None) => "No memory note was added.".to_string(),
+                Err(err) => {
+                    format!("Couldn't save memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}")
+                }
+            };
+            drop(save_spinner);
+            respond_to_memory_prompt(ctx, input, &reply)?;
+            Ok(Some(InteractionOutcome::DirectToolHandled))
+        }
+        MemoryPromptIntent::Forget { request } => {
+            if !persistent_memory_enabled(ctx) {
+                respond_to_memory_prompt(ctx, input, MEMORY_DISABLED_HINT)?;
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            }
+
+            if !maybe_cleanup_before_memory_mutation(ctx, state, input).await? {
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            }
+
+            let candidates = load_memory_candidates(ctx).await?;
+            if candidates.is_empty() {
+                respond_to_memory_prompt(ctx, input, "No persistent memory notes are available to forget.")?;
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            }
+
+            let plan_spinner = start_memory_loading(ctx, state, "Planning memory removal...");
+            let plan = match plan_forget_persistent_memory(ctx.config, ctx.vt_cfg.as_ref(), &request, &candidates).await
+            {
+                Ok(Some(plan)) => plan,
+                Ok(None) => {
+                    drop(plan_spinner);
+                    respond_to_memory_prompt(ctx, input, "Persistent memory is disabled.")?;
+                    return Ok(Some(InteractionOutcome::DirectToolHandled));
+                }
+                Err(err) => {
+                    drop(plan_spinner);
+                    respond_to_memory_prompt(
+                        ctx,
+                        input,
+                        &format!(
+                            "Couldn't remove memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}"
+                        ),
+                    )?;
+                    return Ok(Some(InteractionOutcome::DirectToolHandled));
+                }
+            };
+            drop(plan_spinner);
+            if plan.kind == MemoryOpKind::Noop || plan.selected_ids.is_empty() {
+                respond_to_memory_prompt(
+                    ctx,
+                    input,
+                    plan.message
+                        .as_deref()
+                        .unwrap_or("No matching persistent memory notes were found."),
+                )?;
+                return Ok(Some(InteractionOutcome::DirectToolHandled));
+            }
+
+            match confirm_memory_plan(
+                ctx,
+                state,
+                "Forget Memory Note",
+                "forget",
+                &describe_forget_selection(&candidates, &plan),
+            )
+            .await?
+            {
+                MemoryPromptConfirmation::Confirmed => {}
+                MemoryPromptConfirmation::Cancelled => {
+                    respond_to_memory_prompt(ctx, input, "Cancelled memory removal.")?;
+                    return Ok(Some(InteractionOutcome::DirectToolHandled));
+                }
+                MemoryPromptConfirmation::Unavailable => {
+                    respond_to_memory_prompt(
+                        ctx,
+                        input,
+                        "Memory removals require the inline confirmation UI. Open `/config memory` in inline UI to continue.",
+                    )?;
+                    return Ok(Some(InteractionOutcome::DirectToolHandled));
+                }
+            }
+
+            let remove_spinner = start_memory_loading(ctx, state, "Removing memory note...");
+            let reply =
+                match forget_planned_persistent_memory_matches(ctx.config, ctx.vt_cfg.as_ref(), &candidates, &plan)
+                    .await
+                {
+                    Ok(Some(report)) if report.removed_facts > 0 => format!(
+                        "Removed {} matching memory note(s) from {}.",
+                        report.removed_facts,
+                        report.directory.display()
+                    ),
+                    Ok(Some(_)) | Ok(None) => "No matching persistent memory notes were removed.".to_string(),
+                    Err(err) => format!(
+                        "Couldn't remove memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}"
+                    ),
+                };
+            drop(remove_spinner);
+            respond_to_memory_prompt(ctx, input, &reply)?;
+            Ok(Some(InteractionOutcome::DirectToolHandled))
+        }
+    }
+}
+
+async fn handle_show_memory_intent(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+) -> Result<Option<InteractionOutcome>> {
+    let control = handle_outcome(
+        SlashCommandOutcome::ShowMemoryConfig,
+        SlashCommandContext {
+            thread_id: ctx.thread_id,
+            active_thread_label: ctx.active_thread_label,
+            thread_handle: ctx.thread_handle,
+            renderer: ctx.renderer,
+            handle: ctx.handle,
+            session: ctx.session,
+            header_context: ctx.header_context,
+            config: ctx.config,
+            vt_cfg: ctx.vt_cfg,
+            provider_client: ctx.provider_client,
+            session_bootstrap: ctx.session_bootstrap,
+            model_picker_state: state.model_picker_state,
+            palette_state: state.palette_state,
+            tool_registry: ctx.tool_registry,
+            conversation_history: ctx.conversation_history,
+            decision_ledger: ctx.decision_ledger,
+            context_manager: ctx.context_manager,
+            active_primary_agent: ctx.active_primary_agent,
+            session_stats: ctx.session_stats,
+            plan_session: ctx.plan_session,
+            input_status_state: state.input_status_state,
+            tools: ctx.tools,
+            tool_catalog: ctx.tool_catalog,
+            async_mcp_manager: ctx.async_mcp_manager.as_ref(),
+            mcp_panel_state: ctx.mcp_panel_state,
+            linked_directories: ctx.linked_directories,
+            ctrl_c_state: ctx.ctrl_c_state,
+            ctrl_c_notify: ctx.ctrl_c_notify,
+            full_auto: ctx.full_auto,
+            webmcp_prompt_sender: ctx.webmcp_prompt_sender,
+            webmcp_bridge: ctx.webmcp_bridge,
+            loaded_skills: ctx.loaded_skills,
+            checkpoint_manager: ctx.checkpoint_manager,
+            lifecycle_hooks: ctx.lifecycle_hooks.as_ref(),
+            harness_emitter: ctx.harness_emitter,
+        },
+    )
+    .await?;
+
+    match control {
+        SlashCommandControl::Continue => Ok(Some(InteractionOutcome::DirectToolHandled)),
+        SlashCommandControl::BackgroundCompletionHandled { completion_identity } => {
+            Ok(Some(InteractionOutcome::DirectBackgroundToolHandled { completion_identity }))
+        }
+        SlashCommandControl::SubmitPrompt(prompt) => Ok(Some(InteractionOutcome::Continue {
+            input: prompt,
+            prompt_message_index: None,
+            turn_id: SessionId::generate().into_inner(),
+        })),
+        SlashCommandControl::ReplaceInput(content) => {
+            ctx.handle.set_input(content);
+            Ok(Some(InteractionOutcome::DirectToolHandled))
+        }
+        SlashCommandControl::BreakWithReason(reason) => Ok(Some(InteractionOutcome::Exit { reason })),
+        SlashCommandControl::SelectAgent(name) => {
+            super::interaction_loop_runner::handle_select_primary_agent(ctx, state, Some(name)).await?;
+            Ok(Some(InteractionOutcome::DirectToolHandled))
+        }
+    }
+}
+
+async fn maybe_cleanup_before_memory_mutation(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+    input: &str,
+) -> Result<bool> {
+    let memory_config = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent.persistent_memory.clone())
+        .unwrap_or_default();
+    let cfg = memory_config.clone();
+    let ws = ctx.config.workspace.clone();
+    let status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
+        .await
+        .context("Persistent memory status task panicked")??;
+    if !status.cleanup_status.needed {
+        *state.dismissed_memory_cleanup_fingerprint = None;
+        return Ok(true);
+    }
+
+    let fingerprint = cleanup_fingerprint(&status);
+    if should_suppress_cleanup_confirmation(*state.dismissed_memory_cleanup_fingerprint, &status) {
+        respond_to_memory_prompt(
+            ctx,
+            input,
+            "Persistent memory still needs one-time cleanup before VT Code can change it. Use `/config memory` to run cleanup when you're ready.",
+        )?;
+        return Ok(false);
+    }
+
+    ctx.renderer.line(
+        MessageStyle::Info,
+        "Persistent memory needs one-time cleanup. VT Code is asking for confirmation before continuing.",
+    )?;
+    match confirm_memory_cleanup(ctx, state, &status).await? {
+        MemoryPromptConfirmation::Confirmed => {
+            *state.dismissed_memory_cleanup_fingerprint = None;
+        }
+        MemoryPromptConfirmation::Cancelled => {
+            *state.dismissed_memory_cleanup_fingerprint = Some(fingerprint);
+            respond_to_memory_prompt(
+                ctx,
+                input,
+                "Persistent memory needs one-time cleanup before VT Code can change it. Use `/config memory` to run cleanup when you're ready.",
+            )?;
+            return Ok(false);
+        }
+        MemoryPromptConfirmation::Unavailable => {
+            respond_to_memory_prompt(
+                ctx,
+                input,
+                "Persistent memory needs one-time cleanup. Open `/config memory` in inline UI to confirm cleanup before changing memory.",
+            )?;
+            return Ok(false);
+        }
+    }
+
+    let cleanup_spinner = start_memory_loading(ctx, state, "Cleaning persistent memory...");
+    match cleanup_persistent_memory(ctx.config, ctx.vt_cfg.as_ref(), true).await {
+        Ok(Some(report)) => {
+            drop(cleanup_spinner);
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Cleaned persistent memory under {} and rebuilt the normalized files.",
+                    report.directory.display()
+                ),
+            )?;
+            Ok(true)
+        }
+        Ok(None) => {
+            drop(cleanup_spinner);
+            Ok(true)
+        }
+        Err(err) => {
+            *state.dismissed_memory_cleanup_fingerprint = Some(fingerprint);
+            drop(cleanup_spinner);
+            respond_to_memory_prompt(
+                ctx,
+                input,
+                &format!("Persistent memory cleanup failed, so VT Code did not change memory: {err}"),
+            )?;
+            Ok(false)
+        }
+    }
+}
+
+fn prior_assistant_reply_for_memory_request(request: &str, history: &[uni::Message]) -> Option<String> {
+    if !is_deictic_remember_request(request) {
+        return None;
+    }
+    latest_non_empty_assistant_reply(history)
+}
+
+fn is_deictic_remember_request(request: &str) -> bool {
+    let Some(normalized) = normalize_prompt_clause(request) else {
+        return false;
+    };
+    let lowered = normalized.to_ascii_lowercase();
+    let Some(clause) = extract_memory_clause(&lowered, &normalized, remember_markers()) else {
+        return false;
+    };
+    let clause = clause.trim_end_matches(['.', '!', ',']).trim().to_ascii_lowercase();
+    matches!(
+        clause.as_str(),
+        "it" | "this" | "that" | "this answer" | "that answer" | "this response" | "that response"
+    )
+}
+
+fn latest_non_empty_assistant_reply(history: &[uni::Message]) -> Option<String> {
+    history.iter().rev().find_map(|message| {
+        if message.role != uni::MessageRole::Assistant
+            || message.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
+        {
+            return None;
+        }
+        let text = message.content.as_text();
+        let trimmed = text.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
+}
+
+async fn resolve_remember_plan(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+    input: &str,
+    request: &str,
+    prior_assistant_reply: Option<&str>,
+) -> Result<Option<MemoryOpPlan>> {
+    let mut supplemental: Option<String> = None;
+    let mut final_missing = None;
+    for _ in 0..2 {
+        let plan_spinner = start_memory_loading(ctx, state, "Planning memory save...");
+        let plan = match plan_remember_persistent_memory(
+            ctx.config,
+            ctx.vt_cfg.as_ref(),
+            request,
+            supplemental.as_deref(),
+            prior_assistant_reply,
+        )
+        .await
+        {
+            Ok(Some(plan)) => plan,
+            Ok(None) => {
+                drop(plan_spinner);
+                return Ok(None);
+            }
+            Err(err) => {
+                drop(plan_spinner);
+                respond_to_memory_prompt(
+                    ctx,
+                    input,
+                    &format!(
+                        "Couldn't save memory. VT Code blocks memory writes unless the LLM planner succeeds: {err}"
+                    ),
+                )?;
+                return Ok(None);
+            }
+        };
+        drop(plan_spinner);
+
+        if plan.kind != MemoryOpKind::AskMissing {
+            return Ok(Some(plan));
+        }
+
+        let Some(missing) = plan.missing.clone() else {
+            respond_to_memory_prompt(
+                ctx,
+                input,
+                "Couldn't save memory because the LLM planner did not return the missing information prompt.",
+            )?;
+            return Ok(None);
+        };
+        final_missing = Some(missing.clone());
+        let Some(answer) = prompt_missing_memory_value(ctx, state, &missing.field, &missing.prompt).await? else {
+            respond_to_memory_prompt(ctx, input, "Cancelled memory save.")?;
+            return Ok(None);
+        };
+        if is_empty_memory_answer(&answer) {
+            respond_to_memory_prompt(ctx, input, "Cancelled memory save.")?;
+            return Ok(None);
+        }
+        supplemental = Some(format_supplemental_for_missing(supplemental.take(), &missing.field, &answer));
+    }
+
+    let Some(missing) = final_missing else {
+        respond_to_memory_prompt(
+            ctx,
+            input,
+            "Couldn't save memory because the LLM planner did not return the missing information prompt.",
+        )?;
+        return Ok(None);
+    };
+    respond_to_memory_prompt(ctx, input, &exhausted_missing_details_message(&missing))?;
+    Ok(None)
+}
+
+async fn verify_saved_memory_plan(ctx: &InteractionLoopContext<'_>, plan: &MemoryOpPlan) -> Result<bool> {
+    let candidates = load_memory_candidates(ctx).await?;
+    Ok(memory_plan_facts_are_present(plan, &candidates))
+}
+
+fn memory_plan_facts_are_present(plan: &MemoryOpPlan, candidates: &[MemoryOpCandidate]) -> bool {
+    plan.facts.iter().all(|planned| {
+        let normalized_fact = truncate_for_fact(&normalize_whitespace(&planned.fact), 180).to_ascii_lowercase();
+        !normalized_fact.is_empty()
+            && candidates
+                .iter()
+                .any(|candidate| normalize_whitespace(&candidate.fact).to_ascii_lowercase() == normalized_fact)
+    })
+}
+
+fn exhausted_missing_details_message(missing: &MemoryMissingField) -> String {
+    let field = normalize_whitespace(&missing.field);
+    let prompt = normalize_whitespace(&missing.prompt);
+    format!(
+        "Couldn't save memory yet. The planner still needs `{field}`: {prompt}\nPlease submit the complete fact directly in a new `remember ...` request, e.g. `remember that <your complete fact here>`."
+    )
+}
+
+fn is_empty_memory_answer(answer: &str) -> bool {
+    answer.trim().is_empty()
+}
+
+fn format_supplemental_for_missing(previous: Option<String>, field: &str, answer: &str) -> String {
+    let labeled = format!("For missing field '{}': {}", field.trim(), answer.trim());
+    match previous {
+        Some(prev) => format!("{prev}\n{labeled}"),
+        None => labeled,
+    }
+}
+
+async fn load_memory_candidates(ctx: &InteractionLoopContext<'_>) -> Result<Vec<MemoryOpCandidate>> {
+    let memory_config = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent.persistent_memory.clone())
+        .unwrap_or_default();
+    let matches = list_persistent_memory_candidates(&memory_config, &ctx.config.workspace)
+        .await?
+        .unwrap_or_default();
+    Ok(matches
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| MemoryOpCandidate { id: index, source: entry.source, fact: entry.fact })
+        .collect())
+}
+
+fn describe_memory_plan(plan: &MemoryOpPlan) -> String {
+    plan.facts
+        .iter()
+        .map(|fact| {
+            let topic = match fact.topic {
+                vtcode_core::persistent_memory::MemoryPlannedTopic::Preferences => "preferences",
+                vtcode_core::persistent_memory::MemoryPlannedTopic::RepositoryFacts => "repository facts",
+            };
+            format!("- [{}] {}", topic, fact.fact)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn describe_forget_selection(candidates: &[MemoryOpCandidate], plan: &MemoryOpPlan) -> String {
+    let selected = plan
+        .selected_ids
+        .iter()
+        .filter_map(|id| candidates.iter().find(|candidate| candidate.id == *id))
+        .take(MEMORY_MATCH_PREVIEW_LIMIT)
+        .map(|candidate| format!("- [{}] {}", candidate.source, candidate.fact))
+        .collect::<Vec<_>>();
+    if selected.is_empty() {
+        "- No matching notes selected.".to_string()
+    } else {
+        selected.join("\n")
+    }
+}
+
+async fn confirm_memory_plan(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+    title: &str,
+    action_label: &str,
+    body: &str,
+) -> Result<MemoryPromptConfirmation> {
+    if !ctx.renderer.supports_inline_ui() {
+        return Ok(MemoryPromptConfirmation::Unavailable);
+    }
+    if state.model_picker_state.is_some() || state.palette_state.is_some() {
+        ctx.renderer
+            .line(MessageStyle::Info, "Close the active picker before confirming a memory action.")?;
+        return Ok(MemoryPromptConfirmation::Unavailable);
+    }
+
+    let confirm_step = WizardStep {
+        title: "Confirm".to_string(),
+        question: format!("Review the normalized memory action below, then confirm.\n\n{body}"),
+        items: vec![
+            ui_list::action(
+                format!("Confirm {action_label}"),
+                "Apply the memory change now.".to_string(),
+                Some("Confirm".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(MEMORY_CONFIRM_ACCEPT.to_string())),
+            )
+            .with_search_value("confirm accept yes".to_string()),
+            ui_list::action(
+                "Cancel",
+                "Dismiss without changing memory.".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(MEMORY_CONFIRM_CANCEL.to_string())),
+            )
+            .with_search_value("cancel no dismiss".to_string()),
+        ],
+        completed: false,
+        answer: None,
+        allow_freeform: false,
+        freeform_label: None,
+        freeform_placeholder: None,
+        freeform_default: None,
+    };
+
+    let outcome = show_wizard_modal_and_wait(
+        ctx.handle,
+        ctx.session,
+        title.to_string(),
+        vec![confirm_step],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+    )
+    .await?;
+
+    let WizardModalOutcome::Submitted(selections) = outcome else {
+        return Ok(MemoryPromptConfirmation::Cancelled);
+    };
+
+    let confirmed = selections.iter().any(|selection| {
+        matches!(
+            selection,
+            InlineListSelection::ConfigAction(action) if action == MEMORY_CONFIRM_ACCEPT
+        )
+    });
+
+    if !confirmed {
+        return Ok(MemoryPromptConfirmation::Cancelled);
+    }
+
+    Ok(MemoryPromptConfirmation::Confirmed)
+}
+
+async fn confirm_memory_cleanup(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+    status: &vtcode_core::persistent_memory::PersistentMemoryStatus,
+) -> Result<MemoryPromptConfirmation> {
+    if !ctx.renderer.supports_inline_ui() {
+        return Ok(MemoryPromptConfirmation::Unavailable);
+    }
+    if state.model_picker_state.is_some() || state.palette_state.is_some() {
+        ctx.renderer
+            .line(MessageStyle::Info, "Close the active picker before confirming a memory action.")?;
+        return Ok(MemoryPromptConfirmation::Unavailable);
+    }
+
+    let step = WizardStep {
+        title: "Cleanup".to_string(),
+        question: format!(
+            "Persistent memory contains legacy raw prompts or serialized payloads.\n\n- Suspicious facts: {}\n- Suspicious summary lines: {}\n\nRun the one-time cleanup now?",
+            status.cleanup_status.suspicious_facts, status.cleanup_status.suspicious_summary_lines
+        ),
+        items: vec![
+            ui_list::action(
+                "Run cleanup now",
+                "Rewrite durable memory through the LLM-assisted normalization path.".to_string(),
+                Some("Confirm".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(MEMORY_CLEANUP_ACCEPT.to_string())),
+            )
+            .with_search_value("cleanup memory now".to_string()),
+            ui_list::action(
+                "Cancel",
+                "Leave memory unchanged and stop this mutation.".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(MEMORY_CLEANUP_CANCEL.to_string())),
+            )
+            .with_search_value("cancel cleanup".to_string()),
+        ],
+        completed: false,
+        answer: None,
+        allow_freeform: false,
+        freeform_label: None,
+        freeform_placeholder: None,
+        freeform_default: None,
+    };
+
+    let outcome = show_wizard_modal_and_wait(
+        ctx.handle,
+        ctx.session,
+        "Cleanup Persistent Memory".to_string(),
+        vec![step],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+    )
+    .await?;
+
+    let WizardModalOutcome::Submitted(selections) = outcome else {
+        return Ok(MemoryPromptConfirmation::Cancelled);
+    };
+    let confirmed = selections.iter().any(|selection| {
+        matches!(
+            selection,
+            InlineListSelection::ConfigAction(action) if action == MEMORY_CLEANUP_ACCEPT
+        )
+    });
+    Ok(if confirmed {
+        MemoryPromptConfirmation::Confirmed
+    } else {
+        MemoryPromptConfirmation::Cancelled
+    })
+}
+
+async fn prompt_missing_memory_value(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+    field: &str,
+    prompt: &str,
+) -> Result<Option<String>> {
+    if !ctx.renderer.supports_inline_ui() {
+        return Ok(None);
+    }
+    if state.model_picker_state.is_some() || state.palette_state.is_some() {
+        ctx.renderer
+            .line(MessageStyle::Info, "Close the active picker before entering missing memory details.")?;
+        return Ok(None);
+    }
+
+    ctx.renderer
+        .line(MessageStyle::Info, "VT Code needs one more detail before it can save this memory.")?;
+    let step = WizardStep {
+        title: "Missing Detail".to_string(),
+        question: prompt.to_string(),
+        items: vec![
+            ui_list::choice(
+                "Submit",
+                Some("Press Tab to type the missing detail, then Enter to submit.".to_string()),
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: MEMORY_MISSING_QUESTION_ID.to_string(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+            )
+            .with_search_value("submit memory detail".to_string()),
+        ],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some(field.to_string()),
+        freeform_placeholder: Some(String::new()),
+        freeform_default: None,
+    };
+    let outcome = show_wizard_modal_and_wait(
+        ctx.handle,
+        ctx.session,
+        "Complete Memory Detail".to_string(),
+        vec![step],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+    )
+    .await?;
+
+    let WizardModalOutcome::Submitted(selections) = outcome else {
+        return Ok(None);
+    };
+    Ok(selections.into_iter().find_map(|selection| match selection {
+        InlineListSelection::RequestUserInputAnswer { question_id, other, selected }
+            if question_id == MEMORY_MISSING_QUESTION_ID =>
+        {
+            other.or_else(|| selected.first().cloned())
+        }
+        _ => None,
+    }))
+}
+
+fn respond_to_memory_prompt(ctx: &mut InteractionLoopContext<'_>, input: &str, reply: &str) -> Result<()> {
+    display_user_message(ctx.renderer, input)?;
+    ctx.conversation_history.push(uni::Message::user(input.to_string()));
+    ctx.renderer.line(MessageStyle::Response, reply)?;
+    ctx.conversation_history
+        .push(uni::Message::assistant(reply.to_string()).with_phase(Some(uni::AssistantPhase::FinalAnswer)));
+    reset_inline_input(ctx.handle, ctx.default_placeholder.clone());
+    Ok(())
+}
+
+fn detect_memory_prompt_intent(input: &str) -> Option<MemoryPromptIntent> {
+    let normalized = normalize_prompt_clause(input)?;
+    if normalized.ends_with('?') {
+        if normalized.starts_with("what do you remember")
+            || normalized.starts_with("show memory")
+            || normalized.starts_with("open memory")
+            || normalized.starts_with("list memory")
+        {
+            return Some(MemoryPromptIntent::Show);
+        }
+        return None;
+    }
+
+    let lowered = normalized.to_ascii_lowercase();
+    if matches_show_memory(&lowered) {
+        return Some(MemoryPromptIntent::Show);
+    }
+    if extract_memory_clause(&lowered, &normalized, remember_markers()).is_some() {
+        return Some(MemoryPromptIntent::Remember { request: normalized.clone() });
+    }
+    extract_memory_clause(&lowered, &normalized, forget_markers())
+        .map(|_| MemoryPromptIntent::Forget { request: normalized })
+}
+
+fn matches_show_memory(lowered: &str) -> bool {
+    [
+        "show memory",
+        "open memory",
+        "list memory",
+        "browse memory",
+        "what do you remember",
+        "what's in memory",
+    ]
+    .iter()
+    .any(|pattern| lowered.starts_with(pattern))
+}
+
+fn remember_markers() -> &'static [&'static str] {
+    &[
+        "save to memory,",
+        "save to memory:",
+        "save to memory ",
+        "save this to memory ",
+        "store this in memory ",
+        "store in memory ",
+        "remember that ",
+        "remember ",
+        "add to memory ",
+        "note this for memory ",
+    ]
+}
+
+fn forget_markers() -> &'static [&'static str] {
+    &[
+        "forget that ",
+        "forget about ",
+        "forget ",
+        "remove from memory ",
+        "delete from memory ",
+        "drop from memory ",
+        "don't remember ",
+        "stop remembering ",
+    ]
+}
+
+fn extract_memory_clause(lowered: &str, original: &str, markers: &[&str]) -> Option<String> {
+    markers.iter().find_map(|marker| {
+        let index = lowered.find(marker)?;
+        let start = index + marker.len();
+        let suffix = original.get(start..)?.trim();
+        normalize_prompt_clause(strip_leading_memory_markers(suffix))
+    })
+}
+
+fn strip_leading_memory_markers(input: &str) -> &str {
+    let trimmed = input.trim_start_matches([',', ':', '-', ' ']).trim();
+    let lowered = trimmed.to_ascii_lowercase();
+    for marker in remember_markers().iter().chain(forget_markers()) {
+        if lowered.starts_with(marker) {
+            return trimmed[marker.len()..].trim();
+        }
+    }
+    trimmed
+}
+
+fn normalize_prompt_clause(input: &str) -> Option<String> {
+    let mut text = input.trim();
+    while let Some(stripped) = [
+        "please ",
+        "can you ",
+        "could you ",
+        "would you ",
+        "vt code, ",
+        "vt code ",
+    ]
+    .iter()
+    .find_map(|prefix| text.to_ascii_lowercase().starts_with(prefix).then(|| &text[prefix.len()..]))
+    {
+        text = stripped.trim_start();
+    }
+
+    let normalized = vtcode_commons::formatting::collapse_whitespace(text);
+    (!normalized.is_empty()).then_some(normalized)
+}
+
+#[cfg(test)]
+mod tests;

@@ -6,6 +6,7 @@
 set -euo pipefail
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Configuration
@@ -95,7 +96,6 @@ check_release() {
 show_status() {
     local GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
     local response
-    local has_assets
     local asset_count
     local binary_asset=""
     local required_assets
@@ -121,7 +121,6 @@ show_status() {
 
         if [[ -n "$binary_asset" ]]; then
             log_success "Binary for your platform is ready: $binary_asset"
-            has_assets=true
         else
             log_info "Binaries available: $asset_count/5"
         fi

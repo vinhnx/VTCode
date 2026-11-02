@@ -20,7 +20,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
 
 ### System Requirements
 
-- **Rust**: 1.98.1+ (stable recommended)
+- **Rust**: 1.99.1+ (stable recommended)
   - Install from [rustup.rs](https://rustup.rs/)
   - Includes Cargo package manager
 - **Git**: For version control and cloning the repository
@@ -69,7 +69,7 @@ Choose one of the supported LLM providers:
 
 - **Moonshot (Kimi)**: `export MOONSHOT_API_KEY=your_key_here`
   - Get from [Moonshot Platform](https://platform.moonshot.ai/docs)
-  - Models: Kimi K3, K2.7 Code, K2.5
+  - Models: Kimi K3.1 Pro, K3, K2.7 Code, K2.5
   - Default model: `kimi-k3`; see the [Moonshot provider guide](../providers/PROVIDER_GUIDES.md#moonshot-kimi)
 
 - **StepFun**: `export STEPFUN_API_KEY=your_key_here`
@@ -79,7 +79,7 @@ Choose one of the supported LLM providers:
 
 - **MiniMax**: `export MINIMAX_API_KEY=your_key_here`
   - Get from [MiniMax Platform](https://platform.minimax.io/docs)
-  - Models: MiniMax-M3, M2.5
+  - Models: MiniMax-M3.1-Flash, MiniMax-M3, MiniMax-M2.7
   - Default model: `MiniMax-M3`
 
 - **NVIDIA NIM**: `export NVIDIA_API_KEY=your_key_here`

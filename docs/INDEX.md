@@ -28,6 +28,8 @@ Last reviewed: 2026-08-28
 - [Scheduled Tasks](user-guide/scheduled-tasks.md) - Reminder and durable scheduler flows.
 - [WebMCP Browser Bridge User Guide](user-guide/webmcp.md) - Connect a browser editor to an active VT Code session or a
   bounded standalone workspace bridge.
+- [VT Code Companion](user-guide/vtcode-companion.md) - Install the local MCP plugin, generate a machine-specific
+  marketplace, and share its source through GitHub.
 - [Planning Workflow](guides/planning-workflow.md) - `/plan`, review gate, plan handoff to build/auto agents.
 - [Permissions Guide](guides/permissions.md) - Granular agent permissions and rule grammar.
 - [Decisions Probe Guide](guides/decisions-probe.md) - Experimental OpenAI Decisions tool-output probe usage.
@@ -37,10 +39,13 @@ Last reviewed: 2026-08-28
 - [MCP Integration Guide](mcp/MCP_INTEGRATION_GUIDE.md) - MCP integration onboarding.
 - [Agent Plugins](guides/agent-plugins.md) - Portable skill + MCP packages, `vtcode plugins` CLI.
 - [Testing Guide](development/testing.md) - Test strategy and commands.
+- [Desktop workspace](development/desktop-workspace.md) - macOS GPUI application, local JSON-RPC service, and packaging.
 
 ## Engineering References
 
 - [Development Setup](development/DEVELOPMENT_SETUP.md) - Canonical contributor setup and local quality loop.
+- [Rust Toolchain and MSRV](development/toolchain-updates.md) - Pinned compiler, pin map, bump checklist, and
+  compiler-gated lint fixes.
 - [C++ Core Guidelines Adoption](development/CPP_CORE_GUIDELINES_ADOPTION.md) - Rules for C/C++ code paths and
   cross-language safety intent.
 - [Extension Boundaries](development/EXTENSION_BOUNDARIES.md) - When to use internal Rust traits vs external protocol or

@@ -15,6 +15,12 @@ below based on the topic area.
 
 ### Configuration & Customization
 
+- **File**: `docs/config/agent-memory.md`
+  - **Content**: Agent Guidance, Memory, and Context
+  - **Topics**: Instruction Guidance and Persistent Memory, Context compaction and session history, Participant system
+  - **User Questions**: "What can you tell me about Agent Guidance, Memory, and Context?", "How does Instruction
+    Guidance and Persistent Memory work?", "How does Context compaction and session history work?"
+
 - **File**: `docs/config/CONFIG_FIELD_REFERENCE.md`
   - **Content**: Config Field Reference
   - **User Questions**: "What can you tell me about Config Field Reference?"
@@ -26,6 +32,31 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Configuration Precedence in VT Code?", "How does Resolution Order
     work?", "How does Resetting a configuration layer work?"
 
+- **File**: `docs/config/execution-security.md`
+  - **Content**: Execution, Integrations, and Security
+  - **Topics**: Execution environment, MCP integration, WebMCP browser bridge, Security and approvals
+  - **User Questions**: "What can you tell me about Execution, Integrations, and Security?", "How does Execution
+    environment work?", "How does MCP integration work?"
+
+- **File**: `docs/config/interface.md`
+  - **Content**: Interface and Session Settings
+  - **Topics**: Settings palette and reset, Live reload, Feature flags, External editor, Fullscreen interaction
+  - **User Questions**: "What can you tell me about Interface and Session Settings?", "How does Settings palette and
+    reset work?", "How does Live reload work?"
+
+- **File**: `docs/config/models.md`
+  - **Content**: Model Selection and Providers
+  - **Topics**: Model selection, Native Claude speed
+  - **User Questions**: "What can you tell me about Model Selection and Providers?", "How does Model selection work?",
+    "How does Native Claude speed work?"
+
+- **File**: `docs/config/profiles-reference.md`
+  - **Content**: Profiles, Operations, and Reference
+  - **Topics**: Profiles and overrides, Observability and telemetry, Authentication and authorization, CLI
+    Configuration, Configuration Validation and Troubleshooting
+  - **User Questions**: "What can you tell me about Profiles, Operations, and Reference?", "How does Profiles and
+    overrides work?", "How does Observability and telemetry work?"
+
 - **File**: `docs/config/TOOLS_CONFIG.md`
   - **Content**: Tools Configuration
   - **Topics**: Blocked-call limits and blocked handoffs
@@ -34,9 +65,8 @@ below based on the topic area.
 
 - **File**: `docs/config/config.md`
   - **Content**: VT Code Configuration
-  - **Topics**: Quick navigation, Settings palette and reset, Live reload, Feature flags, Model selection
-  - **User Questions**: "What can you tell me about VT Code Configuration?", "How does Quick navigation work?", "How
-    does Settings palette and reset work?"
+  - **Topics**: Quick navigation
+  - **User Questions**: "What can you tell me about VT Code Configuration?", "How does Quick navigation work?"
 
 ### Development & Testing
 
@@ -115,12 +145,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Checkpoints and combined rewind?", "How does Rewind in the terminal
     work?"
 
-- **File**: `docs/development/codex-reference-workflow.md`
-  - **Content**: Codex reference workflow for VT Code internals
-  - **Topics**: Inspect and research, Compare and apply, Attribute and verify
-  - **User Questions**: "What can you tell me about Codex reference workflow for VT Code internals?", "How does Inspect
-    and research work?", "How does Compare and apply work?"
-
 - **File**: `docs/development/compaction.md`
   - **Content**: Compaction Engine
   - **Topics**: Request history and local clearing, Headless staging and module ownership, Strategy dispatch, Live
@@ -158,12 +182,35 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Declarative Macro Hygiene — Reference Notes?", "How does Source (not
     vendored) work?", "How does Why this matters to VT Code work?"
 
+- **File**: `docs/development/deep-rust-analysis.md`
+  - **Content**: Deep Rust Analysis with Charon
+  - **Topics**: What Charon gives you, Design lessons VT Code adopts, Boundaries and non-goals
+  - **User Questions**: "What can you tell me about Deep Rust Analysis with Charon?", "How does What Charon gives you
+    work?", "How does Design lessons VT Code adopts work?"
+
+- **File**: `docs/development/codex-reference-workflow.md`
+  - **Content**: DeepWiki grounding and Codex reference workflow
+  - **Topics**: Inspect and research, Compare and apply, Attribute and verify
+  - **User Questions**: "What can you tell me about DeepWiki grounding and Codex reference workflow?", "How does Inspect
+    and research work?", "How does Compare and apply work?"
+
 - **File**: `docs/development/DESIRE_PATHS.md`
   - **Content**: Desire Paths in VT Code
   - **Topics**: Philosophy, Current Paved Paths, Desire Paths to Implement, How to Report Friction, Implementation
     Checklist
   - **User Questions**: "What can you tell me about Desire Paths in VT Code?", "How does Philosophy work?", "How does
     Current Paved Paths work?"
+
+- **File**: `docs/development/desktop-component-review.md`
+  - **Content**: Desktop component review
+  - **User Questions**: "What can you tell me about Desktop component review?"
+
+- **File**: `docs/development/desktop-shortcut-parity.md`
+  - **Content**: Desktop⇄CLI Shortcut Parity Matrix
+  - **Topics**: Dispatch rules (verified against vendored source), Kit-native input keys (macOS, `Input` context),
+    Parity matrix, Shipped in this increment, Remaining gaps (ranked)
+  - **User Questions**: "What can you tell me about Desktop⇄CLI Shortcut Parity Matrix?", "How does Dispatch rules
+    (verified against vendored source) work?", "How does Kit-native input keys (macOS, `Input` context) work?"
 
 - **File**: `docs/development/README.md`
   - **Content**: Development Guide
@@ -184,6 +231,10 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Diff Preview Architecture?", "How does Turn aggregation, event
     fields, and themes work?", "How does Readability: wrap and expand work?"
 
+- **File**: `docs/development/web-search.md`
+  - **Content**: DuckDuckGo web search integration
+  - **User Questions**: "What can you tell me about DuckDuckGo web search integration?"
+
 - **File**: `docs/development/matrix-orchestration.md`
   - **Content**: Durable local matrix orchestration
   - **Topics**: Define and control a matrix, Resource reservations and workspace access, Execution and final
@@ -196,6 +247,12 @@ below based on the topic area.
   - **Topics**: Canonical contract, Queries and reports, Validation
   - **User Questions**: "What can you tell me about Execution explanations?", "How does Canonical contract work?", "How
     does Queries and reports work?"
+
+- **File**: `docs/development/execution-policy-matching.md`
+  - **Content**: Execution-policy matching analysis
+  - **Topics**: References and applicability, Contracts and compatibility, Validation and measurement
+  - **User Questions**: "What can you tell me about Execution-policy matching analysis?", "How does References and
+    applicability work?", "How does Contracts and compatibility work?"
 
 - **File**: `docs/development/decisions-probe.md`
   - **Content**: Experimental Decisions Probe
@@ -218,7 +275,7 @@ below based on the topic area.
 
 - **File**: `docs/development/completion-verification.md`
   - **Content**: Fresh verification before successful completion
-  - **Topics**: Implementation boundaries, Research provenance
+  - **Topics**: Implementation boundaries, Research provenance, External evidence and terminal completion
   - **User Questions**: "What can you tell me about Fresh verification before successful completion?", "How does
     Implementation boundaries work?", "How does Research provenance work?"
 
@@ -226,6 +283,13 @@ below based on the topic area.
   - **Content**: Fuzzing Guide
   - **Topics**: Scope, Oracles, Fuzzer-first fixes, Basic Commands, Corpus and Artifacts
   - **User Questions**: "What can you tell me about Fuzzing Guide?", "How does Scope work?", "How does Oracles work?"
+
+- **File**: `docs/development/desktop-gpui-kit-review.md`
+  - **Content**: GPUI Kit desktop guide review
+  - **Topics**: Scope and method, Confirmed findings and changes, Guide coverage and application decisions, Component
+    catalog review, Verification boundaries
+  - **User Questions**: "What can you tell me about GPUI Kit desktop guide review?", "How does Scope and method work?",
+    "How does Confirmed findings and changes work?"
 
 - **File**: `docs/development/hypothesis-revision-validation.md`
   - **Content**: Hypothesis revision validation
@@ -274,6 +338,16 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Performance Optimization?", "How does Goals work?", "How does
     Performance & Simplicity Rules work?"
 
+- **File**: `docs/development/planning-recovery.md`
+  - **Content**: Planning recovery contract
+  - **Topics**: Admission and persistence, Input and model choice, Verification scope
+  - **User Questions**: "What can you tell me about Planning recovery contract?", "How does Admission and persistence
+    work?", "How does Input and model choice work?"
+
+- **File**: `docs/development/planning-validation.md`
+  - **Content**: Planning validation
+  - **User Questions**: "What can you tell me about Planning validation?"
+
 - **File**: `docs/development/preview-budget-blocked-replan.md`
   - **Content**: Preview Budget, Blocked Turns, and Replans
   - **User Questions**: "What can you tell me about Preview Budget, Blocked Turns, and Replans?"
@@ -283,6 +357,26 @@ below based on the topic area.
   - **Topics**: Architecture, Security Measures, Implementation Details, Testing, Security Philosophy
   - **User Questions**: "What can you tell me about Process Hardening?", "How does Architecture work?", "How does
     Security Measures work?"
+
+- **File**: `docs/development/prompt-model-evaluation.md`
+  - **Content**: Prompt and Model Evaluation
+  - **Topics**: Comparison procedure, Outcomes and measurements, Settings and tradeoffs, References
+  - **User Questions**: "What can you tell me about Prompt and Model Evaluation?", "How does Comparison procedure
+    work?", "How does Outcomes and measurements work?"
+
+- **File**: `docs/development/prompt-cache-measurement.md`
+  - **Content**: Prompt-cache measurement
+  - **Topics**: Available observations, Read-only report, Compare policies after paid testing is authorized, Retention
+    and deferred optimizations
+  - **User Questions**: "What can you tell me about Prompt-cache measurement?", "How does Available observations work?",
+    "How does Read-only report work?"
+
+- **File**: `docs/development/24-hour-review-2026-10-23.md`
+  - **Content**: Recent-change review and implementation evidence
+  - **Topics**: Scope and limits, Risk boundaries checked, Implemented DRY/KISS improvements, Remaining large-file plan,
+    Session and tool-efficiency evidence
+  - **User Questions**: "What can you tell me about Recent-change review and implementation evidence?", "How does Scope
+    and limits work?", "How does Risk boundaries checked work?"
 
 - **File**: `docs/development/release-changelog-ownership.md`
   - **Content**: Release changelog ownership
@@ -308,12 +402,30 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Runtime Guidance and Project Instructions?", "How does Planning
     contract ownership work?", "How does User-facing progress contract work?"
 
+- **File**: `docs/development/diagnostics.md`
+  - **Content**: Runtime diagnostics
+  - **Topics**: Transcript presentation, Producer review
+  - **User Questions**: "What can you tell me about Runtime diagnostics?", "How does Transcript presentation work?",
+    "How does Producer review work?"
+
 - **File**: `docs/development/rust-error-handling-reference.md`
   - **Content**: Rust Error Handling — Reference Notes
   - **Topics**: Source (not vendored), Why this matters to VT Code, Distilled principles (in our own words), How VT Code
     applies this, Regression guard
   - **User Questions**: "What can you tell me about Rust Error Handling — Reference Notes?", "How does Source (not
     vendored) work?", "How does Why this matters to VT Code work?"
+
+- **File**: `docs/development/rust-style-guide.md`
+  - **Content**: Rust Style Guide Adoption
+  - **Topics**: Adoption matrix, Rust API migration notes, Audit scope and verification
+  - **User Questions**: "What can you tell me about Rust Style Guide Adoption?", "How does Adoption matrix work?", "How
+    does Rust API migration notes work?"
+
+- **File**: `docs/development/toolchain-updates.md`
+  - **Content**: Rust Toolchain and MSRV
+  - **Topics**: Policy, Pin map, Bump checklist, Compiler and Clippy fallout, Auxiliary compiler pins
+  - **User Questions**: "What can you tell me about Rust Toolchain and MSRV?", "How does Policy work?", "How does Pin
+    map work?"
 
 - **File**: `docs/development/rust-performance-principles.md`
   - **Content**: Rust-Specific Performance Principles for VT Code
@@ -333,9 +445,9 @@ below based on the topic area.
 
 - **File**: `docs/development/session-persistence.md`
   - **Content**: Session Event Persistence
-  - **Topics**: Memory-envelope file replacement, Audit packs
-  - **User Questions**: "What can you tell me about Session Event Persistence?", "How does Memory-envelope file
-    replacement work?", "How does Audit packs work?"
+  - **Topics**: Concurrent sessions, Peer-session messaging, Memory-envelope file replacement, Audit packs
+  - **User Questions**: "What can you tell me about Session Event Persistence?", "How does Concurrent sessions work?",
+    "How does Peer-session messaging work?"
 
 - **File**: `docs/development/session-orchestration-ownership.md`
   - **Content**: Session orchestration ownership
@@ -343,7 +455,7 @@ below based on the topic area.
 
 - **File**: `docs/development/ui-message-protocol.md`
   - **Content**: Shared inline message and control commands
-  - **Topics**: Common control forwarding, Verification, Interactive protocol fixture
+  - **Topics**: Common control forwarding, Verification, Interactive protocol fixture, Operational diagnostics
   - **User Questions**: "What can you tell me about Shared inline message and control commands?", "How does Common
     control forwarding work?", "How does Verification work?"
 
@@ -356,7 +468,7 @@ below based on the topic area.
 
 - **File**: `docs/development/tui-design-system.md`
   - **Content**: TUI design system
-  - **Topics**: Modules, Row contract, Interaction contract, Accessibility, When adding a modal
+  - **Topics**: Modules, Row contract, Code surface, Interaction contract, Accessibility
   - **User Questions**: "What can you tell me about TUI design system?", "How does Modules work?", "How does Row
     contract work?"
 
@@ -374,9 +486,10 @@ below based on the topic area.
 
 - **File**: `docs/development/terminal-program-status.md`
   - **Content**: Terminal program status
-  - **Topics**: Adoption and existing telemetry, Lifecycle, Ownership and privacy, Verification
+  - **Topics**: Adoption and existing telemetry, Terminal pane icons (Rex/Ghostty), iTerm2 session status (OSC 21337),
+    Lifecycle, Ownership and privacy
   - **User Questions**: "What can you tell me about Terminal program status?", "How does Adoption and existing telemetry
-    work?", "How does Lifecycle work?"
+    work?", "How does Terminal pane icons (Rex/Ghostty) work?"
 
 - **File**: `docs/development/grep-tool-guide.md`
   - **Content**: Text Search Guide
@@ -399,6 +512,10 @@ below based on the topic area.
   - **Content**: Tool reentrancy guard
   - **User Questions**: "What can you tell me about Tool reentrancy guard?"
 
+- **File**: `docs/development/planning-provider-audit.md`
+  - **Content**: Tool-free planning provider audit
+  - **User Questions**: "What can you tell me about Tool-free planning provider audit?"
+
 - **File**: `docs/development/async-performance-audit.md`
   - **Content**: VT Code Async Performance Audit
   - **Topics**: Audit Rubric, Findings (Prioritized), Implemented Batch (Runtime-Critical), Validation, Next Batch
@@ -412,6 +529,26 @@ below based on the topic area.
     by Default)
   - **User Questions**: "What can you tell me about VT Code Command Security Model?", "How does Additional permission
     normalization work?", "How does Overview work?"
+
+- **File**: `docs/development/vtcode-companion.md`
+  - **Content**: VT Code Companion private pilot
+  - **Topics**: Local distribution milestone (2026-10-17), Local connection, ChatGPT Desktop: tool attachment and
+    partial planning evidence, Optional remote transport (deferred), Task contract
+  - **User Questions**: "What can you tell me about VT Code Companion private pilot?", "How does Local distribution
+    milestone (2026-10-17) work?", "How does Local connection work?"
+
+- **File**: `docs/development/vtcode-companion-submission.md`
+  - **Content**: VT Code Companion submission preparation
+  - **Topics**: Can this be submitted now?, Practical GitHub and GitHub Pages preparation, Observed validation on
+    2026-10-17, Listing draft, Draft review cases
+  - **User Questions**: "What can you tell me about VT Code Companion submission preparation?", "How does Can this be
+    submitted now? work?", "How does Practical GitHub and GitHub Pages preparation work?"
+
+- **File**: `docs/development/desktop-workspace.md`
+  - **Content**: VT Code Desktop Workspace
+  - **Topics**: System requirements, Build and launch, Runtime and session behavior, UI quick reference, Accessibility
+  - **User Questions**: "What can you tell me about VT Code Desktop Workspace?", "How does System requirements work?",
+    "How does Build and launch work?"
 
 - **File**: `docs/development/EXECUTION_POLICY.md`
   - **Content**: VT Code Execution Policy
@@ -541,6 +678,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about VT Code Architecture Guide?", "How does Overview work?", "How does
     Model + Harness work?"
 
+- **File**: `docs/user-guide/vtcode-companion.md`
+  - **Content**: VT Code Companion (experimental)
+  - **Topics**: Current support, Install VT Code and prepare Companion, Prepare your local plugin, Install in Codex,
+    First read-only workflow
+  - **User Questions**: "What can you tell me about VT Code Companion (experimental)?", "How does Current support
+    work?", "How does Install VT Code and prepare Companion work?"
+
 - **File**: `docs/COMPATIBILITY.md`
   - **Content**: VT Code Platform Compatibility Matrix
   - **Topics**: Quick Reference, Minimum Supported Rust Version (MSRV), Platform-Specific Features, LLM Provider
@@ -600,6 +744,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Cargo-Unmaintained?", "How does Overview work?", "How does Usage
     work?"
 
+- **File**: `docs/guides/cohesivity-mcp.md`
+  - **Content**: Cohesivity MCP
+  - **Topics**: Configure the provider, Verify and use, Troubleshooting and removal
+  - **User Questions**: "What can you tell me about Cohesivity MCP?", "How does Configure the provider work?", "How does
+    Verify and use work?"
+
 - **File**: `docs/guides/status-line.md`
   - **Content**: Configuring the inline status line
   - **Topics**: Available modes, Command payload structure, Example script
@@ -658,16 +808,23 @@ below based on the topic area.
 
 - **File**: `docs/guides/mcp-integration.md`
   - **Content**: MCP Integration Guide
-  - **Topics**: MCP Specification Map, Configuring MCP Providers, Security and validation, Allowlist Behaviour, Testing
-    the Integration
+  - **Topics**: MCP Specification Map, Tool result boundary, Configuring MCP Providers, Security and validation,
+    Allowlist Behaviour
   - **User Questions**: "What can you tell me about MCP Integration Guide?", "How does MCP Specification Map work?",
-    "How does Configuring MCP Providers work?"
+    "How does Tool result boundary work?"
 
 - **File**: `docs/mcp/MCP_INTEGRATION_GUIDE.md`
   - **Content**: MCP Integration Guide for VT Code
   - **Topics**: Overview, Architecture, Configuration, Transport Types, Security
   - **User Questions**: "What can you tell me about MCP Integration Guide for VT Code?", "How does Overview work?", "How
     does Architecture work?"
+
+- **File**: `docs/guides/mcp-interop.md`
+  - **Content**: MCP Interop for Client and Server Maintainers
+  - **Topics**: What VT Code implements, Server maintainers: register your MCP server in VT Code, Client maintainers:
+    connect your MCP client to VT Code, Interop conventions VT Code follows, Where to look in the source
+  - **User Questions**: "What can you tell me about MCP Interop for Client and Server Maintainers?", "How does What VT
+    Code implements work?", "How does Server maintainers: register your MCP server in VT Code work?"
 
 - **File**: `docs/guides/memcode-mcp.md`
   - **Content**: Memcode MCP
@@ -806,6 +963,12 @@ below based on the topic area.
   - **Topics**: Setup overview, Build VT Code, Configure VT Code for ACP, Manual smoke test, Register VT Code in Zed
   - **User Questions**: "What can you tell me about Zed Agent Client Protocol Integration?", "How does Setup overview
     work?", "How does Build VT Code work?"
+
+- **File**: `docs/guides/deedpage-mcp.md`
+  - **Content**: deed.page MCP
+  - **Topics**: Configure the provider, Verify and use, Troubleshooting and removal
+  - **User Questions**: "What can you tell me about deed.page MCP?", "How does Configure the provider work?", "How does
+    Verify and use work?"
 
 - **File**: `docs/guides/macos-alt-shortcut-troubleshooting.md`
   - **Content**: macOS Alt Shortcut Troubleshooting Guide
@@ -988,7 +1151,8 @@ below based on the topic area.
 
 - **File**: `docs/modules/vtcode_indexer.md`
   - **Content**: VT Code Indexer
-  - **Topics**: Core concepts, Customizing persistence, Tailoring traversal, End-to-end example
+  - **Topics**: Core concepts, Customizing persistence, Snapshot hydration and unchanged-file screening, Tailoring
+    traversal, End-to-end example
   - **User Questions**: "What can you tell me about VT Code Indexer?", "How does Core concepts work?", "How does
     Customizing persistence work?"
 
@@ -1100,9 +1264,9 @@ below based on the topic area.
 
 - **File**: `docs/reference/ansi-quick-reference.md`
   - **Content**: ANSI Quick Reference for VT Code Development
-  - **Topics**: Most Common Sequences, VT Code Usage Examples, Regex Patterns, Program Status Protocol, Testing Helpers
-  - **User Questions**: "What can you tell me about ANSI Quick Reference for VT Code Development?", "How does Most
-    Common Sequences work?", "How does VT Code Usage Examples work?"
+  - **Topics**: Diagnostics, Most Common Sequences, VT Code Usage Examples, Regex Patterns, Program Status Protocol
+  - **User Questions**: "What can you tell me about ANSI Quick Reference for VT Code Development?", "How does
+    Diagnostics work?", "How does Most Common Sequences work?"
 
 - **File**: `docs/audits/agent-harness-duplication-report.md`
   - **Content**: Agent / Harness Duplication & Optimization Report
@@ -1555,13 +1719,13 @@ below based on the topic area.
 
 - **File**: `docs/harness/SESSION_LOG_REVIEW.md`
   - **Content**: Session Log Review
-  - **Topics**: 2026-10-11 | Semantic operation identity bounds repeated preflight rejections across turns, 2026-10-11 |
-    Per-item bracket `verify:` list terminally rejected a valid README plan, 2026-09-19 | Post-merge review: inspection
-    verify allowlist tightening, 2026-09-19 | Planning recovery rejects inspection-command verifies, 2026-09-14 |
-    Session session-vtcode-20260914T031505Z_075199-09813 planning validation audit
-  - **User Questions**: "What can you tell me about Session Log Review?", "How does 2026-10-11 | Semantic operation
-    identity bounds repeated preflight rejections across turns work?", "How does 2026-10-11 | Per-item bracket `verify:`
-    list terminally rejected a valid README plan work?"
+  - **Topics**: 2026-11-01 | Terminal plan rejection hid the draft in desktop and retry never rearmed, 2026-10-11 |
+    Semantic operation identity bounds repeated preflight rejections across turns, 2026-10-11 | Per-item bracket
+    `verify:` list terminally rejected a valid README plan, 2026-09-19 | Post-merge review: inspection verify allowlist
+    tightening, 2026-09-19 | Planning recovery rejects inspection-command verifies
+  - **User Questions**: "What can you tell me about Session Log Review?", "How does 2026-11-01 | Terminal plan rejection
+    hid the draft in desktop and retry never rearmed work?", "How does 2026-10-11 | Semantic operation identity bounds
+    repeated preflight rejections across turns work?"
 
 - **File**: `docs/compose/spec/session-residual-hygiene.md`
   - **Content**: Session Residual Hygiene
@@ -1748,7 +1912,8 @@ below based on the topic area.
 
 - **File**: `docs/harness/ZEN_ALIGNMENT.md`
   - **Content**: Zen Alignment for VT Code
-  - **Topics**: Scope, Full Principle Mapping (All 19), Baseline Metrics (2026-03-03), Rollout, Verification Commands
+  - **Topics**: Scope, Full Principle Mapping (All 19), Baseline Metrics (2026-03-03), Hard-Ceiling Metrics
+    (2026-10-29), Rollout
   - **User Questions**: "What can you tell me about Zen Alignment for VT Code?", "How does Scope work?", "How does Full
     Principle Mapping (All 19) work?"
 
@@ -1934,7 +2099,7 @@ below based on the topic area.
 
 - **File**: `docs/user-guide/interactive-mode.md`
   - **Content**: Interactive Mode Reference
-  - **Topics**: Response progress, Keyboard Shortcuts, Execution Explanations, Reduced Motion, Fullscreen Rendering
+  - **Topics**: Response progress, Keyboard Shortcuts, Execution Explanations, Terminal Title, Reduced Motion
   - **User Questions**: "What can you tell me about Interactive Mode Reference?", "How does Response progress work?",
     "How does Keyboard Shortcuts work?"
 

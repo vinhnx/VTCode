@@ -1,5 +1,16 @@
 # ANSI Quick Reference for VT Code Development
 
+## Diagnostics
+
+| Surface | Behavior |
+| --- | --- |
+| `AnsiRenderer::diagnostic` | Redacts, persists through the installed callback, and displays a canonical diagnostic |
+| Human transcript | Always shows the severity summary and actions; click or F8 toggles prose and actionable details |
+| Transcript Review / headless | Retains full labeled operational details, including machine-readable payloads an informational incident does not disclose |
+| Legacy Error / Warning | Uses the shared adapter; summaries remain visible when diagnostics are collapsed |
+
+See the [diagnostic contract](../development/diagnostics.md).
+
 ## Most Common Sequences
 
 ### Colors (Foreground)
@@ -163,10 +174,11 @@ r"\x1b\[38;2;(\d+);(\d+);(\d+)m"
 
 ## Program Status Protocol
 
-Enable `[ui.program_status] enabled = true` to emit bounded OSC 7501 reports on the interactive TUI terminal.
+VT Code emits bounded OSC 7501 reports on the interactive TUI terminal by default (`[ui.program_status] enabled = true`).
 The sequence is `ESC ] 7501 ; state=working:id=<owned-id>:app=vtcode:title=<base64>:msg=<base64> ESC \`.
 Reports use complete replacements, generic labels, and session-owned opaque IDs. `clear` removes an owned record
-and its descendants; VT Code never clears the terminal root. See the
+and its descendants; VT Code never clears the terminal root. Direct iTerm2 sessions also get the OSC 21337
+session-status pill (`status=Idle|Working|Waiting` + indicator color + generic detail). See the
 [lifecycle and privacy guide](../development/terminal-program-status.md).
 
 ## Testing Helpers
@@ -317,3 +329,13 @@ for line in clean_output.lines() {
 - `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
 - `docs/reference/ansi-in-vtcode.md` - VT Code-specific usage
 - `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Implementation
+
+## Planning recovery
+
+| Runtime state | Human action |
+| --- | --- |
+| Synthesizing or repairing | Wait for a validated draft; the shared automatic limit is three requests, subject to remaining execution budget. |
+| Awaiting input | Retry with retained evidence, add clarification, or choose a model. |
+| Awaiting approval | Review and explicitly approve the persisted plan before implementation. |
+
+Recovery input does not approve a plan. See the [recovery contract](../development/planning-recovery.md).

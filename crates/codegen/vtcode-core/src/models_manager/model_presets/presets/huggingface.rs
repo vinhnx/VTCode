@@ -1,6 +1,7 @@
 //! huggingface_presets — provider preset definitions for huggingface.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_ladder_high_max;
 use crate::config::constants::models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
@@ -14,16 +15,7 @@ pub(crate) fn huggingface_presets() -> Vec<ModelPreset> {
             description: "NVIDIA Nemotron 3 Ultra 550B-A55B-NVFP4 via Together inference provider".to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum thinking".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_high_max(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -38,16 +30,7 @@ pub(crate) fn huggingface_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum thinking".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_high_max(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -62,16 +45,7 @@ pub(crate) fn huggingface_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum thinking".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_high_max(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -87,16 +61,7 @@ pub(crate) fn huggingface_presets() -> Vec<ModelPreset> {
                     .to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum thinking".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_high_max(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -111,16 +76,7 @@ pub(crate) fn huggingface_presets() -> Vec<ModelPreset> {
                 .to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum thinking".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_high_max(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,

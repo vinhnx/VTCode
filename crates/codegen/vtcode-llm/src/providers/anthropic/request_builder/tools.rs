@@ -111,7 +111,7 @@ fn strip_top_level_schema_composition(schema: Value) -> Value {
 
 pub(crate) fn build_tools(
     request: &LLMRequest,
-    cache_control: &Option<CacheControl>,
+    cache_control: Option<&CacheControl>,
     breakpoints_remaining: &mut usize,
 ) -> Result<Option<Vec<AnthropicTool>>, LLMError> {
     let Some(request_tools) = request.tools.as_ref() else {
@@ -133,7 +133,7 @@ pub(crate) fn build_tools(
     // sorts last. Anchoring the last anchorable tool keeps the tools prefix
     // cached; trailing non-function tools ride the uncached tail.
     if *breakpoints_remaining > 0
-        && let Some(cc) = cache_control.as_ref()
+        && let Some(cc) = cache_control
         && let Some(func_tool) = built_tools.iter_mut().rev().find_map(|tool| match tool {
             AnthropicTool::Function(func_tool) => Some(func_tool),
             _ => None,
@@ -215,7 +215,7 @@ mod tests {
             ..Default::default()
         };
 
-        let tools = build_tools(&request, &None, &mut 0)
+        let tools = build_tools(&request, None, &mut 0)
             .expect("tool build")
             .expect("tools should exist");
         assert_eq!(tools.len(), 1);
@@ -257,7 +257,7 @@ mod tests {
             ..Default::default()
         };
 
-        let tools = build_tools(&request, &None, &mut 0)
+        let tools = build_tools(&request, None, &mut 0)
             .expect("tool build")
             .expect("tools should exist");
         assert!(matches!(
@@ -292,7 +292,7 @@ mod tests {
             ..Default::default()
         };
 
-        build_tools(&request, &None, &mut 0).unwrap_err();
+        build_tools(&request, None, &mut 0).unwrap_err();
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
             ..Default::default()
         };
 
-        let tools = build_tools(&request, &None, &mut 0)
+        let tools = build_tools(&request, None, &mut 0)
             .expect("tool build")
             .expect("tools should exist");
         assert!(matches!(
@@ -350,7 +350,7 @@ mod tests {
             ..Default::default()
         };
 
-        let tools = build_tools(&request, &None, &mut 0)
+        let tools = build_tools(&request, None, &mut 0)
             .expect("tool build")
             .expect("tools should exist");
         assert!(matches!(
@@ -382,7 +382,7 @@ mod tests {
             ..Default::default()
         };
 
-        let tools = build_tools(&request, &None, &mut 0)
+        let tools = build_tools(&request, None, &mut 0)
             .expect("tool build")
             .expect("tools should exist");
         assert!(matches!(
@@ -421,7 +421,7 @@ mod tests {
             ..Default::default()
         };
 
-        let tools = build_tools(&request, &None, &mut 0)
+        let tools = build_tools(&request, None, &mut 0)
             .expect("tool build")
             .expect("tools should exist");
         assert!(matches!(
@@ -516,7 +516,7 @@ mod tests {
             ..Default::default()
         };
 
-        let tools = build_tools(&request, &None, &mut 0)
+        let tools = build_tools(&request, None, &mut 0)
             .expect("tool build")
             .expect("tools should exist");
         let AnthropicTool::Function(function) = &tools[0] else {
@@ -562,7 +562,7 @@ mod tests {
         });
         let mut breakpoints_remaining = 4usize;
 
-        let tools = build_tools(&request, &cache_control, &mut breakpoints_remaining)
+        let tools = build_tools(&request, cache_control.as_ref(), &mut breakpoints_remaining)
             .expect("tool build")
             .expect("tools should exist");
 
@@ -598,7 +598,7 @@ mod tests {
         });
         let mut breakpoints_remaining = 4usize;
 
-        let tools = build_tools(&request, &cache_control, &mut breakpoints_remaining)
+        let tools = build_tools(&request, cache_control.as_ref(), &mut breakpoints_remaining)
             .expect("tool build")
             .expect("tools should exist");
 
@@ -642,7 +642,7 @@ mod tests {
         });
         let mut breakpoints_remaining = 4usize;
 
-        let tools = build_tools(&request, &cache_control, &mut breakpoints_remaining)
+        let tools = build_tools(&request, cache_control.as_ref(), &mut breakpoints_remaining)
             .expect("tool build")
             .expect("tools should exist");
 

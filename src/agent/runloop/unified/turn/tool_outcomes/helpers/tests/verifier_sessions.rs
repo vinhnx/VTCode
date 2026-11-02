@@ -65,11 +65,7 @@ fn masked_verifier_feedback_is_once_per_turn_without_changing_gate_or_repair_bud
     let args = json!({"cmd":"npx markdownlint-cli2 README.md; echo \"lint exit: $?\""});
     for pending in [false, true] {
         let mut tracker = LoopTracker::with_verification_snapshot((pending, 0));
-        assert_eq!(
-            mutation_blocked_until_verification(&tracker, tools::EXEC_COMMAND, &args),
-            pending,
-            "diagnostic detection must not change admission"
-        );
+
         let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: json!({"exit_code":0}),
             stdout: None,
@@ -80,7 +76,7 @@ fn masked_verifier_feedback_is_once_per_turn_without_changing_gate_or_repair_bud
             assert!(!update_repetition_tracker(&mut tracker, &success, tools::EXEC_COMMAND, &args));
             assert_eq!(tracker.take_piped_verification_notice(), attempt == 0);
             assert_eq!(tracker.verification_is_pending(), pending);
-            assert_eq!(tracker.fix_edits_remaining, 0);
+
             tracker.reset_after_balancer_recovery();
         }
         update_repetition_tracker(
@@ -115,7 +111,6 @@ fn masked_verifier_feedback_requires_execution_and_terminal_status() {
         update_repetition_tracker(&mut tracker, &ToolPipelineOutcome::from_status(status), tools::EXEC_COMMAND, &args);
         assert!(!tracker.take_piped_verification_notice());
         assert!(!tracker.verification_is_pending());
-        assert_eq!(tracker.fix_edits_remaining, 0);
     }
 }
 
@@ -170,7 +165,7 @@ fn masked_checker_polling_retains_only_diagnostic_identity() {
                 ));
                 assert_eq!(tracker.take_piped_verification_notice(), id.trim() == "42");
                 assert_eq!(tracker.verification_is_pending(), pending);
-                assert_eq!(tracker.fix_edits_remaining, 0);
+
                 assert!(!tracker.take_verification_result_lost_notice());
             }
             assert!(tracker.pending_checker_session_ids.is_empty());
@@ -225,7 +220,7 @@ fn masked_checker_session_loss_and_cleanup_never_grant_verifier_recovery() {
         ));
         assert!(tracker.pending_checker_session_ids.is_empty());
         assert!(tracker.verification_is_pending());
-        assert_eq!(tracker.fix_edits_remaining, 0);
+
         assert!(!tracker.take_piped_verification_notice());
         assert!(!tracker.take_verification_result_lost_notice());
     }
@@ -243,18 +238,12 @@ fn failed_masked_checker_queues_feedback_without_granting_repair_edits() {
     update_repetition_tracker(&mut tracker, &failure, tools::EXEC_COMMAND, &json!({"cmd":"cargo check; echo $?"}));
     assert!(tracker.take_piped_verification_notice());
     assert!(!tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
 }
 
 #[test]
 fn fmt_check_clears_gate_but_plain_fmt_does_not() {
     let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
     tracker.consecutive_mutations = BLIND_EDITING_THRESHOLD;
-    assert!(!mutation_blocked_until_verification(
-        &tracker,
-        tools::EXEC_COMMAND,
-        &json!({"cmd": "cargo fmt --all -- --check"})
-    ));
 
     let fmt_check_success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
         output: serde_json::json!({"exit_code": 0}),
@@ -274,7 +263,6 @@ fn fmt_check_clears_gate_but_plain_fmt_does_not() {
     // clears the gate.
     let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
     tracker.consecutive_mutations = BLIND_EDITING_THRESHOLD;
-    assert!(mutation_blocked_until_verification(&tracker, tools::EXEC_COMMAND, &json!({"cmd": "cargo fmt"})));
 }
 
 #[test]
@@ -293,7 +281,6 @@ fn failed_verifier_reports_fix_window_for_text_streak_reset() {
         tools::EXEC_COMMAND,
         &json!({"cmd": "cargo check --locked"}),
     ));
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
 
     let successful_check = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
         output: serde_json::json!({"exit_code": 0}),
@@ -327,11 +314,7 @@ fn lost_verification_tool_failure_while_pending_grants_fix_window() {
         &json!({"cmd": "cargo check --locked"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
-    assert!(
-        !mutation_blocked_until_verification(&tracker, tools::EDIT_FILE, &json!({"path": "src/lib.rs"})),
-        "the lost-result grant must open the bounded fix window"
-    );
+
     assert!(tracker.take_verification_result_lost_notice(), "the lost-result directive must be queued");
     assert!(!tracker.take_verification_result_lost_notice(), "the notice is one-shot");
 }
@@ -354,7 +337,6 @@ fn lost_verification_tool_timeout_while_pending_grants_fix_window() {
         &json!({"cmd": "cargo nextest run"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
 }
 
 #[test]
@@ -374,7 +356,7 @@ fn verification_tool_failure_without_pending_gate_grants_no_fix_window() {
         &json!({"cmd": "cargo check --locked"}),
     ));
     assert!(!tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }
 
@@ -406,10 +388,8 @@ fn missing_session_recovery_preserves_unrelated_running_verifier() {
         assert_eq!(tracker.take_verification_result_lost_notice(), grants_recovery);
         if grants_recovery {
             assert!(tracker.pending_verifier_session_id.is_none());
-            assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
         } else {
             assert_eq!(tracker.pending_verifier_session_id.as_deref(), Some("run-verifier"));
-            assert_eq!(tracker.fix_edits_remaining, 0);
         }
     }
 }
@@ -432,8 +412,7 @@ fn write_stdin_lost_exec_session_failure_while_pending_grants_fix_window() {
         &json!({"session_id": "run-7", "chars": ""}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
-    assert!(!mutation_blocked_until_verification(&tracker, tools::EDIT_FILE, &json!({"path": "src/lib.rs"})));
+
     assert!(tracker.take_verification_result_lost_notice());
 }
 
@@ -454,7 +433,7 @@ fn typed_lost_exec_session_failure_preserves_verification_gate() {
         &json!({"action": "wait", "session_id": "run-7"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
+
     assert!(tracker.take_verification_result_lost_notice());
 }
 
@@ -476,7 +455,7 @@ fn write_stdin_unrelated_failure_while_pending_grants_no_fix_window() {
         &json!({"session_id": "run-7", "chars": "q"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }
 
@@ -498,8 +477,7 @@ fn unified_exec_wait_on_lost_session_while_pending_grants_fix_window() {
         &json!({"action": "wait", "session_id": "run-7"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
-    assert!(!mutation_blocked_until_verification(&tracker, tools::EDIT_FILE, &json!({"path": "src/lib.rs"})));
+
     assert!(tracker.take_verification_result_lost_notice());
     assert!(!tracker.take_verification_result_lost_notice(), "the notice is one-shot");
 }
@@ -522,7 +500,7 @@ fn unified_exec_poll_on_lost_session_while_pending_grants_fix_window() {
         &json!({"action": "poll", "session_id": "run-7"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
+
     assert!(tracker.take_verification_result_lost_notice());
 }
 
@@ -546,7 +524,7 @@ fn unified_exec_inferred_poll_on_lost_session_while_pending_grants_fix_window() 
         &json!({"session_id": "run-7"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
+
     assert!(tracker.take_verification_result_lost_notice());
 }
 
@@ -568,7 +546,7 @@ fn unified_exec_wait_unrelated_failure_while_pending_grants_no_fix_window() {
         &json!({"action": "wait"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }
 
@@ -589,7 +567,7 @@ fn unified_exec_wait_lost_session_without_pending_gate_grants_nothing() {
         &json!({"action": "wait", "session_id": "run-7"}),
     ));
     assert!(!tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }
 
@@ -616,7 +594,7 @@ fn unified_exec_run_action_with_lost_session_text_takes_no_follow_up_path() {
         &json!({"action": "run", "command": "echo hi"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }
 
@@ -641,8 +619,7 @@ fn read_pty_session_poll_on_lost_pty_session_while_pending_grants_fix_window() {
         &json!({"session_id": "pty-3"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
-    assert!(!mutation_blocked_until_verification(&tracker, tools::EDIT_FILE, &json!({"path": "src/lib.rs"})));
+
     assert!(tracker.take_verification_result_lost_notice());
     assert!(!tracker.take_verification_result_lost_notice(), "the notice is one-shot");
 }
@@ -667,7 +644,7 @@ fn send_pty_input_on_lost_pty_session_while_pending_grants_fix_window() {
         &json!({"session_id": "pty-3", "input": "q"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, FAILED_VERIFICATION_FIX_ALLOWANCE);
+
     assert!(tracker.take_verification_result_lost_notice());
 }
 
@@ -693,7 +670,7 @@ fn create_pty_session_run_with_lost_session_text_takes_no_follow_up_path() {
         &json!({"command": "echo hi"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }
 
@@ -714,7 +691,7 @@ fn pty_follow_up_lost_session_without_pending_gate_grants_nothing() {
         &json!({"session_id": "pty-3"}),
     ));
     assert!(!tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }
 
@@ -738,6 +715,6 @@ fn pty_follow_up_unrelated_failure_while_pending_grants_no_fix_window() {
         &json!({"session_id": "pty-3"}),
     ));
     assert!(tracker.verification_is_pending());
-    assert_eq!(tracker.fix_edits_remaining, 0);
+
     assert!(!tracker.take_verification_result_lost_notice());
 }

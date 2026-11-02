@@ -9,7 +9,9 @@ use vtcode_core::utils::session_archive::SessionArchiveMetadata;
 
 mod history_cleaning;
 
+#[cfg(test)]
 use history_cleaning::archived_prompt_content;
+use history_cleaning::archived_prompt_content_with_metadata;
 
 pub(super) struct SessionThreadBootstrap {
     pub(super) thread_id: String,
@@ -273,13 +275,14 @@ pub(crate) fn resolve_thread_completion_status(
 /// Load user prompts from recent session archives (last 24 hours) and inject
 /// them into the history picker so Ctrl+R can search across sessions.
 ///
-/// Only genuine user-typed prompts are kept: harness-generated `User`-role
-/// follow-ups (tracker / plan-mode / verification / background continuations)
-/// are skipped via `is_internal_harness_follow_up`, and LLM-enrichment
-/// wrappers plus trailing `[file_reference_metadata]` /
-/// `[agent_reference_metadata]` blocks are stripped so the picker shows what
-/// the user typed. Full (cleaned) content is stored; the picker collapses it
-/// to a single display row and restores the full text on accept.
+/// Only genuine user-typed prompts are kept: archived messages tagged with
+/// synthetic provenance metadata and harness-generated `User`-role follow-ups
+/// (exec task scaffolding, recovery nudges, tracker / plan-mode / verification /
+/// background continuations) are skipped, and LLM-enrichment wrappers plus
+/// trailing `[file_reference_metadata]` / `[agent_reference_metadata]` blocks
+/// are stripped so the picker shows what the user typed. Full (cleaned) content
+/// is stored; the picker collapses it to a single display row and restores the
+/// full text on accept.
 pub(super) async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineHandle) {
     let listings = match session_archive::list_recent_sessions(50).await {
         Ok(listings) => listings,
@@ -294,7 +297,7 @@ pub(super) async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::a
                 continue;
             }
             let content = msg.content.as_text();
-            let Some(cleaned) = archived_prompt_content(content.trim()) else {
+            let Some(cleaned) = archived_prompt_content_with_metadata(content.trim(), msg.metadata.as_deref()) else {
                 continue;
             };
             // NOTE: `created_at` uses the session start time because per-message

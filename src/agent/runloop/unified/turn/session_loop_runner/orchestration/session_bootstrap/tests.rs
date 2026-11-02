@@ -9,7 +9,11 @@ use vtcode_core::utils::session_archive::{
 };
 
 use super::super::super::support::checkpoint_session_archive_start;
+use super::archived_prompt_content_with_metadata;
 use super::{CoreAgentConfig, ResumeSession, SessionArchiveMetadata, archived_prompt_content, prepare_session_thread};
+use crate::cli::exec::{
+    EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX, EXEC_TASK_INSTRUCTIONS_PREFIX, REVIEW_TASK_INSTRUCTIONS_PREFIX,
+};
 
 fn config(workspace: &Path) -> CoreAgentConfig {
     CoreAgentConfig {
@@ -227,17 +231,30 @@ fn config_poll_retains_rejected_config_and_recovers_with_cli_overrides() {
     assert_eq!(retained.agent.default_model, config.model);
     let mut warnings = Vec::new();
     while let Ok(command) = receiver.try_recv() {
-        if let vtcode_ui::tui::app::InlineCommand::AppendLine { segments, .. } = command {
-            warnings.push(segments.into_iter().map(|segment| segment.text).collect::<String>());
+        if let vtcode_ui::tui::app::InlineCommand::Diagnostic(diagnostic) = command {
+            assert_eq!(diagnostic.severity, vtcode_commons::diagnostics::DiagnosticSeverity::Warning);
+            assert!(!diagnostic.summary.trim().is_empty(), "the warning summary must always remain visible");
+            warnings.push(*diagnostic);
         }
     }
     assert_eq!(
         warnings
             .iter()
-            .filter(|text| text.contains("Configuration reload rejected"))
+            .filter(|diagnostic| diagnostic.text().contains("Configuration reload rejected"))
             .count(),
         1
     );
+    let rejection = warnings
+        .iter()
+        .find(|diagnostic| diagnostic.text().contains("Configuration reload rejected"))
+        .unwrap();
+    if !rejection.summary.contains("Configuration reload rejected") {
+        assert!(rejection.summary.contains("Expand Details"), "long diagnostic keeps a visible next action");
+        assert!(
+            rejection.agent_details.contains("Configuration reload rejected"),
+            "the complete rejection remains available in Details"
+        );
+    }
     assert!(watcher.take_reload_error().is_none());
 
     std::fs::write(&path, "[agent]\nprovider = 'openai'\ndefault_model = 'file-model'\n[ui]\nvim_mode = false\n")
@@ -313,4 +330,117 @@ fn archived_history_keeps_handoff_prefix_without_diff_block_verbatim() {
     // Fail-open guard: the prefix alone does not prove a machine wrapper.
     let typed = "VT Code WebMCP handoff. is something I want to discuss";
     assert_eq!(archived_prompt_content(typed), Some(typed.to_string()));
+}
+
+#[test]
+fn archived_history_skips_exec_task_scaffolding() {
+    // Exec/review/eval frames are `Task: <title>\nDescription: <prompt>`.
+    let task_frame = "Task: Exec Task\nDescription: Make a concise read-only plan for the smoke lifecycle.";
+    assert_eq!(archived_prompt_content(task_frame), None);
+    assert_eq!(
+        archived_prompt_content("Task: Review Task\r\nDescription: review HEAD~1"),
+        None,
+        "CRLF archives must be recognized as well"
+    );
+    assert_eq!(
+        archived_prompt_content(REVIEW_TASK_INSTRUCTIONS_PREFIX),
+        None,
+        "review-mode task instructions are harness text"
+    );
+    assert_eq!(
+        archived_prompt_content(EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX),
+        None,
+        "dry-run instructions are harness text"
+    );
+    assert_eq!(
+        archived_prompt_content(EXEC_TASK_INSTRUCTIONS_PREFIX),
+        None,
+        "exec-mode instructions are harness text"
+    );
+}
+
+#[test]
+fn archived_history_trusts_user_input_for_exec_task_shape() {
+    let user = vtcode_commons::message_metadata::MessageMetadata::user_input(1_700_000_000, 4);
+    let task_frame = "Task: Exec Task\nDescription: Make a concise read-only plan for the smoke lifecycle.";
+    assert_eq!(
+        archived_prompt_content_with_metadata(task_frame, Some(&user)),
+        Some(task_frame.to_string()),
+        "trusted user input must survive the exec-task shape check"
+    );
+    // Legacy task frames carry no metadata, so the shape check still drops them.
+    assert_eq!(archived_prompt_content_with_metadata(task_frame, None), None);
+    // Legacy recovery notices were tagged user_input, so the prefix safety net
+    // still applies even when provenance says user_input.
+    let legacy_recovery =
+        "Verification failed: cargo nextest run (exit code 1). Fix the failure and run verification again.";
+    assert_eq!(archived_prompt_content_with_metadata(legacy_recovery, Some(&user)), None);
+}
+
+#[test]
+fn archived_history_keeps_user_prompts_that_mention_task() {
+    // Asymmetric guard: the bare prefix is not proof of an exec task frame.
+    for typed in [
+        "Task: refactor the parser\nbut keep the public API stable",
+        "Task: list the review findings",
+        "Task: Exec Task",
+    ] {
+        assert_eq!(archived_prompt_content(typed), Some(typed.to_string()), "genuine prompt dropped: {typed}");
+    }
+}
+
+#[test]
+fn archived_history_skips_runner_recovery_notices() {
+    for harness in [
+        "It looks like you're repeating the same response. If you're stuck, try a different approach: break the problem into smaller steps, use different tools, or declare the task complete if you have enough information.",
+        "No tool calls or completion for 3 consecutive turns. The agent appears to be idle — it is responding without taking actions or declaring the task complete.",
+        "You have reached the tool-call iteration limit of 60. This typically means you are in a loop.",
+        "Evaluator rejected the candidate implementation in round 1. Fix the reported issues.",
+        "Durable matrix results: {\"lifecycle\":\"Succeeded\"}. Report success only for Succeeded.",
+        "This is the final planning turn within the configured budget. Return a concise, complete plan now.",
+        "Task tracker steps still open: #4 Verify absence. Continue with the next one in this run.",
+        "The harness task tracker could not be loaded, so completion cannot be checked yet. Continue with the task.",
+        "Run a verifier and observe its terminal exit before completing changed code.",
+        "Verification failed: cargo nextest run (exit code 1). Fix the failure and run verification again.",
+        "Unverified: cargo check produced no terminal verdict. Fix the failure and run verification again.",
+    ] {
+        assert_eq!(archived_prompt_content(harness), None, "harness text leaked: {harness}");
+    }
+}
+
+#[test]
+fn archived_history_skips_non_user_provenance() {
+    for metadata in [
+        vtcode_commons::message_metadata::MessageMetadata::harness_notice(1_700_000_000, 4),
+        vtcode_commons::message_metadata::MessageMetadata::llm_response(1_700_000_000, 4),
+        vtcode_commons::message_metadata::MessageMetadata::tool_result(1_700_000_000, 4),
+        vtcode_commons::message_metadata::MessageMetadata::system(1_700_000_000, 4),
+    ] {
+        assert_eq!(
+            archived_prompt_content_with_metadata("keep going with the migration", Some(&metadata)),
+            None,
+            "non-user provenance must win over prompt shape: {}",
+            metadata.source().unwrap_or("<none>")
+        );
+    }
+}
+
+#[test]
+fn archived_history_skips_messages_tagged_synthetic() {
+    let metadata = vtcode_commons::message_metadata::MessageMetadata::harness_notice(1_700_000_000, 4);
+    assert_eq!(
+        archived_prompt_content_with_metadata("keep going with the migration", Some(&metadata)),
+        None,
+        "synthetic provenance must win over prompt shape"
+    );
+
+    let user = vtcode_commons::message_metadata::MessageMetadata::user_input(1_700_000_000, 4);
+    assert_eq!(
+        archived_prompt_content_with_metadata("keep going with the migration", Some(&user)),
+        Some("keep going with the migration".to_string())
+    );
+    assert_eq!(
+        archived_prompt_content_with_metadata("keep going with the migration", None),
+        Some("keep going with the migration".to_string())
+    );
 }

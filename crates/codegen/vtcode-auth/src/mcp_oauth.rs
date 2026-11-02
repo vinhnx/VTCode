@@ -20,9 +20,9 @@ const REFRESH_SKEW_SECS: u64 = 60;
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct McpOAuthConfig {
-    /// OAuth authorization endpoint.
+    /// OAuth authorization endpoint. Must be an http(s) URL with a host.
     pub authorization_url: String,
-    /// OAuth token endpoint.
+    /// OAuth token endpoint. Must be an http(s) URL with a host.
     pub token_url: String,
     /// OAuth client identifier.
     pub client_id: String,
@@ -64,6 +64,19 @@ impl Default for McpOAuthConfig {
     }
 }
 
+/// Allowlist-based endpoint check: only `http(s)` URLs with a host.
+///
+/// Configured OAuth endpoints and the protected resource all pass through
+/// here so a `javascript:`/`data:`/shell-metachar URL fails at prepare time,
+/// never at `webbrowser::open` or `reqwest` time.
+fn validate_endpoint_url(what: &str, provider_name: &str, raw: &str) -> Result<Url> {
+    let parsed = Url::parse(raw).with_context(|| format!("MCP provider '{provider_name}' has an invalid {what}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        bail!("MCP provider '{provider_name}' {what} must be an http(s) URL with a host");
+    }
+    Ok(parsed)
+}
+
 impl McpOAuthConfig {
     fn validate(&self, provider_name: &str) -> Result<()> {
         if self.authorization_url.trim().is_empty() {
@@ -75,6 +88,8 @@ impl McpOAuthConfig {
         if self.client_id.trim().is_empty() {
             bail!("MCP provider '{provider_name}' is missing oauth.client_id");
         }
+        drop(validate_endpoint_url("oauth.authorization_url", provider_name, &self.authorization_url)?);
+        drop(validate_endpoint_url("oauth.token_url", provider_name, &self.token_url)?);
         Ok(())
     }
 
@@ -84,7 +99,7 @@ impl McpOAuthConfig {
 }
 
 /// Stored OAuth token for an MCP HTTP provider.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct McpOAuthToken {
     access_token: String,
     refresh_token: Option<String>,
@@ -92,6 +107,54 @@ pub struct McpOAuthToken {
     scope: Option<String>,
     obtained_at: u64,
     expires_at: Option<u64>,
+    #[serde(default)]
+    binding: Option<McpOAuthBinding>,
+}
+
+impl std::fmt::Debug for McpOAuthToken {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("McpOAuthToken")
+            .field("access_token", &"[REDACTED]")
+            .field("refresh_token", &self.refresh_token.as_ref().map(|_| "[REDACTED]"))
+            .field("token_type", &self.token_type)
+            .field("scope", &self.scope)
+            .field("obtained_at", &self.obtained_at)
+            .field("expires_at", &self.expires_at)
+            .field("binding", &self.binding.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct McpOAuthBinding {
+    provider: String,
+    authorization_url: String,
+    token_url: String,
+    client_id: String,
+    audience: Option<String>,
+    scopes: Vec<String>,
+    extra_auth_params: BTreeMap<String, String>,
+    extra_token_params: BTreeMap<String, String>,
+    resource: String,
+}
+
+impl McpOAuthBinding {
+    fn new(provider: &str, config: &McpOAuthConfig, resource: &str) -> Result<Self> {
+        config.validate(provider)?;
+        let resource = validate_endpoint_url("protected resource URL", provider, resource)?;
+        Ok(Self {
+            provider: provider.to_owned(),
+            authorization_url: config.authorization_url.clone(),
+            token_url: config.token_url.clone(),
+            client_id: config.client_id.clone(),
+            audience: config.audience.clone(),
+            scopes: config.scopes.clone(),
+            extra_auth_params: config.extra_auth_params.clone(),
+            extra_token_params: config.extra_token_params.clone(),
+            resource: resource.to_string(),
+        })
+    }
 }
 
 impl McpOAuthToken {
@@ -116,6 +179,7 @@ pub struct McpOAuthPreparedLogin {
     pub timeout_secs: u64,
     pkce: PkceChallenge,
     state: String,
+    binding: Option<McpOAuthBinding>,
 }
 
 impl McpOAuthPreparedLogin {
@@ -143,6 +207,10 @@ impl McpOAuthService {
         Self
     }
 
+    /// Prepare the authorization URL without a resource binding.
+    ///
+    /// Such a flow cannot be completed securely; use `prepare_login_for_resource`
+    /// when the token will be used by an HTTP MCP provider.
     pub fn prepare_login(&self, provider_name: &str, config: &McpOAuthConfig) -> Result<McpOAuthPreparedLogin> {
         config.validate(provider_name)?;
         let pkce = generate_pkce_challenge()?;
@@ -154,7 +222,20 @@ impl McpOAuthService {
             timeout_secs: config.flow_timeout_secs,
             pkce,
             state,
+            binding: None,
         })
+    }
+
+    /// Prepare a login bound to the HTTP resource that will receive the token.
+    pub fn prepare_login_for_resource(
+        &self,
+        provider_name: &str,
+        config: &McpOAuthConfig,
+        resource: &str,
+    ) -> Result<McpOAuthPreparedLogin> {
+        let mut prepared = self.prepare_login(provider_name, config)?;
+        prepared.binding = Some(McpOAuthBinding::new(provider_name, config, resource)?);
+        Ok(prepared)
     }
 
     pub async fn complete_login(
@@ -165,7 +246,15 @@ impl McpOAuthService {
         code: &str,
     ) -> Result<McpOAuthLoginCompletion> {
         config.validate(provider_name)?;
-        let token = exchange_code_for_token(config, code, &prepared.pkce).await?;
+        let binding = prepared
+            .binding
+            .as_ref()
+            .context("MCP OAuth login requires a protected resource")?;
+        if *binding != McpOAuthBinding::new(provider_name, config, &binding.resource)? {
+            bail!("MCP OAuth configuration changed during login; start login again");
+        }
+        let mut token = exchange_code_for_token(config, code, &prepared.pkce).await?;
+        token.binding = Some(binding.clone());
         save_token(provider_name, &token, config.credentials_store_mode)?;
         Ok(McpOAuthLoginCompletion {
             name: provider_name.to_string(),
@@ -178,6 +267,30 @@ impl McpOAuthService {
         let Some(token) = load_token(provider_name, storage_mode)? else {
             return Ok(McpOAuthStatus::NotAuthenticated);
         };
+        if token.binding.is_none() {
+            return Ok(McpOAuthStatus::NotAuthenticated);
+        }
+        let now = now_secs();
+        Ok(McpOAuthStatus::Authenticated {
+            age_seconds: now.saturating_sub(token.obtained_at),
+            expires_in: token.expires_at.map(|expires_at| expires_at.saturating_sub(now)),
+        })
+    }
+
+    /// Report authentication only when the stored binding matches the configured resource.
+    pub fn status_for_resource(
+        &self,
+        provider_name: &str,
+        config: &McpOAuthConfig,
+        resource: &str,
+    ) -> Result<McpOAuthStatus> {
+        let binding = McpOAuthBinding::new(provider_name, config, resource)?;
+        let Some(token) = load_token(provider_name, config.credentials_store_mode)? else {
+            return Ok(McpOAuthStatus::NotAuthenticated);
+        };
+        if token.binding.as_ref() != Some(&binding) {
+            return Ok(McpOAuthStatus::NotAuthenticated);
+        }
         let now = now_secs();
         Ok(McpOAuthStatus::Authenticated {
             age_seconds: now.saturating_sub(token.obtained_at),
@@ -193,14 +306,36 @@ impl McpOAuthService {
         load_token(provider_name, storage_mode)
     }
 
+    /// Unbound resolution is rejected because it cannot identify the receiving resource.
+    #[deprecated(
+        since = "0.180.6",
+        note = "use `resolve_access_token_for_resource` with the receiving resource"
+    )]
     pub async fn resolve_access_token(&self, provider_name: &str, config: &McpOAuthConfig) -> Result<Option<String>> {
+        let _ = (provider_name, config);
+        bail!("MCP OAuth token resolution requires a protected resource")
+    }
+
+    /// Resolve only a token bound to the current authorization and resource configuration.
+    pub async fn resolve_access_token_for_resource(
+        &self,
+        provider_name: &str,
+        config: &McpOAuthConfig,
+        resource: &str,
+    ) -> Result<Option<String>> {
+        let binding = McpOAuthBinding::new(provider_name, config, resource)?;
         let Some(mut token) = load_token(provider_name, config.credentials_store_mode)? else {
             return Ok(None);
         };
 
+        if token.binding.as_ref() != Some(&binding) {
+            return Ok(None);
+        }
+
         if token.is_refresh_due() {
             if token.refresh_token.is_some() {
                 token = refresh_token(config, &token).await?;
+                token.binding = Some(binding);
                 save_token(provider_name, &token, config.credentials_store_mode)?;
             } else {
                 bail!(
@@ -314,18 +449,21 @@ async fn refresh_token(config: &McpOAuthConfig, current: &McpOAuthToken) -> Resu
 }
 
 async fn send_token_request(token_url: &str, form: &[(String, String)]) -> Result<McpOAuthToken> {
-    let response = Client::new()
+    let response = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .context("failed to create MCP OAuth client")?
         .post(token_url)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .form(form)
         .send()
         .await
-        .with_context(|| format!("failed to send MCP OAuth request to {token_url}"))?;
+        .map_err(|error| anyhow!("failed to send MCP OAuth request: {}", error.without_url()))?;
     let status = response.status();
     let body = response.text().await.context("failed to read MCP OAuth response body")?;
 
     if !status.is_success() {
-        bail!("MCP OAuth request failed (HTTP {status}): {body}");
+        bail!("MCP OAuth request failed (HTTP {status})");
     }
 
     let payload: TokenResponse = serde_json::from_str(&body).context("failed to parse MCP OAuth token response")?;
@@ -337,6 +475,7 @@ async fn send_token_request(token_url: &str, form: &[(String, String)]) -> Resul
         scope: payload.scope,
         obtained_at: now,
         expires_at: payload.expires_in.map(|secs| now.saturating_add(secs)),
+        binding: None,
     })
 }
 
@@ -380,17 +519,8 @@ fn clear_token(provider_name: &str, storage_mode: AuthCredentialsStoreMode) -> R
 }
 
 fn token_storage(provider_name: &str) -> CredentialStorage {
-    let normalized_provider = provider_name
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    CredentialStorage::new("vtcode", format!("mcp_oauth_{normalized_provider}"))
+    let encoded_provider = URL_SAFE_NO_PAD.encode(provider_name.as_bytes());
+    CredentialStorage::new("vtcode", format!("mcp_oauth:v2:{encoded_provider}"))
 }
 
 fn now_secs() -> u64 {
@@ -449,6 +579,37 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_dangerous_endpoint_schemes() {
+        let mut config = sample_config();
+        for (field, url) in [
+            ("authorization_url", "javascript:alert(1)"),
+            ("authorization_url", "data:text/html,<script>alert(1)</script>"),
+            ("token_url", "file:///etc/passwd"),
+            ("token_url", "vbscript:msgbox(1)"),
+        ] {
+            let mut bad = config.clone();
+            if field == "authorization_url" {
+                bad.authorization_url = url.to_string();
+            } else {
+                bad.token_url = url.to_string();
+            }
+            let error = bad.validate("demo").expect_err("dangerous scheme must fail validation");
+            assert!(format!("{error:#}").contains("must be an http(s) URL"), "unexpected error for {url}: {error:#}");
+        }
+        config.token_url = "http://127.0.0.1:1/token".to_string();
+        config.validate("demo").expect("loopback http stays allowed");
+    }
+
+    #[test]
+    fn prepare_login_for_resource_rejects_dangerous_resource_scheme() {
+        let service = McpOAuthService::new();
+        let error = service
+            .prepare_login_for_resource("demo", &sample_config(), "javascript:alert(1)")
+            .expect_err("dangerous resource scheme must fail");
+        assert!(format!("{error:#}").contains("must be an http(s) URL"), "unexpected error: {error:#}");
+    }
+
+    #[test]
     fn prepare_login_builds_expected_auth_url() {
         let service = McpOAuthService::new();
         let prepared = service.prepare_login("demo", &sample_config()).expect("prepare login");
@@ -462,6 +623,88 @@ mod tests {
         assert!(prepared.auth_url.contains("state="));
         assert_eq!(prepared.callback_port, 8123);
         assert_eq!(prepared.timeout_secs, 120);
+    }
+
+    #[tokio::test]
+    async fn login_completion_rejects_changed_configuration_before_exchange() {
+        let service = McpOAuthService::new();
+        let config = sample_config();
+        let prepared = service
+            .prepare_login_for_resource("demo", &config, "https://mcp.example/api")
+            .expect("prepare");
+        let mut changed = config.clone();
+        changed.token_url = "http://127.0.0.1:1/unexpected".to_string();
+        let error = service
+            .complete_login("demo", &changed, &prepared, "code")
+            .await
+            .expect_err("reject changed config");
+        assert!(format!("{error:#}").contains("configuration changed during login"));
+        let unbound = service.prepare_login("demo", &config).expect("legacy prepare");
+        let error = service
+            .complete_login("demo", &config, &unbound, "code")
+            .await
+            .expect_err("reject unbound login");
+        assert!(format!("{error:#}").contains("requires a protected resource"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn bound_login_exchanges_and_resolves_for_the_same_resource() {
+        use std::io::{Read, Write};
+        let _guard = TestAuthDirGuard::new();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .expect("timeout");
+            let mut buffer = [0_u8; 4096];
+            let count = stream.read(&mut buffer).expect("request");
+            assert!(String::from_utf8_lossy(&buffer[..count]).starts_with("POST /token HTTP/1.1"));
+            let body = r#"{"access_token":"fixture-access","token_type":"Bearer","expires_in":3600}"#;
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).expect("response");
+        });
+        let mut config = sample_config();
+        config.token_url = format!("http://{address}/token");
+        let service = McpOAuthService::new();
+        let resource = "https://mcp.example/resource";
+        let prepared = service.prepare_login_for_resource("demo", &config, resource).expect("prepare");
+        let completion = service
+            .complete_login("demo", &config, &prepared, "fixture-code")
+            .await
+            .expect("complete");
+        assert_eq!(completion.name, "demo");
+        assert_eq!(
+            service
+                .resolve_access_token_for_resource("demo", &config, resource)
+                .await
+                .expect("resolve")
+                .as_deref(),
+            Some("fixture-access")
+        );
+        server.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn token_exchange_does_not_follow_redirects_or_echo_error_bodies() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut buffer = [0_u8; 4096];
+            let _count = stream.read(&mut buffer).expect("request");
+            let body = "sensitive-reflected-value";
+            write!(stream, "HTTP/1.1 307 Temporary Redirect\r\nLocation: http://127.0.0.1:1/steal\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).expect("response");
+        });
+        let error = send_token_request(&format!("http://{address}/token"), &[("code".into(), "secret".into())])
+            .await
+            .expect_err("redirect must fail");
+        let message = format!("{error:#}");
+        assert!(message.contains("307"), "{message}");
+        assert!(!message.contains("sensitive-reflected-value"));
+        server.join().expect("server");
     }
 
     #[test]
@@ -481,6 +724,9 @@ mod tests {
                 scope: Some("mcp:read".to_string()),
                 obtained_at: now_secs(),
                 expires_at: Some(now_secs() + 3600),
+                binding: Some(
+                    McpOAuthBinding::new("demo", &sample_config(), "https://mcp.example/api").expect("binding"),
+                ),
             },
             storage_mode,
         )
@@ -488,6 +734,128 @@ mod tests {
 
         let status = service.status("demo", storage_mode).expect("status");
         assert!(matches!(status, McpOAuthStatus::Authenticated { expires_in: Some(_), .. }));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn token_resolution_requires_matching_resource_and_oauth_identity() {
+        let _guard = TestAuthDirGuard::new();
+        let service = McpOAuthService::new();
+        let config = sample_config();
+        let resource = "https://mcp.example/api";
+        let binding = McpOAuthBinding::new("demo", &config, resource).expect("binding");
+        let mut token = McpOAuthToken {
+            access_token: "access".to_string(),
+            refresh_token: Some("refresh".to_string()),
+            token_type: None,
+            scope: None,
+            obtained_at: now_secs(),
+            expires_at: None,
+            binding: Some(binding),
+        };
+        let debug = format!("{token:?}");
+        assert!(!debug.contains("\"access\""));
+        assert!(!debug.contains("\"refresh\""));
+        save_token("demo", &token, config.credentials_store_mode).expect("store token");
+        assert_eq!(
+            service
+                .resolve_access_token_for_resource("demo", &config, resource)
+                .await
+                .expect("resolve")
+                .as_deref(),
+            Some("access")
+        );
+        // A mismatched expired token must be rejected before any refresh request.
+        token.expires_at = Some(1);
+        save_token("demo", &token, config.credentials_store_mode).expect("store expired token");
+        let mut changed = config.clone();
+        changed.token_url = "https://other.example/token".to_string();
+        for (candidate, endpoint) in [(&changed, resource), (&config, "https://other.example/api")] {
+            assert_eq!(
+                service
+                    .resolve_access_token_for_resource("demo", candidate, endpoint)
+                    .await
+                    .expect("resolve"),
+                None
+            );
+            assert!(matches!(
+                service.status_for_resource("demo", candidate, endpoint).expect("status"),
+                McpOAuthStatus::NotAuthenticated
+            ));
+        }
+        let mut changed_client = config.clone();
+        changed_client.client_id = "other-client".to_string();
+        assert_eq!(
+            service
+                .resolve_access_token_for_resource("demo", &changed_client, resource)
+                .await
+                .expect("resolve"),
+            None
+        );
+        let mut changed_auth = config.clone();
+        changed_auth.authorization_url = "https://other.example/authorize".to_string();
+        assert_eq!(
+            service
+                .resolve_access_token_for_resource("demo", &changed_auth, resource)
+                .await
+                .expect("resolve"),
+            None
+        );
+        assert_eq!(
+            service
+                .resolve_access_token_for_resource("demo_", &config, resource)
+                .await
+                .expect("resolve"),
+            None
+        );
+        token.binding = None;
+        save_token("demo", &token, config.credentials_store_mode).expect("store unbound token");
+        assert_eq!(
+            service
+                .resolve_access_token_for_resource("demo", &config, resource)
+                .await
+                .expect("resolve"),
+            None
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn legacy_and_colliding_provider_names_are_not_reused() {
+        let _guard = TestAuthDirGuard::new();
+        let legacy = CredentialStorage::new("vtcode", "mcp_oauth_a_b");
+        legacy
+            .store_with_mode("old-unbound-token", AuthCredentialsStoreMode::File)
+            .expect("legacy token");
+        assert!(load_token("a/b", AuthCredentialsStoreMode::File).expect("first load").is_none());
+        assert!(
+            load_token("a_b", AuthCredentialsStoreMode::File)
+                .expect("second load")
+                .is_none()
+        );
+        let token = McpOAuthToken {
+            access_token: "first".to_string(),
+            refresh_token: None,
+            token_type: None,
+            scope: None,
+            obtained_at: now_secs(),
+            expires_at: None,
+            binding: None,
+        };
+        save_token("a/b", &token, AuthCredentialsStoreMode::File).expect("first token");
+        assert!(
+            load_token("a_b", AuthCredentialsStoreMode::File)
+                .expect("second load")
+                .is_none()
+        );
+        clear_token("a_b", AuthCredentialsStoreMode::File).expect("clear second");
+        assert_eq!(
+            load_token("a/b", AuthCredentialsStoreMode::File)
+                .expect("first load")
+                .expect("first token")
+                .access_token,
+            "first"
+        );
     }
 
     #[test]
@@ -505,6 +873,7 @@ mod tests {
                 scope: None,
                 obtained_at: now_secs(),
                 expires_at: None,
+                binding: None,
             },
             storage_mode,
         )

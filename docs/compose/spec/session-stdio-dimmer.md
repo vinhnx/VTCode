@@ -69,7 +69,7 @@ row per plumbing argument, and an unbounded bright stdout dump that overwhelms t
 | **Tail-trim to N rows** | Exec-session stdin/stdout bodies (this feature)                                               | Session follow-ups are streaming polls of a live log; the newest rows carry the signal (progress, errors, summary). Head is stale. |
 | **Head + tail excerpt** | Static command previews (`RUN_COMMAND_HEAD/TAIL_PREVIEW_LINES = 3`) and `condense_text_bytes` | Finished logs put the outcome at the end and the invocation at the start.                                                          |
 | **Token budget**        | Model-facing tool results (~25k tokens)                                                       | Context-window cost, not UI cost.                                                                                                  |
-| **Byte budget**         | `ShellHandler` preview (`max_output_tokens` × 4 chars)                                        | Bounds a single tool call before it reaches the model.                                                                             |
+| **Byte budget**         | Model-facing tool result preview (`max_output_tokens` × 4 chars)                              | Bounds a single tool call before it reaches the model.                                                                             |
 | **Line-count cap**      | UI surfaces (`INLINE_STREAM_MAX_LINES = 30`, `MAX_CODE_LINES = 30`)                           | Prevents TUI lag from pathological output.                                                                                         |
 
 **Decision:** keep `EXEC_SESSION_OUTPUT_MAX_LINES = 10` (already landed). Do not change command-launch previews. Do not

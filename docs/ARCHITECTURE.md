@@ -86,8 +86,9 @@ That split keeps VT Code aligned with the current runtime while making the harne
 
 ### HOVER self-correction loop
 
-VT Code's compiled guidance names the HOVER loop: **Hypothesize → Observe → Verify → Evaluate → Revise →
-Repeat**. The mismatch contract is Hypothesis → Observation → Mismatch → Inspect evidence → Revise hypothesis.
+VT Code's HOVER model is **Hypothesize → Observe → Verify → Evaluate → Revise → Repeat**. Compiled guidance
+permits repetition only after a mismatch, within existing limits, and stops after required checks pass.
+The mismatch contract is Hypothesis → Observation → Mismatch → Inspect evidence → Revise hypothesis.
 Guidance and bounded diagnosis feedback encourage this behavior; they do not prove compliance.
 
 - Pure classification lives in `crates/codegen/vtcode-core/src/core/agent/hypothesis.rs`: `MismatchEvidence`,
@@ -210,6 +211,38 @@ The command-line interface is built on specific principles for robustness and in
    state). See [Signal Handling Architecture](signal_handling.md) for details.
 
 ## Core Architecture
+
+### Workspace crates
+
+The workspace has 23 crates: the root `vtcode` binary plus 22 library crates under `crates/codegen/` (runtime) and
+`crates/common/` (shared contracts and utilities). `default-members` build only the root, `vtcode-core`, and `vtcode-ui`.
+New reusable logic belongs in an existing small crate (or a new one) rather than in `vtcode-core` by default.
+
+| Crate                       | Role                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `vtcode` (root `src/`)      | Binary, CLI, session bootstrap.                                                             |
+| `vtcode-core`               | Agent loop, tools, prompts, LLM orchestration, UI.                                          |
+| `vtcode-ui`                 | Unified UI: design system, theme registry, TUI framework.                                   |
+| `vtcode-config`             | Config loading and schema.                                                                  |
+| `vtcode-bash-runner`        | Shell execution sandbox.                                                                    |
+| `vtcode-acp`                | Agent Client Protocol (Zed).                                                                |
+| `vtcode-auth`               | OAuth and credential storage.                                                               |
+| `vtcode-indexer`            | Code indexing and search.                                                                   |
+| `vtcode-exec-events`        | `ThreadEvent` contract and ATIF export.                                                     |
+| `vtcode-diff`               | Bounded structured diffs and renderer-neutral preview rows.                                 |
+| `vtcode-webmcp`             | Authenticated browser editor bridge, pairing, event replay, and bounded workspace adapter.  |
+| `vtcode-commons`            | Shared utilities.                                                                           |
+| `vtcode-macros`             | Procedural macros.                                                                          |
+| `vtcode-utility-tool-specs` | JSON schemas for utility, file, and collaboration/HITL tools.                               |
+| `vtcode-agent-plugins`      | Agent Plugins manifest parsing, validation, and discovery.                                  |
+| `vtcode-llm`                | LLM provider abstraction, client implementations, streaming.                                |
+| `vtcode-skills`             | Skill types, discovery, loading, and validation.                                            |
+| `vtcode-memory`             | Per-session append-only `ThreadEvent` store, derived views, retention, cross-session query. |
+| `vtcode-eval`               | Agent evaluation framework: pass@k/pass^k metrics and outcome verification.                 |
+| `vtcode-safety`             | Command safety detection, execution policies, sandboxing.                                   |
+| `vtcode-a2a`                | Agent2Agent (A2A) protocol client and server.                                               |
+| `vtcode-mcp`                | Model Context Protocol client, connection pooling, tool discovery.                          |
+| `xtask`                     | Release packaging automation.                                                               |
 
 ### TUI Architecture
 

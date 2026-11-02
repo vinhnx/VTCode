@@ -25,6 +25,7 @@ pub mod domains;
 mod errors;
 mod html_preview;
 mod network_guards;
+pub(crate) mod request_budget;
 pub use classify_helpers::extract_http_status;
 pub use domains::{BUILTIN_BLOCKED_DOMAINS, BUILTIN_BLOCKED_PATTERNS, MALICIOUS_PATTERNS};
 use errors::web_fetch_error_response;
@@ -268,6 +269,8 @@ impl WebFetchTool {
         // Validate URL
         self.validate_url(url)?;
 
+        let budget = request_budget::RequestBudget::current();
+        let redirect_budget = budget.clone();
         let default_headers = Self::default_headers();
 
         // Build a redirect policy that validates each redirect target against SSRF rules.
@@ -322,11 +325,11 @@ impl WebFetchTool {
                 // Check allowed domains (exemptions)
                 for allowed in &allowed_domains {
                     if domain_matches_allowed(&domain, allowed) {
-                        return attempt.follow();
+                        return follow_with_budget(attempt, redirect_budget.as_ref());
                     }
                 }
             }
-            attempt.follow()
+            follow_with_budget(attempt, redirect_budget.as_ref())
         });
 
         let client = reqwest::Client::builder()
@@ -335,11 +338,7 @@ impl WebFetchTool {
             .redirect(redirect_policy)
             .build()?;
 
-        let response = client.get(url).send().await?;
-
-        if !response.status().is_success() {
-            return Err(anyhow!("HTTP request failed with status: {}", response.status()));
-        }
+        let response = fetch_response(&client, url, max_bytes, timeout_secs, budget.as_ref()).await?;
 
         let content_type = response
             .headers()
@@ -691,6 +690,62 @@ impl WebFetchTool {
         headers.insert(USER_AGENT, HeaderValue::from_static("VT Code/1.0 (compatible; web-fetch tool)"));
         headers
     }
+}
+
+async fn fetch_response(
+    client: &reqwest::Client,
+    url: &str,
+    max_bytes: usize,
+    timeout_secs: u64,
+    budget: Option<&request_budget::RequestBudget>,
+) -> Result<reqwest::Response> {
+    let transport = match &budget {
+        Some(budget) => Some(budget.lock_transport().await?),
+        None => None,
+    };
+    if let Some(budget) = &budget {
+        budget.admit(&Url::parse(url)?).map_err(|error| anyhow::Error::new(*error))?;
+    }
+    let response = client.get(url).send().await?;
+
+    if !response.status().is_success() {
+        let failure = errors::HttpFetchFailure {
+            status: response.status().as_u16(),
+            retry_after_ms: response
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .and_then(errors::retry_after_ms),
+        };
+        if let Some(budget) = &budget {
+            let error = web_fetch_error_response(response.url().as_str(), max_bytes, timeout_secs, &failure.into());
+            if let Some(mut error) = crate::tools::registry::ToolExecutionError::from_tool_output(&error) {
+                if let Some(context) = error.debug_context.as_mut() {
+                    context
+                        .metadata
+                        .push(("effective_origin".to_owned(), response.url().origin().ascii_serialization()));
+                }
+                return Err(budget.observe(response.url(), error).into());
+            }
+            bail!("failed to classify HTTP response");
+        }
+        return Err(failure.into());
+    }
+    // Body streaming does not hold the shared header-acquisition permit.
+    drop(transport);
+    Ok(response)
+}
+
+fn follow_with_budget(
+    attempt: reqwest::redirect::Attempt<'_>,
+    budget: Option<&request_budget::RequestBudget>,
+) -> reqwest::redirect::Action {
+    if let Some(budget) = budget
+        && let Err(error) = budget.admit(attempt.url())
+    {
+        return attempt.error(*error);
+    }
+    attempt.follow()
 }
 
 impl Default for WebFetchTool {

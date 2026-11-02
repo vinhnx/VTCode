@@ -1,14 +1,16 @@
+use anyhow::Context;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ReasoningEffortLevel};
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::context::{ConversationMemory, EntityResolver, WorkspaceState};
+#[cfg(test)]
+use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::{
-    LightweightFeature, collect_single_response, create_provider_for_model_route, provider as uni,
-    resolve_lightweight_route,
+    LightweightFeature, collect_single_response, create_provider_for_model_route, resolve_lightweight_route,
 };
 
 const MIN_PROMPT_LENGTH_FOR_REFINEMENT: usize = 20;
@@ -23,7 +25,9 @@ mod prompt_refinement;
 #[cfg(test)]
 #[path = "prompt_tests.rs"]
 mod prompt_tests;
-use prompt_refinement::{should_accept_refinement, should_attempt_refinement};
+#[cfg(test)]
+use prompt_refinement::should_accept_refinement;
+use prompt_refinement::{REFINEMENT_TIMEOUT, accepted_refinement, refinement_request, should_attempt_refinement};
 
 /// Combined refinement and enrichment function (Phase 3 integration)
 pub(crate) async fn refine_and_enrich_prompt(
@@ -103,59 +107,17 @@ async fn try_refine_prompt_with_route(
         return Ok(None);
     };
     let refiner = create_provider_for_model_route(route, cfg, Some(vt_cfg))?;
-    let reasoning_effort = if vt_cfg.agent.reasoning_effort != ReasoningEffortLevel::None {
-        let mapping = vtcode_core::llm::reasoning_effort::ReasoningEffortMapper::resolve(
-            refiner.as_ref(),
-            &route.model,
-            vt_cfg.agent.reasoning_effort,
-            vt_cfg.agent.allow_reasoning_effort_downgrade,
-        )?;
-        if mapping.degraded() {
-            tracing::warn!(
-                requested = %mapping.requested,
-                effective = %mapping.effective,
-                model = %route.model,
-                "Prompt-refinement reasoning effort explicitly downgraded"
-            );
-        }
-        Some(mapping.effective)
-    } else {
-        None
-    };
-    let temperature = if reasoning_effort.is_some() && matches!(route.provider_name.as_str(), "anthropic" | "minimax") {
-        None
-    } else {
-        Some(vt_cfg.agent.refine_temperature)
-    };
-    let req = uni::LLMRequest {
-        messages: Arc::new(vec![uni::Message::user(raw.to_string())]),
-        model: route.model.clone(),
-        temperature,
-        tool_choice: Some(uni::ToolChoice::none()),
-        reasoning_effort,
-        ..Default::default()
-    };
-
-    let text = collect_single_response(refiner.as_ref(), req)
+    let req = refinement_request(
+        refiner.as_ref(),
+        raw,
+        &route.model,
+        refiner.supported_reasoning_efforts(&route.model),
+        vt_cfg.agent.refine_temperature,
+    );
+    let response = tokio::time::timeout(REFINEMENT_TIMEOUT, collect_single_response(refiner.as_ref(), req))
         .await
-        .map(|response| response.content.unwrap_or_default())?;
-    if !should_accept_refinement(raw, &text) {
-        return Ok(None);
-    }
-
-    Ok(Some(finalize_refined_prompt(text)))
-}
-
-fn finalize_refined_prompt(text: String) -> String {
-    let lower = text.to_lowercase();
-    let debug_triggers = ["debug", "analyze", "error", "fix", "issue", "troubleshoot", "diagnose"];
-    if debug_triggers.iter().any(|token| lower.contains(token)) {
-        format!(
-            "{text}\n\nNote: For diagnostics, inspect files and run verification commands through `exec_command`. When advanced `code_search` is available, call it with `query` and optional `path`, `file_types`, `result_types`, or `max_results`."
-        )
-    } else {
-        text
-    }
+        .context("prompt refinement timed out")??;
+    Ok(accepted_refinement(raw, response))
 }
 
 // ============================================================================

@@ -22,9 +22,21 @@ struct StartupTraceState {
 static STATE: OnceLock<StartupTraceState> = OnceLock::new();
 static HOOK_STATE: AtomicU8 = AtomicU8::new(0);
 
+/// Env var that opts into phase recording.
+const STARTUP_TRACE_ENV: &str = "VTCODE_STARTUP_TRACE";
+
+/// Whether startup tracing is enabled.
+///
+/// Parsed through the canonical env-flag set (`1`/`true`/`yes`/`on`/`debug`,
+/// trimmed and case-insensitive) rather than a local literal comparison.
+#[must_use]
+pub fn startup_trace_enabled() -> bool {
+    crate::utils::env_flag_enabled(STARTUP_TRACE_ENV)
+}
+
 fn state() -> &'static StartupTraceState {
     STATE.get_or_init(|| StartupTraceState {
-        enabled: std::env::var("VTCODE_STARTUP_TRACE").is_ok_and(|value| value == "1"),
+        enabled: startup_trace_enabled(),
         started_at: Instant::now(),
         first_render_seen: AtomicBool::new(false),
         first_render_hook: Mutex::new(None),

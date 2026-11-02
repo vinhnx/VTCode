@@ -366,6 +366,58 @@ async fn source_inspection_shell_reads_use_cwd_and_credit_verbatim_lines() {
 }
 
 #[tokio::test]
+async fn complete_shell_read_refreshes_conflict_baseline_but_partial_and_stale_reads_do_not() {
+    for mode in [InspectionMode::Off, InspectionMode::Enforce] {
+        let (dir, registry) = fixture().await;
+        registry.set_inspection_mode(mode);
+        let path = dir.path().join("sample.md");
+        let monitor = registry.edited_file_monitor_ref();
+        monitor.track_read(&path).await.unwrap();
+        std::fs::write(&path, "changed\nsecond\n").unwrap();
+        let partial = json!({"cmd":"sed -n '1,1p' sample.md", "yield_time_ms":1000});
+        let output = registry.execute_tool(tools::EXEC_COMMAND, partial).await.unwrap();
+        assert_eq!(output["exit_code"], 0, "{output}");
+        assert!(monitor.detect_conflict(&path, None, None).await.unwrap().is_some());
+
+        let full = json!({"cmd":"cat sample.md", "yield_time_ms":1000});
+        let output = registry.execute_tool(tools::EXEC_COMMAND, full.clone()).await.unwrap();
+        assert_eq!(output["exit_code"], 0, "{output}");
+        assert!(monitor.detect_conflict(&path, None, None).await.unwrap().is_none(), "{output}");
+
+        std::fs::write(&path, "later\nsecond\n").unwrap();
+        registry.observe_source_output(tools::EXEC_COMMAND, &full, &output).await;
+        assert!(monitor.detect_conflict(&path, None, None).await.unwrap().is_some());
+    }
+}
+
+#[tokio::test]
+async fn truncated_failed_and_compound_shell_output_never_refreshes_conflict_baseline() {
+    let (dir, registry) = fixture().await;
+    let path = dir.path().join("sample.md");
+    let monitor = registry.edited_file_monitor_ref();
+    monitor.track_read(&path).await.unwrap();
+    std::fs::write(&path, "new content\n").unwrap();
+    for (args, output) in [
+        (json!({"cmd":"cat sample.md"}), json!({"exit_code":1,"output":"new content\n"})),
+        (json!({"cmd":"cat sample.md"}), json!({"exit_code":0,"success":false,"output":"new content\n"})),
+        (json!({"cmd":"cat sample.md"}), json!({"exit_code":0,"cancelled":true,"output":"new content\n"})),
+        (json!({"cmd":"cat sample.md"}), json!({"exit_code":0,"truncated":true,"output":"new content\n"})),
+        (
+            json!({"cmd":"cat sample.md"}),
+            json!({"exit_code":0,"output":"new content\n","output_truncated":true}),
+        ),
+        (
+            json!({"cmd":"cat sample.md"}),
+            json!({"exit_code":0,"output":"new content\n","spool_path":"spool.txt"}),
+        ),
+        (json!({"cmd":"cat sample.md; true"}), json!({"exit_code":0,"output":"new content\n"})),
+    ] {
+        registry.observe_source_output(tools::EXEC_COMMAND, &args, &output).await;
+        assert!(monitor.detect_conflict(&path, None, None).await.unwrap().is_some(), "{args}: {output}");
+    }
+}
+
+#[tokio::test]
 async fn source_inspection_all_public_and_prevalidated_patch_routes_reject_unseen_source() {
     let (_dir, registry) = fixture().await;
     let args = patch("sample.md", "alpha", "blind");

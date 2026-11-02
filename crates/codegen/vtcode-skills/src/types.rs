@@ -25,6 +25,18 @@ pub enum SkillVariety {
     BuiltIn,
 }
 
+impl SkillVariety {
+    /// Stable snake_case label for listings and metrics.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SkillVariety::AgentSkill => "agent_skill",
+            SkillVariety::SystemUtility => "system_utility",
+            SkillVariety::BuiltIn => "built_in",
+        }
+    }
+}
+
 /// Network access policy for a skill
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillNetworkPolicy {
@@ -341,34 +353,49 @@ impl SkillManifest {
         Ok(())
     }
 
-    /// Validate that skill name matches the parent directory name
-    /// This is a requirement per Agent Skills specification
+    /// Validate that the skill's own directory name matches the manifest name.
+    ///
+    /// Accepts either the skill directory or its `SKILL.md` path; the path is
+    /// resolved to the skill directory first so the check can never compare
+    /// against the wrong (parent) directory. This is a requirement per the
+    /// Agent Skills specification.
     pub(crate) fn validate_directory_name_match(&self, skill_path: &std::path::Path) -> anyhow::Result<()> {
-        // For CLI tools, the directory name might not match the skill name
-        // Check if this is a CLI tool by looking for tool.json
-        let tool_json = skill_path.join("tool.json");
-        if tool_json.exists() {
+        let skill_dir = resolve_skill_dir(skill_path);
+
+        // For CLI tools, the directory name might not match the skill name.
+        // Check if this is a CLI tool by looking for tool.json.
+        if skill_dir.join("tool.json").exists() {
             return Ok(());
         }
 
-        let parent_dir = skill_path
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory of: {skill_path:?}"))?;
-
-        let dir_name = parent_dir
+        let dir_name = skill_dir
             .file_name()
             .and_then(|name| name.to_str())
-            .ok_or_else(|| anyhow::anyhow!("Cannot extract directory name from: {parent_dir:?}"))?;
+            .ok_or_else(|| anyhow::anyhow!("Cannot extract directory name from: {skill_dir:?}"))?;
 
         if dir_name != self.name {
             anyhow::bail!(
-                "Skill name '{}' does not match directory name '{}'\nPer Agent Skills spec, the name field must match the parent directory name",
+                "Skill name '{}' does not match directory name '{}'\nPer Agent Skills spec, the name field must match the skill's directory name",
                 self.name,
                 dir_name
             );
         }
 
         Ok(())
+    }
+}
+
+/// Resolve the skill's own directory from either the skill directory or its
+/// `SKILL.md` path.
+///
+/// The Agent Skills spec requires the manifest `name` to match the skill's
+/// directory, and file references resolve against that directory. A `SKILL.md`
+/// path must therefore be reduced to its parent, while a directory path is
+/// returned unchanged (reducing it would yield the wrong grandparent).
+pub(crate) fn resolve_skill_dir(skill_path: &std::path::Path) -> &std::path::Path {
+    match skill_path.file_name().and_then(|name| name.to_str()) {
+        Some("SKILL.md") => skill_path.parent().unwrap_or(skill_path),
+        _ => skill_path,
     }
 }
 
@@ -738,5 +765,12 @@ mod tests {
         assert!(size_of::<Option<Box<SkillNetworkPolicy>>>() < size_of::<Option<SkillNetworkPolicy>>());
         assert!(size_of::<Option<Box<SkillPermissionProfile>>>() < size_of::<Option<SkillPermissionProfile>>());
         assert!(size_of::<Option<Box<SkillFileSystemPermissions>>>() < size_of::<Option<SkillFileSystemPermissions>>());
+    }
+
+    #[test]
+    fn skill_variety_labels_match_serde_snake_case() {
+        assert_eq!(SkillVariety::AgentSkill.as_str(), "agent_skill");
+        assert_eq!(SkillVariety::SystemUtility.as_str(), "system_utility");
+        assert_eq!(SkillVariety::BuiltIn.as_str(), "built_in");
     }
 }

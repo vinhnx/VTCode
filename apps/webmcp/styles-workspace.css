@@ -1,0 +1,345 @@
+.ide-shell {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.explorer {
+  display: flex;
+  width: var(--explorer-width);
+  min-width: 190px;
+  min-height: 0;
+  flex: 0 0 var(--explorer-width);
+  flex-direction: column;
+  border-right: 1px solid var(--ciapre-border);
+  background: var(--ciapre-surface);
+}
+
+.explorer-header,
+.editor-titlebar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--ciapre-border);
+  padding: 10px 12px;
+}
+
+.explorer-header h2,
+.editor-titlebar h1,
+.turn-heading h2,
+.approval-card h2 {
+  overflow: hidden;
+  margin: 2px 0 0;
+  color: var(--ciapre-foreground);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count,
+.file-type {
+  color: var(--ciapre-muted);
+  white-space: nowrap;
+}
+
+.explorer-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 10px 3px;
+  padding: 5px 7px;
+}
+
+.explorer-filter > span {
+  color: var(--ciapre-secondary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.explorer-filter input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ciapre-foreground);
+  font-size: 11px;
+}
+
+kbd {
+  border: 1px solid var(--ciapre-border);
+  color: var(--ciapre-muted);
+  font-size: 9px;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+
+.filter-status {
+  min-height: 22px;
+  overflow: hidden;
+  color: var(--ciapre-muted);
+  font-size: 10px;
+  padding: 3px 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 3px 0 10px;
+  scrollbar-color: var(--ciapre-border) transparent;
+}
+
+.file-tree-row {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--ciapre-muted);
+  text-align: left;
+}
+
+.directory-item {
+  grid-template-columns: 14px minmax(0, 1fr);
+  padding-block: 5px;
+  padding-right: 8px;
+}
+
+.file-item {
+  grid-template-columns: 24px minmax(0, 1fr) 14px;
+  padding-block: 5px;
+  padding-right: 8px;
+}
+
+.file-tree-row:hover,
+.file-tree-row.active {
+  border-left-color: var(--ciapre-secondary);
+  background: var(--ciapre-selection);
+  color: var(--ciapre-foreground);
+}
+
+.tree-chevron {
+  color: var(--ciapre-secondary);
+  text-align: center;
+}
+
+.tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-icon {
+  color: var(--ciapre-secondary);
+  font-size: 10px;
+  text-align: right;
+}
+
+.dirty-marker {
+  min-width: 12px;
+  color: var(--ciapre-secondary);
+  font-weight: 800;
+  text-align: center;
+}
+
+.tree-empty {
+  color: var(--ciapre-muted);
+  font-size: 11px;
+  padding: 18px 12px;
+}
+
+.boundary-note {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 9px;
+  border-top: 1px solid var(--ciapre-border);
+  padding: 10px 12px;
+}
+
+.boundary-mark {
+  color: var(--ciapre-secondary);
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.boundary-note strong,
+.boundary-note small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boundary-note strong {
+  color: var(--ciapre-foreground);
+  font-size: 11px;
+}
+
+.boundary-note small {
+  color: var(--ciapre-muted);
+  font-size: 10px;
+}
+
+.editor-workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: var(--ciapre-background);
+}
+
+.editor-titlebar {
+  min-height: 52px;
+  flex: 0 0 52px;
+  border-bottom: 0;
+  background: var(--ciapre-background);
+}
+
+.editor-file-heading {
+  min-width: 0;
+}
+
+.editor-file-heading h1 {
+  max-width: min(70vw, 720px);
+  font-size: 13px;
+}
+
+.editor-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: var(--ciapre-muted);
+  font-size: 10px;
+}
+
+#editorState {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#editorState.dirty {
+  color: var(--ciapre-alert-foreground);
+}
+
+.file-tabs {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  flex: 0 0 34px;
+  overflow-x: auto;
+  border-top: 1px solid var(--ciapre-border);
+  border-bottom: 1px solid var(--ciapre-border);
+  background: #151515;
+  scrollbar-width: thin;
+}
+
+.file-tab {
+  display: flex;
+  min-width: 100px;
+  max-width: 210px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-right: 1px solid var(--ciapre-border);
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ciapre-muted);
+  font-size: 11px;
+  padding: 7px 10px;
+}
+
+.file-tab:hover,
+.file-tab.active {
+  border-bottom-color: var(--ciapre-secondary);
+  background: var(--ciapre-surface);
+  color: var(--ciapre-foreground);
+}
+
+.tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-toolbar {
+  display: flex;
+  min-height: 36px;
+  flex: 0 0 36px;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--ciapre-border);
+  padding: 5px 8px;
+}
+
+.toolbar-button {
+  border-radius: 2px;
+  font-size: 10px;
+  padding: 5px 8px;
+}
+
+.toolbar-hint {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--ciapre-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-toolbar .button {
+  font-size: 10px;
+  padding: 5px 8px;
+}
+
+.code-editor {
+  min-height: 160px;
+  flex: 1 1 auto;
+  overflow: hidden;
+  background: var(--ciapre-background);
+}
+
+.cm-editor {
+  height: 100%;
+}
+
+.cm-scroller {
+  max-width: 100%;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+}
+
+.editor-footer {
+  display: flex;
+  min-height: 25px;
+  flex: 0 0 25px;
+  justify-content: space-between;
+  gap: 10px;
+  overflow: hidden;
+  border-top: 1px solid var(--ciapre-border);
+  color: var(--ciapre-muted);
+  font-size: 10px;
+  padding: 5px 10px;
+}
+
+.editor-footer span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

@@ -96,6 +96,20 @@ impl provider::LLMProvider for OpenAIProvider {
         !models::openai::TOOL_UNAVAILABLE_MODELS.contains(&requested)
     }
 
+    fn requested_prompt_cache_ttl(&self, model: &str) -> Option<vtcode_config::core::prompt_cache::PromptCacheTtl> {
+        (self.prompt_cache_hints_enabled
+            && !self.is_chatgpt_backend()
+            && !matches!(self.responses_api_state(model), super::super::types::ResponsesApiState::Disabled)
+            && ((self.is_native_openai_api() && super::super::request_builder::supports_prompt_cache_options(model))
+                || self.prompt_cache_options_models.iter().any(|configured| configured == model)))
+        .then(|| {
+            vtcode_config::core::prompt_cache::resolved_openai_prompt_cache_ttl(
+                self.prompt_cache_settings.prompt_cache_ttl,
+                model,
+            )
+        })
+    }
+
     fn supports_responses_compaction(&self, model: &str) -> bool {
         if self.is_chatgpt_backend() {
             return false;
@@ -171,9 +185,36 @@ impl provider::LLMProvider for OpenAIProvider {
 
     async fn generate_auxiliary(
         &self,
-        request: provider::LLMRequest,
+        mut request: provider::LLMRequest,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        self.generate_request_with_websocket(request, false).await
+        // Auxiliary output is not replayed into this request's conversation.
+        // Avoid writing its disposable suffix while retaining stable instructions.
+        if self.prompt_cache_settings.auxiliary_explicit_cache {
+            request
+                .prompt_cache_profile
+                .get_or_insert(provider::PromptCacheProfile::StablePrefix);
+        }
+        let started = std::time::Instant::now();
+        let requested_cache_profile = request.prompt_cache_profile;
+        let response = self.generate_request_with_websocket(request, false).await?;
+        if self.is_native_openai_api()
+            && let Some(usage) = response.usage.as_ref()
+        {
+            tracing::debug!(
+                target: "vtcode::llm::prompt_cache",
+                kind = "prompt_cache_metrics",
+                scope = "auxiliary",
+                provider = "openai",
+                model = %response.model,
+                requested_cache_profile = ?requested_cache_profile,
+                input_tokens = usage.prompt_tokens,
+                cache_read_tokens_reported = usage.cache_read_tokens.or(usage.cached_prompt_tokens),
+                cache_write_tokens_reported = usage.cache_creation_tokens,
+                elapsed_ms = started.elapsed().as_millis(),
+                "OpenAI auxiliary cache usage"
+            );
+        }
+        Ok(response)
     }
 
     async fn compact_history(

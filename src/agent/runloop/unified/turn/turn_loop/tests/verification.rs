@@ -77,12 +77,12 @@ async fn resumed_turn_cannot_complete_while_verification_is_pending() {
         outcome.result,
         TurnLoopResult::Blocked {
             reason: Some(ref reason)
-        } if reason == PENDING_VERIFICATION_BLOCK_REASON
+        } if reason.contains("Verification is still pending")
     ));
     assert_eq!(
         requests.load(Ordering::SeqCst),
-        6,
-        "the gate must cap repeated unverified responses after bounded auto-recovery"
+        1,
+        "missing verification ends this completion attempt without reminders"
     );
     assert!(outcome.final_response_was_fallback);
     assert!(history.iter().any(|message| {
@@ -92,7 +92,7 @@ async fn resumed_turn_cannot_complete_while_verification_is_pending() {
                 .as_text()
                 .contains(crate::agent::runloop::unified::turn::tool_outcomes::helpers::ANTI_BLIND_EDITING_DIRECTIVE)
     }));
-    assert!(history.iter().any(|message| {
+    assert!(!history.iter().any(|message| {
         message.role == uni::MessageRole::System && message.content.as_text().contains("Verification recovery (")
     }));
     assert!(
@@ -160,14 +160,13 @@ async fn harness_auto_verification_completes_text_only_turn_without_manual_conti
 
     // The provider claims completion on its FIRST text, so the claim fast
     // path fires immediately: the harness runs `rustc --version` itself, the
-    // gate clears, and the second response completes normally — two requests,
-    // zero directive rounds, no manual `continue`, no blocked handoff.
+    // gate clears and the retained response completes without resampling.
     assert!(
         matches!(outcome.result, TurnLoopResult::Completed { .. }),
         "expected Completed, got: {:?}",
         outcome.result
     );
-    assert_eq!(requests.load(Ordering::SeqCst), 2);
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
     assert!(!outcome.final_response_was_fallback);
     assert!(
         !history.iter().any(|message| {
@@ -278,29 +277,14 @@ async fn anti_blind_guard_stops_outer_loop_after_bounded_pending_stale_plan_paus
         outcome.result,
         TurnLoopResult::Blocked {
             reason: Some(ref reason)
-        } if reason == "Turn blocked after repeated unverified assistant responses; verification is still pending."
+        } if reason.contains("Verification is still pending")
     ));
-    // The per-turn text cap is 2, but each cap-hit consumes one bounded
-    // autonomous recovery attempt (fresh streak + project-aware directive):
-    // 2 * (1 + MAX_VERIFICATION_AUTO_RECOVERY_ATTEMPTS) texts before block.
-    assert_eq!(
-        text_responses.load(Ordering::SeqCst),
-        2 * (1 + usize::from(
-            crate::agent::runloop::unified::turn::tool_outcomes::helpers::MAX_VERIFICATION_AUTO_RECOVERY_ATTEMPTS
-        ))
-    );
-    assert_eq!(
-        requests.load(Ordering::SeqCst),
-        12,
-        "the provider must not receive requests beyond the auto-recovery budget"
-    );
+    assert_eq!(text_responses.load(Ordering::SeqCst), 1);
+    assert_eq!(requests.load(Ordering::SeqCst), 7, "six edits then one completion attempt");
     assert!(outcome.final_response_was_fallback);
     assert!(history.iter().any(|message| {
         message.phase == Some(uni::AssistantPhase::FinalAnswer)
-            && message
-                .content
-                .as_text()
-                .contains("Inspection-only checks do not clear the verification gate")
+            && message.content.as_text().contains("Completion remains unverified")
     }));
     assert_eq!(
         history
@@ -481,13 +465,13 @@ async fn blocked_anti_blind_recovery_publishes_one_actionable_handoff() {
             outcome.result,
             TurnLoopResult::Blocked {
                 reason: Some(ref reason)
-            } if reason == PENDING_VERIFICATION_BLOCK_REASON
+            } if reason.contains("Verification is still pending")
         ),
         "expected PENDING_VERIFICATION_BLOCK_REASON, got: {:?}, steps: {:?}",
         outcome.result,
         steps.lock().expect("step trace lock").as_slice()
     );
-    assert_eq!(requests.load(Ordering::SeqCst), 16, "ten tool steps plus six bounded auto-recovery texts");
+    assert_eq!(requests.load(Ordering::SeqCst), 11, "ten tool steps then one completion attempt");
     assert_eq!(
         steps.lock().expect("step trace lock").as_slice(),
         [
@@ -502,12 +486,265 @@ async fn blocked_anti_blind_recovery_publishes_one_actionable_handoff() {
             "diff_check",
             "successful_edit",
             "unverified_text",
-            "unverified_text",
-            "unverified_text",
-            "unverified_text",
-            "unverified_text",
-            "unverified_text",
         ]
     );
     assert_blocked_response_surfaces(&mut backing, &history, &harness_path, PENDING_VERIFICATION_RESPONSE_MARKER);
+}
+
+struct RetainedCompletionProvider {
+    calls: Arc<AtomicUsize>,
+    streaming: bool,
+    requests: Arc<Mutex<Vec<uni::LLMRequest>>>,
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn recovery_sequence_keeps_one_draft_and_one_physical_checker() {
+    use std::os::unix::fs::PermissionsExt;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut backing = TestTurnProcessingBacking::new(16).await;
+    backing.set_provider(Box::new(RetainedCompletionProvider {
+        calls: calls.clone(),
+        streaming: false,
+        requests: requests.clone(),
+    }));
+    let registry;
+    let mut history = vec![uni::Message::user(
+        "Complete locally; report external unavailability.".into(),
+    )];
+    history.push(uni::Message::turn_scoped_system(format!(
+        "{}\nRetained example",
+        vtcode_core::prompts::FEW_SHOT_SECTION_HEADER,
+    )));
+    {
+        let mut ctx = backing.turn_processing_context();
+        registry = ctx.tool_registry.clone();
+        registry.allow_all_tools().await.unwrap();
+        let root = registry.workspace_root();
+        fs::write(root.join("rustc"), "#!/bin/sh\nprintf 'check\\n' >> checker-runs\nprintf 'verified\\n'\n").unwrap();
+        fs::set_permissions(root.join("rustc"), fs::Permissions::from_mode(0o700)).unwrap();
+        let mut commands = registry.commands_config();
+        commands.allow_list.push("./rustc --version".into());
+        registry.apply_commands_config(&commands);
+        history.push(uni::Message::assistant_with_tools(
+            String::new(),
+            vec![uni::ToolCall::function(
+                "denied".into(),
+                tool_names::EXEC_COMMAND.into(),
+                r#"{"cmd":"denied"}"#.into(),
+            )],
+        ));
+        super::super::super::tool_outcomes::handlers::handle_preflight_failure(
+            &mut ctx,
+            "denied",
+            tool_names::EXEC_COMMAND,
+            "Command security check failed: command injection",
+            Some(&json!({"cmd":"denied"})),
+            None,
+        );
+        history.extend(ctx.working_history.clone());
+        registry
+            .execute_tool(
+                tool_names::TASK_TRACKER,
+                json!({
+                    "action":"create", "items":[{"description":"Local check", "status":"completed",
+                    "verify":["./rustc --version"]}]
+                }),
+            )
+            .await
+            .unwrap();
+        registry.restore_completion_verification_debt();
+    }
+    let expired = crate::agent::runloop::unified::turn::tool_outcomes::handlers::PREFLIGHT_CIRCUIT_RECOVERY_DIRECTIVE;
+    history.push(uni::Message::system(expired.into()));
+    // Deterministic external outage evidence: the fixture never needs a live network.
+    history.push(uni::Message::assistant_with_tools(
+        String::new(),
+        vec![uni::ToolCall::function(
+            "external".into(),
+            "web_fetch".into(),
+            r#"{"url":"https://example.invalid"}"#.into(),
+        )],
+    ));
+    history.push(uni::Message::tool_response(
+        "external".into(),
+        "External service unavailable; retry allowance exhausted.".into(),
+    ));
+    history.push(uni::Message::user(format!(
+        "{} Finish using retained local evidence.",
+        crate::agent::runloop::unified::turn::session_loop::VERIFICATION_AUTO_RECOVERY_PREFIX,
+    )));
+    let timer = registry
+        .execute_tool("exec_command", json!({"cmd":"sleep 0.1", "yield_time_ms":1}))
+        .await
+        .unwrap();
+    let timer_id = timer["session_id"].as_str().unwrap().to_owned();
+    let terminal = if timer.get("exit_code").is_some() {
+        timer
+    } else {
+        registry
+            .execute_tool("write_stdin", json!({"session_id":timer_id,"chars":"","yield_time_ms":1000}))
+            .await
+            .unwrap()
+    };
+    assert_eq!(terminal["exit_code"], 0);
+    let outcome = run_turn_loop(&mut history, backing.turn_loop_context()).await.unwrap();
+    assert!(matches!(outcome.result, TurnLoopResult::Completed { .. }));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(fs::read_to_string(registry.workspace_root().join("checker-runs")).unwrap(), "check\n");
+    assert_eq!(
+        history
+            .iter()
+            .filter(|m| m.phase == Some(uni::AssistantPhase::FinalAnswer))
+            .count(),
+        1
+    );
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert!(!requests[0].messages.iter().any(|m| m.content.as_text() == expired));
+    assert!(history.iter().any(|m| m.content.as_text() == expired), "projection must preserve canonical history");
+    assert_eq!(
+        requests[0]
+            .messages
+            .iter()
+            .filter(|m| m.content.as_text().contains(vtcode_core::prompts::FEW_SHOT_SECTION_HEADER,))
+            .count(),
+        1
+    );
+    let projected_bytes: usize = requests[0].messages.iter().map(|m| m.content.as_text().len()).sum();
+    assert!(projected_bytes < 32_768, "bounded fixture projection: {projected_bytes}");
+    use crate::agent::runloop::unified::turn::background_completion::{
+        PendingBackgroundCompletions, background_completion_from_exec_session,
+    };
+    use vtcode_core::tools::exec_session::ExecSessionCompletionEvent;
+    let mut pending = PendingBackgroundCompletions::default();
+    pending.observe_terminal_exec_results(&registry);
+    // Deliver the already observed timer only after the final answer.
+    let event = |session_id: String, exit_code| {
+        background_completion_from_exec_session(ExecSessionCompletionEvent {
+            session_id: session_id.into(),
+            command: "timer".into(),
+            managed_background: false,
+            termination_requested: false,
+            exit_code,
+        })
+        .unwrap()
+    };
+    pending.push(event(timer_id, 0));
+    assert!(!pending.should_schedule_continuation(false, false));
+    assert!(pending.take_transient_note().is_none());
+    pending.push(event("independent-failure".into(), 7));
+    assert!(pending.should_schedule_continuation(false, false));
+    assert!(pending.take_transient_note().unwrap().contains("exit_code=7"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[async_trait::async_trait]
+impl uni::LLMProvider for RetainedCompletionProvider {
+    fn name(&self) -> &str {
+        "openai"
+    }
+    fn supports_streaming(&self) -> bool {
+        self.streaming
+    }
+    async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.requests.lock().unwrap().push(request.clone());
+        Ok(uni::LLMResponse {
+            content: Some("WebMCP inspection is complete.".into()),
+            model: request.model,
+            tool_calls: None,
+            usage: None,
+            finish_reason: uni::FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            organization_id: None,
+            request_id: None,
+            tool_references: vec![],
+            compaction: None,
+        })
+    }
+    async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
+        let response = self.generate(request).await?;
+        Ok(Box::pin(async_stream::stream! {
+            yield Ok(uni::LLMStreamEvent::Token { delta: "WebMCP inspection ".into() });
+            yield Ok(uni::LLMStreamEvent::Token { delta: "is complete.".into() });
+            yield Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) });
+        }))
+    }
+    fn supported_models(&self) -> Vec<String> {
+        vec!["noop-model".into()]
+    }
+    fn validate_request(&self, _: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn retained_completion_runs_missing_checks_and_publishes_once_without_model_follow_up() {
+    for streaming in [false, true] {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        backing.set_provider(Box::new(RetainedCompletionProvider {
+            calls: calls.clone(),
+            streaming,
+            requests: Arc::new(Mutex::new(Vec::new())),
+        }));
+        let harness_path = backing.enable_harness_emitter();
+        {
+            let ctx = backing.turn_processing_context();
+            ctx.tool_registry.allow_all_tools().await.unwrap();
+            ctx.tool_registry
+                .execute_tool(
+                    tool_names::TASK_TRACKER,
+                    json!({
+                        "action":"create", "items":[{"description":"Verify", "status":"completed",
+                        "verify":["rustc --version", "rustc --help"]}]
+                    }),
+                )
+                .await
+                .unwrap();
+            ctx.tool_registry.restore_completion_verification_debt();
+        }
+        let mut history = vec![uni::Message::user("Explain WebMCP.".into())];
+        run_turn_loop(&mut history, backing.turn_loop_context()).await.unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "verification must not resample the answer");
+        let expected = "WebMCP inspection is complete.\n\nHarness verification: `rustc --version` exited 0; `rustc --help` exited 0.";
+        let finals: Vec<_> = history
+            .iter()
+            .filter(|m| m.phase == Some(uni::AssistantPhase::FinalAnswer))
+            .collect();
+        assert_eq!(finals.len(), 1);
+        assert_eq!(finals[0].content.as_text(), expected);
+        assert_eq!(
+            backing
+                .rendered_inline_output()
+                .matches("WebMCP inspection is complete.")
+                .count(),
+            1
+        );
+        let commands: Vec<_> = history
+            .iter()
+            .filter_map(|m| m.tool_calls.as_ref())
+            .flatten()
+            .filter(|call| call.id.starts_with("harness-auto-verify-"))
+            .collect();
+        assert_eq!(commands.len(), 2);
+        let events = fs::read_to_string(harness_path).unwrap();
+        let messages: Vec<_> = events
+            .lines()
+            .filter_map(|line| {
+                let event = serde_json::from_str::<VersionedThreadEvent>(line).unwrap().into_event();
+                match event {
+                    ThreadEvent::ItemCompleted(item) => match item.item.details {
+                        ThreadItemDetails::AgentMessage(message) => Some(message.text),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            })
+            .collect();
+        assert_eq!(messages, vec![expected.to_string()], "canonical history must never expose the unchecked draft");
+    }
 }

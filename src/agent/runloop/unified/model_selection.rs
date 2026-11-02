@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::Path;
-use std::time::Instant;
+use std::time::Duration;
 use vtcode_config::resolve_openai_auth;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
@@ -14,7 +14,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext};
 
 use crate::agent::runloop::unified::model_switch_compaction::{
-    ModelSwitchCompactionOutcome, ModelSwitchCompactionRequest, compact_on_model_switch,
+    ModelSwitchCompactionOutcome, ModelSwitchCompactionRequest, compact_on_model_switch, is_real_model_switch,
 };
 
 use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
@@ -204,7 +204,16 @@ pub(crate) async fn finalize_model_selection(
         .map(|cfg| cfg.agent.harness.compact_on_model_switch)
         .unwrap_or(true);
 
-    let compact_start = Instant::now();
+    let compaction_progress = (compact_on_model_switch_enabled
+        && client_installed
+        && is_real_model_switch(&prev_provider, &prev_model, &selection.provider, &selection.model)
+        && !compaction.history.is_empty())
+    .then(|| {
+        crate::agent::runloop::unified::turn::compaction::CompactionProgressGuard::start(
+            handle,
+            crate::agent::runloop::unified::turn::compaction::estimate_history_tokens(compaction.history),
+        )
+    });
     let outcome = compact_on_model_switch(ModelSwitchCompactionRequest {
         prev_provider,
         prev_model,
@@ -215,10 +224,18 @@ pub(crate) async fn finalize_model_selection(
         provider: provider_client.as_ref(),
         workspace: &config.workspace,
         vt_cfg: vt_cfg.as_ref(),
-        targets: compaction,
+        targets: ModelSwitchCompactionTargets {
+            history: compaction.history,
+            session_stats: &mut *compaction.session_stats,
+            context_manager: compaction.context_manager,
+            session_id: compaction.session_id,
+            thread_id: compaction.thread_id,
+            lifecycle_hooks: compaction.lifecycle_hooks,
+            harness_emitter: compaction.harness_emitter,
+        },
     })
     .await?;
-    let compact_elapsed = compact_start.elapsed();
+    let compact_elapsed = compaction_progress.map_or(Duration::ZERO, |progress| progress.finish());
 
     match outcome {
         ModelSwitchCompactionOutcome::Unchanged => {
@@ -245,17 +262,18 @@ pub(crate) async fn finalize_model_selection(
         }
         ModelSwitchCompactionOutcome::Compacted(outcome) => {
             let label = crate::agent::runloop::unified::turn::compaction::format_compacted_summary(
-                outcome.original_len,
-                outcome.compacted_len,
+                outcome.estimated_tokens_before,
+                outcome.estimated_tokens_after,
                 outcome.mode.as_str(),
                 compact_elapsed,
             );
             renderer.line(MessageStyle::Info, &format!("{label} Resume note added for the selected model."))?;
         }
         ModelSwitchCompactionOutcome::AlreadyCompact => {
+            let label = crate::agent::runloop::unified::turn::compaction::format_already_compact(compact_elapsed);
             renderer.line(
                 MessageStyle::Info,
-                "Model switched; conversation was already compact. History preserved and resume note added.",
+                &format!("Model switched; {label} History preserved and resume note added."),
             )?;
         }
         ModelSwitchCompactionOutcome::Failed(err) => {
@@ -343,6 +361,9 @@ pub(crate) async fn finalize_model_selection(
         )?;
     }
 
+    // Includes an explicit same-model selection. Configuration changes and
+    // failed selection attempts never create this acceptance proof.
+    compaction.session_stats.record_accepted_model_selection();
     Ok(())
 }
 

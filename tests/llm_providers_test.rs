@@ -160,7 +160,7 @@ fn test_provider_creation() {
     let anthropic = create_provider_for_model(models::CLAUDE_SONNET_5, "test_key".to_string(), None, None);
     let _anthropic = anthropic.unwrap();
 
-    let openrouter = create_provider_for_model("deepseek-ai/DeepSeek-V4.1-Flash", "test_key".to_string(), None, None);
+    let openrouter = create_provider_for_model("deepseek/deepseek-v4.1-flash-1017", "test_key".to_string(), None, None);
     let _openrouter = openrouter.unwrap();
 
     let moonshot = create_provider_for_model(models::moonshot::DEFAULT_MODEL, "test_key".to_string(), None, None);
@@ -196,7 +196,7 @@ fn test_unified_client_creation() {
     }
 
     let openrouter_client =
-        create_provider_for_model("deepseek-ai/DeepSeek-V4.1-Flash", "test_key".to_string(), None, None);
+        create_provider_for_model("deepseek/deepseek-v4.1-flash-1017", "test_key".to_string(), None, None);
     assert!(openrouter_client.is_ok());
     if let Ok(client) = openrouter_client {
         assert_eq!(client.name(), "openrouter");
@@ -277,7 +277,7 @@ fn test_provider_supported_models() {
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let openrouter_models = openrouter.supported_models();
-    assert!(openrouter_models.contains(&"deepseek-ai/DeepSeek-V4.1-Flash".to_string()));
+    assert!(openrouter_models.contains(&"deepseek/deepseek-v4.1-flash-1017".to_string()));
     assert!(openrouter_models.contains(&"anthropic/claude-sonnet-4.6".to_string()));
     assert!(openrouter_models.len() >= 2);
 

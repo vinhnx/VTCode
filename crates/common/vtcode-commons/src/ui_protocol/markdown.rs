@@ -29,6 +29,24 @@ impl MarkdownLine {
     }
 }
 
+/// Visual weight for fenced code blocks.
+///
+/// `Primary` keeps the theme foreground at full intensity. `Muted` recedes the
+/// block toward the theme background so secondary surfaces (evidence bodies
+/// behind a disclosure) stay readable without competing with the summary.
+/// Muted is an explicit theme-derived color, never a faint/dim text attribute:
+/// several terminals attenuate that attribute to near-invisible and ratatui
+/// only ever *inserts* modifiers, so a dimmed area background would mute every
+/// glyph painted on top of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CodeBlockWeight {
+    /// Theme foreground at full intensity.
+    #[default]
+    Primary,
+    /// Receded toward the theme background.
+    Muted,
+}
+
 /// Options for the markdown rendering pipeline.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RenderMarkdownOptions {
@@ -40,6 +58,9 @@ pub struct RenderMarkdownOptions {
     /// retain their grid layout and scale columns to fit. Only effective in
     /// TUI mode.
     table_max_width: Option<usize>,
+    /// Visual weight applied to fenced code blocks. Only effective in TUI
+    /// mode.
+    code_block_weight: CodeBlockWeight,
 }
 
 /// A syntax-highlighted text segment.

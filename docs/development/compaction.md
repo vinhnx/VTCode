@@ -191,6 +191,11 @@ returning a replayable window that fits its model context.
 
 ## Per-route policy
 
+The local summary prompt distinguishes completed, running, failed, and not-run checks. It preserves exact commands,
+observed exit codes, pending session IDs and polling actions, user restrictions, and unresolved approvals. Model claims
+do not become verification evidence during summarization. Repeated exploration is compressed before facts needed to
+continue the task. This prompt contract does not replace canonical command records or the runtime verification gate.
+
 `CompactionRoutePolicy` (`threshold_ratio`, `retain_ratio`, `max_overflow_retries`) tunes compaction per provider/model
 route in the DeepSeek-harness shape. Defaults (`1.0`, `0.16`, `1`) preserve current behavior: the threshold ratio only
 ever fires compaction _earlier_, the continuity tail is `min(20_000, window × retain_ratio)` (identical for windows ≥

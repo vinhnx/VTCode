@@ -47,8 +47,7 @@ use clap::FromArgMatches;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use vtcode_commons::color_policy;
 use vtcode_commons::{VtCodePaths, env_lock};
-use vtcode_core::cli::args::Cli;
-use vtcode_core::config::api_keys::load_dotenv;
+use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_ui::tui::panic_hook;
 
 mod agent;
@@ -83,7 +82,19 @@ enum BootstrapOutcome {
 
 #[cfg_attr(feature = "profiling", hotpath::main)]
 fn main() -> std::process::ExitCode {
-    // Apply process hardening before any other operations.
+    // Preserve the command launcher's admitted environment. Agent-specific
+    // hardening below must not strip explicit overrides from managed commands.
+    #[cfg(unix)]
+    match vtcode_bash_runner::process_owner::maybe_run_owned_command() {
+        Ok(false) => {}
+        Ok(true) => return std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            vtcode_commons::diagnostics::stderr(format_args!("owned command startup failed: {error}"));
+            return std::process::ExitCode::FAILURE;
+        }
+    }
+
+    // Apply agent process hardening before other agent initialization.
     // This disables core dumps, caps RLIMIT_STACK (defense-in-depth complement
     // to Rust's built-in stack clash protection — see rustc exploit-mitigations
     // docs), removes dangerous env vars, and prevents ptrace attach.
@@ -124,7 +135,7 @@ fn main() -> std::process::ExitCode {
         }) {
         Ok(handle) => handle,
         Err(err) => {
-            eprintln!("Error: failed to spawn vtcode main thread: {err}");
+            vtcode_commons::diagnostics::stderr(format_args!("Error: failed to spawn vtcode main thread: {err}"));
             return std::process::ExitCode::FAILURE;
         }
     };
@@ -141,7 +152,7 @@ fn main() -> std::process::ExitCode {
         }
         Err(_) => {
             let _ = panic_hook::restore_tui();
-            eprintln!("Error: vtcode main thread panicked");
+            vtcode_commons::diagnostics::stderr(format_args!("Error: vtcode main thread panicked"));
             let _ = std::io::Write::flush(&mut std::io::stderr());
             std::process::ExitCode::FAILURE
         }
@@ -235,7 +246,7 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
             }
             let err_text = err.to_string();
             if let Some(enhanced) = try_enhance_clap_error(&err_text) {
-                eprintln!("{enhanced}");
+                vtcode_commons::diagnostics::stderr(format_args!("{enhanced}"));
                 std::process::exit(1);
             }
             err.exit();
@@ -251,16 +262,7 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     let tui_log_capture_enabled = debug_runtime_flag_enabled(args.debug, "VTCODE_TUI_LOGS");
     vtcode_ui::tui::log::set_tui_log_capture_enabled(tui_log_capture_enabled);
 
-    // Load .env on the critical path. Legacy path migration is maintenance
-    // (marker-checked, idempotent) and must not stall first paint — a large
-    // pre-XDG `~/.vtcode` tree has been observed to add 1s+ here.
-    if startup_policy.load_dotenv() {
-        let environment_phase = vtcode_commons::startup_trace::phase_started();
-        if let Err(_err) = load_dotenv()
-            && !args.quiet
-        {}
-        vtcode_commons::startup_trace::record_phase("dotenv_and_migration", environment_phase);
-    }
+    // Interactive legacy path migration is deferred until after first paint.
     if startup_policy.migrate_legacy_paths() && !startup_policy.run_interactive_maintenance() {
         // Non-interactive consumers still need migrated paths before dispatch.
         migrate_legacy_global_paths(args.quiet);
@@ -291,7 +293,19 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     let runtime_phase = vtcode_commons::startup_trace::phase_started();
     let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
     runtime_builder.enable_all().thread_name("vtcode-rt-worker");
-    if let Some(workers) = vtcode_commons::runtime_diagnostics::configured_worker_threads() {
+    let configured_workers = vtcode_commons::runtime_diagnostics::configured_worker_threads();
+    if matches!(args.command.as_ref(), Some(Commands::DesktopServer)) {
+        // The unified agent loop has substantially deeper async polling than
+        // the request dispatcher. It runs as a Tokio task here, so give the
+        // desktop server workers the same 8 MiB stack budget as the process
+        // main thread that drives the ordinary interactive loop. Its bounded
+        // host-command bridge can block while the session pump drains its
+        // queue, so reserve a second worker even on a single-core host or when
+        // VTCODE_RUNTIME_WORKERS is set to one.
+        let available_workers = std::thread::available_parallelism().map_or(2, |count| count.get());
+        runtime_builder.worker_threads(desktop_runtime_worker_count(configured_workers, available_workers));
+        runtime_builder.thread_stack_size(8 * 1024 * 1024);
+    } else if let Some(workers) = configured_workers {
         runtime_builder.worker_threads(workers);
     }
     let runtime = runtime_builder.build().context("failed to build Tokio runtime")?;
@@ -366,14 +380,16 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
 fn migrate_legacy_global_paths(quiet: bool) {
     match VtCodePaths::resolve().and_then(|paths| paths.migrate_legacy()) {
         Ok(report) if !report.failures.is_empty() && !quiet => {
-            eprintln!(
+            vtcode_commons::diagnostics::stderr(format_args!(
                 "Warning: VT Code legacy migration is incomplete with {} diagnostic failure(s); startup will retry it. See `vtcode --version` for the migration report path.",
                 report.failures.len()
-            );
+            ));
         }
         Ok(_) => {}
         Err(error) if !quiet => {
-            eprintln!("Warning: VT Code could not start legacy migration: {error:#}. Startup will continue.");
+            vtcode_commons::diagnostics::stderr(format_args!(
+                "Warning: VT Code could not start legacy migration: {error:#}. Startup will continue."
+            ));
         }
         Err(_) => {}
     }
@@ -383,7 +399,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     let PreparedRun { args, startup, print_mode } = prepared;
     let startup_policy = startup::command_startup_policy(&args);
 
-    configure_debug_session_routing(&args, &startup, &print_mode).await;
+    configure_debug_session_routing(&args, &startup, print_mode.as_deref()).await;
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = initialize_tracing().await.unwrap_or_default();
@@ -396,7 +412,9 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     } else if !env_tracing_initialized && !startup.config.debug.enable_tracing {
         // Always collect ERROR-level logs into the session archive for post-mortem debugging
         if let Err(err) = initialize_default_error_tracing() {
-            eprintln!("warning: failed to initialize default error tracing: {err}");
+            vtcode_commons::diagnostics::stderr(format_args!(
+                "warning: failed to initialize default error tracing: {err}"
+            ));
         }
     }
 
@@ -413,7 +431,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     }
 
     // Interactive legacy-path migration runs after the runtime exists so it
-    // never shares the pre-dispatch critical path with dotenv/config/auth.
+    // never shares the pre-dispatch critical path with config/auth.
     // Marker-checked and idempotent; non-interactive paths already migrated.
     if startup_policy.migrate_legacy_paths() && startup_policy.run_interactive_maintenance() {
         let quiet = args.quiet;
@@ -442,20 +460,21 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     // is non-critical, so it must not sit on the pre-TUI critical path.
     if startup_policy.run_interactive_maintenance() {
         let quiet = args.quiet;
-        tokio::task::spawn_blocking(
-            move || match vtcode_core::terminal_setup::terminals::iterm2::ensure_profile_icon() {
-                Ok(Some(report)) => {
-                    if !quiet {
-                        tracing::info!(
-                            profile = %report.profile_path.display(),
-                            "Installed VT Code iTerm2 tab icon profile"
-                        );
-                    }
+        let app_icon = startup.config.ui.app_icon;
+        tokio::task::spawn_blocking(move || match vtcode_core::terminal_setup::terminals::iterm2::ensure_profile_icon(
+            app_icon,
+        ) {
+            Ok(Some(report)) => {
+                if !quiet {
+                    tracing::info!(
+                        profile = %report.profile_path.display(),
+                        "Installed VT Code iTerm2 tab icon profile"
+                    );
                 }
-                Ok(None) => {}
-                Err(error) => tracing::debug!(error = %error, "iTerm2 tab icon install skipped"),
-            },
-        );
+            }
+            Ok(None) => {}
+            Err(error) => tracing::debug!(error = %error, "iTerm2 tab icon install skipped"),
+        });
     }
 
     let dispatch_result = cli::dispatch(&args, &startup, print_mode).await;
@@ -480,4 +499,20 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     dispatch_result?;
 
     Ok(())
+}
+
+fn desktop_runtime_worker_count(configured_workers: Option<usize>, available_workers: usize) -> usize {
+    configured_workers.unwrap_or(available_workers).max(2)
+}
+
+#[cfg(test)]
+mod desktop_runtime_tests {
+    use super::desktop_runtime_worker_count;
+
+    #[test]
+    fn desktop_service_keeps_a_worker_available_to_drain_bounded_host_commands() {
+        assert_eq!(desktop_runtime_worker_count(Some(1), 8), 2);
+        assert_eq!(desktop_runtime_worker_count(None, 1), 2);
+        assert_eq!(desktop_runtime_worker_count(Some(4), 2), 4);
+    }
 }

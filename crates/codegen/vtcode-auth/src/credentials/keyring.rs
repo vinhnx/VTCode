@@ -51,6 +51,16 @@ pub(crate) fn is_functional() -> bool {
     })
 }
 
+/// Whether `VTCODE_DISABLE_KEYRING` explicitly re-enables the keyring.
+///
+/// The empty value and the canonical falsy values (`0`, `false`, `no`, `off`)
+/// opt back in; any other value — including unrecognized ones — leaves the
+/// keyring disabled. Delegating the falsy set keeps this in step with the
+/// canonical env parser instead of repeating a literal list.
+fn keyring_explicitly_enabled(value: &str) -> bool {
+    value.trim().is_empty() || vtcode_commons::utils::parse_bool_env_value(value) == Some(false)
+}
+
 /// Returns `true` when access to the OS keyring should be skipped.
 ///
 /// The native keyring (e.g. macOS Keychain) prompts the user for authorization
@@ -70,7 +80,7 @@ fn is_disabled() -> bool {
     *DISABLED.get_or_init(|| {
         if cfg!(debug_assertions) {
             if let Ok(value) = std::env::var("VTCODE_DISABLE_KEYRING") {
-                if matches!(value.trim().to_ascii_lowercase().as_str(), "" | "0" | "false" | "no" | "off") {
+                if keyring_explicitly_enabled(&value) {
                     return false;
                 }
             }
@@ -82,7 +92,7 @@ fn is_disabled() -> bool {
         }
 
         if let Ok(value) = std::env::var("VTCODE_DISABLE_KEYRING") {
-            return !matches!(value.trim().to_ascii_lowercase().as_str(), "" | "0" | "false" | "no" | "off");
+            return !keyring_explicitly_enabled(&value);
         }
 
         std::env::var_os("CI").is_some()
@@ -133,4 +143,22 @@ fn ensure_native_store() -> keyring_core::Result<()> {
 
     keyring_core::set_default_store(store);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keyring_explicit_enable_accepts_the_canonical_falsy_set() {
+        for value in ["", "   ", "0", "false", "NO", " off ", "FALSE"] {
+            assert!(keyring_explicitly_enabled(value), "{value:?} should re-enable the keyring");
+        }
+
+        // Unrecognized values (including `debug`, which `env_flag_enabled` treats
+        // as truthy) do not opt in.
+        for value in ["1", "true", "yes", "on", "debug", "banana"] {
+            assert!(!keyring_explicitly_enabled(value), "{value:?} should leave the keyring disabled");
+        }
+    }
 }

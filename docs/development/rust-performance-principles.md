@@ -313,13 +313,13 @@ Each of these "defense in depth" decisions has a performance cost. Rust eliminat
 
 Rust has a few areas where it may be slower:
 
-| Area                               | Why                                                                                                                                                                | Mitigation                                                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **Floating-point math**            | No global `-ffast-math` equivalent in safe Rust. LLVM strict FP semantics prevent many optimizations.                                                              | Use `-C llvm-args=-enable-unsafe-fp-math` for measured numeric hot paths, or target-specific intrinsics. |
-| **Result checking in tight loops** | `Result<T, E>` is always checked; exceptions in C++ can be truly zero-cost when the sad path is rare.                                                              | Use `.unwrap_unchecked()` in `unsafe` blocks where invariants guarantee success (profile first).         |
-| **Bounds checking**                | Default indexing includes bounds checks.                                                                                                                           | Use iterators or `get_unchecked()` when proven necessary.                                                |
-| **Move-heavy heap allocation**     | Rust constructs values on the stack then copies to heap (`Box::new(val)`); LLVM does not always elide the intermediate copy. C allocates and initializes in-place. | Use `Box::new_uninit()` + manual init for measured hot paths, or arena allocation patterns.              |
-| **Panic infrastructure**           | Panic unwinding has overhead even if panic never occurs.                                                                                                           | Use `panic = "abort"` in release (already vtcode's default).                                             |
+| Area                               | Why                                                                                                                                                                | Mitigation                                                                                                                                                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Floating-point math**            | No global `-ffast-math` equivalent in safe Rust. LLVM strict FP semantics prevent many optimizations.                                                              | Use `-C llvm-args=-enable-unsafe-fp-math` for measured numeric hot paths, or target-specific intrinsics.                                                                                                                              |
+| **Result checking in tight loops** | `Result<T, E>` is always checked; exceptions in C++ can be truly zero-cost when the sad path is rare.                                                              | Use `.unwrap_unchecked()` in `unsafe` blocks where invariants guarantee success (profile first).                                                                                                                                      |
+| **Bounds checking**                | Default indexing includes bounds checks.                                                                                                                           | Use iterators or `get_unchecked()` when proven necessary.                                                                                                                                                                             |
+| **Move-heavy heap allocation**     | Rust constructs values on the stack then copies to heap (`Box::new(val)`); LLVM does not always elide the intermediate copy. C allocates and initializes in-place. | Use `Box::new_uninit()` + manual init for measured hot paths, or arena allocation patterns.                                                                                                                                           |
+| **Panic infrastructure**           | Panic unwinding has overhead even if panic never occurs.                                                                                                           | Use `panic = "abort"` in release (already vtcode's default).                                                                                                                                                                          |
 | **Compile time**                   | Not a runtime concern, but Rust's generics and monomorphization increase build times.                                                                              | Keep `codegen-units=1` for fat-LTO release/bench; high units for dev/CI where parallelism wins. Keep portable linker/CPU defaults; `target-cpu=native` is local-only via `scripts/perf/native-*.sh`. No nightly `-Z` flags on stable. |
 
 For vtcode, none of these are material concerns given the workload characteristics (I/O-bound LLM calls, not tight
@@ -606,6 +606,18 @@ call, per recorded event, per indexed file. The lesson ports directly:
   literal `Regex::new` outside a lazy initializer, so the hoisted shape is the
   path of least resistance — the maintainer duty from the article is to make
   the bad shape hard to write, not to catch it in review.
+
+## Cache Invalidation Without Key Clones
+
+`UnifiedCache` shares one in-place removal path for TTL expiration and predicate-based invalidation.
+It visits each entry once, releases matching cache-owned values, and updates live-entry and byte
+accounting without cloning keys or buffering matches. Invalidation and expiration do not increment
+the capacity-eviction counter; policy-ranked eviction still selects its own victims.
+
+The `cache::eviction_tests::selective_removal` regressions count key clones and check asymmetric
+survivor sets, byte totals, empty/no-match/all-match boundaries, and value release through weak
+references. These deterministic checks establish eliminated key clones, not an end-to-end latency
+improvement. Tool-result invalidation regressions cover callers that discard stale filesystem data.
 
 ## Checklist for VT Code Hot Paths
 

@@ -4,53 +4,115 @@ This document describes the CI/CD pipeline and code quality tools used in the vt
 
 ## GitHub Actions Workflows
 
-The project uses several GitHub Actions workflows to ensure code quality and automate testing:
+The project runs these GitHub Actions workflows: `build-linux-windows.yml` (release
+binaries), `webmcp.yml` (Pages deploy), `hotpath-benchmark.yml` + `hotpath-relay.yml`
+(benchmarks), `desktop-macos.yml` (desktop validation), and `deny.yml` (dependency audit).
 
-### 1. CI Workflow (`ci.yml`)
-
-**Triggers:**
-
-- Push to `main` (filtered by `.rs`, `.toml`, `.lock`, `.yml`, `.json`, `.md`, `scripts/`)
-- Pull requests to `main` (same path filters)
-- Weekly schedule (Monday 5 AM UTC)
-- Manual `workflow_dispatch`
-
-**Jobs:**
-
-- **Format Check (rustfmt)**: Ensures code is properly formatted
-- **Lint Check (clippy)**: Runs comprehensive linting with `-D warnings`
-- **Test**: Runs `cargo nextest run` on Ubuntu and focused harness regressions using the same Cargo `ci` profile
-- **Windows**: Workspace compilation and Clippy, plus focused UI, input, terminal, and private-file persistence regressions
-- **Security Audit**: Workflow policy, `cargo audit`, and license-notice checks
-- **Documentation**: Markdown linting, documentation placement, and core link checks
-- **Scheduled/manual checks**: Cross-platform compilation and an advisory nightly smoke check
-
-### 2. Tool Eval Workflow (`tool-eval.yml`)
-
-**Triggers:**
-
-- Manual `workflow_dispatch` and weekly schedule (Monday 6 AM UTC)
-
-**Jobs:**
-
-- **Tool Evaluation**: Validates built-in tool behavior and safety gateways
-- **Integration tests**: End-to-end tool execution checks
-
-### 3. Build Linux & Windows (`build-linux-windows.yml`)
+### 1. Build Linux & Windows (`build-linux-windows.yml`)
 
 **Triggers:**
 
 - Manual `workflow_dispatch` with release tag input
 - Dispatched from `scripts/release.sh` Step 3.5 via `gh workflow run`
 
+**Rust toolchain:** all four Rust setup steps (three in this workflow, one in `desktop-macos.yml`) explicitly select
+the version in
+`rust-toolchain.toml`, currently 1.99.1. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
+otherwise defaults to floating `stable`; pinning its commit alone does not pin the compiler.
+Update the workflow inputs alongside the canonical toolchain version, following
+[Rust Toolchain and MSRV](./toolchain-updates.md).
+`cargo nextest run --locked -p vtcode --test toolchain_pins_test` checks active
+`.yml`/`.yaml` workflow Rust setup steps, including missing inputs and drift,
+without assuming an old CI filename. Explicit nightly checks remain separate.
+
 **Jobs:**
 
-- **Gen man pages**: Builds `man/` once via `xtask`, shares via `man-pages` artifact
-- **Build Linux**: Compiles `x86_64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, and `aarch64-unknown-linux-gnu`
-  binaries (`needs: [gen-man]`, `fail-fast: true`, `timeout 45m`)
+- **Build GNU Linux**: Builds `x86_64-unknown-linux-gnu`, runs that binary's
+  `man --all-pages --output man/man1`, and uploads its release archive plus the shared `man-pages` artifact.
+  This removes the separate `xtask` development-profile build for current tags. Rebuilding older tags
+  without `man --all-pages` falls back to `xtask`; generation failures do not trigger that fallback.
+- **Build cross Linux**: Compiles `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-gnu`
+  (`fail-fast: true`, `timeout 45m`). This job has no dependency edge on the GNU job, so both cross
+  targets start compiling immediately instead of idling behind the native build. The only shared input
+  is the `man-pages` artifact: after its own binary is built, the job polls the run's artifact list via
+  `gh api` (40 attempts, 15s apart, ~10 min) and then downloads it. Polling the API rather than parsing
+  `gh run download` output separates "not uploaded yet" from a genuine 404/auth failure, which fails
+  immediately. If the GNU producer job completes unsuccessfully before uploading the artifact, the cross
+  job also fails promptly instead of waiting out the full window. An empty artifact also fails the job,
+  so a release can never ship an archive without man pages. Cross uses its container toolchains; no host
+  Zig installation is needed.
 - **Build Windows**: Compiles `x86_64-pc-windows-msvc` binary (`--jobs 4`, `timeout 45m`)
 - **Upload Artifacts**: Stores compiled binaries + extension-stripped `.sha256` sidecars for release
   (`retention-days: 2`, `compression-level: 0` — archives already compressed)
+- **Cache**: each job namespaces its own entry with `key: <target>`. Keep `hashFiles('Cargo.lock')` out
+  of `prefix-key`: rust-cache restores the full key first and falls back to the key without the lockfile
+  hash segment, so hashing the lockfile earlier would shrink that fallback. Cache storage is 10 GB per
+  account on every plan, including public repos where minutes are free; let GitHub evict rather than
+  adding a second cache lineage.
+- **Wait for tag**: every build job first polls the remote (inline `bash`) until the release tag is
+  visible before checkout, deriving the repo URL from `GITHUB_REPOSITORY` so forks and renames stay
+  correct. It must stay inline: a local `uses: ./.github/actions/...` cannot run before
+  `actions/checkout`, because the action file is not in the workspace yet.
+
+**Compiler-cache pilot:** the dispatch/reusable-workflow input `compiler_cache_pilot` defaults to
+`false`. Set it to `true` to install sccache for native GNU Linux and Windows, with incremental
+compilation disabled and cache statistics recorded. Cross-container builds are deliberately excluded.
+Compare repeated runs of the same tag, target, toolchain, and build profile against the default;
+include cache setup, restore/save, compilation, and linking in the comparison. Do not enable it by
+default until net runner-minutes improve. sccache cannot cache Rust invocations that invoke the
+system linker, including binary linking; see the [sccache Rust limitations](https://github.com/mozilla/sccache/blob/main/docs/Rust.md).
+No hosted speedup is established by the local regression tests.
+
+```bash
+gh workflow run build-linux-windows.yml --field tag=<tag> --field compiler_cache_pilot=true
+```
+
+### Man-page generation reference
+
+| Command                                    | Output                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| `vtcode man`                               | Main page on stdout                                               |
+| `vtcode man chat --output chat.1`          | One command page in a file                                        |
+| `vtcode man --all-pages --output man/man1` | Main page and every visible top-level command page in a directory |
+
+`--all-pages` requires `--output` and conflicts with a single command name. Generation uses the same
+compiled clap command tree as `--help`; there is no separately maintained command list. Filesystem
+errors propagate to the caller. Existing files with matching names are overwritten; other files
+in the directory are retained, so use a fresh staging directory when packaging.
+
+### 2. WebMCP application (`webmcp.yml`)
+
+**Triggers:** push to `main` touching `apps/webmcp/**` or the workflow itself, plus manual
+`workflow_dispatch`.
+
+**Jobs:** one `deploy` job sets up Bun, installs the browser dependencies with a frozen lockfile,
+runs the editor typecheck and tests in `parallel:`, builds the Vite app, and publishes it to
+GitHub Pages.
+
+### hotpath Cloud benchmark (`hotpath-benchmark.yml`, `hotpath-relay.yml`)
+
+**Triggers:** push to `main` and every pull request; the relay runs on `workflow_run` of
+`Benchmark`, always from the default branch. That trigger is otherwise banned by
+`check_workflow_security.sh`; the relay holds a scoped exception in
+`scripts/workflow_security_allowlist.txt` because it never checks out or runs PR code.
+
+**Jobs:** `upload` (push) builds `vtcode-ui`'s `tui_hotpath` example once with the `x-prod`
+profile and `--features profiling,hotpath-cloud,hotpath-callgrind`, runs it natively and then
+under pinned Valgrind Callgrind, and uploads the merged report with the job's OIDC token.
+`report` (pull requests, forks included) runs the same pair without `id-token` and stores
+`report.json` as the `hotpath-report` artifact, which the SHA-pinned hotpath relay uploads.
+Policy lives in `hotpath/policy.toml`. Renaming the `Benchmark` workflow silently stops the
+relay. See [performance](performance.md#hotpath-cloud-ci).
+
+### Release build contracts
+
+Release runs are not rate-limited by the release script: every invocation may dispatch the
+full Linux/Windows build. The release contract tests run with
+`./scripts/check.sh contracts` (or directly via `python3 scripts/tests/test_ci_load.py`) and
+also in the full `./scripts/check.sh`.
+
+Selective musl/ARM64/Windows omission is an alternative to daily batching and is not enabled:
+the release publisher and legacy updater bridge require complete platform coverage by default.
 
 **Required release target matrix** (enforced by `scripts/release.sh`):
 
@@ -139,18 +201,7 @@ retrieval, commits, and tap publication. Run the fixture checks without publishi
 python3 scripts/tests/test_homebrew_formula.py
 ```
 
-### 4. Coverage (`coverage.yml`)
-
-**Triggers:**
-
-- Manual `workflow_dispatch` and weekly schedule (Monday 6 AM UTC)
-
-**Jobs:**
-
-- **Code Coverage**: `cargo llvm-cov` with LCOV output
-- **Coverage Report**: Uploads to code coverage service
-
-### 5. Release (driven by `scripts/release.sh`, no dedicated workflow)
+### 3. Release (driven by `scripts/release.sh`, no dedicated workflow)
 
 **Flow:**
 
@@ -158,6 +209,43 @@ python3 scripts/tests/test_homebrew_formula.py
 - **Build Binaries**: Dispatches `build-linux-windows.yml` for Linux/Windows; macOS built locally
 - **Create Release**: Drafts GitHub Release with changelog
 - **Publish**: Publishes to crates.io and Homebrew
+
+Crate publishing runs through `scripts/publish_extracted_crates.sh`. The script lists the crates to publish;
+the order they are published in is derived from the workspace dependency graph (`scripts/publish_order.py`
+resolves `cargo metadata` and topologically sorts the list) because crates.io rejects a crate whose
+workspace dependency is not yet live. Adding a dependency edge therefore cannot silently invalidate the
+release sequence. `--start-from <crate>` resumes a partially completed release and refuses to start when a
+prerequisite of the selected crate is missing from crates.io. The derivation is covered by:
+
+```bash
+python3 scripts/tests/test_publish_order.py
+```
+
+### 4. Dependency audit (`deny.yml`)
+
+**Triggers:** pull requests and pushes to `main` touching any `Cargo.toml`/`Cargo.lock`/`deny.toml`
+or the workflow itself, a weekly schedule (Mondays 05:00 UTC, default branch only — re-audits the
+committed lockfile even when no PR touches it, so newly published advisories fail without a code
+change), and manual `workflow_dispatch`.
+
+**Jobs:** one `cargo-deny` job on `ubuntu-latest` runs `cargo-deny-action` (SHA-pinned) with
+`--locked`. The action provisions its own pinned toolchain inside its Docker image, so no
+`dtolnay/rust-toolchain` step is needed and no Cargo compilation cache is used — it only resolves
+the committed lockfile. Policy lives in `deny.toml` at the repo root; the same policy runs locally
+via `./scripts/check.sh deny` and opt-in via `./scripts/check-dev.sh --deny`.
+
+**Policy summary** (full rationale comments live in `deny.toml`):
+
+- **Advisories**: RustSec vulnerabilities and yanked crates fail the check. The ten unmaintained
+  advisories whose dependency chains are already at their latest upstream releases carry explicit
+  `ignore` entries with reasons (syntect → bincode/yaml-rust, image/exr → paste, notify-rust →
+  zvariant family, gpui/resvg stack) and must be re-evaluated when a parent crate releases.
+- **Licenses**: the allow list mirrors `about.toml` (`accepted`) so cargo-deny and THIRD-PARTY-NOTICES
+  generation share one policy; adding a license means updating both files.
+- **Bans**: duplicate crate versions warn (visible drift, non-blocking).
+- **Sources**: crates.io only; git dependencies must be explicitly allowed.
+- **Targets**: `[graph] targets` lists every shipped target triple (the release build matrix plus
+  macOS), so target-gated dependencies such as the notify-rust/clipboard stacks are always audited.
 
 ## Code Quality Tools
 
@@ -254,6 +342,9 @@ Use the provided development check script to run the same checks locally:
 ./scripts/check.sh test     # Run tests
 ./scripts/check.sh build    # Build project
 ./scripts/check.sh docs     # Generate docs
+./scripts/check.sh unsafe-docs # Gate unsafe SAFETY/allowance + type-position contract docs
+./scripts/check.sh deny     # cargo-deny policy (RustSec advisories, licenses, bans, sources)
+./scripts/check.sh contracts # Release-artifact contract tests
 ```
 
 ### Manual Setup
@@ -325,19 +416,17 @@ Configure branch protection rules in GitHub:
 
 1. Go to repository Settings → Branches
 2. Add rule for `main`/`master` branch
-3. Require status checks to pass:
-   - `fmt`
-   - `clippy`
-   - `test`
-   - `security-audit`
+3. Require the status checks your branches rely on. `build-linux-windows.yml` is
+   `workflow_dispatch`/`workflow_call` only, so add checks for whichever workflows you run on pull
+   requests (for example `webmcp.yml` for browser-editor changes).
 
 ### Status Badges
 
 Add these badges to your README:
 
 ```markdown
-[![CI](https://github.com/yourusername/vtcode/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/vtcode/actions/workflows/ci.yml)
-[![Code Quality](https://github.com/yourusername/vtcode/actions/workflows/code-quality.yml/badge.svg)](https://github.com/yourusername/vtcode/actions/workflows/code-quality.yml)
+[![Build Linux and Windows](https://github.com/yourusername/vtcode/actions/workflows/build-linux-windows.yml/badge.svg)](https://github.com/yourusername/vtcode/actions/workflows/build-linux-windows.yml)
+[![WebMCP](https://github.com/yourusername/vtcode/actions/workflows/webmcp.yml/badge.svg)](https://github.com/yourusername/vtcode/actions/workflows/webmcp.yml)
 ```
 
 ## Troubleshooting
@@ -361,7 +450,7 @@ cargo clippy -- -W clippy::all
 
 ```bash
 cargo msrv --workspace
-cargo msrv --workspace set 1.98.1  # Set specific version
+cargo msrv --workspace set 1.99.1  # Set specific version
 ```
 
 #### Dependency issues
@@ -429,55 +518,74 @@ and the [June 2026 changelog](https://github.blog/changelog/2026-06-25-actions-s
 - Do not parallelize steps that share one output file (e.g. two harnesses `tee`ing to the same log)
   or that both invoke `cargo` on the same workspace (e.g. `cargo build` + `cargo tree`).
 
-Current uses: `webmcp.yml` typecheck + test, `ci.yml` `large-files` (3 python checks),
-`zen-governance` (3 baselines), `lint-markdown` (2 selector tests + lint), and independent Rust setup tasks.
+Current use: `webmcp.yml` typecheck + test.
 
-In `ci.yml`, Clippy and scheduled cross-platform checks restore Cargo caches alongside sccache setup. The Ubuntu test
-job also installs pinned nextest in that group; Windows overlaps Cargo cache restoration with nextest installation.
-Toolchain setup completes first because the cache action needs compiler metadata. These groups have two or three
-members, and their implicit barrier finishes before any Cargo command runs. `cache-bin: false` prevents cache
-restoration from overwriting binaries that a concurrent installer writes into `~/.cargo/bin`. Cache keys retain their
-existing job and target isolation. The nextest installer uses `fallback: none`, so missing prebuilt binaries fail instead
-of starting a Cargo build inside the parallel group.
-
-The focused PTY, pipe, and inline-event suites run through one nextest command with
-`--profile ci-harness --cargo-profile ci`.
-This reuses the main test job's build profile, schedules tests through nextest's bounded runner, and reports all selected
-suites even when one fails. It remains a separate step with `if: success() || failure()` so a main-suite failure does not
-skip focused regressions. Cargo processes remain sequential within each job to avoid target-directory lock contention.
-
-All CI nextest commands explicitly load the tracked `.github/nextest.toml`; local `.config/nextest.toml` is intentionally
-ignored and cannot provide profiles on a clean checkout. `ci-harness`, `ci-windows-ui`, and `ci-windows-terminal` inherit
-the nextest `ci` settings. Their separate profile
-directories preserve each suite's JUnit report; using `--profile ci` for every sequential command would overwrite earlier
-reports, including failure evidence. The Ubuntu test job runs `scripts/tests/test_ci_nextest_reports.py` against the
-configured workflow profiles to verify that a passing follow-up suite preserves an earlier failing report.
+`webmcp.yml` restores dependencies before running its `parallel:` typecheck + test group, so the
+barrier finishes before the build step. Keep `cache-bin: false` when cache restoration overlaps a
+tool installer, so a concurrent install does not write binaries into a directory the cache step is
+restoring.
 
 This applies the batching, bounded-concurrency, and shared-resource lessons from
 [Principles for fast Tokio applications](https://dial9-rs.github.io/blog/principles-for-fast-tokio-applications/)
 and [uv PR #21372](https://github.com/astral-sh/uv/pull/21372) to CI scheduling. It is an analogy, not a Tokio runtime
-optimization. The existing Python check groups already follow this pattern.
+optimization.
 
-To validate a scheduling change, check dependency barriers, action inputs, isolated output paths, nonzero nextest
-selection, and failure propagation before comparing hosted job/step durations on the same commit and cache state.
-Separate queue/setup time, compilation time, and test runtime. Do not infer a speedup from local Rust runtime benchmarks
-or from a shorter YAML file. As of 2026-10-07, the registered CI workflow is `disabled_manually`; source changes and local
-checks do not establish a hosted performance result or re-enable the workflow.
+To validate a scheduling change, check dependency barriers, action inputs, isolated output paths, and
+failure propagation before comparing hosted job/step durations on the same commit and cache state.
+Separate queue/setup time, compilation time, and test runtime. Do not infer a speedup from local Rust
+runtime benchmarks or from a shorter YAML file.
 
 ## Security
 
 ### Dependency Auditing
 
+The primary auditor is **cargo-deny** (policy in `deny.toml`, enforced in CI by `deny.yml` and
+locally by the check scripts). It covers RustSec advisories, yanked crates, license compliance,
+duplicate dependencies, and registry sources in one pass:
+
 ```bash
-# Install cargo-audit
-cargo install cargo-audit
+# Install cargo-deny
+brew install cargo-deny   # or: cargo install cargo-deny --locked
 
-# Run audit
-cargo audit
+# Run the full policy (advisories, licenses, bans, sources)
+cargo deny --locked check
 
-# Fix vulnerabilities
-cargo audit fix
+# House shortcuts
+./scripts/check.sh deny        # same policy as CI
+./scripts/check-dev.sh --deny  # opt-in from the fast gate
 ```
+
+RustSec vulnerabilities or a yanked crate fail the check. Unmaintained advisories that cannot be
+fixed from this repo (dependency chain already at the latest upstream release) carry explicit,
+reason-annotated `ignore` entries in `deny.toml`; each one names its blocking parent crate and must
+be re-evaluated when that parent releases. Adding a new dependency license means updating the
+`allow` list in `deny.toml` **and** the `accepted` list in `about.toml` — they mirror each other.
+
+**cargo-audit** remains available as a secondary, lockfile-wide cross-check (it scans raw lockfile
+entries that cargo-deny's graph resolution may not reach):
+
+```bash
+cargo install cargo-audit
+cargo audit
+cargo audit fix   # applies compatible version bumps when patched versions exist
+```
+
+### Binary Audit Data
+
+The release builds embed the dependency list into each binary via
+[cargo-auditable](https://github.com/rust-secure-code/cargo-auditable) (compressed `.dep-v0` section,
+no runtime overhead), so shipped artifacts can be scanned directly:
+
+```bash
+cargo audit bin target/release/vtcode   # RustSec scan of a shipped binary
+```
+
+The `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc` jobs in `build-linux-windows.yml` and the
+macOS builds in `scripts/release.sh` use `cargo auditable build`; `scripts/release.sh` falls back to
+a plain build with a warning when the tool is absent. The `cross`-built musl/aarch64 artifacts do not
+carry audit data — cross runs cargo inside its container, so injecting would require custom cross
+images (see the comment on the cross build step). Verify any artifact with `cargo audit bin` after
+building if the data matters for that channel.
 
 ### License Compliance
 
@@ -492,9 +600,9 @@ scripts/generate-notices.sh          # regenerate the file
 scripts/generate-notices.sh --check  # CI mode: exit 1 if out of date
 ```
 
-The `license-notices` CI job runs `scripts/generate-notices.sh --check` on every PR to catch stale license notices
-before merge. The file has a manual header (`scripts/templates/third-party-header.txt` for in-tree source ports) and an
-auto-generated dependency listing (`scripts/templates/third-party-notices.hbs` via cargo-about).
+Run `scripts/generate-notices.sh --check` before merge to catch stale license notices. The file has a manual header
+(`scripts/templates/third-party-header.txt` for in-tree source ports) and an auto-generated dependency listing
+(`scripts/templates/third-party-notices.hbs` via cargo-about).
 
 ## References
 

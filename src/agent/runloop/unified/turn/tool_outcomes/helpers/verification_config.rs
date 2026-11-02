@@ -3,18 +3,10 @@
 use super::*;
 
 pub(crate) const BLIND_EDITING_THRESHOLD: usize = 6;
-pub(crate) const ANTI_BLIND_EDITING_WARNING: &str = "[!] Verification checkpoint: run a verifier (build/test/lint — e.g. `cargo check`, `go test`, or `pytest`) and let it exit 0 before further edits.";
 /// Ends with the text of [`VERIFIER_SHELL_FORM_NOTE`] so the shell forms it
 /// describes match what the execution kernel elides; a test keeps the two in
 /// lockstep because `concat!` cannot splice a cross-crate const.
-pub(crate) const ANTI_BLIND_EDITING_DIRECTIVE: &str = "Several edits have landed without a build/test/lint run since the last check, so further code mutations are blocked until a verifier exits 0 (docs-only edits stay allowed). Run your project's build/test/lint tool with `exec_command` (e.g. `cargo check`, `go test`, `npm test`, or `pytest`), standalone or as a pure `&&` chain. Cap output with `max_output_tokens`. Pure `head`/`tail` verifier tails run standalone; static read-only filtering pipelines run with fail-closed `pipefail`. Only terminal exit 0 clears the gate; `;`, `||`, dynamic syntax, and mutating tails do not qualify.";
-/// Fix-up window granted after a failed verification attempt. A failed
-/// `cargo check` / `cargo nextest run` must not deadlock the turn: the agent
-/// needs a bounded number of edits to address the reported failure before
-/// re-verifying. Each failed verifier refreshes this window, so blind editing
-/// (many edits with no verifier attempt) stays blocked while fix-verify loops
-/// can make progress.
-pub(crate) const FAILED_VERIFICATION_FIX_ALLOWANCE: u8 = 2;
+pub(crate) const ANTI_BLIND_EDITING_DIRECTIVE: &str = "Verification is required before successful completion. Continue implementation and repairs; then run only missing checks. Run your project's build/test/lint tool with `exec_command` (e.g. `cargo check`, `go test`, `npm test`, or `pytest`), standalone or as a pure `&&` chain. Cap output with `max_output_tokens`. Pure `head`/`tail` verifier tails run standalone; static read-only filtering pipelines run with fail-closed `pipefail`. Only terminal exit 0 clears the gate; `;`, `||`, dynamic syntax, and mutating tails do not qualify.";
 /// Warning rendered when a pending gate's verifier result was lost (the exec
 /// session ended before the verifier's output was captured).
 pub(crate) const VERIFICATION_RESULT_LOST_WARNING: &str =
@@ -22,16 +14,6 @@ pub(crate) const VERIFICATION_RESULT_LOST_WARNING: &str =
 /// Model-facing directive paired with [`VERIFICATION_RESULT_LOST_WARNING`]:
 /// a successful verifier re-run is required to clear the pending gate.
 pub(crate) const VERIFICATION_RESULT_LOST_DIRECTIVE: &str = "Verification result lost: the exec session ended before the verifier's output was captured. Re-run the verification command standalone or as a pure `&&` chain to confirm or reject the recent edits.";
-/// Warning rendered while the failed-verifier fix-up window is active. Distinct
-/// from [`ANTI_BLIND_EDITING_WARNING`] so the pending-verification block notice
-/// does not imply verification was never run when the verifier already failed.
-pub(crate) const FAILED_VERIFICATION_FIX_WARNING: &str =
-    "[!] Verification failed: bounded fix edits granted before the gate re-arms.";
-/// Model-facing directive paired with [`FAILED_VERIFICATION_FIX_WARNING`]:
-/// the verifier ran and reported failure, so text responses must repair the
-/// reported failure and re-run a standalone verifier instead of claiming
-/// completion.
-pub(crate) const FAILED_VERIFICATION_FIX_DIRECTIVE: &str = "The last verification command ran and failed. A bounded fix window is active: apply fixes for the reported failure, then re-run the verification command standalone or as a pure `&&` chain. The work is accepted once a verifier exits 0.";
 /// Once-per-turn warning for a completed checker in an unverified shell form,
 /// regardless of gate state. Pure truncator and safe static filtering shapes
 /// never land here: they execute standalone or with pipefail. The tracker
@@ -43,24 +25,8 @@ pub(crate) const PIPED_VERIFICATION_WARNING: &str =
 /// this feedback a masked status reads as "verified" to the model, even in
 /// docs-only work where no verification gate is pending.
 pub(crate) const PIPED_VERIFICATION_DIRECTIVE: &str = "Verification was not recorded because the shell sequence cannot establish verifier success. Re-run the checker standalone or as a pure `&&` chain of verifiers. Use `max_output_tokens` and the structured exit code; do not append `; echo $?`. This notice does not grant repair edits or change the verification gate.";
-/// Bounded in-turn autonomous recovery attempts when the model emits text
-/// instead of a verifier while the gate is pending.
-///
-/// Without this, two explanatory text responses end the turn as `Blocked` and
-/// force the user to type `continue` — a manual step that stalls long-running
-/// autonomous work. Each attempt resets the text-response streak once and
-/// injects a project-aware directive naming the exact verifier command (see
-/// `default_verifier_for_workspace`), giving the model one more bounded
-/// chance to verify before the turn blocks. Mirrors Codex's Stop-hook test
-/// gate philosophy: the harness keeps the turn alive until verification is
-/// attempted, rather than punishing the first explanatory responses.
+/// Legacy defaults retained for configuration parsing; runtime recovery is capped at one pass.
 pub(crate) const MAX_VERIFICATION_AUTO_RECOVERY_ATTEMPTS: u8 = 2;
-/// Renderer line paired with the autonomous verification-recovery directive.
-/// Distinct from [`ANTI_BLIND_EDITING_WARNING`] so transcripts show that the
-/// harness granted an automatic retry (with attempt counts) instead of
-/// repeating the initial warning.
-pub(crate) const VERIFICATION_AUTO_RECOVERY_WARNING: &str =
-    "[i] Verification still pending — autonomous recovery: run the named verifier now instead of replying with text.";
 /// Cross-turn counterpart to [`MAX_VERIFICATION_AUTO_RECOVERY_ATTEMPTS`]:
 /// how many additional autonomous turns the session loop may schedule after
 /// a verification-blocked turn before requiring manual `continue`.
@@ -94,6 +60,8 @@ pub(crate) fn verification_cross_turn_turns(vt_cfg: Option<&vtcode_core::config:
     vt_cfg
         .map(|cfg| cfg.agent.harness.verification.cross_turn_turns)
         .unwrap_or(MAX_VERIFICATION_AUTO_RECOVERY_TURNS)
+        .min(1)
+        .min(verification_in_turn_attempts(vt_cfg))
 }
 
 /// Whether tracker-aware auto-continuation is enabled
@@ -110,9 +78,7 @@ pub(crate) fn tracker_cross_turn_turns(vt_cfg: Option<&vtcode_core::config::load
     vt_cfg.map(|cfg| cfg.agent.harness.continuation.cross_turn_turns).unwrap_or(32)
 }
 
-/// exhausts its directive retries. Kill-switch:
-/// `[agent.harness.verification].auto_execute = false` restores
-/// directive-only recovery.
+/// Whether automatic interactive completion checks and corrective recovery are enabled.
 pub(crate) fn verification_auto_execute_enabled(vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>) -> bool {
     vt_cfg.map(|cfg| cfg.agent.harness.verification.auto_execute).unwrap_or(true)
 }

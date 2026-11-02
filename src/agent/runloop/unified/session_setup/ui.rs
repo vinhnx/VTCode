@@ -42,7 +42,7 @@ use vtcode_core::ui::{is_tui_mode, set_tui_mode, to_tui_slash_commands};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
-use vtcode_ui::tui::app::{AgentPaletteItem, InlineHandle, SlashCommandItem};
+use vtcode_ui::tui::app::{AgentPaletteItem, InlineHandle, InlineSession, SlashCommandItem};
 
 use self::header_context::{HeaderContextInit, initialize_header_context, maybe_render_system_prompt_budget_warning};
 pub(crate) use self::local_agents::refresh_local_agents;
@@ -75,6 +75,9 @@ pub(crate) struct SessionUiLaunchOptions {
     pub skip_confirmations: bool,
     pub steering_sender: Option<UnboundedSender<SteeringMessage>>,
     pub settings_sender: UnboundedSender<crate::agent::runloop::unified::session_settings::SessionSettingsControl>,
+    /// Pre-created host session for non-terminal clients such as the desktop
+    /// JSON-RPC service. `None` selects the normal TUI shell.
+    pub host_session: Option<InlineSession>,
 }
 
 /// Whether transcript file links may open while an agent turn is active.
@@ -112,12 +115,14 @@ pub(crate) async fn initialize_session_ui(
         skip_confirmations: _,
         steering_sender: _,
         settings_sender: _,
+        host_session: _,
     } = options;
     let SessionShell {
         mut session,
         handle,
         ctrl_c_state,
         ctrl_c_notify,
+        settings_snapshot,
         input_activity_counter,
         pty_counter,
         settings_event_receiver,
@@ -127,6 +132,7 @@ pub(crate) async fn initialize_session_ui(
         default_placeholder,
         skip_confirmations,
         legacy_key_bindings,
+        terminal_enabled,
     } = shell;
     macro_rules! ui_wait {
         ($future:expr) => {{
@@ -150,6 +156,10 @@ pub(crate) async fn initialize_session_ui(
                 }
             }
         }};
+    }
+    // Bind before setup warnings and pending transcript messages can be displayed.
+    if let Some(emitter) = exit_context.emitter {
+        handle.set_diagnostic_sink(emitter.diagnostic_sink())?;
     }
     let initialization_progress = handle.begin_progress(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
     session_state.session_bootstrap.legacy_key_bindings = legacy_key_bindings;
@@ -210,7 +220,7 @@ pub(crate) async fn initialize_session_ui(
         crate::startup::defer_system_prompt_size_check(vt_cfg, &config.workspace);
     }
 
-    if !is_tui_mode() {
+    if terminal_enabled && !is_tui_mode() {
         set_tui_mode(true);
     }
 
@@ -218,9 +228,13 @@ pub(crate) async fn initialize_session_ui(
     // exec manager and continue wiring session state into the live session.
     // Drain the palette probe after spawn so a silent terminal cannot delay
     // the first frame. Theme/palette settle here before the first model turn.
-    ui_wait!(crate::agent::probe::await_terminal_palette_probe());
+    if terminal_enabled {
+        ui_wait!(crate::agent::probe::await_terminal_palette_probe());
+    }
 
-    set_global_terminal_focused(true);
+    if terminal_enabled {
+        set_global_terminal_focused(true);
+    }
     if skip_confirmations {
         session.set_skip_confirmations(true);
     }
@@ -230,9 +244,9 @@ pub(crate) async fn initialize_session_ui(
         settings_sender,
         handle.clone(),
         config.clone(),
-        vt_cfg.cloned(),
         ctrl_c_state.clone(),
         ctrl_c_notify.clone(),
+        settings_snapshot.clone(),
     )));
     // Merge prompt-template slash commands without blocking first paint.
     // The session spawns with built-ins; this one-shot task appends workspace
@@ -279,6 +293,9 @@ pub(crate) async fn initialize_session_ui(
 
     transcript::set_inline_handle(Arc::new(handle.clone()));
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+    if let Some(emitter) = exit_context.emitter {
+        renderer.set_diagnostic_sink(emitter.diagnostic_sink());
+    }
     let supports_reasoning = model_supports_reasoning(&*session_state.provider_client, &config.model);
     renderer.set_reasoning_visible(resolve_reasoning_visibility(vt_cfg, supports_reasoning));
     if let Some(cfg) = vt_cfg {
@@ -437,7 +454,7 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    render_full_auto_allowlist_banner(&mut renderer, full_auto, session_state.full_auto_allowlist.as_ref())?;
+    render_full_auto_allowlist_banner(&mut renderer, full_auto, session_state.full_auto_allowlist.as_deref())?;
 
     handle.set_placeholder(default_placeholder.clone());
 
@@ -505,7 +522,8 @@ pub(crate) async fn initialize_session_ui(
 
     let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref() {
         let manager = manager.clone();
-        match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number())) {
+        let session_id = session_id.to_owned();
+        match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number(&session_id))) {
             Ok(Ok(turn)) => turn,
             Ok(Err(error)) => {
                 warn!(%error, "Failed to inspect checkpoint turn numbers");
@@ -530,6 +548,7 @@ pub(crate) async fn initialize_session_ui(
         header_context,
         ctrl_c_state,
         ctrl_c_notify,
+        settings_snapshot,
         input_activity_counter,
         checkpoint_manager,
         session_archive,
@@ -611,7 +630,7 @@ fn spawn_agent_palette_and_background_refresh(
 fn render_full_auto_allowlist_banner(
     renderer: &mut AnsiRenderer,
     full_auto: bool,
-    allowlist: Option<&Vec<String>>,
+    allowlist: Option<&[String]>,
 ) -> Result<()> {
     if !full_auto {
         return Ok(());
@@ -639,11 +658,11 @@ fn render_full_auto_allowlist_banner(
 /// Execute session-start lifecycle hooks after hydration so they observe a
 /// fully initialized tool registry.
 pub(crate) async fn run_session_start_hooks(
-    lifecycle_hooks: &Option<LifecycleHookEngine>,
+    lifecycle_hooks: Option<&LifecycleHookEngine>,
     renderer: &mut AnsiRenderer,
     session_state: &mut SessionState,
 ) -> Result<()> {
-    let Some(hooks) = lifecycle_hooks.as_ref() else {
+    let Some(hooks) = lifecycle_hooks else {
         return Ok(());
     };
     match hooks.run_session_start().await {
@@ -683,7 +702,7 @@ pub(crate) fn apply_post_hydration_ui(
     ui_setup.header_context.primary_agent_color = primary_agent_color.clone();
     handle.set_primary_agent(Some(primary_agent_name), primary_agent_color);
 
-    render_full_auto_allowlist_banner(&mut ui_setup.renderer, full_auto, session_state.full_auto_allowlist.as_ref())?;
+    render_full_auto_allowlist_banner(&mut ui_setup.renderer, full_auto, session_state.full_auto_allowlist.as_deref())?;
     maybe_render_system_prompt_budget_warning(&mut ui_setup.renderer, vt_cfg, &session_state.session_bootstrap)?;
 
     // Re-drive shell bindings that were skipped when the registry was still

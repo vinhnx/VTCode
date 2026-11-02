@@ -10,6 +10,14 @@
 use once_cell::sync::Lazy;
 use std::io::{IsTerminal, Write};
 
+use crate::utils::parse_bool_env_value;
+
+/// Env override that forces the HITL bell on or off.
+const BELL_ENV: &str = "VTCODE_HITL_BELL";
+
+/// Env override that selects the HITL notification mode.
+const NOTIFY_ENV: &str = "VTCODE_HITL_NOTIFY";
+
 /// Escape character as a raw byte (ESC = 0x1B = 27)
 pub const ESC_BYTE: u8 = 0x1b;
 
@@ -76,12 +84,13 @@ pub fn play_bell(enabled: bool) {
 }
 
 /// Determine whether the bell should play, honoring an env override.
+///
+/// The override is read through the canonical tri-state boolean helper
+/// (`0|false|no|off` disable, `1|true|yes|on` enable, anything else keeps
+/// `default_enabled`), so `VTCODE_HITL_BELL=no` no longer counts as enabled.
 #[inline]
 fn is_bell_enabled(default_enabled: bool) -> bool {
-    if let Ok(val) = std::env::var("VTCODE_HITL_BELL") {
-        return !matches!(val.trim().to_ascii_lowercase().as_str(), "false" | "0" | "off");
-    }
-    default_enabled
+    crate::utils::parse_env_bool(BELL_ENV, default_enabled)
 }
 
 #[inline]
@@ -127,12 +136,14 @@ pub fn notify_attention_with_mode(default_enabled: bool, message: Option<&str>, 
 }
 
 fn hitl_notify_mode(default_enabled: bool) -> HitlNotifyMode {
-    if let Ok(raw) = std::env::var("VTCODE_HITL_NOTIFY") {
+    if let Ok(raw) = std::env::var(NOTIFY_ENV) {
         let v = raw.trim().to_ascii_lowercase();
         return match v.as_str() {
-            "off" | "0" | "false" => HitlNotifyMode::Off,
             "bell" => HitlNotifyMode::Bell,
             "rich" | "osc" | "notify" => HitlNotifyMode::Rich,
+            // Canonical falsy values (including `no`) switch notifications off;
+            // unknown values keep the lenient bell fallback.
+            _ if parse_bool_env_value(&v) == Some(false) => HitlNotifyMode::Off,
             _ => HitlNotifyMode::Bell,
         };
     }
@@ -793,5 +804,59 @@ mod tests {
         assert_eq!(truncate_to_width("éé", 3, "…"), "éé");
         assert_eq!(truncate_to_width("日本語", 5, "…"), "日本…");
         assert_eq!(truncate_to_width("\x1b[1mabcdef\x1b[0m", 4, "…"), format!("\x1b[1mabc…{RESET}"));
+    }
+
+    #[test]
+    fn bell_override_uses_the_canonical_boolean_set() {
+        let guard = crate::env_lock::lock();
+        let previous = std::env::var_os(BELL_ENV);
+
+        for value in ["0", "false", "no", "NO", " off "] {
+            guard.set_var(BELL_ENV, value);
+            assert!(!is_bell_enabled(true), "{value:?} should disable the bell");
+        }
+
+        for value in ["1", "true", "yes", "on"] {
+            guard.set_var(BELL_ENV, value);
+            assert!(is_bell_enabled(false), "{value:?} should enable the bell");
+        }
+
+        // Unknown values behave like an unset variable and keep the caller default.
+        for value in ["debug", "maybe"] {
+            guard.set_var(BELL_ENV, value);
+            assert!(is_bell_enabled(true), "{value:?} should keep the default on");
+            assert!(!is_bell_enabled(false), "{value:?} should keep the default off");
+        }
+
+        guard.remove_var(BELL_ENV);
+        assert!(is_bell_enabled(true));
+        assert!(!is_bell_enabled(false));
+
+        guard.restore_var(BELL_ENV, previous);
+    }
+
+    #[test]
+    fn notify_mode_override_honors_canonical_falsy_values() {
+        let guard = crate::env_lock::lock();
+        let previous = std::env::var_os(NOTIFY_ENV);
+
+        for value in ["off", "0", "false", "no", "NO"] {
+            guard.set_var(NOTIFY_ENV, value);
+            assert_eq!(hitl_notify_mode(true), HitlNotifyMode::Off, "{value:?} should disable notifications");
+        }
+
+        guard.set_var(NOTIFY_ENV, "bell");
+        assert_eq!(hitl_notify_mode(true), HitlNotifyMode::Bell);
+
+        for value in ["rich", "osc", "notify"] {
+            guard.set_var(NOTIFY_ENV, value);
+            assert_eq!(hitl_notify_mode(false), HitlNotifyMode::Rich, "{value:?} should request rich notifications");
+        }
+
+        guard.remove_var(NOTIFY_ENV);
+        assert_eq!(hitl_notify_mode(true), HitlNotifyMode::Rich);
+        assert_eq!(hitl_notify_mode(false), HitlNotifyMode::Off);
+
+        guard.restore_var(NOTIFY_ENV, previous);
     }
 }

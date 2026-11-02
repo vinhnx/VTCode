@@ -205,7 +205,9 @@ pub async fn refresh_tools(&self, allowlist: &McpAllowListConfig, timeout: Durat
 - Applies allowlist filtering
 - Caches tool metadata
 - Validates input schemas
-- Sorts tools by name, resources by URI, and prompts by name per provider, and aggregates providers in name order, so the catalog (and the LLM prompt-cache prefix) is stable regardless of server ordering; when providers expose the same tool name, the first provider by name owns it
+- Sorts tools by name, resources by URI, and prompts by name per provider, and aggregates providers in name
+  order, so the catalog (and the LLM prompt-cache prefix) is stable regardless of server ordering; when
+  providers expose the same tool name, the first provider by name owns it
 
 ### Tool Execution
 

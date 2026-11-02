@@ -45,7 +45,7 @@ pub fn compact_tool_description(original: &str, mode: ToolDocumentationMode, per
     // and stays unfenced, since the fence would outweigh the summary.
     let framing = split_mcp_policy_framing(original);
     let text = framing.as_ref().map_or(original, |framing| framing.inner.as_str());
-    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = vtcode_commons::formatting::collapse_whitespace(text);
     let limit = |mode_max: usize| per_tool_max.map_or(mode_max, |per_tool| per_tool.min(mode_max));
 
     let summary = match mode {

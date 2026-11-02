@@ -34,11 +34,13 @@ pub fn layout_display_lines(display: &[DiffDisplayLine], options: LayoutOptions)
 
 /// Returns a bounded head/tail excerpt of semantic display lines.
 ///
-/// The returned vector contains at most `max_rows` entries. When rows are
-/// omitted, one metadata entry (`... N lines omitted ...`) is inserted between
-/// the retained head and tail. Source line numbers and intraline ranges on
-/// retained entries are preserved, so callers can render the excerpt without
-/// reparsing or inventing positions.
+/// # Contract
+///
+/// - Ensures: result length is `<= max_rows`; `max_rows == 0` yields empty.
+/// - Ensures: when omitting, exactly one `Metadata` marker
+///   (`... N lines omitted ...`) separates retained head and tail, and
+///   retained entries keep their source numbers and intraline ranges.
+/// - Termination: no loops over unbounded state (two bounded copies).
 #[must_use]
 pub fn bounded_display_lines(lines: &[DiffDisplayLine], max_rows: usize) -> Vec<DiffDisplayLine> {
     if max_rows == 0 {
@@ -273,6 +275,9 @@ fn omission_row(omitted: usize) -> DiffRow {
 }
 
 fn wrap_segments(text: &str, changed: &[(usize, usize)], width: usize, wrap: bool) -> Vec<Vec<DiffSegment>> {
+    // Contract: `changed` ranges should be char-boundary ranges within `text`
+    // (invalid ones are ignored by `segment_slice`). Ensures at least one row.
+    // Termination: single char_indices pass (variant: remaining chars).
     if !wrap || UnicodeWidthStr::width(text) <= width {
         return vec![segment_slice(text, changed, 0, text.len())];
     }

@@ -6,6 +6,9 @@ use vtcode_core::config::DEFAULT_TERMINAL_TITLE_ITEMS;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::core_tui::session::{
+    TERMINAL_TITLE_ATTENTION_NEEDLES, TERMINAL_TITLE_UNDOING_NEEDLES, TERMINAL_TITLE_WAITING_NEEDLES,
+};
 
 use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 
@@ -307,10 +310,14 @@ fn build_terminal_title_preview(
     }
 
     let status = preview_status_label(status_left);
+    // Representative runtime values: the shared loading shimmer starts at its
+    // Braille head (`⠋`), attention uses `!`, and a loading-ended state shows
+    // the static status label.
     let spinner = match status {
         "Ready" => None,
         "Action Required" => Some("!".to_string()),
-        _ => Some("...".to_string()),
+        "Undoing" => Some("Undoing".to_string()),
+        _ => Some("⠋".to_string()),
     };
     let project = workspace
         .file_name()
@@ -322,7 +329,7 @@ fn build_terminal_title_preview(
     let mut seen = std::collections::HashSet::new();
     for item_id in draft_items {
         let candidate = match item_id.as_str() {
-            "app-name" => Some(("VT Code".to_string(), false)),
+            "app-name" => Some((vtcode_core::config::constants::app::DISPLAY_NAME.to_string(), false)),
             "project" => Some((project.clone(), false)),
             "spinner" => spinner.as_ref().map(|spinner| (spinner.clone(), true)),
             "status" => Some((status.to_string(), false)),
@@ -347,7 +354,7 @@ fn build_terminal_title_preview(
             _ => None,
         };
         if let Some((text, spinner_part)) = candidate {
-            let key = text.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase();
+            let key = vtcode_commons::formatting::collapse_whitespace(&text).to_ascii_lowercase();
             if !key.is_empty() && seen.insert(key) {
                 parts.push((text, spinner_part));
             }
@@ -366,12 +373,17 @@ fn build_terminal_title_preview(
 }
 
 fn preview_status_label(status_left: Option<&str>) -> &'static str {
+    // The word needles come from the shipped TUI classifier
+    // (`vtcode-ui` `session/terminal_title.rs`); only the stateless Working /
+    // Ready tail is preview-local, because the preview has no live loading
+    // state to consult.
     let normalized = status_left.unwrap_or("").trim().to_ascii_lowercase();
-    if normalized.contains("action required") || normalized.contains("approval") {
+    let matches = |needles: &[&str]| needles.iter().any(|needle| normalized.contains(needle));
+    if matches(TERMINAL_TITLE_ATTENTION_NEEDLES) {
         "Action Required"
-    } else if normalized.contains("undo") || normalized.contains("rewind") || normalized.contains("revert") {
+    } else if matches(TERMINAL_TITLE_UNDOING_NEEDLES) {
         "Undoing"
-    } else if normalized.contains("waiting") || normalized.contains("queued") {
+    } else if matches(TERMINAL_TITLE_WAITING_NEEDLES) {
         "Waiting"
     } else if normalized.contains("thinking") || normalized.contains("processing") {
         "Thinking"
@@ -417,7 +429,7 @@ mod tests {
             &["project".to_string(), "spinner".to_string(), "status".to_string()],
         );
 
-        assert_eq!(preview, "demo-project ... Thinking");
+        assert_eq!(preview, "demo-project ⠋ Thinking");
     }
 
     #[test]

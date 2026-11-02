@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 
 /// Small/lightweight model configuration for efficient operations
 ///
-/// Following VT Code's pattern, use a smaller model (e.g., Haiku, GPT-4 Mini) for 50%+ of calls:
+/// Use an efficient route for bounded tasks such as:
 /// - Large file reads and parsing (>50KB)
 /// - Web page summarization and analysis
 /// - Git history and commit message processing
 /// - One-word processing labels and simple classifications
 ///
-/// Typically 70-80% cheaper than the main model while maintaining quality for these tasks.
+/// Savings and quality depend on the route, token usage, and retries; compare representative tasks.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentSmallModelConfig {
@@ -18,7 +18,7 @@ pub struct AgentSmallModelConfig {
     #[serde(default = "default_small_model_enabled")]
     pub enabled: bool,
 
-    /// Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash")
+    /// Provider-specific model ID for efficient operations.
     /// Leave empty to auto-select a lightweight sibling of the main model
     #[serde(default)]
     pub model: String,

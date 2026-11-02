@@ -183,24 +183,6 @@ impl SourceInspection {
         ledger.files.insert(destination.to_path_buf(), transferred);
     }
 
-    pub(crate) async fn acquire_patch_leases(
-        monitor: &crate::tools::edited_file_monitor::EditedFileMonitor,
-        patch: &Patch,
-        root: &Path,
-    ) -> Result<Vec<crate::tools::edited_file_monitor::MutationLease>> {
-        let mut paths = Vec::new();
-        for target in crate::tools::apply_patch::patch_mutation_target_paths(patch) {
-            paths.push(vtcode_commons::paths::ensure_path_within_workspace_resolved(&root.join(target), root).await?);
-        }
-        paths.sort();
-        paths.dedup();
-        let mut leases = Vec::new();
-        for path in paths {
-            leases.push(monitor.acquire_mutation(&path).await);
-        }
-        Ok(leases)
-    }
-
     /// Validate every operation before any operation writes. Internal source
     /// loading is only for matching and revision checks, never authorization.
     pub(crate) async fn prepare_patch(&self, patch: &Patch, root: &Path) -> Result<Vec<PreparedPatchCredit>> {

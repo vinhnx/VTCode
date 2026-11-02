@@ -255,6 +255,7 @@ mod tests {
             provider.supported_models(),
             vec![
                 models::minimax::MINIMAX_M3.to_string(),
+                models::minimax::MINIMAX_M3_1_FLASH.to_string(),
                 models::minimax::MINIMAX_M2_7.to_string(),
             ]
         );

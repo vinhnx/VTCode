@@ -6,6 +6,7 @@ use super::{McpPolicyStore, ToolPolicy};
 
 /// Decision result for tool execution
 #[derive(Debug, Clone, PartialEq)]
+#[must_use = "tool execution decisions must be enforced"]
 pub enum ToolExecutionDecision {
     /// The tool is allowed to execute.
     Allowed,
@@ -16,6 +17,7 @@ pub enum ToolExecutionDecision {
 }
 
 impl ToolExecutionDecision {
+    #[must_use]
     pub fn is_allowed(&self) -> bool {
         matches!(self, Self::Allowed)
     }

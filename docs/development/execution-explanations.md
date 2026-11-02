@@ -15,7 +15,8 @@
 Summary sections are Goal, Changes, Decisions, Verification, and Review first. Outcome, failures, completeness, and
 omitted counts stay visible. Terminal wrapping can increase physical rows. Evidence opens retained event captures in
 the existing review surface. In `/explain --details`, Alt+click a wrapped fact to inspect its canonical evidence;
-ordinary click and drag retain text selection. Browser navigation uses a typed UI channel and cannot submit prompts or run commands.
+ordinary click and drag retain text selection. Browser navigation uses a typed UI channel and cannot submit
+prompts or run commands.
 
 ## Canonical contract
 

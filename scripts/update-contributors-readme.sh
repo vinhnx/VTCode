@@ -16,6 +16,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 
 DRY_RUN=false
@@ -23,8 +24,13 @@ if [[ "${1:-}" == "--dry-run" ]]; then
     DRY_RUN=true
 fi
 
-# Users to exclude (CI accounts, coding agents, bots)
+# Users to exclude (owner, CI accounts, coding agents, bots)
 EXCLUDED_USERS="vinhnguyenxuan-ct,vinhnx"
+
+# Regex exclusions on top of EXCLUDED_USERS: any login starting with
+# "vinhnguyenxuan" (owner's automation accounts) or ending in "[bot]" or
+# "-bot" (bots and coding agents).
+EXCLUDED_LOGIN_RE='^vinhnguyenxuan|\[[bB][oO][tT]\]$|-bot$'
 
 # The single main contributor (non-owner) shown after security advisors.
 MAIN_USER="kernitus"
@@ -105,9 +111,14 @@ fi
 
 print_info "Generating grouped avatar HTML..."
 
+# Group buffers accumulated through append_line's indirect expansion (${!group_var}).
+# shellcheck disable=SC2034
 advisors_html=""
+# shellcheck disable=SC2034
 main_html=""
+# shellcheck disable=SC2034
 core_html=""
+# shellcheck disable=SC2034
 contributor_html=""
 
 append_line() {
@@ -144,6 +155,10 @@ emit_entry() {
 while IFS=$'\t' read -r login contributions avatar_url html_url; do
     if echo "$EXCLUDED_USERS" | tr ',' '\n' | grep -qx "$login"; then
         print_info "  Excluding: $login"
+        continue
+    fi
+    if echo "$login" | grep -Eq "$EXCLUDED_LOGIN_RE"; then
+        print_info "  Excluding (pattern): $login"
         continue
     fi
     if [[ "$login" == "$MAIN_USER" ]]; then
@@ -196,6 +211,36 @@ emit_group "Security Advisors" advisors_html
 emit_group "Main Contributor" main_html
 emit_group "Core Contributors" core_html
 emit_group "Contributors" contributor_html
+
+COUNT_START="<!-- CONTRIBUTORS-COUNT:START -->"
+COUNT_END="<!-- CONTRIBUTORS-COUNT:END -->"
+
+if ! grep -q "$COUNT_START" "$README" || ! grep -q "$COUNT_END" "$README"; then
+    print_warning "Count markers not found in README.md ($COUNT_START / $COUNT_END); skipping count update."
+else
+    count=$(printf '%s' "$html" | grep -o '<a href=' | wc -l | tr -d ' ')
+    summary="<summary>View all contributors (${count})</summary>"
+    MARKER_START="$COUNT_START" MARKER_END="$COUNT_END" README="$README" SUMMARY="$summary" python3 - <<'PY'
+import os
+
+readme_path = os.environ["README"]
+marker_start = os.environ["MARKER_START"]
+marker_end = os.environ["MARKER_END"]
+summary = os.environ["SUMMARY"]
+
+with open(readme_path) as f:
+    content = f.read()
+
+start_idx = content.index(marker_start) + len(marker_start)
+end_idx = content.index(marker_end)
+content = content[:start_idx] + summary + content[end_idx:]
+
+with open(readme_path, "w") as f:
+    f.write(content)
+
+print(f"SUCCESS: Contributor summary updated to {summary}")
+PY
+fi
 
 if [[ -z "$html" ]]; then
     print_error "No contributors to display after filtering."

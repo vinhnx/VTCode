@@ -17,6 +17,8 @@ pub(crate) struct PendingBackgroundCompletions {
     events: BTreeMap<String, BackgroundCompletionEvent>,
     non_autonomous_identities: BTreeSet<String>,
     continuation_queued: bool,
+    observed_exec_sessions: BTreeSet<String>,
+    delivered_identities: BTreeSet<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -27,10 +29,40 @@ pub(crate) struct DrainBackgroundCompletionsResult {
 }
 
 impl PendingBackgroundCompletions {
+    pub(crate) fn observe_terminal_exec_results(&mut self, registry: &vtcode_core::tools::ToolRegistry) {
+        self.record_terminal_exec_results(registry.take_observed_terminal_exec_results());
+    }
+
+    fn record_terminal_exec_results(&mut self, session_ids: impl IntoIterator<Item = String>) {
+        self.observed_exec_sessions.extend(session_ids);
+        // Already delivered results must not occupy the bounded pending queue
+        // and displace an unobserved failure. Canonical/UI delivery is separate.
+        let observed = &self.observed_exec_sessions;
+        let delivered = &mut self.delivered_identities;
+        self.events.retain(|identity, event| {
+            let consumed =
+                event.task_id == format!("exec:{}", event.exec_session_id) && observed.contains(&event.exec_session_id);
+            if consumed {
+                delivered.insert(identity.clone());
+            }
+            !consumed
+        });
+    }
+
+    fn exec_result_observed(&self, event: &BackgroundCompletionEvent) -> bool {
+        event.task_id == format!("exec:{}", event.exec_session_id)
+            && self.observed_exec_sessions.contains(&event.exec_session_id)
+    }
+
     pub(crate) fn push(&mut self, event: BackgroundCompletionEvent) -> bool {
         let identity = completion_identity(&event);
-        if self.events.contains_key(&identity) {
+        if self.events.contains_key(&identity) || self.delivered_identities.contains(&identity) {
             return false;
+        }
+        if self.exec_result_observed(&event) {
+            self.delivered_identities.insert(identity);
+            // Return true so drain callers still emit canonical and UI events.
+            return true;
         }
         if self.events.len() >= MAX_PENDING_BACKGROUND_COMPLETIONS {
             self.non_autonomous_identities.remove(&identity);
@@ -54,10 +86,10 @@ impl PendingBackgroundCompletions {
         user_input_queued: bool,
         runtime_follow_up_pending: bool,
     ) -> bool {
-        self.events
-            .keys()
-            .any(|identity| !self.non_autonomous_identities.contains(identity))
-            && !self.continuation_queued
+        self.events.keys().any(|identity| {
+            !self.non_autonomous_identities.contains(identity)
+                && !self.events.get(identity).is_some_and(|event| self.exec_result_observed(event))
+        }) && !self.continuation_queued
             && !user_input_queued
             && !runtime_follow_up_pending
     }
@@ -68,10 +100,10 @@ impl PendingBackgroundCompletions {
 
     pub(crate) fn mark_continuation_queued(&mut self) {
         // A follow-up owned by another completion source cannot latch this queue.
-        self.continuation_queued = self
-            .events
-            .keys()
-            .any(|identity| !self.non_autonomous_identities.contains(identity));
+        self.continuation_queued = self.events.keys().any(|identity| {
+            !self.non_autonomous_identities.contains(identity)
+                && !self.events.get(identity).is_some_and(|event| self.exec_result_observed(event))
+        });
     }
 
     pub(crate) fn take_transient_note(&mut self) -> Option<String> {
@@ -104,6 +136,7 @@ impl PendingBackgroundCompletions {
         }
         self.events.clear();
         for identity in consumed_identities {
+            self.delivered_identities.insert(identity.clone());
             self.non_autonomous_identities.remove(&identity);
         }
         Some(note)
@@ -311,6 +344,7 @@ pub(crate) fn background_completion_thread_event(event: &BackgroundCompletionEve
                 duration_ms: None,
                 task_id: Some(event.task_id.clone()),
                 session_id: Some(event.session_id.clone()),
+                correlation_id: None,
                 exec_session_id: Some(event.exec_session_id.clone()),
                 status: Some(event.status.as_str().to_string()),
                 transcript_path: event.transcript_path.as_ref().map(|path| path.display().to_string()),
@@ -337,6 +371,90 @@ mod tests {
             transcript_path: None,
             exit_code: Some(0),
         }
+    }
+
+    #[test]
+    fn awaited_exec_notice_never_reopens_work_in_either_race_order() {
+        for notice_first in [false, true] {
+            let mut pending = PendingBackgroundCompletions::default();
+            let event = background_completion_from_exec_session(ExecSessionCompletionEvent {
+                session_id: "awaited-timer".to_owned().into(),
+                command: "sleep 0.01".into(),
+                managed_background: false,
+                termination_requested: false,
+                exit_code: 0,
+            })
+            .unwrap();
+            if notice_first {
+                pending.push(event.clone());
+            }
+            pending.record_terminal_exec_results(["awaited-timer".into()]);
+            if !notice_first {
+                pending.push(event.clone());
+            }
+            assert!(!pending.should_schedule_continuation(false, false));
+            assert!(pending.take_transient_note().is_none());
+            assert!(!pending.push(event));
+            assert!(!pending.should_schedule_continuation(false, false));
+            let unobserved = background_completion_from_exec_session(ExecSessionCompletionEvent {
+                session_id: "unobserved-failure".to_owned().into(),
+                command: "false".into(),
+                managed_background: false,
+                termination_requested: false,
+                exit_code: 7,
+            })
+            .unwrap();
+            pending.push(unobserved);
+            assert!(pending.should_schedule_continuation(false, false));
+            assert!(pending.take_transient_note().unwrap().contains("exit_code=7"));
+        }
+    }
+
+    #[test]
+    fn consumed_notices_cannot_displace_an_unobserved_failure() {
+        let mut pending = PendingBackgroundCompletions::default();
+        for index in 0..MAX_PENDING_BACKGROUND_COMPLETIONS + 2 {
+            let session = format!("observed-{index}");
+            pending.record_terminal_exec_results([session.clone()]);
+            let event = background_completion_from_exec_session(ExecSessionCompletionEvent {
+                session_id: session.into(),
+                command: "timer".into(),
+                managed_background: false,
+                termination_requested: false,
+                exit_code: 0,
+            })
+            .unwrap();
+            assert!(pending.push(event));
+        }
+        assert!(pending.is_empty());
+        assert!(pending.push(completion("unobserved-failure", BackgroundSubprocessStatus::Error)));
+        assert!(pending.should_schedule_continuation(false, false));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn returned_exec_and_write_stdin_results_are_latched_without_history() {
+        let workspace = tempfile::tempdir().unwrap();
+        let registry = vtcode_core::tools::ToolRegistry::new(workspace.path().to_path_buf()).await;
+        registry.allow_all_tools().await.unwrap();
+        let run = registry
+            .execute_tool("exec_command", serde_json::json!({"cmd":"sleep 0.1", "yield_time_ms":1}))
+            .await
+            .unwrap();
+        let id = run["session_id"].as_str().unwrap().to_owned();
+        let mut pending = PendingBackgroundCompletions::default();
+        let terminal = if run.get("exit_code").is_some() {
+            run
+        } else {
+            registry
+                .execute_tool("write_stdin", serde_json::json!({"session_id":id,"chars":"","yield_time_ms":1000}))
+                .await
+                .unwrap()
+        };
+        assert_eq!(terminal["exit_code"], 0);
+        pending.observe_terminal_exec_results(&registry);
+        assert!(pending.observed_exec_sessions.contains(&id));
+        assert!(registry.take_observed_terminal_exec_results().is_empty());
     }
 
     #[test]

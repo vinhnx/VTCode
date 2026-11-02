@@ -21,12 +21,15 @@ Use one of these fixes:
 
 - Install the official `copilot` CLI and make sure `copilot` is on `PATH`
 - Point VT Code at a custom binary with `VTCODE_COPILOT_COMMAND`
-- Or configure a custom command in `vtcode.toml`
+- Or configure a custom command in a system, user, or explicitly selected `vtcode.toml`
 
 ```toml
 [auth.copilot]
 command = "/absolute/path/to/copilot"
 ```
+
+Repository workspace and project configuration cannot set this command; startup rejects it and reload retains the
+last valid configuration.
 
 After that, rerun one of:
 

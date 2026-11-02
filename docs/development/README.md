@@ -5,16 +5,22 @@ Entry point for VT Code contributor workflows.
 ## Getting Started
 
 - [Development Setup](./DEVELOPMENT_SETUP.md) - Canonical local setup and quality loop.
+- [Rust Style Guide](./rust-style-guide.md) - Google Rust guidance adoption, enforcement, exceptions, and API migrations.
+- [Rust Toolchain and MSRV](./toolchain-updates.md) - Single compiler pin, bump checklist, new-compiler gate fixes, and
+  which compiler references stay historical.
 - [Architecture Guide](../ARCHITECTURE.md#request-projection-and-context-budgets) - Runtime ownership, request projections,
   context budgets, and staged headless compaction.
 - [Testing Guide](./testing.md) - Test commands, structure, and benchmark coverage, including the startup launch
   benchmark.
+- [Desktop workspace](./desktop-workspace.md) - Local GPUI app, JSON-RPC service, session lifecycle, and macOS packaging.
 - [TUI design system](./tui-design-system.md) - Canonical list rows, keyboard copy, and group spacing in
   `vtcode-ui::design`.
 - [TUI list search](./tui-list-search.md) - Shared live filter for modal and standalone pickers (labels, descriptions,
   keywords).
 - [C++ Core Guidelines Adoption](./CPP_CORE_GUIDELINES_ADOPTION.md) - Policy for any C/C++ code introduced in this
   repository.
+- [Deep Rust Analysis with Charon](./deep-rust-analysis.md) - Semantic Rust inspection (drops, layout, resolution) via
+  Charon, and the design lessons it mirrors.
 - [CI/CD](./ci-cd.md) - Pipeline behavior and verification stages.
 - [Markdown Quality](./markdown-quality.md) - Maintained-file selection, pinned linting, and formatting policy.
 - [Cross Compilation](./cross-compilation.md) - Multi-target build workflows.
@@ -26,6 +32,8 @@ Entry point for VT Code contributor workflows.
 - [Execution Policy](./EXECUTION_POLICY.md) - Command policy model.
 - [Command Security Model](./COMMAND_SECURITY_MODEL.md) - Command validation and threat model.
 - [WebMCP bridge](./webmcp.md) - Authenticated browser editing, pairing, runtime adapters, and security boundaries.
+- [VT Code Companion](./vtcode-companion.md) - Local plugin packaging, marketplace generation, install-script and CLI
+  behavior, and GitHub sharing boundaries.
 - [Source inspection](./source-inspection.md) - Retained source coverage, targeted refresh, shell writes, and verification.
 - [Execution explanations](./execution-explanations.md) - Canonical projection, decisions, evidence, and reports.
 - [Matrix orchestration](./matrix-orchestration.md) - Coordinator tasks, resource leases, final verification, and recovery.
@@ -35,6 +43,8 @@ Entry point for VT Code contributor workflows.
   article with the VT Code applicability mapping; consult before touching `vtcode-safety/src/sandboxing/`.
 - [Runtime Guidance](./runtime-guidance.md) - Boundary between compiled universal behavior and dynamic project
   instructions.
+- [Prompt and Model Evaluation](./prompt-model-evaluation.md) - Supplied-context cases, settings comparisons, and
+  cost/latency measurement.
 - [vtcode Binary Gotchas](./vtcode-binary-gotchas.md) - Binary startup, runloop recovery, allocator, and
   request-assembly invariants.
 - [AI Tool Surface Migration](./ai-tool-surface-migration.md) - Breaking-change notes for the Codex-style default tools.
@@ -91,3 +101,5 @@ Entry point for VT Code contributor workflows.
 - [Contributing](../CONTRIBUTING.md)
 
 - [Checkpoint file storage](filesnap-checkpoints.md): filesnap storage, legacy compatibility, and restore boundaries.
+
+- [DuckDuckGo web search integration](web-search.md): keyless search, request guard rails, parsing, and fetch approval boundaries.

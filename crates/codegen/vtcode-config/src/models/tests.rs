@@ -275,7 +275,8 @@ fn test_models_for_provider() {
     assert!(nvidia_models.contains(&ModelId::NvidiaNemotron3Super120bA12b));
 
     let merge_gateway_models = ModelId::models_for_provider(Provider::MergeGateway);
-    assert_eq!(merge_gateway_models.len(), 29);
+    assert_eq!(merge_gateway_models.len(), 32);
+    assert!(merge_gateway_models.contains(&ModelId::MergeGatewayMoonshotKimiK31Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Flash));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayDefaultRouting));
@@ -287,6 +288,7 @@ fn test_models_for_provider() {
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt6Astra));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt6Sol));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt61Sol));
+    assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt61Terra));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt6Luna));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayAnthropicClaudeHaiku4520251001));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayAnthropicClaudeHaiku55));
@@ -317,7 +319,7 @@ fn test_models_for_provider() {
     assert!(ollama_cloud_models.contains(&ModelId::OllamaGptOss20bCloud));
     assert!(ollama_cloud_models.contains(&ModelId::OllamaGptOss120bCloud));
     assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM3Cloud));
-    assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM3Cloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM31FlashCloud));
 
     let _hf_models = ModelId::models_for_provider(Provider::HuggingFace);
 }
@@ -331,6 +333,7 @@ fn test_ollama_cloud_models() {
         (ModelId::OllamaGptOss20bCloud, models::ollama::GPT_OSS_20B_CLOUD),
         (ModelId::OllamaGptOss120bCloud, models::ollama::GPT_OSS_120B_CLOUD),
         (ModelId::OllamaMinimaxM3Cloud, models::ollama::MINIMAX_M3_CLOUD),
+        (ModelId::OllamaMinimaxM31FlashCloud, models::ollama::MINIMAX_M3_1_FLASH_CLOUD),
         (ModelId::OllamaGlm53Cloud, models::ollama::GLM_5_3_CLOUD),
         (ModelId::OllamaGlm53FlashCloud, models::ollama::GLM_5_3_FLASH_CLOUD),
         (ModelId::OllamaMistralLarge4Cloud, models::ollama::MISTRAL_LARGE_4_CLOUD),
@@ -357,7 +360,10 @@ fn test_ollama_cloud_models() {
             assert!(model_id.is_top_tier());
         }
 
-        if matches!(model_id, ModelId::OllamaGlm53FlashCloud | ModelId::OllamaDeepSeekV41FlashCloud) {
+        if matches!(
+            model_id,
+            ModelId::OllamaGlm53FlashCloud | ModelId::OllamaDeepSeekV41FlashCloud | ModelId::OllamaMinimaxM31FlashCloud
+        ) {
             assert!(model_id.is_flash_variant());
             assert!(model_id.is_efficient_variant());
         }
@@ -414,11 +420,11 @@ fn test_core_capability_helpers() {
 
 #[test]
 fn catalog_reasoning_does_not_imply_configurable_effort() {
-    assert!(Provider::OpenRouter.supports_reasoning("deepseek-ai/DeepSeek-V4.1-Flash"));
-    assert!(!Provider::OpenRouter.supports_reasoning_effort("deepseek-ai/DeepSeek-V4.1-Flash"));
+    assert!(Provider::OpenRouter.supports_reasoning("deepseek/deepseek-v4.1-flash-1017"));
+    assert!(!Provider::OpenRouter.supports_reasoning_effort("deepseek/deepseek-v4.1-flash-1017"));
     assert!(
         Provider::OpenRouter
-            .supported_reasoning_efforts("deepseek-ai/DeepSeek-V4.1-Flash")
+            .supported_reasoning_efforts("deepseek/deepseek-v4.1-flash-1017")
             .is_empty()
     );
 }
@@ -538,6 +544,44 @@ fn test_gpt_5_5_dated_alias_round_trips_to_gpt55_capabilities() {
 }
 
 #[test]
+fn test_minimax_m31_flash_routes_and_reasoning_metadata() {
+    let native = ModelId::from_str("MiniMax-M3.1-Flash").expect("native MiniMax M3.1 Flash");
+    assert_eq!(native, ModelId::MinimaxM31Flash);
+    assert_eq!(native.provider(), Provider::Minimax);
+    assert!(Provider::Minimax.supports_reasoning(native.as_str().as_ref()));
+    assert!(Provider::Minimax.supports_reasoning_effort(native.as_str().as_ref()));
+
+    let merge_route = models::merge_gateway::MINIMAX_M3_1_FLASH;
+    assert_eq!(ModelId::from_str(merge_route), Ok(ModelId::MergeGatewayMinimaxM31Flash));
+    assert!(models::merge_gateway::route_uses_thinking_budget(merge_route));
+    assert!(models::merge_gateway::REASONING_MODELS.contains(&merge_route));
+    assert!(Provider::MergeGateway.supports_reasoning_effort(merge_route));
+
+    let openrouter = ModelId::from_str("minimax/minimax-m3.1-flash:free").expect("OpenRouter free listing");
+    assert_eq!(openrouter, ModelId::OpenRouterMinimaxM31FlashFree);
+    assert_eq!(openrouter.provider(), Provider::OpenRouter);
+    assert!(openrouter.is_flash_variant());
+    assert!(openrouter.is_efficient_variant());
+    assert_eq!(
+        Provider::OpenRouter.supported_reasoning_efforts(openrouter.as_str().as_ref()),
+        ["low", "medium", "high", "xhigh", "max"]
+    );
+
+    // Ollama Cloud route serves the same model; reasoning readiness comes
+    // from the Ollama REASONING_MODELS list, while structured reasoning
+    // efforts are not available on the boolean `think` wire.
+    let ollama_cloud =
+        ModelId::from_str(models::ollama::MINIMAX_M3_1_FLASH_CLOUD).expect("Ollama Cloud MiniMax M3.1 Flash");
+    assert_eq!(ollama_cloud, ModelId::OllamaMinimaxM31FlashCloud);
+    assert_eq!(ModelId::OllamaMinimaxM31FlashCloud.as_str(), models::ollama::MINIMAX_M3_1_FLASH_CLOUD);
+    assert_eq!(ollama_cloud.provider(), Provider::OllamaCloud);
+    assert!(models::ollama::REASONING_MODELS.contains(&ollama_cloud.as_str().as_ref()));
+    assert!(!Provider::OllamaCloud.supports_reasoning_effort(ollama_cloud.as_str().as_ref()));
+    assert!(ollama_cloud.is_flash_variant());
+    assert!(ollama_cloud.is_efficient_variant());
+}
+
+#[test]
 fn test_merge_gateway_haiku_55_stays_out_of_reasoning() {
     // The gateway has no vendor serving reasoning jointly with tools for
     // `anthropic/claude-haiku-5-5`: every reasoning classifier must agree it
@@ -581,6 +625,40 @@ fn test_gpt_61_sol_openai_and_merge_gateway() {
     assert!(models::merge_gateway::REASONING_EFFORT_ROUTES.contains(&models::merge_gateway::OPENAI_GPT_6_1_SOL));
     assert_eq!(ModelId::MergeGatewayOpenAIGpt61Sol.generation(), "6.1");
     assert!(ModelId::MergeGatewayOpenAIGpt61Sol.is_top_tier());
+}
+
+#[test]
+fn test_gpt_61_terra_openai_and_merge_gateway() {
+    // OpenAI native route
+    assert_eq!(ModelId::from_str(models::openai::GPT_6_1_TERRA).unwrap(), ModelId::GPT61Terra);
+    assert_eq!(ModelId::GPT61Terra.as_str(), models::openai::GPT_6_1_TERRA);
+    assert_eq!(ModelId::GPT61Terra.display_name(), "GPT-6.1 Terra");
+    assert!(models::openai::SUPPORTED_MODELS.contains(&models::openai::GPT_6_1_TERRA));
+    assert!(models::openai::REASONING_MODELS.contains(&models::openai::GPT_6_1_TERRA));
+    assert!(models::openai::RESPONSES_API_MODELS.contains(&models::openai::GPT_6_1_TERRA));
+    assert!(Provider::OpenAI.supports_service_tier(models::openai::GPT_6_1_TERRA));
+    assert!(!ModelId::GPT61Terra.is_top_tier());
+    assert_eq!(ModelId::GPT61Terra.generation(), "6.1");
+    assert!(crate::core::prompt_cache::supports_openai_explicit_prompt_cache(models::openai::GPT_6_1_TERRA));
+    // Balanced tier slots between Sol and Luna, mirroring the GPT-5.6 chain.
+    assert_eq!(ModelId::GPT61Sol.preferred_lightweight_variant(), Some(ModelId::GPT61Terra));
+    assert_eq!(ModelId::GPT61Terra.preferred_lightweight_variant(), Some(ModelId::GPT6Luna));
+
+    // Merge Gateway route
+    assert_eq!(
+        ModelId::from_str(models::merge_gateway::OPENAI_GPT_6_1_TERRA).unwrap(),
+        ModelId::MergeGatewayOpenAIGpt61Terra
+    );
+    assert_eq!(ModelId::MergeGatewayOpenAIGpt61Terra.as_str(), models::merge_gateway::OPENAI_GPT_6_1_TERRA);
+    assert!(models::merge_gateway::SUPPORTED_MODELS.contains(&models::merge_gateway::OPENAI_GPT_6_1_TERRA));
+    assert!(models::merge_gateway::REASONING_MODELS.contains(&models::merge_gateway::OPENAI_GPT_6_1_TERRA));
+    assert!(models::merge_gateway::REASONING_EFFORT_ROUTES.contains(&models::merge_gateway::OPENAI_GPT_6_1_TERRA));
+    assert_eq!(ModelId::MergeGatewayOpenAIGpt61Terra.generation(), "6.1");
+    assert!(ModelId::MergeGatewayOpenAIGpt61Terra.is_top_tier());
+    assert_eq!(
+        ModelId::MergeGatewayOpenAIGpt61Sol.preferred_lightweight_variant(),
+        Some(ModelId::MergeGatewayOpenAIGpt61Terra)
+    );
 }
 
 #[test]
@@ -719,6 +797,7 @@ fn test_all_models_have_non_empty_metadata_and_parse() {
             | ModelId::MergeGatewayOpenAIGpt6Astra
             | ModelId::MergeGatewayOpenAIGpt6Sol
             | ModelId::MergeGatewayOpenAIGpt6Luna
+            | ModelId::MergeGatewayDeepseekFlash
             | ModelId::MergeGatewayMetaMuseSparkOpen => continue,
             // Vercel AI Gateway reuses `vendor/model` ids that overlap with
             // OpenRouter/Merge Gateway; bare parsing preserves the existing
@@ -729,6 +808,8 @@ fn test_all_models_have_non_empty_metadata_and_parse() {
             | ModelId::VercelOpenAiGpt6Astra
             | ModelId::VercelOpenAiGpt56Sol
             | ModelId::VercelOpenAiGpt56Luna
+            | ModelId::VercelOpenAiGpt6Sol
+            | ModelId::VercelOpenAiGpt6Luna
             | ModelId::VercelGoogleGemini38Flash
             | ModelId::VercelDeepseekFlash
             | ModelId::VercelMoonshotaiKimiK3 => continue,
@@ -822,6 +903,7 @@ fn missing_catalog_routes_have_no_speculative_fallback_or_tier() {
     for model in [
         ModelId::CopilotGPT52Codex,
         ModelId::CopilotGPT54,
+        ModelId::MoonshotKimiK31Pro,
         ModelId::MoonshotKimiK3,
     ] {
         assert!(!model.is_pro_variant(), "{model}");

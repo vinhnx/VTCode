@@ -57,13 +57,42 @@ fn read_only_mutating_command_requires_approval_and_workspace_write() {
     let plan = build_shell_execution_plan(
         &config,
         PathBuf::from("/tmp/ws").as_path(),
+        PathBuf::from("/tmp/ws").as_path(),
         &command,
+        None,
         SandboxPermissions::UseDefault,
         None,
     )
     .unwrap();
     assert!(plan.approval_reason.is_some());
     assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::WorkspaceWrite { .. })));
+}
+
+#[test]
+fn explicit_full_access_uses_unsandboxed_shell_without_changing_configured_policy() {
+    let mut config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
+        ..Default::default()
+    };
+    let command = vec!["ls".to_owned()];
+    let plan = |config: &vtcode_config::SandboxConfig| {
+        build_shell_execution_plan(
+            config,
+            Path::new("/tmp/ws"),
+            Path::new("/tmp/ws"),
+            &command,
+            None,
+            SandboxPermissions::UseDefault,
+            None,
+        )
+        .expect("shell plan")
+    };
+    assert!(matches!(plan(&config).sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
+    config.enable_full_access();
+    assert!(plan(&config).sandbox_policy.is_none());
+    config.session_permission_mode = vtcode_config::core::sandbox::SessionPermissionMode::Configured;
+    assert!(matches!(plan(&config).sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
 }
 
 #[test]
@@ -78,13 +107,75 @@ fn read_only_non_mutating_command_stays_read_only_without_prompt() {
     let plan = build_shell_execution_plan(
         &config,
         PathBuf::from("/tmp/ws").as_path(),
+        PathBuf::from("/tmp/ws").as_path(),
         &command,
+        None,
         SandboxPermissions::UseDefault,
         None,
     )
     .unwrap();
     assert!(plan.approval_reason.is_none());
     assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
+}
+
+#[test]
+fn recursive_rm_of_mount_layout_requests_approval() {
+    let config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::DangerFullAccess,
+        ..Default::default()
+    };
+    let command = vec!["rm".to_string(), "--recursive".to_string(), "Documents".to_string()];
+
+    let plan = build_shell_execution_plan(
+        &config,
+        Path::new("/tmp/workspace"),
+        Path::new("/mnt/c"),
+        &command,
+        None,
+        SandboxPermissions::UseDefault,
+        None,
+    )
+    .unwrap();
+
+    assert!(plan.sandbox_policy.is_none());
+    assert!(
+        plan.approval_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("mounted filesystem"))
+    );
+}
+
+#[test]
+fn recursive_rm_after_shell_or_wrapper_directory_change_requests_approval() {
+    let config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::DangerFullAccess,
+        ..Default::default()
+    };
+    for command in [
+        vec!["bash", "-lc", "cd /Volumes/Backup && rm --recursive Photos"],
+        vec!["sudo", "--chdir=/Volumes/Backup", "rm", "--recursive", "Photos"],
+    ] {
+        let command: Vec<String> = command.into_iter().map(str::to_owned).collect();
+        let plan = build_shell_execution_plan(
+            &config,
+            Path::new("/tmp/workspace"),
+            Path::new("/tmp/workspace"),
+            &command,
+            None,
+            SandboxPermissions::UseDefault,
+            None,
+        )
+        .unwrap();
+
+        assert!(plan.sandbox_policy.is_none());
+        assert!(
+            plan.approval_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("mounted filesystem"))
+        );
+    }
 }
 
 #[test]
@@ -99,7 +190,9 @@ fn inline_interpreter_code_runs_under_restrictive_sandbox_without_prompt() {
     let plan = build_shell_execution_plan(
         &config,
         PathBuf::from("/tmp/ws").as_path(),
+        PathBuf::from("/tmp/ws").as_path(),
         &command,
+        None,
         SandboxPermissions::UseDefault,
         None,
     )
@@ -123,7 +216,9 @@ fn inline_interpreter_code_requires_approval_without_enforceable_sandbox() {
         let plan = build_shell_execution_plan(
             &config,
             PathBuf::from("/tmp/ws").as_path(),
+            PathBuf::from("/tmp/ws").as_path(),
             &command,
+            None,
             SandboxPermissions::UseDefault,
             None,
         )
@@ -232,16 +327,19 @@ fn external_mode_is_rejected_for_local_pty_execution() {
 
     let command = vec!["ls".to_string()];
     let requested = command.clone();
-    let error = apply_runtime_sandbox_to_command(
-        command,
-        &requested,
+    let plan = build_shell_execution_plan(
         &config,
         PathBuf::from(".").as_path(),
         PathBuf::from(".").as_path(),
+        &requested,
+        None,
         SandboxPermissions::UseDefault,
         None,
     )
-    .expect_err("external sandbox should not be allowed in local PTY flow");
+    .expect("sandbox plan");
+    let error =
+        apply_runtime_sandbox_to_command(command, &requested, PathBuf::from(".").as_path(), plan.sandbox_policy)
+            .expect_err("external sandbox should not be allowed in local PTY flow");
     assert!(error.to_string().contains("not supported"));
 }
 
@@ -358,16 +456,19 @@ fn with_additional_permissions_widens_read_only_for_write_roots() {
         fs_read: Vec::new(),
         fs_write: vec![extra_path.clone()],
     };
-    let transformed = apply_runtime_sandbox_to_command(
-        command,
-        &requested,
+    let plan = build_shell_execution_plan(
         &config,
         PathBuf::from("/tmp/ws").as_path(),
         PathBuf::from("/tmp/ws").as_path(),
+        &requested,
+        None,
         SandboxPermissions::WithAdditionalPermissions,
         Some(&additional_permissions),
     )
-    .expect("sandbox transform should succeed");
+    .expect("sandbox plan");
+    let transformed =
+        apply_runtime_sandbox_to_command(command, &requested, PathBuf::from("/tmp/ws").as_path(), plan.sandbox_policy)
+            .expect("sandbox transform should succeed");
     let needle = extra_path.to_string_lossy().to_string();
 
     assert!(
@@ -532,6 +633,103 @@ fn prepare_exec_command_keeps_existing_shell_invocation() {
     assert_eq!(prepared.display_command, "/bin/zsh -c 'echo hi'");
 }
 
+/// The tokenized argv of a compound command cannot express the shell
+/// operator, so the script text must survive command preparation for the
+/// safety layer to classify the delete.
+#[test]
+fn prepare_exec_command_preserves_compound_command_structure_in_the_script() {
+    let payload = json!({});
+    let payload = payload.as_object().expect("payload object");
+    let script = "cd /Volumes/Backup && rm --recursive Photos";
+    let command = vec![
+        "cd".to_string(),
+        "/Volumes/Backup".to_string(),
+        "&&".to_string(),
+        "rm".to_string(),
+        "--recursive".to_string(),
+        "Photos".to_string(),
+    ];
+
+    let prepared = prepare_exec_command(payload, "/bin/zsh", false, command, Some(script.to_string()));
+
+    assert_eq!(prepared.shell_script, script);
+    assert_eq!(prepared.command.last().map(String::as_str), Some(script));
+}
+
+/// A compound command string must not hide a mounted recursive delete behind
+/// a non-`rm` first token.
+#[test]
+fn compound_command_string_requires_approval_for_mounted_recursive_delete() {
+    let config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::DangerFullAccess,
+        ..Default::default()
+    };
+    let script = "cd /Volumes/Backup && rm --recursive Photos";
+    let command = vec![
+        "cd".to_string(),
+        "/Volumes/Backup".to_string(),
+        "&&".to_string(),
+        "rm".to_string(),
+        "--recursive".to_string(),
+        "Photos".to_string(),
+    ];
+
+    let plan = build_shell_execution_plan(
+        &config,
+        Path::new("/tmp/workspace"),
+        Path::new("/tmp/workspace"),
+        &command,
+        Some(script),
+        SandboxPermissions::UseDefault,
+        None,
+    )
+    .unwrap();
+
+    assert!(plan.sandbox_policy.is_none());
+    assert!(
+        plan.approval_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("mounted filesystem"))
+    );
+}
+
+/// The same compound shape without a recursive delete must not require
+/// approval.
+#[test]
+fn compound_command_string_without_recursive_delete_stays_unclassified() {
+    let config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::DangerFullAccess,
+        ..Default::default()
+    };
+    let script = "cd /Volumes/Backup && ls -la";
+    let command = vec![
+        "cd".to_string(),
+        "/Volumes/Backup".to_string(),
+        "&&".to_string(),
+        "ls".to_string(),
+        "-la".to_string(),
+    ];
+
+    let plan = build_shell_execution_plan(
+        &config,
+        Path::new("/tmp/workspace"),
+        Path::new("/tmp/workspace"),
+        &command,
+        Some(script),
+        SandboxPermissions::UseDefault,
+        None,
+    )
+    .unwrap();
+
+    assert!(
+        plan.approval_reason.is_none(),
+        "a read-only compound command must not require approval: {:?}",
+        plan.approval_reason
+    );
+}
+
 #[test]
 fn require_escalated_bypasses_runtime_sandbox_enforcement() {
     let config = vtcode_config::SandboxConfig {
@@ -542,14 +740,21 @@ fn require_escalated_bypasses_runtime_sandbox_enforcement() {
 
     let command = vec!["echo".to_string(), "hello".to_string()];
     let requested = command.clone();
-    let out = apply_runtime_sandbox_to_command(
-        command.clone(),
-        &requested,
+    let plan = build_shell_execution_plan(
         &config,
         PathBuf::from(".").as_path(),
         PathBuf::from(".").as_path(),
+        &requested,
+        None,
         SandboxPermissions::RequireEscalated,
         None,
+    )
+    .expect("sandbox plan");
+    let out = apply_runtime_sandbox_to_command(
+        command.clone(),
+        &requested,
+        PathBuf::from(".").as_path(),
+        plan.sandbox_policy,
     )
     .expect("require_escalated should bypass sandbox transform");
     assert_eq!(out, command);

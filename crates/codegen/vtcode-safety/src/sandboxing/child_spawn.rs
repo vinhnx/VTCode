@@ -133,6 +133,11 @@ pub const PRESERVED_ENV_VARS: &[&str] = &[
     "GOROOT",
     "JAVA_HOME",
     "PYTHON",
+    // Pipeline hygiene set by the exec launchers for streaming builds:
+    // unbuffered child output keeps live previews streaming, and the git prompt
+    // guard keeps long builds from stalling on an interactive credential prompt.
+    "PYTHONUNBUFFERED",
+    "GIT_TERMINAL_PROMPT",
     // Terminal capabilities
     "COLORTERM",
     "FORCE_COLOR",
@@ -317,12 +322,18 @@ mod tests {
         drop(current.insert("HOME".to_string(), "/home/user".to_string()));
         drop(current.insert("OPENAI_API_KEY".to_string(), TEST_API_KEY_VALUE.to_string()));
         drop(current.insert("RANDOM_VAR".to_string(), "value".to_string()));
+        drop(current.insert("PYTHONUNBUFFERED".to_string(), "1".to_string()));
+        drop(current.insert("GIT_TERMINAL_PROMPT".to_string(), "0".to_string()));
 
         let sanitized = build_sanitized_env(&current, true, true, "MacosSeatbelt", &[]);
 
         // PATH and HOME should be preserved
         assert_eq!(sanitized.get("PATH"), Some(&"/usr/bin".to_string()));
         assert_eq!(sanitized.get("HOME"), Some(&"/home/user".to_string()));
+
+        // Launcher hygiene for streaming builds survives the rebuild
+        assert_eq!(sanitized.get("PYTHONUNBUFFERED"), Some(&"1".to_string()));
+        assert_eq!(sanitized.get("GIT_TERMINAL_PROMPT"), Some(&"0".to_string()));
 
         // API key should NOT be present (not in preserved list)
         assert!(!sanitized.contains_key("OPENAI_API_KEY"));

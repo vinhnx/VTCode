@@ -6,18 +6,19 @@ use super::recovery_guidance::{
 use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
+use crate::agent::runloop::unified::stop_requests::{await_with_stop, stop_outcome};
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingResult,
 };
 use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
 use crate::agent::runloop::unified::turn::tool_outcomes::{ToolOutcomeContext, handle_tool_calls, helpers};
 use crate::agent::runloop::unified::turn::turn_loop::{
-    MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN, PENDING_VERIFICATION_BLOCK_REASON, RECOVERY_CONTRACT_VIOLATION_REASON,
-    budget_recovery_final_response,
+    PENDING_VERIFICATION_BLOCK_REASON, RECOVERY_CONTRACT_VIOLATION_REASON, budget_recovery_final_response,
 };
 
 /// Result of processing a single turn.
@@ -32,6 +33,28 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub max_tool_loops: usize,
     /// Pre-computed tool repeat limit for efficiency.
     pub tool_repeat_limit: usize,
+}
+
+/// Withheld completion, owned only while checks run; never projected into history.
+struct CompletionDraft {
+    text: String,
+    reasoning: Vec<vtcode_core::llm::providers::ReasoningSegment>,
+    reasoning_details: Option<Vec<String>>,
+    response_streamed: bool,
+    mutation_generation: u64,
+    user_messages: usize,
+}
+
+impl CompletionDraft {
+    fn is_current(&self, ctx: &TurnProcessingContext<'_>) -> bool {
+        !ctx.runtime_steering.has_pending_follow_up_inputs()
+            && self.mutation_generation == ctx.tool_registry.completion_mutation_generation()
+            && self.user_messages == user_message_count(ctx.working_history)
+    }
+}
+
+fn user_message_count(history: &[uni::Message]) -> usize {
+    history.iter().filter(|message| message.role == uni::MessageRole::User).count()
 }
 
 fn should_suppress_pre_tool_result_claim(assistant_text: &str, tool_calls: &[PreparedAssistantToolCall]) -> bool {
@@ -94,58 +117,18 @@ fn record_assistant_tool_calls(
 
 /// Outcome of accounting for one text response while verification is pending.
 pub(crate) enum PendingVerificationTextOutcome {
-    /// Keep the turn alive (under the text cap, or a directive retry grant).
-    Continue,
     /// End the turn as verification-blocked.
     Block { reason: String },
-    /// The text cap was reached: the harness should execute `command`
-    /// itself through the normal tool pipeline instead of blocking.
+    /// Execute the missing completion check through the normal tool pipeline.
     AutoVerify { command: String },
-}
-
-/// Whether a pending-gate text response claims the work is done. A completion
-/// claim without verification is the highest-risk moment in the gate's
-/// lifecycle — the model is asserting success with no evidence — so claims
-/// jump straight to harness verification instead of spending directive
-/// rounds. Deliberately recall-biased: a false positive costs one safe,
-/// bounded verifier execution, while a false negative just falls back to the
-/// ordinary cap accounting. Mirrors the result-claim marker philosophy of
-/// `should_suppress_pre_tool_result_claim` (same vocabulary family).
-fn is_completion_claim_text(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    [
-        "is complete",
-        "is done",
-        "is finished",
-        "are complete",
-        "are done",
-        "completed",
-        "all done",
-        "good to go",
-        "ready for review",
-        "task complete",
-        "work complete",
-        "implementation complete",
-        "successfully",
-        "verified",
-        "tests pass",
-        "test passes",
-        "build passes",
-        "no errors",
-        "working correctly",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker))
 }
 
 impl TurnProcessingContext<'_> {
     /// Account for a text response while verification is pending.
     ///
-    /// The model response is intentionally not stored or rendered. Under the
-    /// shared per-turn cap the turn continues, then the harness runs the
-    /// verifier once or waits for an existing verifier. Directive retries are
-    /// the fallback when autonomous execution is disabled or unavailable.
-    /// Exhausted execution budgets block immediately without reminder rounds.
+    /// The answer is withheld until missing checks finish. The registry owns
+    /// freshness; failure ends this attempt and the session owns one correction.
+    /// Exhausted execution budgets block without reminder rounds.
     ///
     /// Tool-free recovery synthesis bypasses this accounting entirely (see the
     /// caller): with tools disabled no text could verify, so recovery budgets
@@ -153,90 +136,45 @@ impl TurnProcessingContext<'_> {
     pub(crate) fn handle_pending_verification_text_response(
         &mut self,
         repeated_tool_attempts: &mut helpers::LoopTracker,
-        assistant_text: &str,
+        _assistant_text: &str,
     ) -> Result<PendingVerificationTextOutcome> {
         repeated_tool_attempts.mark_verification_pending();
         if let Some(reason) = self.verification_execution_blocker(repeated_tool_attempts) {
             return Ok(PendingVerificationTextOutcome::Block { reason });
         }
-        if !repeated_tool_attempts.verification_warning_emitted {
-            // When the failed-verifier fix window is active the verifier already
-            // ran and failed; the generic "run verification" notice would be
-            // circular (it demanded verification the model already attempted
-            // while its fix attempts got no feedback). Say the verifier failed
-            // and bounded fix edits are granted instead.
-            let (warning, directive) = if repeated_tool_attempts.fix_edits_remaining > 0 {
-                (helpers::FAILED_VERIFICATION_FIX_WARNING, helpers::FAILED_VERIFICATION_FIX_DIRECTIVE)
-            } else {
-                (helpers::ANTI_BLIND_EDITING_WARNING, helpers::ANTI_BLIND_EDITING_DIRECTIVE)
-            };
-            self.renderer.line(MessageStyle::Warning, warning).unwrap_or(());
-            self.working_history.push(uni::Message::system(directive.to_string()));
-            repeated_tool_attempts.verification_warning_emitted = true;
-        }
-
-        // Completion claims skip the explanatory budget: asserting "done"
-        // without verification is the exact moment that needs evidence, not
-        // another directive round. Falls through to ordinary cap accounting
-        // when auto-verification is unavailable.
-        if is_completion_claim_text(assistant_text)
-            && let Some(command) = self.try_harness_auto_verify(repeated_tool_attempts)
-        {
-            return Ok(PendingVerificationTextOutcome::AutoVerify { command });
-        }
-
-        let response_count = self.harness_state.record_assistant_text_response();
-        if response_count < MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN {
-            return Ok(PendingVerificationTextOutcome::Continue);
-        }
-
-        // Prefer one real verifier outcome to repeated model-only reminders.
+        // A tool-free answer is a completion attempt. Editing and inspection
+        // never schedule checks; run only the registry's missing verifier here.
         if let Some(command) = self.try_harness_auto_verify(repeated_tool_attempts) {
             return Ok(PendingVerificationTextOutcome::AutoVerify { command });
         }
-
-        // In-turn autonomous recovery: name the exact project verifier and
-        // grant a fresh text budget once more, instead of blocking immediately.
-        // The streak reset mirrors the failed-verifier path (a verifier outcome
-        // that grants fix-ups also resets the streak so the model can diagnose
-        // before the cap re-applies): here the "outcome" is the harness
-        // deciding the turn is still salvageable without user intervention.
-        let max_attempts = helpers::verification_in_turn_attempts(self.vt_cfg);
-        if repeated_tool_attempts.record_verification_auto_recovery_with_limit(max_attempts) {
-            let attempt = repeated_tool_attempts.verification_auto_recovery_attempts();
-            let default_verifier =
-                helpers::resolve_pending_verifier_command(self.vt_cfg, self.tool_registry, self.working_history);
-            let directive = vtcode_core::tools::tool_intent::verification_recovery_directive(
-                default_verifier.as_deref(),
-                attempt,
-                max_attempts,
-            );
-            self.renderer
-                .line(MessageStyle::Info, helpers::VERIFICATION_AUTO_RECOVERY_WARNING)
-                .unwrap_or(());
-            self.working_history.push(uni::Message::system(directive));
-            self.harness_state.reset_assistant_text_response_streak();
-            self.session_stats
-                .set_verification_snapshot(repeated_tool_attempts.verification_snapshot());
-            return Ok(PendingVerificationTextOutcome::Continue);
-        }
-
         Ok(PendingVerificationTextOutcome::Block {
-            reason: PENDING_VERIFICATION_BLOCK_REASON.to_string(),
+            reason: self.tool_registry.unverified_completion_reason(),
         })
     }
 
     fn verification_execution_blocker(&self, tracker: &helpers::LoopTracker) -> Option<String> {
-        let blocker = if self.harness_state.recovery_is_tool_free() {
-            Some("tools are disabled for recovery synthesis")
-        } else if self.harness_state.wall_clock_exhausted() {
-            Some("the turn wall-clock budget is exhausted")
-        } else if self.harness_state.tool_budget_exhausted() && tracker.pending_verifier_session_id.is_none() {
-            Some("the turn tool-call budget is exhausted")
-        } else {
-            None
-        };
-        blocker.map(|reason| format!("Verification is still pending: {reason}. No verifier was scheduled; resume with fresh execution budget."))
+        if self.harness_state.recovery_is_tool_free() {
+            return Some(
+                "Verification is still pending: tools are disabled for recovery synthesis. No verifier was scheduled."
+                    .to_string(),
+            );
+        }
+        let budget_notice = self
+            .harness_state
+            .wall_clock_budget_exhaustion()
+            .map(|budget| budget.synthesis_directive_message())
+            .or_else(|| {
+                tracker
+                    .pending_verifier_session_id
+                    .is_none()
+                    .then(|| self.harness_state.tool_budget_exhaustion())
+                    .flatten()
+                    .map(|budget| budget.synthesis_directive_message())
+            })?;
+        let cause = crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause(&budget_notice)?;
+        Some(format!(
+            "{cause}. Changes remain unverified; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence."
+        ))
     }
 
     /// Shared gate for harness-executed verification: kill-switch,
@@ -288,8 +226,32 @@ fn verifier_response_has_nonzero_exit(text: &str) -> bool {
         .is_some_and(|code| code != 0)
 }
 
-/// Execute the project verifier on the harness's behalf after the model
-/// exhausted its directive retries without verifying.
+/// Only a fresh yielded result for this owned session permits another wait.
+/// A retained handle alone cannot prove that the latest admission succeeded.
+fn verifier_response_is_running_session(text: &str, session_id: &str) -> bool {
+    use vtcode_core::tools::command_args::session_id_text;
+    let Ok(output) = serde_json::from_str::<serde_json::Value>(text) else {
+        return false;
+    };
+    let returned_session = session_id_text(&output)
+        .or_else(|| output.get("next_wait_args").and_then(session_id_text))
+        .or_else(|| output.get("next_continue_args").and_then(session_id_text));
+    returned_session == Some(session_id)
+        && output.get("exit_code").and_then(serde_json::Value::as_i64).is_none()
+        && output.get("error").is_none()
+        && output.get("success").and_then(serde_json::Value::as_bool) != Some(false)
+        && ![
+            "cancelled",
+            "blocked",
+            "not_executed",
+            "termination_requested",
+            "reused_recent_result",
+        ]
+        .iter()
+        .any(|key| output.get(*key).and_then(serde_json::Value::as_bool) == Some(true))
+}
+
+/// Execute a missing check on the harness's behalf at attempted completion.
 ///
 /// The synthesized call flows through the normal [`handle_tool_calls`]
 /// pipeline — mutation guard, validation, permissions, budget, repetition
@@ -299,9 +261,8 @@ fn verifier_response_has_nonzero_exit(text: &str) -> bool {
 ///
 /// - Gate cleared → record success (drops the consecutive-failure count),
 ///   note it in history, and continue the turn.
-/// - Gate still pending → record the failure with a bounded output excerpt
-///   for the escalated handoff, note the active fix window, and continue so
-///   the model can repair from real evidence.
+/// - Gate still pending → preserve bounded failure evidence and end this
+///   completion attempt. The session owns the request's corrective pass.
 /// - Break outcome from the pipeline (exit, cancel, budget synthesis) →
 ///   bookkeep the same way, then honor it.
 /// - No tool response landed (pre-flight rejection, guard block) → do not
@@ -321,41 +282,54 @@ pub(crate) async fn execute_harness_auto_verification(
 
     // A fresh internal turn may still own the previous turn's verifier. Reuse
     // a current-generation execution covering this check, never archived handles.
+    let previous_verifier_session = repeated_tool_attempts.pending_verifier_session_id.clone();
     repeated_tool_attempts.pending_verifier_session_id =
         ctx.tool_registry.pending_completion_verifier_session(&command);
+    if repeated_tool_attempts.pending_verifier_session_id != previous_verifier_session {
+        // A different (or finished) verifier starts a fresh wait window.
+        repeated_tool_attempts.reset_verifier_wait_polls();
+    }
 
     if let Some(reason) = ctx.verification_execution_blocker(repeated_tool_attempts) {
         return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }));
     }
     let pending_session = repeated_tool_attempts.pending_verifier_session_id.clone();
     let (tool_name, args) = match pending_session {
-        Some(session_id) => (
-            tool_names::WRITE_STDIN,
-            serde_json::json!({"session_id": session_id, "action": "wait", "wait_timeout_seconds": 600, "max_output_tokens": 4000}),
+        Some(session_id) => {
+            // The wait returns as soon as the verifier produces output, so a
+            // growing window cuts redundant polls without delaying detection.
+            let wait_timeout_seconds = repeated_tool_attempts.next_verifier_wait_timeout_secs();
+            (
+                tool_names::WRITE_STDIN,
+                serde_json::json!({"session_id": session_id, "action": "wait", "wait_timeout_seconds": wait_timeout_seconds, "max_output_tokens": 4000}),
+            )
+        }
+        None => (
+            tool_names::EXEC_COMMAND,
+            serde_json::json!({"cmd": command, "yield_time_ms": 1000, "max_output_tokens": 4000}),
         ),
-        None => (tool_names::EXEC_COMMAND, serde_json::json!({"cmd": command, "max_output_tokens": 4000})),
     };
 
     let required_before = ctx.tool_registry.next_required_completion_verifier();
+    let announce = !repeated_tool_attempts.auto_verification_executed;
     repeated_tool_attempts.record_auto_verification_executed();
     let action = if tool_name == tool_names::WRITE_STDIN {
         "waiting for the existing verifier"
     } else {
         "running the project verifier"
     };
-    ctx.renderer
-        .line(MessageStyle::Info, &format!("Harness auto-verification: {action}: `{command}`"))
-        .unwrap_or(());
-    ctx.working_history.push(uni::Message::system(format!(
-        "Harness auto-verification: {action}: `{command}` via {tool_name} (output capped). \
-        This call is harness-issued autonomous recovery, not a model action; its result carries the same weight as a model-run verifier."
-    )));
+    if announce {
+        ctx.renderer
+            .line(MessageStyle::Info, &format!("Harness auto-verification: {action}: `{command}`"))
+            .unwrap_or(());
+        ctx.working_history.push(uni::Message::system(format!(
+            "Harness auto-verification: {action}: `{command}` via {tool_name} (output capped). \
+            This call is harness-issued autonomous recovery, not a model action; its result carries the same weight as a model-run verifier."
+        )));
+    }
 
-    let raw_call = uni::ToolCall::function(
-        helpers::HARNESS_AUTO_VERIFY_CALL_ID.to_string(),
-        tool_name.to_string(),
-        args.to_string(),
-    );
+    let call_id = format!("{}-{}", helpers::HARNESS_AUTO_VERIFY_CALL_ID, uuid::Uuid::new_v4());
+    let raw_call = uni::ToolCall::function(call_id.clone(), tool_name.to_string(), args.to_string());
     let synthetic = PreparedAssistantToolCall::new(raw_call);
     if synthetic.args().is_none() {
         // We built the JSON above; absence means a serialization regression.
@@ -397,12 +371,9 @@ pub(crate) async fn execute_harness_auto_verification(
         } else if t_ctx_inner.repeated_tool_attempts.verification_is_pending() {
             // Count only an observed non-zero exit. Policy/preflight rejections
             // and missing results are not executed verification failures.
-            if let Some(response_text) = last_tool_response_text(
-                t_ctx_inner.ctx.working_history,
-                helpers::HARNESS_AUTO_VERIFY_CALL_ID,
-                history_len_before_assistant,
-            )
-            .filter(|text| verifier_response_has_nonzero_exit(text))
+            if let Some(response_text) =
+                last_tool_response_text(t_ctx_inner.ctx.working_history, &call_id, history_len_before_assistant)
+                    .filter(|text| verifier_response_has_nonzero_exit(text))
             {
                 let failures = t_ctx_inner
                     .ctx
@@ -410,7 +381,7 @@ pub(crate) async fn execute_harness_auto_verification(
                     .record_verification_auto_failure(command.clone(), &response_text);
                 t_ctx_inner.ctx.working_history.push(uni::Message::system(format!(
                     "Harness auto-verification `{command}` did not clear the gate (consecutive failure {failures} this episode). \
-                    A bounded fix window is active: repair the reported failure, then re-run the standalone verifier."
+                    Repair the reported failure before attempting completion again."
                 )));
             }
         } else if t_ctx_inner.ctx.tool_registry.completion_verification_pending() {
@@ -423,7 +394,7 @@ pub(crate) async fn execute_harness_auto_verification(
         } else {
             t_ctx_inner.ctx.session_stats.record_verification_auto_success();
             t_ctx_inner.ctx.working_history.push(uni::Message::system(format!(
-                "Harness auto-verification `{command}` exited 0; the verification gate is cleared. Resume the request."
+                "Harness auto-verification `{command}` exited 0; the verification gate is cleared. Publish the retained completion once."
             )));
         }
         t_ctx_inner
@@ -437,9 +408,62 @@ pub(crate) async fn execute_harness_auto_verification(
         return Ok(res);
     }
 
+    if let Some(session_id) = repeated_tool_attempts.pending_verifier_session_id.as_deref() {
+        let response = last_tool_response_text(ctx.working_history, &call_id, history_len_before_assistant);
+        if !response
+            .as_deref()
+            .is_some_and(|text| verifier_response_is_running_session(text, session_id))
+        {
+            let evidence = response.as_deref().unwrap_or("No current verifier wait result was observed.");
+            let evidence = vtcode_commons::formatting::truncate_byte_budget(evidence, 1024, " [result truncated]");
+            return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                reason: Some(format!(
+                    "Verification is still pending: verifier admission or wait did not produce a fresh running result. {evidence}"
+                )),
+            }));
+        }
+    }
+
+    if ctx.tool_registry.completion_verification_pending()
+        && repeated_tool_attempts.pending_verifier_session_id.is_none()
+        && repeated_tool_attempts.auto_verification_executed
+    {
+        return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+            reason: Some(ctx.tool_registry.unverified_completion_reason()),
+        }));
+    }
+
     // Mirror the ToolCalls branch: run the balancer before continuing so
     // navigation churn converging during verification still converges.
     Ok(handle_turn_balancer(ctx, step_count, repeated_tool_attempts, max_tool_loops, tool_repeat_limit).await)
+}
+
+/// Match the headless verifier's per-command ceiling and owned-session cleanup.
+/// Explicit waits do not spend the turn budgets, so they cannot supply this bound.
+async fn block_verification_execution_limit(
+    ctx: &mut TurnProcessingContext<'_>,
+    tracker: &mut helpers::LoopTracker,
+    command: &str,
+) -> TurnHandlerOutcome {
+    let mut reason = format!(
+        "Verification is still pending: execution limit exhausted for `{command}`. The completion draft was withheld."
+    );
+    if let Some(session_id) = ctx.tool_registry.pending_completion_verifier_session(command) {
+        if let Err(error) = ctx.tool_registry.terminate_harness_exec_session(&session_id).await {
+            reason.push_str(&format!(" Verifier cleanup: {error:#}"));
+        }
+        if let Err(error) = ctx.tool_registry.close_harness_exec_session(&session_id).await {
+            reason.push_str(&format!(" Verifier release: {error:#}"));
+        }
+    }
+    tracker.pending_verifier_session_id = ctx.tool_registry.pending_completion_verifier_session(command);
+    ctx.session_stats.set_verification_snapshot(tracker.verification_snapshot());
+    if let Some(stop) = stop_outcome(ctx.ctrl_c_state) {
+        return TurnHandlerOutcome::Break(stop);
+    }
+    TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+        reason: Some(vtcode_commons::formatting::truncate_byte_budget(&reason, 2048, " [cleanup details truncated]")),
+    })
 }
 
 /// Dispatch the appropriate response handler based on the processing result.
@@ -461,10 +485,13 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     if params.ctx.try_planning_violation_repair(&assistant_text)? {
                         return Ok(TurnHandlerOutcome::Continue);
                     }
-                    return params.ctx.break_planning_recovery_with_handoff(
-                        "the synthesis response attempted a tool call while tools were disabled",
-                        (!assistant_text.trim().is_empty()).then_some(assistant_text.as_str()),
-                    );
+                    return params
+                        .ctx
+                        .break_planning_recovery_with_handoff(
+                            "the synthesis response attempted a tool call while tools were disabled",
+                            (!assistant_text.trim().is_empty()).then_some(assistant_text.as_str()),
+                        )
+                        .await;
                 }
                 params
                     .ctx
@@ -527,41 +554,6 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 return Ok(res);
             }
 
-            // Tool-bearing responses reset the text cap. Repeated polls and
-            // inspections must still reach bounded self-verification.
-            let required_stalled = params.repeated_tool_attempts.record_required_verifier_progress(
-                params
-                    .ctx
-                    .tool_registry
-                    .completion_verification_pending()
-                    .then(|| params.ctx.tool_registry.next_required_completion_verifier())
-                    .flatten(),
-            );
-            if !params.ctx.is_planning_active()
-                && (params.repeated_tool_attempts.verification_is_pending()
-                    || params.ctx.tool_registry.completion_verification_pending())
-                && (required_stalled
-                    || params.repeated_tool_attempts.tracker_observations_stalled()
-                    || params.repeated_tool_attempts.consecutive_navigations >= helpers::BLIND_EDITING_THRESHOLD)
-            {
-                params.repeated_tool_attempts.mark_verification_pending();
-                if let Some(command) = params.ctx.try_harness_auto_verify(params.repeated_tool_attempts) {
-                    return execute_harness_auto_verification(
-                        params.ctx,
-                        params.repeated_tool_attempts,
-                        params.turn_modified_files,
-                        params.step_count,
-                        params.max_tool_loops,
-                        params.tool_repeat_limit,
-                        command,
-                    )
-                    .await;
-                }
-                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-                    reason: Some(params.ctx.tool_registry.unverified_completion_reason()),
-                }));
-            }
-
             let balancer_outcome = handle_turn_balancer(
                 &mut *params.ctx,
                 params.step_count,
@@ -605,28 +597,118 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             }
             if !is_planning_synthesis && params.ctx.tool_registry.completion_verification_pending() {
                 params.repeated_tool_attempts.mark_verification_pending();
+            } else if params.ctx.tool_registry.has_current_completion_verification()
+                || params.ctx.tool_registry.next_required_completion_verifier().is_none()
+            {
+                // Optional checker diagnostics cannot create new obligations;
+                // retain explicit pending state when required checks remain.
+                params.repeated_tool_attempts.mark_verification_complete();
             }
-            if params.repeated_tool_attempts.verification_is_pending() && !is_planning_synthesis && !tool_free_synthesis
+            if params.ctx.tool_registry.completion_verification_pending()
+                && !is_planning_synthesis
+                && !tool_free_synthesis
             {
                 match params
                     .ctx
                     .handle_pending_verification_text_response(params.repeated_tool_attempts, &text)?
                 {
-                    PendingVerificationTextOutcome::Continue => return Ok(TurnHandlerOutcome::Continue),
                     PendingVerificationTextOutcome::Block { reason } => {
                         return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }));
                     }
                     PendingVerificationTextOutcome::AutoVerify { command } => {
-                        return execute_harness_auto_verification(
-                            &mut *params.ctx,
-                            &mut *params.repeated_tool_attempts,
-                            &mut *params.turn_modified_files,
-                            params.step_count,
-                            params.max_tool_loops,
-                            params.tool_repeat_limit,
-                            command,
-                        )
-                        .await;
+                        let mut draft = CompletionDraft {
+                            text,
+                            reasoning,
+                            reasoning_details,
+                            response_streamed: params.response_streamed,
+                            mutation_generation: params.ctx.tool_registry.completion_mutation_generation(),
+                            user_messages: user_message_count(params.ctx.working_history),
+                        };
+                        let mut command = command;
+                        let mut results = Vec::new();
+                        let execution_ceiling = params
+                            .ctx
+                            .tool_registry
+                            .timeout_policy()
+                            .ceiling_for(vtcode_core::tools::registry::ToolTimeoutCategory::LongRunningCommand)
+                            .unwrap_or(Duration::from_secs(3600));
+                        let mut verifier_started_at: Option<Instant> = None;
+                        loop {
+                            let control = await_with_stop(
+                                params.ctx.ctrl_c_state,
+                                params.ctx.ctrl_c_notify,
+                                params.ctx.runtime_steering.poll_tool_control(),
+                            )
+                            .await;
+                            if let Some(stop) = stop_outcome(params.ctx.ctrl_c_state) {
+                                return Ok(TurnHandlerOutcome::Break(stop));
+                            }
+                            if control.is_none()
+                                || control == Some(vtcode_core::core::agent::runtime::RuntimeControl::StopRequested)
+                            {
+                                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled));
+                            }
+                            if !draft.is_current(params.ctx) {
+                                // New steering or code invalidates the answer, not the owned check evidence.
+                                return Ok(TurnHandlerOutcome::Continue);
+                            }
+                            if verifier_started_at.is_some_and(|started| started.elapsed() >= execution_ceiling) {
+                                return Ok(block_verification_execution_limit(
+                                    params.ctx,
+                                    params.repeated_tool_attempts,
+                                    &command,
+                                )
+                                .await);
+                            }
+                            if !params.ctx.tool_registry.completion_verification_pending() {
+                                if !results.is_empty() {
+                                    draft.text.push_str("\n\nHarness verification: ");
+                                    draft.text.push_str(&results.join("; "));
+                                    draft.text.push('.');
+                                }
+                                return params
+                                    .ctx
+                                    .handle_text_response(
+                                        draft.text,
+                                        draft.reasoning,
+                                        draft.reasoning_details,
+                                        None,
+                                        draft.response_streamed,
+                                    )
+                                    .await;
+                            }
+                            let started = *verifier_started_at.get_or_insert_with(Instant::now);
+                            let outcome = execute_harness_auto_verification(
+                                &mut *params.ctx,
+                                &mut *params.repeated_tool_attempts,
+                                &mut *params.turn_modified_files,
+                                params.step_count,
+                                params.max_tool_loops,
+                                params.tool_repeat_limit,
+                                command.clone(),
+                            )
+                            .await?;
+                            if !matches!(outcome, TurnHandlerOutcome::Continue) {
+                                return Ok(outcome);
+                            }
+                            if started.elapsed() >= execution_ceiling {
+                                return Ok(block_verification_execution_limit(
+                                    params.ctx,
+                                    params.repeated_tool_attempts,
+                                    &command,
+                                )
+                                .await);
+                            }
+                            if params.ctx.tool_registry.completion_verifier_passed(&command) {
+                                results.push(format!("`{command}` exited 0"));
+                                if let Some(next) = params.ctx.tool_registry.next_required_completion_verifier() {
+                                    command = next;
+                                    verifier_started_at = None;
+                                }
+                            }
+                            // Running checks are resumed through write_stdin on the next iteration.
+                            // Terminal failures and denied/lost results returned a blocked outcome above.
+                        }
                     }
                 }
             }
@@ -706,10 +788,13 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     if params.ctx.try_planning_violation_repair(&salvage)? {
                         return Ok(TurnHandlerOutcome::Continue);
                     }
-                    return params.ctx.break_planning_recovery_with_handoff(
-                        "the synthesis response attempted tool-call markup",
-                        (!salvage.is_empty()).then_some(salvage.as_str()),
-                    );
+                    return params
+                        .ctx
+                        .break_planning_recovery_with_handoff(
+                            "the synthesis response attempted tool-call markup",
+                            (!salvage.is_empty()).then_some(salvage.as_str()),
+                        )
+                        .await;
                 }
                 params.ctx.harness_state.record_recovery_rejected_synthesis(salvage);
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
@@ -727,7 +812,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             params.ctx.harness_state.mark_turn_refused();
             Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }))
         }
-        TurnProcessingResult::Empty => {
+        TurnProcessingResult::Empty { facts } => {
             if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() {
                 let recovery_mode = if params.ctx.recovery_is_tool_free() {
                     RecoveryMode::ToolFreeSynthesis
@@ -762,9 +847,27 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 }
 
                 if params.ctx.is_planning_active() && matches!(recovery_mode, RecoveryMode::ToolFreeSynthesis) {
-                    return params
-                        .ctx
-                        .break_planning_recovery_with_handoff("the model returned an empty synthesis response", None);
+                    // Every response failure uses the same persisted admission
+                    // allowance; private reasoning never becomes a draft.
+                    if params.ctx.try_planning_empty_output_salvage(&facts)? {
+                        return Ok(TurnHandlerOutcome::Continue);
+                    }
+                    // Keep the detail honest: only a response with neither
+                    // tokens nor tool calls may claim plain emptiness.
+                    // Structured classification retains the actual failure shape.
+                    let detail = if facts.dropped_tool_calls {
+                        "the synthesis response attempted native tool calls on a tool-free pass".to_string()
+                    } else if facts.reasoning_only {
+                        "the synthesis returned private reasoning without final content".to_string()
+                    } else if facts.has_completion_tokens() {
+                        crate::agent::runloop::unified::turn::context::planning_tokens_without_content_handoff_detail(
+                            facts.completion_tokens,
+                        )
+                    } else {
+                        crate::agent::runloop::unified::turn::context::PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL
+                            .to_string()
+                    };
+                    return params.ctx.break_planning_recovery_with_handoff(&detail, None).await;
                 }
                 let recovery_reason = if params.ctx.recovery_is_tool_free() {
                     "Recovery mode requested a final synthesis pass, but the model returned no answer."

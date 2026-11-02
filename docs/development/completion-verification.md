@@ -1,8 +1,9 @@
 # Fresh verification before successful completion
 
 Interactive and headless runs require fresh verification after successful code
-mutations, including changes below the six-edit checkpoint. The checkpoint still
-controls mutation pacing and retains its bounded repair allowance after failure.
+mutations. Verification gates successful completion only: edits, repairs, and
+inspections remain available under ordinary permissions. Edit counts and inspection
+thresholds never schedule checks or suppress ordinary repetition guards.
 Prose-only and dedicated planning writes, rejected edits, and known no-op diffs
 retain their exemptions.
 Exemptions check requested paths and the effective targets reported by file
@@ -21,7 +22,7 @@ prevents expansion into options. Character classes, bare globs, variable-based p
 substitutions, dynamic executable names, mutating options, and output-file redirects retain
 debt. This accounting exemption grants no planning or execution permission.
 Concrete changed-file evidence always creates shell mutation debt. This
-proof affects freshness and mutation pacing only; admission and permissions
+proof affects freshness only; admission and permissions
 remain unchanged.
 
 Verification evidence belongs to runtime state in the existing tool registry,
@@ -41,12 +42,20 @@ retention never makes a check fresh after another code edit.
 
 Qualifying model-run checks can satisfy completion. Adopted tracker verification
 commands remain mandatory; a different passing checker cannot replace them.
+Recognized planning and security preflight denials are non-retryable and retain
+policy guidance, including at the denial circuit limit. They do not consume the
+argument-correction allowance or authorize schema repair. A permitted alternative
+remains subject to normal admission checks.
+Approved-plan handoff creates its tracker through registry execution so required
+checks are adopted before implementation begins. Markdown code spans remain in
+the displayed plan while executable verifier identities omit the surrounding backticks.
 Requirements and observed checks match using the execution kernel's pipeline
 normalization, while dispatch retains the original required command for policy
 checks. Eligible declared custom checks count as verification rather than
 invalidating their own verdict as mutations; command admission remains unchanged.
-The interactive checkpoint shares this classification, including yielded custom
-checks and the bounded repair allowance after failure.
+Interactive and headless completion share this classification, including yielded
+custom checks. Mutating scripts belong in implementation steps; `verify:` entries
+must be executable assertions, separate from repairs.
 Recovery directives and blocked handoffs select the next missing tracker command
 before a configured or detected project verifier. Partial success names the next
 required check, so a passing generic build does not cause repeated recovery when
@@ -72,12 +81,28 @@ remain failures. Choose a verifier with a zero-on-success contract when writing
 a plan. Test absence assertions with both present and absent fixtures; a reversed
 predicate can otherwise make the desired state fail its own required check.
 Existing tracker requirements are never repaired or replaced automatically.
+When a model-generated assertion contradicts the original request or observed
+artifact format (for example, a raw-text regex ignores HTML count-marker comments),
+inspect the mismatch before changing implementation. Explicitly correct the
+tracker's `verify` metadata while preserving status, outcome, files, and the original
+user criteria. A corrected assertion must execute and pass; metadata changes alone
+never establish evidence.
 Indexed tracker updates require `status`, including updates to `outcome`,
 `verify`, or notes; retain the current status when changing only metadata.
 Required inspections and custom checks bypass both result-cache boundaries,
 including entries cached before tracker adoption, so actual execution supplies
 the verdict. Passing current-generation checks remain reusable as verification
 evidence without executing them again merely for a completion summary.
+
+At the identical-call repeat limit, the registry admits one fresh execution of
+an exact missing required command per mutation generation when no current-
+generation attempt, terminal verdict, or owned checker session already exists.
+The retry still passes through the ordinary approval, safety, sandbox, timeout,
+and output controls, and the allowance is consumed only when execution is
+admitted. Further identical calls remain subject to the usual loop guard. A
+failed, denied, cancelled, lost, or yielded result does not satisfy the check;
+resume an owned yielded session through its existing session controls. A new
+mutation generation permits one fresh attempt for the still-missing command.
 
 A yielded command has no verdict. Interactive and headless verification resume an
 owned session covering the requested check in the current mutation generation before
@@ -123,15 +148,59 @@ preserved. This projection never rewrites durable history.
 Verification, checker-session, and recovery suites live under
 `tool_outcomes/helpers/tests/`, sharing private parent fixtures.
 
-Interactive tool-bearing responses share bounded verification recovery: repeated
-tracker observations, six inspections, or six batches without advancing the next
-required check schedule the missing verifier through the existing tool pipeline.
-Passing unrelated checks does not reset this progress window. Real edits, changed tracker
-state, and advancement to another required command reset the progress window; a harness
-attempt leaves a bounded diagnostic/repair window after failure. Existing cancellation,
-permissions, failure limits, and execution budgets still apply. Without pending
-verification, repeated unchanged tracker polls get one tool-enabled correction;
-continued polling ends blocked rather than automatically queuing the same work.
+At attempted completion, the harness withholds the draft from rendering and canonical
+assistant events, runs only missing checks, and resumes owned running checks.
+Successful checks publish the retained answer once through the normal final-response
+handler, with an attributed harness result listing commands and terminal statuses.
+No additional model request rewrites a verified draft. The registry owns both
+streaming suppression and completion admission, including native Copilot outcomes.
+Failure, cancellation, a changed mutation generation, or new steering discards the
+draft while retaining check evidence and existing recovery limits.
+
+The retained-draft loop uses the existing long-running command ceiling across
+successive waits for each verifier, with short polls to observe steering promptly.
+Reaching that ceiling withholds the draft and terminates/releases only its owned
+verifier session; cleanup errors remain in the handoff. It does not count as an
+observed nonzero checker exit. Pause remains interruptible by local cancellation
+and exit through the shared stop-aware await helper. A wait permits another wait
+only after a fresh yielded result identifies the same owned session; denied,
+unavailable, or replayed results end the attempt instead of repeating admission.
+Explicit session waits bypass read-result replay, while ordinary inspection
+caches and all execution/permission gates remain in force.
+
+The harness announces each checker once rather than repeating the announcement
+on every wait. Its short internal waits still observe cancellation and steering;
+they do not request additional model responses. Request-only history projection
+keeps the launch and latest result of a contiguous harness-owned session, folding
+intermediate wait output into a UTF-8-safe tail of at most 16 KiB. Drained chunks
+are concatenated without separators; wait boundaries are not line breaks. The
+projection preserves terminal status and complete remaining call/result pairs. User input, other
+tools, new launches, different sessions, diagnostics, truncation, spool references,
+and unknown result fields stop folding. Canonical events and archived history
+remain intact; this projection cannot establish verification credit or change
+admission, checker freshness, or recovery budgets.
+
+Literal inline grep-family `--include=`, `--exclude=`, and `--exclude-dir=` filters
+preserve inspection evidence. Their AST arguments must remain literal; dynamic
+arguments, writes, unknown executables, and concrete changed-file evidence remain
+conservative. This accounting exception does not grant execution permission.
+
+The supplied WebMCP trace (`session-vtcode-20261020T051624Z_637421-02697`) showed
+an answer at 05:20:22, a harness check, and another answer at 05:20:36. Its
+`grep --include=*.rs` inspection now has a generation-preservation regression;
+streamed and non-streamed completion tests assert one provider request and one
+rendered and canonical final answer across multiple mandatory checks.
+
+A failed or unavailable result ends that completion attempt.
+The interactive session may queue one corrective pass per genuine user request;
+the headless runner likewise permits at most one corrective pass. A second
+unsuccessful attempt returns an unverified handoff with the command, status,
+bounded evidence, and blocker. Internal continuations, partial passes, tracker
+progress, and completed internal turns do not restore this allowance. Existing
+recovery settings may disable or tighten it; larger legacy values remain parseable
+but cannot expand it. Cancellation, permissions, failure limits, and execution
+budgets remain authoritative. Repeated unchanged tracker polls get one tool-enabled
+correction; continued polling ends blocked under the ordinary repetition guard.
 
 Recovery attempts count only after the follow-up queue accepts them. A full
 queue publishes no directive and preserves prior attempts and failure evidence;
@@ -173,3 +242,85 @@ spurious debt during README-only work and activated a reversed required check.
 The deterministic replay preserves generation zero and does not rewrite that
 requirement. Code-debt coverage separately ensures the same inspection preserves
 current passing evidence, while adversarial glob and write variants retain debt.
+
+## External evidence and terminal completion
+
+Finish local work once its current-generation checks satisfy all remaining local
+obligations. Reuse passing checks when producing the final response; internal
+recovery summaries do not require another build. Disclose unavailable external
+evidence in that response. A successful Rust build establishes no claim about a
+remote image rendering correctly. Genuine missing mandatory checks still use the
+existing bounded recovery and blocked handoff.
+
+`web_fetch` retains HTTP status, recovery guidance, and `Retry-After` in the
+model-visible error. Within one genuine user request, a rate-limited origin gets
+at most two attempts, including internal continuations and concurrent calls.
+Transport admission counts actual sends, including redirect targets, after policy
+and URL security checks. Denied calls consume no network attempt. HTTP failures
+retain the effective response origin, so redirect aliases share its budget.
+Header acquisition is serialized across origins because redirect admission is
+synchronous; body reads and retry waits release that permit. Accounting remains
+independent per origin. A retry wait must fit five seconds and the remaining
+invocation deadline. Terminal retry rejections survive later invocations;
+cancellation releases the permit and wait without erasing Retry-After. Only fresh
+user requests reset this accounting. Policy denials terminate immediately and must not
+be bypassed with Python or shell commands.
+
+Tool approval remains scoped to the immutable invocation and its execution
+scope. An unchanged retry can reuse approval; separate calls, changed arguments,
+changed policy, and sandbox escalation retain their existing checks. The private
+approval state does not propagate into spawned tasks.
+
+Terminal results returned by `exec_command` or `write_stdin` are retained outside
+compactable history. Their later background notifications still produce canonical
+`ThreadEvent` and UI status, but cannot reopen work. Both notification/result
+orders are handled, and duplicate notices remain consumed. Unobserved background
+results still request continuation. Internal recovery also reuses the original
+few-shot context without inserting another example block into canonical history.
+
+Mutation accounting recognizes literal `sleep 30` commands and the Python timer shape
+`python3 -c 'import time; time.sleep(0.1)'` (or `python`) with a finite nonnegative
+numeric literal. Other Python, extra statements, environment assignments, and
+output redirects remain conservative. This exception grants no execution permission.
+
+These boundaries were compared with OpenAI Codex, Apache-2.0, copyright 2025 OpenAI,
+at commit `89461ea6833832b0551ce24ee32205824d5c108d`:
+[`codex-rs/core/src/tools/orchestrator.rs`](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/core/src/tools/orchestrator.rs)
+scopes approval to execution authority, while
+[`codex-rs/core/src/session/turn.rs`](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/core/src/session/turn.rs)
+separates model follow-up from pending input. These are design comparisons, not
+claims of identical retry guarantees or copied implementations. The final-response
+termination model is also described in OpenAI's
+[agent-loop explanation](https://openai.com/index/unrolling-the-codex-agent-loop/).
+
+Completion-only timing was compared with
+[`codex-rs/core/gpt_5_2_prompt.md`](https://github.com/openai/codex/blob/9dc3a1ce7ea53bb818b8dd69416d6dde70d0b680/codex-rs/core/gpt_5_2_prompt.md)
+at commit `9dc3a1ce7ea53bb818b8dd69416d6dde70d0b680` (Apache-2.0, copyright
+2025 OpenAI) and [OpenAI's harness engineering article](https://openai.com/index/harness-engineering/).
+These support validating completed work and enforcing outcome invariants. No
+upstream code was copied and no runtime speedup is claimed.
+
+Budget exhaustion remains the primary stop reason even when checks are pending.
+It does not count as another verifier failure or schedule a verification corrective
+turn. Handoffs retain earlier command, terminal status, and bounded output as
+previous evidence without claiming a new check ran. Resume retains required checks
+and fresh passes under the existing budget policy. This separation follows the
+distinct budget stop in OpenAI Codex
+[`codex-rs/core/src/tasks/mod.rs`](https://github.com/openai/codex/blob/4635d489254ba6d80eb6d2ef501929b0c617b6ec/codex-rs/core/src/tasks/mod.rs)
+at commit `4635d489254ba6d80eb6d2ef501929b0c617b6ec`
+(Apache-2.0, Copyright 2025 OpenAI); no upstream code was copied.
+
+Retained completion was compared with OpenAI Codex at commit
+`18795fc12571a3530d3e4ac18366e41cd2f57448`,
+[`codex-rs/core/src/session/turn.rs`](https://github.com/openai/codex/blob/18795fc12571a3530d3e4ac18366e41cd2f57448/codex-rs/core/src/session/turn.rs).
+Its `needs_follow_up` distinction separates terminal completion from further model
+work; it does not prove summary deduplication. The retained draft and harness
+result are VT Code policy. No upstream code was copied (Apache-2.0, copyright
+2025 OpenAI). Regressions follow the trace-to-regression workflow linked above.
+
+The bounded retained-draft wait was also compared with
+[`codex-rs/core/src/unified_exec/process_manager.rs`](https://github.com/openai/codex/blob/18795fc12571a3530d3e4ac18366e41cd2f57448/codex-rs/core/src/unified_exec/process_manager.rs)
+at the same pinned commit. Its completion path bounds collection by a deadline
+and confirms termination on timeout. VT Code reuses its own timeout policy,
+stop-aware awaits, normal tool pipeline, and owned-session cleanup; no upstream
+implementation was copied.

@@ -57,7 +57,7 @@ struct OutcomeContext<'a> {
 
 struct SuccessPayload<'a> {
     output: &'a serde_json::Value,
-    stdout: &'a Option<String>,
+    stdout: Option<&'a str>,
     modified_files: &'a [String],
     command_success: bool,
 }
@@ -117,7 +117,7 @@ async fn handle_success_common(
     }
 
     state.last_tool_stdout = if payload.command_success {
-        payload.stdout.clone()
+        payload.stdout.map(str::to_owned)
     } else {
         None
     };
@@ -268,7 +268,7 @@ async fn process_outcome_common(
                 args_val,
                 SuccessPayload {
                     output,
-                    stdout,
+                    stdout: stdout.as_deref(),
                     modified_files,
                     command_success: *command_success,
                 },

@@ -79,6 +79,14 @@ fn is_explicit_cache_breakpoint_model(model: &str) -> bool {
     super::supports_prompt_cache_options(model)
 }
 
+pub(super) fn uses_stable_prefix_cache(request: &provider::LLMRequest, ctx: &ResponsesRequestContext<'_>) -> bool {
+    request.prompt_cache_profile == Some(provider::PromptCacheProfile::StablePrefix)
+        && ctx.include_explicit_cache_breakpoints
+        && ctx.is_responses_api_model
+        && is_explicit_cache_breakpoint_model(&request.model)
+        && request.system_prompt.as_deref().is_some_and(|prompt| !prompt.trim().is_empty())
+}
+
 fn is_eligible_cache_breakpoint_block(block: &Value) -> bool {
     matches!(block.get("type").and_then(Value::as_str), Some("input_text" | "input_image" | "input_file"))
 }
@@ -211,7 +219,9 @@ pub(super) fn build_responses_item_history(
                 }),
             );
         }
-        apply_explicit_cache_breakpoints(&mut responses_payload.input, &request.model, instruction_anchor);
+        if !uses_stable_prefix_cache(request, ctx) {
+            apply_explicit_cache_breakpoints(&mut responses_payload.input, &request.model, instruction_anchor);
+        }
     }
 
     Ok(responses_payload)

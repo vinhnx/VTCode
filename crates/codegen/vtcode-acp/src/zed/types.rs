@@ -13,12 +13,6 @@ pub(crate) enum ToolRuntime {
     Disabled,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum RunTerminalMode {
-    Terminal,
-    Pty,
-}
-
 pub(crate) struct PlanProgress {
     entries: Vec<acp::PlanEntry>,
     analyze_index: usize,
@@ -158,7 +152,6 @@ pub(crate) struct SessionHandle {
 pub(crate) struct SessionData {
     pub(crate) _session_id: acp::SessionId,
     pub(crate) thread: ThreadRuntimeHandle,
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
     pub(crate) tool_notice_sent: AtomicBool,
     pub(crate) primary_agent: String,
     pub(crate) reasoning_effort: ReasoningEffortLevel,

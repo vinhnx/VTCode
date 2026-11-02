@@ -7,6 +7,92 @@ pub(super) fn prompt_cache_hit_ratio(provider: &str, usage: &Usage) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// Match normalized input accounting when a provider reports multiple sampling passes.
+#[derive(Debug, PartialEq)]
+pub(super) struct ReportedCacheUsage {
+    pub read_tokens: Option<u32>,
+    pub write_tokens: Option<u32>,
+}
+
+impl ReportedCacheUsage {
+    pub(super) fn from_usage(usage: &Usage) -> Self {
+        let totals = usage.billable_totals();
+        Self {
+            read_tokens: (usage.cache_read_tokens.is_some()
+                || usage.cached_prompt_tokens.is_some()
+                || totals.cache_read_tokens > 0)
+                .then_some(totals.cache_read_tokens),
+            write_tokens: (usage.cache_creation_tokens.is_some() || totals.cache_creation_tokens > 0)
+                .then_some(totals.cache_creation_tokens),
+        }
+    }
+}
+
+/// Local message projection measurements; token counts are estimates, not billed usage.
+#[derive(Debug, PartialEq, serde::Serialize)]
+pub(super) struct HistoryProjectionMetrics {
+    original_estimated_tokens: usize,
+    projected_estimated_tokens: usize,
+    changed_message_count: usize,
+    first_changed_message_index: Option<usize>,
+}
+
+impl HistoryProjectionMetrics {
+    pub(super) fn between(before: &[Message], after: &[Message]) -> Self {
+        let mut first_changed_message_index = None;
+        let mut changed_message_count = before.len().abs_diff(after.len());
+        for (index, (original, projected)) in before.iter().zip(after).enumerate() {
+            if original != projected {
+                first_changed_message_index.get_or_insert(index);
+                changed_message_count = changed_message_count.saturating_add(1);
+            }
+        }
+        if first_changed_message_index.is_none() && before.len() != after.len() {
+            first_changed_message_index = Some(before.len().min(after.len()));
+        }
+        Self {
+            original_estimated_tokens: estimate_message_history_tokens(before),
+            projected_estimated_tokens: estimate_message_history_tokens(after),
+            changed_message_count,
+            first_changed_message_index,
+        }
+    }
+}
+
+pub(super) fn emit_history_projection_metrics(
+    ctx: &TurnProcessingContext<'_>,
+    step_count: usize,
+    model: &str,
+    before: &[Message],
+    after: &[Message],
+    trigger_tokens: u64,
+) {
+    #[derive(serde::Serialize)]
+    struct HistoryProjectionRecord<'a> {
+        kind: &'static str,
+        turn: usize,
+        run_id: &'a str,
+        turn_id: &'a str,
+        provider: &'a str,
+        model: &'a str,
+        trigger_tokens: u64,
+        #[serde(flatten)]
+        metrics: HistoryProjectionMetrics,
+        ts: i64,
+    }
+    ctx.traj.log(&HistoryProjectionRecord {
+        kind: "history_projection_metrics",
+        turn: step_count,
+        run_id: &ctx.harness_state.run_id.0,
+        turn_id: &ctx.harness_state.turn_id.0,
+        provider: ctx.provider_client.name(),
+        model,
+        trigger_tokens,
+        metrics: HistoryProjectionMetrics::between(before, after),
+        ts: chrono::Utc::now().timestamp(),
+    });
+}
+
 #[derive(Copy, Clone)]
 pub(super) struct ToolCatalogCacheMetrics<'a> {
     pub step_count: usize,
@@ -103,6 +189,7 @@ pub(super) fn emit_llm_retry_metrics(
     model: &str,
     planning_active: bool,
     attempts_made: usize,
+    provider_dispatches: usize,
     max_retries: usize,
     success: bool,
     stream_fallback_used: bool,
@@ -120,6 +207,7 @@ pub(super) fn emit_llm_retry_metrics(
         model,
         planning_active,
         attempts_made,
+        provider_dispatches,
         retries_used,
         max_retries,
         success,
@@ -136,6 +224,7 @@ pub(super) fn emit_llm_retry_metrics(
         model: &'a str,
         planning_active: bool,
         attempts_made: usize,
+        provider_dispatches: usize,
         retries_used: usize,
         max_retries: usize,
         success: bool,
@@ -152,6 +241,7 @@ pub(super) fn emit_llm_retry_metrics(
         model,
         planning_active,
         attempts_made,
+        provider_dispatches,
         retries_used,
         max_retries,
         success,
@@ -189,7 +279,7 @@ pub(super) fn estimate_tool_schema_tokens(tools: &[ToolDefinition]) -> usize {
 /// for tool calls, tool-call IDs, reasoning metadata, and image/file parts, so
 /// structured wire content contributes to context-pressure accounting too.
 pub(super) fn estimate_message_history_tokens(messages: &[Message]) -> usize {
-    messages.iter().map(Message::estimate_tokens).sum()
+    messages.iter().map(Message::estimate_tokens).fold(0, usize::saturating_add)
 }
 
 /// Per-request token-budget breakdown for the assembled first-request prefix.

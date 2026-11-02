@@ -241,29 +241,6 @@
     "name": "OpenAI",
     "doc": "https://developers.openai.com/api/docs/models",
     "models": {
-      "gpt-5.1": {
-        "id": "gpt-5.1",
-        "name": "GPT-5.1",
-        "description": "Latest flagship reasoning model with Responses API, reasoning + verbosity controls, and coding tools.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 400000,
-        "reasoning_efforts": [
-          "low",
-          "medium",
-          "high",
-          "xhigh",
-          "max"
-        ]
-      },
       "gpt-5.1-mini": {
         "id": "gpt-5.1-mini",
         "name": "GPT-5.1 Mini",
@@ -580,6 +557,47 @@
           "cache_write": 2.5e-06
         },
         "is_pro": true,
+        "lightweight_model": "gpt-6.1-terra",
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "gpt-6.1-terra": {
+        "id": "gpt-6.1-terra",
+        "name": "GPT-6.1 Terra",
+        "description": "Fast, efficient model for visual reasoning, precise computer use, and clear, natural writing.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000,
+        "output_tokens": 128000,
+        "capabilities": {
+          "caching": true,
+          "structured_output": true,
+          "thinking": true
+        },
+        "supports_sampling": false,
+        "supports_logprobs": false,
+        "prompt_cache_ttl": "30m",
+        "prompt_contract": "gpt6",
+        "cost": {
+          "input": 1e-06,
+          "output": 5e-06,
+          "cache_read": 5e-08,
+          "cache_write": 1.25e-06
+        },
         "lightweight_model": "gpt-6-luna",
         "reasoning_efforts": [
           "low",
@@ -1576,6 +1594,32 @@
           ]
         },
         "context": 1000000
+      },
+      "MiniMax-M3.1-Flash": {
+        "id": "MiniMax-M3.1-Flash",
+        "name": "MiniMax-M3.1-Flash",
+        "description": "Latest ultra-efficient multimodal coding model with 1M context and tunable thinking depth",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 524288
       }
     }
   },
@@ -2198,9 +2242,9 @@
           "doc_comment": "Claude Sonnet 5 - Anthropic Claude Sonnet 5 listing"
         }
       },
-      "deepseek-ai/DeepSeek-V4.1-Flash": {
-        "id": "deepseek-ai/DeepSeek-V4.1-Flash",
-        "name": "DeepSeek: V4.1 Flash",
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "name": "DeepSeek: V4.1 Flash 1017",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2217,12 +2261,12 @@
           "variant": "OpenRouterDeepSeekFlash",
           "constant": "DEEPSEEK_V4_1_FLASH",
           "vendor": "deepseek",
-          "display": "DeepSeek V4.1 Flash",
-          "description": "Latest flash model with improved reasoning and efficiency via OpenRouter",
+          "display": "DeepSeek V4.1 Flash 1017",
+          "description": "DeepSeek V4.1 Flash 1017 latest flash model via OpenRouter",
           "efficient": true,
           "top_tier": true,
           "generation": "4.1",
-          "doc_comment": "DeepSeek V4.1 Flash - Latest flash model via OpenRouter"
+          "doc_comment": "DeepSeek V4.1 Flash 1017 - Latest flash model via OpenRouter"
         }
       },
       "google/gemini-3.8-flash": {
@@ -2406,6 +2450,47 @@
           "top_tier": true,
           "generation": "V3.1-Nex",
           "doc_comment": "DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter"
+        }
+      },
+      "minimax/minimax-m3.1-flash:free": {
+        "id": "minimax/minimax-m3.1-flash:free",
+        "name": "MiniMax: MiniMax M3.1 Flash (free)",
+        "description": "MiniMax-M3.1-Flash is a multimodal model from MiniMax with 1M context, significant gains in agentic tasks, coding, and cybersecurity, and tunable thinking depth.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 524288,
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "vtcode": {
+          "variant": "OpenRouterMinimaxM31FlashFree",
+          "constant": "MINIMAX_M3_1_FLASH_FREE",
+          "vendor": "minimax",
+          "display": "MiniMax M3.1 Flash (free)",
+          "description": "Latest ultra-efficient MiniMax multimodal model with 1M context and tunable thinking depth - free tier via OpenRouter",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "M3.1",
+          "doc_comment": "MiniMax M3.1 Flash:free - Latest ultra-efficient multimodal model with 1M context free tier via OpenRouter"
         }
       },
       "moonshotai/kimi-k3": {
@@ -3264,6 +3349,23 @@
           ]
         },
         "context": 131072
+      },
+      "minimax-m3.1-flash:cloud": {
+        "id": "minimax-m3.1-flash:cloud",
+        "name": "MiniMax M3.1 Flash (cloud)",
+        "description": "Cloud-hosted next-generation MiniMax M3.1 Flash for agentic coding, computer use, and cybersecurity with native vision and thinking via Ollama Cloud.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 999424
       },
       "gemini-3-flash-preview:cloud": {
         "id": "gemini-3-flash-preview:cloud",
@@ -4259,10 +4361,70 @@
           "structured_output": false
         }
       },
+      "minimax/minimax-m3.1-flash": {
+        "id": "minimax/minimax-m3.1-flash",
+        "name": "MiniMax M3.1 Flash (Merge Gateway)",
+        "description": "MiniMax M3.1 Flash ultra-efficient multimodal model with 1M context served through Merge Gateway's native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 524288,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        }
+      },
       "moonshot/kimi-k3": {
         "id": "moonshot/kimi-k3",
         "name": "Kimi K3 (Merge Gateway)",
         "description": "Moonshot Kimi K3 served through Merge Gateway's native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 1000000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        },
+        "is_pro": true
+      },
+      "moonshot/kimi-k3.1-pro": {
+        "id": "moonshot/kimi-k3.1-pro",
+        "name": "Kimi K3.1 Pro (Merge Gateway)",
+        "description": "Moonshot Kimi K3.1 Pro served through Merge Gateway's native Responses API.",
         "reasoning": true,
         "reasoning_efforts": [
           "low",
@@ -4562,10 +4724,10 @@
         },
         "is_pro": true
       },
-      "deepseek/deepseek-v4.1-flash": {
-        "id": "deepseek/deepseek-v4.1-flash",
-        "name": "DeepSeek V4.1 Flash (Merge Gateway)",
-        "description": "DeepSeek V4.1 Flash served through Merge Gateway's native Responses API.",
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "name": "DeepSeek V4.1 Flash 1017 (Merge Gateway)",
+        "description": "DeepSeek V4.1 Flash 1017 served through Merge Gateway's native Responses API.",
         "reasoning": true,
         "reasoning_efforts": [
           "minimal",
@@ -4684,6 +4846,37 @@
           "structured_output": false
         },
         "is_pro": true,
+        "lightweight_model": "openai/gpt-6.1-terra"
+      },
+      "openai/gpt-6.1-terra": {
+        "id": "openai/gpt-6.1-terra",
+        "name": "GPT-6.1 Terra (Merge Gateway)",
+        "description": "OpenAI GPT-6.1 Terra served through Merge Gateway's native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000,
+        "output_tokens": 128000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        },
         "lightweight_model": "openai/gpt-6-luna"
       },
       "xiaomimimo/mimo-v2.6-pro": {
@@ -5109,10 +5302,10 @@
           "output": 1.2e-06
         }
       },
-      "openai/gpt-5.3-codex": {
-        "id": "openai/gpt-5.3-codex",
-        "name": "GPT-5.3 Codex (Vercel AI Gateway)",
-        "description": "OpenAI GPT-5.3 Codex coding-specialized model served through the Vercel AI Gateway",
+      "openai/gpt-6-sol": {
+        "id": "openai/gpt-6-sol",
+        "name": "GPT-6 Sol (Vercel AI Gateway)",
+        "description": "OpenAI GPT-6 Sol cost-efficient high-end reasoning model served through the Vercel AI Gateway",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -5123,7 +5316,7 @@
             "text"
           ]
         },
-        "context": 400000,
+        "context": 1050000,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -5132,8 +5325,35 @@
         },
         "max_output_tokens": 128000,
         "cost": {
-          "input": 1.75e-06,
-          "output": 1.4e-05
+          "input": 2e-06,
+          "output": 1e-05
+        }
+      },
+      "openai/gpt-6-luna": {
+        "id": "openai/gpt-6-luna",
+        "name": "GPT-6 Luna (Vercel AI Gateway)",
+        "description": "OpenAI GPT-6 Luna fast cost-efficient reasoning model served through the Vercel AI Gateway",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        },
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 1e-07,
+          "output": 5e-07
         }
       },
       "google/gemini-3.1-pro-preview": {

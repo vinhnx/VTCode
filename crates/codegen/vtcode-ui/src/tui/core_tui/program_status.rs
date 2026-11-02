@@ -8,7 +8,8 @@ use std::sync::{
 };
 
 use vtcode_commons::program_status::{
-    InteractionKind, ProgramState, ProgramStatusUpdate, encode_report, record_segment,
+    InteractionKind, ProgramState, ProgramStatusUpdate, clear_iterm21337, encode_iterm21337, encode_report,
+    record_segment,
 };
 use vtcode_commons::ui_protocol::{ActivityState, ProgressPhase, ProgressUpdate};
 
@@ -34,6 +35,8 @@ pub(crate) struct ProgramStatus {
     parent: String,
     enabled: bool,
     terminal: bool,
+    iterm21337: bool,
+    last_iterm21337: Option<String>,
     closed: bool,
     underlying: ProgramState,
     operation: Option<u64>,
@@ -59,6 +62,8 @@ impl Default for ProgramStatus {
             parent: record_segment("vtcode", &format!("{}-{origin}-{nonce}", std::process::id())),
             enabled: false,
             terminal: false,
+            iterm21337: false,
+            last_iterm21337: None,
             closed: false,
             underlying: ProgramState::Idle,
             operation: None,
@@ -76,7 +81,13 @@ impl Default for ProgramStatus {
 impl ProgramStatus {
     /// Set only by the real interactive runner, never a test/headless session.
     pub(crate) fn attach_terminal(&mut self) {
-        self.terminal = io::stdin().is_terminal() && io::stdout().is_terminal() && io::stderr().is_terminal();
+        // Pre-0.54 VTE parsers may mishandle unknown OSC bytes, so they stay
+        // silent even though emission is otherwise on by default.
+        self.terminal = io::stdin().is_terminal()
+            && io::stdout().is_terminal()
+            && io::stderr().is_terminal()
+            && vtcode_commons::program_status::vte_allows_unknown_osc();
+        self.iterm21337 = vtcode_commons::program_status::should_emit_iterm21337_now();
     }
 
     pub(crate) fn apply(&mut self, update: ProgramStatusUpdate) {
@@ -223,7 +234,16 @@ impl ProgramStatus {
             ProgramState::Working | ProgramState::Blocked => self.task_progress,
             _ => None,
         };
-        records.insert(self.parent.clone(), Report { state, kind, progress, title: "VT Code", message });
+        records.insert(
+            self.parent.clone(),
+            Report {
+                state,
+                kind,
+                progress,
+                title: vtcode_config::constants::app::DISPLAY_NAME,
+                message,
+            },
+        );
         if self.closed {
             records.retain(|_, report| report.state.is_finished());
         }
@@ -234,6 +254,12 @@ impl ProgramStatus {
     fn deliver(&mut self, writer: &mut impl Write) -> anyhow::Result<()> {
         use anyhow::Context;
         let desired = self.desired();
+        // Session-level iTerm2 pill follows the parent record; a missing
+        // parent clears it. Precomputed before the loop moves `desired`.
+        let iterm21337 = self.iterm21337.then(|| match desired.get(&self.parent) {
+            Some(report) => encode_iterm21337(report.state, report.message),
+            None => clear_iterm21337(),
+        });
         let removed: Vec<_> = self.attempted.iter().filter(|id| !desired.contains_key(*id)).cloned().collect();
         for id in removed {
             // Clearing a parent would also remove its retained finished children.
@@ -272,6 +298,15 @@ impl ProgramStatus {
             writer.flush().context("flushing program status record")?;
             self.delivered.insert(id, report);
         }
+        if let Some(sequence) = iterm21337
+            && self.last_iterm21337.as_ref() != Some(&sequence)
+        {
+            writer
+                .write_all(sequence.as_bytes())
+                .context("writing iterm21337 session status")?;
+            writer.flush().context("flushing iterm21337 session status")?;
+            self.last_iterm21337 = Some(sequence);
+        }
         Ok(())
     }
 
@@ -307,6 +342,11 @@ impl ProgramStatus {
 pub(crate) fn cleanup_before_restore(writer: &mut impl Write) {
     let records = std::mem::take(&mut *CLEANUP_RECORDS.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
     retire_records(&records, writer);
+    if vtcode_commons::program_status::should_emit_iterm21337_now() {
+        if let Err(error) = writer.write_all(clear_iterm21337().as_bytes()).and_then(|()| writer.flush()) {
+            tracing::warn!(%error, "iterm21337 restoration cleanup failed");
+        }
+    }
 }
 
 fn retire_records(records: &BTreeMap<String, ProgramState>, writer: &mut impl Write) {

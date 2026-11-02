@@ -26,6 +26,15 @@ pub(super) fn handle_verification_block(
     runtime: &mut AgentRuntime,
     stats: &mut SessionStats,
 ) -> VerificationBlockResult {
+    if crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause(base).is_some()
+        && registry.completion_verification_pending()
+    {
+        // Budget exhaustion cannot start another verification recovery turn.
+        // Retain the prior failure as evidence without attributing this stop to it.
+        return VerificationBlockResult::Handoff {
+            reason: verification_exhausted_handoff_reason(base, None, 0, 0, stats.last_verification_failure()),
+        };
+    }
     if !verification_gate::is_pending_verification_block(base) {
         return VerificationBlockResult::NotVerification;
     }
@@ -34,7 +43,8 @@ pub(super) fn handle_verification_block(
         stats.verification_consecutive_failures() >= verification_gate::verification_max_consecutive_failures(cfg);
     let max_turns = verification_gate::verification_cross_turn_turns(cfg);
     let verifier = verification_gate::resolve_pending_verifier_command(cfg, registry, &runtime.state.messages);
-    if !stats.preflight_recovery.exhausted()
+    if verification_gate::verification_auto_execute_enabled(cfg)
+        && !stats.preflight_recovery.exhausted()
         && !escalated
         && verification_gate::verification_block_allows_auto_recovery(
             base,
@@ -45,7 +55,7 @@ pub(super) fn handle_verification_block(
         let attempt = stats.verification_auto_recovery_turns().saturating_add(1);
         let directive =
             vtcode_core::tools::tool_intent::verification_recovery_directive(verifier.as_deref(), attempt, max_turns);
-        match runtime.try_queue_follow_up_input(verification_auto_recovery_follow_up(verifier.as_deref())) {
+        match runtime.try_queue_synthetic_follow_up_input(verification_auto_recovery_follow_up(verifier.as_deref())) {
             Ok(()) => {
                 let recorded = stats.record_verification_auto_recovery_turn_with_limit(max_turns);
                 debug_assert!(recorded, "exclusive recovery admission must retain its checked budget");

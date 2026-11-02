@@ -34,6 +34,11 @@ pub struct CommandSkillSpec {
 }
 
 impl CommandSkillSpec {
+    /// Category used to group the command in host-specific command surfaces.
+    pub const fn category(self) -> &'static str {
+        self.category
+    }
+
     const fn is_traditional(self) -> bool {
         matches!(self.backend, CommandSkillBackend::TraditionalSkill { .. })
     }
@@ -193,7 +198,7 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!(
         "skills",
         "Open interactive skills manager (usage: /skills, /skills manager)",
-        "/skills [manager|list|search|create|load|unload|info|use|validate|package|regenerate-index|help]",
+        "/skills [manager|list|search|create|load|unload|info|use|validate|package|regenerate-index|doctor|help]",
         "tools"
     ),
     built_in_command_spec!(
@@ -203,6 +208,7 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "tools"
     ),
     built_in_command_spec!("status", "Show model, provider, workspace, and tool status", "/status", "status"),
+    built_in_command_spec!("splash", "Show CLI, Desktop, and WebMCP connection wiring status", "/splash", "status"),
     built_in_command_spec!("stop", "Stop the active turn immediately", "/stop", "status"),
     built_in_command_spec!("pause", "Pause the active turn at the next safe boundary", "/pause", "status"),
     built_in_command_spec!(
@@ -304,8 +310,8 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!("donate", "Support the project by buying the author a coffee", "/donate", "support"),
     built_in_command_spec!(
         "terminal-setup",
-        "Configure terminal for VT Code (multiline, copy/paste, shell, themes)",
-        "/terminal-setup",
+        "Configure terminal for VT Code (multiline, copy/paste, shell, themes, tab icon)",
+        "/terminal-setup [install-iterm2-icon|reset-iterm2-icon|icon [light|dark|clear|tinted|dynamic]]",
         "terminal"
     ),
     built_in_command_spec!(
@@ -455,6 +461,10 @@ mod tests {
         let status = find_command_skill_by_slash_name("status").expect("status spec");
         assert!(status.is_built_in());
         assert_eq!(status.skill_name, "cmd-status");
+
+        let splash = find_command_skill_by_slash_name("splash").expect("splash spec");
+        assert!(splash.is_built_in());
+        assert_eq!(splash.usage, "/splash");
     }
 
     #[test]

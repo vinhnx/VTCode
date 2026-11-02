@@ -54,6 +54,8 @@ pub struct CommandInvocation {
     pub(crate) category: CommandCategory,
     pub(crate) working_dir: PathBuf,
     pub(crate) touched_paths: Vec<PathBuf>,
+    #[cfg_attr(feature = "serde-errors", serde(default))]
+    pub(crate) create_parents: bool,
 }
 
 #[cfg_attr(feature = "serde-errors", derive(Serialize, Deserialize))]
@@ -81,11 +83,17 @@ impl CommandInvocation {
             category,
             working_dir,
             touched_paths: Vec::new(),
+            create_parents: false,
         }
     }
 
     pub(crate) fn with_paths(mut self, paths: Vec<PathBuf>) -> Self {
         self.touched_paths = paths;
+        self
+    }
+
+    pub(crate) fn with_create_parents(mut self, create_parents: bool) -> Self {
+        self.create_parents = create_parents;
         self
     }
 }
@@ -281,8 +289,8 @@ impl PureRustCommandExecutor {
         command.contains("-a") || command.contains("-Force")
     }
 
-    fn mkdir(path: &Path, command: &str) -> Result<()> {
-        if command.contains("-p") || command.contains("-Force") {
+    fn mkdir(path: &Path, create_parents: bool) -> Result<()> {
+        if create_parents {
             fs::create_dir_all(path).with_context(|| format!("failed to create directory `{}`", path.display()))?
         } else {
             fs::create_dir(path).with_context(|| format!("failed to create directory `{}`", path.display()))?
@@ -304,25 +312,94 @@ impl PureRustCommandExecutor {
     }
 
     fn copy_recursive(source: &Path, dest: &Path, recursive: bool) -> Result<()> {
-        if source.is_dir() {
-            if !recursive {
-                bail!("copying directory `{}` requires recursive flag", source.display());
+        let canonical_source = vtcode_commons::canonicalize(source)
+            .with_context(|| format!("failed to resolve copy source `{}`", source.display()))?;
+        if !canonical_source.is_dir() {
+            return Self::copy_single_file(&canonical_source, dest);
+        }
+        if !recursive {
+            bail!("copying directory `{}` requires recursive flag", source.display());
+        }
+        fs::create_dir_all(dest).with_context(|| format!("failed to create directory `{}`", dest.display()))?;
+        let canonical_dest = vtcode_commons::canonicalize(dest)
+            .with_context(|| format!("failed to resolve copy destination `{}`", dest.display()))?;
+        Self::copy_dir_anchored(&canonical_source, &canonical_source, &canonical_dest, &canonical_dest)
+    }
+
+    /// Copy directory contents with both sides anchored at their roots.
+    ///
+    /// Descendant symlinks are resolved and must stay beneath the root they
+    /// were discovered under; links escaping to the rest of the filesystem
+    /// fail the copy instead of leaking reads or writes outside the
+    /// authorized trees. Links that stay inside keep the previous
+    /// copy-through behavior.
+    ///
+    /// Residual limitation: validation is check-then-act per entry, so an
+    /// actor swapping links concurrently with the copy is not defeated —
+    /// only planted at-rest links are. Bound directory handles would be
+    /// needed against a live concurrent swapper.
+    fn copy_dir_anchored(source_dir: &Path, source_anchor: &Path, dest_dir: &Path, dest_anchor: &Path) -> Result<()> {
+        for entry in
+            fs::read_dir(source_dir).with_context(|| format!("failed to read directory `{}`", source_dir.display()))?
+        {
+            let entry = entry?;
+            let canonical_entry = vtcode_commons::canonicalize(entry.path())
+                .with_context(|| format!("failed to resolve `{}`", entry.path().display()))?;
+            if !canonical_entry.starts_with(source_anchor) {
+                bail!(
+                    "refusing to copy through symlink `{}` escaping `{}`",
+                    entry.path().display(),
+                    source_anchor.display()
+                );
             }
-            fs::create_dir_all(dest).with_context(|| format!("failed to create directory `{}`", dest.display()))?;
-            for entry in
-                fs::read_dir(source).with_context(|| format!("failed to read directory `{}`", source.display()))?
-            {
-                let entry = entry?;
-                let entry_path = entry.path();
-                let dest_path = dest.join(entry.file_name());
-                if entry_path.is_dir() {
-                    Self::copy_recursive(&entry_path, &dest_path, true)?;
-                } else {
-                    Self::copy_file(&entry_path, &dest_path)?;
+            let dest_path = dest_dir.join(entry.file_name());
+            Self::reject_escaping_destination_link(&dest_path, dest_anchor)?;
+            if canonical_entry.is_dir() {
+                fs::create_dir_all(&dest_path)
+                    .with_context(|| format!("failed to create directory `{}`", dest_path.display()))?;
+                // `create_dir_all` follows links, so re-anchor the real
+                // location before descending into it.
+                let canonical_dest_subdir = vtcode_commons::canonicalize(&dest_path)
+                    .with_context(|| format!("failed to resolve `{}`", dest_path.display()))?;
+                if !canonical_dest_subdir.starts_with(dest_anchor) {
+                    bail!("refusing to copy into `{}` escaping `{}`", dest_path.display(), dest_anchor.display());
                 }
+                Self::copy_dir_anchored(&canonical_entry, source_anchor, &canonical_dest_subdir, dest_anchor)?;
+            } else {
+                Self::copy_file(&canonical_entry, &dest_path)?;
             }
-        } else {
-            Self::copy_file(source, dest)?;
+        }
+        Ok(())
+    }
+
+    /// Copy one file, refusing a symlinked destination that escapes the
+    /// destination's own directory.
+    fn copy_single_file(canonical_source: &Path, dest: &Path) -> Result<()> {
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to prepare destination directory `{}`", parent.display()))?;
+            let canonical_parent = vtcode_commons::canonicalize(parent)
+                .with_context(|| format!("failed to resolve `{}`", parent.display()))?;
+            Self::reject_escaping_destination_link(dest, &canonical_parent)?;
+        }
+        Self::copy_file(canonical_source, dest)
+    }
+
+    /// Fail when `dest` is a symlink resolving outside `dest_anchor`.
+    ///
+    /// `fs::copy` follows a symlinked destination, so a planted link would
+    /// otherwise redirect the write outside the authorized tree.
+    fn reject_escaping_destination_link(dest: &Path, dest_anchor: &Path) -> Result<()> {
+        if fs::symlink_metadata(dest).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            let canonical_dest = vtcode_commons::canonicalize(dest)
+                .with_context(|| format!("failed to resolve destination `{}`", dest.display()))?;
+            if !canonical_dest.starts_with(dest_anchor) {
+                bail!(
+                    "refusing to copy through destination symlink `{}` escaping `{}`",
+                    dest.display(),
+                    dest_anchor.display()
+                );
+            }
         }
         Ok(())
     }
@@ -377,7 +454,7 @@ impl CommandExecutor for PureRustCommandExecutor {
             }
             CommandCategory::CreateDirectory => {
                 let path = Self::resolve_primary_path(invocation)?;
-                Self::mkdir(path, &invocation.command)?;
+                Self::mkdir(path, invocation.create_parents)?;
                 Ok(CommandOutput::success(String::new()))
             }
             CommandCategory::Remove => {

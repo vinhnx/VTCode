@@ -15,6 +15,7 @@ const TRUSTED_HOSTS: &[&str] = &[
     "platform.openai.com",
     "api.openai.com",
     "deepwiki.com",
+    "github.com",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -211,6 +212,17 @@ mod tests {
 
         let lines = prompt.lines();
         assert!(lines.iter().any(|line| line.contains("Trusted host")));
+    }
+
+    #[test]
+    fn parse_github_feedback_url_marks_trusted() {
+        // Mirrors FEEDBACK_URL in `turn/session/slash_commands/apps.rs`: the
+        // first-party /feedback target must not render an untrusted-host warning.
+        let prompt = UrlGuardPrompt::parse("https://github.com/vinhnx/VTCode/issues/new/choose".to_string())
+            .expect("feedback url");
+
+        let lines = prompt.lines();
+        assert!(lines.iter().any(|line| line.contains("Trusted host")), "lines: {lines:?}");
     }
 
     #[test]

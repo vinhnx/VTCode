@@ -1,4 +1,3 @@
-pub mod agent_optimization;
 pub mod async_command;
 pub mod cancellation;
 pub mod code_executor;
@@ -9,10 +8,6 @@ pub mod sdk_ipc;
 pub mod skill_manager;
 pub mod tool_versioning;
 
-pub use agent_optimization::{
-    AgentBehaviorAnalyzer, AppliedRecovery, CodePattern, FailurePatterns, RecoveryPattern, SkillStatistics,
-    ToolStatistics,
-};
 pub use code_executor::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
 pub use pii_tokenizer::{DetectedPii, PiiToken, PiiTokenizer, PiiType};
 pub use sdk_ipc::{ToolIpcHandler, ToolRequest, ToolResponse};

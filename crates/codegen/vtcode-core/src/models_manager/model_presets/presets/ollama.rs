@@ -1,6 +1,8 @@
 //! ollama_presets — provider preset definitions for ollama.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_ladder_medium_high;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
@@ -12,10 +14,7 @@ pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
             description: "Open-weight GPT-OSS served locally".to_string(),
             provider: Provider::Ollama,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: true,
             upgrade: None,
             show_in_picker: true,
@@ -30,16 +29,7 @@ pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
             description: "NVIDIA Nemotron 3 Ultra 550B for high-throughput reasoning and long-running agent workflows via Ollama Cloud".to_string(),
             provider: Provider::OllamaCloud,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_medium_high(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -54,10 +44,7 @@ pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
             description: "Google Gemma 4 for reasoning, agentic workflows, coding, and multimodal understanding".to_string(),
             provider: Provider::Ollama,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -71,15 +58,26 @@ pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
             description: "Cloud-hosted MiniMax-M3 model via Ollama Cloud".to_string(),
             provider: Provider::OllamaCloud,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(131_072),
+        },
+        ModelPreset {
+            id: "ollama/minimax-m3.1-flash:cloud".to_string(),
+            model: "minimax-m3.1-flash:cloud".to_string(),
+            display_name: "MiniMax M3.1 Flash (Ollama)".to_string(),
+            description: "Cloud-hosted ultra-efficient MiniMax M3.1 Flash with native vision and thinking via Ollama Cloud".to_string(),
+            provider: Provider::OllamaCloud,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(999_424),
         },
         ModelPreset {
             id: "ollama/glm-5.2:cloud".to_string(),
@@ -88,16 +86,7 @@ pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
             description: "Cloud-hosted GLM-5.2 flagship model for long-horizon tasks with 1M context via Ollama Cloud".to_string(),
             provider: Provider::OllamaCloud,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_medium_high(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -111,16 +100,7 @@ pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
             description: "Cloud-hosted GLM-5.3 flagship model for long-horizon tasks with 1M context via Ollama Cloud".to_string(),
             provider: Provider::OllamaCloud,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_medium_high(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -135,18 +115,9 @@ pub(crate) fn ollama_presets() -> Vec<ModelPreset> {
             provider: Provider::OllamaCloud,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast responses with lightweight reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning for complex problems".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Max,
-                    description: "Maximum reasoning effort".to_string(),
-                },
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast responses with lightweight reasoning"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep reasoning for complex problems"),
+                reasoning_preset(ReasoningEffortLevel::Max, "Maximum reasoning effort"),
             ],
             is_default: false,
             upgrade: None,

@@ -103,4 +103,4 @@ base_url = "http://omniroute-host:20128/v1"
 ## References
 
 - [OmniRoute repository](https://github.com/diegosouzapw/OmniRoute)
-- [VT Code custom provider configuration](../config/config.md#custom_providers)
+- [VT Code custom provider configuration](../config/models.md#custom_providers)

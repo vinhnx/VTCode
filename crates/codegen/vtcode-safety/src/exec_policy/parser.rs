@@ -145,8 +145,10 @@ impl PolicyParser {
         };
 
         let mut policy = Policy::empty();
-        for rule in rules {
-            policy.add_prefix_rule(&rule.pattern, rule.decision)?;
+        for (index, rule) in rules.into_iter().enumerate() {
+            policy
+                .add_prefix_rule(&rule.pattern, rule.decision)
+                .with_context(|| format!("Invalid policy rule {} in {}", index + 1, path.display()))?;
         }
 
         Ok(policy)
@@ -156,6 +158,56 @@ impl PolicyParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blank_patterns_fail_with_file_and_rule_context() {
+        let parser = PolicyParser::new();
+        let cases = [
+            ("blank.rules", "allow: git\nallow:   "),
+            ("blank.rules", "git = allow\n  = forbidden"),
+            (
+                "blank.toml",
+                "[[rules]]\npattern = 'git'\ndecision = 'allow'\n[[rules]]\npattern = '  '\ndecision = 'allow'",
+            ),
+            (
+                "blank.json",
+                r#"{"rules":[{"pattern":"git","decision":"allow"},{"pattern":" ","decision":"allow"}]}"#,
+            ),
+        ];
+        for (filename, content) in cases {
+            let error = parser.load_from_content(content, Path::new(filename)).unwrap_err();
+            let message = format!("{error:#}");
+            assert!(message.contains(filename), "{message}");
+            assert!(message.contains("rule 2"), "{message}");
+            assert!(message.contains("empty"), "{message}");
+        }
+    }
+
+    #[test]
+    fn empty_rule_files_remain_valid() {
+        let parser = PolicyParser::new();
+        for content in ["", "  \n# comment\n// comment\n"] {
+            assert!(
+                parser
+                    .load_from_content(content, Path::new("empty.rules"))
+                    .unwrap()
+                    .rules()
+                    .is_empty()
+            );
+        }
+        for (filename, content) in [
+            ("empty.toml", "# comment\nrules = []"),
+            ("empty.json", r#"{"rules":[]}"#),
+        ] {
+            assert!(
+                parser
+                    .load_from_content(content, Path::new(filename))
+                    .unwrap()
+                    .rules()
+                    .is_empty()
+            );
+        }
+    }
 
     #[test]
     fn test_parse_simple_format() {

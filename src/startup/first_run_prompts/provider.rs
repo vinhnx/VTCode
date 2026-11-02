@@ -117,7 +117,10 @@ pub(crate) fn prompt_provider(
     match select_provider_with_ratatui(&providers, default, discovered) {
         Ok(provider) => Ok(provider),
         Err(error) => {
-            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(
+                MessageStyle::Warning,
+                &format!("Interactive setup could not continue. Enter the value manually.\n{error}"),
+            )?;
             prompt_provider_text(renderer, &providers, default, discovered)
         }
     }

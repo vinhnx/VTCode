@@ -22,6 +22,9 @@ use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 /// [`DEFAULT_FEW_SHOT_BUDGET_TOKENS`].
 pub(super) async fn build_few_shot_section(ctx: &TurnProcessingContext<'_>) -> Option<String> {
     let query = latest_user_query(ctx.working_history.as_slice())?;
+    if crate::agent::runloop::unified::turn::is_internal_harness_follow_up(&query) {
+        return None;
+    }
     let store = FewShotStore::load_async(Some(ctx.config.workspace.as_path()), home_dir().as_deref()).await;
     if store.is_empty() {
         return None;

@@ -38,6 +38,7 @@ changed and what was checked.
 ## Verification
 
 Run the narrowest command that exercises your change, such as `cargo check -p <crate>` or
-`cargo test -p <crate> <filter>`, and widen to `cargo clippy` or workspace checks when the change crosses crates. Report
+`cargo nextest run --locked -p <crate> -E 'test(<filter>)'`, and widen to `cargo clippy` or workspace checks when the
+change crosses crates. Report
 the exact commands and their results in the Verification section. If a check fails for a reason unrelated to your
 change, say so rather than working around it.

@@ -32,7 +32,7 @@ struct CheckupRemediation {
 }
 
 /// Compute the optimizations that are currently applicable for the active config.
-fn compute_checkup_remediations(vt_cfg: &Option<VTCodeConfig>) -> Vec<CheckupRemediation> {
+fn compute_checkup_remediations(vt_cfg: Option<&VTCodeConfig>) -> Vec<CheckupRemediation> {
     let Some(cfg) = vt_cfg else {
         return Vec::new();
     };
@@ -115,6 +115,13 @@ fn apply_checkup_remediation_to_config(id: &str, cfg: &mut VTCodeConfig) -> Resu
 
 pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let tool_count = ctx.tools.read().await.len();
+    let permission_mode = if ctx.vt_cfg.as_ref().is_some_and(|config| config.sandbox.is_full_access()) {
+        "Full access (session only)"
+    } else {
+        "Configured"
+    };
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Permission mode: {permission_mode}"))?;
     let active_instruction_directory = ctx
         .context_manager
         .active_instruction_directory_snapshot()
@@ -138,13 +145,41 @@ pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<S
     Ok(SlashCommandControl::Continue)
 }
 
+pub(crate) async fn handle_show_splash(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    let tool_count = ctx.tools.read().await.len();
+    ctx.renderer.line(MessageStyle::Info, "VT Code connection wiring")?;
+    ctx.renderer.line(MessageStyle::Info, "CLI runtime: ready")?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Workspace: {}", ctx.config.workspace.display()))?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Session: {}", ctx.active_thread_label))?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Registered tools: {tool_count}"))?;
+    if let Some(bridge) = ctx.webmcp_bridge.as_ref() {
+        if bridge.is_running() {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("WebMCP bridge: listening at {} for {}", bridge.endpoint(), bridge.pairing_origin()),
+            )?;
+        } else {
+            ctx.renderer.line(MessageStyle::Warning, "WebMCP bridge: listener stopped")?;
+        }
+    } else {
+        ctx.renderer
+            .line(MessageStyle::Info, "WebMCP bridge: not started in this CLI session")?;
+    }
+    ctx.renderer.line(
+        MessageStyle::Info,
+        "Desktop handshake: inspect VT Code Desktop → Settings → Connections; a CLI session cannot observe a separate desktop client.",
+    )?;
+    Ok(SlashCommandControl::Continue)
+}
+
 pub(crate) async fn handle_show_memory_config(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         memory::render_memory_config_lines(&mut ctx).await?;
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Use `/config memory` for quick actions or `/config agent.persistent_memory` for the raw section.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Run vtcode in a terminal for memory quick actions.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -272,7 +307,7 @@ fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         .with_search_value("back close cancel".to_string()),
     ];
 
-    for remediation in compute_checkup_remediations(ctx.vt_cfg) {
+    for remediation in compute_checkup_remediations(ctx.vt_cfg.as_ref()) {
         items.push(
             ui_list::action(
                 remediation.title,
@@ -310,19 +345,19 @@ mod tests {
         cfg.automation.full_auto.enabled = true;
         cfg.tools.default_policy = ToolPolicy::Allow;
         // lifecycle defaults to empty
-        let items = compute_checkup_remediations(&Some(cfg));
+        let items = compute_checkup_remediations(Some(&cfg));
         assert!(items.is_empty(), "unexpected: {items:?}");
     }
 
     #[test]
     fn none_config_yields_no_remediations() {
-        assert!(compute_checkup_remediations(&None).is_empty());
+        assert!(compute_checkup_remediations(None).is_empty());
     }
 
     #[test]
     fn reports_all_three_when_unoptimized() {
         let cfg = cfg_with_hooks();
-        let ids: Vec<&str> = compute_checkup_remediations(&Some(cfg)).iter().map(|r| r.id).collect();
+        let ids: Vec<&str> = compute_checkup_remediations(Some(&cfg)).iter().map(|r| r.id).collect();
         assert!(ids.contains(&"enable_auto_mode"));
         assert!(ids.contains(&"disable_slow_hooks"));
         assert!(ids.contains(&"preapprove_readonly"));

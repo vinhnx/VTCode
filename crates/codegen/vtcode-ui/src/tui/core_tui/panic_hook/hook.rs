@@ -30,7 +30,7 @@ pub fn init_panic_hook() {
                 if state::is_color_eyre_enabled() {
                     state::maybe_prepare_color_eyre_hooks();
                     if let Some(panic_hook) = state::COLOR_EYRE_PANIC_HOOK.get() {
-                        eprintln!("{}", panic_hook.panic_report(panic_info));
+                        vtcode_commons::diagnostics::stderr(format_args!("{}", panic_hook.panic_report(panic_info)));
                         return;
                     }
                 }
@@ -50,8 +50,10 @@ pub fn init_panic_hook() {
 
             let file_path = human_panic_dump(&report_metadata, panic_info);
             if let Err(error) = print_msg(file_path, &report_metadata) {
-                eprintln!("\nVT Code encountered a critical error and needs to shut down.");
-                eprintln!("Failed to print crash report details: {error}");
+                vtcode_commons::diagnostics::stderr(format_args!(
+                    "\nVT Code encountered a critical error and needs to shut down."
+                ));
+                vtcode_commons::diagnostics::stderr(format_args!("Failed to print crash report details: {error}"));
                 original_hook(panic_info);
             }
 

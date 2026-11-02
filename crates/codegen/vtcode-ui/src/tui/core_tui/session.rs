@@ -27,6 +27,7 @@ use crate::tui::core_tui::types::LocalAgentEntry;
 use crate::tui::options::FullscreenInteractionSettings;
 use crate::tui::ui::tui::widgets::SessionWidget;
 
+mod diagnostics;
 mod frame_layout;
 mod header;
 mod impl_events;
@@ -68,11 +69,14 @@ pub(crate) mod clipboard_image;
 pub mod config;
 mod driver;
 mod events;
+mod input_render;
 pub(crate) mod message_renderer;
 mod messages;
 pub(crate) mod mode_switch_guard;
+mod overlay_state;
 mod reflow;
 pub(crate) mod reverse_search;
+mod scroll_state;
 mod spinner;
 mod state;
 mod sticky_prompt;
@@ -98,8 +102,12 @@ use self::queue::QueueOverlay;
 use self::render_state::RenderState;
 use self::scroll::ScrollManager;
 pub(crate) use self::spinner::pulse_spinner_frame_for_phase;
+pub(crate) use self::spinner::title_spinner_frame;
 use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
+pub use self::terminal_title::{
+    TERMINAL_TITLE_ATTENTION_NEEDLES, TERMINAL_TITLE_UNDOING_NEEDLES, TERMINAL_TITLE_WAITING_NEEDLES,
+};
 use self::transcript::TranscriptReflowCache;
 use self::transcript_links::TranscriptFileLinkTarget;
 pub(crate) use self::transcript_links::TranscriptLinkClickAction;

@@ -154,7 +154,6 @@ pub mod file_ops;
 pub mod file_search_bridge;
 pub mod file_search_rpc;
 pub mod file_tracker;
-pub mod generation_helpers;
 mod grep_backend;
 pub mod grep_cache;
 pub mod grep_file;
@@ -205,7 +204,6 @@ pub mod cached_executor;
 pub mod lru_cache;
 pub mod pattern_detection;
 pub mod registry_adapters;
-pub mod time_compat;
 pub mod tool_middleware;
 pub mod workflow_optimizer;
 pub use resilience::circuit_breaker;
@@ -289,10 +287,6 @@ pub use async_middleware::{
 pub use cached_executor::{CachedToolExecutor, ExecutorStats};
 pub use handlers::{
     // Apply patch handler
-    ApplyPatchHandler,
-    ApplyPatchRequest,
-    ApplyPatchRuntime,
-    ApplyPatchToolArgs,
     // Orchestrator and sandboxing
     Approvable,
     // Core handler traits and types
@@ -306,8 +300,6 @@ pub use handlers::{
     DiffTracker,
     ExecApprovalRequirement,
     // Event emission
-    ExecCommandInput,
-    ExecCommandSource,
     ExecEnv,
     ExecPolicyAmendment,
     ExecToolCallOutput,
@@ -317,7 +309,6 @@ pub use handlers::{
     FreeformToolFormat,
     JsonSchema as ToolJsonSchema,
     McpToolResult,
-    ParsedCommand,
     RejectConfig,
     ResponsesApiTool,
     SandboxAttempt,
@@ -334,15 +325,10 @@ pub use handlers::{
     ShellToolCallParams,
     ToolCallError,
     ToolCtx,
-    ToolEmitter,
     ToolError,
-    ToolEventCtx,
-    ToolEventFailureKind,
-    ToolEventStage,
     ToolHandler,
     ToolInvocation,
     ToolKind,
-    ToolOrchestrator,
     ToolOutput,
     ToolPayload,
     ToolRuntime,
@@ -350,10 +336,7 @@ pub use handlers::{
     ToolSpec,
     TurnContext,
     TurnDiffTracker,
-    create_apply_patch_freeform_tool,
-    create_apply_patch_json_tool,
     default_exec_approval_requirement,
-    intercept_apply_patch,
     new_shared_tracker,
 };
 pub use improvement_algorithms::{

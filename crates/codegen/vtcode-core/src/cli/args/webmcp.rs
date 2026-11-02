@@ -6,6 +6,12 @@ use std::path::PathBuf;
 pub enum WebmcpCommand {
     /// Start the standalone WebMCP server.
     Serve(WebmcpServeArgs),
+    /// Serve MCP over local stdin/stdout without opening a network listener.
+    Stdio {
+        /// Enable coding tasks using existing workspace trust and execution policies.
+        #[arg(long)]
+        companion: bool,
+    },
     /// Start the server and print a one-time browser pairing code.
     Pair(WebmcpPairArgs),
     /// Show configured WebMCP listener status.
@@ -42,6 +48,9 @@ pub struct WebmcpServeArgs {
     /// Enable the read-only OpenAI-compatible remote MCP surface.
     #[arg(long)]
     pub mcp: bool,
+    /// Enable companion coding tasks on the remote MCP service (one workspace, one active task).
+    #[arg(long, requires = "mcp")]
+    pub companion: bool,
     /// Canonical external HTTPS URL for the remote MCP `/sse/` endpoint.
     #[arg(long = "mcp-public-url", value_name = "URL")]
     pub mcp_public_url: Option<String>,

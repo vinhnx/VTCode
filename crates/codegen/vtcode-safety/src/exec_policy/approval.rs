@@ -147,12 +147,9 @@ impl ExecPolicyAmendment {
         Self { pattern: vec![prefix.into()] }
     }
 
-    /// Check if a command matches this amendment pattern.
+    /// Check if a command matches this amendment pattern. Zero-token patterns never match.
     pub(crate) fn matches(&self, command: &[String]) -> bool {
-        if command.len() < self.pattern.len() {
-            return false;
-        }
-        self.pattern.iter().zip(command.iter()).all(|(pattern, cmd)| pattern == cmd)
+        super::policy::matches_prefix(&self.pattern, command)
     }
 
     /// Convert the amendment to a policy rule string.
@@ -292,6 +289,19 @@ mod tests {
         assert!(!req.can_proceed());
         assert!(!req.requires_approval());
         assert!(req.is_forbidden());
+    }
+
+    #[test]
+    fn empty_amendments_never_match() {
+        let decoded: ExecPolicyAmendment = serde_json::from_str(r#"{"pattern":[]}"#).unwrap();
+        for amendment in [ExecPolicyAmendment::new(vec![]), decoded] {
+            assert!(!amendment.matches(&[]));
+            assert!(!amendment.matches(&["untrusted".into()]));
+        }
+        let amendment = ExecPolicyAmendment::new(vec!["git".into(), "".into()]);
+        assert!(amendment.matches(&["git".into(), "".into(), "tail".into()]));
+        assert!(!amendment.matches(&["".into(), "git".into()]));
+        assert!(!amendment.matches(&["git".into()]));
     }
 
     #[test]

@@ -94,13 +94,14 @@ and re-evaluate your strategy.
 When a turn starts with a still-running foreground command, you receive a bounded resume hint. Retained background
 commands continue asynchronously and are not mandatory to settle before starting new work.
 
-| Field        | Meaning                                                                                   |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| Session line | `- <session_id> (``<command>``, running <secs>s)` — at most 4, newest first               |
-| Wait shape   | `write_stdin {"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}` verbatim |
-| Budget       | `wait`/`inspect` are exempt from the per-turn tool-call budget                            |
-| Deadline     | A deadline-expired wait returns in-progress; wait again with the same id                   |
+| Field        | Meaning                                                                                               |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| Session line | `- <session_id> (``<command>``, running <secs>s)` — at most 4, newest first                           |
+| Wait shape   | `write_stdin {"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}` verbatim    |
+| Budget       | `wait`/`inspect` are exempt from the per-turn tool-call budget                                        |
+| Deadline     | A deadline-expired wait returns in-progress; wait again with the same id                              |
 | Peek vs wait | `wait` blocks until exit/deadline (preferred); `poll` returns immediately; `inspect` is snapshot-only |
 
-**Remediation**: call the pre-filled `write_stdin` wait verbatim for the listed `session_id` before launching new commands (repeat per id newest-first with several sessions). Never
+**Remediation**: call the pre-filled `write_stdin` wait verbatim for the listed `session_id` before launching
+new commands (repeat per id newest-first with several sessions). Never
 guess the id — it is in the hint. See invariant #22 in `docs/harness/ARCHITECTURAL_INVARIANTS.md`.

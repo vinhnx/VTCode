@@ -1,5 +1,5 @@
 use crate::startup::StartupContext;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use vtcode_core::cli::args::{Cli, Commands, ExecSubcommand};
 use vtcode_core::mcp::cli::handle_mcp_command;
 
@@ -12,12 +12,13 @@ use crate::cli::adapters::{ask_options, skills_options};
 use crate::cli::anthropic_api::handle_anthropic_api_command;
 use crate::cli::app_server::handle_app_server_command;
 use crate::cli::bench_allocator::handle_bench_allocator_command;
+use crate::cli::desktop_server::handle_desktop_server_command;
 use crate::cli::plugins::dispatch_plugins_command;
 use crate::cli::session_store::handle_session_store_command;
 use crate::cli::webmcp;
 use crate::cli::{
-    analyze, benchmark, check, config, create_project, dependencies, exec, init, init_project, man, notify, revert,
-    review, schedule, schema, secret, skills, snapshots, trajectory, update,
+    analyze, benchmark, check, config, create_project, dependencies, desktop, exec, init, init_project, man, notify,
+    revert, review, schedule, schema, secret, skills, snapshots, trajectory, update,
 };
 
 pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Commands) -> Result<()> {
@@ -31,6 +32,9 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
     vtcode_core::llm::factory::register_custom_providers(&cfg.custom_providers);
 
     match command {
+        Commands::Companion { command } => {
+            crate::cli::companion_config::handle_companion_command(startup, command)?;
+        }
         Commands::AgentClientProtocol { target } => {
             handle_acp_command(core_cfg, cfg, target).await?;
         }
@@ -38,16 +42,22 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
             vtcode_core::cli::tool_policy_commands::handle_tool_policy_command(command).await?;
         }
         Commands::Mcp { command } => {
-            handle_mcp_command(command).await?;
+            handle_mcp_command(command, &startup.workspace).await?;
         }
         Commands::A2a { command } => {
             vtcode_core::cli::a2a::execute_a2a_command(command).await?;
         }
         Commands::Webmcp { command } => {
-            webmcp::handle_webmcp_command(startup, command).await?;
+            webmcp::handle_webmcp_command(startup, args, command).await?;
         }
         Commands::AppServer { listen } => {
             handle_app_server_command(core_cfg, cfg, &listen).await?;
+        }
+        Commands::DesktopServer => {
+            handle_desktop_server_command(startup).await?;
+        }
+        Commands::Desktop { app_path } => {
+            desktop::handle_desktop_command(app_path)?;
         }
         Commands::Models { command } => {
             vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;
@@ -177,8 +187,8 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         Commands::CreateProject { name, features } => {
             create_project::handle_create_project_command(core_cfg, &name, &features).await?;
         }
-        Commands::Revert { turn, partial } => {
-            revert::handle_revert_command(core_cfg, turn, partial).await?;
+        Commands::Revert { turn, partial, session } => {
+            revert::handle_revert_command(core_cfg, turn, partial, session).await?;
         }
         Commands::Snapshots => {
             snapshots::handle_snapshots_command(core_cfg).await?;
@@ -208,8 +218,13 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
             let options = benchmark::BenchmarkCommandOptions { task_file, inline_task: task, output, max_tasks };
             benchmark::handle_benchmark_command(core_cfg, cfg, options, full_auto_requested).await?;
         }
-        Commands::Man { command, output } => {
-            man::handle_man_command(command, output).await?;
+        Commands::Man { command, output, all_pages } => {
+            if all_pages {
+                let directory = output.context("--all-pages requires an output directory")?;
+                man::handle_all_man_pages(&directory)?;
+            } else {
+                man::handle_man_command(command, output).await?;
+            }
         }
         Commands::BenchAllocator(args) => {
             handle_bench_allocator_command(args).await?;

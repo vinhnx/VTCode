@@ -39,6 +39,11 @@ fn is_few_shot_context_message(message: &uni::Message) -> bool {
 /// an earlier request already sent.
 fn unanswered_user_turn_index(history: &[uni::Message]) -> Option<usize> {
     let user_index = last_user_message_index(history)?;
+    if crate::agent::runloop::unified::turn::is_internal_harness_follow_up(
+        history[user_index].content.as_text().as_ref(),
+    ) {
+        return None;
+    }
     let answered = history[user_index + 1..]
         .iter()
         .any(|message| matches!(message.role, uni::MessageRole::Assistant | uni::MessageRole::Tool));
@@ -110,6 +115,24 @@ mod tests {
 
     fn few_shot(text: &str) -> String {
         format!("{FEW_SHOT_SECTION_HEADER}\n{text}")
+    }
+
+    #[test]
+    fn internal_continuations_reuse_the_original_few_shot_prefix() {
+        let mut history = vec![uni::Message::user("edit README".into())];
+        persist_turn_few_shot_context(&mut history, Some(few_shot("original example")));
+        history.push(uni::Message::assistant("working".into()));
+        let prefix = history.clone();
+        let continuation = crate::agent::runloop::unified::turn::session_loop::VERIFICATION_AUTO_RECOVERY_PREFIX;
+        for _ in 0..3 {
+            history.push(uni::Message::user(format!("{continuation} verify remaining work")));
+            persist_turn_few_shot_context(&mut history, Some(few_shot("unwanted recovery example")));
+        }
+        assert_eq!(&history[..prefix.len()], prefix.as_slice());
+        assert_eq!(history.iter().filter(|message| is_few_shot_context_message(message)).count(), 1);
+        history.push(uni::Message::user("fresh user goal".into()));
+        persist_turn_few_shot_context(&mut history, Some(few_shot("fresh example")));
+        assert_eq!(history.iter().filter(|message| is_few_shot_context_message(message)).count(), 2);
     }
 
     #[test]

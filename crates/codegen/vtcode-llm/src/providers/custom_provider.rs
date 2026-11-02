@@ -93,7 +93,14 @@ impl CustomProviderBackendRouter {
             custom_provider_auth.clone(),
             Some(supported_models.clone()),
         )
-        .with_api_format_override(Some(CustomProviderApiFormat::OpenAIResponses));
+        .with_api_format_override(Some(CustomProviderApiFormat::OpenAIResponses))
+        .with_prompt_cache_options_models(
+            supported_models
+                .iter()
+                .filter(|model| custom_config.resolved_profile(model).supports_prompt_cache_options == Some(true))
+                .cloned()
+                .collect(),
+        );
         let anthropic = AnthropicProvider::from_config(
             api_key,
             Some(default_model.clone()),
@@ -198,7 +205,7 @@ impl LLMProvider for CustomProviderBackendRouter {
             frequency_penalty: profile.frequency_penalty,
             max_tokens: profile.max_tokens,
             reasoning_effort: profile.reasoning_effort,
-            suppresses_sampling_with_reasoning: profile.api_format == Some(CustomProviderApiFormat::AnthropicMessages),
+            suppresses_sampling: profile.api_format == Some(CustomProviderApiFormat::AnthropicMessages),
             profile_aware: true,
         }
     }
@@ -225,6 +232,11 @@ impl LLMProvider for CustomProviderBackendRouter {
             profile.supports_structured_output,
             self.backend_for_model(model).supports_structured_output(resolved),
         )
+    }
+
+    fn requested_prompt_cache_ttl(&self, model: &str) -> Option<vtcode_config::core::prompt_cache::PromptCacheTtl> {
+        self.backend_for_model(model)
+            .requested_prompt_cache_ttl(self.resolved_model(model))
     }
 
     fn supports_context_caching(&self, model: &str) -> bool {
@@ -479,7 +491,7 @@ mod tests {
                 frequency_penalty: None,
                 max_tokens: None,
                 reasoning_effort: Some(ReasoningEffortLevel::Low),
-                suppresses_sampling_with_reasoning: false,
+                suppresses_sampling: false,
                 profile_aware: true,
             }
         );
@@ -495,27 +507,29 @@ mod tests {
     fn sampling_overrides_suppression_matrix_matches_native_semantics() {
         let profile_openai = SamplingOverrides { profile_aware: true, ..Default::default() };
         let profile_anthropic = SamplingOverrides {
-            suppresses_sampling_with_reasoning: true,
+            suppresses_sampling: true,
             profile_aware: true,
             ..Default::default()
         };
         let builtin_default = SamplingOverrides::default();
 
         // Custom openai-shaped profile keeps pinned values during reasoning.
-        assert!(!profile_openai.suppresses_sampling(false, true));
+        assert!(!profile_openai.drops_sampling_params(false, true));
+        assert!(!profile_openai.drops_sampling_params(false, false));
 
-        // Custom anthropic-messages profile drops them.
-        assert!(profile_anthropic.suppresses_sampling(false, true));
-        assert!(!profile_anthropic.suppresses_sampling(false, false));
+        // Custom anthropic-messages profiles drop them whether or not
+        // reasoning is active: API version 2026-10-21 rejects sampling on
+        // every request.
+        assert!(profile_anthropic.drops_sampling_params(false, true));
+        assert!(profile_anthropic.drops_sampling_params(false, false));
+        assert!(profile_anthropic.drops_sampling_params(true, false));
 
-        // Built-in Anthropic/MiniMax shape suppresses only via native match;
-        // built-in OpenAI shape never does through overrides alone.
-        assert!(builtin_default.suppresses_sampling(true, true));
-        assert!(!builtin_default.suppresses_sampling(true, false));
-        assert!(!builtin_default.suppresses_sampling(false, true));
-
-        // Level "none"/"unknown" is not active reasoning anywhere.
-        assert!(!profile_anthropic.suppresses_sampling(false, false));
+        // Built-in Anthropic/MiniMax shape suppresses only via native match,
+        // unconditionally; built-in OpenAI shape never does through overrides.
+        assert!(builtin_default.drops_sampling_params(true, true));
+        assert!(builtin_default.drops_sampling_params(true, false));
+        assert!(!builtin_default.drops_sampling_params(false, true));
+        assert!(!builtin_default.drops_sampling_params(false, false));
     }
 
     #[test]
@@ -724,6 +738,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: Some(true),
             api_key_env: "ANTHROPIC_CUSTOM_API_KEY".to_string(),
             auth: None,

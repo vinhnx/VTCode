@@ -154,12 +154,20 @@ itself remains loopback-only. The transport follows the
 [MCP transport specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports) and the OpenAI
 [remote MCP contract](https://developers.openai.com/api/docs/mcp).
 
-Only these tools are advertised:
+By default, only these tools are advertised:
 
 ```text
 search({ query }) → { results: [{ id, title, url }] }
 fetch({ id }) → { id, title, text, url, metadata? }
 ```
+
+An additional `--mcp --companion` startup opt-in exposes coding tasks through a binary-owned exec backend. It
+preserves these read tools and their authentication policy; see [VT Code Companion](vtcode-companion.md) for the
+task contract and setup.
+
+Local plugins use `vtcode --workspace /absolute/path --quiet webmcp stdio --companion`.
+This reuses the MCP handler over stdin/stdout without an HTTP listener or OAuth configuration.
+The binary checks the same workspace trust and task policy, and cancels owned tasks on EOF.
 
 Both tools are annotated `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, and `openWorldHint=false`.
 Results are bounded by 20 files returned, 256 files scanned, and 16 MiB of UTF-8 content scanned by default. Search
@@ -244,9 +252,12 @@ with a bounded timeout and output cap. The bridge does not terminate TLS or bind
 loopback listener. Direct non-loopback binding is rejected.
 
 The slash command `/webmcp` reports the command family and security boundary inside an active session.
-`/webmcp pair <origin>` starts an authenticated bridge owned by that interactive TUI session, prints its WebSocket URL,
+`/webmcp connect <origin>` starts an authenticated bridge owned by that interactive TUI session, prints its WebSocket URL,
 one-time pairing code, and browser next-step instruction, then routes `turn.request` prompts into the existing
-interaction loop. The browser pastes the URL and code into **Settings → Connect or re-pair a VT Code bridge**. The
+interaction loop. `/webmcp pair` remains an alias. VT Code Desktop exposes the same bridge from Settings → WebMCP and
+from its composer slash command; the desktop service attaches the bridge to its selected runtime session, publishes
+the same canonical `VersionedThreadEvent` stream to desktop and browser clients, and uses the same CLI origin list.
+The browser pastes the URL and code into **Settings → Connect or re-pair a VT Code bridge**. The
 browser still cannot authorize writes; normal VT Code terminal permissions and tool policy remain authoritative. If the
 bridge is already running, the pair command prints its current endpoint, one-time code, and expiry for the active
 pairing origin. Pairing another configured origin issues a new one-time code without revoking existing sessions. Use

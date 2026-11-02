@@ -86,20 +86,20 @@ if [[ "$RUN_MSRV" == true ]]; then
 	echo -e "${BLUE}Current Rust:${NC} $RUST_VERSION"
 
 	# Check MSRV in Cargo.toml files
-	echo -e "${BLUE}Expected MSRV:${NC} 1.98.1 (Rust 2024 Edition)"
+	echo -e "${BLUE}Expected MSRV:${NC} 1.99.1 (Rust 2024 Edition)"
 	echo ""
 
 	# Verify all crates have rust-version set
 	MSRV_CHECK_PASSED=true
 
-	for cargo_toml in $(find . -name "Cargo.toml" -not -path "./target/*"); do
+	while IFS= read -r cargo_toml; do
 		if grep -q 'edition = "2024"' "$cargo_toml"; then
 			if ! grep -q 'rust-version' "$cargo_toml"; then
 				echo -e "${RED}✗ Missing rust-version in $cargo_toml${NC}"
 				MSRV_CHECK_PASSED=false
 			fi
 		fi
-	done
+	done < <(find . -name "Cargo.toml" -not -path "./target/*" -not -path "./.worktrees/*" -not -path "./.vtcode/*" -not -path "./patches/*" -not -path "./fuzz/*" -not -path "./extensions/*")
 
 	if [[ "$MSRV_CHECK_PASSED" == true ]]; then
 		echo -e "${GREEN}✓ All crates have rust-version specified${NC}"
@@ -127,10 +127,9 @@ if [[ "$RUN_MSRV" == true ]]; then
 		if [[ -n "$ver" ]]; then
 			check_pin "$cargo_toml" "$ver"
 		fi
-	done < <(find . -name 'Cargo.toml' -not -path './target/*' -not -path './.worktrees/*' -not -path './patches/*' -not -path './fuzz/*' -not -path './extensions/*')
+	done < <(find . -name 'Cargo.toml' -not -path './target/*' -not -path './.worktrees/*' -not -path './.vtcode/*' -not -path './patches/*' -not -path './fuzz/*' -not -path './extensions/*')
 	check_pin 'clippy.toml' "$(grep -E '^msrv[[:space:]]*=' clippy.toml | sed 's/.*"\([^"]*\)".*/\1/')"
 	check_pin 'Dockerfile.build' "$(grep -E '^FROM rust:' Dockerfile.build | sed 's/.*rust:\([^-]*\).*/\1/')"
-	check_pin '.github/workflows/ci.yml (MSRV job)' "$(grep -A18 'MSRV Check' .github/workflows/ci.yml | grep -o 'toolchain: "[^"]*"' | head -n 1 | sed 's/.*"\([^"]*\)".*/\1/')"
 	if [[ "$PINS_CONSISTENT" == true ]]; then
 		echo -e "${GREEN}✓ All toolchain pins agree on $PINNED${NC}"
 	else

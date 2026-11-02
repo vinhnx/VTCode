@@ -1,34 +1,17 @@
 use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::reasoning_preset;
 use crate::config::constants::models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 
 fn merge_reasoning_presets() -> Vec<ReasoningEffortPreset> {
     vec![
-        ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Minimal,
-            description: "Minimal reasoning depth".to_string(),
-        },
-        ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Low,
-            description: "Fast, less thinking".to_string(),
-        },
-        ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Medium,
-            description: "Balanced thinking".to_string(),
-        },
-        ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::High,
-            description: "Deep thinking".to_string(),
-        },
-        ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::XHigh,
-            description: "Extra-high reasoning depth".to_string(),
-        },
-        ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Max,
-            description: "Maximum reasoning depth".to_string(),
-        },
+        reasoning_preset(ReasoningEffortLevel::Minimal, "Minimal reasoning depth"),
+        reasoning_preset(ReasoningEffortLevel::Low, "Fast, less thinking"),
+        reasoning_preset(ReasoningEffortLevel::Medium, "Balanced thinking"),
+        reasoning_preset(ReasoningEffortLevel::High, "Deep thinking"),
+        reasoning_preset(ReasoningEffortLevel::XHigh, "Extra-high reasoning depth"),
+        reasoning_preset(ReasoningEffortLevel::Max, "Maximum reasoning depth"),
     ]
 }
 
@@ -100,8 +83,8 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
         ),
         (
             models::merge_gateway::DEEPSEEK_FLASH,
-            "DeepSeek V4.1 Flash (Merge Gateway)",
-            "DeepSeek V4.1 Flash through Merge Gateway",
+            "DeepSeek V4.1 Flash 1017 (Merge Gateway)",
+            "DeepSeek V4.1 Flash 1017 through Merge Gateway",
             1_000_000,
             false,
         ),
@@ -127,9 +110,23 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
+            models::merge_gateway::MINIMAX_M3_1_FLASH,
+            "MiniMax M3.1 Flash (Merge Gateway)",
+            "MiniMax M3.1 Flash through Merge Gateway",
+            1_000_000,
+            false,
+        ),
+        (
             models::merge_gateway::MOONSHOT_KIMI_K3,
             "Kimi K3 (Merge Gateway)",
             "Moonshot Kimi K3 through Merge Gateway",
+            1_000_000,
+            false,
+        ),
+        (
+            models::merge_gateway::MOONSHOT_KIMI_K3_1_PRO,
+            "Kimi K3.1 Pro (Merge Gateway)",
+            "Moonshot Kimi K3.1 Pro through Merge Gateway",
             1_000_000,
             false,
         ),
@@ -193,6 +190,13 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             models::merge_gateway::OPENAI_GPT_6_1_SOL,
             "GPT-6.1 Sol (Merge Gateway)",
             "OpenAI GPT-6.1 Sol through Merge Gateway",
+            1_050_000,
+            false,
+        ),
+        (
+            models::merge_gateway::OPENAI_GPT_6_1_TERRA,
+            "GPT-6.1 Terra (Merge Gateway)",
+            "OpenAI GPT-6.1 Terra through Merge Gateway",
             1_050_000,
             false,
         ),

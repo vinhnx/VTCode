@@ -261,8 +261,7 @@ impl ExecPolicyManager {
     /// Evaluate a command against the full policy stack.
     pub async fn evaluate(&self, command: &[String]) -> PolicyEvaluation {
         let policy = self.policy.read().await;
-        let commands = [command.to_vec()];
-        policy.check_multiple(commands.iter(), &|cmd| self.heuristics_decision(cmd))
+        policy.check_multiple(std::iter::once(command), &|cmd| self.heuristics_decision(cmd))
     }
 
     /// Apply heuristics to determine decision for unknown commands.
@@ -374,6 +373,38 @@ pub async fn shared_exec_policy_manager_with_rules(workspace_root: &Path) -> Res
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn invalid_reload_preserves_active_policy() {
+        let dir = tempdir().unwrap();
+        let manager = ExecPolicyManager::with_defaults(dir.path().to_path_buf());
+        let active = dir.path().join("active.rules");
+        let valid = dir.path().join("valid.rules");
+        let invalid = dir.path().join("invalid.rules");
+        std::fs::write(&active, "forbidden: git\nallow: custom").unwrap();
+        std::fs::write(&valid, "allow: git\nforbidden: custom").unwrap();
+        std::fs::write(&invalid, "allow: echo\nallow: ").unwrap();
+        manager.load_policy(&active).await.unwrap();
+        let before = manager.policy.read().await.rules().to_vec();
+        assert!(manager.load_policy(&invalid).await.is_err());
+        assert_eq!(manager.policy.read().await.rules(), before);
+        assert!(manager.load_policy_layers(&[valid, invalid]).await.is_err());
+        assert_eq!(manager.policy.read().await.rules(), before);
+        assert!(manager.check_approval(&["git".into()]).await.is_forbidden());
+        assert!(manager.check_approval(&["custom".into()]).await.can_proceed());
+    }
+
+    #[tokio::test]
+    async fn empty_trusted_amendment_cannot_bypass_policy() {
+        let dir = tempdir().unwrap();
+        let manager = ExecPolicyManager::with_defaults(dir.path().to_path_buf());
+        let amendment = serde_json::from_str(r#"{"pattern":[]}"#).unwrap();
+        manager.add_trusted_pattern(amendment).await;
+        manager.add_prefix_rule(&["blocked".into()], Decision::Forbidden).await.unwrap();
+        assert!(manager.check_approval(&[]).await.requires_approval());
+        assert!(manager.check_approval(&["unknown".into()]).await.requires_approval());
+        assert!(manager.check_approval(&["blocked".into()]).await.is_forbidden());
+    }
 
     #[tokio::test]
     async fn test_policy_manager_basic() {

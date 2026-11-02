@@ -7,6 +7,7 @@ use crate::loader::manager::ConfigManager;
 
 /// Builder for creating a [`ConfigManager`] with custom overrides.
 #[derive(Debug, Clone, Default)]
+#[must_use = "build the configuration before discarding the builder"]
 pub struct ConfigBuilder {
     workspace: Option<PathBuf>,
     config_file: Option<PathBuf>,

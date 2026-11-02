@@ -1,0 +1,855 @@
+use crate::core::advisor::AdvisorConfig;
+use serde::{Deserialize, Serialize};
+use vtcode_commons::reasoning::ReasoningEffortLevel;
+
+/// Controls how thinking content is returned in Anthropic API responses.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThinkingDisplayMode {
+    /// Thinking blocks contain summarized thinking text (default on Claude 4 models).
+    Summarized,
+    /// Thinking blocks are returned with an empty `thinking` field (default on Claude Opus 4.7).
+    Omitted,
+    /// Only the short progress updates written between tool calls come back as
+    /// text; reasoning stays hidden (Claude Sonnet 5.5, Claude Opus 5.5,
+    /// Claude Fable 5.x). Sent with the `thinking-display-updates-2026-08-18`
+    /// beta.
+    Updates,
+    /// Catch-all for unknown display modes added by the Anthropic API.
+    #[serde(other)]
+    Unknown,
+}
+
+impl ThinkingDisplayMode {
+    /// Returns the string representation for the API wire format.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Summarized => "summarized",
+            Self::Omitted => "omitted",
+            Self::Updates => "updates",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// Native OpenAI service tier selection.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenAIServiceTier {
+    Flex,
+    Priority,
+    Ultrafast,
+}
+
+impl OpenAIServiceTier {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Flex => "flex",
+            Self::Priority => "priority",
+            Self::Ultrafast => "ultrafast",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("flex") {
+            Some(Self::Flex)
+        } else if normalized.eq_ignore_ascii_case("priority") {
+            Some(Self::Priority)
+        } else if normalized.eq_ignore_ascii_case("ultrafast") {
+            Some(Self::Ultrafast)
+        } else {
+            None
+        }
+    }
+}
+
+/// How VT Code should provision OpenAI hosted shell environments.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenAIHostedShellEnvironment {
+    #[default]
+    ContainerAuto,
+    ContainerReference,
+}
+
+impl OpenAIHostedShellEnvironment {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ContainerAuto => "container_auto",
+            Self::ContainerReference => "container_reference",
+        }
+    }
+}
+
+impl OpenAIHostedShellEnvironment {
+    const fn uses_container_reference(self) -> bool {
+        matches!(self, Self::ContainerReference)
+    }
+}
+
+/// Hosted shell network access policy.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenAIHostedShellNetworkPolicyType {
+    #[default]
+    Disabled,
+    Allowlist,
+}
+
+impl OpenAIHostedShellNetworkPolicyType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Allowlist => "allowlist",
+        }
+    }
+}
+
+/// Per-domain secret injected by the OpenAI hosted shell runtime.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenAIHostedShellDomainSecret {
+    pub domain: String,
+    pub name: String,
+    pub value: String,
+}
+
+impl OpenAIHostedShellDomainSecret {
+    fn validation_error(&self, index: usize) -> Option<String> {
+        let base = format!("provider.openai.hosted_shell.network_policy.domain_secrets[{index}]");
+
+        if self.domain.trim().is_empty() {
+            return Some(format!("`{base}.domain` must not be empty when set."));
+        }
+        if self.name.trim().is_empty() {
+            return Some(format!("`{base}.name` must not be empty when set."));
+        }
+        if self.value.trim().is_empty() {
+            return Some(format!("`{base}.value` must not be empty when set."));
+        }
+
+        None
+    }
+}
+
+/// Request-scoped network policy for OpenAI hosted shell environments.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+pub struct OpenAIHostedShellNetworkPolicy {
+    #[serde(rename = "type", default)]
+    pub policy_type: OpenAIHostedShellNetworkPolicyType,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub domain_secrets: Vec<OpenAIHostedShellDomainSecret>,
+}
+
+impl OpenAIHostedShellNetworkPolicy {
+    pub const fn is_allowlist(&self) -> bool {
+        matches!(self.policy_type, OpenAIHostedShellNetworkPolicyType::Allowlist)
+    }
+
+    fn first_invalid_message(&self) -> Option<String> {
+        match self.policy_type {
+            OpenAIHostedShellNetworkPolicyType::Disabled => {
+                if !self.allowed_domains.is_empty() || !self.domain_secrets.is_empty() {
+                    return Some(
+                        "`provider.openai.hosted_shell.network_policy.allowed_domains` and `provider.openai.hosted_shell.network_policy.domain_secrets` require `provider.openai.hosted_shell.network_policy.type = \"allowlist\"`."
+                            .to_string(),
+                    );
+                }
+            }
+            OpenAIHostedShellNetworkPolicyType::Allowlist => {
+                if let Some(index) = self.allowed_domains.iter().position(|value| value.trim().is_empty()) {
+                    return Some(format!(
+                        "`provider.openai.hosted_shell.network_policy.allowed_domains[{index}]` must not be empty when set."
+                    ));
+                }
+
+                if self.allowed_domains.is_empty() {
+                    return Some(
+                        "`provider.openai.hosted_shell.network_policy.allowed_domains` must include at least one domain when `provider.openai.hosted_shell.network_policy.type = \"allowlist\"`."
+                            .to_string(),
+                    );
+                }
+
+                for (index, secret) in self.domain_secrets.iter().enumerate() {
+                    if let Some(message) = secret.validation_error(index) {
+                        return Some(message);
+                    }
+
+                    let secret_domain = secret.domain.trim();
+                    if !self
+                        .allowed_domains
+                        .iter()
+                        .any(|domain| domain.trim().eq_ignore_ascii_case(secret_domain))
+                    {
+                        return Some(format!(
+                            "`provider.openai.hosted_shell.network_policy.domain_secrets[{index}].domain` must also appear in `provider.openai.hosted_shell.network_policy.allowed_domains`."
+                        ));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
+/// Reserved keyword values for hosted skill version selection.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenAIHostedSkillVersionKeyword {
+    #[default]
+    Latest,
+}
+
+/// Hosted skill version selector for OpenAI Responses hosted shell mounts.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum OpenAIHostedSkillVersion {
+    Latest(OpenAIHostedSkillVersionKeyword),
+    Number(u64),
+    String(String),
+}
+
+impl Default for OpenAIHostedSkillVersion {
+    fn default() -> Self {
+        Self::Latest(OpenAIHostedSkillVersionKeyword::Latest)
+    }
+}
+
+impl OpenAIHostedSkillVersion {
+    fn validation_error(&self, field_path: &str) -> Option<String> {
+        match self {
+            Self::String(value) if value.trim().is_empty() => {
+                Some(format!("`{field_path}` must not be empty when set."))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Hosted skill reference mounted into an OpenAI hosted shell environment.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OpenAIHostedSkill {
+    /// Reference to a pre-registered hosted skill.
+    SkillReference {
+        skill_id: String,
+        #[serde(default)]
+        version: OpenAIHostedSkillVersion,
+    },
+    /// Inline base64 zip bundle.
+    Inline {
+        bundle_b64: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sha256: Option<String>,
+    },
+}
+
+impl OpenAIHostedSkill {
+    fn validation_error(&self, index: usize) -> Option<String> {
+        match self {
+            Self::SkillReference { skill_id, version } => {
+                let skill_id_path = format!("provider.openai.hosted_shell.skills[{index}].skill_id");
+                if skill_id.trim().is_empty() {
+                    return Some(format!("`{skill_id_path}` must not be empty when `type = \"skill_reference\"`."));
+                }
+
+                let version_path = format!("provider.openai.hosted_shell.skills[{index}].version");
+                version.validation_error(&version_path)
+            }
+            Self::Inline { bundle_b64, .. } => {
+                let bundle_path = format!("provider.openai.hosted_shell.skills[{index}].bundle_b64");
+                if bundle_b64.trim().is_empty() {
+                    return Some(format!("`{bundle_path}` must not be empty when `type = \"inline\"`."));
+                }
+                None
+            }
+        }
+    }
+}
+
+/// OpenAI hosted shell configuration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+pub struct OpenAIHostedShellConfig {
+    /// Enable OpenAI hosted shell instead of VT Code's local shell tool.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Environment provisioning mode for hosted shell.
+    #[serde(default)]
+    pub environment: OpenAIHostedShellEnvironment,
+
+    /// Existing OpenAI container ID to reuse when `environment = "container_reference"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container_id: Option<String>,
+
+    /// File IDs to mount when using `container_auto`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_ids: Vec<String>,
+
+    /// Hosted skills to mount when using `container_auto`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<OpenAIHostedSkill>,
+
+    /// Request-scoped network policy for `container_auto` hosted shells.
+    #[serde(default)]
+    pub network_policy: OpenAIHostedShellNetworkPolicy,
+}
+
+impl OpenAIHostedShellConfig {
+    fn container_id_ref(&self) -> Option<&str> {
+        self.container_id.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    }
+
+    pub const fn uses_container_reference(&self) -> bool {
+        self.environment.uses_container_reference()
+    }
+
+    pub fn first_invalid_skill_message(&self) -> Option<String> {
+        if self.uses_container_reference() {
+            return None;
+        }
+
+        self.skills
+            .iter()
+            .enumerate()
+            .find_map(|(index, skill)| skill.validation_error(index))
+    }
+
+    fn has_valid_skill_mounts(&self) -> bool {
+        self.first_invalid_skill_message().is_none()
+    }
+
+    pub fn first_invalid_network_policy_message(&self) -> Option<String> {
+        if self.uses_container_reference() {
+            return None;
+        }
+
+        self.network_policy.first_invalid_message()
+    }
+
+    fn has_valid_network_policy(&self) -> bool {
+        self.first_invalid_network_policy_message().is_none()
+    }
+
+    pub fn has_valid_reference_target(&self) -> bool {
+        !self.uses_container_reference() || self.container_id_ref().is_some()
+    }
+
+    pub fn is_valid_for_runtime(&self) -> bool {
+        self.has_valid_reference_target() && self.has_valid_skill_mounts() && self.has_valid_network_policy()
+    }
+}
+
+/// OpenAI hosted tool search configuration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenAIToolSearchConfig {
+    /// Enable hosted tool search for OpenAI Responses-compatible models.
+    #[serde(default = "default_tool_search_enabled")]
+    pub enabled: bool,
+
+    /// Automatically defer loading of all tools except the core always-on set.
+    #[serde(default = "default_defer_by_default")]
+    pub defer_by_default: bool,
+
+    /// Tool names that should never be deferred (always available).
+    #[serde(default)]
+    pub always_available_tools: Vec<String>,
+}
+
+impl Default for OpenAIToolSearchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_tool_search_enabled(),
+            defer_by_default: default_defer_by_default(),
+            always_available_tools: Vec::new(),
+        }
+    }
+}
+
+/// Manual compaction defaults for the native OpenAI `/responses/compact` flow.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+pub struct OpenAIManualCompactionConfig {
+    /// Optional custom instructions appended to manual `/compact` requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+}
+
+/// OpenAI-specific provider configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct OpenAIConfig {
+    /// Enable persistent Responses API WebSocket generation and streaming on
+    /// native OpenAI and OpenAI-compatible Responses endpoints.
+    /// This is an opt-in path designed for long-running, tool-heavy workflows.
+    /// A persistent connection removes per-request HTTP handshake overhead, so
+    /// pair it with `service_tier = "ultrafast"` on `gpt-6-astra`/`gpt-6.1-sol`
+    /// for agentic tool-call bursts (Ultrafast docs strongly recommend WebSockets).
+    /// Streaming falls back to HTTP only before any output event is exposed.
+    #[serde(default)]
+    pub websocket_mode: bool,
+
+    /// Optional Responses API `store` flag.
+    /// Set to `false` to avoid server-side storage when using Responses-compatible models.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub responses_store: Option<bool>,
+
+    /// Optional Responses API `include` selectors.
+    /// Example: `["reasoning.encrypted_content"]` for encrypted reasoning continuity.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub responses_include: Vec<String>,
+
+    /// Optional native OpenAI `service_tier` request parameter.
+    /// Leave unset to inherit the Project-level default service tier.
+    /// Options: "flex", "priority", "ultrafast".
+    /// "ultrafast" is the fastest tier: GA for `gpt-6-astra` and `gpt-6.1-sol`,
+    /// preview-only for `gpt-5.6-sol` (contact your OpenAI account team). It costs more,
+    /// starts at low TPM limits (Astra 500k/1M/5M, 6.1-sol 1M/4M/40M), supports US/global
+    /// processing on Astra and US/EU/global on 6.1-sol, and pairs best with `websocket_mode = true`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<OpenAIServiceTier>,
+
+    /// Manual `/compact` defaults for the native OpenAI standalone compaction endpoint.
+    #[serde(default)]
+    pub manual_compaction: OpenAIManualCompactionConfig,
+
+    /// Optional hosted shell configuration for OpenAI native Responses models.
+    #[serde(default)]
+    pub hosted_shell: OpenAIHostedShellConfig,
+
+    /// Hosted tool search configuration for OpenAI Responses-compatible models.
+    #[serde(default)]
+    pub tool_search: OpenAIToolSearchConfig,
+}
+
+/// Anthropic-specific provider configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnthropicConfig {
+    /// Native Claude speed (standard or fast). Fast uses premium pricing; unsupported routes keep this preference dormant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<super::AnthropicSpeed>,
+
+    /// Enable adaptive or extended thinking for Anthropic models
+    /// When enabled, Claude uses internal reasoning before responding, providing
+    /// enhanced reasoning capabilities for complex tasks.
+    /// Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
+    /// Claude Opus 4.7 uses adaptive thinking instead of budgeted extended thinking.
+    /// Note: Extended thinking is now auto-enabled by default (31,999 tokens).
+    /// Set MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models.
+    /// See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking>
+    #[serde(default = "default_extended_thinking_enabled")]
+    pub extended_thinking_enabled: bool,
+
+    /// Beta header for interleaved thinking feature
+    #[serde(default = "default_interleaved_thinking_beta")]
+    pub interleaved_thinking_beta: String,
+
+    /// Budget tokens for extended thinking (minimum: 1024, default: 31999)
+    /// On 64K output models (Opus 4.5, Sonnet 4.5, Haiku 4.5): default 31,999, max 63,999
+    /// On 32K output models (Opus 4): max 31,999
+    /// Claude Opus 4.7 ignores this setting and uses adaptive thinking instead.
+    /// Use MAX_THINKING_TOKENS environment variable to override.
+    #[serde(default = "default_interleaved_thinking_budget_tokens")]
+    pub interleaved_thinking_budget_tokens: u32,
+
+    /// Type value for enabling interleaved thinking
+    #[serde(default = "default_interleaved_thinking_type")]
+    pub interleaved_thinking_type_enabled: String,
+
+    /// Tool search configuration for dynamic tool discovery (advanced-tool-use beta)
+    #[serde(default)]
+    pub tool_search: ToolSearchConfig,
+
+    /// Native Anthropic memory tool configuration.
+    #[serde(default)]
+    pub memory: AnthropicMemoryConfig,
+
+    /// Effort level for adaptive thinking/token usage (low, medium, high, xhigh, max)
+    /// Controls how many tokens Claude uses when responding, trading off between
+    /// response thoroughness and token efficiency.
+    /// Unset by default: each model then uses its own default effort (for example
+    /// `medium` on Claude Opus 5.5, `high` on Claude Opus 5). An explicit
+    /// `agent.reasoning_effort` or `/effort` selection takes precedence; a value the
+    /// active model does not support falls back to that model's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<ReasoningEffortLevel>,
+
+    /// Optional Anthropic task budget token total for Claude Fable 5/5.1, Opus 5,
+    /// and Opus 5.5 (not sent for other models).
+    /// When set, VT Code sends `output_config.task_budget = { type = "tokens", total = N }`
+    /// and the required beta header.
+    /// Anthropic currently requires a minimum of 20,000 tokens.
+    #[serde(default)]
+    pub task_budget_tokens: Option<u32>,
+
+    /// Beta header for Anthropic task budgets.
+    #[serde(default = "default_task_budget_beta")]
+    pub task_budget_beta: String,
+
+    /// Controls how thinking content is returned in API responses.
+    ///   - "summarized": Thinking blocks contain summarized text (default on Opus 4.6 and earlier).
+    ///   - "omitted": Thinking blocks have an empty `thinking` field (default on Opus 4.7+).
+    ///   - "updates": Only the progress updates between tool calls are returned as text
+    ///     (Claude Sonnet 5.5, Claude Opus 5.5 and Claude Fable 5.x; the VT Code
+    ///     default on Claude Sonnet 5.5 and Claude Opus 5.5).
+    ///     Ignored on models without progress updates.
+    ///
+    /// When set, this overrides the model-specific default.
+    /// See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#controlling-thinking-display>
+    #[serde(default)]
+    pub thinking_display: Option<ThinkingDisplayMode>,
+
+    /// Enable token counting via the count_tokens endpoint
+    /// When enabled, the agent can estimate input token counts before making API calls
+    /// Useful for proactive management of rate limits and costs
+    #[serde(default = "default_count_tokens_enabled")]
+    pub count_tokens_enabled: bool,
+
+    /// Claude Advisor server-side tool configuration. The advisor pairs a faster
+    /// executor model with a higher-intelligence advisor model for strategic
+    /// guidance mid-generation. Only honored for Anthropic models and providers.
+    #[serde(default)]
+    pub advisor: AdvisorConfig,
+
+    /// Server-side refusal fallbacks (`fallbacks` request parameter).
+    ///   - "default": let Anthropic pick the recommended fallback model when the
+    ///     primary model declines on policy grounds (the VT Code default).
+    ///   - "off": never send `fallbacks`.
+    ///   - a list of 1-3 `{ model, max_tokens }` entries tried in order.
+    ///
+    /// Only sent to the first-party Claude API (`api.anthropic.com`) for models
+    /// whose capability profile supports server-side fallbacks (Claude Opus 5,
+    /// Opus 5.5, Fable 5 and Fable 5.1); other models and endpoints send nothing.
+    #[serde(default)]
+    pub fallbacks: AnthropicFallbacks,
+}
+
+/// Keyword forms of [`AnthropicFallbacks`].
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AnthropicFallbackMode {
+    /// Use Anthropic's recommended fallback chain (`fallbacks: "default"`).
+    #[default]
+    Default,
+    /// Do not request server-side fallbacks.
+    Off,
+}
+
+/// One explicit server-side fallback entry.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct AnthropicFallbackTarget {
+    /// Fallback model id, for example `claude-opus-4-8`.
+    pub model: String,
+    /// Optional `max_tokens` override for this fallback attempt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+}
+
+/// Server-side refusal fallback selection: `"default"`, `"off"`, or an explicit
+/// list of fallback models.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum AnthropicFallbacks {
+    Mode(AnthropicFallbackMode),
+    Models(Vec<AnthropicFallbackTarget>),
+}
+
+impl Default for AnthropicFallbacks {
+    fn default() -> Self {
+        Self::Mode(AnthropicFallbackMode::Default)
+    }
+}
+
+impl AnthropicFallbacks {
+    /// Maximum number of explicit fallback entries the API accepts.
+    pub const MAX_MODELS: usize = 3;
+
+    /// Returns a validation message when an explicit list is empty, too long,
+    /// has a blank model, or repeats a model.
+    pub fn validation_error(&self, field_path: &str) -> Option<String> {
+        let Self::Models(models) = self else {
+            return None;
+        };
+        Self::entries_validation_error(
+            field_path,
+            models.iter().map(|target| (target.model.as_str(), target.max_tokens)),
+        )
+    }
+
+    /// Validates explicit fallback entries given as `(model, max_tokens)`
+    /// pairs, applying the same rules as the list form of
+    /// `provider.anthropic.fallbacks`. Shared with request-level fallback
+    /// lists so both paths reject the same payloads.
+    pub fn entries_validation_error<'a>(
+        field_path: &str,
+        entries: impl ExactSizeIterator<Item = (&'a str, Option<u32>)>,
+    ) -> Option<String> {
+        let len = entries.len();
+        if len == 0 || len > Self::MAX_MODELS {
+            return Some(format!(
+                "`{field_path}` must list between 1 and {} fallback models, or be \"default\" or \"off\".",
+                Self::MAX_MODELS
+            ));
+        }
+        let mut seen = std::collections::HashSet::with_capacity(len);
+        for (model, max_tokens) in entries {
+            let model = model.trim();
+            if model.is_empty() {
+                return Some(format!("`{field_path}` entries must set a non-empty `model`."));
+            }
+            if !seen.insert(model) {
+                return Some(format!("`{field_path}` lists `{model}` more than once; entries must be distinct."));
+            }
+            if max_tokens == Some(0) {
+                return Some(format!("`{field_path}` entry `{model}` must use a positive `max_tokens`."));
+            }
+        }
+        None
+    }
+}
+
+impl Default for AnthropicConfig {
+    fn default() -> Self {
+        Self {
+            speed: None,
+            extended_thinking_enabled: default_extended_thinking_enabled(),
+            interleaved_thinking_beta: default_interleaved_thinking_beta(),
+            interleaved_thinking_budget_tokens: default_interleaved_thinking_budget_tokens(),
+            interleaved_thinking_type_enabled: default_interleaved_thinking_type(),
+            tool_search: ToolSearchConfig::default(),
+            memory: AnthropicMemoryConfig::default(),
+            effort: None,
+            task_budget_tokens: None,
+            task_budget_beta: default_task_budget_beta(),
+            thinking_display: None,
+            count_tokens_enabled: default_count_tokens_enabled(),
+            advisor: AdvisorConfig::default(),
+            fallbacks: AnthropicFallbacks::default(),
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct AnthropicMemoryConfig {
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+/// OpenRouter app attribution (<https://openrouter.ai/docs/app-attribution>).
+///
+/// Opt-in only. When `enabled` is false no attribution headers are sent.
+/// When true, VT Code sends `HTTP-Referer`, `X-OpenRouter-Title`, and
+/// `X-OpenRouter-Categories: cli-agent`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenRouterAttributionConfig {
+    /// Master opt-in switch. Default false for privacy.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Override app URL used as `HTTP-Referer`. Defaults to the VT Code repo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub referer: Option<String>,
+
+    /// Override display name used as `X-OpenRouter-Title`. Defaults to `VT Code`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+impl OpenRouterAttributionConfig {
+    /// Default referer sent when attribution is enabled and no override is set.
+    pub const DEFAULT_REFERER: &'static str = "https://github.com/vinhnx/vtcode";
+    /// Default title sent when attribution is enabled and no override is set.
+    pub const DEFAULT_TITLE: &'static str = "VT Code";
+    /// Fixed marketplace category. `cli-agent` is the allowlisted terminal-agent category.
+    pub const CATEGORIES: &'static str = "cli-agent";
+
+    /// Resolve whether attribution headers should be sent.
+    ///
+    /// The environment layer wins when set to a recognized value
+    /// (`ConfigLayerStack` env > file); unrecognized or unset values fall
+    /// through to the file value. Delegates to the canonical tri-state
+    /// parser — do not fork the accepted-value set.
+    pub fn is_enabled(&self) -> bool {
+        vtcode_commons::utils::parse_env_bool(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION, self.enabled)
+    }
+
+    /// Header-safe override check: non-empty, bounded, no CTLs (reqwest
+    /// `HeaderValue` rejects `\r`/`\n`/control bytes; fall back to defaults).
+    fn header_safe(value: &str) -> bool {
+        !value.is_empty() && value.len() <= 512 && !value.bytes().any(|b| b < 0x20 || b == 0x7F)
+    }
+
+    /// Resolve effective referer, falling back to the default. Empty or
+    /// header-unsafe overrides are ignored.
+    pub fn resolved_referer(&self) -> &str {
+        self.referer
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| Self::header_safe(s))
+            .unwrap_or(Self::DEFAULT_REFERER)
+    }
+
+    /// Resolve effective title, falling back to the default. Empty or
+    /// header-unsafe overrides are ignored.
+    pub fn resolved_title(&self) -> &str {
+        self.title
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| Self::header_safe(s))
+            .unwrap_or(Self::DEFAULT_TITLE)
+    }
+}
+
+/// OpenRouter-specific provider configuration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
+pub struct OpenRouterConfig {
+    /// App attribution opt-in (`[provider.openrouter.attribution]`).
+    #[serde(default)]
+    pub attribution: OpenRouterAttributionConfig,
+}
+
+#[inline]
+fn default_count_tokens_enabled() -> bool {
+    false
+}
+
+/// Tool search algorithm for Anthropic's advanced-tool-use beta
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolSearchAlgorithm {
+    /// Regex-based search using Python re.search() syntax
+    #[default]
+    Regex,
+    /// BM25-based natural language search
+    Bm25,
+    /// Forward-compatible catch-all for unknown algorithm values
+    #[serde(other)]
+    Unknown,
+}
+
+impl ToolSearchAlgorithm {
+    /// Returns the string representation of this algorithm variant.
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Regex => "regex",
+            Self::Bm25 => "bm25",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for ToolSearchAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Configuration for Anthropic's tool search feature (advanced-tool-use beta)
+/// Enables dynamic tool discovery for large tool catalogs (up to 10k tools)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ToolSearchConfig {
+    /// Enable tool search feature (requires advanced-tool-use-2025-11-20 beta)
+    #[serde(default = "default_tool_search_enabled")]
+    pub enabled: bool,
+
+    /// Search algorithm: "regex" (Python regex patterns) or "bm25" (natural language)
+    #[serde(default = "default_tool_search_algorithm")]
+    pub algorithm: ToolSearchAlgorithm,
+
+    /// Automatically defer loading of all tools except core tools
+    #[serde(default = "default_defer_by_default")]
+    pub defer_by_default: bool,
+
+    /// Maximum number of tool search results to return
+    #[serde(default = "default_max_results")]
+    max_results: u32,
+
+    /// Tool names that should never be deferred (always available)
+    #[serde(default)]
+    pub always_available_tools: Vec<String>,
+}
+
+impl Default for ToolSearchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_tool_search_enabled(),
+            algorithm: default_tool_search_algorithm(),
+            defer_by_default: default_defer_by_default(),
+            max_results: default_max_results(),
+            always_available_tools: vec![],
+        }
+    }
+}
+
+#[inline]
+fn default_tool_search_enabled() -> bool {
+    true
+}
+
+#[inline]
+fn default_tool_search_algorithm() -> ToolSearchAlgorithm {
+    ToolSearchAlgorithm::Regex
+}
+
+#[inline]
+fn default_defer_by_default() -> bool {
+    true
+}
+
+#[inline]
+fn default_max_results() -> u32 {
+    5
+}
+
+#[inline]
+fn default_extended_thinking_enabled() -> bool {
+    true
+}
+
+#[inline]
+fn default_interleaved_thinking_beta() -> String {
+    "interleaved-thinking-2025-05-14".to_string()
+}
+
+#[inline]
+fn default_interleaved_thinking_budget_tokens() -> u32 {
+    31999
+}
+
+#[inline]
+fn default_interleaved_thinking_type() -> String {
+    "enabled".to_string()
+}
+
+#[inline]
+fn default_task_budget_beta() -> String {
+    "task-budgets-2026-03-13".to_string()
+}
+
+#[cfg(test)]
+mod tests;

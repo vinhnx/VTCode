@@ -154,7 +154,7 @@ pub enum WebFetchMode {
 /// search, so the provider enum is intentionally minimal. `Auto` defers to
 /// the DDG default and is the recommended choice.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum WebSearchProvider {
     /// Default; same as `Duckduckgo` for now (kept for back-compat).
@@ -162,18 +162,34 @@ pub enum WebSearchProvider {
     Auto,
     /// Keyless DuckDuckGo HTML scraping (`https://html.duckduckgo.com/html/`).
     Duckduckgo,
-    /// You.com Search API (`https://ydc-index.io/v1/search`). Requires a
-    /// `YDC_API_KEY` environment variable; the key is read at request time
-    /// and never logged. Opt-in only — the default provider stays
-    /// DuckDuckGo.
-    Youcom,
+}
+
+impl WebSearchProvider {
+    /// Return the canonical runtime backend identifier.
+    #[must_use]
+    pub const fn backend_id(self) -> &'static str {
+        match self {
+            Self::Auto | Self::Duckduckgo => "duckduckgo",
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for WebSearchProvider {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        match value.as_str() {
+            "auto" => Ok(Self::Auto),
+            "duckduckgo" => Ok(Self::Duckduckgo),
+            _ => Err(serde::de::Error::unknown_variant(&value, &["auto", "duckduckgo"])),
+        }
+    }
 }
 
 /// Web Search tool configuration.
 ///
 /// VT Code only uses the keyless DuckDuckGo HTML endpoint. The defaults
 /// below are tuned to be polite to that endpoint and to keep the agent
-/// responsive under low-quota conditions:
+/// responsive under constrained network conditions:
 /// - `cooldown_ms`: minimum gap between consecutive live requests on the
 ///   same tool instance (avoids bursty hammering that triggers the DDG
 ///   anti-bot challenge).
@@ -184,9 +200,9 @@ pub enum WebSearchProvider {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct WebSearchConfig {
-    /// Provider selection. Supported backends are the keyless DuckDuckGo
-    /// HTML endpoint (default) and the You.com Search API (opt-in, requires
-    /// `YDC_API_KEY`).
+    /// Provider selection. The built-in backend is the keyless DuckDuckGo
+    /// HTML endpoint; `auto` is retained as a compatibility alias.
+    /// Options: "auto", "duckduckgo".
     #[serde(default)]
     pub provider: WebSearchProvider,
 
@@ -210,7 +226,7 @@ pub struct WebSearchConfig {
     pub cache_ttl_secs: u64,
 
     /// Hard cap on outbound network requests per tool instance. Defaults
-    /// to 12 to stay well below DDG's soft session quotas.
+    /// to 12 as a conservative VTCode budget; this is not a DuckDuckGo quota.
     #[serde(default = "default_web_search_session_max_requests")]
     pub session_max_requests: u32,
 }
@@ -671,26 +687,19 @@ session_max_requests = 5
     }
 
     #[test]
-    fn web_search_youcom_provider_roundtrips() {
-        let json = serde_json::to_value(WebSearchProvider::Youcom).unwrap();
-        assert_eq!(json, serde_json::json!("youcom"));
-        let back: WebSearchProvider = serde_json::from_value(json).unwrap();
-        assert_eq!(back, WebSearchProvider::Youcom);
+    fn web_search_provider_backend_id_is_canonical() {
+        assert_eq!(WebSearchProvider::Auto.backend_id(), "duckduckgo");
+        assert_eq!(WebSearchProvider::Auto.backend_id(), WebSearchProvider::Duckduckgo.backend_id());
     }
 
     #[test]
-    fn web_search_youcom_provider_deserializes_from_toml() {
-        let config: ToolsConfig = toml::from_str(
-            r#"
-default_policy = "prompt"
-
-[web_search]
-provider = "youcom"
-"#,
-        )
-        .expect("tools config should parse");
-
-        assert_eq!(config.web_search.provider, WebSearchProvider::Youcom);
+    fn web_search_unsupported_provider_uses_generic_error() {
+        let error = serde_json::from_value::<WebSearchProvider>(serde_json::json!("unsupported-provider"))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown variant"));
+        assert!(error.contains("auto"));
+        assert!(error.contains("duckduckgo"));
     }
 
     #[test]

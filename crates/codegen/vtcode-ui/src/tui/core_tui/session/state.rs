@@ -641,23 +641,66 @@ impl Session {
         self.has_active_foreground_pty().then_some(ACTIVE_PTY_STATUS_TEXT)
     }
 
+    /// Semantic loading indicator derived from the status text and activity
+    /// state, without the animation policy. Animation-side gating belongs to
+    /// the appearance settings; loading classification must not depend on
+    /// accessibility settings. A blocked turn is quiescent and commandable,
+    /// so the persistent blocked label never looks like loading.
+    fn status_indicator_active(&self) -> bool {
+        self.activity_state.is_busy()
+            || (!matches!(self.activity_state, ActivityState::Blocked)
+                && status_requires_shimmer(self.animation_status_text()))
+    }
+
     pub(crate) fn has_status_spinner(&self) -> bool {
-        if self.activity_state.is_busy() {
-            return true;
-        }
-        // Do not let the persistent blocked label trigger the generic shimmer
-        // detector; a blocked turn is quiescent and commandable.
-        if matches!(self.activity_state, ActivityState::Blocked) {
-            return false;
-        }
-        if !self.appearance.should_animate_progress_status() {
-            return false;
-        }
-        status_requires_shimmer(self.animation_status_text())
+        self.appearance.should_animate_progress_status() && self.status_indicator_active()
     }
 
     pub(crate) fn is_shimmer_active(&self) -> bool {
         self.has_status_spinner() || self.thinking_spinner.is_active
+    }
+
+    /// Whether any canonical global loading observer is live: turn status
+    /// activity, thinking indicator, an animated transcript progress row, or
+    /// background work. Deliberately animation-independent — accessibility
+    /// policy only suppresses the animation frame, never the fact that work
+    /// is in flight. This is the shared clock the terminal title spinner and
+    /// the footer shimmer both follow; seeding a new animated surface here
+    /// keeps them from drifting.
+    pub(crate) fn loading_activity_active(&self) -> bool {
+        vtcode_commons::ui_protocol::LoadingActivity {
+            blocked: matches!(self.activity_state, ActivityState::Blocked),
+            turn: self.status_indicator_active(),
+            thinking: self.thinking_spinner.is_active,
+            progress: self.progress.is_animated(),
+            background: self.background_status_shimmer_active(),
+        }
+        .is_active()
+    }
+
+    /// Terminal-title attention signal: only real user attention (blocked
+    /// turn, approval/permission/input-required modal, or wizard) qualifies.
+    /// Ordinary overlays such as config pickers and setup modals stay out so
+    /// configuring the title never flashes "action required" at itself.
+    pub(crate) fn title_attention_required(&self) -> bool {
+        if matches!(self.activity_state, ActivityState::Blocked) {
+            return true;
+        }
+        if let Some(modal) = self.modal_state() {
+            // Typed HITL selections are authoritative; the title-wording
+            // needles below keep word-only legacy prompts working.
+            if modal.attention_required() {
+                return true;
+            }
+            let normalized_title = modal.title.trim().to_ascii_lowercase();
+            if normalized_title.contains("approval")
+                || normalized_title.contains("permission")
+                || normalized_title.contains("input required")
+            {
+                return true;
+            }
+        }
+        self.wizard_overlay().is_some()
     }
 
     /// Whether live background tasks must keep the loading shimmer animating.
@@ -789,437 +832,5 @@ impl Session {
         self.show_logs = !self.show_logs;
         self.invalidate_scroll_metrics();
         self.mark_dirty();
-    }
-
-    /// Show a simple modal dialog
-    pub(crate) fn show_modal(
-        &mut self,
-        title: String,
-        lines: Vec<String>,
-        secure_prompt: Option<super::super::types::SecurePromptConfig>,
-    ) {
-        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
-            title,
-            lines,
-            secure_prompt,
-            is_help_modal: false,
-        }));
-    }
-
-    /// Show a help modal using the ratatui-cheese Help widget.
-    ///
-    /// The help flag travels on the request so a queued help modal still
-    /// renders as help when it activates instead of clobbering the overlay
-    /// that is currently visible.
-    pub(crate) fn show_help_modal(&mut self) {
-        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
-            title: "Keyboard Shortcuts".to_string(),
-            lines: Vec::new(),
-            secure_prompt: None,
-            is_help_modal: true,
-        }));
-    }
-
-    pub(crate) fn show_overlay(&mut self, request: OverlayRequest) {
-        if self.has_active_overlay() {
-            self.overlay_queue.push_back(request);
-            self.mark_dirty();
-            return;
-        }
-        self.activate_overlay(request);
-    }
-
-    pub(crate) fn has_active_overlay(&self) -> bool {
-        self.active_overlay.is_some()
-    }
-
-    pub(crate) fn modal_state(&self) -> Option<&ModalState> {
-        self.active_overlay.as_ref().and_then(ActiveOverlay::as_modal)
-    }
-
-    pub(crate) fn modal_state_mut(&mut self) -> Option<&mut ModalState> {
-        self.active_overlay.as_mut().and_then(ActiveOverlay::as_modal_mut)
-    }
-
-    pub(crate) fn wizard_overlay(&self) -> Option<&WizardModalState> {
-        self.active_overlay.as_ref().and_then(ActiveOverlay::as_wizard)
-    }
-
-    pub(crate) fn wizard_overlay_mut(&mut self) -> Option<&mut WizardModalState> {
-        self.active_overlay.as_mut().and_then(ActiveOverlay::as_wizard_mut)
-    }
-
-    pub(crate) fn take_modal_state(&mut self) -> Option<ModalState> {
-        if !self
-            .active_overlay
-            .as_ref()
-            .is_some_and(|overlay| matches!(overlay, ActiveOverlay::Modal(_)))
-        {
-            return None;
-        }
-
-        match self.active_overlay.take() {
-            Some(ActiveOverlay::Modal(state)) => Some(*state),
-            Some(ActiveOverlay::Wizard(_)) | None => None,
-        }
-    }
-
-    fn activate_overlay(&mut self, request: OverlayRequest) {
-        match request {
-            OverlayRequest::Modal(request) => {
-                self.clear_last_overlay_list_cache();
-                self.activate_modal_overlay(request);
-            }
-            OverlayRequest::List(request) => self.activate_list_overlay(request),
-            OverlayRequest::Wizard(request) => {
-                self.clear_last_overlay_list_cache();
-                self.activate_wizard_overlay(request);
-            }
-        }
-    }
-
-    pub(crate) fn close_overlay(&mut self) {
-        let Some(state) = self.active_overlay.take() else {
-            return;
-        };
-
-        self.areas.clear_modal_areas();
-        self.modal_link_targets.clear();
-        self.cache_last_overlay_list_state(&state);
-        self.input_enabled = state.restore_input() && !self.activity_state.is_busy();
-        self.cursor_visible = state.restore_cursor() && !self.activity_state.is_busy();
-
-        if let Some(next_request) = self.overlay_queue.pop_front() {
-            self.activate_overlay(next_request);
-            return;
-        }
-
-        self.mark_dirty();
-    }
-
-    fn activate_modal_overlay(&mut self, request: ModalOverlayRequest) {
-        let state = ModalState {
-            title: request.title,
-            lines: request.lines,
-            footer_hint: None,
-            hotkeys: Vec::new(),
-            list: None,
-            search: None,
-            secure_prompt: request.secure_prompt,
-            is_help_modal: request.is_help_modal,
-            restore_input: true,
-            restore_cursor: true,
-            status: None,
-        };
-        if state.secure_prompt.is_none() {
-            self.input_enabled = false;
-        }
-        self.cursor_visible = false;
-        self.active_overlay = Some(ActiveOverlay::Modal(Box::new(state)));
-        self.mark_dirty();
-    }
-
-    fn activate_list_overlay(&mut self, request: ListOverlayRequest) {
-        let anchor_to_bottom = self.should_anchor_list_to_bottom(request.selected.as_ref());
-        let mut list_state = ModalListState::new(request.items, request.selected.clone());
-        let search_state = request.search.map(ModalSearchState::from);
-        if let Some(search) = &search_state {
-            list_state.apply_search_with_preference(&search.query, request.selected, search.fuzzy);
-        }
-        if anchor_to_bottom {
-            list_state.select_last();
-        }
-        self.clear_last_overlay_list_cache();
-        let state = ModalState {
-            title: request.title,
-            lines: request.lines,
-            footer_hint: request.footer_hint,
-            hotkeys: request.hotkeys,
-            list: Some(list_state),
-            search: search_state,
-            secure_prompt: None,
-            restore_input: true,
-            restore_cursor: true,
-            is_help_modal: false,
-            status: request.status,
-        };
-        self.input_enabled = false;
-        self.cursor_visible = false;
-        self.active_overlay = Some(ActiveOverlay::Modal(Box::new(state)));
-        self.mark_dirty();
-    }
-
-    fn cache_last_overlay_list_state(&mut self, overlay: &ActiveOverlay) {
-        if let ActiveOverlay::Modal(state) = overlay
-            && let Some(list) = state.list.as_ref()
-        {
-            self.last_overlay_list_selection = list.current_selection();
-            self.last_overlay_list_was_last = list.selected_is_last();
-            return;
-        }
-
-        self.last_overlay_list_selection = None;
-        self.last_overlay_list_was_last = false;
-    }
-
-    fn should_anchor_list_to_bottom(&self, preferred: Option<&InlineListSelection>) -> bool {
-        self.last_overlay_list_was_last && self.last_overlay_list_selection.as_ref() == preferred
-    }
-
-    fn clear_last_overlay_list_cache(&mut self) {
-        self.last_overlay_list_selection = None;
-        self.last_overlay_list_was_last = false;
-    }
-
-    fn activate_wizard_overlay(&mut self, request: WizardOverlayRequest) {
-        let wizard =
-            WizardModalState::new(request.title, request.steps, request.current_step, request.search, request.mode);
-        self.active_overlay = Some(ActiveOverlay::Wizard(Box::new(wizard)));
-        self.input_enabled = false;
-        self.cursor_visible = false;
-        self.mark_dirty();
-    }
-
-    /// Scroll operations
-    ///
-    /// Note: The scroll offset model is inverted for chat-style display:
-    /// offset=0 shows the bottom (newest content), offset=max shows the top.
-    /// Therefore "scroll up" (show older content) increases the offset, and
-    /// "scroll down" (show newer content) decreases it.
-    pub(crate) fn scroll_line_up(&mut self) {
-        self.mark_scrolling();
-        self.ensure_scroll_metrics();
-        let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager.scroll_down(1);
-        if self.scroll_manager.offset() != previous_offset {
-            self.user_scrolled = self.scroll_manager.offset() != 0;
-            self.visible_lines_cache = None;
-            self.sticky_prompt_target = None;
-            // Content moves down on screen; shift selection to match.
-            self.mouse_selection.adjust_for_scroll(1);
-        }
-    }
-
-    pub(crate) fn scroll_line_down(&mut self) {
-        self.mark_scrolling();
-        self.ensure_scroll_metrics();
-        let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager.scroll_up(1);
-        if self.scroll_manager.offset() != previous_offset {
-            self.user_scrolled = self.scroll_manager.offset() != 0;
-            self.visible_lines_cache = None;
-            self.sticky_prompt_target = None;
-            // Content moves up on screen; shift selection to match.
-            self.mouse_selection.adjust_for_scroll(-1);
-        }
-    }
-
-    pub(crate) fn scroll_page_up(&mut self) {
-        self.mark_scrolling();
-        self.ensure_scroll_metrics();
-        let previous_offset = self.scroll_manager.offset();
-        let page = self.viewport_height().max(1);
-        self.scroll_manager.scroll_down(page);
-        if self.scroll_manager.offset() != previous_offset {
-            let actual_delta = self.scroll_manager.offset() - previous_offset;
-            self.user_scrolled = self.scroll_manager.offset() != 0;
-            self.visible_lines_cache = None;
-            self.sticky_prompt_target = None;
-            self.mouse_selection.adjust_for_scroll(actual_delta as i32);
-        }
-    }
-
-    pub(crate) fn scroll_page_down(&mut self) {
-        self.mark_scrolling();
-        self.ensure_scroll_metrics();
-        let page = self.viewport_height().max(1);
-        let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager.scroll_up(page);
-        if self.scroll_manager.offset() != previous_offset {
-            let actual_delta = previous_offset - self.scroll_manager.offset();
-            self.user_scrolled = self.scroll_manager.offset() != 0;
-            self.visible_lines_cache = None;
-            self.sticky_prompt_target = None;
-            self.mouse_selection.adjust_for_scroll(-(actual_delta as i32));
-        }
-    }
-
-    pub(crate) fn viewport_height(&self) -> usize {
-        self.transcript_rows.max(1) as usize
-    }
-
-    /// Apply coalesced scroll from accumulated scroll events
-    /// This is more efficient than calling scroll_line_up/down multiple times
-    pub(crate) fn apply_coalesced_scroll(&mut self, line_delta: i32, page_delta: i32) {
-        self.mark_scrolling();
-        self.ensure_scroll_metrics();
-        let previous_offset = self.scroll_manager.offset();
-
-        // Apply page scroll first (larger movements)
-        // Inverted offset model: positive delta = scroll down visually = decrease offset
-        if page_delta != 0 {
-            let page_size = self.viewport_height().max(1);
-            if page_delta > 0 {
-                self.scroll_manager.scroll_up(page_size * page_delta.unsigned_abs() as usize);
-            } else {
-                self.scroll_manager.scroll_down(page_size * page_delta.unsigned_abs() as usize);
-            }
-        }
-
-        // Then apply line scroll
-        if line_delta != 0 {
-            if line_delta > 0 {
-                self.scroll_manager.scroll_up(line_delta.unsigned_abs() as usize);
-            } else {
-                self.scroll_manager.scroll_down(line_delta.unsigned_abs() as usize);
-            }
-        }
-
-        // Invalidate visible lines cache if offset actually changed
-        if self.scroll_manager.offset() != previous_offset {
-            self.user_scrolled = self.scroll_manager.offset() != 0;
-            self.invalidate_transcript_viewport();
-            // Compute actual row delta for selection adjustment.
-            // Inverted model: increasing offset → content moves down → positive row delta.
-            let offset_delta = self.scroll_manager.offset() as i64 - previous_offset as i64;
-            self.mouse_selection.adjust_for_scroll(offset_delta as i32);
-        }
-    }
-
-    /// Invalidate scroll metrics to force recalculation
-    pub(crate) fn invalidate_scroll_metrics(&mut self) {
-        self.scroll_manager.invalidate_metrics();
-        self.invalidate_transcript_viewport();
-    }
-
-    /// Invalidate the transcript cache
-    pub(crate) fn invalidate_transcript_cache(&mut self) {
-        self.transcript_presentation_revision = self.transcript_presentation_revision.wrapping_add(1);
-        let had_cache = if let Some(cache) = self.transcript_cache.as_mut() {
-            cache.invalidate_content();
-            true
-        } else {
-            false
-        };
-        self.invalidate_transcript_viewport();
-        self.request_transcript_clear();
-
-        if had_cache || self.first_dirty_line.is_none() {
-            self.first_dirty_line = Some(0);
-        }
-    }
-
-    /// Get the current maximum scroll offset
-    pub(crate) fn current_max_scroll_offset(&mut self) -> usize {
-        self.ensure_scroll_metrics();
-        self.scroll_manager.max_offset()
-    }
-
-    /// Enforce scroll bounds after viewport changes.
-    /// Clamps against last-known metrics only — never forces a reflow. The next
-    /// `ensure_scroll_metrics` (on render) recomputes and clamps again.
-    pub(crate) fn enforce_scroll_bounds(&mut self) {
-        if !self.scroll_manager.metrics_valid() {
-            return;
-        }
-        let max_offset = self.scroll_manager.max_offset();
-        if self.scroll_manager.offset() > max_offset {
-            self.scroll_manager.set_offset(max_offset);
-        }
-    }
-
-    /// Ensure scroll metrics are up to date
-    pub(crate) fn ensure_scroll_metrics(&mut self) {
-        if self.scroll_manager.metrics_valid() {
-            return;
-        }
-
-        let viewport_rows = self.viewport_height();
-        if self.transcript_width == 0 || viewport_rows == 0 {
-            self.scroll_manager.set_viewport_rows(viewport_rows.max(1) as u16);
-            self.scroll_manager.set_total_rows(0);
-            return;
-        }
-
-        let effective_padding = ui::effective_transcript_bottom_padding(viewport_rows);
-        let total_rows = self.total_transcript_rows(self.transcript_width) + effective_padding;
-        self.scroll_manager.set_viewport_rows(viewport_rows as u16);
-        self.scroll_manager.set_total_rows(total_rows);
-        self.scroll_manager.clamp_offset();
-    }
-
-    /// Prepare transcript scroll parameters
-    pub(crate) fn prepare_transcript_scroll(&mut self, total_rows: usize, viewport_rows: usize) -> (usize, usize) {
-        let viewport = viewport_rows.max(1);
-        let clamped_total = total_rows.max(1);
-        self.scroll_manager.set_viewport_rows(viewport as u16);
-        self.scroll_manager.set_total_rows(clamped_total);
-        let max_offset = self.scroll_manager.max_offset();
-
-        if self.scroll_manager.offset() > max_offset {
-            self.scroll_manager.set_offset(max_offset);
-        }
-
-        let top_offset = max_offset.saturating_sub(self.scroll_manager.offset());
-        (top_offset, clamped_total)
-    }
-
-    /// Adjust scroll position after content changes to keep the current view stable.
-    /// When the viewport is at the bottom (offset 0), new content naturally stays
-    /// in view without adjustment. Only when the user has scrolled up (offset > 0)
-    /// do we adjust the offset to prevent the view from drifting.
-    ///
-    /// Bottom-follow returns immediately so appends never force a reflow.
-    pub(crate) fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
-        if self.scroll_manager.offset() == 0 {
-            return;
-        }
-        let new_max_offset = self.current_max_scroll_offset();
-        if new_max_offset > previous_max_offset {
-            // Keep content position stable when the user has scrolled away from bottom
-            use std::cmp::min;
-            let current_offset = self.scroll_manager.offset();
-            let delta = new_max_offset - previous_max_offset;
-            self.scroll_manager.set_offset(min(current_offset + delta, new_max_offset));
-        }
-        self.enforce_scroll_bounds();
-    }
-
-    /// Emit an inline event through the channel and callback
-    #[inline]
-    pub(crate) fn emit_inline_event(
-        &self,
-        event: &InlineEvent,
-        events: &UnboundedSender<InlineEvent>,
-        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-    ) {
-        if let Some(cb) = callback {
-            cb(event);
-        }
-        let _ = events.send(event.clone());
-    }
-
-    /// Handle scroll down event
-    #[inline]
-    fn handle_scroll_down(
-        &mut self,
-        events: &UnboundedSender<InlineEvent>,
-        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-    ) {
-        self.scroll_line_down();
-        self.mark_dirty();
-        self.emit_inline_event(&InlineEvent::ScrollLineDown, events, callback);
-    }
-
-    /// Handle scroll up event
-    #[inline]
-    fn handle_scroll_up(
-        &mut self,
-        events: &UnboundedSender<InlineEvent>,
-        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-    ) {
-        self.scroll_line_up();
-        self.mark_dirty();
-        self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
     }
 }

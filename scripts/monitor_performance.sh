@@ -23,29 +23,40 @@ get_metrics() {
     local pid=$1
     local turn=$2
 
-    if ! kill -0 $pid 2>/dev/null; then
+    if ! kill -0 "$pid" 2>/dev/null; then
         return 1
     fi
 
     # Get process stats (macOS and Linux compatible)
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
-        local stats=$(ps -p $pid -o rss= -o vsz= | awk '{print $1, $2}')
-        local rss=$(echo $stats | awk '{printf "%.1f", $1 / 1024}')
-        local vsz=$(echo $stats | awk '{printf "%.1f", $2 / 1024}')
-        local cpu=$(ps -p $pid -o %cpu= | xargs)
-        local threads=$(ps -p $pid -o nlwp=)
+        local stats
+        stats=$(ps -p "$pid" -o rss= -o vsz= | awk '{print $1, $2}')
+        local rss
+        rss=$(echo "$stats" | awk '{printf "%.1f", $1 / 1024}')
+        local vsz
+        vsz=$(echo "$stats" | awk '{printf "%.1f", $2 / 1024}')
+        local cpu
+        cpu=$(ps -p "$pid" -o %cpu= | xargs)
+        local threads
+        threads=$(ps -p "$pid" -o nlwp=)
     else
         # Linux
-        local stats=$(ps -p $pid -o rss= -o vsz= | awk '{print $1, $2}')
-        local rss=$(echo $stats | awk '{printf "%.1f", $1 / 1024}')
-        local vsz=$(echo $stats | awk '{printf "%.1f", $2 / 1024}')
-        local cpu=$(ps -p $pid -o %cpu= | xargs)
-        local threads=$(ps -p $pid -o nlwp= | xargs)
+        local stats
+        stats=$(ps -p "$pid" -o rss= -o vsz= | awk '{print $1, $2}')
+        local rss
+        rss=$(echo "$stats" | awk '{printf "%.1f", $1 / 1024}')
+        local vsz
+        vsz=$(echo "$stats" | awk '{printf "%.1f", $2 / 1024}')
+        local cpu
+        cpu=$(ps -p "$pid" -o %cpu= | xargs)
+        local threads
+        threads=$(ps -p "$pid" -o nlwp= | xargs)
     fi
 
     # Get timestamp
-    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Write to CSV (placeholder values for cache stats - would need instrumentation)
     echo "$timestamp,$turn,$rss,$vsz,$cpu,$threads,0,0,0" >> "$OUTPUT_FILE"
@@ -110,7 +121,7 @@ while kill -0 $VTCODE_PID 2>/dev/null; do
         break
     fi
 
-    sleep $INTERVAL
+    sleep "$INTERVAL"
 done
 
 # Wait for process to finish

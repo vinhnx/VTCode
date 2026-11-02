@@ -32,6 +32,8 @@ pub mod pipe;
 pub mod policy;
 pub mod process;
 pub mod process_group;
+#[cfg(unix)]
+pub mod process_owner;
 pub mod runner;
 pub mod stream;
 

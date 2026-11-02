@@ -34,10 +34,24 @@ pub(crate) async fn emit_plan_ready_events(
     thread_id: &str,
     turn_id: &str,
     plan_text: &str,
-) {
+) -> anyhow::Result<()> {
+    let mut recovery = plan_session.recovery.clone();
+    recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval;
+    if let Some(emitter) = emitter {
+        emitter
+            .persist_checkpoint(&ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+                thread_id: thread_id.to_owned(),
+                turn_id: turn_id.to_owned(),
+                item_id: "planning-recovery".to_owned(),
+                delta: String::new(),
+                recovery: Some(Box::new(recovery.clone())),
+            })))
+            .await?;
+    }
+    plan_session.recovery = recovery;
     plan_session.mark_plan_approval_pending(thread_id.to_owned(), turn_id.to_owned());
     let Some(emitter) = emitter else {
-        return;
+        return Ok(());
     };
 
     let item_id = format!("{turn_id}-plan");
@@ -66,6 +80,7 @@ pub(crate) async fn emit_plan_ready_events(
         turn_id: turn_id.to_owned(),
         item_id: item_id.clone(),
         delta: plan_text.to_owned(),
+        recovery: None,
     })));
 
     let completed_item = ThreadItem {
@@ -82,6 +97,54 @@ pub(crate) async fn emit_plan_ready_events(
         None,
     ));
     emit_plan_approval_requested(Some(emitter), thread_id, turn_id, plan_path);
+    Ok(())
+}
+
+/// Publish a terminally rejected plan draft so every runtime surface can show it.
+///
+/// Terminal rejections render the draft through the transcript renderer only,
+/// which host runtimes (desktop) never forward: the desktop pump publishes
+/// progress, interactions, and canonical thread events, not transcript lines.
+/// Without this, desktop users see the rejection notice but never the rejected
+/// draft, and `events.jsonl` carries no trace for forensics. The item id is
+/// `{turn_id}-rejected-plan` so consumers can distinguish it from the
+/// approval-ready `{turn_id}-plan` lifecycle; no approval request is emitted.
+pub(crate) fn emit_plan_rejected_events(
+    emitter: Option<&HarnessEventEmitter>,
+    thread_id: &str,
+    turn_id: &str,
+    plan_text: &str,
+) {
+    let Some(emitter) = emitter else {
+        return;
+    };
+    let plan_text = plan_text.trim();
+    if plan_text.is_empty() {
+        return;
+    }
+
+    let item_id = format!("{turn_id}-rejected-plan");
+    let start_item = ThreadItem {
+        context: None,
+        id: item_id.clone(),
+        details: ThreadItemDetails::Plan(PlanItem { text: String::new() }),
+    };
+    let _ = emitter.emit(ThreadEvent::ItemStarted(ItemStartedEvent { item: start_item }));
+
+    let _ = emitter.emit(ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+        thread_id: thread_id.to_owned(),
+        turn_id: turn_id.to_owned(),
+        item_id: item_id.clone(),
+        delta: plan_text.to_owned(),
+        recovery: None,
+    })));
+
+    let completed_item = ThreadItem {
+        context: None,
+        id: item_id,
+        details: ThreadItemDetails::Plan(PlanItem { text: plan_text.to_owned() }),
+    };
+    let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }));
 }
 
 pub(crate) fn emit_plan_approval_requested(
@@ -149,10 +212,12 @@ pub(crate) fn emit_plan_approval_resolved(
 #[cfg(test)]
 mod tests {
     use super::PlanningWorkflowState;
-    use super::{display_plan_path, emit_plan_approval_requested, emit_plan_approval_resolved};
+    use super::{
+        display_plan_path, emit_plan_approval_requested, emit_plan_approval_resolved, emit_plan_rejected_events,
+    };
     use std::path::PathBuf;
     use tempfile::tempdir;
-    use vtcode_core::exec::events::{PlanApprovalDecision, ThreadEvent, VersionedThreadEvent};
+    use vtcode_core::exec::events::{PlanApprovalDecision, ThreadEvent, ThreadItemDetails, VersionedThreadEvent};
 
     #[test]
     fn plan_event_paths_use_workspace_relative_display() {
@@ -180,7 +245,9 @@ mod tests {
         let emitter = HarnessEventEmitter::new(event_path.clone()).expect("harness emitter");
         let mut plan_session = PlanningWorkflowSessionState::default();
 
-        super::emit_plan_ready_events(&mut plan_session, &state, Some(&emitter), "thread-1", "turn-1", "# Task").await;
+        super::emit_plan_ready_events(&mut plan_session, &state, Some(&emitter), "thread-1", "turn-1", "# Task")
+            .await
+            .unwrap();
 
         let events = std::fs::read_to_string(event_path)
             .expect("event log")
@@ -205,6 +272,47 @@ mod tests {
 
         assert!(plan_paths.clone().all(|path| path == ".vtcode/plans/task.md"));
         assert_eq!(plan_paths.count(), 2);
+    }
+
+    #[test]
+    fn rejected_plan_events_publish_draft_without_approval_request() {
+        let directory = tempdir().expect("temporary event directory");
+        let path = directory.path().join(PathBuf::from("events.jsonl"));
+        let emitter = super::HarnessEventEmitter::new(path.clone()).expect("harness emitter");
+
+        emit_plan_rejected_events(Some(&emitter), "thread-1", "turn-1", "# Rejected draft\n");
+        emit_plan_rejected_events(Some(&emitter), "thread-1", "turn-1", "   ");
+
+        let events = std::fs::read_to_string(path)
+            .expect("event log")
+            .lines()
+            .map(|line| serde_json::from_str::<VersionedThreadEvent>(line).expect("versioned event"))
+            .map(VersionedThreadEvent::into_event)
+            .collect::<Vec<_>>();
+
+        assert_eq!(events.len(), 3, "empty drafts must not emit");
+        let ThreadEvent::ItemStarted(started) = &events[0] else {
+            panic!("rejected draft must start a plan item, got {:?}", events[0]);
+        };
+        assert_eq!(started.item.id, "turn-1-rejected-plan");
+        assert!(
+            matches!(&started.item.details, ThreadItemDetails::Plan(plan) if plan.text.is_empty()),
+            "rejected plan item must start empty"
+        );
+        let ThreadEvent::PlanDelta(delta) = &events[1] else {
+            panic!("rejected draft must stream its text, got {:?}", events[1]);
+        };
+        assert_eq!(delta.item_id, "turn-1-rejected-plan");
+        assert_eq!(delta.delta, "# Rejected draft");
+        assert!(delta.recovery.is_none());
+        let ThreadEvent::ItemCompleted(completed) = &events[2] else {
+            panic!("rejected draft must complete a plan item, got {:?}", events[2]);
+        };
+        assert_eq!(completed.item.id, "turn-1-rejected-plan");
+        let ThreadItemDetails::Plan(plan) = &completed.item.details else {
+            panic!("rejected item must carry plan details");
+        };
+        assert_eq!(plan.text, "# Rejected draft");
     }
 
     #[test]

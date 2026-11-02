@@ -67,6 +67,15 @@ const ANTHROPIC_EFFORTS_UP_TO_XHIGH_AND_MAX: &[&str] = &[
     reasoning::MAX,
 ];
 
+/// MiniMax M3.1 Flash accepts every effort level and defaults to `max`.
+const MINIMAX_M31_EFFORTS: &[&str] = ANTHROPIC_EFFORTS_UP_TO_XHIGH_AND_MAX;
+
+/// MiniMax-M3.1-Flash is served through the Anthropic-compatible surface with
+/// always-on adaptive thinking and `output_config.effort` control.
+pub(crate) fn is_minimax_m31_flash(model: &str) -> bool {
+    model.trim() == models::minimax::MINIMAX_M3_1_FLASH
+}
+
 pub(crate) fn resolve_model_name<'a>(model: &'a str, default_model: &'a str) -> &'a str {
     if model.trim().is_empty() { default_model } else { model }
 }
@@ -254,7 +263,7 @@ fn is_claude_5_family(model: &str) -> bool {
 }
 
 fn supports_native_1m_context(model: &str) -> bool {
-    is_claude_5_family(model)
+    is_claude_5_family(model) || is_minimax_m31_flash(model)
 }
 
 pub(crate) fn supports_reasoning(model: &str, default_model: &str) -> bool {
@@ -281,7 +290,9 @@ pub(crate) fn supports_reasoning_effort(model: &str, default_model: &str) -> boo
 }
 
 pub(crate) fn supports_effort(model: &str, default_model: &str) -> bool {
-    claude_thinking_profile(model, default_model).is_some_and(|profile| profile.supports_effort)
+    let requested = resolve_model_name(model, default_model);
+    is_minimax_m31_flash(requested)
+        || claude_thinking_profile(requested, default_model).is_some_and(|profile| profile.supports_effort)
 }
 
 pub(crate) fn supports_task_budget(model: &str, default_model: &str) -> bool {
@@ -434,13 +445,21 @@ pub(crate) fn default_thinking_display(model: &str, default_model: &str) -> Opti
 }
 
 pub(crate) fn default_effort_for_model(model: &str, default_model: &str) -> Option<&'static str> {
-    claude_thinking_profile(model, default_model)
+    let requested = resolve_model_name(model, default_model);
+    if is_minimax_m31_flash(requested) {
+        return Some(reasoning::MAX);
+    }
+    claude_thinking_profile(requested, default_model)
         .filter(|profile| profile.supports_effort)
         .map(|profile| profile.default_effort)
 }
 
 pub(crate) fn allowed_efforts_for_model(model: &str, default_model: &str) -> Option<&'static [&'static str]> {
-    let profile = claude_thinking_profile(model, default_model)?;
+    let requested = resolve_model_name(model, default_model);
+    if is_minimax_m31_flash(requested) {
+        return Some(MINIMAX_M31_EFFORTS);
+    }
+    let profile = claude_thinking_profile(requested, default_model)?;
     if !profile.supports_effort {
         return None;
     }
@@ -513,6 +532,11 @@ pub(crate) fn supports_vision(model: &str, default_model: &str) -> bool {
 
     // All models with a thinking profile support vision.
     if claude_thinking_profile(requested, default_model).is_some() {
+        return true;
+    }
+
+    // MiniMax M3.1 Flash accepts text, image, and video input.
+    if is_minimax_m31_flash(requested) {
         return true;
     }
 

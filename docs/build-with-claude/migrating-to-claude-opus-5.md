@@ -401,9 +401,9 @@ thinking_display = "summarized"          # if you want visible reasoning
 
 3. **Disabling thinking capped at `high` effort.** Same as above.
 
-4. **Sampling parameters removed.** VT Code's request builder already forces `temperature = None` when thinking is
-   active or the model is Opus 4.8+. On Opus 5, non-default `temperature`/`top_p`/`top_k` are rejected server-side
-   regardless. Ensure no code path sets these explicitly.
+4. **Sampling parameters removed.** VT Code never serializes `temperature`, `top_p`, or `top_k` on the Anthropic wire:
+   API version `2026-10-21` rejects them on every model, so the request builder omits them and validation refuses an
+   explicit value. Ensure no code path sets these explicitly.
 
 5. **Thinking content omitted by default.** VT Code's default `thinking_display` for Opus 5 is `"omitted"` (matching the
    API). Set `thinking_display = "summarized"` in config if your UI displays reasoning.

@@ -136,6 +136,31 @@ fn history_picker_renders_search_field_above_results() {
 }
 
 #[test]
+fn history_picker_seeds_filter_from_composer_draft() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.core.set_input("cargo test".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    session.core.set_input("git status".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    // A draft in the composer pre-filters history as soon as Ctrl+R opens.
+    session.core.set_input("git".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+
+    assert!(session.history_picker_state.active);
+    assert_eq!(session.history_picker_state.search_query, "git");
+    assert!(!session.history_picker_state.matches.is_empty(), "seeded query should still match history");
+    assert!(
+        session
+            .history_picker_state
+            .matches
+            .iter()
+            .all(|history_match| history_match.content.to_lowercase().contains("git")),
+        "every match must satisfy the seeded draft"
+    );
+}
+
+#[test]
 fn arrow_up_stays_within_multiline_without_history() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_input("first message".to_string());

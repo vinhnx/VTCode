@@ -7,6 +7,7 @@
 #   - rustfmt (formatting)
 #   - clippy (linting, default-members only)
 #   - cargo check (compilation verification)
+#   - file length gate (hard ceiling: 1000 lines per tracked text file)
 #
 # Optional checks (via flags):
 #   - Tests (--test)
@@ -18,6 +19,7 @@
 set -e
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Configuration
@@ -28,6 +30,7 @@ RUN_WORKSPACE=false
 RUN_EXTRA_LINTS=false
 RUN_CHANGED=false
 QUIET=false
+RUN_DENY=false
 SCOPE_LABEL="default-members"
 
 # Quiet-aware status printer: progress banners are suppressed in quiet mode.
@@ -46,7 +49,8 @@ print_always() {
 
 # Timing helper
 print_timing() {
-	local end=$(date +%s)
+	local end
+	end=$(date +%s)
 	local duration=$((end - SCRIPT_START))
 	if [ $duration -lt 60 ]; then
 		echo ""
@@ -116,6 +120,8 @@ run_clippy() {
 	SCOPE_LABEL="$label"
 
 	print_status "Running clippy ($SCOPE_LABEL)..."
+	# Unquoted on purpose: cargo_verbosity prints one flag or nothing (which must vanish, not become "").
+	# shellcheck disable=SC2046
 	if cargo clippy --locked $(cargo_verbosity) "${scope_args[@]}" --all-targets --all-features -- -D warnings; then
 		print_success "No clippy warnings found!"
 		return 0
@@ -137,11 +143,24 @@ run_check() {
 	SCOPE_LABEL="$label"
 
 	print_status "Running cargo check ($SCOPE_LABEL)..."
+	# Unquoted on purpose: see run_clippy above.
+	# shellcheck disable=SC2046
 	if cargo check --locked $(cargo_verbosity) "${scope_args[@]}"; then
 		print_success "Compilation successful!"
 		return 0
 	else
 		print_error "Compilation failed."
+		return 1
+	fi
+}
+
+run_file_length_gate() {
+	print_status "Running file length gate (max 1000 lines)..."
+	if python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
+		print_success "File lengths within budget!"
+		return 0
+	else
+		print_error "File length violations found."
 		return 1
 	fi
 }
@@ -307,6 +326,8 @@ run_shell_scripts_lint() {
 	fi
 }
 
+# run_cargo_deny is provided by scripts/common.sh (shared with check.sh).
+
 print_usage() {
 	echo "VT Code Fast Development Check Script"
 	echo ""
@@ -325,6 +346,8 @@ print_usage() {
 	echo "  --changed, -c       Only run tests in crates changed since HEAD~1 (implies --test)"
 	echo "  --quiet, -q         Suppress progress banners and cargo noise; errors and"
 	echo "                      the final summary still print (agent/CI friendly)"
+	echo "  --deny, -d          Also run cargo-deny (RustSec advisories, licenses, bans,"
+	echo "                      sources; network-bound on first advisory-DB fetch)"
 	echo "  --help, -h          Show this help message"
 	echo ""
 	echo "Examples:"
@@ -360,6 +383,10 @@ main() {
 			;;
 		--quiet | -q)
 			QUIET=true
+			shift
+			;;
+		--deny | -d)
+			RUN_DENY=true
 			shift
 			;;
 		--help | -h)
@@ -399,6 +426,7 @@ main() {
 	run_rustfmt || ((FAILED_CHECKS++))
 	run_clippy || ((FAILED_CHECKS++))
 	run_check || ((FAILED_CHECKS++))
+	run_file_length_gate || ((FAILED_CHECKS++))
 
 	# Run extra lints if requested
 	if [ "$RUN_EXTRA_LINTS" = true ]; then
@@ -409,6 +437,12 @@ main() {
 
 	# Always run shell script syntax check (fast, no extra deps)
 	run_shell_scripts_lint || ((FAILED_CHECKS++))
+
+	# Run dependency audit if requested (network-bound on first run); the
+	# explicit flag hard-requires the tool rather than skipping.
+	if [ "$RUN_DENY" = true ]; then
+		run_cargo_deny required || ((FAILED_CHECKS++))
+	fi
 
 	# Run tests if requested (always last, as they're the slowest)
 	if [ "$RUN_TESTS" = true ]; then

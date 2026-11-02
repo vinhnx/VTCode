@@ -1,0 +1,15 @@
+# Opt-in anonymous Cohesivity MCP over Streamable HTTP.
+# Merge these settings into your existing vtcode.toml; retain other providers.
+[mcp]
+enabled = true
+experimental_use_rmcp_client = true
+
+[[mcp.providers]]
+name = "cohesivity"
+enabled = true
+endpoint = "https://cohesivity.ai/mcp"
+http_headers = { "User-Agent" = "VTCode/cohesivity-mcp" }
+
+# MCP tools reach the model under the advanced tool profile.
+[tools]
+profile = "advanced_vtcode"

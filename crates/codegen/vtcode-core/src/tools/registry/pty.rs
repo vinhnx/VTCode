@@ -21,7 +21,7 @@ impl Drop for PtySessionGuard {
 }
 
 fn decrement_active_sessions(active_sessions: &AtomicUsize) {
-    let _ = active_sessions.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| current.checked_sub(1));
+    let _ = active_sessions.try_update(Ordering::Relaxed, Ordering::Relaxed, |current| current.checked_sub(1));
 }
 
 #[derive(Clone)]

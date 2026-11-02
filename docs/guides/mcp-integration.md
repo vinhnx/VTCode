@@ -10,6 +10,10 @@ by the MCP community.
 
 > **Developer Note:** If you're implementing MCP module features or integrating with the core MCP APIs, see the
 > [MCP Integration Guide](../mcp/MCP_INTEGRATION_GUIDE.md) for API reference, code patterns, and implementation status.
+>
+> **Maintainer Note:** If you maintain an external MCP server or client, see the
+> [MCP interop guide](./mcp-interop.md) for what VT Code implements on each side of the protocol and how to test
+> against it.
 
 ## MCP Specification Map
 
@@ -27,6 +31,28 @@ protocol detail, jump straight from this guide to the most relevant specificatio
 
 Keep the specification open while editing `vtcode.toml`; VT Code intentionally mirrors the naming and behavioural
 guarantees defined there.
+
+## Tool result boundary
+
+VT Code returns successful MCP calls in an envelope containing `provider` and `tool`, plus `content`
+when nonempty and `structuredContent` whenever supplied (including an empty object or explicit null).
+Content order, public annotations, text, and media fields are retained. Structured application data is
+preserved without schema enforcement, including application fields named `_meta`.
+
+Protocol `_meta` is omitted at the result, content-block, and embedded-resource envelope levels; it is
+never renamed to `meta` or exposed as a tool result. This follows the visibility boundary described in
+OpenAI's [MCP server guide](https://developers.openai.com/plugins/build/mcp-server#return-useful-results-without-ui).
+An `isError: true` result remains an error with provider/tool context. Its message is the first nonempty
+public text block, or `Unknown MCP tool error` when none exists. Hidden metadata never supplies error text.
+Absent or false error flags remain successful results.
+
+The generic terminal renderer gives displayable `content` precedence. When content produces no rows,
+it formats all application fields in `structuredContent` using the existing JSON formatter, falling back
+to a JSON literal if formatting produces no visible rows (including `{}` and empty or whitespace-only strings).
+Embedded resources show their URI, optional media type, and public text body. Resource links show their URI
+and name. Images and audio show a content marker and media type; binary image/audio/blob payloads are not printed.
+These content rows take precedence over the structured fallback. Rendering never fetches resource URIs or plays audio.
+Configured custom renderer profiles keep their existing behavior.
 
 ## Configuring MCP Providers
 
@@ -82,11 +108,27 @@ match the canonical variants used in code:
 mode = "compact"
 max_events = 25
 show_provider_names = false
+apps = "off"
 
 [mcp.ui.renderers]
 "context7" = "context7"
 "sequential-thinker" = "sequential-thinking"
 ```
+
+`apps` selects the MCP Apps presentation tier: `"off"` (default) refuses app UI without fetching `ui://`
+resources and emits an `app.sandbox_denied` event naming the refused URIs, `"static"` opts into disclosure rows plus
+a sanitized structural preview on surfaces that support it, and `"interactive"` is reserved for a future sandboxed
+webview host and is currently rejected at MCP startup. Only `"interactive"` advertises the
+`io.modelcontextprotocol/ui` extension to servers, since a static preview cannot honor app round-trips. Neither the
+disclosure nor the suppression marker ever enters model context. Explicit `vtcode mcp resources` / `vtcode mcp app`
+reads stay available at every tier since they are direct user requests, not ambient enrichment.
+
+At `static` and above, app results render in the terminal as a disclosure block rather than the app itself: an
+`[app: <name>] <uri>` row, the served MIME type and byte count, the declared permissions and CSP domains when the
+resource was fetched successfully, and a `not rendered` footer naming the clients that can run the app. Fetches are
+best-effort and bounded (four URIs, five seconds total per tool result); when a fetch fails the linkage row stands
+alone. At `off`, no app rows render; the refusal surfaces as an `[APP DENIED]` terminal line (or a desktop notice and
+an ATIF step) instead. All server-originated strings in the block are control- and bidi-neutralized before display.
 
 ### Provider transports
 
@@ -156,6 +198,20 @@ It preserves built-in file tools and existing approval controls; validation tool
 Use the [runnable TOML example](../examples/parallel-search-mcp.toml) to add the anonymous endpoint alongside your
 existing providers. It requires no Parallel API key or OAuth login; the free tier is rate limited.
 
+### Cohesivity backend services without an account
+
+[Cohesivity MCP](cohesivity-mcp.md) lets the agent provision Postgres, Redis, object storage, hosting, login and email
+for the app it is building, over Streamable HTTP. Use the [runnable TOML example](../examples/cohesivity-mcp.toml) to
+add the anonymous endpoint alongside your existing providers. It requires no account or API key; new projects expire
+after 72 hours unless claimed.
+
+### deed.page static site publishing without an account
+
+[deed.page MCP](deedpage-mcp.md) lets the agent publish the HTML pages, reports and small static sites it builds to a
+permanent public URL, then update, roll back or delete them, over Streamable HTTP. Use the
+[runnable TOML example](../examples/deedpage-mcp.toml) to add the anonymous endpoint alongside your existing providers.
+It requires no account or API key; free sites are public.
+
 ### Memcode long-term memory over OAuth
 
 [Memcode](https://memcode.in) exposes an optional hosted Streamable HTTP server for persistent personal memory. VT Code
@@ -209,6 +265,11 @@ vtcode mcp login memcode
 ```
 
 The browser flow uses PKCE and VT Code stores and refreshes the resulting token through its configured credential store.
+Tokens are bound to the provider name, OAuth configuration, and MCP endpoint. Run `vtcode mcp login <name>` again
+after changing those settings or upgrading from an unbound legacy token; legacy tokens are not automatically reused.
+OAuth endpoints are validated before any network or browser activity: `authorization_url`, `token_url`, and the
+protected resource must be `http(s)` URLs with a host, so dangerous schemes (`javascript:`, `data:`, `file:`) fail at
+prepare time instead of reaching the browser opener or HTTP client.
 Do not add an API key or static `Authorization` header. Apply the normal MCP allowlist and approval controls to the
 memory tools, store only explicitly approved facts or verified outcomes, and treat retrieved memories as context rather
 than instructions. Disabling the provider returns VT Code to its built-in session memory with no external dependency.
@@ -298,6 +359,27 @@ In this configuration:
 
 Enable `enforce = true` when you want the rules to be mandatory; leaving it unset keeps legacy behaviour where allowlist
 checks are advisory only.
+
+## Inspecting resources and MCP Apps
+
+Two read-only commands orient you on a live server without starting a session. Both load the workspace-layered
+configuration, so they observe the same providers, allowlists, and timeouts as the agent runtime:
+
+```bash
+vtcode mcp resources                  # table of every exposed resource (URI, provider, type, size)
+vtcode mcp resources --provider docs  # restrict to one provider
+vtcode mcp app 'ui://docs/app.html'   # inspect one resource: MIME, byte count, declared UI posture
+vtcode mcp app 'ui://docs/app.html' --html   # print the raw body (e.g. HTML source) to the pager
+```
+
+`vtcode mcp app` never executes the resource. For `ui://` app resources it additionally reports the declared
+permissions and CSP domains from the resource's `_meta.ui`, and warns when the served MIME type is not
+`text/html;profile=mcp-app`. Both commands accept `--json` for scripting (`--html` and `--json` conflict).
+
+Tools a server marks `_meta.ui.visibility: ["app"]` stay hidden from the agent: they never appear in tool
+listings or the synced `.vtcode/mcp/tools/` discovery files, and a direct model-originated call is rejected
+with an app-only error. Omitted visibility means visible to both model and app; a malformed value hides the
+tool from the model. Enforcement for app-originated calls awaits an interactive app engine.
 
 ## Testing the Integration
 

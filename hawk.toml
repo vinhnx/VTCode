@@ -172,14 +172,6 @@ item = "atif::AtifTrajectoryBuilder::set_session_id"
 level = "allow"
 reason = "public ATIF builder API"
 
-# vtcode-exec-events ToolOutcome — intentional public API
-[[override]]
-lint = "hawk::dead_public"
-crate = "vtcode_exec_events"
-item = "ToolOutcome::is_terminal"
-level = "allow"
-reason = "public API for tool outcome consumers"
-
 [[override]]
 lint = "hawk::unnecessary_public"
 crate = "vtcode_commons"
@@ -221,3 +213,13 @@ crate = "vtcode_commons"
 item = "validation::NonEmptyString::into_inner"
 level = "allow"
 reason = "used in doctest: name.into_inner()"
+
+# Planned CLI permission handler: `PermissionPromptHandler`/`set_permission_handler`
+# already exist in `tool_policy`, and docs/development/TUI_ONLY_REFACTORING.md
+# documents this prompt as the CLI implementation of that trait.
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_core"
+item = "ui::user_confirmation::UserConfirmation::confirm_tool_usage"
+level = "allow"
+reason = "CLI PermissionPromptHandler implementation planned in docs/development/TUI_ONLY_REFACTORING.md"

@@ -78,7 +78,7 @@ pub(super) fn render_local_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
+pub(crate) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     let available_themes = theme::available_themes();
     renderer.line(MessageStyle::Info, "Available themes:")?;
 

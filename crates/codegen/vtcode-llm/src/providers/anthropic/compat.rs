@@ -1,6 +1,7 @@
+use crate::error_display;
 use crate::provider::{
     AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides,
-    AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, ContentPart, FinishReason, LLMRequest,
+    AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, ContentPart, FinishReason, LLMError, LLMRequest,
     LLMResponse, Message, MessageContent, MessageRole, ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition,
 };
 use crate::providers::anthropic_types::{
@@ -23,13 +24,17 @@ pub struct AnthropicMessagesRequest {
     #[serde(default)]
     pub(crate) stream: bool,
     #[serde(default)]
+    pub(crate) stop_sequences: Option<Vec<String>>,
+    /// Sampling parameters. Removed by API version `2026-10-21`: a request
+    /// that sends them is rejected, so they are accepted for parsing (a local
+    /// Anthropic-compatible gateway may still forward them) but never
+    /// forwarded to the upstream request.
+    #[serde(default)]
     pub(crate) temperature: Option<f32>,
     #[serde(default)]
     pub(crate) top_p: Option<f32>,
     #[serde(default)]
     pub(crate) top_k: Option<i32>,
-    #[serde(default)]
-    pub(crate) stop_sequences: Option<Vec<String>>,
     #[serde(default)]
     pub(crate) tools: Option<Vec<AnthropicTool>>,
     #[serde(default)]
@@ -72,6 +77,12 @@ pub enum AnthropicContentBlock {
     Image { source: AnthropicImageSource },
     #[serde(rename = "tool_use")]
     ToolUse { id: String, name: String, input: Value },
+    /// Anthropic only accepts `document` blocks in `user` messages under API
+    /// version `2026-10-21`; an assistant block is a 400. The block is
+    /// rejected during conversion rather than dropped, so a caller cannot
+    /// silently lose an attachment.
+    #[serde(rename = "document")]
+    Document { source: Value },
     #[serde(rename = "tool_result")]
     ToolResult {
         tool_use_id: String,
@@ -268,7 +279,7 @@ mod tests {
                 "thinking": { "type": "adaptive", "display": "updates" },
             }))
             .expect("compat request");
-            let llm_request = convert_anthropic_to_llm_request(request);
+            let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
             let anthropic_config = AnthropicConfig::default();
             let prompt_cache_settings = AnthropicPromptCacheSettings::default();
             let ctx = RequestBuilderContext {
@@ -349,7 +360,7 @@ struct ConvertedAnthropicBlocks {
     emitted_messages: Vec<Message>,
 }
 
-pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LLMRequest {
+pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> Result<LLMRequest, LLMError> {
     let (tool_choice, parallel_tool_config) = parse_anthropic_tool_choice(request.tool_choice.as_ref());
     let effort = request.output_config.as_ref().and_then(|config| config.effort.clone());
     let output_format = request.output_config.as_ref().and_then(|config| {
@@ -393,6 +404,21 @@ pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest
                 }
             }
             AnthropicContent::Blocks(blocks) => {
+                // API version 2026-10-21 rejects a `document` block placed
+                // directly in an `assistant` message; documents belong in
+                // `user` messages.
+                if role == MessageRole::Assistant
+                    && blocks
+                        .iter()
+                        .any(|block| matches!(block, AnthropicContentBlock::Document { .. }))
+                {
+                    let formatted_error = error_display::format_llm_error(
+                        "Anthropic",
+                        "document content blocks are only accepted in user messages; send the document in a user message instead.",
+                    );
+                    return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
+                }
+
                 let converted = convert_anthropic_blocks(&blocks);
                 messages.extend(converted.emitted_messages);
 
@@ -521,13 +547,13 @@ pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest
         None
     };
 
-    LLMRequest {
+    Ok(LLMRequest {
         messages: Arc::new(messages),
         system_prompt,
         tools,
         model: request.model,
         max_tokens: Some(request.max_tokens),
-        temperature: request.temperature,
+        temperature: None,
         stream: request.stream,
         output_format,
         tool_choice,
@@ -537,8 +563,8 @@ pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest
         effort,
         verbosity: None,
         do_sample: None,
-        top_p: request.top_p,
-        top_k: request.top_k,
+        top_p: None,
+        top_k: None,
         presence_penalty: None,
         frequency_penalty: None,
         stop_sequences: request.stop_sequences,
@@ -556,7 +582,7 @@ pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest
         fallbacks: None,
         fallback_credit_token: None,
         anthropic_request_overrides,
-    }
+    })
 }
 
 pub(crate) fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMessagesResponse {
@@ -765,6 +791,9 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
             AnthropicContentBlock::ContainerUpload { file_id } => {
                 converted.content_parts.push(ContentPart::file_from_id(file_id.clone()));
             }
+            AnthropicContentBlock::Document { .. } => {
+                converted.content_parts.push(ContentPart::text("[Document]".to_string()));
+            }
             AnthropicContentBlock::CodeExecutionToolResult { tool_use_id, content }
             | AnthropicContentBlock::BashCodeExecutionToolResult { tool_use_id, content }
             | AnthropicContentBlock::TextEditorCodeExecutionToolResult { tool_use_id, content }
@@ -809,6 +838,7 @@ fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
         AnthropicContentBlock::RedactedThinking { .. } => "[REDACTED THINKING]".to_string(),
         AnthropicContentBlock::Image { .. } => "[Image]".to_string(),
         AnthropicContentBlock::ContainerUpload { file_id } => format!("[File: {file_id}]"),
+        AnthropicContentBlock::Document { .. } => "[Document]".to_string(),
         AnthropicContentBlock::ToolUse { name, input, .. }
         | AnthropicContentBlock::ServerToolUse { name, input, .. } => {
             format!("[Tool call: {name} with args: {input}]")

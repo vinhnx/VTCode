@@ -112,7 +112,9 @@ Repository-controlled configuration is not trusted to introduce provider executi
 config loading, VT Code rejects any non-empty `custom_providers` value whose winning origin is a workspace or project
 layer. This includes custom provider `auth.command`, which can launch a child process with the user's process
 privileges. The loader rejects `provider_overrides.<name>.base_url` and `.api_key_env` from those layers as well,
-preventing a repository from redirecting model traffic or selecting a credential environment variable.
+preventing a repository from redirecting model traffic or selecting a credential environment variable. A
+repository-controlled `auth.copilot.command` — the child process launched for GitHub Copilot authentication — is
+rejected for the same reason.
 
 The check runs before provider validation and registration, and `workspace.use_root_config` cannot bypass it. Keep
 command-backed providers and endpoint/credential overrides in system or user configuration, or pass a file explicitly
@@ -194,6 +196,21 @@ lifecycle engine: **no lifecycle hook runs** until you approve the exact command
 
 User-level hooks in the canonical user config `vtcode.toml` run without approval when the workspace defines no lifecycle
 hook content of its own.
+
+### Full access mode
+
+Full access is an explicit, session-only opt-in: start with `vtcode --full-access`, pick
+**Full access** in `/permissions`, or choose it in the Desktop permission control. It disables the process sandbox for
+shell execution and automatically approves promptable calls, after a confirmation step that discloses the granted
+access (files, terminal, network) and requires an explicit risk acknowledgement.
+
+Retained restrictions:
+
+- Explicit tool and command denies, hook denials, planning restrictions, and hard command-safety checks still block.
+- Direct file tools may retain their workspace boundaries even though shell execution is unsandboxed.
+- The mode is never persisted and is not inherited by new sessions; leaving it restores the configured sandbox and
+  permission behavior. Configuration reloads and agent switches never silently change the selected mode.
+- Full access cannot be combined with full-auto, and selecting it does not grant or persist full-auto workspace trust.
 
 ## Threat Model
 

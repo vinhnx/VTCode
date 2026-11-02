@@ -1,8 +1,8 @@
 [package]
 name = "xtask"
-version = "0.179.1"
+version = "0.181.0"
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 publish = false
 
 [lints]

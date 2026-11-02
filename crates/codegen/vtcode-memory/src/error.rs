@@ -39,11 +39,53 @@ pub enum SessionStoreError {
     /// An audit pack is malformed or unsafe (bad schema, path traversal).
     #[error("invalid audit pack: {0}")]
     InvalidPack(String),
+
+    /// The session is already open for writing in another process.
+    #[error(
+        "session {session} is already open in another process; continue there or fork a new session with --session-id <suffix>"
+    )]
+    SessionBusy {
+        /// Session id.
+        session: String,
+    },
+
+    /// A mailbox message failed validation.
+    #[error("invalid mail: {0}")]
+    InvalidMail(String),
+
+    /// The target session does not exist or is not live.
+    #[error("session {session} is not live; messages go to running sessions only")]
+    SessionNotLive {
+        /// Session id.
+        session: String,
+    },
+
+    /// The target inbox is full.
+    #[error("session {session} has too many unread messages; it must drain before accepting more")]
+    MailboxFull {
+        /// Session id.
+        session: String,
+    },
 }
 
 impl SessionStoreError {
     /// Convenience constructor for an IO error at a path.
     pub(crate) fn io(path: impl Into<PathBuf>, source: std::io::Error) -> Self {
         Self::Io { path: path.into(), source }
+    }
+
+    /// Convenience constructor for a mailbox validation failure.
+    pub(crate) fn invalid_mail(reason: impl Into<String>) -> Self {
+        Self::InvalidMail(reason.into())
+    }
+
+    /// Convenience constructor for a message to a non-live session.
+    pub(crate) fn session_not_live(session: impl Into<String>) -> Self {
+        Self::SessionNotLive { session: session.into() }
+    }
+
+    /// Convenience constructor for a send to a full inbox.
+    pub(crate) fn mailbox_full(session: impl Into<String>) -> Self {
+        Self::MailboxFull { session: session.into() }
     }
 }

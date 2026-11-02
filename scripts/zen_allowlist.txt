@@ -52,9 +52,6 @@ vtcode-core/src/tools/registry/executors/cargo_failure_diagnostics.rs:16 | stati
 vtcode-core/src/tools/registry/executors/cargo_failure_diagnostics.rs:19 | static regex for cargo panic location parsing
 vtcode-core/src/tools/skills/mod.rs:725 | filtered to skills with manifests; filter invariant
 vtcode-core/src/tools/web_fetch/classify_helpers.rs:41 | static regex for HTTP status code classification
-vtcode-core/src/tools/web_search/mod.rs:337 | static regex for DuckDuckGo anchor extraction
-vtcode-core/src/tools/web_search/mod.rs:340 | static regex for DuckDuckGo snippet extraction
-vtcode-core/src/tools/web_search/mod.rs:453 | static regex for HTML tag stripping
 vtcode-llm/src/copilot/auth.rs:30 | static regex for GitHub device flow parsing
 vtcode-llm/src/providers/gemini/helpers.rs:1415 | stream payload from Gemini is always an object
 vtcode-llm/src/providers/ollama.rs:65 | static version requirement literal; always valid
@@ -111,7 +108,6 @@ vtcode-core/src/pods/manager.rs:446 | pod manager home directory; default impl
 vtcode-core/src/tools/registry/distributed.rs:47 | OnceCell initialized after first set() call
 vtcode-core/src/tools/search_runtime.rs:86 | cache capacity is a non-zero constant
 vtcode-core/src/tools/skills/mod.rs:635 | filtered to skills with manifests
-vtcode-core/src/tools/web_search/mod.rs:184 | elapsed < cooldown checked above
 
 # Provider/tool call mutex locks; single-threaded access, no poisoning.
 vtcode-core/src/skills/executor.rs:733 | provider calls mutex
@@ -136,9 +132,6 @@ vtcode-memory/src/query.rs:13 | MANIFEST_CACHE_CAPACITY is a non-zero constant
 
 # Static regexes compiled at startup; failure indicates programmer error.
 vtcode-core/src/tools/web_fetch/classify_helpers.rs:40 | static status regex
-vtcode-core/src/tools/web_search/mod.rs:322 | static DDG anchor regex
-vtcode-core/src/tools/web_search/mod.rs:325 | static DDG snippet regex
-vtcode-core/src/tools/web_search/mod.rs:423 | static HTML tag regex
 vtcode-core/src/tools/registry/executors/cargo_failure_diagnostics.rs | static cargo diagnostic regexes
 vtcode-ui/src/tui/core_tui/session/input.rs:1110 | static inline image path regex
 vtcode-ui/src/tui/core_tui/session/wrapping.rs | static URL/path token regex

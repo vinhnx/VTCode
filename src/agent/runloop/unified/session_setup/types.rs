@@ -80,6 +80,7 @@ pub(crate) struct SessionUISetup {
     pub header_context: InlineHeaderContext,
     pub ctrl_c_state: Arc<CtrlCState>,
     pub ctrl_c_notify: Arc<Notify>,
+    pub settings_snapshot: crate::agent::runloop::unified::session_settings::SharedSettingsSnapshot,
     pub input_activity_counter: Arc<AtomicU64>,
     pub checkpoint_manager: Option<vtcode_core::core::agent::snapshots::SnapshotManager>,
     pub session_archive: Option<SessionArchive>,

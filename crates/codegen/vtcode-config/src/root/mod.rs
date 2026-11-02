@@ -1,0 +1,945 @@
+use anyhow::{Result, anyhow, bail};
+use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
+
+use crate::accessibility::reduce_motion_preference;
+use crate::status_line::StatusLineConfig;
+use crate::terminal_title::TerminalTitleConfig;
+use vtcode_commons::ui_protocol::AppIconPreference;
+use vtcode_commons::ui_protocol::DiffPreviewMode;
+
+mod modes;
+
+pub use modes::{
+    LayoutModeOverride, NotificationBackend, NotificationDeliveryMode, ReasoningDisplayMode, ToolDisplayMode,
+    ToolOutputMode, UiDisplayMode,
+};
+
+/// Notification preferences for terminal and desktop alerts.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiNotificationsConfig {
+    /// Master toggle for all runtime notifications.
+    #[serde(default = "default_notifications_enabled")]
+    pub enabled: bool,
+
+    /// Notification transport strategy.
+    #[serde(default)]
+    pub delivery_mode: NotificationDeliveryMode,
+
+    /// Preferred backend for desktop notification delivery.
+    #[serde(default)]
+    pub backend: NotificationBackend,
+
+    /// Suppress notifications while terminal focus is active.
+    #[serde(default = "default_notifications_suppress_when_focused")]
+    pub suppress_when_focused: bool,
+
+    /// Notify when a shell/command execution fails.
+    /// If omitted, falls back to `tool_failure` for backward compatibility.
+    #[serde(default)]
+    pub command_failure: Option<bool>,
+
+    /// Notify when a tool call fails.
+    #[serde(default = "default_notifications_tool_failure")]
+    pub tool_failure: bool,
+
+    /// Notify on runtime/system errors.
+    #[serde(default = "default_notifications_error")]
+    pub error: bool,
+
+    /// Legacy master toggle for completion notifications.
+    /// New installs should prefer `completion_success` and `completion_failure`.
+    #[serde(default = "default_notifications_completion")]
+    pub completion: bool,
+
+    /// Notify when a turn/session completes successfully.
+    /// If omitted, falls back to `completion`.
+    #[serde(default)]
+    pub completion_success: Option<bool>,
+
+    /// Notify when a turn/session is partial, failed, or cancelled.
+    /// If omitted, falls back to `completion`.
+    #[serde(default)]
+    pub completion_failure: Option<bool>,
+
+    /// Notify when human input/approval is required.
+    #[serde(default = "default_notifications_hitl")]
+    pub hitl: bool,
+
+    /// Notify when policy approval is required.
+    /// If omitted, falls back to `hitl` for backward compatibility.
+    #[serde(default)]
+    pub policy_approval: Option<bool>,
+
+    /// Notify on generic request events.
+    /// If omitted, falls back to `hitl` for backward compatibility.
+    #[serde(default)]
+    pub request: Option<bool>,
+
+    /// Notify on successful tool calls.
+    #[serde(default = "default_notifications_tool_success")]
+    pub tool_success: bool,
+
+    /// Suppression window for repeated identical notifications.
+    #[serde(default = "default_notifications_repeat_window_seconds")]
+    pub repeat_window_seconds: u64,
+
+    /// Maximum identical notifications allowed within the suppression window.
+    #[serde(default = "default_notifications_max_identical_in_window")]
+    pub max_identical_in_window: u32,
+}
+
+impl Default for UiNotificationsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_notifications_enabled(),
+            delivery_mode: NotificationDeliveryMode::default(),
+            backend: NotificationBackend::default(),
+            suppress_when_focused: default_notifications_suppress_when_focused(),
+            command_failure: Some(default_notifications_command_failure()),
+            tool_failure: default_notifications_tool_failure(),
+            error: default_notifications_error(),
+            completion: default_notifications_completion(),
+            completion_success: Some(default_notifications_completion_success()),
+            completion_failure: Some(default_notifications_completion_failure()),
+            hitl: default_notifications_hitl(),
+            policy_approval: Some(default_notifications_policy_approval()),
+            request: Some(default_notifications_request()),
+            tool_success: default_notifications_tool_success(),
+            repeat_window_seconds: default_notifications_repeat_window_seconds(),
+            max_identical_in_window: default_notifications_max_identical_in_window(),
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiFullscreenConfig {
+    /// Capture mouse events inside the fullscreen UI.
+    /// Can also be controlled via VTCODE_FULLSCREEN_MOUSE_CAPTURE=0/1.
+    #[serde(default = "default_fullscreen_mouse_capture")]
+    pub mouse_capture: bool,
+
+    /// Copy selected transcript text immediately when the mouse selection ends
+    /// (click-drag or double-click word select).
+    /// When disabled, copy manually with Ctrl+C (transcript/input selection)
+    /// or Ctrl+O (last agent response).
+    /// Can also be controlled via VTCODE_FULLSCREEN_COPY_ON_SELECT=0/1.
+    #[serde(default = "default_fullscreen_copy_on_select")]
+    pub copy_on_select: bool,
+
+    /// Multiplier applied to mouse wheel transcript scrolling in fullscreen mode.
+    /// Values are clamped to the range 1..=20.
+    /// Can also be controlled via VTCODE_FULLSCREEN_SCROLL_SPEED.
+    #[serde(default = "default_fullscreen_scroll_speed")]
+    pub scroll_speed: u8,
+}
+
+impl Default for UiFullscreenConfig {
+    fn default() -> Self {
+        Self {
+            mouse_capture: default_fullscreen_mouse_capture(),
+            copy_on_select: default_fullscreen_copy_on_select(),
+            scroll_speed: default_fullscreen_scroll_speed(),
+        }
+    }
+}
+
+/// Presentation controls for the session-local Transcript Review overlay.
+/// These settings affect only the interactive UI; captured transcript content
+/// and exported output remain complete and independent of the controls.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiTranscriptReviewConfig {
+    /// Show the click/keyboard affordance on compact command rows.
+    #[serde(default = "default_transcript_review_control")]
+    pub show_hints: bool,
+
+    /// Show the keyboard guide footer inside Transcript Review.
+    #[serde(default = "default_transcript_review_control")]
+    pub show_shortcut_guide: bool,
+
+    /// Show the mouse-clickable close control in the Transcript Review title.
+    #[serde(default = "default_transcript_review_control")]
+    pub show_close_button: bool,
+}
+
+impl Default for UiTranscriptReviewConfig {
+    fn default() -> Self {
+        Self {
+            show_hints: default_transcript_review_control(),
+            show_shortcut_guide: default_transcript_review_control(),
+            show_close_button: default_transcript_review_control(),
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiConfig {
+    /// Tool output display mode ("compact" or "full")
+    #[serde(default = "default_tool_output_mode")]
+    pub tool_output_mode: ToolOutputMode,
+
+    /// Tool transition summary display mode
+    /// Options: "expanded" (expanded summary layout) or "compact" (one compact summary per tool call)
+    #[serde(default = "default_tool_display_mode")]
+    pub tool_display_mode: ToolDisplayMode,
+
+    /// Session action bindings. Each action maps to one or more key specs;
+    /// an empty list explicitly unbinds the built-in action.
+    #[serde(default, alias = "key_bindings")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "std::collections::BTreeMap<String, Vec<String>>")
+    )]
+    pub keybindings: HashMap<String, Vec<String>>,
+
+    /// Maximum number of lines to display in tool output (prevents transcript flooding)
+    #[serde(default = "default_tool_output_max_lines")]
+    pub tool_output_max_lines: usize,
+
+    /// Maximum bytes of output to display before auto-spooling to disk
+    #[serde(default = "default_tool_output_spool_bytes")]
+    pub tool_output_spool_bytes: usize,
+
+    /// Optional custom directory for spooled tool output logs
+    #[serde(default)]
+    pub tool_output_spool_dir: Option<String>,
+
+    /// Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
+    #[serde(default = "default_allow_tool_ansi")]
+    pub allow_tool_ansi: bool,
+
+    /// Number of rows to allocate for inline UI viewport
+    #[serde(default = "default_inline_viewport_rows")]
+    pub inline_viewport_rows: u16,
+
+    /// Reasoning display mode for chat UI ("always", "toggle", or "hidden"). Options: "always", "toggle", "hidden".
+    #[serde(default = "default_reasoning_display_mode")]
+    pub reasoning_display_mode: ReasoningDisplayMode,
+
+    /// Default visibility for reasoning when display mode is "toggle"
+    #[serde(default = "default_reasoning_visible_default")]
+    pub reasoning_visible_default: bool,
+
+    /// Default collapse state of agent thinking/reasoning blocks ("collapsed" or "extended")
+    #[serde(default = "default_thinking_display")]
+    pub thinking_display: vtcode_commons::ui_protocol::ThinkingBlockState,
+
+    /// Enable Vim-style prompt editing in the interactive terminal UI.
+    #[serde(default = "default_vim_mode")]
+    pub vim_mode: bool,
+
+    /// Status line configuration settings
+    #[serde(default)]
+    pub status_line: StatusLineConfig,
+
+    /// Terminal title configuration settings
+    #[serde(default)]
+    pub terminal_title: TerminalTitleConfig,
+
+    /// Keyboard protocol enhancements for modern terminals (e.g. Kitty protocol)
+    #[serde(default)]
+    pub keyboard_protocol: KeyboardProtocolConfig,
+
+    /// Override the responsive layout mode
+    #[serde(default)]
+    pub layout_mode: LayoutModeOverride,
+
+    /// UI display mode preset (full, minimal, focused)
+    #[serde(default)]
+    pub display_mode: UiDisplayMode,
+
+    /// Show the right sidebar (queue, context, tools)
+    #[serde(default = "default_show_sidebar")]
+    pub show_sidebar: bool,
+
+    /// Dim completed todo items (- \[x\]) in agent output
+    #[serde(default = "default_dim_completed_todos")]
+    pub dim_completed_todos: bool,
+
+    /// Automatically show the plan-mode TODO task tracking panel when a plan
+    /// is approved or the task tracker is updated. When disabled, the panel
+    /// can still be toggled with the `toggle_task_panel` keybinding.
+    #[serde(default = "default_show_task_panel")]
+    pub show_task_panel: bool,
+
+    /// Add spacing between message blocks
+    #[serde(default = "default_message_block_spacing")]
+    pub message_block_spacing: bool,
+
+    /// Show per-turn elapsed timer line after completed turns
+    #[serde(default = "default_show_turn_timer")]
+    pub show_turn_timer: bool,
+
+    /// Show warning/error/fatal diagnostic lines in the TUI transcript and log panel.
+    /// Also controls whether ERROR-level tracing logs appear in the TUI session log.
+    /// Errors are always captured in the session archive JSON regardless of this setting.
+    #[serde(default = "default_show_diagnostics_in_transcript")]
+    pub show_diagnostics_in_transcript: bool,
+
+    // === Color Accessibility Configuration ===
+    // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research.
+    /// Minimum contrast ratio for text against background (WCAG 2.1 standard)
+    /// - 4.5: WCAG AA (default, suitable for most users)
+    /// - 7.0: WCAG AAA (enhanced, for low-vision users)
+    /// - 3.0: Large text minimum
+    /// - 1.0: Disable contrast enforcement
+    #[serde(default = "default_minimum_contrast")]
+    pub minimum_contrast: f32,
+
+    /// Compatibility mode for legacy terminals that map bold to bright colors.
+    /// When enabled, avoids using bold styling on text that would become bright colors,
+    /// preventing visibility issues in terminals with "bold is bright" behavior.
+    #[serde(default = "default_bold_is_bright")]
+    pub bold_is_bright: bool,
+
+    /// Restrict color palette to the 11 "safe" ANSI colors portable across common themes.
+    /// Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan
+    /// Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes),
+    /// white/brwhite (light themes), brblue (Basic Dark).
+    /// See: <https://blog.xoria.org/terminal-colors/>
+    #[serde(default = "default_safe_colors_only")]
+    pub safe_colors_only: bool,
+
+    /// Color scheme mode for automatic light/dark theme switching.
+    /// - "auto": Detect from terminal (via the Contour dark/light query where supported, else OSC 11, or the COLORFGBG env var) and follow live palette changes
+    /// - "light": Force light mode theme selection
+    /// - "dark": Force dark mode theme selection
+    #[serde(default = "default_color_scheme_mode")]
+    pub color_scheme_mode: ColorSchemeMode,
+
+    /// Application icon artwork variant for terminal tab icons and the desktop picker.
+    /// - "dynamic": Follow the active light/dark mode (default)
+    /// - "light": Always use the light-mode artwork
+    /// - "dark": Always use the dark-mode artwork
+    /// - "clear": Always use the clear (transparent glass V) artwork
+    /// - "tinted": Always use the tinted (monochrome slate) artwork
+    #[serde(default = "default_app_icon")]
+    pub app_icon: AppIconPreference,
+
+    /// Terminal program status reports for the interactive TUI (on by default).
+    #[serde(default)]
+    pub program_status: UiProgramStatusConfig,
+
+    /// Notification preferences for attention events.
+    #[serde(default)]
+    pub notifications: UiNotificationsConfig,
+
+    /// Fullscreen interaction settings for alternate-screen rendering.
+    #[serde(default)]
+    pub fullscreen: UiFullscreenConfig,
+
+    /// Screen reader mode: disables animations, uses plain text thinking indicators,
+    /// and opens Transcript Review in raw mode. Alternate-screen compatibility
+    /// depends on the terminal and assistive technology.
+    /// Can also be enabled via VTCODE_SCREEN_READER=1 environment variable.
+    #[serde(default = "default_screen_reader_mode")]
+    pub screen_reader_mode: bool,
+
+    /// Reduce motion mode: keeps progress labels visible without animated effects.
+    /// If omitted, defaults from VTCODE_REDUCE_MOTION, then a supported OS
+    /// accessibility preference; unknown or unavailable preferences default to false.
+    #[serde(default = "default_reduce_motion_mode")]
+    pub reduce_motion_mode: bool,
+
+    /// Keep animated progress indicators while reduce_motion_mode is enabled.
+    /// Screen reader mode still disables progress animation.
+    #[serde(default = "default_reduce_motion_keep_progress_animation")]
+    pub reduce_motion_keep_progress_animation: bool,
+
+    /// Hide the full TUI header, showing only version info in a compact line.
+    #[serde(default = "default_hide_header")]
+    pub hide_header: bool,
+
+    /// Diff preview layout for file-edit approval overlays.
+    /// Options: "inline" (default) or "side-by-side".
+    #[serde(default = "default_diff_preview_mode")]
+    pub diff_preview_mode: DiffPreviewMode,
+
+    /// Transcript Review presentation controls.
+    #[serde(default)]
+    pub transcript_review: UiTranscriptReviewConfig,
+}
+
+/// Color scheme mode for theme selection
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ColorSchemeMode {
+    /// Detect from terminal environment (OSC 11 query or COLORFGBG)
+    #[default]
+    Auto,
+    /// Force light color scheme
+    Light,
+    /// Force dark color scheme
+    Dark,
+    /// Catch-all for unknown modes added by future versions.
+    #[serde(other)]
+    Unknown,
+}
+
+fn default_minimum_contrast() -> f32 {
+    crate::constants::ui::THEME_MIN_CONTRAST_RATIO
+}
+
+fn default_bold_is_bright() -> bool {
+    false
+}
+
+fn default_safe_colors_only() -> bool {
+    false
+}
+
+fn default_color_scheme_mode() -> ColorSchemeMode {
+    ColorSchemeMode::Auto
+}
+
+fn default_app_icon() -> AppIconPreference {
+    AppIconPreference::Dynamic
+}
+
+fn default_show_sidebar() -> bool {
+    true
+}
+
+fn default_dim_completed_todos() -> bool {
+    true
+}
+
+fn default_message_block_spacing() -> bool {
+    true
+}
+
+fn default_program_status_enabled() -> bool {
+    true
+}
+
+fn default_show_turn_timer() -> bool {
+    false
+}
+
+fn default_show_diagnostics_in_transcript() -> bool {
+    false
+}
+
+fn default_vim_mode() -> bool {
+    false
+}
+
+fn default_notifications_enabled() -> bool {
+    true
+}
+
+fn default_notifications_suppress_when_focused() -> bool {
+    true
+}
+
+fn default_notifications_command_failure() -> bool {
+    false
+}
+
+fn default_notifications_tool_failure() -> bool {
+    false
+}
+
+fn default_notifications_error() -> bool {
+    true
+}
+
+fn default_notifications_completion() -> bool {
+    true
+}
+
+fn default_notifications_completion_success() -> bool {
+    false
+}
+
+fn default_notifications_completion_failure() -> bool {
+    true
+}
+
+fn default_notifications_hitl() -> bool {
+    true
+}
+
+fn default_notifications_policy_approval() -> bool {
+    true
+}
+
+fn default_notifications_request() -> bool {
+    false
+}
+
+fn default_notifications_tool_success() -> bool {
+    false
+}
+
+fn default_notifications_repeat_window_seconds() -> u64 {
+    30
+}
+
+fn default_notifications_max_identical_in_window() -> u32 {
+    1
+}
+
+fn env_bool_var(name: &str) -> Option<bool> {
+    crate::env_helpers::read_env_var(name).and_then(|v| vtcode_commons::utils::parse_bool_env_value(&v))
+}
+
+fn env_u8_var(name: &str) -> Option<u8> {
+    crate::env_helpers::read_env_var(name)
+        .and_then(|value| value.trim().parse::<u8>().ok())
+        .map(clamp_fullscreen_scroll_speed)
+}
+
+fn clamp_fullscreen_scroll_speed(value: u8) -> u8 {
+    value.clamp(1, 20)
+}
+
+fn default_fullscreen_mouse_capture() -> bool {
+    env_bool_var("VTCODE_FULLSCREEN_MOUSE_CAPTURE").unwrap_or(true)
+}
+
+fn default_fullscreen_copy_on_select() -> bool {
+    env_bool_var("VTCODE_FULLSCREEN_COPY_ON_SELECT").unwrap_or(true)
+}
+
+fn default_fullscreen_scroll_speed() -> u8 {
+    env_u8_var("VTCODE_FULLSCREEN_SCROLL_SPEED").unwrap_or(3)
+}
+
+fn default_screen_reader_mode() -> bool {
+    env_bool_var("VTCODE_SCREEN_READER").unwrap_or(false)
+}
+
+fn default_reduce_motion_mode() -> bool {
+    env_bool_var("VTCODE_REDUCE_MOTION")
+        .or_else(reduce_motion_preference)
+        .unwrap_or(false)
+}
+
+fn default_reduce_motion_keep_progress_animation() -> bool {
+    false
+}
+
+fn default_hide_header() -> bool {
+    true
+}
+
+fn default_diff_preview_mode() -> DiffPreviewMode {
+    DiffPreviewMode::Inline
+}
+
+fn default_transcript_review_control() -> bool {
+    true
+}
+
+fn default_show_task_panel() -> bool {
+    false
+}
+
+fn default_ask_questions_enabled() -> bool {
+    true
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            tool_output_mode: default_tool_output_mode(),
+            tool_display_mode: default_tool_display_mode(),
+            keybindings: HashMap::new(),
+            tool_output_max_lines: default_tool_output_max_lines(),
+            tool_output_spool_bytes: default_tool_output_spool_bytes(),
+            tool_output_spool_dir: None,
+            allow_tool_ansi: default_allow_tool_ansi(),
+            inline_viewport_rows: default_inline_viewport_rows(),
+            reasoning_display_mode: default_reasoning_display_mode(),
+            reasoning_visible_default: default_reasoning_visible_default(),
+            thinking_display: default_thinking_display(),
+            vim_mode: default_vim_mode(),
+            status_line: StatusLineConfig::default(),
+            terminal_title: TerminalTitleConfig::default(),
+            keyboard_protocol: KeyboardProtocolConfig::default(),
+            layout_mode: LayoutModeOverride::default(),
+            display_mode: UiDisplayMode::default(),
+            show_sidebar: default_show_sidebar(),
+            dim_completed_todos: default_dim_completed_todos(),
+            show_task_panel: default_show_task_panel(),
+            message_block_spacing: default_message_block_spacing(),
+            show_turn_timer: default_show_turn_timer(),
+            show_diagnostics_in_transcript: default_show_diagnostics_in_transcript(),
+            // Color accessibility defaults
+            minimum_contrast: default_minimum_contrast(),
+            bold_is_bright: default_bold_is_bright(),
+            safe_colors_only: default_safe_colors_only(),
+            color_scheme_mode: default_color_scheme_mode(),
+            app_icon: default_app_icon(),
+            program_status: UiProgramStatusConfig::default(),
+            notifications: UiNotificationsConfig::default(),
+            fullscreen: UiFullscreenConfig::default(),
+            screen_reader_mode: default_screen_reader_mode(),
+            reduce_motion_mode: default_reduce_motion_mode(),
+            reduce_motion_keep_progress_animation: default_reduce_motion_keep_progress_animation(),
+            hide_header: default_hide_header(),
+            diff_preview_mode: default_diff_preview_mode(),
+            transcript_review: UiTranscriptReviewConfig::default(),
+        }
+    }
+}
+
+/// Terminal Program Status Protocol preferences.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct UiProgramStatusConfig {
+    /// Emit OSC 7501 status reports on the interactive TUI terminal stream.
+    #[serde(default = "default_program_status_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for UiProgramStatusConfig {
+    fn default() -> Self {
+        Self { enabled: default_program_status_enabled() }
+    }
+}
+
+/// Chat configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ChatConfig {
+    /// Ask Questions tool configuration (chat.askQuestions.*)
+    #[serde(default, rename = "askQuestions", alias = "ask_questions")]
+    pub ask_questions: AskQuestionsConfig,
+}
+
+/// Ask Questions tool configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AskQuestionsConfig {
+    /// Enable the Ask Questions tool in interactive chat
+    #[serde(default = "default_ask_questions_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for AskQuestionsConfig {
+    fn default() -> Self {
+        Self { enabled: default_ask_questions_enabled() }
+    }
+}
+
+/// PTY configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PtyConfig {
+    /// Enable PTY support for interactive commands
+    #[serde(default = "default_pty_enabled")]
+    pub enabled: bool,
+
+    /// Default terminal rows for PTY sessions
+    #[serde(default = "default_pty_rows")]
+    pub default_rows: u16,
+
+    /// Default terminal columns for PTY sessions
+    #[serde(default = "default_pty_cols")]
+    pub default_cols: u16,
+
+    /// Maximum number of concurrent PTY sessions
+    #[serde(default = "default_max_pty_sessions")]
+    pub max_sessions: usize,
+
+    /// Command timeout in seconds (prevents hanging commands)
+    #[serde(default = "default_pty_timeout")]
+    pub command_timeout_seconds: u64,
+
+    /// Number of recent PTY output lines to display in the chat transcript
+    #[serde(default = "default_stdout_tail_lines")]
+    pub stdout_tail_lines: usize,
+
+    /// Total scrollback buffer size (lines) retained per PTY session
+    #[serde(default = "default_scrollback_lines")]
+    pub scrollback_lines: usize,
+
+    /// Maximum bytes of output to retain per PTY session (prevents memory explosion)
+    #[serde(default = "default_max_scrollback_bytes")]
+    pub max_scrollback_bytes: usize,
+
+    /// Threshold (KB) at which to auto-spool large outputs to disk instead of memory
+    #[serde(default = "default_large_output_threshold_kb")]
+    pub large_output_threshold_kb: usize,
+
+    /// Preferred shell program for PTY sessions (e.g. "zsh", "bash"); falls back to $SHELL
+    #[serde(default)]
+    pub preferred_shell: Option<String>,
+
+    /// Feature-gated shell runtime path that routes shell execution through zsh EXEC_WRAPPER hooks.
+    #[serde(default = "default_shell_zsh_fork")]
+    pub shell_zsh_fork: bool,
+
+    /// Optional absolute path to patched zsh used when shell_zsh_fork is enabled.
+    #[serde(default)]
+    pub zsh_path: Option<String>,
+}
+
+impl Default for PtyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_pty_enabled(),
+            default_rows: default_pty_rows(),
+            default_cols: default_pty_cols(),
+            max_sessions: default_max_pty_sessions(),
+            command_timeout_seconds: default_pty_timeout(),
+            stdout_tail_lines: default_stdout_tail_lines(),
+            scrollback_lines: default_scrollback_lines(),
+            max_scrollback_bytes: default_max_scrollback_bytes(),
+            large_output_threshold_kb: default_large_output_threshold_kb(),
+            preferred_shell: None,
+            shell_zsh_fork: default_shell_zsh_fork(),
+            zsh_path: None,
+        }
+    }
+}
+
+impl PtyConfig {
+    pub fn validate(&self) -> Result<()> {
+        self.zsh_fork_shell_path()?;
+        Ok(())
+    }
+
+    pub fn zsh_fork_shell_path(&self) -> Result<Option<&str>> {
+        if !self.shell_zsh_fork {
+            return Ok(None);
+        }
+
+        let zsh_path = self
+            .zsh_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .ok_or_else(|| {
+                anyhow!(
+                    "pty.shell_zsh_fork is enabled, but pty.zsh_path is not configured. \
+                     Set pty.zsh_path to an absolute path to patched zsh."
+                )
+            })?;
+
+        #[cfg(not(unix))]
+        {
+            let _ = zsh_path;
+            bail!("pty.shell_zsh_fork is only supported on Unix platforms");
+        }
+
+        #[cfg(unix)]
+        {
+            let path = std::path::Path::new(zsh_path);
+            if !path.is_absolute() {
+                bail!("pty.zsh_path '{zsh_path}' must be an absolute path when pty.shell_zsh_fork is enabled");
+            }
+            if !path.exists() {
+                bail!("pty.zsh_path '{zsh_path}' does not exist (required when pty.shell_zsh_fork is enabled)");
+            }
+            if !path.is_file() {
+                bail!("pty.zsh_path '{zsh_path}' is not a file (required when pty.shell_zsh_fork is enabled)");
+            }
+
+            Ok(Some(zsh_path))
+        }
+    }
+}
+
+fn default_pty_enabled() -> bool {
+    true
+}
+
+fn default_pty_rows() -> u16 {
+    24
+}
+
+fn default_pty_cols() -> u16 {
+    80
+}
+
+fn default_max_pty_sessions() -> usize {
+    10
+}
+
+fn default_pty_timeout() -> u64 {
+    300
+}
+
+fn default_shell_zsh_fork() -> bool {
+    false
+}
+
+fn default_stdout_tail_lines() -> usize {
+    crate::constants::defaults::DEFAULT_PTY_STDOUT_TAIL_LINES
+}
+
+fn default_scrollback_lines() -> usize {
+    crate::constants::defaults::DEFAULT_PTY_SCROLLBACK_LINES
+}
+
+fn default_max_scrollback_bytes() -> usize {
+    // Reduced from 50MB to 25MB for memory-constrained development environments
+    // Can be overridden in vtcode.toml with: pty.max_scrollback_bytes = 52428800
+    25_000_000 // 25MB max to prevent memory explosion
+}
+
+fn default_large_output_threshold_kb() -> usize {
+    5_000 // 5MB threshold for auto-spooling
+}
+
+fn default_tool_output_mode() -> ToolOutputMode {
+    ToolOutputMode::Compact
+}
+
+fn default_tool_display_mode() -> ToolDisplayMode {
+    ToolDisplayMode::Compact
+}
+
+fn default_tool_output_max_lines() -> usize {
+    30
+}
+
+fn default_tool_output_spool_bytes() -> usize {
+    80_000
+}
+
+fn default_allow_tool_ansi() -> bool {
+    false
+}
+
+fn default_inline_viewport_rows() -> u16 {
+    crate::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS
+}
+
+fn default_reasoning_display_mode() -> ReasoningDisplayMode {
+    ReasoningDisplayMode::Toggle
+}
+
+fn default_reasoning_visible_default() -> bool {
+    crate::constants::ui::DEFAULT_REASONING_VISIBLE
+}
+
+fn default_thinking_display() -> vtcode_commons::ui_protocol::ThinkingBlockState {
+    vtcode_commons::ui_protocol::ThinkingBlockState::Collapsed
+}
+
+/// Kitty keyboard protocol configuration
+/// Reference: <https://sw.kovidgoyal.net/kitty/keyboard-protocol/>
+/// Keyboard protocol preset mode
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KeyboardProtocolMode {
+    /// Standard enhancements (disambiguate + event types + alternate keys)
+    #[default]
+    Default,
+    /// All enhancements including report-all-keys
+    Full,
+    /// Minimal: disambiguate escape codes only
+    Minimal,
+    /// Custom: use individual toggle fields
+    Custom,
+}
+
+impl KeyboardProtocolMode {
+    /// Returns the snake_case string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Full => "full",
+            Self::Minimal => "minimal",
+            Self::Custom => "custom",
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct KeyboardProtocolConfig {
+    /// Enable keyboard protocol enhancements (master toggle)
+    #[serde(default = "default_keyboard_protocol_enabled")]
+    pub enabled: bool,
+
+    /// Preset mode: default, full, minimal, or custom
+    #[serde(default = "default_keyboard_protocol_mode")]
+    pub mode: KeyboardProtocolMode,
+
+    /// Resolve Esc key ambiguity (recommended for performance)
+    #[serde(default = "default_disambiguate_escape_codes")]
+    pub disambiguate_escape_codes: bool,
+
+    /// Report press, release, and repeat events
+    #[serde(default = "default_report_event_types")]
+    pub report_event_types: bool,
+
+    /// Report alternate key layouts (e.g. for non-US keyboards)
+    #[serde(default = "default_report_alternate_keys")]
+    pub report_alternate_keys: bool,
+
+    /// Report all keys, including modifier-only keys (Shift, Ctrl)
+    #[serde(default = "default_report_all_keys")]
+    pub report_all_keys: bool,
+}
+
+impl Default for KeyboardProtocolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_keyboard_protocol_enabled(),
+            mode: default_keyboard_protocol_mode(),
+            disambiguate_escape_codes: default_disambiguate_escape_codes(),
+            report_event_types: default_report_event_types(),
+            report_alternate_keys: default_report_alternate_keys(),
+            report_all_keys: default_report_all_keys(),
+        }
+    }
+}
+
+impl KeyboardProtocolConfig {
+    pub fn validate(&self) -> Result<()> {
+        // All enum variants are valid; nothing to validate.
+        let _ = self.mode;
+        Ok(())
+    }
+}
+
+fn default_keyboard_protocol_enabled() -> bool {
+    std::env::var("VTCODE_KEYBOARD_PROTOCOL_ENABLED")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(true)
+}
+
+fn default_keyboard_protocol_mode() -> KeyboardProtocolMode {
+    std::env::var("VTCODE_KEYBOARD_PROTOCOL_MODE")
+        .ok()
+        .and_then(|v| match v.to_ascii_lowercase().as_str() {
+            "default" => Some(KeyboardProtocolMode::Default),
+            "full" => Some(KeyboardProtocolMode::Full),
+            "minimal" => Some(KeyboardProtocolMode::Minimal),
+            "custom" => Some(KeyboardProtocolMode::Custom),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+fn default_disambiguate_escape_codes() -> bool {
+    true
+}
+
+fn default_report_event_types() -> bool {
+    true
+}
+
+fn default_report_alternate_keys() -> bool {
+    true
+}
+
+fn default_report_all_keys() -> bool {
+    false
+}
+#[cfg(test)]
+mod tests;

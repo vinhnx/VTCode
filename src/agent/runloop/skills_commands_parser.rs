@@ -109,6 +109,7 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
         "regenerate-index" | "--regenerate-index" | "regen" | "--regen" => {
             Ok(Some(SkillCommandAction::RegenerateIndex))
         }
+        "doctor" | "--doctor" => Ok(Some(SkillCommandAction::Doctor)),
         cmd => Err(anyhow::anyhow!("unknown skills subcommand: {cmd}")),
     }
 }
@@ -202,5 +203,11 @@ mod tests {
     fn test_parse_non_skill_command() {
         let result = parse_skill_command("/help").unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_skills_doctor() {
+        assert!(matches!(parse_skill_command("/skills doctor").unwrap(), Some(SkillCommandAction::Doctor)));
+        assert!(matches!(parse_skill_command("/skills --doctor").unwrap(), Some(SkillCommandAction::Doctor)));
     }
 }

@@ -378,9 +378,95 @@ impl PlanContent {
     }
 }
 
+// ---------------------------------------------------------------------------
+// App icon preference
+// ---------------------------------------------------------------------------
+
+/// Selected application-icon artwork, shared by the desktop Dock/bundle icon
+/// picker and the CLI terminal tab icon (`ui.app_icon`).
+///
+/// `Dynamic` (default) follows the active light/dark mode, while
+/// `Light`/`Dark`/`Clear`/`Tinted` pin one artwork. `Unknown` is the serde
+/// catch-all for values added by future versions and behaves like `Dynamic`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum AppIconPreference {
+    /// Follow the active light/dark mode (default).
+    #[default]
+    Dynamic,
+    /// Always use the light-mode artwork.
+    Light,
+    /// Always use the dark-mode artwork.
+    Dark,
+    /// Always use the clear (transparent glass V) artwork.
+    Clear,
+    /// Always use the tinted (monochrome slate) artwork.
+    Tinted,
+    /// Catch-all for unknown values added by future versions.
+    #[serde(other)]
+    Unknown,
+}
+
+impl AppIconPreference {
+    /// Selectable variants, in picker order. `Unknown` is never offered.
+    pub const ALL: [Self; 5] = [Self::Dynamic, Self::Light, Self::Dark, Self::Clear, Self::Tinted];
+
+    /// Canonical persisted id.
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Dynamic | Self::Unknown => "dynamic",
+            Self::Light => "light",
+            Self::Dark => "dark",
+            Self::Clear => "clear",
+            Self::Tinted => "tinted",
+        }
+    }
+
+    /// Parse a persisted id; missing or unknown values fall back to `Dynamic`.
+    #[must_use]
+    pub fn from_id(id: Option<&str>) -> Self {
+        match id.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
+            Some("light") => Self::Light,
+            Some("dark") => Self::Dark,
+            Some("clear") => Self::Clear,
+            Some("tinted") => Self::Tinted,
+            _ => Self::Dynamic,
+        }
+    }
+
+    /// Resolve to the concrete pinned artwork: `Dynamic`/`Unknown` follow the
+    /// given UI mode, while explicit variants pin their own art.
+    #[must_use]
+    pub const fn resolve(self, dark_mode: bool) -> Self {
+        match self {
+            Self::Dynamic | Self::Unknown => {
+                if dark_mode {
+                    Self::Dark
+                } else {
+                    Self::Light
+                }
+            }
+            pinned => pinned,
+        }
+    }
+
+    /// Whether the dark-mode artwork applies under the given UI mode.
+    ///
+    /// Only meaningful for the light/dark/dynamic family: `Clear` and
+    /// `Tinted` pin their own non-flat artwork, so this is always false for
+    /// them. Prefer [`Self::resolve`] when selecting artwork bytes.
+    #[must_use]
+    pub const fn is_dark(self, dark_mode: bool) -> bool {
+        matches!(self.resolve(dark_mode), Self::Dark)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::PlanContent;
+    use crate::ui_protocol::AppIconPreference;
 
     #[test]
     fn parses_sparse_summary_section_without_displaying_section_label() {
@@ -393,5 +479,88 @@ mod tests {
         assert_eq!(plan.summary, "Focus on startup latency.");
         assert_eq!(plan.total_steps, 2);
         assert_eq!(plan.raw_content.lines().next(), Some("Summary"));
+    }
+
+    #[test]
+    fn app_icon_default_is_dynamic() {
+        assert_eq!(AppIconPreference::default(), AppIconPreference::Dynamic);
+    }
+
+    #[test]
+    fn app_icon_ids_round_trip_through_from_id() {
+        for variant in AppIconPreference::ALL {
+            assert_eq!(AppIconPreference::from_id(Some(variant.id())), variant, "{}", variant.id());
+        }
+        assert_eq!(AppIconPreference::from_id(None), AppIconPreference::Dynamic);
+    }
+
+    #[test]
+    fn app_icon_from_id_is_forgiving_about_case_and_whitespace() {
+        assert_eq!(AppIconPreference::from_id(Some(" Light ")), AppIconPreference::Light);
+        assert_eq!(AppIconPreference::from_id(Some("DARK")), AppIconPreference::Dark);
+        assert_eq!(AppIconPreference::from_id(Some("DYNAMIC")), AppIconPreference::Dynamic);
+        assert_eq!(AppIconPreference::from_id(Some(" Clear ")), AppIconPreference::Clear);
+        assert_eq!(AppIconPreference::from_id(Some("TINTED")), AppIconPreference::Tinted);
+    }
+
+    #[test]
+    fn app_icon_from_id_falls_back_to_dynamic_for_unknown_or_empty() {
+        for raw in ["", "   ", "twilight", "bright", "dynamic-v2"] {
+            assert_eq!(AppIconPreference::from_id(Some(raw)), AppIconPreference::Dynamic, "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn app_icon_is_dark_pins_light_and_dark_but_follows_mode_for_dynamic() {
+        for dark_mode in [false, true] {
+            assert!(!AppIconPreference::Light.is_dark(dark_mode), "light pins light art");
+            assert!(AppIconPreference::Dark.is_dark(dark_mode), "dark pins dark art");
+            assert_eq!(AppIconPreference::Dynamic.is_dark(dark_mode), dark_mode, "dynamic follows mode");
+            assert_eq!(AppIconPreference::Unknown.is_dark(dark_mode), dark_mode, "unknown follows mode");
+            assert!(
+                !AppIconPreference::Clear.is_dark(dark_mode),
+                "clear pins its own glass art, never the dark flat tile"
+            );
+            assert!(
+                !AppIconPreference::Tinted.is_dark(dark_mode),
+                "tinted pins its own slate art, never the dark flat tile"
+            );
+        }
+    }
+
+    #[test]
+    fn app_icon_resolve_pins_explicit_variants_and_follows_mode_for_dynamic() {
+        for dark_mode in [false, true] {
+            for pinned in [
+                AppIconPreference::Light,
+                AppIconPreference::Dark,
+                AppIconPreference::Clear,
+                AppIconPreference::Tinted,
+            ] {
+                assert_eq!(pinned.resolve(dark_mode), pinned, "{pinned:?}");
+            }
+            let expected = if dark_mode {
+                AppIconPreference::Dark
+            } else {
+                AppIconPreference::Light
+            };
+            assert_eq!(AppIconPreference::Dynamic.resolve(dark_mode), expected);
+            assert_eq!(AppIconPreference::Unknown.resolve(dark_mode), expected);
+        }
+    }
+
+    #[test]
+    fn app_icon_serde_uses_ids_and_catches_unknown_variants() {
+        assert_eq!(serde_json::from_str::<AppIconPreference>("\"light\"").unwrap(), AppIconPreference::Light);
+        assert_eq!(serde_json::from_str::<AppIconPreference>("\"clear\"").unwrap(), AppIconPreference::Clear);
+        assert_eq!(serde_json::from_str::<AppIconPreference>("\"tinted\"").unwrap(), AppIconPreference::Tinted);
+        assert_eq!(
+            serde_json::from_str::<AppIconPreference>("\"future-variant\"").unwrap(),
+            AppIconPreference::Unknown
+        );
+        assert_eq!(serde_json::to_string(&AppIconPreference::Dynamic).unwrap(), "\"dynamic\"");
+        assert_eq!(serde_json::to_string(&AppIconPreference::Clear).unwrap(), "\"clear\"");
+        assert_eq!(serde_json::to_string(&AppIconPreference::Tinted).unwrap(), "\"tinted\"");
+        assert_eq!(AppIconPreference::Unknown.id(), "dynamic");
     }
 }

@@ -459,6 +459,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
                     Binding::new("Ctrl+T", "open/close review"),
                     Binding::new("r", "rich/raw review"),
                     Binding::new("Ctrl+I", "lists"),
+                    Binding::new("Alt+I", "focus input"),
                     Binding::new("Ctrl+G", "editor"),
                     Binding::new("Ctrl+Z/Y", "undo/redo"),
                 ],

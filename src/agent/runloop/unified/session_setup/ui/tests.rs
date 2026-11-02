@@ -161,14 +161,22 @@ fn structured_resume_lines_omit_persisted_request_context() {
         uni::Message::system(editor),
         uni::Message::user("edit the parser".to_string()),
         uni::Message::turn_scoped_system(few_shot),
+        uni::Message::turn_scoped_system(vtcode_core::utils::session_archive::COLLAPSED_TOOL_OUTPUT_NOTICE.into()),
         uni::Message::assistant("done".to_string()),
     ];
     let lines = build_structured_resume_lines(&history, true);
     assert!(!lines.iter().any(|line| line.text.contains("example body")
         || line.text.contains("src/parser.rs")
+        || line.text.contains("Only you see that command")
         || line.text == "System:"));
     assert!(lines.iter().any(|line| line.text.contains("edit the parser")));
     assert!(lines.iter().any(|line| line.text.contains("done")));
+}
+
+#[test]
+fn structured_resume_lines_keep_ordinary_system_notices() {
+    let lines = build_structured_resume_lines(&[uni::Message::system("Visible system notice".into())], false);
+    assert!(lines.iter().any(|line| line.text.contains("Visible system notice")));
 }
 
 #[test]

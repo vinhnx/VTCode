@@ -12,6 +12,44 @@ pub(crate) fn reasoning_preset(effort: ReasoningEffortLevel, description: &'stat
     ReasoningEffortPreset { effort, description: description.to_string() }
 }
 
+/// Two-tier ladder for providers exposing only a balanced default and a deeper
+/// tier: `Balanced` (medium) then `Deep` (high).
+pub(crate) fn reasoning_ladder_medium_high() -> Vec<ReasoningEffortPreset> {
+    vec![
+        reasoning_preset(ReasoningEffortLevel::Medium, "Balanced"),
+        reasoning_preset(ReasoningEffortLevel::High, "Deep"),
+    ]
+}
+
+/// Three-tier ladder with terse labels: `Fast` (low), `Balanced` (medium),
+/// `Deep` (high).
+pub(crate) fn reasoning_ladder_low_medium_high() -> Vec<ReasoningEffortPreset> {
+    vec![
+        reasoning_preset(ReasoningEffortLevel::Low, "Fast"),
+        reasoning_preset(ReasoningEffortLevel::Medium, "Balanced"),
+        reasoning_preset(ReasoningEffortLevel::High, "Deep"),
+    ]
+}
+
+/// Three-tier ladder whose labels each name the word "reasoning": `Fast
+/// responses` (low), `Balanced reasoning` (medium), `Deep reasoning` (high).
+pub(crate) fn reasoning_ladder_low_medium_high_verbose() -> Vec<ReasoningEffortPreset> {
+    vec![
+        reasoning_preset(ReasoningEffortLevel::Low, "Fast responses"),
+        reasoning_preset(ReasoningEffortLevel::Medium, "Balanced reasoning"),
+        reasoning_preset(ReasoningEffortLevel::High, "Deep reasoning"),
+    ]
+}
+
+/// Two-tier ladder from a balanced high tier to maximum thinking: `Balanced`
+/// (high) then `Maximum thinking` (max).
+pub(crate) fn reasoning_ladder_high_max() -> Vec<ReasoningEffortPreset> {
+    vec![
+        reasoning_preset(ReasoningEffortLevel::High, "Balanced"),
+        reasoning_preset(ReasoningEffortLevel::Max, "Maximum thinking"),
+    ]
+}
+
 mod copilot;
 pub(crate) use copilot::copilot_presets;
 mod gemini;

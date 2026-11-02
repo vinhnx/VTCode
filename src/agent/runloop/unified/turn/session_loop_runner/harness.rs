@@ -20,6 +20,7 @@ pub(super) async fn initialize_harness(
     vt_cfg: Option<&VTCodeConfig>,
     model: &str,
     turn_run_id: &TurnRunId,
+    live_event_sender: Option<vtcode_desktop_protocol::LiveEventSender>,
 ) -> Result<Option<HarnessEventEmitter>> {
     let harness_config = vt_cfg.map(|cfg| cfg.agent.harness.clone()).unwrap_or_default();
     let legacy_path = harness_config
@@ -31,6 +32,9 @@ pub(super) async fn initialize_harness(
     // Canonical persistence is mandatory. Setup errors propagate instead of
     // silently downgrading the run to an unpersisted session.
     let emitter = HarnessEventEmitter::new_async(workspace, &turn_run_id.0, legacy_path).await?;
+    if let Some(sender) = live_event_sender {
+        emitter.attach_live_event_stream(sender)?;
+    }
 
     let session_derived = vtcode_memory::session_directory(workspace, &turn_run_id.0).join("derived");
     let features = FeatureSet::from_config(vt_cfg);
@@ -207,17 +211,66 @@ fn prune_history_envelopes(workspace: &Path, preserve_session_id: &str, max_age_
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use vtcode_core::exec::events::{AgentMessageItem, ItemUpdatedEvent, ThreadItem, ThreadItemDetails};
 
     #[tokio::test]
     async fn initialize_harness_emits_thread_started_without_retention_side_effects() {
         let temp = TempDir::new().expect("temp dir");
         let turn = TurnRunId("test-harness-init".to_string());
-        let emitter = initialize_harness(temp.path(), None, "gpt-5", &turn).await.expect("emitter");
+        let emitter = initialize_harness(temp.path(), None, "gpt-5", &turn, None)
+            .await
+            .expect("emitter");
         assert!(emitter.is_some(), "canonical emitter is mandatory");
         // Retention is deferred: no session store is required for emitter setup.
         assert!(
             !temp.path().join("sessions").exists(),
             "initialize_harness must not create or sweep the session store before first paint"
+        );
+    }
+
+    #[tokio::test]
+    async fn saturated_live_stream_never_fails_emit_or_loses_lifecycle_events() {
+        let temp = TempDir::new().expect("temp dir");
+        let turn = TurnRunId("test-live-saturation".to_string());
+        let (sender, receiver) = vtcode_desktop_protocol::live_event_channel(4);
+        let emitter = initialize_harness(temp.path(), None, "gpt-5", &turn, Some(sender))
+            .await
+            .expect("emitter setup")
+            .expect("canonical emitter");
+
+        // A stalled consumer must not fail the producing turn: every emit
+        // succeeds even though nobody drains the queue.
+        for round in 0..64 {
+            emitter
+                .emit(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                    item: ThreadItem {
+                        context: None,
+                        id: "item-stream".to_string(),
+                        details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: format!("round {round}") }),
+                    },
+                }))
+                .expect("emit must survive a stalled consumer");
+        }
+        drop(emitter);
+
+        let mut saw_thread_started = false;
+        let mut latest_snapshot = None;
+        while let Some(event) = receiver.recv().await {
+            match event.event() {
+                ThreadEvent::ThreadStarted(_) => saw_thread_started = true,
+                ThreadEvent::ItemUpdated(update) => {
+                    if let ThreadItemDetails::AgentMessage(message) = &update.item.details {
+                        latest_snapshot = Some(message.text.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+        assert!(saw_thread_started, "thread.started must survive saturation");
+        assert_eq!(
+            latest_snapshot.as_deref(),
+            Some("round 63"),
+            "the newest snapshot for an item must survive saturation"
         );
     }
 

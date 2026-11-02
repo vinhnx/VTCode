@@ -67,7 +67,8 @@ use_decisions_probe = false
 
 Enable this default-off experiment in `/settings` → **Approvals & Security** to classify tool output with OpenAI
 Decisions. While it is off, the `/model` picker also prompts for it after choosing a direct OpenAI API-key model at the
-standard endpoint (`yes` enables, `no` keeps it disabled, `skip` leaves it unchanged). It applies only to the built-in OpenAI provider using an API key and the standard
+standard endpoint (`yes` enables, `no` keeps it disabled, `skip` leaves it unchanged). It applies only to the
+built-in OpenAI provider using an API key and the standard
 `https://api.openai.com/v1` endpoint. Ordinary interactive TUI sessions can use it with either Build or Auto selected,
 without full-auto or its acknowledgement profile. ChatGPT subscription access, custom providers, gateways, other
 providers, and custom endpoints send no additional probes in normal TUI sessions. Full-auto retains its existing

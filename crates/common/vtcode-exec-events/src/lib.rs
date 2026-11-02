@@ -21,11 +21,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod atif;
+pub mod diagnostic;
+pub use diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity};
+pub mod items;
+pub use items::{
+    AgentMessageItem, AppPreviewItem, AppUiPosture, CommandExecutionItem, CommandExecutionStatus, DecisionItem,
+    FileChangeItem, FileUpdateChange, McpToolCallItem, McpToolCallStatus, PatchApplyStatus, PatchChangeKind, PlanItem,
+    ReasoningItem, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutcome, ToolOutputItem,
+    WebSearchItem, tool_outcome_from_status,
+};
 pub mod matrix;
+pub mod planning;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.18.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.23.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -46,6 +56,11 @@ impl VersionedThreadEvent {
             schema_version: EVENT_SCHEMA_VERSION.to_string(),
             event,
         }
+    }
+
+    /// Returns the nested [`ThreadEvent`] by reference.
+    pub fn event(&self) -> &ThreadEvent {
+        &self.event
     }
 
     /// Returns the nested [`ThreadEvent`], consuming the wrapper.
@@ -75,292 +90,29 @@ where
     }
 }
 
-/// JSON helper utilities for serializing and deserializing thread events.
 #[cfg(feature = "serde-json")]
-pub(crate) mod json {
-    use super::{ThreadEvent, VersionedThreadEvent};
-
-    /// Converts an event into a `serde_json::Value`.
-    pub fn to_value(event: &ThreadEvent) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(event)
-    }
-
-    /// Serializes an event into a JSON string.
-    pub(crate) fn to_string(event: &ThreadEvent) -> serde_json::Result<String> {
-        serde_json::to_string(event)
-    }
-
-    /// Deserializes an event from a JSON string.
-    pub fn from_str(payload: &str) -> serde_json::Result<ThreadEvent> {
-        serde_json::from_str(payload)
-    }
-
-    /// Serializes a [`VersionedThreadEvent`] wrapper.
-    pub(crate) fn versioned_to_string(event: &ThreadEvent) -> serde_json::Result<String> {
-        serde_json::to_string(&VersionedThreadEvent::new(event.clone()))
-    }
-
-    /// Deserializes a [`VersionedThreadEvent`] wrapper.
-    pub(crate) fn versioned_from_str(payload: &str) -> serde_json::Result<VersionedThreadEvent> {
-        serde_json::from_str(payload)
-    }
-}
+pub(crate) mod json;
 
 #[cfg(feature = "telemetry-log")]
-mod log_support {
-    use log::Level;
-
-    use super::{EventEmitter, ThreadEvent, json};
-
-    /// Emits JSON serialized events to the `log` facade at the configured level.
-    #[derive(Debug, Clone)]
-    pub struct LogEmitter {
-        level: Level,
-    }
-
-    impl LogEmitter {
-        /// Creates a new [`LogEmitter`] that logs at the provided [`Level`].
-        pub fn new(level: Level) -> Self {
-            Self { level }
-        }
-    }
-
-    impl Default for LogEmitter {
-        fn default() -> Self {
-            Self { level: Level::Info }
-        }
-    }
-
-    impl EventEmitter for LogEmitter {
-        fn emit(&mut self, event: &ThreadEvent) {
-            if log::log_enabled!(self.level) {
-                match json::to_string(event) {
-                    Ok(serialized) => log::log!(self.level, "{serialized}"),
-                    Err(err) => log::log!(self.level, "failed to serialize vtcode exec event for logging: {err}"),
-                }
-            }
-        }
-    }
-
-    pub use LogEmitter as PublicLogEmitter;
-}
+mod log_support;
 
 #[cfg(feature = "telemetry-log")]
 pub use log_support::PublicLogEmitter as LogEmitter;
 
 #[cfg(feature = "telemetry-tracing")]
-mod tracing_support {
-    use tracing::Level;
-
-    use super::{EVENT_SCHEMA_VERSION, EventEmitter, ThreadEvent, VersionedThreadEvent};
-
-    /// Emits structured events as `tracing` events at the specified level.
-    #[derive(Debug, Clone)]
-    pub struct TracingEmitter {
-        level: Level,
-    }
-
-    impl TracingEmitter {
-        /// Creates a new [`TracingEmitter`] with the provided [`Level`].
-        pub fn new(level: Level) -> Self {
-            Self { level }
-        }
-    }
-
-    impl Default for TracingEmitter {
-        fn default() -> Self {
-            Self { level: Level::INFO }
-        }
-    }
-
-    impl EventEmitter for TracingEmitter {
-        fn emit(&mut self, event: &ThreadEvent) {
-            match self.level {
-                Level::TRACE => tracing::event!(
-                    target: "vtcode_exec_events",
-                    Level::TRACE,
-                    schema_version = EVENT_SCHEMA_VERSION,
-                    event = ?VersionedThreadEvent::new(event.clone()),
-                    "vtcode_exec_event"
-                ),
-                Level::DEBUG => tracing::event!(
-                    target: "vtcode_exec_events",
-                    Level::DEBUG,
-                    schema_version = EVENT_SCHEMA_VERSION,
-                    event = ?VersionedThreadEvent::new(event.clone()),
-                    "vtcode_exec_event"
-                ),
-                Level::INFO => tracing::event!(
-                    target: "vtcode_exec_events",
-                    Level::INFO,
-                    schema_version = EVENT_SCHEMA_VERSION,
-                    event = ?VersionedThreadEvent::new(event.clone()),
-                    "vtcode_exec_event"
-                ),
-                Level::WARN => tracing::event!(
-                    target: "vtcode_exec_events",
-                    Level::WARN,
-                    schema_version = EVENT_SCHEMA_VERSION,
-                    event = ?VersionedThreadEvent::new(event.clone()),
-                    "vtcode_exec_event"
-                ),
-                Level::ERROR => tracing::event!(
-                    target: "vtcode_exec_events",
-                    Level::ERROR,
-                    schema_version = EVENT_SCHEMA_VERSION,
-                    event = ?VersionedThreadEvent::new(event.clone()),
-                    "vtcode_exec_event"
-                ),
-            }
-        }
-    }
-
-    pub use TracingEmitter as PublicTracingEmitter;
-}
+mod tracing_support;
 
 #[cfg(feature = "telemetry-tracing")]
 pub use tracing_support::PublicTracingEmitter as TracingEmitter;
 
 #[cfg(feature = "telemetry-otel")]
-mod otel_support {
-    use opentelemetry::KeyValue;
-    use opentelemetry::trace::{Span, Status, Tracer};
-
-    use super::{EventEmitter, ThreadEvent, ThreadItemDetails};
-
-    /// Emits [`ThreadEvent`]s as OpenTelemetry spans and span events.
-    ///
-    /// Each `ThreadEvent` is recorded as an OTel span with attributes derived
-    /// from the event payload.  Harness events are attached as span events
-    /// with their own attributes (event kind, message, path, etc.).
-    ///
-    /// # Usage
-    ///
-    /// ```rust,ignore
-    /// // Requires concrete SDK type (e.g. opentelemetry_sdk::trace::SdkTracerProvider)
-    /// # use vtcode_exec_events::OtelEmitter;
-    /// # let tracer = opentelemetry_sdk::trace::SdkTracerProvider::default()
-    /// #     .tracer("vtcode");
-    /// # let mut emitter = OtelEmitter::new(tracer);
-    /// ```
-    pub struct OtelEmitter<T: Tracer> {
-        tracer: T,
-    }
-
-    impl<T: Tracer> OtelEmitter<T> {
-        pub fn new(tracer: T) -> Self {
-            Self { tracer }
-        }
-    }
-
-    impl<T: Tracer> EventEmitter for OtelEmitter<T> {
-        fn emit(&mut self, event: &ThreadEvent) {
-            let span_name = match event {
-                ThreadEvent::ThreadStarted(_) => "thread.started",
-                ThreadEvent::ThreadCompleted(_) => "thread.completed",
-                ThreadEvent::ContextReset(_) => "context.reset",
-                ThreadEvent::TurnStarted(_) => "turn.started",
-                ThreadEvent::TurnCompleted(_) => "turn.completed",
-                ThreadEvent::TurnFailed(_) => "turn.failed",
-                ThreadEvent::ItemStarted(_) => "item.started",
-                ThreadEvent::ItemUpdated(_) => "item.updated",
-                ThreadEvent::ItemCompleted(_) => "item.completed",
-                ThreadEvent::Error(_) => "error",
-                _ => "event",
-            };
-
-            let mut span = self.tracer.start(span_name);
-
-            match event {
-                ThreadEvent::ThreadStarted(e) => {
-                    span.set_attribute(KeyValue::new("thread_id", e.thread_id.clone()));
-                }
-                ThreadEvent::ThreadCompleted(e) => {
-                    if let Some(ref cost) = e.total_cost_usd {
-                        span.set_attribute(KeyValue::new("total_cost_usd", cost.as_f64().unwrap_or(0.0)));
-                    }
-                    span.set_attribute(KeyValue::new(
-                        "input_tokens",
-                        i64::try_from(e.usage.input_tokens).unwrap_or(i64::MAX),
-                    ));
-                    span.set_attribute(KeyValue::new(
-                        "output_tokens",
-                        i64::try_from(e.usage.output_tokens).unwrap_or(i64::MAX),
-                    ));
-                    span.set_attribute(KeyValue::new("completion_subtype", e.subtype.as_str().to_string()));
-                }
-                ThreadEvent::ContextReset(e) => {
-                    span.set_attribute(KeyValue::new("thread_id", e.thread_id.clone()));
-                    span.set_attribute(KeyValue::new("turn_id", e.turn_id.clone()));
-                    span.set_attribute(KeyValue::new("plan_preserved", e.plan_preserved));
-                    span.set_attribute(KeyValue::new(
-                        "previous_context_usage_percent",
-                        e.previous_context_usage_percent as i64,
-                    ));
-                    span.set_attribute(KeyValue::new("tool_budget_reset", e.tool_budget_reset));
-                }
-                ThreadEvent::TurnCompleted(e) => {
-                    span.set_attribute(KeyValue::new(
-                        "turn_input_tokens",
-                        i64::try_from(e.usage.input_tokens).unwrap_or(i64::MAX),
-                    ));
-                    span.set_attribute(KeyValue::new(
-                        "turn_output_tokens",
-                        i64::try_from(e.usage.output_tokens).unwrap_or(i64::MAX),
-                    ));
-                }
-                ThreadEvent::ItemCompleted(e) => {
-                    if let ThreadItemDetails::Harness(harness) = &e.item.details {
-                        span.set_attribute(KeyValue::new("harness_event", format!("{:?}", harness.event)));
-                        if let Some(ref msg) = harness.message {
-                            span.set_attribute(KeyValue::new("harness_message", msg.clone()));
-                        }
-                        if let Some(ref path) = harness.path {
-                            span.set_attribute(KeyValue::new("harness_path", path.clone()));
-                        }
-                        if let Some(dur) = harness.duration_ms {
-                            span.set_attribute(KeyValue::new("duration_ms", i64::try_from(dur).unwrap_or(i64::MAX)));
-                        }
-                        let mut event_attrs = vec![KeyValue::new("event_kind", format!("{:?}", harness.event))];
-                        if let Some(ref msg) = harness.message {
-                            event_attrs.push(KeyValue::new("message", msg.clone()));
-                        }
-                        span.add_event("harness_event", event_attrs);
-                    }
-                }
-                ThreadEvent::Error(e) => {
-                    span.set_status(Status::Error { description: e.message.clone().into() });
-                    span.set_attribute(KeyValue::new("error_message", e.message.clone()));
-                }
-                _ => {}
-            }
-
-            span.end();
-        }
-    }
-
-    pub use OtelEmitter as PublicOtelEmitter;
-}
+mod otel_support;
 
 #[cfg(feature = "telemetry-otel")]
 pub use otel_support::PublicOtelEmitter as OtelEmitter;
 
 #[cfg(feature = "schema-export")]
-pub mod schema {
-    use schemars::{Schema, schema_for};
-
-    use super::{ThreadEvent, VersionedThreadEvent};
-
-    /// Generates a JSON Schema describing [`ThreadEvent`].
-    pub fn thread_event_schema() -> Schema {
-        schema_for!(ThreadEvent)
-    }
-
-    /// Generates a JSON Schema describing [`VersionedThreadEvent`].
-    pub fn versioned_thread_event_schema() -> Schema {
-        schema_for!(VersionedThreadEvent)
-    }
-}
+pub mod schema;
 
 /// Structured events emitted during autonomous execution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -405,6 +157,11 @@ pub enum ThreadEvent {
     /// Indicates that an item reached a terminal state.
     #[serde(rename = "item.completed")]
     ItemCompleted(ItemCompletedEvent),
+    /// Emitted when an MCP server offers app UI that the `off` apps tier
+    /// refuses. No `ui://` resource was fetched and no app rows render; the
+    /// refused URIs are listed so the denial stays visible.
+    #[serde(rename = "app.sandbox_denied")]
+    AppSandboxDenied(Box<AppSandboxDeniedEvent>),
     /// Emitted when a tool requires user permission before execution.
     #[serde(rename = "permission.requested")]
     PermissionRequested(PermissionRequestedEvent),
@@ -779,6 +536,17 @@ pub struct ThreadErrorEvent {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct AppSandboxDeniedEvent {
+    /// Tool whose result offered the refused app UI.
+    pub tool: String,
+    /// Apps tier that refused the UI (`off`).
+    pub tier: String,
+    /// Refused `ui://` URIs, in first-seen order (capped at 4).
+    pub uris: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct Usage {
@@ -891,6 +659,9 @@ pub struct PlanDeltaEvent {
     pub item_id: String,
     /// Incremental plan text chunk.
     pub delta: String,
+    /// Runtime-owned recovery checkpoint; absent in older sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<Box<planning::PlanningRecoverySnapshot>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -943,320 +714,6 @@ pub struct PlanApprovalResolvedEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct ThreadItem {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub context: Option<Box<ItemContext>>,
-    /// Stable identifier associated with the item.
-    pub id: String,
-    /// Embedded event details for the item type.
-    #[serde(flatten)]
-    pub details: ThreadItemDetails,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ThreadItemDetails {
-    /// Message authored by the agent.
-    AgentMessage(AgentMessageItem),
-    /// Structured plan content authored by the agent in Planning workflow.
-    Plan(PlanItem),
-    /// Free-form reasoning text produced during a turn.
-    Reasoning(Box<ReasoningItem>),
-    /// Public rationale explicitly recorded by the agent; never private reasoning.
-    Decision(Box<DecisionItem>),
-    /// Command execution lifecycle update for an actual shell/PTY process.
-    CommandExecution(Box<CommandExecutionItem>),
-    /// Tool invocation lifecycle update.
-    ToolInvocation(Box<ToolInvocationItem>),
-    /// Tool output lifecycle update tied to a tool invocation.
-    ToolOutput(Box<ToolOutputItem>),
-    /// File change summary associated with the turn.
-    FileChange(Box<FileChangeItem>),
-    /// MCP tool invocation status.
-    McpToolCall(Box<McpToolCallItem>),
-    /// Web search event emitted by a registered search provider.
-    WebSearch(Box<WebSearchItem>),
-    /// Harness-managed continuation or verification lifecycle event.
-    Harness(Box<HarnessEventItem>),
-    /// General error captured for auditing.
-    Error(ErrorItem),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct AgentMessageItem {
-    /// Textual content of the agent message.
-    pub text: String,
-}
-
-/// A consequential choice and the agent's reported public rationale.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct DecisionItem {
-    pub summary: String,
-    pub rationale: String,
-    #[serde(default)]
-    pub alternatives: Vec<String>,
-    #[serde(default)]
-    pub evidence_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct PlanItem {
-    /// Plan markdown content.
-    pub text: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct ReasoningItem {
-    /// Free-form reasoning content captured during planning.
-    pub text: String,
-    /// Optional stage of reasoning (e.g., "analysis", "plan", "verification",
-    /// or the bounded evidence-only "diagnosis" stage).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stage: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum CommandExecutionStatus {
-    /// Command finished successfully.
-    #[default]
-    Completed,
-    /// Command failed (non-zero exit code or runtime error).
-    Failed,
-    /// Command is still running and may emit additional output.
-    InProgress,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct CommandExecutionItem {
-    /// Tool or command identifier executed by the runner.
-    pub command: String,
-    /// Arguments passed to the tool invocation, when available.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<Value>,
-    /// Aggregated output emitted by the command.
-    #[serde(default)]
-    pub aggregated_output: String,
-    /// Exit code reported by the process, when available.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exit_code: Option<i32>,
-    /// Current status of the command execution.
-    pub status: CommandExecutionStatus,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum ToolCallStatus {
-    /// Tool finished successfully.
-    #[default]
-    Completed,
-    /// Tool failed.
-    Failed,
-    /// Tool is still running and may emit additional output.
-    InProgress,
-}
-
-/// Fine-grained outcome of a tool invocation lifecycle.
-///
-/// Mirrors the outcome taxonomy used by the runtime: `status` remains the
-/// coarse lifecycle signal (`Completed` / `Failed` / `InProgress`), while
-/// `outcome` captures *why* the invocation terminated. Consumers that only
-/// need success/failure can continue to read `status`; analytics and the UI
-/// layer use `outcome` for richer classification.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum ToolOutcome {
-    /// Tool executed and returned a result.
-    #[default]
-    Success,
-    /// Tool executed but returned an error.
-    Error,
-    /// User rejected the permission prompt.
-    PermissionRejected,
-    /// User cancelled the permission prompt (e.g. Ctrl+C / Esc).
-    PermissionCancelled,
-    /// User provided a followup message instead of approving.
-    Followup,
-    /// A user-configured hook blocked execution.
-    HookDenied,
-    /// Tool not found or arguments couldn't be parsed.
-    InvalidTool,
-    /// Tool was cancelled during execution or closed before dispatch when its turn ended.
-    Cancelled,
-}
-
-impl ToolOutcome {
-    #[must_use]
-    pub const fn is_terminal(self) -> bool {
-        !matches!(self, Self::Followup)
-    }
-}
-
-/// Map a terminal [`ToolCallStatus`] to its corresponding [`ToolOutcome`].
-///
-/// # Panics
-///
-/// Panics if `status` is [`ToolCallStatus::InProgress`], which is a non-terminal
-/// state and must never be passed to a completion-event emitter.
-#[must_use]
-#[allow(
-    clippy::unreachable,
-    reason = "Intentional compatibility, platform, or test-only suppression."
-)]
-pub fn tool_outcome_from_status(status: &ToolCallStatus) -> ToolOutcome {
-    match status {
-        ToolCallStatus::Completed => ToolOutcome::Success,
-        ToolCallStatus::Failed => ToolOutcome::Error,
-        ToolCallStatus::InProgress => unreachable!("InProgress status passed to completion event"),
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct ToolInvocationItem {
-    /// Name of the invoked tool.
-    pub tool_name: String,
-    /// Structured arguments passed to the tool.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<Value>,
-    /// Raw model-emitted tool call identifier, when available.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
-    /// Current lifecycle status of the invocation.
-    pub status: ToolCallStatus,
-    /// Fine-grained outcome of the invocation lifecycle.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub outcome: Option<ToolOutcome>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct ToolOutputItem {
-    /// Identifier of the related harness invocation item.
-    pub call_id: String,
-    /// Raw model-emitted tool call identifier, when available.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
-    /// Canonical spool file path when the full output was written to disk.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spool_path: Option<String>,
-    /// Aggregated output emitted by the tool.
-    #[serde(default)]
-    pub output: String,
-    /// Exit code reported by the tool, when available.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exit_code: Option<i32>,
-    /// Current lifecycle status of the output item.
-    pub status: ToolCallStatus,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct FileChangeItem {
-    /// Captured preview was truncated, suppressed, or unavailable.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diff_incomplete: Option<bool>,
-    /// List of individual file updates included in the change set.
-    pub changes: Vec<FileUpdateChange>,
-    /// Whether the patch application succeeded.
-    pub status: PatchApplyStatus,
-    /// Optional precomputed unified diff for the change set.
-    ///
-    /// Populated by the turn diff tracker so consumers can render per-change
-    /// previews without recomputation. Absent in older events.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unified_diff: Option<String>,
-    /// Optional added-line count for the change set.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub additions: Option<u64>,
-    /// Optional deleted-line count for the change set.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub deletions: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct FileUpdateChange {
-    /// Path of the file that was updated.
-    pub path: String,
-    /// Type of change applied to the file.
-    pub kind: PatchChangeKind,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum PatchApplyStatus {
-    /// Patch successfully applied.
-    Completed,
-    /// Patch application failed.
-    Failed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum PatchChangeKind {
-    /// File addition.
-    Add,
-    /// File deletion.
-    Delete,
-    /// File update in place.
-    Update,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct McpToolCallItem {
-    /// Name of the MCP tool invoked by the agent.
-    pub tool_name: String,
-    /// Arguments passed to the tool invocation, if any.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<Value>,
-    /// Result payload returned by the tool, if captured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<String>,
-    /// Lifecycle status for the tool call.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<McpToolCallStatus>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum McpToolCallStatus {
-    /// Tool invocation has started.
-    Started,
-    /// Tool invocation completed successfully.
-    Completed,
-    /// Tool invocation failed.
-    Failed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-pub struct WebSearchItem {
-    /// Query that triggered the search.
-    pub query: String,
-    /// Search provider identifier, when known.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    /// Optional raw search results captured for auditing.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub results: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum HarnessEventKind {
     PlanningStarted,
@@ -1302,6 +759,12 @@ pub enum HarnessEventKind {
     BackgroundSubprocessCompleted,
     /// A native delegated agent's public status and ancestry were observed.
     DelegatedAgentStatus,
+    /// A message was sent to a peer session's mailbox.
+    SessionMessageSent,
+    /// A peer session's message was received from this session's mailbox.
+    SessionMessageReceived,
+    /// A mailbox message expired before delivery.
+    SessionMessageExpired,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -1319,6 +782,9 @@ pub enum PermissionDecision {
 pub struct PermissionRequestedEvent {
     /// Name of the tool that requires permission.
     pub tool_name: String,
+    /// Identifier of the tool invocation that requested permission, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1326,6 +792,9 @@ pub struct PermissionRequestedEvent {
 pub struct PermissionResolvedEvent {
     /// Name of the tool that was permitted or denied.
     pub tool_name: String,
+    /// Identifier of the tool invocation whose permission was resolved, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
     /// User's decision on the permission prompt.
     pub decision: PermissionDecision,
     /// Wall-clock time the prompt was visible, in milliseconds.
@@ -1391,9 +860,14 @@ pub struct HarnessEventItem {
     /// Stable task identifier for background completion events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
-    /// Child session identifier for background completion events.
+    /// Child session identifier for background completion events; the peer
+    /// session for session-messaging events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// Correlation id linking related harness events (a mailbox question to
+    /// its answer for session-messaging events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub correlation_id: Option<String>,
     /// Exec-session identifier for background completion events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exec_session_id: Option<String>,
@@ -1406,6 +880,31 @@ pub struct HarnessEventItem {
     /// Archived session reference for background completion events.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub archive_path: Option<String>,
+}
+
+impl HarnessEventItem {
+    /// A harness event with every optional field unset. Prefer this over a
+    /// struct literal so new optional fields do not break construction sites.
+    #[must_use]
+    pub fn new(event: HarnessEventKind) -> Self {
+        Self {
+            event,
+            message: None,
+            command: None,
+            path: None,
+            exit_code: None,
+            attempt: None,
+            error_category: None,
+            duration_ms: None,
+            task_id: None,
+            session_id: None,
+            correlation_id: None,
+            exec_session_id: None,
+            status: None,
+            transcript_path: None,
+            archive_path: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

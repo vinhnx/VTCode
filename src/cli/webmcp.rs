@@ -1,16 +1,17 @@
 use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use std::sync::Arc;
-use vtcode_core::cli::args::{WebmcpCommand, WebmcpPairArgs, WebmcpServeArgs};
+use vtcode_core::cli::args::{Cli, WebmcpCommand, WebmcpPairArgs, WebmcpServeArgs};
 use vtcode_webmcp::{FilesystemWorkspace, RemoteMcpServerConfig, WebmcpServer, WebmcpServerConfig};
 
 use crate::startup::{StartupContext, require_full_auto_workspace_trust};
 
 /// Dispatch the standalone WebMCP command family.
-pub(crate) async fn handle_webmcp_command(startup: &StartupContext, command: WebmcpCommand) -> Result<()> {
+pub(crate) async fn handle_webmcp_command(startup: &StartupContext, cli: &Cli, command: WebmcpCommand) -> Result<()> {
     match command {
-        WebmcpCommand::Serve(args) => run_server(startup, &args, None).await,
-        WebmcpCommand::Pair(args) => run_pair(startup, &args).await,
+        WebmcpCommand::Serve(args) => run_server(startup, cli, &args, None).await,
+        WebmcpCommand::Stdio { companion } => run_stdio(startup, cli, companion).await,
+        WebmcpCommand::Pair(args) => run_pair(startup, cli, &args).await,
         WebmcpCommand::Status => print_status(startup),
         WebmcpCommand::Tools => print_tools(),
         WebmcpCommand::Roots => print_roots(startup),
@@ -23,7 +24,69 @@ pub(crate) async fn handle_webmcp_command(startup: &StartupContext, command: Web
     }
 }
 
-async fn run_pair(startup: &StartupContext, args: &WebmcpPairArgs) -> Result<()> {
+async fn companion_service(
+    startup: &StartupContext,
+    cli: &Cli,
+    workspace: PathBuf,
+    proxy_token_env: String,
+) -> Result<Arc<super::companion::CompanionService>> {
+    use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, load_workspace_trust_level};
+    if !startup.config.automation.full_auto.enabled {
+        bail!("companion requires automation.full_auto.enabled; existing tool allowlists and denies still apply");
+    }
+    if load_workspace_trust_level(&workspace).await? != Some(WorkspaceTrustLevel::FullAuto) {
+        bail!(
+            "companion requires existing persisted full-auto workspace trust; grant it through VT Code before starting the service"
+        );
+    }
+    Ok(Arc::new(super::companion::CompanionService::new(
+        workspace,
+        std::env::current_exe().context("failed to locate VT Code executable")?,
+        proxy_token_env,
+        super::companion::launch_args(cli, vtcode_config::loader::explicit_config_path()),
+    )))
+}
+
+async fn run_stdio(startup: &StartupContext, cli: &Cli, enable_companion: bool) -> Result<()> {
+    let workspace =
+        vtcode_commons::fs::canonicalize_with_context_async(&startup.workspace, "local MCP workspace").await?;
+    let companion = if enable_companion {
+        Some(
+            companion_service(
+                startup,
+                cli,
+                workspace.clone(),
+                startup.config.webmcp.remote_mcp.proxy_token_env.clone(),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    let adapter = Arc::new(FilesystemWorkspace::new(&workspace, vec![workspace.clone()], false).await?);
+    let handler = vtcode_webmcp::RemoteMcpHandler::local(
+        adapter,
+        companion
+            .clone()
+            .map(|service| service as Arc<dyn vtcode_webmcp::companion::CompanionTasks>),
+    );
+    let cancellation = tokio_util::sync::CancellationToken::new();
+    let signal_cancellation = cancellation.clone();
+    let signal = tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            signal_cancellation.cancel();
+        }
+    });
+    let result = handler.serve_stdio(cancellation).await;
+    signal.abort();
+    let _ = signal.await;
+    if let Some(companion) = companion {
+        companion.shutdown().await.map_err(anyhow::Error::msg)?;
+    }
+    result.context("local MCP service failed")
+}
+
+async fn run_pair(startup: &StartupContext, cli: &Cli, args: &WebmcpPairArgs) -> Result<()> {
     let serve_args = WebmcpServeArgs {
         host: args.host.clone(),
         port: args.port,
@@ -32,15 +95,21 @@ async fn run_pair(startup: &StartupContext, args: &WebmcpPairArgs) -> Result<()>
         allow_remote: args.allow_remote,
         public_url: args.public_url.clone(),
         mcp: false,
+        companion: false,
         mcp_public_url: None,
         mcp_authorization_server: None,
         mcp_proxy_token_env: None,
         mcp_citation_url_prefix: None,
     };
-    run_server(startup, &serve_args, Some(args.origin.as_str())).await
+    run_server(startup, cli, &serve_args, Some(args.origin.as_str())).await
 }
 
-async fn run_server(startup: &StartupContext, args: &WebmcpServeArgs, pairing_origin: Option<&str>) -> Result<()> {
+async fn run_server(
+    startup: &StartupContext,
+    cli: &Cli,
+    args: &WebmcpServeArgs,
+    pairing_origin: Option<&str>,
+) -> Result<()> {
     let configured = &startup.config.webmcp;
     let host = args.host.clone().unwrap_or_else(|| configured.host.clone());
     let port = args.port.unwrap_or(configured.port);
@@ -49,7 +118,7 @@ async fn run_server(startup: &StartupContext, args: &WebmcpServeArgs, pairing_or
     } else {
         args.origins.clone()
     };
-    let remote_mcp = build_remote_mcp_config(startup, args, configured)?;
+    let mut remote_mcp = build_remote_mcp_config(startup, args, configured)?;
     let remote_endpoints = remote_mcp.as_ref().map(|remote| {
         let mut streamable_url = remote.public_url.clone();
         streamable_url.set_path("/mcp");
@@ -81,6 +150,21 @@ async fn run_server(startup: &StartupContext, args: &WebmcpServeArgs, pairing_or
         );
     }
     let workspace_root = allowed_roots.first().cloned().unwrap_or_else(|| startup.workspace.clone());
+    let workspace_root = vtcode_commons::fs::canonicalize_with_context_async(&workspace_root, "WebMCP workspace")
+        .await
+        .context("failed to resolve WebMCP workspace")?;
+    let companion = if args.companion {
+        let remote = remote_mcp.as_mut().context("companion requires remote MCP")?;
+        let proxy_token_env = args
+            .mcp_proxy_token_env
+            .clone()
+            .unwrap_or_else(|| configured.remote_mcp.proxy_token_env.clone());
+        let service = companion_service(startup, cli, workspace_root.clone(), proxy_token_env).await?;
+        remote.companion = Some(service.clone());
+        Some(service)
+    } else {
+        None
+    };
     let roots = if allowed_roots.is_empty() {
         vec![workspace_root.clone()]
     } else {
@@ -131,9 +215,15 @@ async fn run_server(startup: &StartupContext, args: &WebmcpServeArgs, pairing_or
         println!("Remote MCP Streamable HTTP endpoint: {streamable_url}");
         println!("Remote MCP protected-resource metadata: {metadata_url}");
     }
-    println!(
-        "Agent turns are unavailable in standalone mode; use `/webmcp pair <origin>` inside an interactive `vtcode chat` session for VT Code turns."
-    );
+    if companion.is_some() {
+        println!(
+            "Companion tasks enabled: one active exec task in this workspace; planning is read-only and implementation requires a completed plan."
+        );
+    } else {
+        println!(
+            "Agent turns are unavailable in standalone mode; use `/webmcp pair <origin>` inside an interactive `vtcode chat` session for VT Code turns."
+        );
+    }
     if let Some(public_url) = args.public_url.as_deref() {
         println!(
             "Remote access requires a TLS-terminating reverse proxy at {public_url} forwarding to this loopback listener."
@@ -143,14 +233,24 @@ async fn run_server(startup: &StartupContext, args: &WebmcpServeArgs, pairing_or
         println!("Pairing code: {} (expires in {} seconds)", pairing.code(), pairing.expires_in().as_secs());
     }
     if !mutations_allowed {
-        println!(
-            "Mutations remain terminal-approved; headless apply is disabled without explicit full-auto permissions."
-        );
+        if companion.is_some() {
+            println!(
+                "Browser patch apply is disabled; companion implementation independently retains the exec runtime's configured permissions."
+            );
+        } else {
+            println!(
+                "Mutations remain terminal-approved; headless apply is disabled without explicit full-auto permissions."
+            );
+        }
     }
-    tokio::select! {
+    let result = tokio::select! {
         result = server.serve_listener(listener) => result.map_err(anyhow::Error::from),
         signal = tokio::signal::ctrl_c() => signal.context("failed to listen for WebMCP shutdown")
+    };
+    if let Some(companion) = companion {
+        companion.shutdown().await.map_err(anyhow::Error::msg)?;
     }
+    result
 }
 
 fn full_auto_allows_tool(startup: &StartupContext, tool: &str) -> bool {

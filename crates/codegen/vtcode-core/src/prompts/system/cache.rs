@@ -5,6 +5,7 @@ use std::path::Path;
 use crate::prompts::context::PromptContext;
 #[cfg(test)]
 use crate::prompts::static_prompts::static_profile_prompt;
+use crate::skills::model::SkillScope;
 
 /// Build a cache key for the system prompt.
 ///
@@ -93,34 +94,27 @@ pub(super) fn prompt_context_digest(prompt_context: Option<&PromptContext>) -> u
         return crate::core::agent::hash_utils::hash_value(&"context-free");
     };
 
-    let mut languages = context.languages.clone();
-    languages.sort();
-    let mut tools = context.available_tools.clone();
-    tools.sort();
-    let mut skills = context.available_skills.clone();
-    skills.sort();
+    let languages = sorted_refs(&context.languages);
+    let tools = sorted_refs(&context.available_tools);
+    let skills = sorted_refs(&context.available_skills);
     let mut metadata = context
         .available_skill_metadata
         .iter()
-        .map(|skill| {
-            (
-                skill.name.clone(),
-                skill.description.clone(),
-                skill.short_description.clone(),
-                skill.path.clone(),
-                skill.scope,
-                skill.manifest.as_ref().map(|manifest| format!("{manifest:?}")),
-            )
+        .map(|skill| SkillMetadataIdentity {
+            name: &skill.name,
+            description: &skill.description,
+            short_description: skill.short_description.as_deref(),
+            path: &skill.path,
+            scope: skill.scope,
+            manifest: skill.manifest.as_ref().map(|manifest| format!("{manifest:?}")),
         })
         .collect::<Vec<_>>();
-    metadata.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.3.cmp(&right.3)));
+    metadata.sort_by(|left, right| left.name.cmp(right.name).then_with(|| left.path.cmp(right.path)));
 
-    let preferences = context.user_preferences.as_ref().map(|preferences| {
-        let mut preferred_languages = preferences.preferred_languages.clone();
-        preferred_languages.sort();
-        let mut preferred_frameworks = preferences.preferred_frameworks.clone();
-        preferred_frameworks.sort();
-        (preferred_languages, preferences.coding_style.clone(), preferred_frameworks)
+    let preferences = context.user_preferences.as_ref().map(|preferences| PreferencesIdentity {
+        preferred_languages: sorted_refs(&preferences.preferred_languages),
+        coding_style: preferences.coding_style.as_deref(),
+        preferred_frameworks: sorted_refs(&preferences.preferred_frameworks),
     });
 
     crate::core::agent::hash_utils::hash_value(&(
@@ -135,3 +129,32 @@ pub(super) fn prompt_context_digest(prompt_context: Option<&PromptContext>) -> u
         context.current_directory.as_ref(),
     ))
 }
+
+// Field order preserves the former tuple-based hash representation. Borrowed
+// strings and paths hash like their owned counterparts; manifest Debug text
+// stays owned to retain the existing identity format.
+#[derive(Hash)]
+struct SkillMetadataIdentity<'a> {
+    name: &'a str,
+    description: &'a str,
+    short_description: Option<&'a str>,
+    path: &'a Path,
+    scope: SkillScope,
+    manifest: Option<String>,
+}
+
+#[derive(Hash)]
+struct PreferencesIdentity<'a> {
+    preferred_languages: Vec<&'a String>,
+    coding_style: Option<&'a str>,
+    preferred_frameworks: Vec<&'a String>,
+}
+
+fn sorted_refs<T: Ord>(values: &[T]) -> Vec<&T> {
+    let mut sorted = values.iter().collect::<Vec<_>>();
+    sorted.sort();
+    sorted
+}
+
+#[cfg(test)]
+mod tests;

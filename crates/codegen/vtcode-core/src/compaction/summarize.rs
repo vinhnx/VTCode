@@ -307,7 +307,16 @@ pub(crate) async fn generate_summary_with_capacity_retry(
     let mut remaining_retries = max_overflow_retries;
     let mut retry_storage: Vec<Message>;
     loop {
-        match collect_single_response(provider, make_request(current_source)).await {
+        let mut request = make_request(current_source);
+        // Compaction forks can start from legacy or partially recorded
+        // history, outside the normal turn request builder. Repair tool-call
+        // pairs at this request boundary so compatible gateways never see an
+        // assistant call without its result. The shared normalizer is
+        // copy-on-write, so clean histories retain their existing allocation
+        // and failed compaction does not mutate session history.
+        request.messages =
+            crate::core::agent::state::normalize_history_for_request_shared(Arc::clone(&request.messages));
+        match collect_single_response(provider, request).await {
             Ok(response) => {
                 let summary = response.content.unwrap_or_default().trim().to_string();
                 if summary.is_empty() {

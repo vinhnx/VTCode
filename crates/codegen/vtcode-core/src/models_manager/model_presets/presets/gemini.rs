@@ -1,6 +1,7 @@
 //! gemini_presets — provider preset definitions for gemini.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_ladder_low_medium_high_verbose;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn gemini_presets() -> Vec<ModelPreset> {
@@ -14,20 +15,7 @@ pub(crate) fn gemini_presets() -> Vec<ModelPreset> {
                     .to_string(),
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast responses".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_low_medium_high_verbose(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -43,20 +31,7 @@ pub(crate) fn gemini_presets() -> Vec<ModelPreset> {
                     .to_string(),
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast responses".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_low_medium_high_verbose(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -70,20 +45,7 @@ pub(crate) fn gemini_presets() -> Vec<ModelPreset> {
             description: "Most intelligent model built for speed with superior search and grounding".to_string(),
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast responses".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning".to_string(),
-                },
-            ],
+            supported_reasoning_efforts: reasoning_ladder_low_medium_high_verbose(),
             is_default: true,
             upgrade: None,
             show_in_picker: true,

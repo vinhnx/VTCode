@@ -626,6 +626,7 @@ where
 
 /// Builder for constructing trace records incrementally.
 #[derive(Debug, Default)]
+#[must_use = "build the trace record before discarding the builder"]
 pub struct TraceRecordBuilder {
     vcs: Option<VcsInfo>,
     tool: Option<ToolInfo>,
@@ -670,6 +671,7 @@ impl TraceRecordBuilder {
     }
 
     /// Build the trace record.
+    #[must_use]
     pub fn build(self) -> TraceRecord {
         TraceRecord {
             version: AGENT_TRACE_VERSION.to_string(),

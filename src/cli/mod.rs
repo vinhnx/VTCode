@@ -13,8 +13,12 @@ mod auto;
 mod background_subagent;
 mod check;
 mod checkpoints;
+mod companion;
+mod companion_config;
 mod config;
 mod create_project;
+mod desktop;
+mod desktop_server;
 mod dispatch;
 mod full_auto_primary_agent;
 mod init;
@@ -177,6 +181,7 @@ mod tests {
             workspace: PathBuf::from("."),
             config: VTCodeConfig::default(),
             agent_config: runtime_config(),
+            provider_auth_error: None,
             skip_confirmations: false,
             full_auto_requested: false,
             automation_prompt: None,

@@ -124,6 +124,43 @@ pub(crate) fn vercel_presets() -> Vec<ModelPreset> {
             context_window: Some(1_050_000),
         },
         ModelPreset {
+            id: "vercel/openai/gpt-6-sol".to_string(),
+            model: vercel_models::OPENAI_GPT_6_SOL.to_string(),
+            display_name: "GPT-6 Sol (Vercel AI Gateway)".to_string(),
+            description:
+                "OpenAI GPT-6 Sol cost-efficient high-end reasoning model served through the Vercel AI Gateway."
+                    .to_string(),
+            provider: Provider::Vercel,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_050_000),
+        },
+        ModelPreset {
+            id: "vercel/openai/gpt-6-luna".to_string(),
+            model: vercel_models::OPENAI_GPT_6_LUNA.to_string(),
+            display_name: "GPT-6 Luna (Vercel AI Gateway)".to_string(),
+            description: "OpenAI GPT-6 Luna fast cost-efficient reasoning model served through the Vercel AI Gateway."
+                .to_string(),
+            provider: Provider::Vercel,
+            default_reasoning_effort: ReasoningEffortLevel::Low,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: false,
+            upgrade: Some(ModelUpgrade {
+                id: "vercel/openai/gpt-6-sol".to_string(),
+                migration_config_key: String::new(),
+                upgrade_copy: Some("Upgrade to GPT-6 Sol for stronger reasoning on complex tasks.".to_string()),
+                reasoning_effort_mapping: None,
+                model_link: None,
+            }),
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_050_000),
+        },
+        ModelPreset {
             id: "vercel/openai/gpt-5.6-luna".to_string(),
             model: vercel_models::GOOGLE_GEMINI_3_8_FLASH.to_string(),
             display_name: "Gemini 3.8 Flash (Vercel AI Gateway)".to_string(),

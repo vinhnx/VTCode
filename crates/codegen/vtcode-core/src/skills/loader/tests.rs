@@ -6,6 +6,7 @@ use crate::skills::types::SkillManifest;
 use hashbrown::HashMap;
 use serial_test::serial;
 use std::fs;
+use std::path::PathBuf;
 use tempfile::TempDir;
 use tempfile::tempdir;
 
@@ -657,12 +658,10 @@ description: Should not be discovered because it is not an immediate child of sk
     );
 }
 
-#[test]
-fn discovers_plugin_mcp_providers() {
-    let workspace = tempdir().expect("workspace");
-    fs::create_dir(workspace.path().join(".git")).expect("create .git");
-
-    let plugin_root = workspace.path().join(".agents/plugins/mcp-plugin");
+/// Create an Agent Plugin named `mcp-plugin` with one stdio and one HTTP MCP
+/// server under `<workspace>/.agents/plugins`. Returns the plugin directory.
+fn write_mcp_plugin(workspace: &Path) -> PathBuf {
+    let plugin_root = workspace.join(".agents/plugins/mcp-plugin");
     fs::create_dir_all(plugin_root.join("bin")).expect("create bin dir");
 
     fs::write(
@@ -694,13 +693,44 @@ fn discovers_plugin_mcp_providers() {
     .expect("write mcp.json");
 
     fs::write(plugin_root.join("bin/server"), "#!/bin/sh\necho hello").expect("write server script");
+    plugin_root
+}
+
+#[test]
+fn discovers_plugin_mcp_providers() {
+    let workspace = tempdir().expect("workspace");
+    write_mcp_plugin(workspace.path());
 
     let providers = crate::mcp::plugin_providers::discover_plugin_mcp_providers(workspace.path());
 
     let names: Vec<_> = providers.iter().map(|p| p.name.as_str()).collect();
     assert!(names.contains(&"mcp-plugin.local"), "expected mcp-plugin.local, got: {:?}", names);
     assert!(names.contains(&"mcp-plugin.remote"), "expected mcp-plugin.remote, got: {:?}", names);
-    assert_eq!(providers.len(), 2);
+    // The production root set also contains the host user plugin root, so the
+    // total count is host-dependent: require each server exactly once instead.
+    let unique: std::collections::HashSet<_> = names.iter().copied().collect();
+    assert_eq!(names.len(), unique.len(), "MCP servers must be discovered once, got: {:?}", names);
+}
+
+#[test]
+fn explicit_plugin_roots_are_exact_and_deduplicated() {
+    let workspace = tempdir().expect("workspace");
+    let plugin_root = write_mcp_plugin(workspace.path());
+    let plugins_root = plugin_root.parent().expect("plugins root").to_path_buf();
+
+    let mut names: Vec<_> =
+        crate::mcp::plugin_providers::discover_plugin_mcp_providers_in_roots(std::slice::from_ref(&plugins_root))
+            .into_iter()
+            .map(|provider| provider.name)
+            .collect();
+    names.sort();
+    assert_eq!(names, vec!["mcp-plugin.local".to_string(), "mcp-plugin.remote".to_string()]);
+
+    // A workspace nested under the user plugin root can resolve the same root
+    // twice, which must not duplicate the discovered servers.
+    let deduplicated =
+        crate::mcp::plugin_providers::discover_plugin_mcp_providers_in_roots(&[plugins_root.clone(), plugins_root]);
+    assert_eq!(deduplicated.len(), 2, "duplicate roots must not duplicate MCP servers");
 }
 
 #[test]

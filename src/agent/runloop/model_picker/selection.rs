@@ -257,7 +257,6 @@ pub(super) fn selection_from_option_with_mode(
 }
 
 #[cfg(test)]
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 pub(super) fn selection_from_dynamic(
     provider: Provider,
     model_id: &str,

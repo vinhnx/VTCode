@@ -77,6 +77,22 @@ pub(crate) fn pulse_spinner_frame_for_phase(phase: f32) -> &'static str {
     frames[index.min(frames.len() - 1)]
 }
 
+/// Terminal title spinner frame derived from the shared shimmer phase so the
+/// title and the footer's global loading shimmer stay in lockstep and can
+/// never drift apart. Two Braille rotations per 2s shimmer sweep keeps a
+/// readable ~100ms cadence (~10 title writes/s worst case).
+pub(crate) fn title_spinner_frame(shimmer_phase: f32) -> &'static str {
+    const TITLE_TURNS_PER_SWEEP: f32 = 2.0;
+    spinner_frame_for_phase((shimmer_phase * TITLE_TURNS_PER_SWEEP).fract())
+}
+
+/// Braille spinner frame for a normalized 0..1 phase.
+fn spinner_frame_for_phase(phase: f32) -> &'static str {
+    let frames = SPINNER_FRAMES.len();
+    let scaled = (phase.fract().clamp(0.0, 0.999_999) * frames as f32) as usize;
+    SPINNER_FRAMES[scaled.min(frames - 1)]
+}
+
 /// Spinner animation frames (Braille pattern for smooth animation)
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 

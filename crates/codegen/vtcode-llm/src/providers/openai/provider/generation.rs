@@ -178,7 +178,7 @@ impl OpenAIProvider {
     pub(super) async fn retry_without_service_tier(
         &self,
         url: &str,
-        metadata: &Option<Value>,
+        metadata: Option<&Value>,
         payload: &Value,
         include_responses_beta: bool,
     ) -> Result<(reqwest::Response, String), provider::LLMError> {
@@ -391,7 +391,7 @@ impl OpenAIProvider {
                             ),
                             &client_request_id,
                         ),
-                        &request.metadata,
+                        request.metadata.as_ref(),
                     )
                     .json(&openai_request)
                 })
@@ -412,7 +412,7 @@ impl OpenAIProvider {
                     log_service_tier_rejection("Responses", &request.model, &client_request_id, rejected_tier);
 
                     let (retry_response, retry_client_request_id) = self
-                        .retry_without_service_tier(url, &request.metadata, &openai_request, true)
+                        .retry_without_service_tier(url, request.metadata.as_ref(), &openai_request, true)
                         .await?;
                     effective_client_request_id = retry_client_request_id;
 
@@ -461,7 +461,7 @@ impl OpenAIProvider {
                                             ),
                                             &retry_client_request_id,
                                         ),
-                                        &request.metadata,
+                                        request.metadata.as_ref(),
                                     )
                                     .json(&retry_openai)
                                 })
@@ -555,7 +555,7 @@ impl OpenAIProvider {
                         self.authorize_with_api_key(self.http_client.post(url), auth),
                         &client_request_id,
                     ),
-                    &request.metadata,
+                    request.metadata.as_ref(),
                 )
                 .json(&openai_request)
             })
@@ -575,7 +575,7 @@ impl OpenAIProvider {
                 log_service_tier_rejection("Chat Completions", &request.model, &client_request_id, rejected_tier);
 
                 let (retry_response, retry_client_request_id) = self
-                    .retry_without_service_tier(url, &request.metadata, &openai_request, false)
+                    .retry_without_service_tier(url, request.metadata.as_ref(), &openai_request, false)
                     .await?;
                 effective_client_request_id = retry_client_request_id;
 

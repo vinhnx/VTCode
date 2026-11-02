@@ -3,24 +3,39 @@
 //! Supports zip-based packaging of skills for distribution, version management,
 //! and inline bundle injection. Follows OpenAI Skills API packaging patterns:
 //! - Safe zip extraction with path traversal protection
-//! - Size limits (50MB compressed, 25MB per file, 500 files max)
+//! - Size limits (50MB compressed, 25MB per file, 200MB total uncompressed, 500 files max)
 //! - Manifest validation after extraction
 //! - Versioned storage layout
 
 use anyhow::{Context, Result, bail};
 use hashbrown::HashMap;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 use vtcode_commons::canonicalize;
+use vtcode_commons::safe_archive_relative_path;
 
 /// Maximum compressed bundle size (50 MB)
 const MAX_BUNDLE_SIZE: usize = 50 * 1024 * 1024;
 /// Maximum uncompressed file size (25 MB)
 const MAX_FILE_SIZE: usize = 25 * 1024 * 1024;
+/// Maximum total uncompressed size (200 MB)
+///
+/// `MAX_BUNDLE_SIZE` bounds the *compressed* input, but DEFLATE can expand by
+/// ~1000x, so an uncompressed budget must be enforced while writing. Without it
+/// a single small bundle can fill the disk (zip bomb).
+const MAX_TOTAL_UNCOMPRESSED_SIZE: u64 = 200 * 1024 * 1024;
 /// Maximum file count per bundle
 const MAX_FILE_COUNT: usize = 500;
+
+/// Whether `total` uncompressed bytes fit within the bundle budget.
+///
+/// Shared by extraction (incremental, per entry) and post-extraction
+/// validation so the two enforcement points cannot drift.
+fn within_total_budget(total: u64) -> bool {
+    total <= MAX_TOTAL_UNCOMPRESSED_SIZE
+}
 
 /// Result of importing a skill bundle
 #[derive(Debug, Clone)]
@@ -161,19 +176,22 @@ fn extract_zip_safely(zip_bytes: &[u8], dest: &Path) -> Result<()> {
         bail!("Zip contains {} entries, exceeds maximum {}", archive.len(), MAX_FILE_COUNT);
     }
 
+    let mut total_uncompressed: u64 = 0;
+
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).with_context(|| format!("reading zip entry {i}"))?;
-        let raw_name = file.name().to_string();
+        let raw_name = file
+            .name()
+            .with_context(|| format!("zip entry {i} has a non-UTF-8 name"))?
+            .into_owned();
 
-        if raw_name.contains("..") {
-            bail!("Path traversal detected in zip entry: {raw_name}");
+        let safe_name = safe_archive_relative_path(Path::new(&raw_name))
+            .with_context(|| format!("Path traversal detected in zip entry: {raw_name}"))?;
+        if safe_name.as_os_str().is_empty() {
+            continue;
         }
 
-        let out_path = dest.join(&raw_name);
-
-        if !out_path.starts_with(dest) {
-            bail!("Zip entry escapes destination: {}", out_path.display());
-        }
+        let out_path = dest.join(safe_name);
 
         if file.is_dir() {
             fs::create_dir_all(&out_path).with_context(|| format!("creating dir {}", out_path.display()))?;
@@ -188,11 +206,34 @@ fn extract_zip_safely(zip_bytes: &[u8], dest: &Path) -> Result<()> {
 
             let mut out_file =
                 fs::File::create(&out_path).with_context(|| format!("creating file {}", out_path.display()))?;
-            std::io::copy(&mut file, &mut out_file).with_context(|| format!("writing file {}", out_path.display()))?;
+            // Bound by bytes actually written: the archive's declared `file.size()`
+            // cannot be trusted, and the cumulative budget stops zip bombs.
+            let written = copy_bounded(&mut file, &mut out_file, MAX_FILE_SIZE as u64)
+                .with_context(|| format!("writing file {}", out_path.display()))?;
+            total_uncompressed += written;
+            if !within_total_budget(total_uncompressed) {
+                bail!(
+                    "Zip uncompressed size {total_uncompressed} bytes exceeds maximum {MAX_TOTAL_UNCOMPRESSED_SIZE} bytes"
+                );
+            }
         }
     }
 
     Ok(())
+}
+
+/// Copy at most `limit` bytes from `reader` into `writer`.
+///
+/// Fails rather than silently truncating when the reader yields more than
+/// `limit`, so untrusted input whose declared size lies is still capped by the
+/// bytes actually written.
+fn copy_bounded<R: Read, W: Write>(reader: &mut R, writer: &mut W, limit: u64) -> Result<u64> {
+    let mut bounded = reader.take(limit.saturating_add(1));
+    let written = std::io::copy(&mut bounded, writer)?;
+    if written > limit {
+        bail!("entry exceeds maximum {limit} bytes");
+    }
+    Ok(written)
 }
 
 /// Find SKILL.md in extracted directory (handles nested structures)
@@ -232,6 +273,10 @@ fn validate_extracted_bundle(skill_root: &Path) -> Result<()> {
 
     if file_count > MAX_FILE_COUNT as u64 {
         bail!("Bundle contains {file_count} files, exceeds maximum {MAX_FILE_COUNT}");
+    }
+
+    if !within_total_budget(total_size) {
+        bail!("Bundle uncompressed size {total_size} bytes exceeds maximum {MAX_TOTAL_UNCOMPRESSED_SIZE} bytes");
     }
 
     Ok(())
@@ -386,5 +431,101 @@ mod tests {
         let result = import_skill_bundle(&oversized, temp.path());
         assert!(result.is_err());
         assert!(result.expect_err("should fail").to_string().contains("exceeds maximum"));
+    }
+
+    /// Build an uncompressed zip archive from `(name, contents)` entries.
+    fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let options = zip::write::SimpleFileOptions::default();
+            for (name, data) in entries {
+                writer.start_file(*name, options).expect("start_file");
+                writer.write_all(data).expect("write_all");
+            }
+            writer.finish().expect("finish");
+        }
+        buf
+    }
+
+    #[test]
+    fn copy_bounded_accepts_exactly_the_limit() {
+        let data = vec![7u8; 10];
+        let mut out = Vec::new();
+        let written = copy_bounded(&mut data.as_slice(), &mut out, 10).expect("exact limit is allowed");
+        assert_eq!(written, 10);
+        assert_eq!(out.len(), 10);
+    }
+
+    #[test]
+    fn copy_bounded_rejects_one_byte_over_the_limit() {
+        let data = vec![7u8; 11];
+        let mut out = Vec::new();
+        let err = copy_bounded(&mut data.as_slice(), &mut out, 10).expect_err("over limit must fail");
+        assert!(err.to_string().contains("exceeds maximum"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn within_total_budget_boundaries() {
+        assert!(within_total_budget(0));
+        assert!(within_total_budget(MAX_TOTAL_UNCOMPRESSED_SIZE));
+        assert!(!within_total_budget(MAX_TOTAL_UNCOMPRESSED_SIZE + 1));
+    }
+
+    #[test]
+    fn extract_rejects_parent_directory_traversal() {
+        let bytes = zip_bytes(&[("../evil.txt", b"pwned")]);
+        let temp = tempfile::tempdir().expect("tempdir");
+        let err = extract_zip_safely(&bytes, temp.path()).expect_err("traversal must fail");
+        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
+        assert!(!temp.path().join("../evil.txt").exists());
+    }
+
+    #[test]
+    fn extract_rejects_absolute_path_entries() {
+        let bytes = zip_bytes(&[("/abs.txt", b"pwned")]);
+        let temp = tempfile::tempdir().expect("tempdir");
+        let err = extract_zip_safely(&bytes, temp.path()).expect_err("absolute path must fail");
+        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn extract_rejects_mid_path_traversal() {
+        let bytes = zip_bytes(&[("skills/../../evil.txt", b"pwned")]);
+        let temp = tempfile::tempdir().expect("tempdir");
+        let err = extract_zip_safely(&bytes, temp.path()).expect_err("mid-path traversal must fail");
+        assert!(err.to_string().contains("Path traversal"), "unexpected error: {err}");
+        assert!(!temp.path().join("evil.txt").exists());
+    }
+
+    #[test]
+    fn extract_accepts_dot_dot_inside_a_single_component() {
+        // `..` inside one component is a legitimate file name, not traversal;
+        // the substring check this replaced used to reject it.
+        let bytes = zip_bytes(&[("v1..2/README.md", b"body")]);
+        let temp = tempfile::tempdir().expect("tempdir");
+        extract_zip_safely(&bytes, temp.path()).expect("dot-dot component must extract");
+
+        assert_eq!(fs::read(temp.path().join("v1..2/README.md")).expect("read"), b"body");
+    }
+
+    #[test]
+    fn import_round_trips_an_exported_bundle() {
+        let source = tempfile::tempdir().expect("source tempdir");
+        let skill_dir = source.path().join("roundtrip-skill");
+        fs::create_dir_all(&skill_dir).expect("create skill dir");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: roundtrip-skill\ndescription: Round trip test skill\nversion: 1.2.3\n---\n# Body\n",
+        )
+        .expect("write SKILL.md");
+
+        let bytes = export_skill_bundle(&skill_dir).expect("export");
+
+        let store = tempfile::tempdir().expect("store tempdir");
+        let imported = import_skill_bundle(&bytes, store.path()).expect("import");
+        assert_eq!(imported.name, "roundtrip-skill");
+        assert!(imported.file_count >= 1, "expected at least SKILL.md to be copied");
+        assert!(imported.path.join("SKILL.md").exists(), "SKILL.md must land in the versioned store");
     }
 }

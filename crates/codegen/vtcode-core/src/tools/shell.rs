@@ -38,14 +38,33 @@ pub trait CommandExecutor: Send + Sync {
     async fn execute(&self, command: &str, cwd: &Path) -> Result<ShellOutput>;
 }
 
-/// Standard system command executor
+/// Standard system command executor.
+///
+/// Every launch clears the inherited environment and rebuilds it from an explicit
+/// map, so callers that already resolved the shared sandbox allowlist
+/// ([`crate::sandboxing::build_sanitized_env`]) hand it to the child instead of
+/// letting the shell inherit the full process environment.
 pub struct SystemExecutor {
     shell: String,
+    env: hashbrown::HashMap<String, String>,
+}
+
+impl SystemExecutor {
+    /// Create an executor that launches commands with an already-sanitized environment.
+    pub fn with_env(env: hashbrown::HashMap<String, String>) -> Self {
+        Self { shell: resolve_fallback_shell(), env }
+    }
 }
 
 impl Default for SystemExecutor {
     fn default() -> Self {
-        Self { shell: resolve_fallback_shell() }
+        Self::with_env(crate::sandboxing::build_sanitized_env(
+            &std::env::vars().collect(),
+            true,
+            false,
+            "shell-runner",
+            &[],
+        ))
     }
 }
 
@@ -63,6 +82,7 @@ impl CommandExecutor for SystemExecutor {
             .current_dir(cwd)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        cmd.env_clear().envs(&self.env);
 
         let output = cmd.output().await?;
 
@@ -365,4 +385,22 @@ pub fn resolve_fallback_shell() -> String {
     }
 
     "/bin/sh".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn default_system_executor_runs_with_a_sanitized_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let runner = ShellRunner::new(root.path().to_path_buf());
+
+        // The child must still run (PATH survives the allowlist) but must see the
+        // rebuilt environment rather than an inherited one.
+        let output = runner.exec("echo $VTCODE_SANDBOX_ACTIVE").await.unwrap();
+
+        assert_eq!(output.exit_code, 0, "{output:?}");
+        assert_eq!(output.stdout.trim(), "1", "{output:?}");
+    }
 }

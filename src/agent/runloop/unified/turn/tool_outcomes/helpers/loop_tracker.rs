@@ -32,6 +32,13 @@ pub(crate) const PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD: u8 = 10;
 /// so this fires only for churn uninterrupted by productive work.
 pub(crate) const EXECUTION_TOTAL_LOW_SIGNAL_THRESHOLD: u8 = 12;
 
+/// First verifier wait window, in seconds.
+const VERIFIER_WAIT_BASE_SECS: u64 = 1;
+/// Longest verifier wait window, in seconds.
+const VERIFIER_WAIT_MAX_SECS: u64 = 8;
+/// Largest doubling step, so the schedule is 1s, 2s, 4s, 8s, 8s, …
+const VERIFIER_WAIT_MAX_SHIFT: u32 = 3;
+
 /// Optimized loop detection with bounded signature keys and exponential backoff.
 pub(crate) struct LoopTracker {
     attempts: FxHashMap<String, (usize, Instant)>,
@@ -39,13 +46,8 @@ pub(crate) struct LoopTracker {
     pub(super) coarse_inspection_attempts: FxHashMap<String, (usize, Instant)>,
     /// Counter for consecutive mutating file operations without execution/verification
     pub consecutive_mutations: usize,
-    /// True after the mutation threshold until a verification command completes.
+    /// Pending completion evidence; never restricts editing.
     pub verification_pending: bool,
-    /// Bounded fix-up edits allowed while verification stays pending.
-    /// Set to [`FAILED_VERIFICATION_FIX_ALLOWANCE`] after a failed verifier so
-    /// a broken build can be repaired; consumed by successful fix-up mutations.
-    /// Persisted in `SessionStats` so `continue` turns keep the same window.
-    pub fix_edits_remaining: u8,
     /// Prevent repeated warning output while verification remains pending.
     pub verification_warning_emitted: bool,
     /// Prevent repeated inline block notices for a single verification checkpoint.
@@ -81,6 +83,10 @@ pub(crate) struct LoopTracker {
     pub auto_verification_executed: bool,
     /// Live verifier identity for this turn; a running response is not a verdict.
     pub pending_verifier_session_id: Option<String>,
+    /// Consecutive waits issued against `pending_verifier_session_id`.
+    /// Drives the growing wait window so a long-running verifier needs a
+    /// handful of polls instead of one per second.
+    pub verifier_wait_polls: u32,
     /// Feedback for an observed terminal verifier failure, never a lost result.
     pub(super) verifier_failed_notice_pending: bool,
     /// Counter for consecutive read/search operations without action or synthesis
@@ -124,7 +130,6 @@ impl LoopTracker {
             coarse_inspection_attempts: FxHashMap::with_capacity_and_hasher(8, Default::default()),
             consecutive_mutations: 0,
             verification_pending: false,
-            fix_edits_remaining: 0,
             verification_warning_emitted: false,
             verification_block_notice_emitted: false,
             verification_result_lost_notice_pending: false,
@@ -134,6 +139,7 @@ impl LoopTracker {
             verification_auto_recovery_attempts: 0,
             auto_verification_executed: false,
             pending_verifier_session_id: None,
+            verifier_wait_polls: 0,
             verifier_failed_notice_pending: false,
             consecutive_navigations: 0,
             navigation_loop_recoveries: 0,
@@ -155,15 +161,10 @@ impl LoopTracker {
         }
     }
 
-    /// Tuple counterpart to `SessionStats::verification_snapshot`, so turn
-    /// setup and persistence share one call shape instead of threading two
-    /// loosely-coupled halves across five call sites. A zero-pending snapshot
-    /// never carries fix-ups; the clamp keeps a stale caller from building an
-    /// inconsistent gate.
+    /// Restore pending completion; the retired edit allowance is ignored.
     pub(crate) fn with_verification_snapshot(snapshot: (bool, u8)) -> Self {
         let mut tracker = Self::new();
         tracker.verification_pending = snapshot.0;
-        tracker.fix_edits_remaining = if snapshot.0 { snapshot.1 } else { 0 };
         tracker
     }
 
@@ -244,7 +245,7 @@ impl LoopTracker {
     pub(crate) fn take_verifier_failed_guidance(&mut self) -> Option<String> {
         self.take_verifier_failed_notice().then(|| {
             append_revision_guidance(
-                "The verifier reported a terminal non-zero exit; success remains unverified. Use the reported cause to repair within the existing limits, then obtain a terminal exit 0. This notice grants no permissions or extra repair edits.",
+                "The verifier reported a terminal non-zero exit; success remains unverified. Inspect the failure against the original request and observed artifact. If a model-generated assertion is incorrect, explicitly correct tracker verify metadata while preserving status, outcome, files, and user criteria; do not change correct code to fit it. Otherwise repair within the existing limits, then obtain a terminal exit 0. This notice grants no permissions or extra repair edits.",
                 Some(MismatchKind::VerifierFailed),
             )
         })
@@ -375,7 +376,7 @@ impl LoopTracker {
         // Synthesis retains context: unchanged reads remain redundant.
         // Mutations, verification and successful compaction invalidate it.
         // Navigation recovery is not verification. Preserve mutation pressure,
-        // an active verification checkpoint, its bounded fix window, the
+        // pending completion, the
         // in-turn auto-recovery budget, the harness-executed once-flag, and
         // the associated one-shot notices. Only a successful standalone
         // verifier may clear those fields.
@@ -384,15 +385,12 @@ impl LoopTracker {
     }
 
     pub(crate) fn verification_is_pending(&self) -> bool {
-        self.verification_pending || self.consecutive_mutations >= BLIND_EDITING_THRESHOLD
+        self.verification_pending
     }
 
-    /// Snapshot the session-persisted gate state for `SessionStats`.
-    /// Persist both halves together so resumed turns reconstruct the same
-    /// gate instead of drifting (a pending gate with a lost fix window
-    /// deadlocks a broken build).
+    /// Preserve the legacy snapshot shape with no edit allowance.
     pub(crate) fn verification_snapshot(&self) -> (bool, u8) {
-        (self.verification_is_pending(), self.fix_edits_remaining)
+        (self.verification_is_pending(), 0)
     }
 
     pub(crate) fn mark_verification_pending(&mut self) {
@@ -400,7 +398,7 @@ impl LoopTracker {
     }
 
     /// Generic passing checks do not advance a still-missing required check.
-    /// Keep this separate from the pacing gate, which those checks may clear.
+    /// Keep this separate from the registry verdict for required checks.
     pub(crate) fn record_required_verifier_progress(&mut self, command: Option<String>) -> bool {
         if command.is_none() || self.last_required_verifier.as_deref() != command.as_deref() {
             self.unchanged_required_verifier_batches = 0;
@@ -431,31 +429,23 @@ impl LoopTracker {
         true
     }
 
-    /// Grant a bounded fix-up window after a failed verifier. The gate stays
-    /// pending (completion still requires a successful standalone verifier),
-    /// but the next [`FAILED_VERIFICATION_FIX_ALLOWANCE`] successful mutations
-    /// are admitted so a broken build can be repaired instead of deadlocking.
+    /// Preserve pending completion after an unsuccessful verifier.
     pub(crate) fn record_failed_verification(&mut self) {
         self.pending_verifier_session_id = None;
         self.verification_pending = true;
-        self.fix_edits_remaining = FAILED_VERIFICATION_FIX_ALLOWANCE;
     }
 
     pub(super) fn record_successful_mutation(&mut self) {
         self.clear_navigation_evidence();
         self.record_required_verifier_progress(None);
-        // A verifier launched before this edit cannot clear the pacing checkpoint.
-        self.pending_verifier_session_id = None;
-        // Consume the fix-up window first: repair edits must not grow the
-        // blind-editing counter while the gate already requires re-verify.
-        if self.verification_pending && self.fix_edits_remaining > 0 {
-            self.fix_edits_remaining = self.fix_edits_remaining.saturating_sub(1);
-            return;
+        // A verifier launched before this edit cannot establish completion.
+        if self.pending_verifier_session_id.take().is_some() {
+            self.mark_verification_pending();
+            // The running check now predates the edit. A fresh completion check
+            // is needed; the request's corrective-pass budget stays unchanged.
+            self.auto_verification_executed = false;
         }
         self.consecutive_mutations = self.consecutive_mutations.saturating_add(1);
-        if self.consecutive_mutations >= BLIND_EDITING_THRESHOLD {
-            self.verification_pending = true;
-        }
     }
 
     /// Config-aware attempt recorder; prefer it at call sites with workspace
@@ -463,6 +453,7 @@ impl LoopTracker {
     /// honored. Returns `true` when budget remained (the caller should reset
     /// the text-response streak, inject the project-aware recovery directive,
     /// and `Continue` the turn instead of `Block`ing); `false` once exhausted.
+    #[cfg(test)]
     pub(crate) fn record_verification_auto_recovery_with_limit(&mut self, max_attempts: u8) -> bool {
         if self.verification_auto_recovery_attempts >= max_attempts {
             return false;
@@ -471,6 +462,7 @@ impl LoopTracker {
         true
     }
 
+    #[cfg(test)]
     pub(crate) fn verification_auto_recovery_attempts(&self) -> u8 {
         self.verification_auto_recovery_attempts
     }
@@ -493,12 +485,30 @@ impl LoopTracker {
         self.record_required_verifier_progress(None);
     }
 
+    /// The wait window for the next poll of the pending verifier session.
+    ///
+    /// The wait returns as soon as the session produces output, so a longer
+    /// window does not delay completion detection — it only avoids one tool
+    /// call per second while a long verifier is still running. The window
+    /// doubles up to the cap, and resets when the verifier session changes.
+    pub(crate) fn next_verifier_wait_timeout_secs(&mut self) -> u64 {
+        let shift = self.verifier_wait_polls.min(VERIFIER_WAIT_MAX_SHIFT);
+        self.verifier_wait_polls = self.verifier_wait_polls.saturating_add(1);
+        VERIFIER_WAIT_BASE_SECS
+            .saturating_mul(1u64 << shift)
+            .min(VERIFIER_WAIT_MAX_SECS)
+    }
+
+    /// Reset the wait window when the pending verifier session changes.
+    pub(crate) fn reset_verifier_wait_polls(&mut self) {
+        self.verifier_wait_polls = 0;
+    }
+
     pub(crate) fn mark_verification_complete(&mut self) {
         self.pending_verifier_session_id = None;
         self.verifier_failed_notice_pending = false;
         self.consecutive_mutations = 0;
         self.verification_pending = false;
-        self.fix_edits_remaining = 0;
         self.verification_warning_emitted = false;
         self.verification_block_notice_emitted = false;
         self.verification_result_lost_notice_pending = false;

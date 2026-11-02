@@ -7,10 +7,10 @@
 //! payloads) is verbatim, and `build_responses_request` is re-exported from
 //! the parent.
 
-use super::history::build_responses_item_history;
+use super::history::{build_responses_item_history, uses_stable_prefix_cache};
 use super::model_policy::{
-    allows_sampling_parameters, default_reasoning_effort_for_model, default_text_verbosity_for_model, is_gpt6_model,
-    is_gpt56_model, supports_text_verbosity,
+    allows_sampling_parameters, default_reasoning_effort_for_model, default_text_verbosity_for_model,
+    supports_text_verbosity,
 };
 use super::{ResponsesRequestContext, trimmed_non_empty};
 use crate::error_display;
@@ -24,11 +24,6 @@ use rig::providers::openai::responses_api::{
 };
 use serde_json::{Value, json};
 use vtcode_config::models::Provider as ModelProvider;
-
-/// Default `prompt_cache_options.ttl` for GPT-5.6-family Responses requests.
-/// Currently the only value OpenAI accepts; sent explicitly so cache intent
-/// does not rely on the implicit default alone.
-const DEFAULT_GPT56_PROMPT_CACHE_TTL: &str = "30m";
 
 fn push_unique_include(include_values: &mut Vec<String>, field: &str) {
     let field = field.trim();
@@ -187,25 +182,10 @@ fn build_responses_request_from_history(
         typed_parameters.prompt_cache_key = Some(prompt_cache_key.to_string());
     }
 
-    let cache_ttl = vtcode_config::models::model_catalog_entry("openai", &request.model)
-        .and_then(|entry| entry.prompt_cache_ttl)
-        .and_then(|ttl| trimmed_non_empty(Some(ttl)));
-    // GPT-5.6+ uses `prompt_cache_options.ttl` ("30m" is currently the only
-    // supported value); the legacy `prompt_cache_retention` field is
-    // deprecated for these models. No catalog entry sets a TTL today, so
-    // default GPT-5.6-family Responses requests to "30m" to document caching
-    // intent explicitly instead of relying on the implicit default alone.
-    let cache_ttl = cache_ttl.or_else(|| {
-        ((is_gpt56_model(&request.model) || is_gpt6_model(&request.model))
-            && ctx.include_prompt_cache_retention
-            && ctx.is_responses_api_model)
-            .then_some(DEFAULT_GPT56_PROMPT_CACHE_TTL)
-    });
-    if let Some(ttl) = cache_ttl
-        && ctx.include_prompt_cache_retention
-        && ctx.is_responses_api_model
-    {
-        openai_request["prompt_cache_options"] = json!({ "ttl": ttl });
+    if ctx.supports_prompt_cache_options {
+        let ttl =
+            vtcode_config::core::prompt_cache::resolved_openai_prompt_cache_ttl(ctx.prompt_cache_ttl, &request.model);
+        openai_request["prompt_cache_options"] = json!({ "ttl": ttl.as_str() });
     } else if ctx.include_prompt_cache_retention
         && ctx.is_responses_api_model
         && let Some(retention) = trimmed_non_empty(ctx.prompt_cache_retention)
@@ -214,6 +194,10 @@ fn build_responses_request_from_history(
     }
 
     merge_typed_responses_parameters(&mut openai_request, typed_parameters);
+
+    if uses_stable_prefix_cache(request, ctx) {
+        openai_request["prompt_cache_options"]["mode"] = json!("explicit");
+    }
 
     let mut include_values = Vec::new();
     if let Some(include_fields) = request.responses_include.as_deref().or(ctx.default_responses_include) {
@@ -301,9 +285,9 @@ fn build_responses_request_from_history(
                     tool_choice,
                     openai_request["tools"].as_array().map(Vec::as_slice).unwrap_or_default(),
                 )
-                .unwrap_or_else(|| tool_choice.to_provider_format("openai"))
+                .unwrap_or_else(|| tool_choice.to_responses_format())
             } else {
-                tool_choice.to_provider_format("openai")
+                tool_choice.to_responses_format()
             };
         }
 

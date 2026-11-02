@@ -8,11 +8,11 @@ pub fn print_error_report(error: anyhow::Error) {
     if cfg!(debug_assertions) && state::is_color_eyre_enabled() {
         state::maybe_prepare_color_eyre_hooks();
         let report = color_eyre::eyre::eyre!("{error:#}");
-        eprintln!("{report:?}");
+        vtcode_commons::diagnostics::stderr(format_args!("{report:?}"));
         return;
     }
 
-    eprintln!("Error: {error:?}");
+    vtcode_commons::diagnostics::stderr(format_args!("Error: {error:?}"));
 }
 
 /// A guard struct that automatically registers and unregisters TUI state

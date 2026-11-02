@@ -19,9 +19,9 @@ use crate::models::Provider;
 mod credential_resolution;
 
 pub use credential_resolution::{
-    CredentialSource, ResolvedCredential, clear_credential_with_mode, get_api_key, get_api_key_with_mode,
-    load_stored_api_key_with_mode, load_stored_credential_with_mode, resolve_credential, resolve_credential_with_mode,
-    resolve_openai_api_key_for_auth, store_credential_with_mode,
+    CredentialSource, ResolvedCredential, clear_credential_with_mode, get_api_key, get_api_key_in_workspace_with_mode,
+    get_api_key_with_mode, load_stored_api_key_with_mode, load_stored_credential_with_mode, resolve_credential,
+    resolve_credential_with_mode, resolve_openai_api_key_for_auth, store_credential_with_mode,
 };
 
 /// API key sources for different providers
@@ -122,29 +122,11 @@ fn read_env_var(key: &str) -> Option<String> {
     crate::env_helpers::read_env_var(key)
 }
 
-/// Load environment variables from .env file
-///
-/// This function attempts to load environment variables from a .env file
-/// in the current directory. It logs a warning if the file exists but cannot
-/// be loaded, but doesn't fail if the file doesn't exist.
+/// Retained for compatibility. Workspace credentials are read on demand and
+/// are never imported into the process environment.
+#[deprecated(since = "0.180.6", note = "workspace `.env` is never imported; this is a no-op")]
 pub fn load_dotenv() -> Result<()> {
-    match dotenvy::dotenv() {
-        Ok(path) => {
-            // Only print in verbose mode to avoid polluting stdout/stderr in scripts
-            if read_env_var("VTCODE_VERBOSE").is_some() || read_env_var("RUST_LOG").is_some() {
-                tracing::info!("Loaded environment variables from: {}", path.display());
-            }
-            Ok(())
-        }
-        Err(dotenvy::Error::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {
-            // .env file doesn't exist, which is fine
-            Ok(())
-        }
-        Err(e) => {
-            tracing::warn!("Failed to load .env file: {}", e);
-            Ok(())
-        }
-    }
+    Ok(())
 }
 
 /// A provider with a discoverable credential — ready to use without prompting
@@ -428,6 +410,32 @@ mod tests {
     }
 
     #[test]
+    fn local_provider_workspace_key_respects_environment_and_empty_fallback() {
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join(".env"), "OLLAMA_API_KEY=workspace-key\n").expect("dotenv");
+        for (environment, expected) in [(None, "workspace-key"), (Some("inherited-key"), "inherited-key")] {
+            with_override("OLLAMA_API_KEY", environment, || {
+                assert_eq!(
+                    get_api_key_in_workspace_with_mode(
+                        "ollama",
+                        Some(workspace.path()),
+                        crate::auth::AuthCredentialsStoreMode::File,
+                    )
+                    .expect("local key"),
+                    expected
+                );
+            });
+        }
+        with_override("OLLAMA_API_KEY", None, || {
+            assert_eq!(
+                get_api_key_in_workspace_with_mode("ollama", None, crate::auth::AuthCredentialsStoreMode::File)
+                    .expect("local provider accepts no key"),
+                ""
+            );
+        });
+    }
+
+    #[test]
     fn copilot_returns_managed_auth_error() {
         let result = get_api_key("copilot", &default_sources());
         assert!(result.is_err());
@@ -554,6 +562,31 @@ mod tests {
             assert_eq!(resolved.identity.provider(), "mycorp");
             assert_eq!(resolved.identity.key_name(), "MYCORP_API_KEY");
         });
+    }
+
+    #[test]
+    #[allow(deprecated, reason = "compatibility shim must stay callable")]
+    fn load_dotenv_does_not_import_workspace_settings() {
+        const CHILD: &str = "VTCODE_DOTENV_ISOLATION_TEST_CHILD";
+        const SETTING: &str = "VTCODE_DOTENV_ISOLATION_TEST_SETTING";
+        if std::env::var_os(CHILD).is_some() {
+            load_dotenv().expect("compatibility call");
+            assert!(std::env::var_os(SETTING).is_none());
+            return;
+        }
+
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join(".env"), format!("{SETTING}=untrusted\n")).expect("write dotenv");
+        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+            .arg("--exact")
+            .arg("api_keys::tests::load_dotenv_does_not_import_workspace_settings")
+            .env(CHILD, "1")
+            .env_remove(SETTING)
+            .current_dir(workspace.path())
+            .output()
+            .expect("run isolated test");
+        assert!(output.status.success());
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
     }
 
     #[test]

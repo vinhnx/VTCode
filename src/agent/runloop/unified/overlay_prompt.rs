@@ -164,7 +164,14 @@ where
                 deferral?;
                 return Ok(OverlayWaitOutcome::Deferred);
             }
-            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => continue,
+            event @ (InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_)) => {
+                // A host can submit before it receives the startup overlay.
+                // InlineSession holds deferred events until the overlay closes.
+                if let Err(error) = session.defer_event(event) {
+                    close_overlay(handle).await;
+                    return Err(error);
+                }
+            }
             InlineEvent::Transient(_) => {}
             _ => {
                 tracing::info!(
@@ -189,7 +196,9 @@ mod tests {
     use async_trait::async_trait;
     use tokio::sync::{Notify, mpsc};
     use vtcode_core::core::interfaces::ui::UiSession;
-    use vtcode_ui::tui::app::{InlineCommand, InlineListItem};
+    use vtcode_ui::tui::app::{
+        ContentPart, InlineCommand, InlineListItem, ListOverlayRequest, SubmittedInput, new_host_session,
+    };
 
     struct FailingDeferralSession {
         handle: InlineHandle,
@@ -212,24 +221,94 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn failed_webmcp_deferral_still_closes_the_overlay() {
-        let (command_sender, mut command_receiver) = mpsc::unbounded_channel();
-        let handle = InlineHandle::new_for_tests(command_sender);
-        handle.show_list_modal("test".into(), Vec::new(), Vec::<InlineListItem>::new(), None, None);
-        let mut session = FailingDeferralSession {
-            handle: handle.clone(),
-            event: Some(InlineEvent::WebmcpSubmit("/exit".into())),
-        };
-        let ctrl_c_state = Arc::new(CtrlCState::new());
-        let ctrl_c_notify = Arc::new(Notify::new());
+    async fn failed_input_deferral_still_closes_the_overlay() {
+        for event in [
+            InlineEvent::WebmcpSubmit("/exit".into()),
+            InlineEvent::Submit("draft".into()),
+        ] {
+            let (command_sender, mut command_receiver) = mpsc::unbounded_channel();
+            let handle = InlineHandle::new_for_tests(command_sender);
+            handle.show_list_modal("test".into(), Vec::new(), Vec::<InlineListItem>::new(), None, None);
+            let mut session = FailingDeferralSession { handle: handle.clone(), event: Some(event) };
+            let ctrl_c_state = Arc::new(CtrlCState::new());
+            let ctrl_c_notify = Arc::new(Notify::new());
 
-        let result =
-            wait_for_overlay_submission(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify, |_| None::<()>).await;
+            let result =
+                wait_for_overlay_submission(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify, |_| None::<()>).await;
 
-        assert!(result.is_err());
-        assert!(matches!(command_receiver.recv().await, Some(InlineCommand::ShowTransient { .. })));
-        assert!(matches!(command_receiver.recv().await, Some(InlineCommand::CloseTransient)));
-        assert!(matches!(command_receiver.recv().await, Some(InlineCommand::ForceRedraw)));
+            assert!(result.is_err());
+            assert!(matches!(command_receiver.recv().await, Some(InlineCommand::ShowTransient { .. })));
+            assert!(matches!(command_receiver.recv().await, Some(InlineCommand::CloseTransient)));
+            assert!(matches!(command_receiver.recv().await, Some(InlineCommand::ForceRedraw)));
+        }
+    }
+
+    #[tokio::test]
+    async fn startup_overlay_preserves_early_host_submissions_until_the_question_is_answered() {
+        use vtcode_ui::tui::app::InlineListSelection;
+        let mut host = new_host_session();
+        let handle = host.session.handle.clone();
+        let direct = SubmittedInput::new("first request", vec![ContentPart::Text { text: "attached source".into() }]);
+        let queued = SubmittedInput::new("follow up", Vec::new()).batchable();
+        host.input.send(InlineEvent::Submit(direct.clone())).expect("direct submission");
+        host.input
+            .send(InlineEvent::QueueSubmit(queued.clone()))
+            .expect("queued submission");
+        host.input
+            .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                InlineListSelection::ToolApproval(true),
+            ))))
+            .expect("answer");
+        let result = show_overlay_and_wait(
+            &handle,
+            &mut host.session,
+            TransientRequest::List(ListOverlayRequest {
+                title: "Startup question".into(),
+                lines: Vec::new(),
+                footer_hint: None,
+                items: Vec::new(),
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+                status: None,
+            }),
+            &Arc::new(CtrlCState::new()),
+            &Arc::new(Notify::new()),
+            |answer| match answer {
+                TransientSubmission::Selection(InlineListSelection::ToolApproval(value)) => Some(value),
+                _ => None,
+            },
+        )
+        .await
+        .expect("overlay result");
+        assert!(matches!(result, OverlayWaitOutcome::Submitted(true)));
+        assert!(matches!(host.session.next_event().await, Some(InlineEvent::Submit(input)) if input == direct));
+        assert!(matches!(host.session.next_event().await, Some(InlineEvent::QueueSubmit(input)) if input == queued));
+        assert!(!handle.has_deferred_event());
+    }
+
+    #[tokio::test]
+    async fn cancelling_startup_question_preserves_the_early_submission() {
+        let mut host = new_host_session();
+        let handle = host.session.handle.clone();
+        handle.show_list_modal("Startup question".into(), Vec::new(), Vec::new(), None, None);
+        host.input
+            .send(InlineEvent::Submit("first request".into()))
+            .expect("submission");
+        host.input.send(InlineEvent::Cancel).expect("cancel question");
+        let result = wait_for_overlay_submission(
+            &handle,
+            &mut host.session,
+            &Arc::new(CtrlCState::new()),
+            &Arc::new(Notify::new()),
+            |_| None::<()>,
+        )
+        .await
+        .expect("overlay result");
+        assert!(matches!(result, OverlayWaitOutcome::Cancelled));
+        assert!(
+            matches!(host.session.next_event().await, Some(InlineEvent::Submit(input)) if input.text == "first request")
+        );
     }
 
     #[tokio::test]

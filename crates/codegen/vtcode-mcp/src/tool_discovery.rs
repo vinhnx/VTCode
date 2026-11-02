@@ -293,6 +293,8 @@ mod tests {
             provider: provider.to_string(),
             input_schema: json!({}),
             output_schema: None,
+            ui: None,
+            visibility: crate::types::McpToolVisibility::default(),
         }
     }
 

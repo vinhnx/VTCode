@@ -86,7 +86,9 @@ impl HistoryPickerState {
     /// Open the history picker
     pub(crate) fn open(&mut self, input_manager: &InputManager) {
         self.active = true;
-        self.search_query.clear();
+        // Seed the search with any text already in the composer so Ctrl+R
+        // immediately filters history by what the user was typing.
+        self.search_query = input_manager.content().trim().to_string();
         self.original_content = input_manager.content().to_string();
         self.original_cursor = input_manager.cursor();
         self.original_attachments = input_manager.attachments().to_vec();
@@ -386,6 +388,36 @@ mod tests {
         assert!(!picker.active);
         picker.open(&manager);
         assert!(picker.active);
+    }
+
+    #[test]
+    fn test_open_seeds_query_from_composer_draft() {
+        let mut picker = HistoryPickerState::new();
+        let mut manager = InputManager::new();
+        manager.set_content("  cargo  ".to_string());
+        let history = make_history();
+
+        picker.open(&manager);
+        // The draft is trimmed into the query so history filters immediately.
+        assert_eq!(picker.search_query, "cargo");
+        picker.update_search(&history);
+        assert_eq!(picker.match_count(), 3);
+
+        // Cancelling restores the exact (untrimmed) draft.
+        picker.cancel(&mut manager);
+        assert_eq!(manager.content(), "  cargo  ");
+    }
+
+    #[test]
+    fn test_open_with_empty_composer_keeps_query_empty() {
+        let mut picker = HistoryPickerState::new();
+        let manager = InputManager::new();
+        let history = make_history();
+
+        picker.open(&manager);
+        assert!(picker.search_query.is_empty());
+        picker.update_search(&history);
+        assert_eq!(picker.match_count(), 5);
     }
 
     #[test]

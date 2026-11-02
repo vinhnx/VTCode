@@ -12,5 +12,5 @@ pub mod worktree;
 
 pub use reconciler::{ReconcileResult, WorktreeReconciler};
 pub use verify::{DiffVerifier, HeuristicDiffVerifier, VerifyVerdict};
-pub use workspace_diff::capture_workspace_diff;
+pub use workspace_diff::{capture_workspace_diff, capture_workspace_review_diff};
 pub use worktree::{WorktreeInfo, WorktreeManager};

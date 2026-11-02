@@ -113,14 +113,23 @@ pub(crate) async fn read_byte_range(
         });
     }
 
+    // In line-number mode with a nonzero offset, read one extra leading byte
+    // so the line-boundary check below does not need a second file open.
+    let probe_leading_byte = line_numbers && offset_bytes > 0;
+    let read_start = if probe_leading_byte {
+        offset_bytes - 1
+    } else {
+        offset_bytes
+    };
+
     // Open file and seek to offset
     let mut file = tokio::fs::File::open(file_path)
         .await
         .with_context(|| format!("Failed to open: {}", file_path.display()))?;
 
-    file.seek(std::io::SeekFrom::Start(offset_bytes))
+    file.seek(std::io::SeekFrom::Start(read_start))
         .await
-        .with_context(|| format!("Failed to seek to offset {} in: {}", offset_bytes, file_path.display()))?;
+        .with_context(|| format!("Failed to seek to offset {} in: {}", read_start, file_path.display()))?;
 
     // Clamp read size to file bounds, guarding against overflow
     let page_size_u64 = page_size_bytes as u64;
@@ -128,13 +137,20 @@ pub(crate) async fn read_byte_range(
         .checked_add(page_size_u64)
         .map(|end| std::cmp::min(end, file_size))
         .unwrap_or(file_size);
-    let actual_read_size = (end_pos - offset_bytes) as usize;
+    let actual_read_size = (end_pos - offset_bytes) as usize + usize::from(probe_leading_byte);
 
     let buffer = read_exact_uninit(&mut file, actual_read_size).await.with_context(|| {
-        format!("Failed to read {} bytes from offset {} in: {}", actual_read_size, offset_bytes, file_path.display())
+        format!("Failed to read {} bytes from offset {} in: {}", actual_read_size, read_start, file_path.display())
     })?;
 
-    let raw = String::from_utf8_lossy(&buffer).into_owned();
+    let (leading_byte, content_bytes) = if probe_leading_byte {
+        let (lead, rest) = buffer.split_first().context("leading probe byte missing from range read")?;
+        (Some(*lead), rest)
+    } else {
+        (None, buffer.as_slice())
+    };
+
+    let raw = String::from_utf8_lossy(content_bytes).into_owned();
     let has_more = end_pos < file_size;
 
     if !line_numbers {
@@ -145,22 +161,8 @@ pub(crate) async fn read_byte_range(
     // Line-number mode: align to line boundaries and add line numbers
     let start_line = count_lines_before(file_path, offset_bytes).await?;
 
-    // Check if we're at a line boundary by looking at the byte before offset
-    let at_line_boundary = if offset_bytes == 0 {
-        true
-    } else {
-        let mut pre = tokio::fs::File::open(file_path)
-            .await
-            .with_context(|| format!("Failed to open: {}", file_path.display()))?;
-        pre.seek(std::io::SeekFrom::Start(offset_bytes - 1))
-            .await
-            .context("failed to seek for boundary check")?;
-        let mut prev_byte = [0u8; 1];
-        AsyncReadExt::read_exact(&mut pre, &mut prev_byte)
-            .await
-            .context("failed to read boundary byte")?;
-        prev_byte[0] == b'\n'
-    };
+    // A missing probe byte means a zero offset, which is always a boundary.
+    let at_line_boundary = leading_byte.is_none_or(|byte| byte == b'\n');
 
     let lines: Vec<&str> = raw.split('\n').collect();
     let mut formatted_lines = Vec::new();

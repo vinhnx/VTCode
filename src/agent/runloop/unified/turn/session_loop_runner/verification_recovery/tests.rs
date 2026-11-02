@@ -51,7 +51,7 @@ async fn verification_recovery_queues_the_required_check_after_existing_user_inp
     fixture.runtime.try_queue_follow_up_input("Existing user input".into()).unwrap();
     let mut cfg = VTCodeConfig::default();
     cfg.agent.harness.verification.default_verifier_override = Some("rustc --version".into());
-    cfg.agent.harness.verification.cross_turn_turns = 1;
+    cfg.agent.harness.verification.cross_turn_turns = 9;
 
     let VerificationBlockResult::Queued { status_line } = fixture.recover(PENDING_REASON, Some(&cfg)) else {
         panic!("the first recovery turn should be queued");
@@ -112,23 +112,26 @@ async fn verification_recovery_preserves_disabled_exhausted_and_escalated_bounda
     #[derive(Debug, PartialEq)]
     enum RecoveryBlocker {
         Disabled,
+        AutoExecuteDisabled,
         Budget,
         Preflight,
         Failures,
     }
     for blocker in [
         RecoveryBlocker::Disabled,
+        RecoveryBlocker::AutoExecuteDisabled,
         RecoveryBlocker::Budget,
         RecoveryBlocker::Preflight,
         RecoveryBlocker::Failures,
     ] {
         let mut fixture = RecoveryFixture::new().await;
         let mut cfg = VTCodeConfig::default();
-        cfg.agent.harness.verification.cross_turn_turns = 1;
+        cfg.agent.harness.verification.cross_turn_turns = 9;
         cfg.agent.harness.verification.max_consecutive_failures = 2;
         cfg.agent.harness.verification.default_verifier_override = Some("rustc --version".into());
         match blocker {
             RecoveryBlocker::Disabled => cfg.agent.harness.verification.cross_turn_turns = 0,
+            RecoveryBlocker::AutoExecuteDisabled => cfg.agent.harness.verification.auto_execute = false,
             RecoveryBlocker::Budget => assert!(fixture.stats.record_verification_auto_recovery_turn_with_limit(1)),
             RecoveryBlocker::Preflight => {
                 fixture.stats.preflight_recovery.synthesis();
@@ -183,7 +186,7 @@ async fn verification_recovery_leaves_other_blocks_and_existing_inputs_untouched
 async fn exhausted_recovery_keeps_non_escalated_exit_and_bounded_failure_evidence() {
     let mut fixture = RecoveryFixture::new().await;
     let mut cfg = VTCodeConfig::default();
-    cfg.agent.harness.verification.cross_turn_turns = 1;
+    cfg.agent.harness.verification.cross_turn_turns = 9;
     cfg.agent.harness.verification.max_consecutive_failures = 3;
     let command = "grep -n '---\\s\\+\\|' README.md";
     cfg.agent.harness.verification.default_verifier_override = Some(command.into());
@@ -203,4 +206,26 @@ async fn exhausted_recovery_keeps_non_escalated_exit_and_bounded_failure_evidenc
     assert!(reason.len() < 4000);
     assert!(!fixture.runtime.has_pending_follow_up_inputs());
     assert_eq!(fixture.stats.verification_auto_recovery_turns(), 1);
+}
+
+#[tokio::test]
+async fn pending_verification_budget_stop_preserves_evidence_without_queueing_recovery() {
+    let mut fixture = RecoveryFixture::new().await;
+    fixture.registry.restore_completion_verification_debt();
+    fixture
+        .stats
+        .record_verification_auto_failure("rg -q count README.md".into(), r#"{"exit_code":1,"output":"no match"}"#);
+    let base = "Tool wall-clock budget exhausted for this turn (600s). Changes remain unverified; no additional verifier was scheduled.";
+    let VerificationBlockResult::Handoff { reason } = fixture.recover(base, None) else {
+        panic!("pending checks at budget exhaustion must hand off without another recovery");
+    };
+    assert!(reason.starts_with(base));
+    assert!(reason.contains("Previous check `rg -q count README.md`: terminal exit 1"));
+    assert!(reason.contains("no match"));
+    assert!(!reason.contains("so autonomous recovery stopped"));
+    assert_eq!(fixture.stats.verification_auto_recovery_turns(), 0);
+    assert_eq!(fixture.stats.verification_consecutive_failures(), 1);
+    assert!(!fixture.runtime.has_pending_follow_up_inputs());
+    assert!(fixture.runtime.state.messages.is_empty());
+    assert!(fixture.registry.completion_verification_pending());
 }

@@ -172,7 +172,7 @@ impl CrossTurnTracker {
     }
 
     /// Check if the tracker has detected a stuck pattern (for diagnostics).
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(dead_code, reason = "Accessor kept on the live cross-turn tracker state.")]
     pub(crate) fn zero_mutation_turns(&self) -> usize {
         self.zero_mutation_turns
     }

@@ -4,6 +4,7 @@
 //! - OpenAI API keys (`sk-...`)
 //! - AWS Access Key IDs (`AKIA...`)
 //! - GitHub App installation tokens (`ghs_...`, including ~520-char stateless JWTs)
+//! - Other GitHub token prefixes (`ghp_`/`gho_`/`ghu_`/`ghr_`/`github_pat_...`)
 //! - Bearer tokens (`Bearer ...`)
 //! - Generic secret assignments (`api_key=...`, `password:...`, etc.)
 //!
@@ -30,6 +31,14 @@ static AWS_ACCESS_KEY_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex
 /// and stateless JWT-format tokens (~520 chars, two dots).
 static GITHUB_APP_TOKEN_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"ghs_[A-Za-z0-9.\-_]{36,}"));
 
+/// Remaining GitHub token family: personal (`ghp_`), OAuth (`gho_`),
+/// user-to-server (`ghu_`), and refresh (`ghr_`) tokens share the classic
+/// 36+ char suffix shape; fine-grained PATs use the distinctive
+/// `github_pat_` prefix with a 22+ char suffix. Same opaque-string
+/// treatment as `ghs_`: redact on prefix alone, without length oracles.
+static GITHUB_TOKEN_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r"(?:gh[pour]_[A-Za-z0-9.\-_]{36,}|github_pat_[A-Za-z0-9.\-_]{22,})"));
+
 /// Bearer token pattern: "Bearer " followed by token characters
 static BEARER_TOKEN_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"(?i)\bBearer\s+[A-Za-z0-9.\-_]{16,}\b"));
 
@@ -44,6 +53,62 @@ static SECRET_ASSIGNMENT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// Maximum serialized size of a provider diagnostic after redaction.
 pub const PROVIDER_DIAGNOSTIC_MAX_BYTES: usize = 8 * 1024;
 const PROVIDER_DIAGNOSTIC_TRUNCATION_MARKER: &str = "… [diagnostic truncated]";
+
+/// Replacement marker for control characters in terminal-bound text.
+const TERMINAL_CONTROL_REPLACEMENT: char = '\u{FFFD}';
+
+/// Bidi controls that reorder terminal output while occupying no visible space.
+///
+/// A crafted override (U+202E) in a displayed URI or domain can visually spoof a
+/// trusted value, so these are neutralized like control characters. Joiners and
+/// other format characters stay intact: legitimate names may contain emoji.
+fn is_bidi_control(character: char) -> bool {
+    matches!(
+        character,
+        '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
+fn is_neutralized_terminal_char(character: char) -> bool {
+    character.is_control() || is_bidi_control(character)
+}
+
+/// Neutralize control and bidi-reordering characters and bound length for terminal display.
+///
+/// Server-originated strings (resource URIs, domains, names) must pass through
+/// here before reaching terminal output: raw newlines split rows, BEL/CR/ESC
+/// enable terminal mangling, bidi controls visually reorder text, and unbounded
+/// values blow up layouts. Shell metacharacters (`$`, backticks) are inert in
+/// terminal output and preserved.
+pub fn sanitize_terminal_text(input: &str, max_chars: usize) -> String {
+    if input.chars().all(|character| !is_neutralized_terminal_char(character)) {
+        return crate::formatting::truncate_text(input, max_chars, "…");
+    }
+    let neutralized: String = input
+        .chars()
+        .map(|character| {
+            if is_neutralized_terminal_char(character) {
+                TERMINAL_CONTROL_REPLACEMENT
+            } else {
+                character
+            }
+        })
+        .collect();
+    crate::formatting::truncate_text(&neutralized, max_chars, "…")
+}
+
+/// Join disclosed entries with per-item sanitizing and a count-capped tail.
+///
+/// Each item is neutralized via [`sanitize_terminal_text`] with `max_item_chars`;
+/// at most `max_items` are shown before the remainder folds into a count.
+pub fn join_sanitized_truncated(items: &[String], max_items: usize, max_item_chars: usize) -> String {
+    let sanitized: Vec<String> = items.iter().map(|item| sanitize_terminal_text(item, max_item_chars)).collect();
+    if sanitized.len() <= max_items {
+        return sanitized.join(", ");
+    }
+    let shown: Vec<&str> = sanitized.iter().take(max_items).map(String::as_str).collect();
+    format!("{} … +{} more", shown.join(", "), sanitized.len() - max_items)
+}
 
 /// Redact secrets and sensitive keys from a string.
 ///
@@ -63,14 +128,15 @@ pub fn redact_secrets(input: String) -> String {
     let r1 = OPENAI_KEY_REGEX.replace_all(&input, "[REDACTED_SECRET]");
     let r2 = AWS_ACCESS_KEY_ID_REGEX.replace_all(&r1, "[REDACTED_SECRET]");
     let r3 = GITHUB_APP_TOKEN_REGEX.replace_all(&r2, "[REDACTED_SECRET]");
-    let r4 = BEARER_TOKEN_REGEX.replace_all(&r3, "Bearer [REDACTED_SECRET]");
-    let r5 = SECRET_ASSIGNMENT_REGEX.replace_all(&r4, "$1$2$3[REDACTED_SECRET]");
+    let r4 = GITHUB_TOKEN_REGEX.replace_all(&r3, "[REDACTED_SECRET]");
+    let r5 = BEARER_TOKEN_REGEX.replace_all(&r4, "Bearer [REDACTED_SECRET]");
+    let r6 = SECRET_ASSIGNMENT_REGEX.replace_all(&r5, "$1$2$3[REDACTED_SECRET]");
     // `into_owned` clones only when the final result is `Borrowed` (no regex
     // matched at all); when any redaction occurred it moves the owned string
     // without an extra allocation. Do NOT short-circuit on `Cow::Borrowed` —
     // the final Cow is `Borrowed` whenever the *last* regex doesn't match,
     // even if earlier regexes did, which would silently discard redactions.
-    r5.into_owned()
+    r6.into_owned()
 }
 
 /// Redact secrets and return a bounded, UTF-8-safe provider diagnostic.
@@ -210,6 +276,35 @@ mod tests {
     }
 
     #[test]
+    fn redacts_github_token_family_besides_app_tokens() {
+        // Fixtures are assembled at runtime so scans do not flag them.
+        for prefix in ["ghp_", "gho_", "ghu_", "ghr_"] {
+            let token = format!("{prefix}{}", "e".repeat(36));
+            let output = redact_secrets(format!("pasted {token} in chat"));
+            assert_eq!(output, "pasted [REDACTED_SECRET] in chat", "{prefix}");
+            assert!(!output.contains(token.as_str()));
+        }
+        let fine_grained = format!("github_pat_{}", "f".repeat(22));
+        let output = redact_secrets(format!("pasted {fine_grained} in chat"));
+        assert_eq!(output, "pasted [REDACTED_SECRET] in chat");
+        assert!(!output.contains(fine_grained.as_str()));
+    }
+
+    #[test]
+    fn github_token_family_thresholds_match_app_token_policy() {
+        // `gh?_` prefixes need a 36+ char suffix, `github_pat_` needs 22+;
+        // shorter lookalikes (docs, placeholders) must survive.
+        let short_classic = format!("ghp_{}", "a".repeat(35));
+        let exact_classic = format!("ghp_{}", "a".repeat(36));
+        assert_eq!(redact_secrets(format!("saw {short_classic} here")), format!("saw {short_classic} here"));
+        assert_eq!(redact_secrets(format!("saw {exact_classic} here")), "saw [REDACTED_SECRET] here");
+        let short_pat = format!("github_pat_{}", "a".repeat(21));
+        let exact_pat = format!("github_pat_{}", "a".repeat(22));
+        assert_eq!(redact_secrets(format!("saw {short_pat} here")), format!("saw {short_pat} here"));
+        assert_eq!(redact_secrets(format!("saw {exact_pat} here")), "saw [REDACTED_SECRET] here");
+    }
+
+    #[test]
     fn redacts_github_app_token_split_across_stream_chunks() {
         // A ~526-char stateless token fits in the 1_024-byte carry window, so
         // halves split at an IO boundary must still redact on finish.
@@ -281,6 +376,51 @@ mod tests {
 
         assert_eq!(output, "password=[REDACTED_SECRET]\n");
         assert!(!output.contains("supersecretvalue"));
+    }
+
+    #[test]
+    fn terminal_text_neutralizes_controls_and_bounds_length() {
+        assert_eq!(sanitize_terminal_text("", 8), "");
+        assert_eq!(sanitize_terminal_text("abc", 8), "abc");
+        assert_eq!(sanitize_terminal_text("abcdefgh", 8), "abcdefgh");
+        assert_eq!(sanitize_terminal_text("abcdefghi", 8), "abcdefgh…");
+        assert_eq!(sanitize_terminal_text("ab", 0), "…");
+    }
+
+    #[test]
+    fn terminal_text_replaces_controls_but_preserves_shell_metachars() {
+        assert_eq!(sanitize_terminal_text("a\nb\rc\td\0e\x07f\x1bg", 64), "a�b�c�d�e�f�g");
+        assert_eq!(sanitize_terminal_text("price is $5 `code` ~user", 64), "price is $5 `code` ~user");
+        assert_eq!(sanitize_terminal_text("ui://x/\u{7f}app", 64), "ui://x/�app");
+    }
+
+    #[test]
+    fn terminal_text_truncates_on_char_boundaries() {
+        assert_eq!(sanitize_terminal_text("日本語テスト", 4), "日本語テ…");
+        assert_eq!(sanitize_terminal_text("日本語", 4), "日本語");
+    }
+
+    #[test]
+    fn terminal_text_neutralizes_bidi_controls_but_preserves_joiners() {
+        assert_eq!(sanitize_terminal_text("ui://\u{202e}evil/app", 64), "ui://�evil/app");
+        assert_eq!(sanitize_terminal_text("a\u{2066}b\u{2069}c", 64), "a�b�c");
+        assert_eq!(sanitize_terminal_text("x\u{200e}y\u{200f}z", 64), "x�y�z");
+        // Zero-width joiners keep emoji sequences intact.
+        assert_eq!(sanitize_terminal_text("fam 👨\u{200d}👩\u{200d}👧 ok", 64), "fam 👨\u{200d}👩\u{200d}👧 ok");
+    }
+
+    #[test]
+    fn join_sanitized_truncated_folds_only_past_max() {
+        let items: Vec<String> = (0..8).map(|n| format!("d{n}")).collect();
+        assert_eq!(join_sanitized_truncated(&items, 8, usize::MAX), "d0, d1, d2, d3, d4, d5, d6, d7");
+        let items: Vec<String> = (0..9).map(|n| format!("d{n}")).collect();
+        assert_eq!(join_sanitized_truncated(&items, 8, usize::MAX), "d0, d1, d2, d3, d4, d5, d6, d7 … +1 more");
+        let items: Vec<String> = (0..11).map(|n| format!("d{n}")).collect();
+        assert_eq!(join_sanitized_truncated(&items, 8, usize::MAX), "d0, d1, d2, d3, d4, d5, d6, d7 … +3 more");
+        // Per-item caps apply before joining; controls in any item are neutralized.
+        let items = vec!["abcdefghij".to_string(), "x\ny".to_string()];
+        assert_eq!(join_sanitized_truncated(&items, 8, 4), "abcd…, x�y");
+        assert!(join_sanitized_truncated(&[], 8, usize::MAX).is_empty());
     }
 
     #[test]

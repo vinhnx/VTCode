@@ -106,6 +106,44 @@ pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
     RgbColor(blend(color.0, target.0), blend(color.1, target.1), blend(color.2, target.2))
 }
 
+/// Granularity of the dimming search, as a fraction of the blend range.
+const DIM_STEPS: u32 = 20;
+
+/// Recede a color toward the background, keeping the result readable.
+///
+/// The result is the requested share of the background mix, or the dimmest
+/// tint that still clears the contrast floor when the share would go too far.
+/// Light and dark themes therefore both keep a legible surface instead of
+/// washing the text out. Palette colors that are not plain RGB are returned
+/// unchanged: the recipe needs true-color luminance math.
+pub(crate) fn recede_toward_background(
+    base: anstyle::Color,
+    background: anstyle::Color,
+    ratio: f32,
+    min_contrast: f32,
+) -> anstyle::Color {
+    let (anstyle::Color::Rgb(base_rgb), anstyle::Color::Rgb(background_rgb)) = (base, background) else {
+        return base;
+    };
+    let candidate = mix(base_rgb, background_rgb, ratio);
+    if contrast_ratio(candidate, background_rgb) >= min_contrast {
+        return candidate.into();
+    }
+    // The requested share would go too far: take the dimmest tint that still
+    // clears the floor.
+    let mut dimmed = base_rgb;
+    for step in 1..=DIM_STEPS {
+        let step_ratio = step as f32 / DIM_STEPS as f32;
+        let step_candidate = mix(base_rgb, background_rgb, step_ratio);
+        if contrast_ratio(step_candidate, background_rgb) >= min_contrast {
+            dimmed = step_candidate;
+        } else {
+            break;
+        }
+    }
+    dimmed.into()
+}
+
 pub(crate) fn lighten(color: RgbColor, ratio: f32) -> RgbColor {
     mix(
         color,
@@ -113,3 +151,42 @@ pub(crate) fn lighten(color: RgbColor, ratio: f32) -> RgbColor {
         ratio,
     )
 }
+
+/// Foreground for a filled control: the white/black choice at the WCAG
+/// equal-contrast crossover (luminance 0.179), readable on every saturated
+/// accent. Shared by the desktop client and the CLI palette export.
+pub fn filled_text(color: RgbColor) -> RgbColor {
+    const BLACK: RgbColor = RgbColor(0, 0, 0);
+    const WHITE: RgbColor = RgbColor(255, 255, 255);
+    if relative_luminance(color) > ui::THEME_FILLED_TEXT_LUMINANCE_CROSSOVER {
+        BLACK
+    } else {
+        WHITE
+    }
+}
+
+/// The softest text color that still meets WCAG AA against `background`: the
+/// palette foreground blended toward the background just until the threshold
+/// holds. Returns the foreground untouched when even it cannot reach AA.
+pub fn aa_muted_text(background: RgbColor, foreground: RgbColor) -> RgbColor {
+    let aa_ratio = ui::THEME_MIN_CONTRAST_RATIO;
+    if contrast_ratio(foreground, background) < aa_ratio {
+        return foreground;
+    }
+    let mut low = 0.0_f32;
+    let mut high = 1.0_f32;
+    for _ in 0..AA_SEARCH_STEPS {
+        let middle = (low + high) / 2.0;
+        if contrast_ratio(mix(foreground, background, middle), background) >= aa_ratio {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    // Sit just inside the passing range.
+    mix(foreground, background, low)
+}
+
+/// Bisection steps for [`aa_muted_text`]; 20 halvings land well under one
+/// 8-bit channel step.
+const AA_SEARCH_STEPS: u32 = 20;

@@ -240,7 +240,7 @@ impl PtyScrollback {
         validation_context.complete(self.utf8_buffer_remainder.len());
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(dead_code, reason = "Accessor kept on the live PTY scrollback buffer.")]
     pub(super) fn snapshot(&self) -> String {
         let mut output = String::with_capacity(self.current_bytes.min(self.max_bytes));
         for line in &self.lines {
@@ -276,12 +276,12 @@ impl PtyScrollback {
         !self.pending_lines.is_empty() || !self.pending_partial.is_empty()
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(dead_code, reason = "Accessor kept on the live PTY scrollback buffer.")]
     fn has_overflow(&self) -> bool {
         self.overflow_detected
     }
 
-    #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
+    #[allow(dead_code, reason = "Accessor kept on the live PTY scrollback buffer.")]
     fn current_size_bytes(&self) -> usize {
         self.current_bytes
     }

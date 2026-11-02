@@ -33,8 +33,9 @@ use helpers::{
 };
 
 pub(super) fn is_info_box_line(message: &MessageLine) -> bool {
-    matches!(message.kind, InlineMessageKind::Error | InlineMessageKind::Warning)
-        || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message))
+    message.diagnostic.is_none()
+        && (matches!(message.kind, InlineMessageKind::Error | InlineMessageKind::Warning)
+            || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message)))
 }
 
 impl Session {
@@ -113,6 +114,10 @@ impl Session {
         let Some(message) = self.lines.get(index) else {
             return vec![TranscriptLine::default()];
         };
+
+        if message.diagnostic.is_some() {
+            return self.reflow_diagnostic(index, width, false);
+        }
 
         // Thinking/reasoning blocks are rendered as contiguous `Policy` runs.
         // Delegate the whole run (header + body) to the dedicated thinking
@@ -311,6 +316,9 @@ impl Session {
     }
 
     pub(crate) fn reflow_message_lines_for_review(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
+        if self.lines.get(index).is_some_and(|line| line.diagnostic.is_some()) {
+            return self.reflow_diagnostic(index, width, true);
+        }
         let Some(collapsed) = self.collapsed_pastes.iter().find(|paste| paste.line_index == index) else {
             return self.reflow_message_lines(index, width, false);
         };

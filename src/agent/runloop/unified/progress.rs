@@ -5,25 +5,6 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
-/// RAII guard to ensure a background progress task is aborted when dropped
-pub(crate) struct ProgressUpdateGuard {
-    handle: Option<tokio::task::JoinHandle<()>>,
-}
-
-impl ProgressUpdateGuard {
-    pub(crate) fn new(handle: tokio::task::JoinHandle<()>) -> Self {
-        Self { handle: Some(handle) }
-    }
-}
-
-impl Drop for ProgressUpdateGuard {
-    fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
-        }
-    }
-}
-
 /// Tracks the state of a long-running operation with detailed progress information
 pub(crate) struct ProgressState {
     current: AtomicU64,

@@ -26,16 +26,13 @@ pub(crate) struct VerificationFailureSummary {
 }
 
 impl SessionStats {
-    /// Bundle counterpart to `LoopTracker::verification_snapshot`. Turn setup
-    /// and persistence must move both halves together; threading the tuple
-    /// through one call keeps a pending gate from losing its fix window.
+    /// Preserve the legacy snapshot shape; the retired edit allowance is zero.
     pub(crate) fn verification_snapshot(&self) -> (bool, u8) {
-        (self.verification_pending, self.verification_fix_remaining)
+        (self.verification_pending, 0)
     }
 
     pub(crate) fn set_verification_snapshot(&mut self, snapshot: (bool, u8)) {
         self.verification_pending = snapshot.0;
-        self.verification_fix_remaining = if snapshot.0 { snapshot.1 } else { 0 };
     }
 
     /// Config-aware cross-turn recovery recorder; prefer it at call sites with
@@ -112,20 +109,6 @@ impl SessionStats {
 
     pub(crate) fn reset_plan_continuation_budget(&mut self) {
         self.plan_continuation_turns = 0;
-        self.consecutive_plan_empty_fallbacks = 0;
-    }
-
-    pub(crate) fn consecutive_plan_empty_fallbacks(&self) -> u8 {
-        self.consecutive_plan_empty_fallbacks
-    }
-
-    pub(crate) fn record_plan_empty_fallback(&mut self) -> u8 {
-        self.consecutive_plan_empty_fallbacks = self.consecutive_plan_empty_fallbacks.saturating_add(1);
-        self.consecutive_plan_empty_fallbacks
-    }
-
-    pub(crate) fn reset_plan_empty_fallbacks(&mut self) {
-        self.consecutive_plan_empty_fallbacks = 0;
     }
 
     /// Record a failed harness auto-verification of `command`, keeping a
@@ -171,26 +154,13 @@ impl SessionStats {
         self.last_verification_failure.as_ref()
     }
 
-    /// Reset the whole verification-recovery episode: cross-turn budget,
-    /// consecutive-failure count, and stored failure tail. Call on
-    /// `Completed` turns, cancellation/exit, fresh execution, and fresh user
-    /// instructions — every point where past verification struggles stop
-    /// being relevant to future work.
+    /// Clear terminal diagnostics without replenishing request-scoped recovery.
+    /// Only genuine fresh input restores the corrective-pass allowance.
     pub(crate) fn reset_verification_recovery_episode(&mut self) {
-        self.verification_auto_recovery_turns = 0;
         self.verification_consecutive_failures = 0;
         self.last_verification_failure = None;
         // Tracker/plan continuation budgets are independent episode counters;
         // do not wipe them here (Completed-turn verification resets must not
         // silently restore full tracker auto-continue budgets).
-    }
-
-    /// Reset only the cross-turn auto-recovery turn budget, preserving the
-    /// consecutive-failure escalation counter. Called when tracker progress
-    /// proves long-running work is advancing: fresh verification misses for
-    /// new work get a new bounded recovery episode, while a genuinely
-    /// never-passing suite still escalates via the preserved failure count.
-    pub(crate) fn reset_verification_auto_recovery_turns(&mut self) {
-        self.verification_auto_recovery_turns = 0;
     }
 }

@@ -10,6 +10,9 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
 pub use prep::ExecCommandKind;
 pub(crate) use prep::resolve_exec_command;
+pub(crate) use run::{
+    EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX, EXEC_TASK_INSTRUCTIONS_PREFIX, REVIEW_TASK_INSTRUCTIONS_PREFIX,
+};
 
 #[derive(Debug, Clone)]
 pub struct ExecCommandOptions {
@@ -29,7 +32,7 @@ pub async fn handle_exec_command(
     tokio::select! {
         res = run::handle_exec_command_impl(config, vt_cfg, options) => res,
         _ = vtcode_core::shutdown::shutdown_signal() => {
-            eprintln!("{}", crate::cli::messages::warn("Cancelled by user."));
+            vtcode_commons::diagnostics::stderr(format_args!("{}", crate::cli::messages::warn("Cancelled by user.")));
             bail!("Operation cancelled");
         }
     }
@@ -94,6 +97,7 @@ mod tests {
             turn_id: "turn-1".to_string(),
             item_id: "plan-1".to_string(),
             delta: "First plan".to_string(),
+            recovery: None,
         })));
         assert_eq!(processor.final_message(), Some("First plan"));
 
@@ -172,12 +176,72 @@ mod tests {
     }
 
     #[test]
+    fn human_event_line_formats_sandbox_denial() {
+        let line = human_event_line(&ThreadEvent::AppSandboxDenied(Box::new(
+            vtcode_core::exec::events::AppSandboxDeniedEvent {
+                tool: "mcp::demo::get_time".to_string(),
+                tier: "off".to_string(),
+                uris: vec!["ui://demo/app.html".to_string()],
+            },
+        )))
+        .expect("denial event should render");
+        assert!(line.contains("[APP DENIED]"));
+        assert!(line.contains("mcp::demo::get_time"));
+        assert!(line.contains("ui://demo/app.html"));
+    }
+
+    #[test]
+    fn human_event_line_neutralizes_denial_uri_escapes() {
+        let line = human_event_line(&ThreadEvent::AppSandboxDenied(Box::new(
+            vtcode_core::exec::events::AppSandboxDeniedEvent {
+                tool: "mcp::demo::get_time".to_string(),
+                tier: "off".to_string(),
+                uris: vec!["ui://demo/\u{1b}[2Japp.html".to_string()],
+            },
+        )))
+        .expect("denial event should render");
+        // Style codes legitimately contain ESC; the attack sequence (ESC + CSI) must not.
+        assert!(!line.contains("\u{1b}[2J"), "erase-screen sequence must be broken: {line}");
+        assert!(line.contains("ui://demo/"));
+    }
+
+    #[test]
+    fn human_event_line_preserves_canonical_updated_diagnostic_details() {
+        use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+        let event = ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
+            item: ThreadItem {
+                context: None,
+                id: "diagnostic-3".into(),
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    text: "short summary".into(),
+                    stage: Some("diagnosis".into()),
+                    diagnostic: Some(Box::new(Diagnostic {
+                        severity: DiagnosticSeverity::Error,
+                        code: "planning.awaiting_input".into(),
+                        summary: "Planning needs input".into(),
+                        agent_details: "attempts=3 password=headless-private-secret".into(),
+                        correlation_id: "diagnostic-3".into(),
+                        actions: Vec::new(),
+                    })),
+                })),
+            },
+        });
+        let line = human_event_line(&event).unwrap();
+        assert!(line.contains("[ERROR]"));
+        assert!(line.contains("Planning needs input"));
+        assert!(line.contains("Details:"));
+        assert!(line.contains("attempts=3"));
+        assert!(!line.contains("headless-private-secret"));
+    }
+
+    #[test]
     fn human_event_line_formats_diagnosis_reasoning() {
         let line = human_event_line(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 context: None,
                 id: "diagnosis-1".to_string(),
                 details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    diagnostic: None,
                     text: "Diagnosis: exec\nObserved: exit 1".to_string(),
                     stage: Some("diagnosis".to_string()),
                 })),
@@ -206,6 +270,7 @@ mod tests {
                     duration_ms: None,
                     task_id: None,
                     session_id: None,
+                    correlation_id: None,
                     exec_session_id: None,
                     status: None,
                     transcript_path: None,
@@ -236,6 +301,7 @@ mod tests {
                     duration_ms: None,
                     task_id: None,
                     session_id: None,
+                    correlation_id: None,
                     exec_session_id: None,
                     status: None,
                     transcript_path: None,

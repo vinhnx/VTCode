@@ -93,6 +93,7 @@ where
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct EvaluatorFinding {
     pub(super) severity: String,
+    #[serde(alias = "finding")]
     pub(super) title: String,
     #[serde(default)]
     pub(super) detail: Option<String>,

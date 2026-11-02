@@ -14,13 +14,27 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 
 
 class CheckDevTests(unittest.TestCase):
-    def run_fixture(self, options=(), quick=True, changed_paths=("src/lib.rs",), **scenario):
+    def run_fixture(
+        self,
+        options=(),
+        quick=True,
+        changed_paths=("src/lib.rs",),
+        deny_stub=False,
+        **scenario,
+    ):
         with tempfile.TemporaryDirectory(prefix="vtcode-check-dev-") as directory:
             root = Path(directory)
             scripts = root / "scripts"
             scripts.mkdir()
             for name in ("check-dev.sh", "common.sh"):
                 shutil.copy2(SCRIPTS / name, scripts / name)
+            stub = scripts / "check_file_length.py"
+            stub.write_text(
+                f"#!{sys.executable}\n"
+                "import os, sys\n"
+                "print('File length summary: stub')\n"
+                "sys.exit(int(os.environ.get('CHECK_DEV_FILE_LENGTH_STATUS', '0')))\n"
+            )
             if quick:
                 config = root / ".config/nextest.toml"
                 config.parent.mkdir()
@@ -39,6 +53,8 @@ class CheckDevTests(unittest.TestCase):
                 "    log.write(json.dumps(args) + '\\n')\n"
                 "if args == ['nextest', '--version']:\n"
                 "    sys.exit(0 if scenario.get('nextest_available', True) else 1)\n"
+                "if args[0] == 'deny':\n"
+                "    sys.exit(scenario.get('deny_status', 0))\n"
                 "is_verifier = '--version' not in args and (args[0] in ('check', 'clippy', 'metadata') or args[:2] == ['nextest', 'run'])\n"
                 "if is_verifier and '--locked' not in args:\n"
                 "    pathlib.Path('Cargo.lock').write_text('unlocked resolution changed the lockfile\\n')\n"
@@ -65,17 +81,31 @@ class CheckDevTests(unittest.TestCase):
                 "    sys.exit(91)\n"
             )
             git.chmod(0o755)
+            if deny_stub:
+                deny = commands / "cargo-deny"
+                deny.write_text(f"#!{sys.executable}\nimport sys\nsys.exit(0)\n")
+                deny.chmod(0o755)
             calls_file = root / "calls.jsonl"
+            # Hermetic PATH: only the stubbed commands plus the system prefix,
+            # so tool-presence scenarios (e.g. cargo-deny) do not depend on the
+            # host's installed toolchain.
             environment = {
                 **os.environ,
-                "PATH": f"{commands}:{os.environ.get('PATH', '')}",
+                "PATH": f"{commands}:/usr/bin:/bin",
                 "CHECK_DEV_CALLS": str(calls_file),
                 "CHECK_DEV_SCENARIO": json.dumps(scenario),
                 "CHECK_DEV_CHANGED_PATHS": json.dumps(changed_paths),
+                "CHECK_DEV_FILE_LENGTH_STATUS": str(
+                    scenario.get("file_length_status", 0)
+                ),
             }
             result = subprocess.run(
                 ["bash", str(scripts / "check-dev.sh"), *options],
-                cwd=root, env=environment, capture_output=True, text=True, timeout=20,
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=20,
             )
             calls = [json.loads(line) for line in calls_file.read_text().splitlines()]
             return result, calls, lockfile.read_text()
@@ -95,21 +125,34 @@ class CheckDevTests(unittest.TestCase):
                 self.assert_success(result)
                 self.assertEqual(lockfile, "fixture lockfile\n")
                 for command in ("clippy", "check"):
-                    call = next(call for call in calls if call[0] == command and "--version" not in call)
+                    call = next(
+                        call
+                        for call in calls
+                        if call[0] == command and "--version" not in call
+                    )
                     self.assertIn("--locked", call)
                     self.assertEqual("--workspace" in call, "--workspace" in options)
-                self.assertFalse(any(call[0] == "test" or call[:2] == ["nextest", "run"] for call in calls))
+                self.assertFalse(
+                    any(
+                        call[0] == "test" or call[:2] == ["nextest", "run"]
+                        for call in calls
+                    )
+                )
 
     def test_tests_use_locked_nextest_with_quick_or_default_profile(self):
         for quick in (True, False):
             with self.subTest(quick=quick):
-                result, calls, lockfile = self.run_fixture(("--test", "--quiet"), quick=quick)
+                result, calls, lockfile = self.run_fixture(
+                    ("--test", "--quiet"), quick=quick
+                )
                 self.assert_success(result)
                 self.assertEqual(lockfile, "fixture lockfile\n")
                 call = next(call for call in calls if call[:2] == ["nextest", "run"])
                 self.assertIn("--locked", call)
                 self.assertIn("--no-tests=fail", call)
-                self.assertEqual(call[call.index("--profile") + 1], "quick" if quick else "default")
+                self.assertEqual(
+                    call[call.index("--profile") + 1], "quick" if quick else "default"
+                )
 
     def test_changed_selection_uses_locked_metadata_and_package_filter(self):
         result, calls, lockfile = self.run_fixture(("--changed",))
@@ -131,14 +174,19 @@ class CheckDevTests(unittest.TestCase):
             with self.subTest(options=options):
                 result, calls, _ = self.run_fixture(options, changed_paths=())
                 self.assert_success(result)
-                self.assertIn("No changed packages in the selected test scope; skipping tests.", result.stdout)
+                self.assertIn(
+                    "No changed packages in the selected test scope; skipping tests.",
+                    result.stdout,
+                )
                 self.assertFalse(any(call[:2] == ["nextest", "run"] for call in calls))
 
     def test_missing_nextest_fails_without_using_another_runner(self):
         result, calls, _ = self.run_fixture(("--test",), nextest_available=False)
         self.assert_failure(result)
         self.assertIn("cargo-nextest is required", result.stdout)
-        self.assertFalse(any(call[0] == "test" or call[:2] == ["nextest", "run"] for call in calls))
+        self.assertFalse(
+            any(call[0] == "test" or call[:2] == ["nextest", "run"] for call in calls)
+        )
 
     def test_empty_suite_and_failed_tests_fail_the_gate(self):
         for scenario in ({"empty_suite": True}, {"nextest_status": 29}):
@@ -147,12 +195,47 @@ class CheckDevTests(unittest.TestCase):
                 self.assert_failure(result)
                 self.assertNotIn("All tests passed!", result.stdout)
 
+    def test_file_length_gate_failure_fails_the_gate(self):
+        result, _, _ = self.run_fixture(file_length_status=1)
+        self.assert_failure(result)
+        self.assertIn("File length violations found.", result.stdout)
+
     def test_failed_locked_check_or_clippy_fails_the_gate(self):
         for scenario in ({"check_status": 31}, {"clippy_status": 32}):
             with self.subTest(scenario=scenario):
                 result, _, lockfile = self.run_fixture(**scenario)
                 self.assert_failure(result)
                 self.assertEqual(lockfile, "fixture lockfile\n")
+
+    def test_deny_flag_runs_locked_cargo_deny_before_the_subcommand(self):
+        result, calls, lockfile = self.run_fixture(
+            ("--deny", "--quiet"), deny_stub=True
+        )
+        self.assert_success(result)
+        self.assertEqual(lockfile, "fixture lockfile\n")
+        # --locked is a global cargo-deny flag: it must precede the subcommand.
+        self.assertEqual(
+            next(call for call in calls if call[0] == "deny"),
+            ["deny", "--locked", "check"],
+        )
+
+    def test_deny_is_opt_in_and_absent_by_default(self):
+        for options in ((), ("--test",)):
+            with self.subTest(options=options):
+                result, calls, _ = self.run_fixture(options)
+                self.assert_success(result)
+                self.assertFalse(any(call[0] == "deny" for call in calls))
+
+    def test_deny_policy_violation_fails_the_gate(self):
+        # A missing cargo-deny surfaces the same way in required mode: the
+        # `cargo deny` invocation exits nonzero and fails the gate.
+        result, _, _ = self.run_fixture(
+            ("--deny", "--quiet"), deny_stub=True, deny_status=1
+        )
+        self.assert_failure(result)
+        self.assertIn(
+            "cargo-deny found policy violations", result.stdout + result.stderr
+        )
 
 
 if __name__ == "__main__":

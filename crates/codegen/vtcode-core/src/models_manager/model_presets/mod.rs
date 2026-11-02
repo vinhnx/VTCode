@@ -373,7 +373,8 @@ mod tests {
     #[test]
     fn moonshot_presets_exist_and_default_to_kimi_k3() {
         let presets = presets::moonshot_presets();
-        assert_eq!(presets.len(), 1);
+        assert_eq!(presets.len(), 2);
+        assert!(presets.iter().any(|preset| preset.model == "kimi-k3.1-pro"));
 
         let default = presets
             .iter()
@@ -422,7 +423,7 @@ mod tests {
     #[test]
     fn merge_gateway_presets_expose_curated_routes_and_default() {
         let presets = presets::merge_gateway_presets();
-        assert_eq!(presets.len(), 28);
+        assert_eq!(presets.len(), 31);
         let default = presets
             .iter()
             .find(|preset| preset.is_default)

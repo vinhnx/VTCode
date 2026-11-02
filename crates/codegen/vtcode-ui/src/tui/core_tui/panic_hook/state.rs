@@ -228,11 +228,15 @@ pub(crate) fn maybe_prepare_color_eyre_hooks() {
             Ok((panic_hook, eyre_hook)) => {
                 let _ = COLOR_EYRE_PANIC_HOOK.set(panic_hook);
                 if let Err(error) = eyre_hook.install() {
-                    eprintln!("warning: failed to install color-eyre hook: {error}");
+                    vtcode_commons::diagnostics::stderr(format_args!(
+                        "warning: failed to install color-eyre hook: {error}"
+                    ));
                 }
             }
             Err(error) => {
-                eprintln!("warning: failed to prepare color-eyre hook: {error}");
+                vtcode_commons::diagnostics::stderr(format_args!(
+                    "warning: failed to prepare color-eyre hook: {error}"
+                ));
             }
         }
     });

@@ -14,24 +14,53 @@ pub const MAX_OVERFLOW_FOLLOW_UP_INTENTS: usize = 64;
 /// Maximum number of applied follow-up IDs retained for restart recovery.
 pub const MAX_APPLIED_FOLLOW_UP_INTENT_IDS: usize = 64;
 
+/// Origin of a queued follow-up, preserved when it is applied to conversation history.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FollowUpProvenance {
+    /// Input supplied by a user through the steering interface.
+    #[default]
+    UserInput,
+    /// A harness-generated continuation or recovery instruction.
+    Synthetic,
+}
+
 /// A follow-up instruction with a stable identity for recovery and
 /// de-duplication.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueuedFollowUpIntent {
     id: String,
     text: String,
+    /// Defaults to user input for envelopes written before provenance existed.
+    #[serde(default)]
+    provenance: FollowUpProvenance,
 }
 
 impl QueuedFollowUpIntent {
     /// Create a new intent with a UUIDv4 identity.
     #[must_use]
     pub fn new(text: String) -> Self {
-        Self { id: Uuid::new_v4().to_string(), text }
+        Self::new_with_provenance(text, FollowUpProvenance::UserInput)
+    }
+
+    /// Create a new intent with an explicit source and UUIDv4 identity.
+    #[must_use]
+    pub fn new_with_provenance(text: String, provenance: FollowUpProvenance) -> Self {
+        Self { id: Uuid::new_v4().to_string(), text, provenance }
     }
 
     /// Reconstruct an intent recovered from durable state.
     pub fn from_parts(id: impl Into<String>, text: impl Into<String>) -> Self {
-        Self { id: id.into(), text: text.into() }
+        Self::from_parts_with_provenance(id, text, FollowUpProvenance::UserInput)
+    }
+
+    /// Reconstruct an intent recovered from durable state with its source.
+    pub fn from_parts_with_provenance(
+        id: impl Into<String>,
+        text: impl Into<String>,
+        provenance: FollowUpProvenance,
+    ) -> Self {
+        Self { id: id.into(), text: text.into(), provenance }
     }
 
     #[must_use]
@@ -44,10 +73,21 @@ impl QueuedFollowUpIntent {
         &self.text
     }
 
+    #[must_use]
+    pub const fn provenance(&self) -> FollowUpProvenance {
+        self.provenance
+    }
+
     /// Consume the intent and return its user-visible text.
     #[must_use]
     pub fn into_parts(self) -> (String, String) {
         (self.id, self.text)
+    }
+
+    /// Consume the intent and return its identity, text, and source.
+    #[must_use]
+    pub fn into_parts_with_provenance(self) -> (String, String, FollowUpProvenance) {
+        (self.id, self.text, self.provenance)
     }
 }
 

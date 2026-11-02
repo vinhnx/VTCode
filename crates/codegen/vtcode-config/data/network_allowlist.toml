@@ -263,6 +263,12 @@ protocol = "https"
 notes    = "Privacy-first; no user tracking"
 
 [[search.web]]
+name     = "DuckDuckGo"
+domain   = "html.duckduckgo.com"
+protocol = "https"
+notes    = "Keyless HTML search; may be rate-limited or anti-bot challenged"
+
+[[search.web]]
 name     = "Serper"
 domain   = "google.serper.dev"
 protocol = "https"
@@ -272,7 +278,7 @@ notes    = "Google SERP results; cost-effective"
 name     = "SerpAPI"
 domain   = "serpapi.com"
 protocol = "https"
-notes    = "Multi-engine: Google, Bing, DuckDuckGo"
+notes    = "Multi-engine metasearch"
 
 [[search.web]]
 name     = "ValueSERP"
@@ -291,12 +297,6 @@ name     = "Bing Search"
 domain   = "api.bing.microsoft.com"
 protocol = "https"
 notes    = "Microsoft Azure Cognitive Search"
-
-[[search.web]]
-name     = "You.com"
-domain   = "api.you.com"
-protocol = "https"
-notes    = "LLM-native search results"
 
 [[search.web]]
 name     = "Kagi"

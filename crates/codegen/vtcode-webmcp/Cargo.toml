@@ -20,7 +20,7 @@ futures = { workspace = true }
 hashbrown = { workspace = true }
 http = { workspace = true }
 libc = { workspace = true }
-rmcp = { workspace = true, features = ["server", "macros", "transport-streamable-http-server"] }
+rmcp = { workspace = true, features = ["server", "macros", "transport-streamable-http-server", "transport-io"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

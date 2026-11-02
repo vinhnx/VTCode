@@ -1,0 +1,32 @@
+{
+  "features": ["refractivity"],
+  "fill": { "automatic-gradient": "extended-srgb:0.74902,0.70196,0.56078,1.00000" },
+  "fill-specializations": [
+    { "appearance": "dark", "value": { "automatic-gradient": "extended-srgb:0.12157,0.12549,0.13333,1.00000" } },
+    { "appearance": "tinted", "value": "automatic" }
+  ],
+  "groups": [
+    {
+      "name": "V mark",
+      "lighting": "individual",
+      "specular": true,
+      "blur-material": 0.5,
+      "refractivity": { "enabled": true, "strength": 0.5, "depth": 0.5 },
+      "translucency": { "enabled": true, "value": 0.5 },
+      "shadow": { "kind": "neutral", "opacity": 0.5 },
+      "layers": [
+        {
+          "name": "V",
+          "image-name": "Foreground.png",
+          "glass": true,
+          "fill": { "solid": "extended-srgb:0.15294,0.14902,0.14902,1.00000" },
+          "fill-specializations": [
+            { "appearance": "dark", "value": { "solid": "extended-srgb:0.92157,0.90196,0.85098,1.00000" } },
+            { "appearance": "tinted", "value": "automatic" }
+          ]
+        }
+      ]
+    }
+  ],
+  "supported-platforms": { "squares": "shared" }
+}

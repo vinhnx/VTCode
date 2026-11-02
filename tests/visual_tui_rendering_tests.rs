@@ -222,7 +222,24 @@ async fn test_tui_backend_smoke_error_content() {
             style: InlineTextStyle::default().into(),
         }],
     );
-    assert_eq!(drain_append_lines(&mut command_rx).len(), 4);
+    let commands: Vec<_> = std::iter::from_fn(|| command_rx.try_recv().ok()).collect();
+    assert_eq!(commands.len(), 4);
+    assert_eq!(
+        commands
+            .iter()
+            .filter(|command| matches!(command, InlineCommand::AppendLine { .. }))
+            .count(),
+        3
+    );
+    let diagnostic = commands
+        .iter()
+        .find_map(|command| match command {
+            InlineCommand::Diagnostic(diagnostic) => Some(diagnostic),
+            _ => None,
+        })
+        .expect("error messages use the canonical diagnostic command");
+    assert_eq!(diagnostic.severity, vtcode_commons::diagnostics::DiagnosticSeverity::Error);
+    assert!(diagnostic.summary.contains("nonexistent-command' not found"));
 
     let _frame = terminal
         .draw(|f| {

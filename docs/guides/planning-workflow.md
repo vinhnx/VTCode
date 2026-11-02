@@ -65,7 +65,7 @@ When a turn stops because of blocked behavior, VT Code forces a session-history 
 handoff. The handoff advertises `vtcode --resume <archive-id>` only after that archive is successfully persisted and its
 identifier is verified. If history persistence is disabled or the checkpoint fails, the handoff explains that resume is
 unavailable and does not advertise a misleading command. Interactive sessions return to the next input after the handoff
-— except for recoverable blocked ends (budgets, safety caps, blocked-tool fuse, tool-free recovery), which auto-continue
+— except for typed synthesizing or repairing outcomes with remaining allowance, which may auto-continue
 a bounded follow-up turn in every mode before control returns to you; manual `continue` matters once that budget
 (`agent.harness.continuation.cross_turn_turns`) is exhausted.
 
@@ -142,6 +142,13 @@ Tracker artifacts use the shared private atomic writer (owner read/write on Unix
 Reads and no-op updates do not rewrite identical mirrors.
 All tracker artifacts are read before an update is published. Reported publication failures roll back earlier
 writes; detected concurrent edits are preserved and rollback failures remain visible in the error.
+
+Headless evaluator/replanner additions reconcile against one live tracker snapshot per batch.
+Repeated descriptions and metadata already covered by the existing step preserve its status and checks;
+omitted fields never erase existing metadata.
+A unique unfinished placeholder can gain its missing metadata in place. Completed placeholders, ambiguous duplicate
+descriptions, and different verification criteria are retained; new criteria become a separate pending item.
+This reconciliation applies to harness-generated revisions, leaving the explicit tracker `add` action unchanged.
 
 Successful tracker updates honor display mode: compact shows header plus the single current task (`» …`, first
 `in_progress` leaf else first `pending`/`blocked`; header-only when all done) while expanded shows header plus truncated
@@ -321,6 +328,9 @@ through `request_user_input`. In an interactive session this opens an inline wiz
 an optional free-form note). The selected answer is returned to the same planning turn, recorded as the completed
 interview, and supplied to the next model request so planning can continue with the user's choice.
 
+Recommendation markers and option numbering affect presentation only. The submitted answer keeps the option's
+declared label unchanged, including for runtime recovery choices such as Retry.
+
 Pressing `Esc` or `Ctrl-C` cancels the interview without submitting an answer; the planning agent may ask again when the
 ambiguity still matters. A plan approval popup is not shown until any required clarification has completed.
 
@@ -329,18 +339,33 @@ planning session and suppresses repeated interview attempts. VT Code gives the m
 the repository evidence already gathered. If that retry does not produce a validated persisted plan, the session stays
 in planning and shows a keep-planning message; it does not advertise implementation or emit approval events.
 
-### Empty-response recovery
+### Bounded synthesis recovery
 
-Two consecutive empty model responses in planning have one deterministic recovery path. The first empty response
-receives the ordinary tool-enabled retry. The second schedules exactly one tool-free synthesis using the latest request
-and bounded recent evidence; the synthesis must contain exactly one canonical `<proposed_plan>...</proposed_plan>` block
-and no tools, questions, or approval prose. The runtime validates and persists the block before exposing approval
-controls.
+After a research guard closes tools, one synthesis request and at most two corrective requests share a request-scoped
+allowance. Empty content, private reasoning without final content, native tool-call violations, truncated output,
+malformed plans, and provider failures all use the same allowance. Automatic continuations and session resume retain
+consumed requests and cannot reopen research. Transport retries also consume this allowance. Private reasoning never
+becomes a plan or final response. Headless corrections require both unused recovery allowance and remaining
+configured execution budget; the three-request allowance does not extend turn, time, token, or cost limits.
 
-If synthesis is empty, malformed, contains tool markup, fails validation, or cannot be persisted, the runtime preserves
-any rejected draft, emits a concise actionable blocked handoff, and keeps planning active. It does not inject another
-interactive question, claim completion, or emit `thread.completed`; the blocked turn is resumable and the session is
-finalized only during shutdown.
+The runtime retains the latest request, bounded public evidence, best structured draft, and validator report in the
+canonical session event log. A repair targets that draft and its specific defects. Approval-only prose cannot replace
+the draft or change readiness. Complete unwrapped plans still validate; approval requires successful artifact and
+checkpoint persistence.
+
+On exhaustion, a runtime-generated interview offers these choices without another model response:
+
+| Choice | Result |
+| --- | --- |
+| Retry from retained evidence | One explicitly requested synthesis cycle; research stays closed. |
+| Add clarification | Free text revises the retained plan and starts a bounded cycle. |
+| Choose another model | The existing picker opens; synthesis waits for an explicit selection. |
+
+No option submits automatically. Dismissal leaves planning idle and resumable. A genuine clarifying question may pause
+before exhaustion. Headless or unavailable interviews produce a structured `planning.awaiting_input` diagnostic with
+the same choices. Answers do not approve implementation. Cancellation, permissions, and hard execution budgets remain
+in force. See the [recovery contract](../development/planning-recovery.md), [validator contract](../development/planning-validation.md),
+and [provider audit](../development/planning-provider-audit.md).
 
 ## Plan Output Format
 

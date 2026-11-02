@@ -1,6 +1,7 @@
 //! opencode_go_presets — provider preset definitions for opencode_go.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::constants::models::opencode_go as opencode_go_models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
@@ -13,10 +14,7 @@ pub(crate) fn opencode_go_presets() -> Vec<ModelPreset> {
             description: "Grok 4.5 — xAI flagship reasoning model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -30,10 +28,7 @@ pub(crate) fn opencode_go_presets() -> Vec<ModelPreset> {
             description: "GLM-5.3 — Z.AI flagship for frontier long-horizon coding on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -47,10 +42,7 @@ pub(crate) fn opencode_go_presets() -> Vec<ModelPreset> {
             description: "GLM-5.2 — flagship Z.AI model for long-horizon coding on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: true,
             upgrade: None,
             show_in_picker: true,
@@ -64,10 +56,7 @@ pub(crate) fn opencode_go_presets() -> Vec<ModelPreset> {
             description: "GPT-5.6 Luna — OpenAI cost-efficient frontier model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -81,10 +70,7 @@ pub(crate) fn opencode_go_presets() -> Vec<ModelPreset> {
             description: "Kimi K3 — Moonshot flagship 2.8T agentic model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -98,10 +84,7 @@ pub(crate) fn opencode_go_presets() -> Vec<ModelPreset> {
             description: "MiniMax-M3 — frontier multimodal coding model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,

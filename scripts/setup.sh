@@ -6,6 +6,7 @@
 set -e
 
 # Source common utilities
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 echo "Setting up VT Code Development Environment..."
@@ -61,7 +62,7 @@ install_baseline_tools() {
         if cargo install cargo-nextest --locked; then
             print_success "cargo-nextest installed successfully"
         else
-            print_warning "Failed to install cargo-nextest. Falling back to 'cargo test' remains available."
+            print_warning "Failed to install cargo-nextest. Install it before running the repository test suites."
         fi
     fi
 }
@@ -94,6 +95,12 @@ if ! cargo clippy -- -D warnings; then
     exit 1
 fi
 
+# Run file length gate (hard ceiling: 1000 lines per tracked text file)
+if ! python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
+    echo "File length violations found. Split oversized files or see scripts/file_length_allowlist.txt."
+    exit 1
+fi
+
 echo "Pre-commit checks passed!"
 EOF
 
@@ -123,16 +130,17 @@ verify_installation() {
         print_error "clippy not working properly"
     fi
 
-    # Check cargo-nextest (optional but recommended)
+    # Check cargo-nextest, the repository test runner
     if cargo nextest --version &> /dev/null; then
         print_success "cargo-nextest: $(cargo nextest --version)"
     else
-        print_warning "cargo-nextest not detected. 'cargo test --workspace' can be used as fallback."
+        print_warning \
+            "cargo-nextest not detected. Install it before running repository tests: cargo install cargo-nextest --locked"
     fi
 
     # Test build
     print_status "Testing project build..."
-    if cargo check; then
+    if cargo check --locked; then
         print_success "Project builds successfully"
     else
         print_error "Project build failed"
@@ -174,7 +182,7 @@ main() {
     echo "Useful commands:"
     echo "  • Format code: cargo fmt --all"
     echo "  • Lint code: cargo clippy -- -D warnings"
-    echo "  • Run tests: cargo nextest run (fallback: cargo test --workspace)"
+    echo "  • Run tests: cargo nextest run"
     echo "  • Build docs: cargo doc --workspace --open"
     echo "  • Check everything: ./scripts/check.sh"
     echo ""
@@ -208,7 +216,7 @@ After running this script, you can use:
   • ./scripts/check.sh - Run comprehensive code quality checks
   • cargo fmt --all - Format code
   • cargo clippy - Lint code
-  • cargo nextest run - Run tests (fallback: cargo test --workspace)
+  • cargo nextest run - Run tests
 
 To configure API keys:
   • Copy .env.example to .env and add your actual API keys

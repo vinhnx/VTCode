@@ -34,15 +34,12 @@ pub struct RuntimeSnapshot {
 
 /// Returns true when runtime diagnostics logging is enabled.
 ///
-/// Enabled by `VTCODE_RUNTIME_METRICS=1|true|yes|on|debug` or when
-/// `VTCODE_STARTUP_TRACE=1` (startup trace already implies diagnostics).
+/// Enabled by `VTCODE_RUNTIME_METRICS=1|true|yes|on|debug` or when startup
+/// tracing is on (`VTCODE_STARTUP_TRACE`, same canonical set — startup trace
+/// already implies diagnostics).
 #[must_use]
 pub fn runtime_diagnostics_enabled() -> bool {
-    crate::utils::env_flag_enabled(RUNTIME_METRICS_ENV) || startup_trace_enabled()
-}
-
-fn startup_trace_enabled() -> bool {
-    std::env::var("VTCODE_STARTUP_TRACE").is_ok_and(|value| value == "1")
+    crate::utils::env_flag_enabled(RUNTIME_METRICS_ENV) || crate::startup_trace::startup_trace_enabled()
 }
 
 /// Env var that overrides the Tokio worker-thread count.

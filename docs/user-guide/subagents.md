@@ -635,7 +635,8 @@ child threads and is now explicitly opt-in:
 - `Ctrl+B` first hands an active foreground PTY or pipe command to the unified background-session manager; when no
   foreground command is active, it starts or stops a background subagent only after you enable background mode and set
   `default_agent`
-- if background mode is disabled or unconfigured, `Ctrl+B` opens the Local Agents inline bottom view and shows the setup guidance
+- if background mode is disabled or unconfigured, `Ctrl+B` opens the Local Agents inline bottom view and
+  shows the setup guidance
   instead of launching anything
 - `/subprocesses` opens the Local Agents inline bottom view
 - `/config jobs` opens that same unified view (`/jobs` still works as a hidden alias), including raw background

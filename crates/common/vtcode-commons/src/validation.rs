@@ -25,8 +25,12 @@ pub fn validate_non_empty_string(value: String, field_name: &str) -> Result<Stri
     Ok(value)
 }
 
-/// Validate optional non-empty string
-pub fn validate_optional_non_empty(value: &Option<String>, field_name: &str) -> Result<()> {
+/// Validate a borrowed optional string without taking ownership.
+///
+/// # Errors
+/// Returns an error naming `field_name` if a present value is whitespace-only.
+/// An absent value is valid.
+pub fn validate_optional_non_empty(value: Option<&str>, field_name: &str) -> Result<()> {
     if let Some(v) = value {
         validate_non_empty(v, field_name)?;
     }
@@ -432,6 +436,16 @@ impl<'a, T> NonEmptySlice<'a, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn optional_non_empty_accepts_borrowed_strings_and_absence() {
+        assert!(validate_optional_non_empty(None, "label").is_ok());
+        assert!(validate_optional_non_empty(Some("label"), "label").is_ok());
+        for value in ["", " \t\n"] {
+            let error = validate_optional_non_empty(Some(value), "label").unwrap_err();
+            assert_eq!(error.to_string(), "label cannot be empty");
+        }
+    }
 
     #[test]
     fn is_valid_origin_accepts_only_bare_web_origins() {

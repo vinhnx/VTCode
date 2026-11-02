@@ -396,6 +396,15 @@ Rule files (`.rules`, TOML/JSON/simple formats — see `exec_policy::PolicyParse
 `ExecPolicyManager::load_policy_layers` merges them so a pattern defined in a higher-precedence layer wins.
 `exec_policy::shared_exec_policy_manager_with_rules` builds a manager with both layers auto-loaded.
 
+Prefix patterns must contain at least one token. Zero-token insertion and rule-file loading now fail with an error;
+directly constructed or deserialized empty rules and trusted amendments never match. This intentionally removes the
+previous match-all behavior of empty patterns. Nonempty patterns still compare exact, ordered tokens, including
+empty-string arguments supplied through the library API. Empty simple/comment-only files and structured files with
+`rules = []` (TOML) or `{"rules": []}` (JSON) remain valid. Failed single-file or layered reloads retain the active policy.
+
+Layer deduplication uses token-pattern membership while retaining vector evaluation order and first-match decisions.
+See [policy matching analysis](execution-policy-matching.md) for equivalence coverage and benchmark methodology.
+
 ### Provider diagnostics
 
 All provider error metadata, user-facing messages, logs, OpenRouter fallback errors, OpenAI diagnostics, legacy provider
@@ -417,9 +426,10 @@ they can reach provider registration. This prevents repository configuration fro
 authentication (`auth.command`).
 
 It also rejects repository-controlled `provider_overrides.<name>.base_url` and `.api_key_env` values, which could
-redirect model requests or select credentials from an environment variable. Origin checks still apply when
-`workspace.use_root_config` discards lower layers. System/user config, explicitly selected config files, and explicit
-runtime overrides remain trusted opt-in paths.
+redirect model requests or select credentials from an environment variable, and repository-controlled
+`auth.copilot.command`, which launches the child process used for GitHub Copilot authentication. Origin checks still
+apply when `workspace.use_root_config` discards lower layers. System/user config, explicitly selected config files, and
+explicit runtime overrides remain trusted opt-in paths.
 
 Normal startup and live reload can repair legacy repository files produced by older full-config writes: only the
 protected provider fields are removed atomically before strict loading is retried. Malformed or symlinked files are

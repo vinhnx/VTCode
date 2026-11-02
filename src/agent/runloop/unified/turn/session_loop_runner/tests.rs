@@ -62,7 +62,11 @@ fn take_pending_resumed_user_prompt_removes_trailing_user_message() {
 
     let pending = take_pending_resumed_user_prompt(&mut history);
 
-    assert_eq!(pending.as_deref(), Some("what is this project"));
+    assert_eq!(pending.as_ref().map(|intent| intent.text()), Some("what is this project"));
+    assert_eq!(
+        pending.as_ref().map(|intent| intent.provenance()),
+        Some(vtcode_core::core::agent::steering::FollowUpProvenance::UserInput)
+    );
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].role, MessageRole::System);
 }
@@ -77,10 +81,28 @@ fn take_pending_resumed_user_prompt_handles_trailing_system_notes() {
 
     let pending = take_pending_resumed_user_prompt(&mut history);
 
-    assert_eq!(pending.as_deref(), Some("what is this project"));
+    assert_eq!(pending.as_ref().map(|intent| intent.text()), Some("what is this project"));
     assert_eq!(history.len(), 2);
     assert_eq!(history[0].role, MessageRole::System);
     assert_eq!(history[1].role, MessageRole::System);
+}
+
+#[test]
+fn take_pending_resumed_synthetic_prompt_preserves_provenance_and_intent_id() {
+    let intent_id = "resume-synthetic-intent";
+    let mut history = vec![
+        vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),
+        vtcode_core::llm::provider::Message::user("continue the saved plan".to_string()).with_metadata(
+            vtcode_commons::message_metadata::MessageMetadata::harness_notice(1, 6).with_intent_id(intent_id),
+        ),
+    ];
+
+    let pending = take_pending_resumed_user_prompt(&mut history).expect("interrupted prompt should be restored");
+
+    assert_eq!(pending.text(), "continue the saved plan");
+    assert_eq!(pending.id(), intent_id);
+    assert_eq!(pending.provenance(), vtcode_core::core::agent::steering::FollowUpProvenance::Synthetic);
+    assert_eq!(history.len(), 1);
 }
 
 #[test]

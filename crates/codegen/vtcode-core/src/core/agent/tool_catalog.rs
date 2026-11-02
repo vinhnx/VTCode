@@ -29,7 +29,7 @@ impl SessionToolCatalogSnapshot {
         snapshot: Option<Arc<Vec<ToolDefinition>>>,
         cache_hit: bool,
     ) -> Self {
-        let active_tool_names = Arc::new(tool_names_from_definitions(snapshot.as_deref()));
+        let active_tool_names = Arc::new(tool_names_from_definitions(snapshot.as_deref().map(Vec::as_slice)));
         Self::with_active_tool_names(
             version,
             epoch,
@@ -63,28 +63,50 @@ impl SessionToolCatalogSnapshot {
         }
     }
 
+    #[must_use]
     pub fn available_tools(&self) -> usize {
         self.active_tool_names.len()
     }
 
+    #[must_use]
     pub fn catalog_tools(&self) -> usize {
         self.snapshot.as_ref().map_or(0, |defs| defs.len())
     }
 
+    #[must_use]
     pub fn has_tools(&self) -> bool {
         self.snapshot.is_some()
     }
 
+    #[must_use]
     pub fn with_cache_hit(mut self, cache_hit: bool) -> Self {
         self.cache_hit = cache_hit;
         self
     }
 }
 
-fn tool_names_from_definitions(tools: Option<&Vec<ToolDefinition>>) -> Vec<String> {
+fn tool_names_from_definitions(tools: Option<&[ToolDefinition]>) -> Vec<String> {
     let Some(tools) = tools else {
         return Vec::new();
     };
 
     tools.iter().map(|tool| tool.function_name().to_string()).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tool_names_from_definitions;
+    use crate::llm::provider::ToolDefinition;
+
+    #[test]
+    fn borrowed_tool_slice_preserves_order_and_optional_empty_inputs() {
+        let tools = [
+            ToolDefinition::function("second".into(), "Second tool".into(), serde_json::json!({})),
+            ToolDefinition::function("first".into(), "First tool".into(), serde_json::json!({})),
+        ];
+        assert_eq!(tool_names_from_definitions(Some(&tools)), ["second", "first"]);
+        assert_eq!(tool_names_from_definitions(Some(&tools[1..])), ["first"]);
+        assert!(tool_names_from_definitions(Some(&[])).is_empty());
+        assert!(tool_names_from_definitions(None).is_empty());
+    }
 }

@@ -119,12 +119,10 @@ async fn execute_manual_compaction(
 
     let resolved_options = resolve_manual_compaction_options(ctx, options);
     let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
-    // Async UI: bracket the engine await so `Compacting context...` ticks with
-    // elapsed time while the summarizer runs. The guard restores input status
-    // on finish/drop; the final line below stays the single source of truth.
+    // Own the transcript progress row while the compaction engine is running.
     let progress = crate::agent::runloop::unified::turn::compaction::CompactionProgressGuard::start(
         ctx.handle,
-        ctx.input_status_state,
+        crate::agent::runloop::unified::turn::compaction::estimate_history_tokens(ctx.conversation_history),
     );
     let outcome = crate::agent::runloop::unified::turn::compaction::manual_compact_history_in_place(
         crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
@@ -167,8 +165,8 @@ async fn execute_manual_compaction(
     ctx.session_stats.auto_compact_suppressed = vtcode_core::compaction::SUPPRESS_NONE;
 
     let label = crate::agent::runloop::unified::turn::compaction::format_compacted_summary(
-        outcome.original_len,
-        outcome.compacted_len,
+        outcome.estimated_tokens_before,
+        outcome.estimated_tokens_after,
         outcome.mode.as_str(),
         elapsed,
     );

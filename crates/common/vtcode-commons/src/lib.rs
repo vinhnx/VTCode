@@ -109,7 +109,7 @@ pub use modal_hints::{
 pub use paths::{
     PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths, canonicalize, canonicalize_async,
     file_name_from_path, is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,
-    workspace_relative_display,
+    safe_archive_relative_path, validate_no_escaping_symlink_ancestors, workspace_relative_display,
 };
 pub use project::{ProjectOverview, build_project_overview};
 pub use reference::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};
@@ -117,7 +117,7 @@ pub use stop_hints::{STOP_HINT_COMPACT, STOP_HINT_INLINE, with_stop_hint};
 pub use styling::{ColorPalette, DiffColorPalette, render_styled};
 pub use task_guard::TaskGuard;
 pub use telemetry::{NoopTelemetry, TelemetrySink};
-pub use tokens::{estimate_tokens, truncate_to_tokens};
+pub use tokens::{estimate_tokens, format_token_count, truncate_to_tokens};
 pub use unicode::{UNICODE_MONITOR, UnicodeMonitor, UnicodeValidationContext};
 pub use validation::{EmptyCollectionError, NonEmptySlice, NonEmptyString, NonEmptyVec};
 pub use vtcode_paths::{
@@ -126,3 +126,6 @@ pub use vtcode_paths::{
 
 // Re-export key thread safety primitives.
 pub(crate) use thread_safety::RelaxedAtomic;
+
+/// Canonical runtime diagnostic sanitization.
+pub mod diagnostics;

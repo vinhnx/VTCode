@@ -22,6 +22,42 @@ async fn compact_history_manual_uses_local_summary_for_plain_provider() {
 }
 
 #[tokio::test]
+async fn local_compaction_repairs_missing_tool_results_in_summary_request() {
+    let history = vec![
+        Message::user("Inspect the README".to_string()),
+        Message::assistant_with_tools(
+            "Run two reads".to_string(),
+            vec![
+                ToolCall::function("call_read_a".to_string(), "exec_command".to_string(), "{}".to_string()),
+                ToolCall::function("call_read_b".to_string(), "exec_command".to_string(), "{}".to_string()),
+            ],
+        ),
+        Message::user("Continue the documentation task".to_string()),
+    ];
+    let provider = CapturingProvider { last_request: Mutex::new(None) };
+    let config = CompactionConfig {
+        always_summarize: true,
+        ..CompactionConfig::default()
+    };
+
+    let (_compacted, mode) =
+        compact_history_manual(&provider, "stub-model", &history, &config, &ManualCompactionOptions::default())
+            .await
+            .expect("manual compaction should repair its summary request");
+
+    assert_eq!(mode, CompactionMode::Local);
+    let request = provider.last_request.lock().unwrap().clone().expect("captured summary request");
+    let messages = request.messages.as_ref();
+    assert!(
+        !crate::core::agent::state::request_history_needs_normalization(messages),
+        "summary request must contain a complete tool-call/result batch"
+    );
+    assert_eq!(messages[2].tool_call_id.as_deref(), Some("call_read_a"));
+    assert_eq!(messages[3].tool_call_id.as_deref(), Some("call_read_b"));
+    assert_eq!(messages[4], history[2], "the next user message follows the repaired batch");
+}
+
+#[tokio::test]
 async fn local_compaction_collects_summary_from_streaming_only_provider() {
     let provider = StreamingOnlyCompactionProvider {
         generate_calls: Mutex::new(0),

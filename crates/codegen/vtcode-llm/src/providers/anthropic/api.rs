@@ -97,7 +97,10 @@ async fn messages_handler(
     merge_header_betas(&mut request, &headers);
 
     let is_stream = request.stream;
-    let llm_request = convert_anthropic_to_llm_request(request);
+    let llm_request = match convert_anthropic_to_llm_request(request) {
+        Ok(llm_request) => llm_request,
+        Err(_) => return Ok((StatusCode::BAD_REQUEST, "invalid request").into_response()),
+    };
 
     if is_stream {
         // Handle streaming response
@@ -345,7 +348,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         let tools = llm_request.tools.expect("tools");
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].tool_type, "web_search_20260209");
@@ -393,7 +396,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         let tools = llm_request.tools.expect("tools");
         assert_eq!(tools[0].allowed_callers.as_ref(), Some(&vec!["code_execution_20250825".to_string()]));
     }
@@ -439,7 +442,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         let tools = llm_request.tools.expect("tools");
         assert_eq!(tools[0].strict, Some(true));
         assert_eq!(
@@ -480,7 +483,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         let tools = llm_request.tools.expect("tools");
         assert_eq!(tools[0].tool_type, "code_execution_20250825");
     }
@@ -512,7 +515,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         let tools = llm_request.tools.expect("tools");
         assert_eq!(tools[0].tool_type, "memory_20250818");
     }
@@ -547,7 +550,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         match &llm_request.messages[0].content {
             MessageContent::Parts(parts) => {
                 assert!(matches!(
@@ -602,7 +605,7 @@ mod tests {
             }),
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         assert_eq!(llm_request.effort.as_deref(), Some("medium"));
         assert_eq!(
             llm_request.output_format,
@@ -644,7 +647,7 @@ mod tests {
             }),
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         let overrides = llm_request.anthropic_request_overrides.expect("anthropic overrides");
         assert_eq!(overrides.thinking_mode, AnthropicThinkingModeOverride::Adaptive);
         assert_eq!(overrides.thinking_display, AnthropicThinkingDisplayOverride::Summarized);
@@ -678,7 +681,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         let overrides = llm_request.anthropic_request_overrides.expect("anthropic overrides");
         assert_eq!(overrides.thinking_mode, AnthropicThinkingModeOverride::ManualBudget(4096));
         assert_eq!(overrides.thinking_display, AnthropicThinkingDisplayOverride::Omitted);
@@ -722,7 +725,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         assert_eq!(llm_request.messages.len(), 1);
         let message = &llm_request.messages[0];
         assert_eq!(message.reasoning.as_deref(), Some("inspect files"));
@@ -764,7 +767,7 @@ mod tests {
             output_config: None,
         };
 
-        let llm_request = convert_anthropic_to_llm_request(request);
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
         assert!(matches!(llm_request.tool_choice, Some(ToolChoice::Auto)));
         assert!(
             llm_request
@@ -772,6 +775,58 @@ mod tests {
                 .as_ref()
                 .is_some_and(|config| config.disable_parallel_tool_use)
         );
+    }
+
+    /// API version `2026-10-21` returns a 400 when a `document` block sits
+    /// directly in an `assistant` message; the same block is accepted in a
+    /// `user` message.
+    #[test]
+    fn convert_anthropic_to_llm_request_rejects_document_block_in_assistant_message() {
+        let document_block = || AnthropicContentBlock::Document { source: json!({"type": "base64"}) };
+        let document_request = |role: &str| AnthropicMessagesRequest {
+            model: "claude-sonnet-5".to_string(),
+            max_tokens: 1024,
+            messages: vec![AnthropicMessage {
+                role: role.to_string(),
+                content: AnthropicContent::Blocks(vec![document_block()]),
+            }],
+            system: None,
+            stream: false,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            thinking: None,
+            betas: None,
+            context_management: None,
+            output_config: None,
+        };
+
+        assert!(convert_anthropic_to_llm_request(document_request("assistant")).is_err());
+        assert!(convert_anthropic_to_llm_request(document_request("user")).is_ok());
+    }
+
+    /// API version `2026-10-21` rejects `temperature`, `top_p`, and `top_k`
+    /// on every model; a gateway client that still sends them must not have
+    /// them forwarded upstream.
+    #[test]
+    fn convert_anthropic_to_llm_request_drops_removed_sampling_parameters() {
+        let request: AnthropicMessagesRequest = serde_json::from_value(json!({
+            "model": "claude-sonnet-5",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": "hello"}],
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 10,
+        }))
+        .expect("compat request");
+
+        let llm_request = convert_anthropic_to_llm_request(request).expect("converted request");
+        assert!(llm_request.temperature.is_none());
+        assert!(llm_request.top_p.is_none());
+        assert!(llm_request.top_k.is_none());
     }
 
     #[test]

@@ -120,7 +120,7 @@ fn create_headless_session() -> InlineSession {
     }
 }
 
-struct TestContextBacking {
+pub(super) struct TestContextBacking {
     _temp: tempfile::TempDir,
     sample_file: std::path::PathBuf,
     tool_registry: vtcode_core::tools::ToolRegistry,
@@ -162,7 +162,7 @@ struct TestContextBacking {
 }
 
 impl TestContextBacking {
-    async fn new(max_tool_calls: usize) -> Self {
+    pub(super) async fn new(max_tool_calls: usize) -> Self {
         let temp = tempfile::TempDir::new().expect("temp workspace");
         let workspace = vtcode_commons::canonicalize(temp.path()).expect("canonical temp workspace");
         let sample_file = workspace.join("sample.txt");
@@ -277,7 +277,7 @@ impl TestContextBacking {
         }
     }
 
-    fn turn_processing_context(&mut self) -> TurnProcessingContext<'_> {
+    pub(super) fn turn_processing_context(&mut self) -> TurnProcessingContext<'_> {
         let tool = crate::agent::runloop::unified::turn::context::ToolContext {
             tool_result_cache: &self.tool_result_cache,
             approval_recorder: &self.approval_recorder,

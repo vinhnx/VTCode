@@ -19,7 +19,7 @@ use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
-use crate::agent::runloop::unified::progress::{ProgressReporter, ProgressUpdateGuard, spawn_elapsed_time_updater};
+use crate::agent::runloop::unified::progress::{ProgressReporter, spawn_elapsed_time_updater};
 
 use super::presentation::CopilotPtyStream;
 use super::{CopilotRuntimeHost, emit_terminal_finished_event, emit_terminal_output_event};
@@ -385,7 +385,7 @@ async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
 
 struct TerminalStreamSetup {
     stream: CopilotPtyStream,
-    elapsed_guard: ProgressUpdateGuard,
+    elapsed_guard: vtcode_commons::TaskGuard,
 }
 
 async fn setup_terminal_stream(
@@ -401,11 +401,10 @@ async fn setup_terminal_stream(
         .set_message(format!("Running command: {command_display}"))
         .await;
 
-    let elapsed_guard = ProgressUpdateGuard::new(spawn_elapsed_time_updater(
-        progress_reporter.clone(),
-        format!("command: {command_display}"),
-        500,
-    ));
+    let elapsed_guard = vtcode_commons::TaskGuard::with_label(
+        spawn_elapsed_time_updater(progress_reporter.clone(), format!("command: {command_display}"), 500),
+        "copilot-terminal-progress",
+    );
 
     TerminalStreamSetup {
         stream: CopilotPtyStream::start(handle, progress_reporter, tail_limit, command_display.to_string(), pty_config),

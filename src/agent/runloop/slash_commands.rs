@@ -20,7 +20,8 @@ pub(crate) use models::{
     McpCommandAction, OAuthProviderAction, SecretCommandAction, SessionLogExportFormat, SessionPaletteMode,
     SlashCommandOutcome, StatuslineTargetMode, SubprocessManagerAction, ThemePaletteMode,
 };
+pub(crate) use rendering::render_theme_list;
 
 #[cfg(test)]
-#[path = "slash_commands/tests.rs"]
+#[path = "slash_commands/tests/mod.rs"]
 mod tests;

@@ -3,7 +3,7 @@
     clippy::expect_used,
     reason = "Intentional compatibility, platform, test, or API-shape suppression."
 )]
-//! Guards that the repository pins exactly one Rust toolchain everywhere.
+//! Guards that stable/MSRV installations agree with the repository Rust pin.
 //!
 //! `rust-toolchain.toml` is the single source of truth. Any other manifest or
 //! build file that pins a different version silently reintroduces a second
@@ -16,10 +16,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Directories whose Cargo manifests are intentionally not pinned to the
-/// workspace channel (vendored forks, fuzz harnesses, editor extensions).
+/// workspace channel (vendored forks, fuzz harnesses, editor extensions) or
+/// that hold local runtime state (archived workspace snapshots, logs, memory).
 const EXCLUDED_DIRS: &[&str] = &[
     "target",
     ".worktrees",
+    ".vtcode",
     "patches",
     "fuzz",
     "extensions",
@@ -95,17 +97,62 @@ fn rust_version_pins(root: &Path) -> Vec<(PathBuf, String)> {
     pins
 }
 
-/// Cases where a file embeds the toolchain version in a non-TOML format,
-/// described as `(relative path, human label, extractor)`.
-fn non_manifest_pins(root: &Path) -> Vec<(&'static str, String, String)> {
+#[derive(Debug)]
+struct ToolchainPin {
+    location: String,
+    version: String,
+}
+
+/// Inspect declared workflow pins without assuming a job or workflow filename.
+/// Nightly checks intentionally exercise a separate channel, not the MSRV pin.
+fn workflow_toolchain_pins(path: &Path, contents: &str) -> Result<Vec<ToolchainPin>, String> {
+    let lines = contents.lines().collect::<Vec<_>>();
+    let mut pins = Vec::new();
+    for (line_index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        let uses = trimmed.strip_prefix("- ").unwrap_or(trimmed);
+        if !uses.starts_with("uses: dtolnay/rust-toolchain@") {
+            continue;
+        }
+        let indentation = line.len() - trimmed.len();
+        let version = lines
+            .iter()
+            .skip(line_index + 1)
+            .take_while(|line| {
+                let next = line.trim_start();
+                next.is_empty()
+                    || next.starts_with('#')
+                    || (line.len() - next.len() >= indentation
+                        && !(next.starts_with("- ") && line.len() - next.len() == indentation))
+            })
+            .find_map(|line| line.trim().strip_prefix("toolchain:"));
+        let location = format!("{}:{} toolchain", path.display(), line_index + 1);
+        let version = version
+            .unwrap_or_default()
+            .split('#')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .trim_matches(['\'', '"']);
+        if version.is_empty() {
+            return Err(format!("{location} must explicitly select the workspace pin"));
+        }
+        if version != "nightly" && !version.starts_with("nightly-") {
+            pins.push(ToolchainPin { location, version: version.to_owned() });
+        }
+    }
+    Ok(pins)
+}
+
+/// Toolchain versions embedded outside Cargo manifests.
+fn non_manifest_pins(root: &Path) -> Vec<ToolchainPin> {
     let mut pins = Vec::new();
 
     let clippy = fs::read_to_string(root.join("clippy.toml")).expect("read clippy.toml");
-    pins.push((
-        "clippy.toml",
-        "msrv".to_string(),
-        toml_string_value(&clippy, "msrv").expect("clippy.toml must set `msrv`"),
-    ));
+    pins.push(ToolchainPin {
+        location: "clippy.toml msrv".into(),
+        version: toml_string_value(&clippy, "msrv").expect("clippy.toml must set `msrv`"),
+    });
 
     let dockerfile = fs::read_to_string(root.join("Dockerfile.build")).expect("read Dockerfile.build");
     let rust_base = dockerfile
@@ -117,23 +164,21 @@ fn non_manifest_pins(root: &Path) -> Vec<(&'static str, String, String)> {
         .map_or(rust_base, |(version, _)| version)
         .trim()
         .to_string();
-    pins.push(("Dockerfile.build", "FROM rust".to_string(), docker_version));
+    pins.push(ToolchainPin {
+        location: "Dockerfile.build FROM rust".into(),
+        version: docker_version,
+    });
 
-    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("read ci.yml");
-    let msrv_job = ci
-        .split("msrv:")
-        .nth(1)
-        .expect("ci.yml must define an `msrv` job")
-        .split("\n  nightly:")
-        .next()
-        .expect("msrv job must precede the nightly job");
-    let ci_version = msrv_job
-        .lines()
-        .filter_map(|line| line.trim().strip_prefix("toolchain:"))
-        .map(|value| value.trim().trim_matches('"').to_string())
-        .next()
-        .expect("ci.yml msrv job must pin a toolchain");
-    pins.push((".github/workflows/ci.yml (msrv job)", "toolchain".to_string(), ci_version));
+    for entry in fs::read_dir(root.join(".github/workflows")).expect("read active workflows") {
+        let path = entry.expect("read workflow entry").path();
+        if !path.is_file() || !matches!(path.extension().and_then(|extension| extension.to_str()), Some("yml" | "yaml"))
+        {
+            continue;
+        }
+        let contents = fs::read_to_string(&path).expect("read workflow");
+        let relative = path.strip_prefix(root).expect("workflow inside workspace");
+        pins.extend(workflow_toolchain_pins(relative, &contents).expect("explicit workflow toolchain pins"));
+    }
 
     pins
 }
@@ -155,8 +200,8 @@ fn every_rust_toolchain_pin_agrees() {
     mismatches.extend(
         non_manifest_pins(&root)
             .into_iter()
-            .filter(|(_, _, version)| version != &pinned)
-            .map(|(path, label, version)| format!("{path} {label} = {version}")),
+            .filter(|pin| pin.version != pinned)
+            .map(|pin| format!("{} = {}", pin.location, pin.version)),
     );
 
     assert!(
@@ -178,4 +223,47 @@ fn workspace_package_inherits_the_pinned_toolchain() {
 
     let edition = toml_string_value(&workspace_manifest, "edition").expect("workspace.package must declare edition");
     assert_eq!(edition, "2024", "the workspace targets Rust edition 2024");
+}
+
+#[test]
+fn workflow_pin_guard_follows_active_names_and_detects_drift() {
+    let path = Path::new(".github/workflows/renamed-build.yaml");
+    let pins = workflow_toolchain_pins(
+        path,
+        r#"
+steps:
+  - uses: dtolnay/rust-toolchain@pinned-action
+    with:
+      toolchain: '1.99.1' # workspace pin
+  - name: another installer
+    uses: dtolnay/rust-toolchain@pinned-action
+    with:
+      toolchain: 1.97.0
+  - uses: dtolnay/rust-toolchain@pinned-action
+    with:
+      toolchain: nightly-2026-01-01
+"#,
+    )
+    .unwrap();
+    assert_eq!(pins.len(), 2);
+    assert_eq!(pins[0].version, "1.99.1");
+    let mismatches = pins.iter().filter(|pin| pin.version != "1.99.1").collect::<Vec<_>>();
+    assert_eq!(mismatches.len(), 1);
+    assert_eq!(mismatches[0].version, "1.97.0");
+    assert!(mismatches[0].location.contains("renamed-build.yaml:7"));
+}
+
+#[test]
+fn workflow_installers_cannot_borrow_a_later_steps_pin_or_default_to_stable() {
+    let path = Path::new("renamed.yml");
+    let missing = workflow_toolchain_pins(
+        path,
+        "  - uses: dtolnay/rust-toolchain@action\n  - name: another step\n    with:\n      toolchain: 1.99.1\n",
+    );
+    assert!(missing.unwrap_err().contains("must explicitly select"));
+    let floating =
+        workflow_toolchain_pins(path, "  - uses: dtolnay/rust-toolchain@action\n    with:\n      toolchain: stable\n")
+            .unwrap();
+    assert_eq!(floating[0].version, "stable");
+    assert_ne!(floating[0].version, "1.99.1");
 }

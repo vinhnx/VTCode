@@ -1,6 +1,7 @@
 //! llamacpp_presets — provider preset definitions for llamacpp.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::constants::models::llamacpp as llamacpp_models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
@@ -13,10 +14,7 @@ pub(crate) fn llamacpp_presets() -> Vec<ModelPreset> {
             description: "OpenAI's open-weight GPT-OSS 20B model served locally through llama.cpp".to_string(),
             provider: Provider::LlamaCpp,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: true,
             upgrade: None,
             show_in_picker: true,
@@ -30,10 +28,7 @@ pub(crate) fn llamacpp_presets() -> Vec<ModelPreset> {
             description: "Gemma 4 desktop MoE model served through llama.cpp".to_string(),
             provider: Provider::LlamaCpp,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -47,10 +42,7 @@ pub(crate) fn llamacpp_presets() -> Vec<ModelPreset> {
             description: "Tiny-footprint Gemma 4 model served through llama.cpp".to_string(),
             provider: Provider::LlamaCpp,
             default_reasoning_effort: ReasoningEffortLevel::Low,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Low,
-                description: "Fast".to_string(),
-            }],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Low, "Fast")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,

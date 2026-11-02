@@ -315,6 +315,8 @@ mod tests {
             provider: provider.to_string(),
             input_schema: json!({}),
             output_schema: None,
+            ui: None,
+            visibility: vtcode_core::mcp::McpToolVisibility::default(),
         }
     }
 

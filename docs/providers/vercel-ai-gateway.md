@@ -68,7 +68,8 @@ curl https://ai-gateway.vercel.sh/v1/chat/completions \
 | `openai/gpt-5.6-sol`            | GPT-5.6 Sol            | 1,050,000 |        $2 |        $10 |                                                    |
 | `openai/gpt-6-astra`            | GPT-6 Astra            | 1,050,000 |       $10 |        $50 |                                                    |
 | `openai/gpt-5.6-luna`           | GPT-5.6 Luna           | 1,050,000 |     $0.20 |      $1.20 |                                                    |
-| `openai/gpt-5.3-codex`          | GPT-5.3 Codex          |   400,000 |     $1.75 |        $14 |                                                    |
+| `openai/gpt-6-sol`              | GPT-6 Sol              | 1,050,000 |        $2 |        $10 | Replacement for deprecated `openai/gpt-5.3-codex`  |
+| `openai/gpt-6-luna`             | GPT-6 Luna             | 1,050,000 |     $0.10 |      $0.50 | Replacement for deprecated GPT-4 series            |
 | `google/gemini-3.1-pro-preview` | Gemini 3.1 Pro Preview | 1,000,000 |        $2 |        $12 |                                                    |
 | `google/gemini-3.8-flash`       | Gemini 3.8 Flash       | 1,000,000 |     $0.75 |      $3.75 |                                                    |
 | `deepseek/deepseek-v4-pro`      | DeepSeek V4 Pro        | 1,000,000 |     $0.66 |      $1.98 |                                                    |

@@ -24,6 +24,8 @@ const INVALID_CHOICE_MESSAGE: &str = "Invalid selection. Please enter 'a' or 'q'
 /// * `deny`, `0`, `no`, `off` — explicitly refuse trust; the calling command
 ///   will abort with a clear error instead of prompting.
 pub(crate) const TRUST_OVERRIDE_ENV: &str = "VTCODE_TRUST_WORKSPACE";
+/// Suppresses the "trusted via env" notice when set to a canonical truthy flag.
+const QUIET_ENV: &str = "VTCODE_TRUST_WORKSPACE_QUIET";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrustSelection {
@@ -199,7 +201,8 @@ fn tui_safe_println(msg: &str) {
 }
 
 fn quiet_env_overrides() -> bool {
-    matches!(env::var("VTCODE_TRUST_WORKSPACE_QUIET").ok().as_deref(), Some("1") | Some("true") | Some("yes"))
+    // Canonical env-flag set (1/true/yes/on/debug, trimmed, case-insensitive).
+    vtcode_commons::utils::env_flag_enabled(QUIET_ENV)
 }
 
 fn parse_env_trust_override() -> Result<Option<EnvTrustOverride>> {
@@ -373,6 +376,29 @@ mod tests {
     fn classify_env_trust_value_rejects_empty() {
         let err = classify_env_trust_value("   ").expect_err("empty value should fail");
         assert!(err.to_string().contains("empty"));
+    }
+
+    #[test]
+    fn quiet_env_overrides_accepts_the_canonical_flag_set() {
+        // The quiet notice used to compare literal "1"/"true"/"yes" only, so
+        // padded, mixed-case, "on", and "debug" values were silently ignored.
+        let env_guard = vtcode_commons::env_lock::lock();
+        let previous = env::var_os(QUIET_ENV);
+
+        for value in ["1", "true", "TRUE", "yes", "on", "debug", " debug "] {
+            env_guard.set_var(QUIET_ENV, value);
+            assert!(quiet_env_overrides(), "{value:?} should silence the notice");
+        }
+
+        for value in ["0", "false", "no", "off", ""] {
+            env_guard.set_var(QUIET_ENV, value);
+            assert!(!quiet_env_overrides(), "{value:?} should keep the notice");
+        }
+
+        env_guard.remove_var(QUIET_ENV);
+        assert!(!quiet_env_overrides(), "unset should keep the notice");
+
+        env_guard.restore_var(QUIET_ENV, previous);
     }
 
     #[tokio::test]

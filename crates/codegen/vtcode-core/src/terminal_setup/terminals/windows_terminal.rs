@@ -80,12 +80,12 @@ pub fn profile_icon_instructions() -> Vec<String> {
     vec![
         "TAB ICON (profile image):".to_string(),
         "1. Open Settings (Ctrl+,) → Open JSON file.".to_string(),
-        "2. Add a profile entry (replace the icon path with your copy of resources/icons/vtcode-profile-180.png):"
+        "2. Add a profile entry (replace the icon path with your copy of resources/icons/vtcode-app-dynamic-128.png):"
             .to_string(),
         "{".to_string(),
         "  \"name\": \"VT Code\",".to_string(),
         "  \"commandline\": \"vtcode\",".to_string(),
-        "  \"icon\": \"C:\\\\Tools\\\\vtcode-profile-180.png\"".to_string(),
+        "  \"icon\": \"C:\\\\Tools\\\\vtcode-app-dynamic-128.png\"".to_string(),
         "}".to_string(),
     ]
 }

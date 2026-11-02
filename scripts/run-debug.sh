@@ -5,18 +5,15 @@
 
 set -eo pipefail
 
-restore_terminal_state() {
-	if [[ -t 1 || -t 2 ]]; then
-		# Best-effort restore for raw/alternate-screen/mouse modes in case vtcode aborts.
-		# Order mirrors vtcode_ui::tui::panic_hook::restore_tui: LeaveAlternateScreen first,
-		# then bracketed paste/focus/mouse, pop keyboard flags, reset OSC 22 pointer,
-		# default cursor shape, show cursor.
-		printf '\r\033[K\033[?1049l\033[?2004l\033[?1004l\033[?1006l\033[?1015l\033[?1003l\033[?1002l\033[?1000l\033[<1u\033]22;default\007\033[0 q\033[?25h' >/dev/tty 2>/dev/null || true
-		stty sane </dev/tty >/dev/tty 2>/dev/null || true
-	fi
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/terminal-restore-common.sh"
 
 trap restore_terminal_state EXIT INT TERM
+
+# Resolve the host OS once: the session-dir default, P-core job pinning, and
+# the Gatekeeper pre-scan branch all branch on it.
+HOST_OS="$(uname -s)"
 
 # Suppress macOS malloc warnings by REMOVING the env vars (not setting to 0)
 # Setting to 0 triggers "can't turn off malloc stack logging" warnings
@@ -27,7 +24,7 @@ unset MallocErrorAbort
 unset MallocNanoZone
 
 if [[ -z "${VT_SESSION_DIR:-}" ]]; then
-	case "$(uname -s)" in
+	case "${HOST_OS}" in
 	Darwin)
 		VT_STATE_DIR="$HOME/Library/Application Support/com.vinhnx.vtcode/state"
 		;;
@@ -68,9 +65,11 @@ export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
 # default counts E-cores too, and rustc threads thrashing the E-cores
 # end up slower than fewer-but-faster P-core threads. No-op on non-Darwin
 # hosts. Override via `CARGO_BUILD_JOBS=N ./scripts/run-debug.sh`.
-if [[ -z "${CARGO_BUILD_JOBS}" && "$(uname -s)" == "Darwin" ]] &&
-	sysctl -n hw.perflevel0.physicalcpu >/dev/null 2>&1; then
-	export CARGO_BUILD_JOBS="$(sysctl -n hw.perflevel0.physicalcpu)"
+if [[ -z "${CARGO_BUILD_JOBS}" && "${HOST_OS}" == "Darwin" ]]; then
+	CARGO_BUILD_P_CORES="$(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || true)"
+	if [[ -n "${CARGO_BUILD_P_CORES}" ]]; then
+		export CARGO_BUILD_JOBS="${CARGO_BUILD_P_CORES}"
+	fi
 fi
 
 # Build optional args from environment
@@ -92,7 +91,11 @@ fi
 # Increase stack floor for spawned threads in debug runs to reduce overflow risk.
 export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 
-if [[ "$(uname -s)" == "Darwin" && -x /usr/bin/gktool ]]; then
+# Ad-hoc CLI args are forwarded last so a caller can override the defaults,
+# e.g. `./scripts/run-debug.sh --help` or `./scripts/run-debug.sh --resume`.
+LAUNCH_ARGS=(--show-file-diffs --debug "${EXTRA_ARGS[@]}" "$@")
+
+if [[ "${HOST_OS}" == "Darwin" && -x /usr/bin/gktool ]]; then
 	cargo build --bin vtcode
 
 	VTCODE_DEBUG_TARGET_DIR="${CARGO_TARGET_DIR:-target}"
@@ -105,13 +108,22 @@ if [[ "$(uname -s)" == "Darwin" && -x /usr/bin/gktool ]]; then
 	VTCODE_DEBUG_APP_CONTENTS="${VTCODE_DEBUG_APP}/Contents"
 	VTCODE_DEBUG_APP_EXECUTABLE="${VTCODE_DEBUG_APP_CONTENTS}/MacOS/vtcode"
 	VTCODE_DEBUG_INFO_PLIST="${VTCODE_DEBUG_APP_CONTENTS}/Info.plist"
-	VTCODE_DEBUG_INFO_TEMP="${VTCODE_DEBUG_INFO_PLIST}.tmp.$$"
 
 	# Gatekeeper shows a transient verification sheet for newly built binaries.
 	# Scan a stable local app bundle before launching the same debug executable.
-	mkdir -p "${VTCODE_DEBUG_APP_CONTENTS}/MacOS"
-	cp "${VTCODE_DEBUG_BINARY}" "${VTCODE_DEBUG_APP_EXECUTABLE}"
-	cat > "${VTCODE_DEBUG_INFO_TEMP}" <<'EOF'
+	#
+	# Only refresh the bundle when it does not already hold the current binary:
+	# `cargo build` leaves the binary untouched when nothing changed, so a
+	# relaunch without edits skips the copy/re-sign/re-scan entirely and keeps
+	# the bundle's signature stable for Gatekeeper's cache. A real relink bumps
+	# the binary mtime and forces the refresh.
+	if [[ ! -f "${VTCODE_DEBUG_APP_EXECUTABLE}" || ! -f "${VTCODE_DEBUG_INFO_PLIST}" ||
+		"${VTCODE_DEBUG_BINARY}" -nt "${VTCODE_DEBUG_APP_EXECUTABLE}" ]]; then
+		VTCODE_DEBUG_INFO_TEMP="${VTCODE_DEBUG_INFO_PLIST}.tmp.$$"
+
+		mkdir -p "${VTCODE_DEBUG_APP_CONTENTS}/MacOS"
+		cp -f "${VTCODE_DEBUG_BINARY}" "${VTCODE_DEBUG_APP_EXECUTABLE}"
+		cat >"${VTCODE_DEBUG_INFO_TEMP}" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -133,14 +145,16 @@ if [[ "$(uname -s)" == "Darwin" && -x /usr/bin/gktool ]]; then
 </dict>
 </plist>
 EOF
-	mv -f "${VTCODE_DEBUG_INFO_TEMP}" "${VTCODE_DEBUG_INFO_PLIST}"
-	/usr/bin/codesign --force --sign - --identifier com.vinhnx.vtcode.debug "${VTCODE_DEBUG_APP}"
-	if ! /usr/bin/gktool scan "${VTCODE_DEBUG_APP}"; then
-		printf 'Error: Gatekeeper could not pre-scan the VT Code debug app; refusing to launch it to avoid the macOS verification sheet.\n' >&2
-		exit 1
+		mv -f "${VTCODE_DEBUG_INFO_TEMP}" "${VTCODE_DEBUG_INFO_PLIST}"
+		/usr/bin/codesign --force --sign - --identifier com.vinhnx.vtcode.debug "${VTCODE_DEBUG_APP}"
+		if ! /usr/bin/gktool scan "${VTCODE_DEBUG_APP}"; then
+			printf 'Error: Gatekeeper could not pre-scan the VT Code debug app; refusing to launch it to avoid the macOS verification sheet.\n' >&2
+			exit 1
+		fi
 	fi
+
 	export PATH="${VTCODE_DEBUG_BUILD_DIR}:${PATH}"
-	"${VTCODE_DEBUG_APP_EXECUTABLE}" "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+	"${VTCODE_DEBUG_APP_EXECUTABLE}" "${LAUNCH_ARGS[@]}"
 else
-	cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+	cargo run -- "${LAUNCH_ARGS[@]}"
 fi

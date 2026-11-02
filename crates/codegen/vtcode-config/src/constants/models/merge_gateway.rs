@@ -11,7 +11,9 @@ pub const GOOGLE_GEMINI_3_7_FLASH: &str = "google/gemini-3.7-flash";
 pub const XAI_GROK_4_6: &str = "xai/grok-4.6";
 pub const XAI_GROK_4_7: &str = "xai/grok-4.7";
 pub const MINIMAX_H3: &str = "minimax/minimax-h3";
+pub const MINIMAX_M3_1_FLASH: &str = "minimax/minimax-m3.1-flash";
 pub const MOONSHOT_KIMI_K3: &str = "moonshot/kimi-k3";
+pub const MOONSHOT_KIMI_K3_1_PRO: &str = "moonshot/kimi-k3.1-pro";
 pub const THINKINGMACHINES_INKLING: &str = "thinkingmachines/inkling";
 pub const ZAI_GLM_5_3_FLASH: &str = "zai/glm-5.3-flash";
 pub const ZAI_GLM_5_3_FLASHX: &str = "zai/glm-5.3-flashx";
@@ -21,13 +23,14 @@ pub const OPENAI_GPT_5_6_TERRA: &str = "openai/gpt-5.6-terra";
 pub const OPENAI_GPT_6_ASTRA: &str = "openai/gpt-6-astra";
 pub const OPENAI_GPT_6_SOL: &str = "openai/gpt-6-sol";
 pub const OPENAI_GPT_6_1_SOL: &str = "openai/gpt-6.1-sol";
+pub const OPENAI_GPT_6_1_TERRA: &str = "openai/gpt-6.1-terra";
 pub const OPENAI_GPT_6_LUNA: &str = "openai/gpt-6-luna";
 pub const GOOGLE_GEMINI_3_8_FLASH: &str = "google/gemini-3.8-flash";
 pub const GOOGLE_GEMINI_4_ARGON: &str = "google/gemini-4-argon";
 pub const ANTHROPIC_CLAUDE_HAIKU_4_5_20251001: &str = "anthropic/claude-haiku-4-5-20251001";
 pub const ANTHROPIC_CLAUDE_HAIKU_5_5: &str = "anthropic/claude-haiku-5-5";
 pub const ANTHROPIC_CLAUDE_FABLE_5_1: &str = "anthropic/claude-fable-5-1";
-pub const DEEPSEEK_FLASH: &str = "deepseek/deepseek-v4.1-flash";
+pub const DEEPSEEK_FLASH: &str = "deepseek/deepseek-v4.1-flash-1017";
 pub const XIAOMIMIMO_MIMO_V2_6_PRO: &str = "xiaomimimo/mimo-v2.6-pro";
 pub const XIAOMIMIMO_MIMO_V2_6_FLASH: &str = "xiaomimimo/mimo-v2.6-flash";
 pub const MISTRAL_LARGE_4: &str = "mistral/mistral-large-4-0";
@@ -55,7 +58,9 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     XAI_GROK_4_6,
     XAI_GROK_4_7,
     MINIMAX_H3,
+    MINIMAX_M3_1_FLASH,
     MOONSHOT_KIMI_K3,
+    MOONSHOT_KIMI_K3_1_PRO,
     THINKINGMACHINES_INKLING,
     ZAI_GLM_5_3_FLASH,
     ZAI_GLM_5_3_FLASHX,
@@ -65,6 +70,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     OPENAI_GPT_6_ASTRA,
     OPENAI_GPT_6_SOL,
     OPENAI_GPT_6_1_SOL,
+    OPENAI_GPT_6_1_TERRA,
     OPENAI_GPT_6_LUNA,
     XIAOMIMIMO_MIMO_V2_6_PRO,
     XIAOMIMIMO_MIMO_V2_6_FLASH,
@@ -79,6 +85,7 @@ pub const REASONING_EFFORT_ROUTES: &[&str] = &[
     XAI_GROK_4_6,
     XAI_GROK_4_7,
     MOONSHOT_KIMI_K3,
+    MOONSHOT_KIMI_K3_1_PRO,
     ZAI_GLM_5_3_FLASH,
     ZAI_GLM_5_3_FLASHX,
     OPENAI_GPT_5_6_LUNA,
@@ -87,6 +94,7 @@ pub const REASONING_EFFORT_ROUTES: &[&str] = &[
     OPENAI_GPT_6_ASTRA,
     OPENAI_GPT_6_SOL,
     OPENAI_GPT_6_1_SOL,
+    OPENAI_GPT_6_1_TERRA,
     OPENAI_GPT_6_LUNA,
     META_MUSE_SPARK_OPEN,
 ];
@@ -110,6 +118,7 @@ pub const THINKING_BUDGET_ROUTES: &[&str] = &[
     GOOGLE_GEMINI_4_ARGON,
     DEEPSEEK_FLASH,
     MINIMAX_H3,
+    MINIMAX_M3_1_FLASH,
     THINKINGMACHINES_INKLING,
 ];
 
@@ -129,7 +138,9 @@ pub const REASONING_MODELS: &[&str] = &[
     XAI_GROK_4_6,
     XAI_GROK_4_7,
     MINIMAX_H3,
+    MINIMAX_M3_1_FLASH,
     MOONSHOT_KIMI_K3,
+    MOONSHOT_KIMI_K3_1_PRO,
     THINKINGMACHINES_INKLING,
     ZAI_GLM_5_3_FLASH,
     ZAI_GLM_5_3_FLASHX,
@@ -139,6 +150,7 @@ pub const REASONING_MODELS: &[&str] = &[
     OPENAI_GPT_6_ASTRA,
     OPENAI_GPT_6_SOL,
     OPENAI_GPT_6_1_SOL,
+    OPENAI_GPT_6_1_TERRA,
     OPENAI_GPT_6_LUNA,
     META_MUSE_SPARK_OPEN,
 ];

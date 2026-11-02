@@ -5,7 +5,8 @@
 //! Shared theme registry and runtime state for VT Code UI crates.
 
 mod color_math;
-pub(crate) use color_math::contrast_ratio;
+pub(crate) use color_math::{contrast_ratio, recede_toward_background};
+mod gpui_kit;
 mod registry;
 mod runtime;
 mod scheme;
@@ -13,6 +14,7 @@ mod syntax;
 #[cfg(test)]
 mod tests;
 mod types;
+mod ui_palette;
 
 pub use registry::{available_theme_suites, available_themes, theme_label, theme_suite_id, theme_suite_label};
 pub use runtime::{
@@ -28,4 +30,8 @@ pub use syntax::{get_active_syntax_theme, get_syntax_theme_for_ui_theme};
 pub use types::{
     ColorAccessibilityConfig, DEFAULT_THEME_ID, ThemeDefinition, ThemePalette, ThemeStyles, ThemeSuite,
     ThemeValidationResult,
+};
+pub use ui_palette::{
+    UiAnsiSlots, UiThemeColors, builtin_theme_colors, gpui_kit_theme_colors, gpui_kit_theme_colors_all,
+    gpui_kit_theme_label, is_gpui_kit_theme, rgb_u32,
 };

@@ -98,22 +98,23 @@ CARGO_INCREMENTAL=1 cargo nextest run --profile quick
 ./scripts/check-dev.sh --test
 ```
 
-The `quick` and `ci` profiles are optional workspace configuration. The check scripts use those profiles when available
-and fall back to Nextest's `default` profile when a local checkout does not provide them; a missing profile must not
-prevent the checks from running. `check-dev.sh --changed` performs its own changed-package filtering because Nextest
-does not provide Cargo's `--changed --since` selection flags.
+The `quick` and `ci` profiles ship with the repository in `.config/nextest.toml`. The check scripts still use those
+profiles only when available and fall back to Nextest's `default` profile when a local checkout does not provide them;
+a missing profile must not prevent the checks from running. `check-dev.sh --changed` performs its own changed-package
+filtering because Nextest does not provide Cargo's `--changed --since` selection flags.
 
 The fast gate runs Cargo checks, Clippy, changed-package metadata, and Nextest with `--locked`; verification never
 updates `Cargo.lock`. Tests require `cargo-nextest` and fail if the selected suite contains no tests. A successful
 `--changed` selection with no changed packages explicitly skips testing; metadata failures fail the gate instead.
 Install the runner with `cargo install cargo-nextest --locked`.
 
-| Fast gate | Command | Test selection |
-| --- | --- | --- |
-| Checks and lints | `./scripts/check-dev.sh` | Tests excluded |
-| Checks, lints, and tests | `./scripts/check-dev.sh --test` | Quick profile when configured, otherwise default |
-| Changed packages | `./scripts/check-dev.sh --changed` | Changed packages in the selected scope |
-| Full workspace | `./scripts/check-dev.sh --workspace --test` | All workspace packages |
+| Fast gate                | Command                                     | Test selection                                                                              |
+| ------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Checks and lints         | `./scripts/check-dev.sh`                    | Tests excluded                                                                              |
+| Checks, lints, and tests | `./scripts/check-dev.sh --test`             | Quick profile when configured, otherwise default                                            |
+| Changed packages         | `./scripts/check-dev.sh --changed`          | Changed packages in the selected scope                                                      |
+| Full workspace           | `./scripts/check-dev.sh --workspace --test` | All workspace packages                                                                      |
+| Dependency audit         | `./scripts/check-dev.sh --deny`             | Tests excluded; runs `cargo deny --locked check` (network-bound on first advisory-DB fetch) |
 
 Run the script regressions with `python3 -m unittest discover -s scripts/tests -p 'test_check_dev.py'`.
 
@@ -127,6 +128,24 @@ is never suppressed — a failing check still prints its rustfmt diff, clippy di
 # Agent/CI run: minimal output, full failure detail
 ./scripts/check-dev.sh --quiet
 ./scripts/check-dev.sh --quiet --test
+```
+
+### Platform-gated `unsafe` Gate
+
+`cargo clippy` (even with `-D warnings`) only lints code that compiles on the checking host, so `unsafe` behind
+`#[cfg(target_os = "...")]` for another platform is never checked locally. `./scripts/check.sh unsafe-docs` closes that
+gap: it deterministically scans every tracked `.rs` file (independent of `cfg`) and enforces the same two obligations
+as `rust.unsafe_code` and `clippy::undocumented_unsafe_blocks` — every file that uses `unsafe` must carry an
+`unsafe_code` allow/expect, and every `unsafe { … }` / `unsafe impl` / `unsafe trait` must be preceded by a `SAFETY:`
+marker. It adds a third, clippy-invisible obligation for `unsafe` in type position (`type Cb = unsafe extern "C" fn()`),
+which fires no lint at all: those declarations need a `///` contract doc (clippy rejects a `// SAFETY:` marker there as
+`unnecessary_safety_comment`). The clippy-equivalent rules are deliberately more permissive than clippy, so clippy-clean
+host code never trips them; deliberate exceptions go in `scripts/unsafe_allowlist.txt`.
+
+```bash
+./scripts/check.sh unsafe-docs
+# Or run the checker directly:
+python3 scripts/check_unsafe_docs.py --mode enforce
 ```
 
 ### Structural Rule Checks
@@ -306,8 +325,8 @@ Located in `tests/integration_tests.rs`:
 ```rust
 #[cfg(test)]
 mod integration_tests {
-    use vtcode::tools::ToolRegistry;
     use serde_json::json;
+    use vtcode::tools::ToolRegistry;
 
     #[tokio::test]
     async fn test_tool_integration() {
@@ -336,7 +355,7 @@ runs, `black_box` outputs, `iter_batched` independence except explicit `cache_hi
 to hit a goal).
 
 ```rust
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 fn benchmark_function(c: &mut Criterion) {
     // Benchmark setup and execution
@@ -492,6 +511,17 @@ Measures:
 3. **End-to-End Tests**: Test complete workflows
 4. **Performance Tests**: Benchmark critical paths
 
+Keep large unit suites in private behavior-focused child modules. Share fixtures through the nearest
+parent test module without widening production visibility or duplicating setup. The runtime-handler
+suite uses `tool_outcomes/handlers/tests/runtime/` for admission, budgets, corrections, history,
+lifecycle, patching, planning, preflight, and read reuse. OpenAI provider tests use
+`providers/openai/provider/tests/` for auth, caching, compaction, files, history, hosted shell,
+request policy, tools, and transport, alongside the existing cache TTL and usage suites.
+
+When moving tests, preserve assertions and fixture lifetimes, adjust relative fixture paths, and
+compare the selected test counts before and after extraction. Prefer stable suite or leaf-name
+filters over exact module paths when the module layout is not itself part of the contract.
+
 ### Test Naming Conventions
 
 ```rust
@@ -537,13 +567,13 @@ name: Tests
 on: [push, pull_request]
 
 jobs:
-    test:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-            - uses: dtolnay/rust-toolchain@stable
-            - run: cargo nextest run
-            - run: cargo bench
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo nextest run
+      - run: cargo bench
 ```
 
 ### Test Coverage

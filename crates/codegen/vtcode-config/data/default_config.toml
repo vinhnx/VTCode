@@ -232,6 +232,15 @@ exec_command = "prompt"           # Run commands; pipe-first by default, set tty
 write_stdin = "prompt"            # Send input to active command sessions
 code_search = "allow"             # Advanced bounded literal search with query-led filters
 
+# Keyless DuckDuckGo search; full-page web_fetch remains separately authorized.
+[tools.web_search]
+provider = "duckduckgo"
+max_results = 8
+timeout_secs = 20
+cooldown_ms = 3000
+cache_ttl_secs = 300
+session_max_requests = 12
+
 # Command security - Define safe and dangerous command patterns
 [commands]
 # Commands that are always allowed without confirmation
@@ -556,6 +565,9 @@ cache_friendly_prompt_shaping = true
     # Optional: server-side prompt cache retention for OpenAI Responses API
     # Supported values: "in_memory" or "24h" (leave commented out for default behavior)
     # prompt_cache_retention = "24h"
+    # Optional minimum lifetime on eligible Responses routes: "30m" (default) or "12h".
+    # 12h cache writes cost 2.5x ordinary input, versus 1.25x for 30m.
+    # prompt_cache_ttl = "12h"
 
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]

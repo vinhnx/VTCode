@@ -129,6 +129,7 @@ impl StreamingProgressTracker {
 }
 
 /// Builder for creating streaming progress trackers with fluent API
+#[must_use = "build the progress tracker before discarding the builder"]
 pub struct StreamingProgressBuilder {
     total_timeout: Duration,
     callback: Option<StreamingProgressCallback>,

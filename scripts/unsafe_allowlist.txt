@@ -1,0 +1,8 @@
+# unsafe-docs gate allowlist
+# Format:
+#   path/glob.rs | rationale
+#   path/glob.rs:123 | rationale
+# Keep rules scoped and remove them once the underlying code is fixed.
+# The check enforces what `rust.unsafe_code` and `clippy::undocumented_unsafe_blocks`
+# require for code that compiles on the host; exceptions here should only cover
+# platform-gated code that the host toolchain cannot see.

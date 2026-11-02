@@ -30,11 +30,30 @@ use crate::codex_app_server::{
 
 const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
-const EXEC_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive exec mode. Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished.";
-const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = "You are running vtcode as a non-interactive dry-run execution. Plan and validate the approach with read-only permissions, without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why.";
+/// Stable openings of the model-facing exec/dry-run/review task instructions,
+/// reused by reverse history so these harness prompts are never offered as user
+/// input. Each is the literal head of the corresponding `*_INSTRUCTIONS` value
+/// (see the `concat!` construction below); keep the two aligned when editing.
+pub(crate) const EXEC_TASK_INSTRUCTIONS_PREFIX: &str = "You are running vtcode in non-interactive exec mode.";
+pub(crate) const EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX: &str =
+    "You are running vtcode as a non-interactive dry-run execution.";
+pub(crate) const REVIEW_TASK_INSTRUCTIONS_PREFIX: &str =
+    "You are running vtcode through the non-interactive review command.";
+
+const EXEC_TASK_INSTRUCTIONS: &str = concat!(
+    "You are running vtcode in non-interactive exec mode.",
+    " Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished."
+);
+const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = concat!(
+    "You are running vtcode as a non-interactive dry-run execution.",
+    " Plan and validate the approach with read-only permissions, without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why."
+);
 pub(super) const REVIEW_TASK_ID: &str = "review-task";
 const REVIEW_TASK_TITLE: &str = "Review Task";
-const REVIEW_TASK_INSTRUCTIONS: &str = "You are running vtcode through the non-interactive review command. Review the requested target with read-only permissions. Do not modify files, do not run mutating commands, and do not request user input. Return findings first, ordered by severity, with concrete file and line references when possible. If there are no findings, state that explicitly.";
+const REVIEW_TASK_INSTRUCTIONS: &str = concat!(
+    "You are running vtcode through the non-interactive review command.",
+    " Review the requested target with read-only permissions. Do not modify files, do not run mutating commands, and do not request user input. Return findings first, ordered by severity, with concrete file and line references when possible. If there are no findings, state that explicitly."
+);
 
 async fn open_events_writer_async(path: &Path) -> Result<BufWriter<File>> {
     let path = path.to_path_buf();

@@ -58,6 +58,40 @@ pub(super) fn reject_invalid_args(
         .push_tool_error(tool_call_id.to_string(), tool_name, &serde_json::Value::String(detail), is_gemini);
 }
 
+/// Reject a tool call that a policy gate (planning workflow, command security)
+/// denied during admission.
+///
+/// Unlike [`reject_invalid_args`], the denial is not an argument problem, so
+/// the recorded outcome is [`ToolOutcome::HookDenied`] and the model-facing
+/// detail preserves the gate's own remediation text — rendered from the whole
+/// `anyhow` chain (`{:#}`), because the gate wraps its guidance behind a short
+/// context marker. Reporting it as `Invalid arguments` invited the model to
+/// retry the identical call.
+///
+/// The event/warning summary stays a single line (the outer context), so
+/// headless `[WARNING]` output is not flooded with the multi-line guidance.
+pub(super) fn reject_policy_denied(
+    runtime: &mut AgentRuntime,
+    event_recorder: &mut ExecEventRecorder,
+    agent_prefix: &str,
+    tool_name: &str,
+    tool_call_id: &str,
+    args: Option<&serde_json::Value>,
+    err: &anyhow::Error,
+    is_gemini: bool,
+    quiet: bool,
+) {
+    let summary = format!("Tool '{tool_name}' denied by policy: {err}");
+    let detail = format!("{err:#}");
+    if !quiet {
+        warn!(agent = %agent_prefix, tool = %tool_name, error = %detail, "Tool call denied by policy");
+    }
+    reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &summary, ToolOutcome::HookDenied);
+    runtime
+        .state
+        .push_tool_error(tool_call_id.to_string(), tool_name, &serde_json::Value::String(detail), is_gemini);
+}
+
 /// Reject a tool call that policy or feature gating disallows.
 ///
 /// Records the warning on the session, logs at warn level (unless quiet), and
@@ -107,6 +141,7 @@ pub(super) fn emit_failed_tool_outputs_for_completed_invocations(
             None,
             detail,
             None,
+            Vec::new(),
         );
     }
 }

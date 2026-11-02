@@ -5,9 +5,23 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use vtcode_core::cli::args::SessionStoreCommand;
 use vtcode_memory::{
-    DEFAULT_MAX_EVENTS, RetentionPolicy, apply_retention, migrate_legacy, open, query_facts, read_audit_pack,
-    recent_sessions, verify_audit_pack, write_audit_pack,
+    DEFAULT_MAX_EVENTS, RetentionPolicy, SessionSummary, apply_retention, live_sessions, migrate_legacy, open,
+    query_facts, read_audit_pack, recent_sessions, verify_audit_pack, write_audit_pack,
 };
+
+/// One `session-store list` row. Live sessions (a process holds the session
+/// lock) carry the `live` marker so users can see messaging peers at a glance.
+fn format_session_list_row(summary: &SessionSummary, live: bool) -> String {
+    format!(
+        "{:<28} turns={:<4} events={:<6} {}  {}  {}",
+        summary.session_id,
+        summary.turn_count,
+        summary.event_count,
+        summary.status,
+        summary.updated_at,
+        if live { "live" } else { "" },
+    )
+}
 
 /// Handle the `session-store` CLI subcommand.
 pub async fn handle_session_store_command(command: SessionStoreCommand) -> Result<()> {
@@ -36,11 +50,10 @@ pub async fn handle_session_store_command(command: SessionStoreCommand) -> Resul
                 println!("No sessions found under .vtcode/sessions/.");
                 return Ok(());
             }
+            let live_summaries = live_sessions(&workspace);
+            let live: std::collections::HashSet<&str> = live_summaries.iter().map(|s| s.session_id.as_str()).collect();
             for s in &sessions {
-                println!(
-                    "{:<28} turns={:<4} events={:<6} {}  {}",
-                    s.session_id, s.turn_count, s.event_count, s.status, s.updated_at
-                );
+                println!("{}", format_session_list_row(s, live.contains(s.session_id.as_str())));
             }
             println!("{} session(s).", sessions.len());
         }
@@ -102,4 +115,30 @@ pub async fn handle_session_store_command(command: SessionStoreCommand) -> Resul
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_summary() -> SessionSummary {
+        SessionSummary {
+            session_id: "peer-a".to_string(),
+            turn_count: 3,
+            event_count: 42,
+            status: "active".to_string(),
+            updated_at: "2026-11-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn list_row_marks_live_sessions_only() {
+        let live_row = format_session_list_row(&sample_summary(), true);
+        assert!(live_row.contains("peer-a"), "session id present: {live_row}");
+        assert!(live_row.contains("turns=3"), "turn count present: {live_row}");
+        assert!(live_row.ends_with("live"), "live marker present: {live_row}");
+
+        let dead_row = format_session_list_row(&sample_summary(), false);
+        assert!(!dead_row.contains("live"), "no marker for dead sessions: {dead_row}");
+    }
 }

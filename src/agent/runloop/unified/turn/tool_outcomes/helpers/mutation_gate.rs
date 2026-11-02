@@ -1,4 +1,4 @@
-//! Mutation gate: docs-only/plan-artifact classification and verification blocking.
+//! Mutation accounting and completion-verification observations.
 
 use super::*;
 
@@ -46,77 +46,14 @@ fn exec_mutation_should_count(
     vtcode_core::tools::tool_intent::exec_mutation_should_incur_debt(&command_text, output)
 }
 
-/// Return whether a tool call must wait for a successful verification step.
-///
-/// Reads, inspections, verification commands, task tracking, dedicated
-/// plan-artifact writes, and docs-only prose writes remain available while the
-/// checkpoint is pending.
-/// A failed verifier grants a bounded fix-up window ([`FAILED_VERIFICATION_FIX_ALLOWANCE`])
-/// so a broken build can be repaired, and piped verifier attempts
-/// (e.g. `cargo check 2>&1 | grep error`) are admitted with pipefail when their
-/// tails are statically read-only. A verifier piped only into `head`/`tail` runs
-/// as a standalone verifier (see [`shell_args_as_executed`]).
-pub(crate) fn mutation_blocked_until_verification(
-    loop_tracker: &LoopTracker,
-    name: &str,
-    args: &serde_json::Value,
-) -> bool {
-    if !loop_tracker.verification_is_pending() || is_plan_artifact_write(name, args) || is_docs_only_write(name, args) {
-        return false;
-    }
-
-    let canonical_name = canonical_tool_name(name);
-    // Cleanup can only stop/release an owned exec session; it must remain
-    // reachable when workspace edits await verification. Permissions still apply.
-    if vtcode_core::tools::tool_intent::is_exec_session_cleanup_call(canonical_name, args) {
-        return false;
-    }
-    if is_execution_tool(canonical_name) {
-        // Classify the command the kernel will run: a verifier piped only
-        // into `head`/`tail` executes standalone and is a verification.
-        let executed = shell_args_as_executed(canonical_name, args);
-        let activity = classify_shell_activity(canonical_name, &executed);
-        // Other piped verifier attempts (`cargo check 2>&1 | grep error`)
-        // run with pipefail when statically safe. The admission predicate
-        // requires every shell segment to be verification-or-readonly, so a
-        // smuggled mutation such as `cargo check && rm -rf target` stays
-        // blocked.
-        if !matches!(activity, ShellActivity::Mutation) || shell_command_is_admitted_verification_attempt(&executed) {
-            return false;
-        }
-        // Fix-up window: allow bounded repair edits after a failed verifier.
-        return loop_tracker.fix_edits_remaining == 0;
-    }
-
-    if !vtcode_core::tools::tool_intent::classify_tool_intent(canonical_name, args).mutating {
-        return false;
-    }
-    loop_tracker.fix_edits_remaining == 0
-}
-
 /// Updates the tool repetition tracker based on the execution outcome.
 ///
 /// Count completed attempts for repetition detection, but only successful
 /// mutations contribute to anti-blind-editing verification pressure.
 ///
-/// Returns `true` when this outcome freshly granted (or refreshed) the
-/// failed-verifier fix-up window. Callers must reset the assistant text-response
-/// streak so the model gets one diagnostic explanation before the
-/// pending-verification text cap re-applies; otherwise a failed build blocks
-/// the turn before the agent can describe the failure and use its fix-up edits.
-///
-/// A `true` return also covers *lost* verifier results: while the gate is
-/// pending, a verifier-level Failure/Timeout (or a session follow-up
-/// failure — `write_stdin`, a non-run `unified_exec` action, or a PTY
-/// session follow-up — reporting a dead exec/PTY session) grants the same
-/// bounded window because the verifier never produced an observable
-/// verdict. In that case the tracker queues
-/// [`VERIFICATION_RESULT_LOST_DIRECTIVE`] for the handlers to surface.
-///
-/// A `true` return also covers an admitted status-masking verifier success
-/// while the gate is pending. Completed unverified checker sequences queue
-/// [`PIPED_VERIFICATION_DIRECTIVE`] independently of gate state; that coaching
-/// alone never changes this return value or grants fix-up edits.
+/// Returns `true` for checker failure, unavailable results, or masked status
+/// needing diagnostic feedback. Callers reset the assistant text streak so the
+/// model can explain and repair; this never grants or restricts edit permission.
 #[cfg(test)]
 pub(crate) fn update_repetition_tracker(
     loop_tracker: &mut LoopTracker,
@@ -134,7 +71,6 @@ pub(crate) fn update_repetition_tracker_for_registry(
     args: &serde_json::Value,
     registry: &vtcode_core::tools::ToolRegistry,
 ) -> bool {
-    let was_pending = loop_tracker.verification_is_pending();
     let attempts = loop_tracker.verification_auto_recovery_attempts;
     let executed = loop_tracker.auto_verification_executed;
     let failed = update_repetition_tracker_inner(
@@ -146,12 +82,14 @@ pub(crate) fn update_repetition_tracker_for_registry(
     );
     if registry.completion_verification_pending() {
         // A partial or unrelated pass cannot refill the recovery episode.
-        if was_pending {
-            loop_tracker.mark_verification_pending();
-        }
-        loop_tracker.verification_auto_recovery_attempts = attempts;
-        loop_tracker.auto_verification_executed = executed;
+        loop_tracker.mark_verification_pending();
+    } else {
+        // Optional checker diagnostics remain useful even without completion debt.
+        // Synchronize admission state without consuming their pending notices.
+        loop_tracker.verification_pending = false;
     }
+    loop_tracker.verification_auto_recovery_attempts = attempts;
+    loop_tracker.auto_verification_executed = executed;
     failed
 }
 
@@ -346,7 +284,6 @@ fn update_repetition_tracker_inner(
                     && let Some(session_id) = output.get("session_id").and_then(serde_json::Value::as_str)
                 {
                     loop_tracker.mark_verification_pending();
-                    loop_tracker.fix_edits_remaining = 0;
                     loop_tracker.pending_verifier_session_id = Some(session_id.to_owned());
                     loop_tracker.reset_navigation_window(true);
                     return false;
@@ -356,8 +293,8 @@ fn update_repetition_tracker_inner(
                     loop_tracker.mark_verification_complete();
                 } else if matches!(&outcome.status, ToolExecutionStatus::Success { command_success: false, .. }) {
                     // Only a verifier that actually ran and reported non-zero
-                    // opens the fix-up window. Tool-level Failure/Timeout (never
-                    // executed, e.g. argument errors) must not grant edits.
+                    // marks completion pending. Tool-level Failure/Timeout (never
+                    // executed, e.g. argument errors) provides no terminal verdict.
                     loop_tracker.record_failed_verification();
                     loop_tracker.verifier_failed_notice_pending = matches!(&outcome.status,
                         ToolExecutionStatus::Success { output, .. }
@@ -374,15 +311,8 @@ fn update_repetition_tracker_inner(
                                 | vtcode_core::tools::registry::ToolErrorType::ToolNotFound)
                     )
                 {
-                    // While the gate is pending, a verifier-level
-                    // Failure/Timeout almost always means the result was lost
-                    // (e.g. the exec session ended before the verifier
-                    // finished) rather than a genuine non-zero exit: the
-                    // verifier never produced an observable verdict. A bounded
-                    // fix window that still requires a successful standalone
-                    // verifier to clear is strictly better than a permanent
-                    // stall. Without the gate pending this stays a no-grant
-                    // arg-error path.
+                    // A lost result cannot establish completion. Preserve debt
+                    // and surface the unavailable verdict for corrective work.
                     loop_tracker.verification_result_lost_notice_pending = true;
                     loop_tracker.record_failed_verification();
                     loop_tracker.reset_navigation_window(low_signal_family.is_none());

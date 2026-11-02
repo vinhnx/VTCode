@@ -14,6 +14,16 @@ pub(super) fn render_resume_state_if_present(
         return Ok(());
     };
 
+    // Deliver the whole resume block in one UI command: the viewport paints
+    // the last message once instead of scrolling through the history.
+    renderer.transcript_batch(|renderer| render_resume_state_lines(renderer, session, supports_reasoning))
+}
+
+fn render_resume_state_lines(
+    renderer: &mut AnsiRenderer,
+    session: &ResumeSession,
+    supports_reasoning: bool,
+) -> Result<()> {
     let ended_local = session.snapshot().ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
     let action = if session.is_fork() { "Forking" } else { "Resuming" };
     renderer.line(
@@ -179,17 +189,12 @@ pub(crate) fn build_structured_resume_lines(
 /// stability, but it is not part of the conversation the user had, so the
 /// resume transcript omits it.
 fn is_persisted_request_context(message: &uni::Message) -> bool {
-    if message.role != uni::MessageRole::System {
-        return false;
-    }
-    let text = message.content.as_text();
-    text.starts_with(vtcode_core::prompts::FEW_SHOT_SECTION_HEADER)
-        || text.starts_with(LEGACY_EDITOR_CONTEXT_PROMPT_HEADER)
+    vtcode_core::utils::session_archive::is_internal_session_context(
+        message.role,
+        &message.content.as_text(),
+        message.clear_at,
+    )
 }
-
-/// Header of the pre-removal `## Active Editor Context` block. Kept as a
-/// literal so old histories still filter out of resume transcripts.
-const LEGACY_EDITOR_CONTEXT_PROMPT_HEADER: &str = "## Active Editor Context";
 
 fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> String {
     match tool_call_id {
@@ -295,15 +300,7 @@ fn format_tool_output_for_resume(content: &uni::MessageContent) -> Option<String
             let trimmed_output = output.trim();
             if !trimmed_output.is_empty() {
                 // Truncate very long output to keep resume display concise
-                let display = if trimmed_output.len() > 500 {
-                    let mut end = 500;
-                    while !trimmed_output.is_char_boundary(end) {
-                        end -= 1;
-                    }
-                    format!("{}...", &trimmed_output[..end])
-                } else {
-                    trimmed_output.to_string()
-                };
+                let display = vtcode_commons::formatting::truncate_byte_budget(trimmed_output, 500, "...");
                 parts.push(display);
             }
         }

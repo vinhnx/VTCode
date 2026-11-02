@@ -49,9 +49,16 @@ insert_changelog_entry() {
 	if [[ -n "$(tail -n1 "$tmp")" ]]; then
 		printf '\n' >>"$tmp"
 	fi
-	printf '%s\n' "$entry" >>"$tmp"
+	# Normalize the entry to a single trailing newline: the release caller passes
+	# git-cliff output through command substitution, which strips trailing
+	# newlines, while direct callers may include one.
+	printf '%s\n' "$(printf '%s' "$entry")" >>"$tmp"
 
 	if [[ -n "$first_version_line" ]]; then
+		# Keep a blank line before the retained history so the previous
+		# `## version` heading stays surrounded by blank lines after a release
+		# insertion (markdownlint MD022).
+		printf '\n' >>"$tmp"
 		tail -n "+$first_version_line" CHANGELOG.md >>"$tmp"
 	fi
 

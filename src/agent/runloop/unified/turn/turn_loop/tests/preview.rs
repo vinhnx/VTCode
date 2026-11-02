@@ -81,9 +81,9 @@ async fn exhausted_previews_pending_verification_done_claim_is_blocked() {
         outcome.result,
         TurnLoopResult::Blocked {
             reason: Some(ref reason)
-        } if reason == PENDING_VERIFICATION_BLOCK_REASON
+        } if reason.contains("Verification is still pending")
     ));
-    assert_eq!(requests.load(Ordering::SeqCst), 6, "six bounded auto-recovery texts are the terminal cap");
+    assert_eq!(requests.load(Ordering::SeqCst), 1, "completion checks do not spend reminder rounds");
     assert!(outcome.turn_diagnostics.model_visible_tool_preview_budget_exhausted);
     assert!(outcome.turn_diagnostics.suppressed_tool_previews >= 1);
     assert_blocked_response_surfaces(&mut backing, &history, &harness_path, PENDING_VERIFICATION_RESPONSE_MARKER);

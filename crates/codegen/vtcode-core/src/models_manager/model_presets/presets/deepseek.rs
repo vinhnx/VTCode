@@ -1,6 +1,7 @@
 //! deepseek_presets — provider preset definitions for deepseek.
 
-use super::super::{ModelPreset, ReasoningEffortPreset};
+use super::super::ModelPreset;
+use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn deepseek_presets() -> Vec<ModelPreset> {
@@ -13,18 +14,9 @@ pub(crate) fn deepseek_presets() -> Vec<ModelPreset> {
         provider: Provider::DeepSeek,
         default_reasoning_effort: ReasoningEffortLevel::High,
         supported_reasoning_efforts: vec![
-            ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Low,
-                description: "Fast, light reasoning".to_string(),
-            },
-            ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::High,
-                description: "Balanced".to_string(),
-            },
-            ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Max,
-                description: "Maximum thinking".to_string(),
-            },
+            reasoning_preset(ReasoningEffortLevel::Low, "Fast, light reasoning"),
+            reasoning_preset(ReasoningEffortLevel::High, "Balanced"),
+            reasoning_preset(ReasoningEffortLevel::Max, "Maximum thinking"),
         ],
         is_default: true,
         upgrade: None,

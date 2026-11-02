@@ -1,0 +1,33 @@
+<!-- Sanitized checkpoint 1940 model output (session-vtcode-20261101T022006Z retry turn). Repository claims are inert fixture data, not verified facts. -->
+<proposed_plan>
+## Summary
+
+Tighten-only README.md refine at 450 lines: repair three stale doc anchors, clarify version and crate wording, preserve hero and prose.
+
+## Scope
+
+In: README.md anchor repairs, version and workspace wording checks, documentation link consistency, file-length gate.
+Out: No hero rewrite, no contributor trim, no onboarding rewrite, no desktop view edits, no code changes.
+
+## Implementation Steps
+
+1. Repair provider-index anchor to verified provider guide file link -> files: [README.md] -> verify: [test -f docs/README.md, grep -n PROVIDER_GUIDES README.md]
+2. Repair context-budgets anchor to verified ARCHITECTURE file link -> files: [README.md] -> verify: [test -f docs/INDEX.md, grep -n ARCHITECTURE README.md]
+3. Repair execution-explanations anchor to verified development guide file link -> files: [README.md] -> verify: [test -f docs/README.md, grep -n execution-explanations README.md]
+4. Clarify Rust version and crate-count wording against Cargo.toml members and edition -> files: [README.md] -> verify: [grep -n members Cargo.toml, grep -n 1.99.1 README.md]
+5. Confirm scoped change shows only README.md modified plus file-length gate passes -> files: [README.md] -> verify: [python3 scripts/check_file_length.py --mode enforce, git status --porcelain README.md]
+
+## Test Cases and Validation
+
+- Repaired anchors resolve to existing files via test -f docs/README.md and test -f docs/INDEX.md.
+- Updated links present via grep -n checks on README.md for PROVIDER_GUIDES, ARCHITECTURE, execution-explanations.
+- Version wording matches Cargo.toml via grep -n members Cargo.toml and grep -n 1.99.1 README.md.
+- File-length gate passes via python3 scripts/check_file_length.py --mode enforce.
+- Scope exclusivity holds via git status --porcelain README.md showing only README.md.
+
+## Assumptions and Defaults
+
+- Tighten-only depth per user selection; no prose modernization.
+- File-level doc links preferred where anchors proved missing by grep exit 1.
+- Rust 1.99.1 and edition 2024 remain current; no toolchain bump.
+</proposed_plan>

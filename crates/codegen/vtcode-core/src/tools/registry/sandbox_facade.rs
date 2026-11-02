@@ -9,9 +9,13 @@ pub(super) fn runtime_sandbox_config_default() -> vtcode_config::SandboxConfig {
 
 impl ToolRegistry {
     pub fn apply_sandbox_config(&self, sandbox_config: &vtcode_config::SandboxConfig) {
-        if let Ok(mut guard) = self.runtime_sandbox_config.write() {
-            *guard = sandbox_config.clone();
-        }
+        // Recover the guard on poisoning: a poisoned lock must not silently
+        // leave the previous (possibly disabled) sandbox in force.
+        let mut guard = self
+            .runtime_sandbox_config
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = sandbox_config.clone();
     }
 
     pub fn sandbox_config(&self) -> vtcode_config::SandboxConfig {

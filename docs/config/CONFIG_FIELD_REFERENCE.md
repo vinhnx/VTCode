@@ -68,7 +68,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.continuation.cross_turn_turns` | `integer` | no | `32` | Bounded cross-turn auto-continue turns after a recoverable end (budget/preview/tool-free recovery) or on resume while tracker work remains. The episode budget **progress-resets** when any tracker step completes. `0` disables cross-turn tracker auto-queue (in-turn continuation still applies when `auto_continue_tracker` is true). Default: 32. |
 | `agent.harness.continuation_policy` | `string` | no | `"all"` | Controls whether harness-managed continuation loops are enabled. |
 | `agent.harness.event_log_path` | `null \| string` | no | `null` | Optional compatibility/export JSONL path for harness events. Canonical events are always stored under the workspace session store; unset configuration creates no global harness file. |
-| `agent.harness.inspection.mode` | `string` | no | `"warn"` | Advisory source exposure by default: `enforce`, `warn`, or `off`; independent of verification. See [source inspection](../development/source-inspection.md). |
+| `agent.harness.inspection.mode` | `string` | no | `"warn"` | Whether missing source exposure blocks mutations. |
 | `agent.harness.max_budget_usd` | `null \| number` | no | `null` | Optional maximum estimated API cost in USD before VT Code stops the session. |
 | `agent.harness.max_parallel_tool_calls` | `integer` | no | `4` | Maximum number of tool calls that may execute concurrently within a single parallel batch. Set to `0` to disable the cap (unlimited concurrency). Default: 4. |
 | `agent.harness.max_revision_rounds` | `integer` | no | `2` | Maximum generator revision rounds after evaluator rejection. |
@@ -85,10 +85,10 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.tool_result_clearing.keep_recent_tool_batches` | `integer` | no | `2` | Local clearing additionally protects the newest assistant messages with tool calls, selected by originating message order (default 2). Protection is the union with keep_tool_uses; 0 restores count-based batch retention. Native Anthropic context edits continue to use keep_tool_uses only. |
 | `agent.harness.tool_result_clearing.keep_tool_uses` | `integer` | no | `2` | Protect newest results. Local clearing also retains all results from their originating assistant tool-call batches, matching call IDs across reordered completions and intervening directives. |
 | `agent.harness.tool_result_clearing.trigger_tokens` | `integer` | no | `40000` | Local clearing caps this at 60% of the provider/session history budget after output reserves and system/tool-schema overhead (minimum positive cap: 1). Lower configured triggers win; unknown capacity keeps this value. Configured values must be positive. Native edit thresholds keep the configured value. |
-| `agent.harness.verification.auto_execute` | `boolean` | no | `true` | Run the detected project verifier through the normal tool pipeline when the model exhausts its directive retries without verifying. Default: true. Set to false to restore directive-only recovery. |
-| `agent.harness.verification.cross_turn_turns` | `integer` | no | `2` | Autonomous cross-turn recovery turns scheduled after a verification-blocked turn before a manual blocked handoff is written. Default: 2. |
+| `agent.harness.verification.auto_execute` | `boolean` | no | `true` | Run missing interactive completion checks through the normal pipeline. Default: true. False disables automatic interactive execution and corrective recovery; headless mandatory verification remains required. |
+| `agent.harness.verification.cross_turn_turns` | `integer` | no | `2` | Legacy cross-turn recovery bound. Zero disables the corrective pass; nonzero values permit at most one pass per request. Default: 2 for compatibility. |
 | `agent.harness.verification.default_verifier_override` | `null \| string` | no | `null` | Explicit verifier command overriding project-marker detection (e.g. `"cargo nextest run -p mycrate"`). Must be a standalone verifier or pure `&&` chain; pipes and `;`/`\|\|` joins are rejected at use. |
-| `agent.harness.verification.in_turn_attempts` | `integer` | no | `2` | Bounded in-turn directive retries granted when the model emits text instead of a verifier while the gate is pending. Each grant resets the text-response streak once and injects a project-aware directive. Default: 2. |
+| `agent.harness.verification.in_turn_attempts` | `integer` | no | `2` | Legacy in-turn recovery bound. Zero disables the corrective pass; nonzero values permit at most one pass. Default: 2 for compatibility. |
 | `agent.harness.verification.max_consecutive_failures` | `integer` | no | `3` | Consecutive failed harness auto-verifications before escalation to a manual blocked handoff carrying the failure log. Reset by any success, completed turn, or fresh user input. Default: 3. |
 | `agent.idle_turn_limit` | `integer` | no | `3` | Maximum consecutive idle turns (no tool calls, no meaningful response) before the agent runner treats the session as stalled and aborts the loop. |
 | `agent.include_structured_reasoning_tags` | `boolean \| null` | no | `null` | Controls inclusion of the structured reasoning tag instructions block. Behavior: - `Some(true)`: always include structured reasoning instructions. - `Some(false)`: never include structured reasoning instructions. - `None` (default): omit structured reasoning instructions in every prompt mode. Models with native reasoning do not need visible reasoning tags, so the block is opt-in for users who want tag-based reasoning guidance. |
@@ -150,7 +150,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.require_plan_confirmation` | `boolean` | no | `true` | Require user confirmation before executing a plan generated in planning workflow When true, exiting planning workflow shows the implementation blueprint and requires explicit user approval before enabling edit tools. |
 | `agent.shell_prompt_profile` | `string` | no | `"auto"` | Shell syntax profile used in model-facing command examples. This controls prompt wording only; command policy remains in the runtime. Values: auto, unix_like, powershell. |
 | `agent.small_model.enabled` | `boolean` | no | `true` | Enable small model tier for efficient operations |
-| `agent.small_model.model` | `string` | no | `""` | Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash") Leave empty to auto-select a lightweight sibling of the main model |
+| `agent.small_model.model` | `string` | no | `""` | Provider-specific model ID for efficient operations. Leave empty to auto-select a lightweight sibling of the main model |
 | `agent.small_model.temperature` | `number` | no | `0.3` | Temperature for small model responses |
 | `agent.small_model.use_for_git_history` | `boolean` | no | `true` | Enable small model for git history processing |
 | `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable small model for large file reads (>50KB) |
@@ -166,7 +166,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.trim_system_prompt` | `boolean` | no | `true` | Trim low-priority advisory system prompt sections when over budget. Base, shell-safety, and active-tool contracts are never trimmed. |
 | `agent.ui_surface` | `string` | no | `"inline"` | Preferred rendering surface for the interactive chat UI (inline by default; auto, alternate, inline) |
 | `agent.user_instructions` | `null \| string` | no | `null` | Custom instructions provided by the user via configuration to guide agent behavior |
-| `agent.verbosity` | `string` | no | `"medium"` | Output verbosity for supported models (low to high). |
+| `agent.verbosity` | `string` | no | `"medium"` | Output verbosity for supported models (low to high). Options: "low", "medium", "high". |
 | `agent.vibe_coding.enable_conversation_memory` | `boolean` | no | `true` | Enable conversation memory for pronoun resolution |
 | `agent.vibe_coding.enable_entity_resolution` | `boolean` | no | `true` | Enable fuzzy entity resolution |
 | `agent.vibe_coding.enable_proactive_context` | `boolean` | no | `true` | Enable proactive context gathering |
@@ -187,7 +187,7 @@ python3 scripts/generate_config_field_reference.py
 | `auth.copilot.auth_timeout_secs` | `integer` | no | `300` | - |
 | `auth.copilot.available_tools` | `array` | no | `["view", "glob", "grep"]` | - |
 | `auth.copilot.available_tools[]` | `string` | no | `-` | - |
-| `auth.copilot.command` | `null \| string` | no | `null` | - |
+| `auth.copilot.command` | `null \| string` | no | `null` | Executable override; allowed only in system, user, or explicitly selected configuration. |
 | `auth.copilot.excluded_tools` | `array` | no | `[]` | - |
 | `auth.copilot.excluded_tools[]` | `string` | no | `-` | - |
 | `auth.copilot.host` | `null \| string` | no | `null` | - |
@@ -289,6 +289,8 @@ python3 scripts/generate_config_field_reference.py
 | `custom_providers[].profiles.*.top_k` | `integer \| null` | no | `-` | Optional top-k override (>= 0). |
 | `custom_providers[].profiles.*.top_p` | `null \| number` | no | `-` | Optional nucleus-sampling override (0.0-1.0). |
 | `custom_providers[].reasoning_effort` | `ReasoningEffortLevel \| null` | no | `-` | Optional reasoning effort default for models without a profile override. |
+| `custom_providers[].supports_prompt_cache_options` | `boolean \| null` | no | `null` | Explicit opt-in for Responses cache TTL options; absent disables support. |
+| `custom_providers[].profiles.*.supports_prompt_cache_options` | `boolean \| null` | no | `null` | Overrides provider capability, preserving explicit `false`. |
 | `custom_providers[].supports_context_caching` | `boolean \| null` | no | `-` | Optional support for context caching. |
 | `custom_providers[].supports_context_edits` | `boolean \| null` | no | `-` | Optional support for context edits. |
 | `custom_providers[].supports_parallel_tool_calls` | `boolean \| null` | no | `-` | Optional support for parallel tool calls. |
@@ -454,7 +456,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.providers[].name` | `string` | yes | `-` | Provider name (used for identification) |
 | `mcp.providers[].oauth` | `McpOAuthConfig \| null` | no | `null` | Optional OAuth configuration for providers that issue bearer tokens dynamically. |
 | `mcp.providers[].oauth.audience` | `null \| string` | no | `null` | Optional audience/resource hint sent with the auth and token requests. |
-| `mcp.providers[].oauth.authorization_url` | `string` | no | `""` | OAuth authorization endpoint. |
+| `mcp.providers[].oauth.authorization_url` | `string` | no | `""` | OAuth authorization endpoint. Must be an http(s) URL with a host. |
 | `mcp.providers[].oauth.callback_port` | `integer` | no | `8768` | Local callback server port. |
 | `mcp.providers[].oauth.client_id` | `string` | no | `""` | OAuth client identifier. |
 | `mcp.providers[].oauth.credentials_store_mode` | `string` | no | `"file"` | Credential storage backend for this provider's token. |
@@ -465,7 +467,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.providers[].oauth.flow_timeout_secs` | `integer` | no | `300` | Browser-flow timeout in seconds. |
 | `mcp.providers[].oauth.scopes` | `array` | no | `[]` | Requested scopes. |
 | `mcp.providers[].oauth.scopes[]` | `string` | no | `-` | - |
-| `mcp.providers[].oauth.token_url` | `string` | no | `""` | OAuth token endpoint. |
+| `mcp.providers[].oauth.token_url` | `string` | no | `""` | OAuth token endpoint. Must be an http(s) URL with a host. |
 | `mcp.providers[].protocol_version` | `string` | no | `"2025-11-25"` | Protocol version |
 | `mcp.providers[].startup_timeout_ms` | `integer \| null` | no | `null` | Startup timeout in milliseconds for this provider |
 | `mcp.providers[].working_directory` | `null \| string` | no | `null` | Working directory for the command |
@@ -490,10 +492,11 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.171.3"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.180.1"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
+| `mcp.ui.apps` | `string` | no | `"off"` | MCP Apps preview tier ("off" refuses app UI without fetching and emits a sandbox-denied event, "static" shows disclosure rows plus an inert HTML preview, "interactive" needs an app engine and is currently rejected). Options: "off", "static", "interactive" |
 | `mcp.ui.max_events` | `integer` | no | `50` | Maximum number of MCP events to display |
 | `mcp.ui.mode` | `string` | no | `"compact"` | UI mode for MCP events: "compact" or "full" |
 | `mcp.ui.renderers` | `object` | no | `{}` | Custom renderer profiles for provider-specific output formatting |
@@ -581,7 +584,7 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.auto.max_total_denials` | `integer` | no | `20` | Maximum total denials before auto permission review falls back. |
 | `permissions.auto.model` | `string` | no | `""` | Optional model override for the transcript reviewer. |
 | `permissions.auto.probe_model` | `string` | no | `""` | Optional model override for the prompt-injection probe. |
-| `permissions.auto.use_decisions_probe` | `boolean` | no | `false` | Experimental OpenAI Decisions tool-output probe in ordinary interactive TUI and full-auto sessions. Direct OpenAI API-key sessions at the standard endpoint only; billed to your OpenAI API account. One generation fallback shares the eight-second deadline. TUI use requires no full-auto acknowledgement and preserves manual approvals and tool permissions. |
+| `permissions.auto.use_decisions_probe` | `boolean` | no | `false` | Experimental OpenAI Decisions tool-output probe. Direct OpenAI API-key TUI or full-auto sessions at the standard endpoint only; billed to your OpenAI API account. Inconclusive requests fall back to the generation probe within its deadline. Manual approvals and tool permissions remain unchanged; no full-auto acknowledgement is needed in TUI. |
 | `permissions.cache_enabled` | `boolean` | no | `true` | Enable permission decision caching to avoid redundant evaluations |
 | `permissions.cache_ttl_seconds` | `integer` | no | `300` | Cache time-to-live in seconds (how long to cache decisions) Default: 300 seconds (5 minutes) |
 | `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls. |
@@ -617,10 +620,12 @@ python3 scripts/generate_config_field_reference.py
 | `prompt_cache.providers.gemini.min_prefix_tokens` | `integer` | no | `1024` | - |
 | `prompt_cache.providers.gemini.mode` | `string` | no | `"implicit"` | Gemini prompt caching mode selection |
 | `prompt_cache.providers.moonshot.enabled` | `boolean` | no | `true` | - |
+| `prompt_cache.providers.openai.auxiliary_explicit_cache` | `boolean` | no | `false` | Opt in to stable-instruction-only cache writes for independent native GPT-5.6+ auxiliary requests. Interactive requests keep implicit caching. |
 | `prompt_cache.providers.openai.enabled` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openai.idle_expiration_seconds` | `integer` | no | `3600` | - |
 | `prompt_cache.providers.openai.min_prefix_tokens` | `integer` | no | `1024` | - |
 | `prompt_cache.providers.openai.prompt_cache_key_mode` | `string` | no | `"session"` | Strategy for generating OpenAI `prompt_cache_key`. Session-scoped keys derive one stable key per VT Code conversation. |
+| `prompt_cache.providers.openai.prompt_cache_ttl` | `string \| null` | no | `null` | Eligible Responses minimum lifetime: `30m` or `12h`; explicit value > catalog > `30m`. |
 | `prompt_cache.providers.openai.prompt_cache_retention` | `PromptCacheRetention \| null` | no | `null` | Optional prompt cache retention policy to pass directly into OpenAI Responses API. Supported values are "in_memory" and "24h". If set, VT Code will include `prompt_cache_retention` in the request body to extend the model-side prompt caching window or request the explicit in-memory policy. |
 | `prompt_cache.providers.openai.surface_metrics` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openrouter.enabled` | `boolean` | no | `true` | - |
@@ -677,7 +682,7 @@ python3 scripts/generate_config_field_reference.py
 | `provider.openai.responses_include` | `array` | no | `-` | Optional Responses API `include` selectors. Example: `["reasoning.encrypted_content"]` for encrypted reasoning continuity. |
 | `provider.openai.responses_include[]` | `string` | no | `-` | - |
 | `provider.openai.responses_store` | `boolean \| null` | no | `-` | Optional Responses API `store` flag. Set to `false` to avoid server-side storage when using Responses-compatible models. |
-| `provider.openai.service_tier` | `OpenAIServiceTier \| null` | no | `-` | Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level default service tier. Options: "flex", "priority", "ultrafast". "ultrafast" is the fastest tier: supported only for native OpenAI `gpt-6-astra` and `gpt-6.1-sol`. Toggle with `/fast`, `/fast on`, or `/fast off`. It costs more, starts at low TPM limits (Astra 500k/1M/5M, 6.1-sol 1M/4M/40M), supports US/global processing on Astra and US/EU/global on 6.1-sol, and pairs best with `websocket_mode = true`. |
+| `provider.openai.service_tier` | `OpenAIServiceTier \| null` | no | `-` | Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level default service tier. Options: "flex", "priority", "ultrafast". "ultrafast" is the fastest tier: GA for `gpt-6-astra` and `gpt-6.1-sol`, preview-only for `gpt-5.6-sol` (contact your OpenAI account team). It costs more, starts at low TPM limits (Astra 500k/1M/5M, 6.1-sol 1M/4M/40M), supports US/global processing on Astra and US/EU/global on 6.1-sol, and pairs best with `websocket_mode = true`. |
 | `provider.openai.tool_search.always_available_tools` | `array` | no | `[]` | Tool names that should never be deferred (always available). |
 | `provider.openai.tool_search.always_available_tools[]` | `string` | no | `-` | - |
 | `provider.openai.tool_search.defer_by_default` | `boolean` | no | `true` | Automatically defer loading of all tools except the core always-on set. |
@@ -705,7 +710,7 @@ python3 scripts/generate_config_field_reference.py
 | `pty.shell_zsh_fork` | `boolean` | no | `false` | Feature-gated shell runtime path that routes shell execution through zsh EXEC_WRAPPER hooks. |
 | `pty.stdout_tail_lines` | `integer` | no | `20` | Number of recent PTY output lines to display in the chat transcript |
 | `pty.zsh_path` | `null \| string` | no | `null` | Optional absolute path to patched zsh used when shell_zsh_fork is enabled. |
-| `sandbox.default_policy` | `string` | no | `"read_only"` | Default sandbox policy |
+| `sandbox.default_policy` | `string` | no | `"read_only"` | Default sandbox policy. Options: "read_only", "workspace_write", "danger_full_access", "external". |
 | `sandbox.enabled` | `boolean` | no | `false` | Enable sandboxing for command execution |
 | `sandbox.external.docker.cpu_limit` | `string` | no | `""` | CPU limit for container |
 | `sandbox.external.docker.image` | `string` | no | `"ubuntu:22.04"` | Docker image to use |
@@ -719,7 +724,7 @@ python3 scripts/generate_config_field_reference.py
 | `sandbox.network.allowlist` | `array` | no | `[]` | Domain allowlist for network egress. Following field guide: "Default-deny outbound network, then allowlist." |
 | `sandbox.network.allowlist[].domain` | `string` | yes | `-` | Domain pattern (e.g., "api.github.com", "*.npmjs.org") |
 | `sandbox.network.allowlist[].port` | `integer` | no | `443` | Port (defaults to 443) |
-| `sandbox.network.policy` | `string` | yes | `-` | Network egress policy. Defaults to [`NetworkPolicy::AllowlistOnly`] (default-deny, then allowlist). |
+| `sandbox.network.policy` | `string` | yes | `-` | Network egress policy. Defaults to [`NetworkPolicy::AllowlistOnly`] (default-deny, then allowlist). Options: "allowlist_only", "allow_all", "block_all". |
 | `sandbox.resource_limits.cpu_time_secs` | `integer` | no | `0` | Custom CPU time limit in seconds (0 = use preset) |
 | `sandbox.resource_limits.max_disk_mb` | `integer` | no | `0` | Custom disk write limit in MB (0 = use preset) |
 | `sandbox.resource_limits.max_memory_mb` | `integer` | no | `0` | Custom memory limit in MB (0 = use preset) |
@@ -770,7 +775,7 @@ python3 scripts/generate_config_field_reference.py
 | `syntax_highlighting.enabled_languages[]` | `string` | no | `-` | - |
 | `syntax_highlighting.highlight_timeout_ms` | `integer` | no | `5000` | Performance settings - highlight timeout in milliseconds |
 | `syntax_highlighting.max_file_size_mb` | `integer` | no | `10` | Maximum file size for syntax highlighting (in MB) |
-| `syntax_highlighting.theme` | `string` | no | `"base16-ocean.dark"` | Theme to use for syntax highlighting |
+| `syntax_highlighting.theme` | `string` | no | `"base16-ocean.dark"` | Theme to use for highlighting tool output; TUI-rendered diagnostic evidence keeps the syntax palette that matches the terminal theme so code stays legible on both light and dark schemes |
 | `telemetry.atif_enabled` | `boolean` | no | `false` | Enable ATIF (Agent Trajectory Interchange Format) trajectory export. When enabled, sessions write an `atif-trajectory.json` alongside the existing `.jsonl` trajectory log. |
 | `telemetry.bottleneck_tracing` | `boolean` | no | `false` | Emit bottleneck traces for slow paths |
 | `telemetry.dashboards_enabled` | `boolean` | no | `true` | Enable real-time dashboards |
@@ -828,7 +833,7 @@ python3 scripts/generate_config_field_reference.py
 | `tools.web_search.cache_ttl_secs` | `integer` | no | `300` | How long successful search results are cached before a fresh request is made, in seconds. Defaults to 300s (5 min). |
 | `tools.web_search.cooldown_ms` | `integer` | no | `3000` | Minimum gap between consecutive live requests, in milliseconds. Defaults to 3000ms (3s). |
 | `tools.web_search.max_results` | `integer` | no | `8` | Default cap on the number of results returned per call. Hard-capped at 20 by the runtime to keep responses inline-friendly. |
-| `tools.web_search.provider` | `string` | no | `"auto"` | Provider selection. Supported backends are the keyless DuckDuckGo HTML endpoint (default) and the You.com Search API (opt-in, requires `YDC_API_KEY`). |
+| `tools.web_search.provider` | `string` | no | `"auto"` | Provider selection. The built-in backend is the keyless DuckDuckGo HTML endpoint; `auto` is retained as a compatibility alias. Options: "auto", "duckduckgo". |
 | `tools.web_search.session_max_requests` | `integer` | no | `12` | Hard cap on outbound network requests per tool instance. Defaults to 12 to stay well below DDG's soft session quotas. |
 | `tools.web_search.timeout_secs` | `integer` | no | `20` | Per-request timeout in seconds. Capped at 60s by the runtime. |
 | `tui.alternate_screen` | `TuiAlternateScreen \| null` | no | `null` | - |
@@ -838,6 +843,7 @@ python3 scripts/generate_config_field_reference.py
 | `tui.notifications` | `TuiNotificationsConfig \| null` | no | `null` | - |
 | `tui.show_tooltips` | `boolean \| null` | no | `null` | - |
 | `ui.allow_tool_ansi` | `boolean` | no | `false` | Allow ANSI escape sequences in tool output (enables colors but may cause layout issues) |
+| `ui.app_icon` | `string` | no | `"dynamic"` | Application icon artwork variant for terminal tab icons and the desktop picker. - "dynamic": Follow the active light/dark mode (default) - "light": Always use the light-mode artwork - "dark": Always use the dark-mode artwork - "clear": Always use the clear (transparent glass V) artwork - "tinted": Always use the tinted (monochrome slate) artwork |
 | `ui.bold_is_bright` | `boolean` | no | `false` | Compatibility mode for legacy terminals that map bold to bright colors. When enabled, avoids using bold styling on text that would become bright colors, preventing visibility issues in terminals with "bold is bright" behavior. |
 | `ui.color_scheme_mode` | `string` | no | `"auto"` | Color scheme mode for automatic light/dark theme switching. - "auto": Detect from terminal (via the Contour dark/light query where supported, else OSC 11, or the COLORFGBG env var) and follow live palette changes - "light": Force light mode theme selection - "dark": Force dark mode theme selection |
 | `ui.diff_preview_mode` | `string` | no | `"inline"` | Diff preview layout for file-edit approval overlays. Options: "inline" (default) or "side-by-side". |
@@ -876,8 +882,8 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.suppress_when_focused` | `boolean` | no | `true` | Suppress notifications while terminal focus is active. |
 | `ui.notifications.tool_failure` | `boolean` | no | `false` | Notify when a tool call fails. |
 | `ui.notifications.tool_success` | `boolean` | no | `false` | Notify on successful tool calls. |
-| `ui.program_status.enabled` | `boolean` | no | `false` | Emit OSC 7501 status reports on the interactive TUI terminal stream. |
-| `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden") |
+| `ui.program_status.enabled` | `boolean` | no | `true` | Emit OSC 7501 status reports on the interactive TUI terminal stream. |
+| `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden"). Options: "always", "toggle", "hidden". |
 | `ui.reasoning_visible_default` | `boolean` | no | `true` | Default visibility for reasoning when display mode is "toggle" |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while reduce_motion_mode is enabled. Screen reader mode still disables progress animation. |
 | `ui.reduce_motion_mode` | `boolean` | no | `false` | Reduce motion mode: keeps progress labels visible without animated effects. If omitted, defaults from VTCODE_REDUCE_MOTION, then a supported OS accessibility preference; unknown or unavailable preferences default to false. |
@@ -892,7 +898,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.status_line.mode` | `string` | no | `"auto"` | - |
 | `ui.status_line.refresh_interval_ms` | `integer` | no | `1000` | - |
 | `ui.status_line.show_clock` | `boolean` | no | `true` | Show the current system time (`HH:MM:SS`) on the status line (default: true). |
-| `ui.terminal_title.items` | `array \| null` | no | `null` | - |
+| `ui.terminal_title.items` | `array \| null` | no | `null` | Ordered title items; `None` resolves to `["spinner", "project"]` (spinner enabled by default), and an empty array disables VT Code-managed titles. |
 | `ui.terminal_title.items[]` | `string` | no | `-` | - |
 | `ui.thinking_display` | `string` | no | `"collapsed"` | Default collapse state of agent thinking/reasoning blocks ("collapsed" or "extended") |
 | `ui.tool_display_mode` | `string` | no | `"compact"` | Tool transition summary display mode Options: "expanded" (expanded summary layout) or "compact" (one compact summary per tool call) |

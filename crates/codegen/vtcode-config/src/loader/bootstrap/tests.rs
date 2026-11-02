@@ -129,6 +129,17 @@ fn sample_config_template_contains_release_loop_budgets() {
 }
 
 #[test]
+fn sample_config_template_keeps_spinner_title_enabled_by_default() {
+    let template = VTCodeConfig::default_vtcode_toml_template();
+    let config: VTCodeConfig = toml::from_str(&template).expect("sample config template should parse");
+
+    // The staged `items` table must stay equivalent to the serde default
+    // (`ui.terminal_title.items = None` → `DEFAULT_TERMINAL_TITLE_ITEMS`), so
+    // shipped binaries always manage the title with the spinner enabled.
+    assert_eq!(config.ui.terminal_title.items, Some(vec!["spinner".to_string(), "project".to_string()]));
+}
+
+#[test]
 fn bootstrap_project_creates_vtcode_readme() {
     let workspace = tempdir().expect("workspace");
     let created = VTCodeConfig::bootstrap_project(workspace.path(), false).expect("bootstrap project should succeed");
