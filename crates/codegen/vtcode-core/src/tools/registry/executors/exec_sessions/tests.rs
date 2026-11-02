@@ -5,6 +5,54 @@ use crate::tools::exec_session::PipeOutputStats;
 use crate::tools::registry::ExecSettlementMode;
 use crate::tools::types::VTCodeExecSession;
 
+#[tokio::test]
+#[cfg(unix)]
+async fn pipe_environment_uses_configured_search_paths_and_overrides() -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let workspace = tempfile::tempdir()?;
+    let bin = workspace.path().join("bin");
+    std::fs::create_dir(&bin)?;
+    let executable = bin.join("python3");
+    std::fs::write(&executable, "#!/bin/sh\nprintf path-probe-ok\n")?;
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
+    let override_bin = workspace.path().join("override-bin");
+    std::fs::create_dir(&override_bin)?;
+    let override_executable = override_bin.join("python3");
+    std::fs::write(&override_executable, "#!/bin/sh\nprintf override-probe-ok\n")?;
+    std::fs::set_permissions(&override_executable, std::fs::Permissions::from_mode(0o755))?;
+    let registry = super::ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let mut config = registry.commands_config();
+    config.extra_path_entries = vec![bin.to_string_lossy().into_owned()];
+    registry.apply_commands_config(&config);
+
+    let env = registry.build_pipe_session_env("/bin/sh", hashbrown::HashMap::new());
+    let path = env.get("PATH").expect("pipe PATH");
+    let paths: Vec<_> = std::env::split_paths(path).collect();
+    assert_eq!(paths.first(), Some(&bin));
+    let mut overrides = hashbrown::HashMap::new();
+    overrides.insert("PATH".to_string(), override_bin.to_string_lossy().into_owned());
+    assert_eq!(registry.build_pipe_session_env("/bin/sh", overrides)["PATH"], override_bin.to_string_lossy());
+    registry.allow_all_tools().await?;
+    let result = registry
+        .execute_tool(
+            crate::config::constants::tools::EXEC_COMMAND,
+            json!({"cmd": "python3", "shell": "/bin/sh", "yield_time_ms": 1000}),
+        )
+        .await?;
+    assert_eq!(result["exit_code"], 0, "{result}");
+    assert_eq!(result["output"], "path-probe-ok");
+    let overridden = registry
+        .execute_tool(
+            crate::config::constants::tools::EXEC_COMMAND,
+            json!({"cmd": "python3", "shell": "/bin/sh", "env": {"PATH": override_bin}, "yield_time_ms": 1000}),
+        )
+        .await?;
+    assert_eq!(overridden["exit_code"], 0, "{overridden}");
+    assert_eq!(overridden["output"], "override-probe-ok");
+    Ok(())
+}
+
 #[cfg(unix)]
 struct PipePeekFixture {
     registry: super::ToolRegistry,

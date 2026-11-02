@@ -447,6 +447,9 @@ impl ToolRegistry {
         if !shell_program.trim().is_empty() {
             env.insert("SHELL".to_string(), shell_program.to_string());
         }
+        if let Some(path) = self.pty_manager().merge_command_path(env.get("PATH").map(std::ffi::OsStr::new)) {
+            env.insert("PATH".to_string(), path.to_string_lossy().into_owned());
+        }
         env.extend(extra_env);
         env
     }

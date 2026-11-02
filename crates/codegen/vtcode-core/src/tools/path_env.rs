@@ -188,12 +188,14 @@ mod tests {
     #[test]
     fn merge_path_env_preprends_extra_entries() {
         let extra = vec![PathBuf::from("/extra/bin"), PathBuf::from("/another/bin")];
-        let current = Some(OsStr::new("/usr/bin:/bin"));
-        let merged = merge_path_env(current, &extra).expect("merged path");
+        let current = std::env::join_paths(["/project/.venv/bin", "/extra/bin", "/usr/bin"]).expect("current path");
+        let merged = merge_path_env(Some(&current), &extra).expect("merged path");
         let paths: Vec<PathBuf> = std::env::split_paths(&merged).collect();
-        assert_eq!(paths[0], PathBuf::from("/extra/bin"));
-        assert_eq!(paths[1], PathBuf::from("/another/bin"));
-        assert_eq!(paths[2], PathBuf::from("/usr/bin"));
+        assert_eq!(paths[0], PathBuf::from("/another/bin"));
+        assert_eq!(paths[1], PathBuf::from("/project/.venv/bin"));
+        assert_eq!(paths[2], PathBuf::from("/extra/bin"));
+        assert_eq!(paths[3], PathBuf::from("/usr/bin"));
+        assert_eq!(paths.iter().filter(|path| path.as_os_str() == "/extra/bin").count(), 1);
     }
 
     #[test]

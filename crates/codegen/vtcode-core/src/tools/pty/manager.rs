@@ -147,6 +147,10 @@ impl PtyManager {
         *self.extra_paths.write() = Arc::new(new_paths);
     }
 
+    pub(crate) fn merge_command_path(&self, current: Option<&std::ffi::OsStr>) -> Option<std::ffi::OsString> {
+        path_env::merge_path_env(current, &self.extra_paths.read())
+    }
+
     pub fn describe_working_dir(&self, path: &Path) -> String {
         self.format_working_dir(path)
     }
