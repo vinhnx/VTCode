@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::agent::snapshots::SnapshotSkippedPaths;
+use vtcode_core::core::agent::snapshots::{BeginPromptFailure, SnapshotSkippedPaths, classify_begin_prompt_error};
 use vtcode_core::core::agent::steering::{FollowUpProvenance, QueuedFollowUpIntent};
 use vtcode_core::llm::provider::{AssistantPhase, MessageRole};
 use vtcode_core::tools::registry::ToolRegistry;
@@ -151,21 +151,70 @@ pub(super) fn remove_transient_system_notes(history: &mut Vec<vtcode_core::llm::
     }
 }
 
+/// Bound on the inline error detail carried by checkpoint notices.
+const MAX_CHECKPOINT_ERROR_DETAIL_CHARS: usize = 120;
+
+/// One-line, bounded rendering of a checkpoint error chain for user notices.
+fn truncate_error_detail(err: &anyhow::Error) -> String {
+    format!("{err:#}")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(MAX_CHECKPOINT_ERROR_DETAIL_CHARS)
+        .collect()
+}
+
 /// User-facing notice when a prompt checkpoint cannot be taken.
 ///
-/// Pure policy: maps the checkpoint error text to a short `Info` notice.
+/// Pure policy: maps the classified failure to a short `Info` notice.
 /// The busy branch fires only when this same session already has a running turn
 /// (other sessions proceed concurrently), so it points at the duplicate
-/// holder instead of a separate worktree.
-pub(super) fn checkpoint_unavailable_notice(err_text: &str) -> Cow<'static, str> {
-    if err_text.contains("Another turn is using this session") {
-        Cow::Borrowed(
+/// holder instead of a separate worktree. The fallback names the underlying
+/// cause (bounded) so a generic outage stays diagnosable.
+pub(super) fn checkpoint_unavailable_notice(err: &anyhow::Error) -> Cow<'static, str> {
+    match classify_begin_prompt_error(err) {
+        BeginPromptFailure::SessionBusy => Cow::Borrowed(
             "Prompt kept — session busy (safety lock prevents checkpoint corruption). If another terminal holds this session, continue there; otherwise wait then retry.",
-        )
-    } else if err_text.contains("Interrupted rewind") {
-        Cow::Borrowed("Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry.")
-    } else {
-        Cow::Borrowed("Prompt kept — checkpoint unavailable. Wait a moment and retry.")
+        ),
+        BeginPromptFailure::InterruptedRewind => {
+            Cow::Borrowed("Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry.")
+        }
+        BeginPromptFailure::Other => Cow::Owned(format!(
+            "Prompt kept — checkpoint unavailable ({}). Wait a moment and retry.",
+            truncate_error_detail(err)
+        )),
+    }
+}
+
+/// Warning when a turn proceeds without its start-of-turn checkpoint: this
+/// turn cannot be rewound. Names the cause (bounded) instead of blocking.
+pub(super) fn degraded_checkpoint_warning(err: &anyhow::Error) -> String {
+    format!("Checkpoint unavailable ({}); proceeding without rewind for this turn.", truncate_error_detail(err))
+}
+
+/// Restore a kept prompt to the input after removing its history message.
+///
+/// The prompt was already appended by the interaction loop (or the approved-plan
+/// handoff); truncating it here keeps a retry from duplicating the message.
+pub(super) fn restore_kept_prompt(
+    working_history: &mut Vec<vtcode_core::llm::provider::Message>,
+    handle: &InlineHandle,
+    prompt_message_index: Option<usize>,
+    prompt_text: &str,
+) {
+    if let Some(index) = prompt_message_index {
+        if index < working_history.len() {
+            working_history.truncate(index);
+        }
+        handle.set_input(prompt_text.to_owned());
+        handle.force_redraw();
+    } else if working_history.last().is_some_and(|message| {
+        message.role == MessageRole::User && message.content.as_text().trim() == prompt_text.trim()
+    }) {
+        working_history.pop();
+        handle.set_input(prompt_text.to_owned());
+        handle.force_redraw();
     }
 }
 

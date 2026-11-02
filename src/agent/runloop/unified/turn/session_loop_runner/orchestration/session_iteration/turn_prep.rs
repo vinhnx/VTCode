@@ -9,15 +9,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use vtcode_commons::ui_protocol::ActivityState;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runtime::{AgentRuntime, RuntimeSteering};
-use vtcode_core::core::agent::snapshots::PromptCheckpointLease;
+use vtcode_core::core::agent::snapshots::{
+    PromptCheckpointLease, checkpoint_failure_is_recoverable, classify_begin_prompt_error,
+};
 use vtcode_core::hooks::SessionEndReason;
-use vtcode_core::llm::provider::{Message, MessageRole};
+use vtcode_core::llm::provider::Message;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionMessage;
@@ -25,7 +27,7 @@ use vtcode_ui::tui::app::{InlineHandle, ProgressGuard};
 
 use super::super::super::support::{
     RefusedTurnRollback, ack_peer_messages, build_unrelated_dirty_worktree_note, checkpoint_unavailable_notice,
-    prepare_transient_turn_notes, skipped_paths_turn_warning,
+    degraded_checkpoint_warning, prepare_transient_turn_notes, restore_kept_prompt, skipped_paths_turn_warning,
 };
 use crate::agent::runloop::unified::inline_events::harness::{
     HarnessEventEmitter, harness_event, harness_session_message_event,
@@ -218,73 +220,76 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
     let dirty_worktree_task =
         tokio::task::spawn_blocking(move || build_unrelated_dirty_worktree_note(&workspace_buf, &touched_clone));
     let checkpoint_started_at = Instant::now();
-    let prompt_checkpoint_lease = if let Some(manager) = checkpoint_manager.as_ref() {
+    // Disabled checkpoints skip the lease entirely: no lock, no capture, and
+    // the turn proceeds exactly like a checkpoint-less session.
+    let prompt_checkpoint_lease = if let Some(manager) = checkpoint_manager.as_ref().filter(|manager| manager.enabled())
+    {
         handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::SavingCheckpoint);
         let prefix = completed_turn_prompt_message_index
             .unwrap_or(working_history.len())
             .min(working_history.len());
         let conversation: Vec<_> = working_history[..prefix].iter().map(SessionMessage::from).collect();
         let session_id = tool_registry.harness_context_snapshot().session_id;
-        // A missing lease (cooperative cancellation) shares the
-        // unavailable-checkpoint recovery below: retain the prompt
-        // and retry instead of panicking on a supposedly
-        // impossible arm.
-        let lease = match preparation_wait!(manager.begin_prompt_with_cancellation(
+        let lease_result = preparation_wait!(manager.begin_prompt_with_cancellation(
             *next_checkpoint_turn,
             &session_id,
             next_turn_input,
             &conversation,
             CancellationToken::new()
-        ))
-        .and_then(|lease| lease.context("checkpoint preparation cancelled"))
-        {
-            Ok(lease) => lease,
+        ));
+        match lease_result {
+            Ok(Some(lease)) => {
+                if let Some(emitter) = harness_emitter.as_ref() {
+                    let detail = match lease.skipped_paths().filter(|skipped| !skipped.is_empty()) {
+                        Some(skipped) => {
+                            format!("Before prompt {next_checkpoint_turn} snapshot saved ({} skipped)", skipped.total)
+                        }
+                        None => format!("Before prompt {next_checkpoint_turn} snapshot saved"),
+                    };
+                    let _ = emitter.emit(harness_event(
+                        vtcode_core::exec::events::HarnessEventKind::SnapshotCreated,
+                        Some(detail),
+                        None,
+                        None,
+                        None,
+                    ));
+                }
+                if let Some(skipped) = lease.skipped_paths().filter(|skipped| !skipped.is_empty()) {
+                    tracing::warn!(skipped = %skipped.summary(), "Checkpoint skipped paths; turn proceeds degraded");
+                    let _ = renderer.line(MessageStyle::Warning, &skipped_paths_turn_warning(skipped));
+                }
+                *next_checkpoint_turn = next_checkpoint_turn.saturating_add(1);
+                Some(lease)
+            }
+            // Cooperative cancellation: retain the prompt and retry rather
+            // than dropping the user's request.
+            Ok(None) => {
+                // Drain the independent worker before retrying this prompt.
+                let _ = preparation_wait!(dirty_worktree_task);
+                tracing::debug!("Checkpoint preparation cancelled; prompt retained in input");
+                let _ = renderer.line(MessageStyle::Info, "Prompt kept — checkpoint cancelled. Retry when ready.");
+                restore_kept_prompt(working_history, handle, completed_turn_prompt_message_index, next_turn_input);
+                return Ok(TurnPrepFlow::ContinueLoop);
+            }
+            // Deterministic failures (storage, capture, worker) carry no
+            // concurrent writer, so the turn proceeds without rewind for it
+            // instead of wedging the session. The counter stays: no record
+            // was written, so the turn-end snapshot keeps this turn's number.
+            Err(err) if checkpoint_failure_is_recoverable(classify_begin_prompt_error(&err)) => {
+                tracing::warn!(error = %err, "Checkpoint unavailable; proceeding without rewind for this turn");
+                let _ = renderer.line(MessageStyle::Warning, &degraded_checkpoint_warning(&err));
+                None
+            }
             Err(err) => {
                 // Drain the independent worker before retrying this prompt.
                 let _ = preparation_wait!(dirty_worktree_task);
                 tracing::warn!(error = %err, "Checkpoint unavailable; prompt retained in input");
-                let message = checkpoint_unavailable_notice(&format!("{err:#}"));
+                let message = checkpoint_unavailable_notice(&err);
                 let _ = renderer.line(MessageStyle::Info, &message);
-                // The prompt message was already appended to history by the
-                // interaction loop (or the approved-plan handoff). Remove it
-                // so a retry does not duplicate, and restore the text.
-                if let Some(index) = completed_turn_prompt_message_index {
-                    if index < working_history.len() {
-                        working_history.truncate(index);
-                    }
-                    handle.set_input(next_turn_input.to_owned());
-                    handle.force_redraw();
-                } else if working_history.last().is_some_and(|message| {
-                    message.role == MessageRole::User && message.content.as_text().trim() == next_turn_input.trim()
-                }) {
-                    working_history.pop();
-                    handle.set_input(next_turn_input.to_owned());
-                    handle.force_redraw();
-                }
+                restore_kept_prompt(working_history, handle, completed_turn_prompt_message_index, next_turn_input);
                 return Ok(TurnPrepFlow::ContinueLoop);
             }
-        };
-        if let Some(emitter) = harness_emitter.as_ref() {
-            let detail = match lease.skipped_paths().filter(|skipped| !skipped.is_empty()) {
-                Some(skipped) => {
-                    format!("Before prompt {next_checkpoint_turn} snapshot saved ({} skipped)", skipped.total)
-                }
-                None => format!("Before prompt {next_checkpoint_turn} snapshot saved"),
-            };
-            let _ = emitter.emit(harness_event(
-                vtcode_core::exec::events::HarnessEventKind::SnapshotCreated,
-                Some(detail),
-                None,
-                None,
-                None,
-            ));
         }
-        if let Some(skipped) = lease.skipped_paths().filter(|skipped| !skipped.is_empty()) {
-            tracing::warn!(skipped = %skipped.summary(), "Checkpoint skipped paths; turn proceeds degraded");
-            let _ = renderer.line(MessageStyle::Warning, &skipped_paths_turn_warning(skipped));
-        }
-        *next_checkpoint_turn = next_checkpoint_turn.saturating_add(1);
-        Some(lease)
     } else {
         None
     };

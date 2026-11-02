@@ -574,9 +574,9 @@ impl SnapshotManager {
         // own locks — the filesnap engine serializes per session and gives
         // each capture a truthful record of the workspace.
         let lock_path = self.session_lock_path(session)?;
-        let lock = acquire_verified_rewind_lock(&lock_path).context("Another turn is using this session")?;
+        let lock = acquire_verified_rewind_lock(&lock_path).context(SESSION_BUSY_CONTEXT)?;
         let mut state = self.navigation(session)?;
-        anyhow::ensure!(state.pending.is_none(), "Interrupted rewind; run /rewind-recover before continuing");
+        anyhow::ensure!(state.pending.is_none(), "{INTERRUPTED_REWIND_MARKER}; run /rewind-recover before continuing");
         let workspace = self.canonical_workspace.clone();
         let storage = self.storage_dir.clone();
         let engine = format!("vt-{}", uuid::Uuid::new_v4());
@@ -686,7 +686,7 @@ impl SnapshotManager {
             Ok(serde_json::from_slice(&fs::read(recovery_path(&self.storage_dir, &saved.snapshot))?)?)
         };
         if let Some(pending) = state.pending.clone() {
-            anyhow::ensure!(turn.is_none(), "Interrupted rewind; run /rewind-recover");
+            anyhow::ensure!(turn.is_none(), "{INTERRUPTED_REWIND_MARKER}; run /rewind-recover");
             let restored = self
                 .restore_stored_snapshot_with_ignore(
                     load_recovery(&pending)?,

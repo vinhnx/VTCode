@@ -27,11 +27,12 @@ Checkpoints made before shell redirection tracking was added may lack absence re
 cannot safely infer which files to delete; use a new prompt checkpoint to validate this behavior.
 
 The interactive runtime captures the conversation prefix before the user prompt and records file pre-images after tool
-argument normalization. If checkpointing itself fails, the prompt is not sent: the message is removed from history and
-restored into the input field so nothing is lost. Native list modals show only the current branch. Consumed or discarded
-redo records are retired and their storage reclaimed instead of leaking. A per-session lease excludes concurrent
-turns/restores in the same session; other sessions in the workspace proceed concurrently. Ignore rules are pinned
-across each combined restoration.
+argument normalization. If checkpointing fails because the session is busy or a rewind is pending recovery, the prompt
+is not sent: the message is removed from history and restored into the input field so nothing is lost. Other
+checkpoint failures warn and run the turn without a checkpoint for it, so that turn cannot be rewound. Native list
+modals show only the current branch. Consumed or discarded redo records are retired and their storage reclaimed
+instead of leaking. A per-session lease excludes concurrent turns/restores in the same session; other sessions in the
+workspace proceed concurrently. Ignore rules are pinned across each combined restoration.
 
 A turn-start checkpoint proceeds even when the workspace scan must skip a path it cannot snapshot: an untracked file
 larger than the 16 MiB snapshot size limit, an unreadable file, or a symlink/socket/device. The exclusions (exact

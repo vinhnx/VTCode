@@ -784,3 +784,54 @@ async fn cleanup_reclaims_stale_unheld_session_locks() -> Result<()> {
     drop(held);
     Ok(())
 }
+
+#[test]
+fn classify_locked_session_marker_as_busy() {
+    // Mirrors the lock site: an io error wrapped with the busy context.
+    let err: anyhow::Error =
+        Err::<(), std::io::Error>(std::io::Error::new(std::io::ErrorKind::WouldBlock, "operation would block"))
+            .context("Another turn is using this session")
+            .unwrap_err();
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::SessionBusy);
+}
+
+#[test]
+fn classify_would_block_without_marker_as_other() {
+    // Asymmetric pair: the same WouldBlock kind without the marker must not
+    // read as contention — the marker, not the kind, carries the meaning.
+    let err = anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::WouldBlock, "operation would block"));
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::Other);
+}
+
+#[test]
+fn classify_typed_filesnap_busy_as_busy() {
+    let err = anyhow::Error::new(filesnap::SnapshotError::SessionBusy { session: "watch".to_string() });
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::SessionBusy);
+}
+
+#[test]
+fn classify_other_filesnap_errors_as_other() {
+    // Asymmetric pair: same error enum, different variant — only SessionBusy
+    // implies a concurrent writer.
+    let err = anyhow::Error::new(filesnap::SnapshotError::MissingBlob("deadbeef".to_string()));
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::Other);
+}
+
+#[test]
+fn classify_interrupted_rewind_marker() {
+    let err = anyhow::anyhow!("Interrupted rewind; run /rewind-recover before continuing");
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::InterruptedRewind);
+}
+
+#[test]
+fn classify_worker_failures_as_other() {
+    let err = anyhow::anyhow!("checkpoint preparation worker failed: join error");
+    assert_eq!(classify_begin_prompt_error(&err), BeginPromptFailure::Other);
+}
+
+#[test]
+fn only_other_failures_may_proceed_without_checkpoint() {
+    assert!(!checkpoint_failure_is_recoverable(BeginPromptFailure::SessionBusy));
+    assert!(!checkpoint_failure_is_recoverable(BeginPromptFailure::InterruptedRewind));
+    assert!(checkpoint_failure_is_recoverable(BeginPromptFailure::Other));
+}

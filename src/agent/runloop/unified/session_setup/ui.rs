@@ -520,7 +520,9 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref() {
+    // Disabled checkpoints skip enumeration: the counter is unused without a
+    // lease (turn prep skips begin; turn end returns early).
+    let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref().filter(|manager| manager.enabled()) {
         let manager = manager.clone();
         let session_id = session_id.to_owned();
         match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number(&session_id))) {
