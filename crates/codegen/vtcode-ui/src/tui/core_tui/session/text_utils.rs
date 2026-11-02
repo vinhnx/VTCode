@@ -4,7 +4,7 @@ use line_clipping::cohen_sutherland::clip_line;
 use line_clipping::{LineSegment, Point, Window};
 use ratatui::prelude::*;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub use vtcode_commons::ansi::strip_ansi_codes;
 
@@ -26,14 +26,22 @@ pub(super) fn trim_trailing_wrap_whitespace(spans: &mut Vec<Span<'static>>) {
 /// Terminal display width of `text` in cells.
 ///
 /// This is `unicode-width` plus the halfwidth-voiced-sound-mark correction
-/// that terminals apply: `U+FF9E` (dakuten) and `U+FF9F` (handakuten) report
-/// width 0 but occupy one cell each (same correction as
-/// `ratatui::buffer::CellWidth`). Without it, strings like `ｶﾞ` measure 1
-/// cell wide here but render 2 cells wide, breaking wrap and truncation math.
+/// that terminals apply: `U+FF9E` (dakuten) and `U+FF9F` (handakuten) occupy
+/// one cell each (same correction as `ratatui::buffer::CellWidth`). Older
+/// `unicode-width` releases report them as width 0 while newer ones count
+/// them, so only the missing width is credited — crediting unconditionally
+/// double-counts on the newer tables. Without the correction, strings like
+/// `ｶﾞ` measure 1 cell wide here but render 2 cells wide, breaking wrap and
+/// truncation math.
 ///
 /// Prefer this over calling `unicode-width` directly on the wrapping path.
 pub(crate) fn display_width(text: &str) -> usize {
-    UnicodeWidthStr::width(text).saturating_add(text.chars().filter(|ch| matches!(ch, '\u{FF9E}' | '\u{FF9F}')).count())
+    let missing_mark_width: usize = text
+        .chars()
+        .filter(|ch| matches!(ch, '\u{FF9E}' | '\u{FF9F}'))
+        .map(|mark| 1usize.saturating_sub(UnicodeWidthChar::width(mark).unwrap_or(0)))
+        .sum();
+    UnicodeWidthStr::width(text).saturating_add(missing_mark_width)
 }
 
 /// Simplify tool call display text for better human readability
