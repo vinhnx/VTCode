@@ -17,7 +17,7 @@ mod companion;
 mod companion_config;
 mod config;
 mod create_project;
-mod desktop;
+pub(crate) mod desktop;
 mod desktop_server;
 mod dispatch;
 mod full_auto_primary_agent;

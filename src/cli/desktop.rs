@@ -30,7 +30,7 @@ fn scan_locations(roots: &[PathBuf]) -> Result<PathBuf> {
         }
     }
     bail!(
-        "VT Code.app not found; pass its path (`vtcode desktop <path>`), set {DESKTOP_APP_ENV}, or build it with scripts/package-desktop-macos.sh"
+        "VT Code.app not found; install it with `vtcode update --with-desktop`, pass its path (`vtcode desktop <path>`), set {DESKTOP_APP_ENV}, or build it with scripts/package-desktop-macos.sh"
     )
 }
 
@@ -127,6 +127,7 @@ mod tests {
 
         let error = scan_locations(&[missing]).expect_err("empty scan must fail");
         let message = format!("{error:#}");
+        assert!(message.contains("vtcode update --with-desktop"), "{message}");
         assert!(message.contains("vtcode desktop <path>"), "{message}");
         assert!(message.contains(DESKTOP_APP_ENV), "{message}");
         assert!(message.contains("scripts/package-desktop-macos.sh"), "{message}");

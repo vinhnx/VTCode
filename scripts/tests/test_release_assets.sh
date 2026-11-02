@@ -534,6 +534,8 @@ else
 fi
 
 # Neither auth has push -> nonzero, fast failure.
+# Invoked indirectly: exported below and called by ensure_release_push_access.
+# shellcheck disable=SC2329
 gh() {
     if [[ "$1" == "api" ]]; then
         printf 'false'

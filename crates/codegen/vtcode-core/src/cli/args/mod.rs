@@ -827,6 +827,7 @@ pub enum Commands {
     ///   vtcode update --list
     ///   vtcode update --pin 0.120.0
     ///   vtcode update --unpin
+    ///   vtcode update --with-desktop
     #[command(name = "update")]
     Update {
         /// Check for updates without installing
@@ -874,6 +875,20 @@ pub enum Commands {
             long_help = "Display the current update configuration (channel, pin, intervals) and exit."
         )]
         show_config: bool,
+        /// Install or update the macOS desktop app without prompting
+        #[arg(
+            long,
+            conflicts_with = "without_desktop",
+            long_help = "Install or update the macOS desktop app from the prebuilt release asset without prompting.\nFails on non-macOS platforms."
+        )]
+        with_desktop: bool,
+        /// Skip the macOS desktop app without prompting
+        #[arg(
+            long,
+            conflicts_with = "with_desktop",
+            long_help = "Skip the macOS desktop app install/update step without prompting."
+        )]
+        without_desktop: bool,
     },
 
     /// Start Anthropic API compatibility server

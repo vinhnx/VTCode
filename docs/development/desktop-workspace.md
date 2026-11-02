@@ -21,8 +21,9 @@ To run the app:
 - Provider credentials configured for the CLI (see below); the desktop service reuses the CLI's configuration,
   credentials, workspace trust, and sandbox policy.
 
-To build and install from source (`scripts/install.sh` does this by default on macOS; `--without-desktop` skips
-it; or run `scripts/package-desktop-macos.sh` directly):
+To build and install from source (only needed when a release ships no prebuilt desktop asset for the host:
+`scripts/install.sh` falls back to this automatically, `--without-desktop` skips it entirely, or run
+`scripts/package-desktop-macos.sh` directly):
 
 - A macOS 15+ build host (enforced by the packaging script).
 - Git, when installing through `install.sh` (it clones the release tag); not needed when packaging from a checkout.
@@ -36,8 +37,11 @@ it; or run `scripts/package-desktop-macos.sh` directly):
 Every release ships a prebuilt Apple Silicon app on
 [GitHub Releases](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**): download
 `vtcode-desktop-<version>-aarch64-apple-darwin.zip`, unzip, and drag **VT Code.app** to `~/Applications`.
-Verify with the matching `.sha256` sidecar or `checksums.txt`. On Intel Macs, install through
-`scripts/install.sh` (builds from source by default) or package from a checkout as below.
+Verify with the matching `.sha256` sidecar or `checksums.txt`. `scripts/install.sh` and
+`vtcode update` install the same prebuilt asset automatically, asking between `~/Applications` and `/Applications`
+for fresh installs (`--with-desktop` skips the question and uses `~/Applications`); only hosts without a published
+asset fall back to a from-source build, or package from a checkout
+as below.
 
 ## Build and launch
 

@@ -267,6 +267,8 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
             unpin,
             channel,
             show_config,
+            with_desktop,
+            without_desktop,
         } => {
             let options = update::UpdateCommandOptions {
                 check_only: check,
@@ -277,12 +279,25 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
                 unpin,
                 channel,
                 show_config,
+                desktop: desktop_choice_from_flags(with_desktop, without_desktop),
             };
             update::handle_update_command(options).await?;
         }
     }
 
     Ok(())
+}
+
+/// Map desktop flags to a choice. clap `conflicts_with` excludes both flags;
+/// without-desktop wins defensively.
+fn desktop_choice_from_flags(with_desktop: bool, without_desktop: bool) -> update::DesktopChoice {
+    if without_desktop {
+        update::DesktopChoice::Skip
+    } else if with_desktop {
+        update::DesktopChoice::Install
+    } else {
+        update::DesktopChoice::Prompt
+    }
 }
 
 async fn dispatch_schema_command(
@@ -294,7 +309,8 @@ async fn dispatch_schema_command(
 
 #[cfg(test)]
 mod tests {
-    use super::dispatch_schema_command;
+    use super::{desktop_choice_from_flags, dispatch_schema_command};
+    use crate::cli::update::DesktopChoice;
     use crate::startup::StartupContext;
     use clap::Parser;
     use std::fs;
@@ -339,5 +355,15 @@ mod tests {
             .expect("schema dispatch");
 
         assert!(output.contains("\"name\":\"code_search\""), "{output}");
+    }
+
+    #[test]
+    fn desktop_flag_mapping_prefers_skip_then_install() {
+        use DesktopChoice::{Install, Prompt, Skip};
+        assert_eq!(desktop_choice_from_flags(false, false), Prompt);
+        assert_eq!(desktop_choice_from_flags(true, false), Install);
+        assert_eq!(desktop_choice_from_flags(false, true), Skip);
+        // clap excludes this combination; without-desktop wins defensively.
+        assert_eq!(desktop_choice_from_flags(true, true), Skip);
     }
 }

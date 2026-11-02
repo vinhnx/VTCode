@@ -1,5 +1,6 @@
 mod archive;
 mod cache;
+mod desktop;
 mod download;
 mod github;
 mod install_source;
@@ -14,6 +15,10 @@ use semver::Version;
 use tracing::{debug, info};
 use vtcode_config::update::UpdateConfig;
 
+pub(crate) use desktop::{
+    DesktopInstallOutcome, default_install_dir, desktop_macos_major, desktop_supported, existing_install_dir,
+    install_desktop_app, installed_desktop_version,
+};
 pub(crate) use install_source::InstallSource;
 pub(crate) use interactive::{
     InlineUpdateOutcome, append_notice_highlight, display_release_notes, display_update_notice, execute_inline_update,

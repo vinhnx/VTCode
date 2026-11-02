@@ -77,10 +77,11 @@ Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-The installer also attempts to add the optional `ripgrep` and `ast-grep` search tools. On macOS 15+ it also builds the
-VT Code desktop app from source at the installed release tag and installs it to `~/Applications` (best-effort: a missing
-toolchain or failed build only warns, so the CLI install never breaks). Pass `--without-desktop` to skip it or
-`--with-desktop` to fail hard when unavailable; see the [installer guide](./docs/installation/NATIVE_INSTALLERS.md).
+The installer also attempts to add the optional `ripgrep` and `ast-grep` search tools. On macOS 15+ it also offers
+the VT Code desktop app from the prebuilt release asset, asking before installing (`~/Applications` by default;
+best-effort: a missing asset or failed install only warns, so the CLI install never breaks; releases without a desktop
+asset fall back to a from-source build). Pass `--without-desktop` to skip it or `--with-desktop` to fail hard when
+unavailable; see the [installer guide](./docs/installation/NATIVE_INSTALLERS.md).
 To manage installation yourself, use Homebrew or Cargo:
 
 ```bash
@@ -218,13 +219,15 @@ sandboxing, and sessions.
 Download `vtcode-desktop-<version>-aarch64-apple-darwin.zip` from the
 [latest release](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**), unzip, and drag
 **VT Code.app** to `~/Applications`. Verify with the matching `.sha256` sidecar or `checksums.txt`, then open
-it anytime with `vtcode desktop`.
+it anytime with `vtcode desktop`. Easier: the installer offers the desktop app, or run
+`vtcode update --with-desktop` to install it from the release asset (fresh installs go to `~/Applications`;
+plain `vtcode update` asks between `~/Applications` and `/Applications` when prompting).
 
 > **Note:** Release builds are ad hoc signed unless the release notes say otherwise. Approve the first launch
 > with Right-click > Open, or allow VT Code once in Settings > Privacy & Security.
 
-On Intel Macs, or to build from source, the installer compiles the app into `~/Applications` by default
-(`--without-desktop` skips it).
+On hosts without a published desktop asset, the installer falls back to compiling the app from source
+(`--without-desktop` skips it). It asks where to install (`~/Applications` or `/Applications`).
 
 <details>
 <summary><strong>Build and launch from source</strong></summary>
