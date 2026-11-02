@@ -20,6 +20,7 @@ pub(crate) mod url_guard;
 mod mcp_support;
 mod mcp_tool_manager;
 mod model_selection;
+pub(crate) use model_selection::best_effort_reasoning;
 mod model_switch_compaction;
 pub(crate) mod palettes;
 pub(crate) mod plan_blocks;

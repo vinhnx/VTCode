@@ -11,20 +11,28 @@ fn synced_openai_service_tier(selection: &ModelSelectionResult) -> Option<vtcode
     selection.service_tier_supported.then_some(selection.service_tier).flatten()
 }
 
+/// Reject providers outside the workspace whitelist with the canonical
+/// persistence error. Shared by the interactive picker and the desktop
+/// `config/select` path so the two selections can never disagree.
+pub(crate) fn ensure_provider_whitelisted(config: &VTCodeConfig, provider: &str) -> Result<()> {
+    if !config.providers_whitelist.is_empty()
+        && !config
+            .providers_whitelist
+            .iter()
+            .any(|allowed| allowed.eq_ignore_ascii_case(provider))
+    {
+        anyhow::bail!("Cannot persist selection: provider '{provider}' is not in providers_whitelist");
+    }
+    Ok(())
+}
+
 pub(super) async fn persist_selection(
     workspace: &std::path::Path,
     selection: &ModelSelectionResult,
 ) -> Result<VTCodeConfig> {
     let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
     let config = manager.config();
-    if !config.providers_whitelist.is_empty()
-        && !config
-            .providers_whitelist
-            .iter()
-            .any(|w| w.eq_ignore_ascii_case(&selection.provider))
-    {
-        anyhow::bail!("Cannot persist selection: provider '{}' is not in providers_whitelist", selection.provider);
-    }
+    ensure_provider_whitelisted(config, &selection.provider)?;
 
     selection.validate_speed(config)?;
     let mut config = config.clone();

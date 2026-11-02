@@ -282,7 +282,19 @@ fn config_select_preserves_live_thread_and_applies_override() {
             let runtime = state.runtime.as_ref().expect("rebuilt runtime");
             assert_eq!(runtime.session_id, "live-session");
             assert!(!runtime.input.is_closed());
-            assert!(state.session_options.reasoning_effort.is_none(), "effort resets for the new route");
+            let efforts = session_options::supported_efforts(&local.provider, &local.id);
+            match state.session_options.reasoning_effort.clone() {
+                Some(effort) => assert!(
+                    efforts.iter().any(|supported| supported == &effort),
+                    "inherited effort maps onto a level the new route supports"
+                ),
+                None => assert!(
+                    !efforts
+                        .iter()
+                        .any(|effort| { vtcode_commons::reasoning::ReasoningEffortLevel::parse(effort).is_some() }),
+                    "effort clears only when the new route supports nothing mappable",
+                ),
+            }
         }
         live.shutdown_real_runtime().await;
         live.runtime_task.abort();
@@ -446,4 +458,129 @@ async fn config_change_with_unreadable_archive_leaves_live_session_untouched() {
     assert!(!state.session_transitioning, "transition gate releases");
     drop(state);
     live.runtime_task.abort();
+}
+
+#[test]
+#[serial]
+fn config_restart_without_archive_keeps_session_id_and_forks_no_lineage() {
+    block_on_with_desktop_stack(async {
+        let sessions = IsolatedSessionStore::new();
+        let mut live = LiveSession::install("live-session").await;
+        // No seeded archive: the thread was never persisted (no completed
+        // turn yet). The rebooted runtime must adopt the desktop session id
+        // via the reserved archive id instead of minting a fresh thread.
+        let result = live
+            .restart_with(config_request("options-1", protocol::method::CONFIG_OPTIONS, json!({ "mode": "plan" })))
+            .await;
+        let snapshot: ConfigurationSnapshot = serde_json::from_value(result).expect("snapshot");
+        assert_eq!(snapshot.session_options.as_ref().expect("options").mode, "plan");
+        {
+            let state = live.context.state.lock().await;
+            assert_eq!(state.session_id.as_deref(), Some("live-session"), "thread keeps its id");
+            let runtime = state.runtime.as_ref().expect("rebuilt runtime");
+            assert_eq!(runtime.session_id, "live-session");
+            assert!(!runtime.input.is_closed(), "new runtime accepts turns");
+        }
+        live.shutdown_real_runtime().await;
+        live.runtime_task.abort();
+        // The rebooted runloop adopts the desktop session id for its archive;
+        // a minted fresh id would persist under a different filename. Poll
+        // for the file (slow-disk tolerant), then require it to be the only
+        // lineage.
+        let archive_path = sessions.path().join("live-session.json");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if archive_path.is_file() {
+                break;
+            }
+            assert!(Instant::now() < deadline, "rebooted runloop never persisted under the desktop session id");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let mut archives: Vec<String> = std::fs::read_dir(sessions.path())
+            .expect("sessions dir")
+            .flatten()
+            .filter(|entry| entry.path().extension().is_some_and(|extension| extension == "json"))
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        archives.sort();
+        assert_eq!(archives, vec!["live-session.json"], "no forked archive lineage");
+    });
+}
+
+#[tokio::test]
+async fn config_select_persists_model_to_cli_config() {
+    let workspace = hermetic_workspace();
+    let (context, _) = test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+    context.state.lock().await.initialized = true;
+    let local = catalog_models("", "")
+        .into_iter()
+        .find(|model| model.provider == "ollama" && !model.id.to_ascii_lowercase().contains("cloud"))
+        .expect("local ollama catalog entry");
+    let (result, shutdown) = handle_request(
+        &context,
+        &config_request(
+            "select-1",
+            protocol::method::CONFIG_SELECT,
+            json!({ "provider": local.provider, "model": local.id }),
+        ),
+    )
+    .await
+    .expect("select");
+    assert!(!shutdown);
+    let snapshot: ConfigurationSnapshot = serde_json::from_value(result).expect("snapshot");
+    assert_eq!(snapshot.provider, local.provider);
+    assert_eq!(snapshot.model, local.id);
+    // CLI parity: the selection must survive a service restart, so it is
+    // written to the workspace config — not kept as a memory-only override.
+    let manager =
+        vtcode_core::config::loader::ConfigManager::load_from_workspace(workspace.path()).expect("reload CLI config");
+    assert_eq!(manager.config().agent.provider, local.provider);
+    assert_eq!(manager.config().agent.default_model, local.id);
+}
+
+#[tokio::test]
+async fn config_select_maps_inherited_effort_onto_new_route() {
+    let workspace = hermetic_workspace();
+    let (context, _) = test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+    context.state.lock().await.initialized = true;
+    // Asymmetric fixture: the boot default is excluded from the target
+    // route, so a reset-to-default and a nearest-supported mapping produce
+    // observably different snapshots.
+    let boot_default = vtcode_commons::reasoning::ReasoningEffortLevel::default().as_str();
+    let target = catalog_models("", "")
+        .into_iter()
+        .find(|model| {
+            let efforts = session_options::supported_efforts(&model.provider, &model.id);
+            !efforts.is_empty()
+                && !efforts.iter().any(|effort| effort == boot_default)
+                && efforts
+                    .iter()
+                    .any(|effort| vtcode_commons::reasoning::ReasoningEffortLevel::parse(effort).is_some())
+        })
+        .expect("catalog entry whose efforts exclude the boot default");
+    let supported = session_options::supported_efforts(&target.provider, &target.id);
+    let (result, shutdown) = handle_request(
+        &context,
+        &config_request(
+            "select-1",
+            protocol::method::CONFIG_SELECT,
+            json!({ "provider": target.provider, "model": target.id }),
+        ),
+    )
+    .await
+    .expect("select");
+    assert!(!shutdown);
+    let snapshot: ConfigurationSnapshot = serde_json::from_value(result).expect("snapshot");
+    let effort = snapshot.session_options.as_ref().expect("options").reasoning_effort.clone();
+    assert_ne!(effort, boot_default, "inherited effort maps instead of resetting to the boot default");
+    assert!(
+        supported.iter().any(|supported| supported == &effort),
+        "mapped effort is supported by the new route"
+    );
+    let state = context.state.lock().await;
+    assert_eq!(state.session_options.reasoning_effort.as_deref(), Some(effort.as_str()));
+    drop(state);
+    let manager =
+        vtcode_core::config::loader::ConfigManager::load_from_workspace(workspace.path()).expect("reload CLI config");
+    assert_eq!(manager.config().agent.reasoning_effort.as_str(), effort.as_str());
 }

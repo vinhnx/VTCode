@@ -19,6 +19,7 @@ mod welcome;
 mod welcome_tests;
 
 pub(crate) use crate::agent::agents::ResumeSession;
+pub(crate) use model_picker::ensure_provider_whitelisted;
 pub(crate) use plugin_commands::{
     PluginCommandAction, PluginCommandOutcome, discover_installed_plugins, handle_plugin_command, parse_plugin_command,
 };

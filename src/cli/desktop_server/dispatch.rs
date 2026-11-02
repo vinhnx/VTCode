@@ -438,10 +438,34 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             };
             let override_auth =
                 catalog::resolve_override_auth(context, &params.provider, &params.model, &api_key_env).await;
+            // CLI parity: the inherited effort maps onto the new route
+            // (nearest supported level, preferring lower) instead of
+            // resetting, and the selection persists to the workspace config
+            // so it survives service restarts. Persistence runs before the
+            // restart so a rejection leaves the live session untouched.
+            let supported = session_options::supported_efforts(&params.provider, &params.model);
+            let requested = context
+                .state
+                .lock()
+                .await
+                .session_options
+                .reasoning_effort
+                .as_deref()
+                .and_then(vtcode_config::types::ReasoningEffortLevel::parse)
+                .unwrap_or(context.startup.agent_config.reasoning_effort);
+            let supported_refs: Vec<&str> = supported.iter().map(String::as_str).collect();
+            let mapped = crate::agent::runloop::unified::best_effort_reasoning(requested, &supported_refs);
+            session_preferences::persist_model_selection(
+                context.workspace.clone(),
+                params.provider.clone(),
+                params.model.clone(),
+                mapped,
+            )
+            .await?;
             restart_session_preserving_thread(context, |state| {
                 state.model_override = Some(params);
                 state.model_override_auth = Some(override_auth);
-                state.session_options.reasoning_effort = None;
+                state.session_options.reasoning_effort = mapped.map(|level| level.as_str().to_owned());
             })
             .await?;
             let agent = active_agent_config(context).await;

@@ -668,8 +668,9 @@ impl DesktopView {
         }
     }
 
-    /// Switch the service to another catalog model. The service restarts its
-    /// session; the next prompt starts a fresh one under the new model.
+    /// Switch the service to another catalog model. The service restarts the
+    /// runtime under the same session id; the thread keeps its history and
+    /// the new route applies to subsequent turns.
     pub(super) fn select_model(&mut self, provider: String, model: String, cx: &mut Context<Self>) {
         if self.attachments_picker_open {
             return;

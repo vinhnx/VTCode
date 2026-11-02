@@ -569,7 +569,7 @@ fn effort_order(level: vtcode_core::config::types::ReasoningEffortLevel) -> Opti
     }
 }
 
-fn best_effort_reasoning(
+pub(crate) fn best_effort_reasoning(
     requested: vtcode_core::config::types::ReasoningEffortLevel,
     supported: &[&str],
 ) -> Option<vtcode_core::config::types::ReasoningEffortLevel> {

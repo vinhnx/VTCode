@@ -496,20 +496,23 @@ impl DesktopView {
                             self.error = Some(rust_i18n::t!("app.service.invalid_theme").to_string());
                         }
                     },
-                    protocol::method::CONFIG_SELECT => {
-                        // The service restarted the runtime with the new
-                        // provider/model under the same session id; keep the
-                        // thread, transcript, and tabs.
-                        self.configuration = serde_json::from_value::<ConfigurationSnapshot>(result).ok();
-                        self.models.clear();
-                        let _ = self.request(protocol::method::CONFIG_MODELS, json!({}));
-                        let model = self
-                            .configuration
-                            .as_ref()
-                            .map(|configuration| configuration.model.clone())
-                            .unwrap_or_default();
-                        self.status = rust_i18n::t!("app.service.switched_model", model = model.as_str()).to_string();
-                    }
+                    protocol::method::CONFIG_SELECT => match serde_json::from_value::<ConfigurationSnapshot>(result) {
+                        Ok(snapshot) => {
+                            // The service restarted the runtime with the new
+                            // provider/model under the same session id; keep the
+                            // thread, transcript, and tabs.
+                            let model = snapshot.model.clone();
+                            self.configuration = Some(snapshot);
+                            self.models.clear();
+                            let _ = self.request(protocol::method::CONFIG_MODELS, json!({}));
+                            self.status =
+                                rust_i18n::t!("app.service.switched_model", model = model.as_str()).to_string();
+                        }
+                        Err(_) => {
+                            self.backend = None;
+                            self.error = Some(rust_i18n::t!("app.service.invalid_runtime").to_string());
+                        }
+                    },
                     protocol::method::STORAGE_SUMMARY => self.apply_storage_summary(result),
                     protocol::method::SESSION_DELETE => self.apply_session_delete(result, cx),
                     protocol::method::WORKTREE_LIST => self.apply_worktree_list(result),

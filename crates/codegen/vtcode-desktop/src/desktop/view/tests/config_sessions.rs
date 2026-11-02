@@ -726,3 +726,73 @@ fn deferred_submission_rechecks_credentials_before_sending(cx: &mut TestAppConte
     .unwrap();
     assert!(requests.try_recv().is_err());
 }
+
+#[gpui_kit::test]
+fn model_switch_response_preserves_the_thread_and_applies_the_snapshot(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session-live".to_string());
+            view.open_tabs = vec!["session-live".to_string()];
+            view.transcript.push(TranscriptItem::new(
+                "kept-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Conversation remains visible.".into(),
+            ));
+            let mut configuration = runtime_options_config();
+            configuration.provider = "ollama".into();
+            configuration.model = "gpt-oss:20b".into();
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_SELECT.into(),
+                    result: Some(json!(configuration)),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-live"), "model switch preserves the thread");
+            assert_eq!(view.open_tabs, vec!["session-live".to_string()], "tabs survive the change");
+            assert_eq!(view.transcript.get(0).unwrap().text, "Conversation remains visible.");
+            assert!(view.transcript.get(1).is_none(), "no transcript row is added or dropped");
+            let applied = view.configuration.as_ref().unwrap();
+            assert_eq!(applied.provider, "ollama");
+            assert_eq!(applied.model, "gpt-oss:20b");
+            assert_eq!(view.status, "Switched to gpt-oss:20b.");
+            assert!(view.error.is_none());
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn model_switch_invalid_snapshot_keeps_configuration_and_reports_error(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session-live".to_string());
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_SELECT.into(),
+                    result: Some(json!({"bogus": true})),
+                    error: None,
+                },
+                cx,
+            );
+            // A malformed snapshot must never silently clear the running
+            // configuration: keep the old snapshot, keep the thread, and say
+            // what went wrong (CONFIG_OPTIONS parity).
+            assert_eq!(view.configuration.as_ref().unwrap().model, "gpt-5.6-sol");
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-live"));
+            assert!(view.error.is_some());
+            assert!(view.backend.is_none(), "protocol desync disconnects like the options arm");
+        });
+    })
+    .unwrap();
+}

@@ -1,5 +1,5 @@
 //! Persist desktop runtime preference changes (mode, fast-mode, reasoning
-//! effort) through the CLI's layered config writer.
+//! effort, model selection) through the CLI's layered config writer.
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -35,6 +35,37 @@ pub(super) async fn persist(
     })
     .await
     .context("CLI runtime preference persistence task failed")?
+}
+
+/// Persist a desktop provider/model selection (CLI
+/// `model_picker::config_persistence::persist_selection` parity:
+/// `agent.provider`, `agent.default_model`, `agent.reasoning_effort`) so the
+/// choice survives service restarts instead of living as a memory-only
+/// override. A `None` effort leaves the stored effort untouched: the new
+/// route supports nothing mappable, so there is nothing to persist.
+pub(super) async fn persist_model_selection(
+    workspace: PathBuf,
+    provider: String,
+    model: String,
+    effort: Option<ReasoningEffortLevel>,
+) -> Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let mut manager = ConfigManager::load_from_workspace(&workspace)
+            .context("failed to load CLI config for model selection synchronization")?;
+        let config = manager.config();
+        crate::agent::runloop::ensure_provider_whitelisted(config, &provider)?;
+        let mut config = config.clone();
+        config.agent.provider = provider;
+        config.agent.default_model = model;
+        if let Some(effort) = effort {
+            config.agent.reasoning_effort = effort;
+        }
+        manager
+            .save_config(&config)
+            .context("failed to save model selection to CLI configuration")
+    })
+    .await
+    .context("CLI model selection persistence task failed")?
 }
 
 #[cfg(test)]
