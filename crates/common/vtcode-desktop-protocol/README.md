@@ -1,6 +1,6 @@
 # vtcode-desktop-protocol
 
-Private, versioned JSON-RPC contract used between the VT Code desktop client
+Versioned JSON-RPC contract used between the VT Code desktop client
 and its matching local `vtcode desktop-server` process.
 
 The transport uses one JSON-RPC object per UTF-8 line, capped at 1 MiB. The
@@ -8,8 +8,9 @@ server and client negotiate a compatible protocol range, runtime events use
 `VersionedThreadEvent` from `vtcode-exec-events`, and host/service queues are
 bounded with backpressure.
 
-This crate is an internal workspace dependency and is not published to
-crates.io.
+Although the contract is only consumed inside the VT Code workspace today,
+the crate is published to crates.io because the published `vtcode` binary
+depends on it.
 
 The wire boundary follows the general separation used by the [pinned Codex
 app-server protocol](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/app-server-protocol/src/protocol/common.rs):

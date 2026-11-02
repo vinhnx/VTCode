@@ -85,10 +85,14 @@ install -m 644 "${ICON_SOURCE}" "${CONTENTS}/Resources/VTCode.icns"
 
 # Liquid Glass catalog for macOS 26+: layered Default/Dark/Tinted appearances
 # composed by the OS at display time. Older systems ignore Assets.car and use
-# the icns fallback above.
+# the icns fallback above. Build hosts with an older SDK skip the catalog
+# with a warning instead of failing the bundle.
 "${ROOT_DIR}/scripts/build-app-icon.sh" \
     "${ROOT_DIR}/resources/icons/AppIcon.icon" \
     "${CONTENTS}/Resources/Assets.car"
+if [[ ! -f "${CONTENTS}/Resources/Assets.car" ]]; then
+    printf 'Warning: continuing without Assets.car; the icns fallback covers systems without the Liquid Glass catalog.\n' >&2
+fi
 
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "${ROOT_DIR}/Cargo.toml" | head -n 1)"
 cat >"${CONTENTS}/Info.plist" <<PLIST

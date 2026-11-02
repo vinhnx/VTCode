@@ -12,9 +12,9 @@
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
 
-> [!TIP]
 > **New: native macOS app:** the full VT Code engine behind a premium desktop interface.
-> [Jump to the desktop app](#desktop-app) or read the
+> [Download the latest app](https://github.com/vinhnx/VTCode/releases/latest),
+> [jump to the desktop app](#desktop-app), or read the
 > [desktop workspace guide](./docs/development/desktop-workspace.md).
 
 [![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](#desktop-app)
@@ -116,13 +116,11 @@ can also set credentials in environment variables or a workspace `.env` file, or
 has a supported login flow. See [Getting started](./docs/user-guide/getting-started.md) and
 [Provider guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific instructions.
 
-> [!NOTE]
-> ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow; prefer your
-> own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
+> **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow;
+> prefer your own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
 > [OAuth authentication](./docs/guides/oauth-authentication.md).
 
-> [!CAUTION]
-> Keep API keys out of Git and `vtcode.toml`. If you use a workspace `.env` file, make sure it is not committed.
+> **Caution:** Keep API keys out of Git and `vtcode.toml`. If you use a workspace `.env` file, make sure it is not committed.
 
 ### 3. Run your first task
 
@@ -213,12 +211,20 @@ Use `vtcode continue --session-id <id>` to fork an earlier session.
 </div>
 
 The GUI talks to a matching local service binary while the unified runloop still owns providers, tool policy,
-sandboxing, and sessions. The installer builds the app from source into `~/Applications` by default
-(`--without-desktop` skips it).
+sandboxing, and sessions.
 
-> [!NOTE]
-> Local builds are signed ad hoc. Approve the first launch with Right-click > Open, or allow VTCode once in
-> Settings > Privacy & Security.
+### Download (Apple Silicon, macOS 15+)
+
+Download `vtcode-desktop-<version>-aarch64-apple-darwin.zip` from the
+[latest release](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**), unzip, and drag
+**VT Code.app** to `~/Applications`. Verify with the matching `.sha256` sidecar or `checksums.txt`, then open
+it anytime with `vtcode desktop`.
+
+> **Note:** Release builds are ad hoc signed unless the release notes say otherwise. Approve the first launch
+> with Right-click > Open, or allow VT Code once in Settings > Privacy & Security.
+
+On Intel Macs, or to build from source, the installer compiles the app into `~/Applications` by default
+(`--without-desktop` skips it).
 
 <details>
 <summary><strong>Build and launch from source</strong></summary>

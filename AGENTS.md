@@ -52,7 +52,7 @@ Cargo workspace, 25 crates. Rust stable, MSRV 1.99.1, edition 2024. `default-mem
 | `vtcode` (root `src/`)                       | Binary, CLI, session bootstrap                                                                                                         |
 | `crates/codegen/vtcode-core`                 | Agent loop, tools, prompts, LLM orchestration, UI                                                                                      |
 | `crates/codegen/vtcode-ui`                   | Unified UI: design system, theme registry, TUI framework                                                                               |
-| `vtcode-desktop` + `vtcode-desktop-protocol` | Non-publishable GPUI app and versioned local service protocol                                                                          |
+| `vtcode-desktop` + `vtcode-desktop-protocol` | Non-publishable GPUI app; protocol crate is published (the `vtcode` binary depends on it)                                              |
 | `crates/codegen/vtcode-config`               | Config loading and schema                                                                                                              |
 | `crates/codegen/vtcode-bash-runner`          | Shell execution sandbox                                                                                                                |
 | `crates/codegen/vtcode-acp`                  | Agent Client Protocol (Zed)                                                                                                            |

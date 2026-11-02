@@ -557,6 +557,125 @@ fi
 if [[ "$_saved_github_token" == "__unset__" ]]; then unset GITHUB_TOKEN; else export GITHUB_TOKEN="$_saved_github_token"; fi
 if [[ "$_saved_gh_token" == "__unset__" ]]; then unset GH_TOKEN; else export GH_TOKEN="$_saved_gh_token"; fi
 
+echo "Testing desktop_archive_name (updater-safe shape)..."
+
+desktop_name=$(desktop_archive_name "0.181.0" "aarch64-apple-darwin")
+if [[ "$desktop_name" == "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" ]]; then
+    pass "desktop name is vtcode-desktop-<v>-<target>.zip"
+else
+    fail_test "desktop name: got $desktop_name"
+fi
+
+if desktop_archive_name "0.181.0" >/dev/null 2>&1; then
+    fail_test "desktop name missing arg should fail"
+else
+    pass "desktop name missing arg rejected"
+fi
+
+if [[ "$desktop_name" == vtcode-*.zip ]]; then
+    pass "desktop name rides the vtcode-*.zip upload queue glob"
+else
+    fail_test "desktop name must match the vtcode-*.zip upload glob: got $desktop_name"
+fi
+
+echo "Testing desktop asset never matches updater selection (load-bearing)..."
+
+# Mirror of `select_archive_asset` in src/updater/github.rs: the modern updater
+# requires EXACTLY ONE asset with starts_with("vtcode-") &&
+# ends_with("{target}.tar.gz"|"{target}.zip"). A desktop asset matching any CLI
+# target would make every self-update fail with "multiple compatible
+# archives". The legacy updater additionally matches `{target}.tar.gz`
+# substrings, which a .zip name must never contain.
+desktop_lower=$(printf '%s' "$desktop_name" | tr '[:upper:]' '[:lower:]')
+collision=0
+for item in "x86_64-apple-darwin:tar.gz" "aarch64-apple-darwin:tar.gz" \
+    "x86_64-unknown-linux-gnu:tar.gz" "x86_64-unknown-linux-musl:tar.gz" \
+    "aarch64-unknown-linux-gnu:tar.gz" "x86_64-pc-windows-msvc:zip"; do
+    target="${item%%:*}"
+    ext="${item##*:}"
+    if [[ "$desktop_lower" == vtcode-* && "$desktop_lower" == *"${target}.${ext}" ]]; then
+        fail_test "desktop asset collides with modern updater selection for $target"
+        collision=1
+    fi
+    if [[ "$desktop_lower" == *"${target}.tar.gz"* ]]; then
+        fail_test "desktop asset collides with legacy updater selection for $target"
+        collision=1
+    fi
+done
+if [[ "$collision" -eq 0 ]]; then
+    pass "desktop asset matches no updater selector for any CLI target"
+fi
+
+echo "Testing append_desktop_release_notes..."
+
+gh() {
+    if [[ "$1" == "release" && "$2" == "view" ]]; then
+        if [[ "${TEST_GH_VIEW_FAILS:-0}" == "1" ]]; then
+            return 1
+        fi
+        printf '%s' "${TEST_RELEASE_BODY:-## Old notes}"
+        return 0
+    fi
+    if [[ "$1" == "release" && "$2" == "edit" ]]; then
+        printf '%s\n' "$*" >>"$tmp/gh-edit-args"
+        return "${TEST_GH_EDIT_FAILS:-0}"
+    fi
+    return 0
+}
+export -f gh
+
+: >"$tmp/gh-edit-args"
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "unsigned" >/dev/null 2>&1 \
+    && grep -Fq -- "### Desktop app (macOS)" "$tmp/gh-edit-args" \
+    && grep -Fq -- "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "$tmp/gh-edit-args" \
+    && grep -Fq -- "Apple Silicon" "$tmp/gh-edit-args" \
+    && grep -Fq -- "ad hoc signed" "$tmp/gh-edit-args" \
+    && grep -Fq -- "## Old notes" "$tmp/gh-edit-args"; then
+    pass "unsigned notes append the desktop section and keep existing notes"
+else
+    fail_test "unsigned notes should append the desktop section"
+fi
+
+: >"$tmp/gh-edit-args"
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-x86_64-apple-darwin.zip" "notarized" >/dev/null 2>&1 \
+    && grep -Fq -- "Intel" "$tmp/gh-edit-args" \
+    && grep -Fq -- "notarized, so it opens normally" "$tmp/gh-edit-args" \
+    && ! grep -Fq -- "ad hoc signed" "$tmp/gh-edit-args"; then
+    pass "notarized notes name Intel and skip the Gatekeeper guidance"
+else
+    fail_test "notarized notes should name Intel without ad hoc guidance"
+fi
+
+: >"$tmp/gh-edit-args"
+TEST_RELEASE_BODY="## Old notes vtcode-desktop-0.181.0-aarch64-apple-darwin.zip"
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "unsigned" >/dev/null 2>&1 \
+    && [[ ! -s "$tmp/gh-edit-args" ]]; then
+    pass "notes edit is skipped when the desktop archive is already referenced"
+else
+    fail_test "notes edit should be idempotent"
+fi
+unset TEST_RELEASE_BODY
+
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-x86_64-pc-windows-msvc.zip" "unsigned" >/dev/null 2>&1; then
+    fail_test "unexpected desktop archive name should be rejected"
+else
+    pass "unexpected desktop archive name rejected"
+fi
+
+TEST_GH_VIEW_FAILS=1
+if append_desktop_release_notes "0.181.0" "vtcode-desktop-0.181.0-aarch64-apple-darwin.zip" "unsigned" >/dev/null 2>&1; then
+    fail_test "unreadable release notes should fail"
+else
+    pass "unreadable release notes fail"
+fi
+unset TEST_GH_VIEW_FAILS
+
+if append_desktop_release_notes "0.181.0" >/dev/null 2>&1; then
+    fail_test "notes helper missing args should fail"
+else
+    pass "notes helper missing args rejected"
+fi
+
 if [[ "$fail" -ne 0 ]]; then
     echo "FAIL: release-assets tests failed"
     exit 1

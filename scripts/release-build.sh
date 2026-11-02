@@ -32,6 +32,99 @@ package_release_archive() {
 	fi
 }
 
+# Build the macOS desktop .app and stage its distribution zip + checksum.
+#
+#   build_macos_desktop_archive <version> <binaries-dir>
+#
+# Runs scripts/package-desktop-macos.sh for the host target (reusing the
+# just-built arch CLI cache via CARGO_BUILD_TARGET), Developer ID signs +
+# notarizes + staples when signing credentials are configured (ad hoc
+# otherwise), and writes vtcode-desktop-<v>-<target>.zip + .sha256 into
+# <binaries-dir>, where generate_checksums_manifest and the upload queue pick
+# them up automatically. No compatibility asset: the legacy updater bridge is
+# CLI-only (the zip holds a bundle, not a root vtcode executable).
+build_macos_desktop_archive() {
+	local version=$1
+	local binaries_dir=$2
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		print_error "Desktop app release packaging requires macOS"
+		return 1
+	fi
+	local host_target
+	host_target=$(rustc -vV 2>/dev/null | sed -n 's/^host: //p')
+	if [[ "$host_target" != *-apple-darwin ]]; then
+		print_error "Cannot determine the macOS host target (got '${host_target:-unknown}')"
+		return 1
+	fi
+	local stage_dir
+	if ! stage_dir=$(mktemp -d "${TMPDIR:-/tmp}/vtcode-desktop-release.XXXXXX"); then
+		print_error "Could not create the desktop staging directory"
+		return 1
+	fi
+	local staged_app="$stage_dir/VT Code.app"
+	# SCRIPT_DIR is release.sh's local, visible here via dynamic scope.
+	# shellcheck disable=SC2154
+	if ! env CARGO_BUILD_TARGET="$host_target" "$SCRIPT_DIR/package-desktop-macos.sh" "$staged_app"; then
+		print_error "Desktop app packaging failed"
+		rm -rf "$stage_dir"
+		return 1
+	fi
+	if ! macos_release_signing_preflight; then
+		rm -rf "$stage_dir"
+		return 1
+	fi
+	local archive_name
+	archive_name=$(desktop_archive_name "$version" "$host_target")
+	local archive_path="$binaries_dir/$archive_name"
+	# _vtcode_macos_release_signing_mode is set by the sourced signing lib.
+	# shellcheck disable=SC2154
+	if [[ "$_vtcode_macos_release_signing_mode" == "notarized" ]]; then
+		if ! sign_macos_app_bundle "$staged_app"; then
+			rm -rf "$stage_dir"
+			return 1
+		fi
+		local notary_zip="$stage_dir/notarization.zip"
+		if ! ditto -c -k --sequesterRsrc --keepParent "$staged_app" "$notary_zip"; then
+			print_error "Could not create the desktop notarization archive"
+			rm -rf "$stage_dir"
+			return 1
+		fi
+		if ! notarize_macos_archive "$notary_zip"; then
+			rm -rf "$stage_dir"
+			return 1
+		fi
+		if ! staple_macos_app_bundle "$staged_app"; then
+			rm -rf "$stage_dir"
+			return 1
+		fi
+		if ! verify_macos_app_bundle "$staged_app"; then
+			rm -rf "$stage_dir"
+			return 1
+		fi
+		rm -f "$notary_zip"
+		# Re-zip after stapling so the ticket ships inside the bundle.
+		if ! ditto -c -k --sequesterRsrc --keepParent "$staged_app" "$archive_path"; then
+			print_error "Could not create the desktop distribution archive: $archive_path"
+			rm -rf "$stage_dir"
+			return 1
+		fi
+	else
+		# Ad hoc build: ship the FIRST-LAUNCH.txt Gatekeeper guidance the
+		# packaging script wrote beside the bundle.
+		if ! ditto -c -k --sequesterRsrc "$stage_dir" "$archive_path"; then
+			print_error "Could not create the desktop distribution archive: $archive_path"
+			rm -rf "$stage_dir"
+			return 1
+		fi
+	fi
+	rm -rf "$stage_dir"
+	if ! shasum -a 256 "$archive_path" >"$archive_path.sha256"; then
+		print_error "Could not write the desktop checksum sidecar"
+		return 1
+	fi
+	print_success "Staged desktop archive: $archive_name"
+}
+
 # Trigger the Linux/Windows CI workflow for a released version and wait for
 # its builds to complete. Records the workflow run id in CI_RUN_ID for the
 # later artifact download.
@@ -118,14 +211,14 @@ trigger_docs_rs_rebuild() {
 
 	print_distribution "Triggering docs.rs rebuild for version $version..."
 	local crates=(
-		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-webmcp vtcode-memory vtcode-macros
+		vtcode-diff vtcode-commons vtcode-auth vtcode-exec-events vtcode-desktop-protocol vtcode-webmcp vtcode-memory vtcode-macros
 		vtcode-config vtcode-indexer vtcode-bash-runner vtcode-utility-tool-specs vtcode-eval
 		vtcode-safety vtcode-a2a vtcode-llm vtcode-skills vtcode-agent-plugins vtcode-ui vtcode-mcp
 		vtcode-core vtcode-acp vtcode
 	)
 	for crate in "${crates[@]}"; do
 		# Fire-and-forget rebuild pings; each is an independent HTTPS GET,
-		# so all 21 run concurrently instead of sequentially.
+		# so all 22 run concurrently instead of sequentially.
 		curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true &
 	done
 	wait 2>/dev/null || true

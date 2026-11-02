@@ -587,6 +587,23 @@ main() {
 			print_warning "Failed to build macOS aarch64"
 		fi
 
+		# Build the macOS desktop app bundle and stage its distribution zip.
+		# Sequential after the arch CLI builds: packaging reuses their cargo
+		# cache via CARGO_BUILD_TARGET but compiles the GUI crate fresh, and a
+		# third concurrent release build would thrash the shared target dir.
+		# The zip + sha256 land in $binaries_dir where checksums.txt and the
+		# upload queue pick them up automatically.
+		print_info "Building macOS desktop app..."
+		local require_desktop="${RELEASE_REQUIRE_DESKTOP:-true}"
+		if build_macos_desktop_archive "$released_version" "$binaries_dir"; then
+			print_success "Built macOS desktop app"
+		elif [[ "$require_desktop" == "true" ]]; then
+			print_error "Desktop app build failed; aborting release (set RELEASE_REQUIRE_DESKTOP=false to ship CLI-only)"
+			exit 1
+		else
+			print_warning "Desktop app build failed; continuing without it (RELEASE_REQUIRE_DESKTOP=false)"
+		fi
+
 		# Download Linux and Windows binaries from CI artifacts
 		print_info "Downloading Linux and Windows binaries from CI..."
 
@@ -904,6 +921,21 @@ main() {
 		fi
 		print_success "All binaries, compatibility assets, checksums.txt, and install scripts uploaded successfully"
 
+		# Point the release notes at the desktop app (idempotent on re-runs;
+		# skipped when no desktop archive was staged).
+		shopt -s nullglob
+		local -a desktop_zips=("$binaries_dir"/vtcode-desktop-*.zip)
+		shopt -u nullglob
+		if [[ ${#desktop_zips[@]} -eq 1 ]]; then
+			# _vtcode_macos_release_signing_mode is set by the sourced signing lib.
+			# shellcheck disable=SC2154
+			if ! append_desktop_release_notes "$released_version" "$(basename "${desktop_zips[0]}")" "$_vtcode_macos_release_signing_mode"; then
+				print_warning "Could not update release notes with the desktop app section"
+			fi
+		elif [[ ${#desktop_zips[@]} -gt 1 ]]; then
+			print_warning "Multiple desktop archives staged; skipping release notes update"
+		fi
+
 		# Extract checksums before cleanup for Homebrew formula update
 		local release_x86_sha=""
 		local release_arm_sha=""
@@ -941,6 +973,7 @@ main() {
 	print_info "Distribution:"
 	print_info "  ✓ Cargo (crates.io)"
 	print_info "  ✓ GitHub Releases (all platforms: macOS local + Linux/Windows CI)"
+	print_info "  ✓ macOS Desktop app (vtcode-desktop-<version>-<target>.zip + .sha256)"
 	print_info "  ✓ Homebrew (vinhnx/homebrew-tap/vtcode)"
 	print_info ""
 	print_info "Cost optimization:"
