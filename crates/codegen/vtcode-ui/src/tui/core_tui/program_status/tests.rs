@@ -13,6 +13,12 @@ fn enabled_iterm2() -> ProgramStatus {
     status
 }
 
+fn enabled_conemu94() -> ProgramStatus {
+    let mut status = enabled();
+    status.conemu94 = true;
+    status
+}
+
 fn child(id: &str, kind: LocalAgentKind, state: ProgramState, updated_at: i64) -> LocalAgentEntry {
     LocalAgentEntry {
         id: id.into(),
@@ -473,4 +479,96 @@ fn program_status_iterm21337_stays_silent_without_direct_iterm2() {
     let mut output = Vec::new();
     status.deliver(&mut output).unwrap();
     assert!(!String::from_utf8(output).unwrap().contains("21337"));
+}
+
+#[test]
+fn program_status_conemu94_mapping_covers_every_state() {
+    use ProgramState::{Blocked, Clear, Done, Error, Idle, Working};
+    fn report(state: ProgramState, progress: Option<u8>) -> Report {
+        Report {
+            state,
+            kind: None,
+            progress,
+            title: "VT Code",
+            message: "Working",
+        }
+    }
+    assert_eq!(conemu94_for_report(&report(Idle, None)), ConEmuProgress::Remove);
+    assert_eq!(conemu94_for_report(&report(Done, None)), ConEmuProgress::Remove);
+    assert_eq!(conemu94_for_report(&report(Clear, None)), ConEmuProgress::Remove);
+    assert_eq!(conemu94_for_report(&report(Working, None)), ConEmuProgress::Indeterminate);
+    assert_eq!(conemu94_for_report(&report(Working, Some(40))), ConEmuProgress::Normal(40));
+    assert_eq!(conemu94_for_report(&report(Blocked, None)), ConEmuProgress::Paused);
+    assert_eq!(conemu94_for_report(&report(Error, None)), ConEmuProgress::Error);
+}
+
+#[test]
+fn program_status_conemu94_follows_parent_and_dedups() {
+    let mut status = enabled_conemu94();
+    // Idle removes any stale indicator left by a previous tab occupant.
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert_eq!(String::from_utf8(output).unwrap().matches("\x1b]9;4;").count(), 1);
+    // Unchanged state re-emits nothing.
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(output.is_empty());
+
+    let operation = ProgressOperation::start();
+    status.progress(ProgressUpdate::Begin { operation, phase: ProgressPhase::WaitingForModel });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    let wire = String::from_utf8(output).unwrap();
+    assert!(wire.contains("\x1b]9;4;3\x07"), "{wire:?}");
+
+    status.apply(ProgramStatusUpdate::Progress { percent: Some(40) });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    let wire = String::from_utf8(output).unwrap();
+    assert!(wire.contains("\x1b]9;4;1;40\x07"), "{wire:?}");
+
+    status.apply(ProgramStatusUpdate::Wait { token: 1, kind: InteractionKind::Permission });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    let wire = String::from_utf8(output).unwrap();
+    assert!(wire.contains("\x1b]9;4;4\x07"), "{wire:?}");
+
+    status.apply(ProgramStatusUpdate::Resume { token: 1 });
+    status.apply(ProgramStatusUpdate::Outcome(ProgramState::Error));
+    status.progress(ProgressUpdate::Finish { operation });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    let wire = String::from_utf8(output).unwrap();
+    assert!(wire.contains("\x1b]9;4;2\x07"), "{wire:?}");
+
+    status.apply(ProgramStatusUpdate::Outcome(ProgramState::Done));
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    let wire = String::from_utf8(output).unwrap();
+    assert!(wire.contains("\x1b]9;4;0\x07"), "{wire:?}");
+}
+
+#[test]
+fn program_status_conemu94_clears_when_parent_is_gone() {
+    let mut status = enabled_conemu94();
+    let operation = ProgressOperation::start();
+    status.progress(ProgressUpdate::Begin { operation, phase: ProgressPhase::WaitingForModel });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(String::from_utf8(output).unwrap().contains("\x1b]9;4;3\x07"));
+    status.apply(ProgramStatusUpdate::Configure { enabled: false });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(String::from_utf8(output).unwrap().contains("\x1b]9;4;0\x07"));
+}
+
+#[test]
+fn program_status_conemu94_stays_silent_without_allowlisted_terminal() {
+    let mut status = enabled();
+    assert!(!status.conemu94);
+    let operation = ProgressOperation::start();
+    status.progress(ProgressUpdate::Begin { operation, phase: ProgressPhase::WaitingForModel });
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(!String::from_utf8(output).unwrap().contains("9;4"));
 }

@@ -171,3 +171,106 @@ fn program_status_vte_live_gate_follows_the_environment() {
     assert!(vte_allows_unknown_osc());
     env.restore_var("VTE_VERSION", previous);
 }
+
+#[test]
+fn conemu94_exact_wire_covers_every_state() {
+    use ConEmuProgress::{Error, Indeterminate, Normal, Paused, Remove};
+    assert_eq!(encode_conemu94(Remove), "\x1b]9;4;0\x07");
+    assert_eq!(encode_conemu94(Normal(0)), "\x1b]9;4;1;0\x07");
+    assert_eq!(encode_conemu94(Normal(40)), "\x1b]9;4;1;40\x07");
+    assert_eq!(encode_conemu94(Normal(100)), "\x1b]9;4;1;100\x07");
+    // Out-of-range values clamp to the documented 0..=100 range.
+    assert_eq!(encode_conemu94(Normal(101)), "\x1b]9;4;1;100\x07");
+    assert_eq!(encode_conemu94(Normal(255)), "\x1b]9;4;1;100\x07");
+    assert_eq!(encode_conemu94(Error), "\x1b]9;4;2\x07");
+    assert_eq!(encode_conemu94(Indeterminate), "\x1b]9;4;3\x07");
+    assert_eq!(encode_conemu94(Paused), "\x1b]9;4;4\x07");
+}
+
+#[test]
+fn conemu94_ghostty_version_floor_checks_both_sides() {
+    assert!(!ghostty_version_allows_conemu94(Some("0.9")));
+    assert!(!ghostty_version_allows_conemu94(Some("1.0")));
+    assert!(!ghostty_version_allows_conemu94(Some("1.1.9")));
+    assert!(ghostty_version_allows_conemu94(Some("1.2")));
+    assert!(ghostty_version_allows_conemu94(Some("1.2.0")));
+    assert!(ghostty_version_allows_conemu94(Some("1.3.1")));
+    assert!(ghostty_version_allows_conemu94(Some("1.10")));
+    assert!(ghostty_version_allows_conemu94(Some("2.0")));
+    assert!(ghostty_version_allows_conemu94(Some("  1.2  ")));
+}
+
+#[test]
+fn conemu94_ghostty_version_fails_closed_on_garbage() {
+    assert!(!ghostty_version_allows_conemu94(None));
+    for raw in [
+        "",
+        "  ",
+        "abc",
+        "1",
+        "1.x",
+        "x.2",
+        "1.2-beta",
+        "99999999999999999999.0",
+        "1.-2",
+    ] {
+        assert!(!ghostty_version_allows_conemu94(Some(raw)), "{raw:?} must fail closed");
+    }
+}
+
+#[test]
+fn conemu94_pure_gate_is_default_deny_or() {
+    assert!(!should_emit_conemu94(false, false, false));
+    assert!(should_emit_conemu94(true, false, false));
+    assert!(should_emit_conemu94(false, true, false));
+    assert!(should_emit_conemu94(false, false, true));
+    assert!(should_emit_conemu94(true, true, true));
+}
+
+#[test]
+fn conemu94_live_gate_follows_the_environment() {
+    let env = crate::env_lock::lock();
+    let previous_wt_session = std::env::var_os("WT_SESSION");
+    let previous_wt_profile = std::env::var_os("WT_PROFILE_ID");
+    let previous_conemu = std::env::var_os("ConEmuPID");
+    let previous_program = std::env::var_os("TERM_PROGRAM");
+    let previous_version = std::env::var_os("TERM_PROGRAM_VERSION");
+    env.remove_var("WT_SESSION");
+    env.remove_var("WT_PROFILE_ID");
+    env.remove_var("ConEmuPID");
+    env.remove_var("TERM_PROGRAM");
+    env.remove_var("TERM_PROGRAM_VERSION");
+    assert!(!should_emit_conemu94_now());
+
+    env.set_var("WT_SESSION", "9d8b2f1a-0000-0000-0000-000000000000");
+    assert!(should_emit_conemu94_now());
+    env.remove_var("WT_SESSION");
+    env.set_var("WT_PROFILE_ID", "{00000000-0000-0000-0000-000000000000}");
+    assert!(should_emit_conemu94_now());
+    env.remove_var("WT_PROFILE_ID");
+    assert!(!should_emit_conemu94_now());
+
+    env.set_var("ConEmuPID", "1234");
+    assert!(should_emit_conemu94_now());
+    env.remove_var("ConEmuPID");
+    assert!(!should_emit_conemu94_now());
+
+    // Ghostty needs both the exact program name and a new-enough version:
+    // older Ghostty reads OSC 9 as a notification.
+    env.set_var("TERM_PROGRAM", "ghostty");
+    assert!(!should_emit_conemu94_now(), "unversioned Ghostty must fail closed");
+    env.set_var("TERM_PROGRAM_VERSION", "1.1.0");
+    assert!(!should_emit_conemu94_now());
+    env.set_var("TERM_PROGRAM_VERSION", "1.2.0");
+    assert!(should_emit_conemu94_now());
+    env.set_var("TERM_PROGRAM", "Ghostty");
+    assert!(should_emit_conemu94_now(), "program match is case-insensitive");
+    env.set_var("TERM_PROGRAM", "not-ghostty");
+    assert!(!should_emit_conemu94_now(), "program match is exact, not substring");
+
+    env.restore_var("WT_SESSION", previous_wt_session);
+    env.restore_var("WT_PROFILE_ID", previous_wt_profile);
+    env.restore_var("ConEmuPID", previous_conemu);
+    env.restore_var("TERM_PROGRAM", previous_program);
+    env.restore_var("TERM_PROGRAM_VERSION", previous_version);
+}

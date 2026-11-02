@@ -193,6 +193,79 @@ pub fn should_emit_iterm21337_now() -> bool {
     )
 }
 
+/// ConEmu `OSC 9;4` tab-progress state, also rendered natively by Windows
+/// Terminal and Ghostty 1.2+. Numeric mapping follows ConEmu and the
+/// [Windows Terminal docs](https://learn.microsoft.com/en-us/windows/terminal/tutorials/progress-bar-sequences).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConEmuProgress {
+    /// `0`: hide the progress indicator (also the completion state).
+    Remove,
+    /// `1`: determinate progress, clamped to `0..=100`.
+    Normal(u8),
+    /// `2`: error state.
+    Error,
+    /// `3`: indeterminate work (no percentage available).
+    Indeterminate,
+    /// `4`: paused/warning state (a wait, not a failure).
+    Paused,
+}
+
+/// Encode a ConEmu `OSC 9;4` tab-progress report (`BEL`-terminated, the
+/// canonical form from the Windows Terminal docs).
+pub fn encode_conemu94(progress: ConEmuProgress) -> String {
+    match progress {
+        ConEmuProgress::Remove => "\x1b]9;4;0\x07".to_string(),
+        ConEmuProgress::Normal(percent) => format!("\x1b]9;4;1;{}\x07", percent.min(100)),
+        ConEmuProgress::Error => "\x1b]9;4;2\x07".to_string(),
+        ConEmuProgress::Indeterminate => "\x1b]9;4;3\x07".to_string(),
+        ConEmuProgress::Paused => "\x1b]9;4;4\x07".to_string(),
+    }
+}
+
+/// Minimum Ghostty `(major, minor)` rendering `OSC 9;4` as tab progress.
+///
+/// Older Ghostty parses `OSC 9` as a notification, so unversioned or
+/// unparsable versions fail closed (no emission).
+pub const MIN_GHOSTTY_VERSION_WITH_CONEMU94: (u32, u32) = (1, 2);
+
+/// Pure gate: whether a `TERM_PROGRAM_VERSION` value permits `OSC 9;4`.
+/// Compares only the leading `major.minor` pair; anything else fails closed.
+pub fn ghostty_version_allows_conemu94(raw: Option<&str>) -> bool {
+    let Some(raw) = raw else {
+        return false;
+    };
+    let mut parts = raw.trim().split('.');
+    let (Some(major), Some(minor)) = (parts.next(), parts.next()) else {
+        return false;
+    };
+    match (major.parse::<u32>(), minor.parse::<u32>()) {
+        (Ok(major), Ok(minor)) => (major, minor) >= MIN_GHOSTTY_VERSION_WITH_CONEMU94,
+        _ => false,
+    }
+}
+
+/// Pure gate: `OSC 9;4` renders only on terminals documented to honor it.
+///
+/// Everywhere else `OSC 9` may mean notifications (iTerm2, older Ghostty),
+/// so this is default-deny: unknown terminals never receive the sequence.
+pub fn should_emit_conemu94(windows_terminal: bool, conemu: bool, ghostty_supported: bool) -> bool {
+    windows_terminal || conemu || ghostty_supported
+}
+
+/// Live gate combining [`should_emit_conemu94`] with process-environment
+/// detection: `WT_SESSION`/`WT_PROFILE_ID` (Windows Terminal), `ConEmuPID`
+/// (ConEmu), or exactly `TERM_PROGRAM=ghostty` with
+/// [`ghostty_version_allows_conemu94`].
+pub fn should_emit_conemu94_now() -> bool {
+    let windows_terminal = std::env::var("WT_SESSION").is_ok() || std::env::var("WT_PROFILE_ID").is_ok();
+    let conemu = std::env::var("ConEmuPID").is_ok();
+    let ghostty_supported = std::env::var("TERM_PROGRAM")
+        .map(|program| program.eq_ignore_ascii_case("ghostty"))
+        .unwrap_or(false)
+        && ghostty_version_allows_conemu94(std::env::var("TERM_PROGRAM_VERSION").ok().as_deref());
+    should_emit_conemu94(windows_terminal, conemu, ghostty_supported)
+}
+
 /// Encode a complete replacement record. An explicit owned ID is mandatory;
 /// callers cannot accidentally clear the terminal's root or unrelated records.
 ///

@@ -595,7 +595,7 @@ impl Default for UiConfig {
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct UiProgramStatusConfig {
-    /// Emit OSC 7501 status reports on the interactive TUI terminal stream.
+    /// Emit terminal status reports (OSC 7501 plus ConEmu OSC 9;4 tab progress on allowlisted terminals) on the interactive TUI terminal stream.
     #[serde(default = "default_program_status_enabled")]
     pub enabled: bool,
 }

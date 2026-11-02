@@ -98,6 +98,26 @@ Direct iTerm2 sessions (no tmux/screen) additionally receive the proprietary ses
 with the same generic detail label, finished states read as idle, and restoration clears the pill. Children,
 progress percents, and kinds stay 7501-only; the pill is one session-level status, deduplicated like the records.
 
+## Tab progress (OSC 9;4)
+
+Sessions on terminals documented to render ConEmu progress additionally receive `OSC 9;4` tab-progress reports
+on the same stream, under the same `enabled` switch: a native tab ring/bar with no per-terminal install. The
+parent state maps onto the ConEmu states ([Windows Terminal docs](https://learn.microsoft.com/en-us/windows/terminal/tutorials/progress-bar-sequences)):
+
+| Runtime evidence | Tab progress |
+| --- | --- |
+| Working with typed task percent | `1` + value (`0-100`, clamped) |
+| Working, indeterminate | `3` (indeterminate) |
+| Actual approval, question, or authentication wait | `4` (paused — a wait, not a failure) |
+| Terminal turn failure | `2` (error) |
+| Idle, successful turn, disable, or shutdown | `0` (remove) |
+
+Emission is allowlist-only, because everywhere else `OSC 9` may mean notifications: Windows Terminal
+(`WT_SESSION`/`WT_PROFILE_ID`), ConEmu (`ConEmuPID`), or exactly `TERM_PROGRAM=ghostty` with
+`TERM_PROGRAM_VERSION >= 1.2.0` (older Ghostty parses `OSC 9` as a notification, so unversioned or
+unparsable versions fail closed). Unknown terminals never receive the sequence. Like the 7501 records,
+only changed states are written and restoration removes the indicator.
+
 ## Lifecycle
 
 | Runtime evidence | Terminal state |
