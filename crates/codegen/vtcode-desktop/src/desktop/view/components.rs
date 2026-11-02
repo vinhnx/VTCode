@@ -133,6 +133,12 @@ pub(super) fn panel_header(leading: impl IntoElement, trailing: impl IntoElement
 /// Pre-configured bordered card for settings sections: the fill token plus the
 /// soft 1px theme border, with the title above the surface. Callers chain
 /// `.child(...)`/`.footer(...)` as before.
+///
+/// Horizontal padding steps up to `px_6` while vertical keeps the Kit `p_4`:
+/// the fill matches the panel background, so the hairline alone must carry
+/// the card gestalt, and rows scan better with the boundary (`xl`) airier
+/// than the gaps between rows (`lg`). Vertical stays tight so pages do not
+/// grow extra scroll length.
 pub(super) fn settings_group_box(
     title: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
@@ -140,7 +146,7 @@ pub(super) fn settings_group_box(
     GroupBox::new()
         .flex_shrink_0()
         .fill()
-        .content_style(card_border_style(colors))
+        .content_style(card_border_style(colors).px_6())
         .title(group_box_title(title, colors))
 }
 

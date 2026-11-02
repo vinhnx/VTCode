@@ -104,7 +104,7 @@ fn translucent_sidebar_toggle_persists_and_reset_restores_opaque(cx: &mut TestAp
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-700.))), cx);
         window.render_frame(cx);
         assert_eq!(window.find("translucent-sidebar").checked(), Some(false));
         window.click("translucent-sidebar", cx);
@@ -780,7 +780,7 @@ fn navigation_position_switch_moves_the_expanded_panel_and_persists(cx: &mut Tes
 
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-700.))), cx);
         window.render_frame(cx);
 
         assert!(view.read(cx).preferences.navigation_on_right(), "navigation defaults to the right");

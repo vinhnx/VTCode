@@ -205,6 +205,9 @@ impl DesktopView {
                     div()
                         .text_lg()
                         .font_semibold()
+                        // The shared header row insets at `px_3`; one extra
+                        // step lands the title on the `px_4` body spine.
+                        .pl_1()
                         .child(div().id("settings-title").test_support().child(title)),
                     // Generic "Close" word shared across panels (owned by the browser surface).
                     desktop_button("settings-dismiss")
@@ -224,12 +227,12 @@ impl DesktopView {
                         .w_full()
                         .flex()
                         .when(narrow, |row| row.flex_col())
-                        // Two gaps flank the divider, so each shrinks to 4px: the 9px
-                        // total keeps the content width at its pre-divider size while
-                        // the hairline owns the boundary.
-                        .gap_1()
-                        .px_3()
-                        .pb_3()
+                        // Two gaps flank the divider at one scale step each, so
+                        // the nav/content separation reads at panel scale (17px
+                        // total) while the hairline owns the boundary alone.
+                        .gap_2()
+                        .px_4()
+                        .pb_4()
                         .child(self.render_settings_navigation(window, cx, narrow))
                         .child(pane_divider("settings-pane-divider", !narrow, &colors))
                         .child(

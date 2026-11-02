@@ -151,3 +151,80 @@ fn appearance_sections_keep_order_air_and_narrow_containment(cx: &mut TestAppCon
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn settings_container_and_sections_keep_horizontal_air(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    // Asymmetric extremes: panel insets, divider gaps, and section padding
+    // are rem-based, so they must hold at the smallest and largest UI base
+    // sizes, not just the default.
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let panel = window.find("settings-panel").bounds();
+            let title = window.find("settings-title").bounds();
+            let navigation = window.find("settings-navigation").bounds();
+            let divider = window.find("settings-pane-divider").bounds();
+            let content = window.find("settings-content").bounds();
+            let panel_right = panel.origin.x + panel.size.width;
+            let panel_bottom = panel.origin.y + panel.size.height;
+            // Panel insets at `px_4` (1rem): nav and content sit one panel
+            // step inside the panel on every side.
+            let inset = base_size - 1.;
+            assert!(
+                navigation.origin.x - panel.origin.x >= px(inset),
+                "nav keeps a panel-scale leading inset at {base_size}px: navigation={navigation:?} panel={panel:?}"
+            );
+            assert!(
+                panel_right - (content.origin.x + content.size.width) >= px(inset),
+                "content keeps a panel-scale trailing inset at {base_size}px: content={content:?} panel={panel:?}"
+            );
+            assert!(
+                panel_bottom - (content.origin.y + content.size.height) >= px(inset),
+                "content keeps a panel-scale bottom inset at {base_size}px: content={content:?} panel={panel:?}"
+            );
+            // Divider gaps at `gap_2` (0.5rem) per side: the nav/content
+            // separation reads at panel scale instead of hairline-tight.
+            let flank = base_size / 2. - 1.;
+            assert!(
+                divider.origin.x - (navigation.origin.x + navigation.size.width) >= px(flank),
+                "divider keeps air from the nav at {base_size}px: navigation={navigation:?} divider={divider:?}"
+            );
+            assert!(
+                content.origin.x - (divider.origin.x + divider.size.width) >= px(flank),
+                "content keeps air from the divider at {base_size}px: divider={divider:?} content={content:?}"
+            );
+            // Title shares the body spine: header `px_3` plus the title's
+            // own `pl_1` equals body `px_4`, so both start on one edge.
+            assert!(
+                (title.origin.x - navigation.origin.x).abs() <= px(1.),
+                "title aligns to the nav spine at {base_size}px: title={title:?} navigation={navigation:?}"
+            );
+            // Section surfaces pad horizontal at `px_6` (1.5rem): the full-
+            // width code preview pins both edges of the air inside the card.
+            let group = window.find("appearance-typography-group").bounds();
+            let preview = window.find("appearance-code-preview").bounds();
+            let group_right = group.origin.x + group.size.width;
+            let air = base_size * 1.5 - 1.;
+            assert!(
+                preview.origin.x - group.origin.x >= px(air),
+                "section keeps leading air at {base_size}px: preview={preview:?} group={group:?}"
+            );
+            assert!(
+                group_right - (preview.origin.x + preview.size.width) >= px(air),
+                "section keeps trailing air at {base_size}px: preview={preview:?} group={group:?}"
+            );
+        })
+        .unwrap();
+    }
+}
