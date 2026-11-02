@@ -10,14 +10,6 @@ https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool
 
 ---
 
-CRITICAL: check desktop app, for plan mode proposal to build. VT Code plan proposal draft is being reject without user confirmation loop. and the plan rejected and it ends the turns. THIS needs fixing. /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261102T034357Z_318945-20650
-
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 10.46.40 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 10.46.37 AM.png'
-
-it seems thatt the plan and build modes interactive doesn't work properly on desktop app, it has been working well before on the CLI.
-
----
-
 add visual sync for the utils pane '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 10.47.11 AM.png' also add a button to close it.
 
 1. remove the left line border
@@ -74,40 +66,6 @@ check and fix desktop themes doesn't grouped by modes (light/dark) in the settin
 
 ---
 
----
-
-CRITICAL: check vtcode doesn't work ? what is Prompt kept — checkpoint unavailable. ?
-
-> VT Code (0.181.0) Build · Meta AI Muse-Spark-1.3-Contributor (1M) · high
-> ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-> Refine and update @README.md for better structure and wordings.
-> Prompt kept — checkpoint unavailable. Wait a moment and retry.
-> MCP tools are ready. Use /mcp tools to inspect the catalog.
-> ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-> Refine and update @README.md for better structure and wordings.
-> Prompt kept — checkpoint unavailable. Wait a moment and retry.
-> ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-> Refine and update @README.md for better structure and wordings.
-> Prompt kept — checkpoint unavailable. Wait a moment and retry.
-
-is it because I have laucched a desktop app process?
-
-remove multi session or filesnap lock -> Help me reason through this problem step by step. Review the context,
-challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the
-simplest practical approach before implementation.
-
-it should not be the case when user want to run multiple vtcode instance-> Help me reason through this problem step
-by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the
-overall design. Recommend the simplest practical approach before implementation. and fix
-
----
-
-CRITICAL: changing the modes/models/effort causing the desktop app to open a new thread, it should stay in the same thread and continue there. the configuration should persist.
-
-this is not happening as expected. CLI seems to keep the thread correctly.
-
----
-
 For both cli and desktop app, show human-readable provider names in the model picker list instead of codes. also regroup and sort and move the frontier company and models to top. Move OpenAI, Anthropic to top. Then open source ones (HuggingFace, Ollama, LM Studio, etc).
 
 ---
@@ -126,11 +84,7 @@ for zen mode, when activated, hide distractions and focus on the main content. m
 
 ---
 
-Implement license, open source section disclosure and viewer for desktop app. check the repo for details.
-
----
-
-add current time at each agent's message response. reference: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 3.12.46 PM.png'
+add current time at each agent's message response. reference: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 3.12.46 PM.png'. also implement for the CLI replacing current status clock.
 
 ---
 
@@ -143,3 +97,36 @@ implement a simple markdown preview for desktop app.
 ---
 
 implement terminal for desktop app.
+
+--
+
+improve desktop shimmer text by lowering the text opacity, keep on the shimmer bright
+
+---
+
+for search, it should able to deeplink to specific item when click, and scroll to and then highlight it for a brief moment.
+
+---
+
+check and fix TUI
+
+```
+
+Tool 'task_tracker' failed. Expand Details for recovery
+steps.
+Details (click or F8 to expand)
+```
+
+when the thread message runloop is running, clicking on this doesn't do anything. may need to handle it differently in the UI. for the context for the agent, it should still show relevant info.
+
+---
+
+check auto mode seems can't use web search tool? /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261102T044638Z_528994-20422
+
+---
+
+https://github.com/longbridge/gpui-kit/releases/tag/v0.9.0
+
+---
+
+contribute back to OSS with learning from this project. check gotchas and decicions.
