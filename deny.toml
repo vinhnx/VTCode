@@ -50,13 +50,6 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
-  # The following four are unmaintained, unreachable-from-workspace lockfile
-  # entries in the gpui/resvg rendering stack (target-gated dependencies).
-  # They disappear on the next lockfile regeneration that drops them.
-  { id = "RUSTSEC-2024-0384", reason = "unmaintained instant, transitive via gpui stack (target-gated); no patched release" },
-  { id = "RUSTSEC-2025-0134", reason = "unmaintained rustls-pemfile, transitive via gpui stack (target-gated); no patched release" },
-  { id = "RUSTSEC-2026-0206", reason = "unmaintained rustybuzz, transitive via usvg/resvg stack (target-gated); no patched release" },
-  { id = "RUSTSEC-2026-0192", reason = "unmaintained ttf-parser, transitive via gpui/resvg stack (target-gated); no patched release" },
 ]
 
 [licenses]

@@ -371,7 +371,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot 0.12.5",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -1717,9 +1717,9 @@ dependencies = [
 
 [[package]]
 name = "corcovado"
-version = "0.5.28"
+version = "0.5.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aac575a85cf04f046f88f7daf6ef350ebf79545ae54fe9bb081efbb638ed3194"
+checksum = "9cba695e51805c1acd3501c7561dec661b81394376c4493b46c49bdf39889741"
 dependencies = [
  "libc",
  "miow 0.5.0",
@@ -2364,7 +2364,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2593,7 +2593,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3195,7 +3195,7 @@ dependencies = [
  "libc",
  "log",
  "rustversion",
- "windows-link 0.2.1",
+ "windows-link 0.1.3",
  "windows-result 0.4.1",
 ]
 
@@ -6917,7 +6917,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7632,7 +7632,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.42.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -8488,7 +8488,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9167,9 +9167,9 @@ dependencies = [
 
 [[package]]
 name = "rio-grapheme-width"
-version = "0.5.28"
+version = "0.5.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a901dda1fe16da68fbe8788db5f2b4525f95b43f064618d2bb6c7361c4e9150"
+checksum = "7ef9487fce3556a0b27b6598a956c4402a46b8bb25afe2ec53ab0378c75e402c"
 dependencies = [
  "phf 0.13.1",
  "ucd-trie",
@@ -9177,9 +9177,9 @@ dependencies = [
 
 [[package]]
 name = "rio-graphics"
-version = "0.5.28"
+version = "0.5.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40bdcb0a124c88c7e75a4f2b2953b158981bf541613b4b0146e21d07f4a104ac"
+checksum = "736eb317aa3bdb7256f58b1ad18f971a831d6de928854a9aee6e13c6792bcf19"
 dependencies = [
  "rustc-hash 2.1.3",
  "tracing",
@@ -9188,15 +9188,15 @@ dependencies = [
 
 [[package]]
 name = "rio-unicode"
-version = "0.5.28"
+version = "0.5.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48266e8c525eb4fb8d3ad899e1a050404fb782f876cad2df800dd5455126a99b"
+checksum = "ed68c9eaee951073cac248ece99f5f1ebabf92a1c0305ac28fa622a8fa1679d5"
 
 [[package]]
 name = "rio-vt"
-version = "0.5.28"
+version = "0.5.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f80220ae32041e4cef8719cab57d3579cbe0dc26dd1cb1ca0693f85491e1696"
+checksum = "28b1c817c56394ca5777f25a66925e9700e6d395154c7f55f1100a5f8cb0ef39"
 dependencies = [
  "base64 0.23.1",
  "bitflags 2.13.1",
@@ -9446,7 +9446,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9514,7 +9514,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9724,7 +9724,7 @@ checksum = "609c5606d9d357b26e4ee1a7a01beac396628d0fa01ebbade2a09cefb88e65af"
 dependencies = [
  "fastrand",
  "tempfile",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9766,7 +9766,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8050abb251097357e24aff63ba2c52a6309ecb7d23a5474023df960a02694d8"
 dependencies = [
  "annotate-snippets",
- "base64 0.23.1",
+ "base64 0.22.1",
  "encoding_rs_io",
  "granit-parser 1.3.0",
  "nohash-hasher",
@@ -9783,7 +9783,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a253edfdea34032da21af84e16fcc94f4c7a6ba237f9f3bc2dbf43cea8535c44"
 dependencies = [
  "annotate-snippets",
- "base64 0.23.1",
+ "base64 0.22.1",
  "encoding_rs_io",
  "granit-parser 2.0.0",
  "nohash-hasher",
@@ -10066,7 +10066,7 @@ version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
 dependencies = [
- "dirs 6.0.0",
+ "dirs 5.0.1",
 ]
 
 [[package]]
@@ -10643,9 +10643,9 @@ dependencies = [
 
 [[package]]
 name = "teletypewriter"
-version = "0.5.28"
+version = "0.5.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edbf8e5a8f36cd22c3092b4895a1c5b41b9748e63ef92030b0353b1e05531e46"
+checksum = "184dad5c0e9838908962751c877e10defda2cb0878f9fa9041e0404f2792adf8"
 dependencies = [
  "corcovado",
  "dirs 6.0.0",
@@ -10664,10 +10664,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10710,7 +10710,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13310,7 +13310,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -14014,7 +14014,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
 dependencies = [
  "cfg-if",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
