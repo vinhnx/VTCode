@@ -410,6 +410,27 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn cancel_shortcut_stays_silent_while_idle(cx: &mut TestAppContext) {
+    // The CancelRun handler is render-gated on `running` (the menu item
+    // stays disabled while idle); an idle press must send nothing.
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".into());
+            view.focus_composer(window, cx);
+        });
+        window.render_frame(cx);
+        window.press("cmd-.", cx);
+        assert!(!view.read(cx).running);
+        assert!(!view.read(cx).cancel_requested);
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "an idle shortcut sends nothing");
+}
+
+#[gpui_kit::test]
 fn workspace_shortcuts_match_navigation_and_review_controls(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

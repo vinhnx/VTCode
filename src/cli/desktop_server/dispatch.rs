@@ -81,6 +81,11 @@ pub(super) fn dispatch_interaction_response(
 const STOP_HANDLE_WAIT: Duration = Duration::from_secs(2);
 const STOP_HANDLE_POLL: Duration = Duration::from_millis(10);
 
+/// Delay before re-asserting a cancel signal: long enough to land after the
+/// runloop's Submit-time latch reset (in-memory work), short enough that a
+/// raced single press still stops the turn promptly.
+const CANCEL_REFIRE_DELAY: Duration = Duration::from_millis(100);
+
 /// Fire the runloop's out-of-band stop signal, waiting briefly when the
 /// runtime is still publishing its handles after shell setup.
 async fn signal_runloop_stop(stop: &StopHandleSlot) {
@@ -100,6 +105,39 @@ pub(super) async fn signal_runloop_stop_with_timeout(stop: &StopHandleSlot, wait
         }
     })
     .await;
+}
+
+/// Wait for a starting runloop to publish its stop handles, then fire.
+/// Detached so the cancel ack never blocks on runloop startup.
+fn spawn_late_stop_signal(stop: StopHandleSlot) {
+    tokio::spawn(async move {
+        signal_runloop_stop_with_timeout(&stop, STOP_HANDLE_WAIT).await;
+    });
+}
+
+/// Re-assert a cancel signal after `delay` when the same turn is still
+/// active and still cancel-requested. Closes the Submit-reset race for
+/// single presses; the gate keeps a late task from touching a later turn.
+fn spawn_cancel_refire(
+    state: std::sync::Arc<Mutex<ServerState>>,
+    stop: StopHandleSlot,
+    session_id: String,
+    turn_id: String,
+    delay: Duration,
+) {
+    tokio::spawn(async move {
+        tokio::time::sleep(delay).await;
+        let live = {
+            let state = state.lock().await;
+            state.session_id.as_deref() == Some(session_id.as_str())
+                && state.active_turn_id.as_deref() == Some(turn_id.as_str())
+                && state.cancel_requested_turn.as_deref() == Some(turn_id.as_str())
+                && state.runtime.as_ref().is_some_and(|runtime| !runtime.input.is_closed())
+        };
+        if live {
+            stop_requests::fire_stop_signal(&stop);
+        }
+    });
 }
 
 pub(super) async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool) -> Result<()> {
@@ -830,10 +868,26 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             if should_send {
                 // The out-of-band signal is what stops the running turn; the
                 // queued event only dismisses overlay waits. A closed channel
-                // proves the runtime is gone, so skip the publish wait and go
+                // proves the runtime is gone, so skip the signal and go
                 // straight to the send-failure bail below.
                 if !input.is_closed() {
-                    signal_runloop_stop(&stop).await;
+                    if stop_requests::fire_stop_signal(&stop) {
+                        // The runloop resets its latch while processing the
+                        // Submit, so a signal fired into that window is lost.
+                        // The delayed re-fire lands after the reset while the
+                        // turn still runs.
+                        spawn_cancel_refire(
+                            context.state.clone(),
+                            stop.clone(),
+                            params.session_id.clone(),
+                            params.turn_id.clone(),
+                            CANCEL_REFIRE_DELAY,
+                        );
+                    } else {
+                        // Handles unpublished (runloop still starting): wait
+                        // detached so the ack stays fast.
+                        spawn_late_stop_signal(stop.clone());
+                    }
                 }
                 if input.send(InlineEvent::Cancel).is_err() {
                     let mut state = context.state.lock().await;

@@ -355,7 +355,7 @@ impl DesktopView {
                         .icon(IconName::Square)
                         .danger()
                         .when(self.zen_mode, |button| button.small())
-                        .dispatches_desktop_action(CancelRun, self.focus_handle.clone()),
+                        .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                 );
         } else {
             model_actions = model_actions.child(

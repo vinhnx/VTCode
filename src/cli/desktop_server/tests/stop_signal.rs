@@ -88,6 +88,16 @@ impl StopHarness {
     }
 }
 
+async fn wait_for_cancel(ctrl_c: &Arc<CtrlCState>) {
+    timeout(Duration::from_secs(5), async {
+        while !ctrl_c.is_cancel_requested() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("stop signal observed");
+}
+
 #[tokio::test]
 async fn turn_cancel_fires_stop_signal_and_queues_cancel_event() {
     let mut harness = StopHarness::new().await;
@@ -118,11 +128,16 @@ async fn turn_cancel_waits_for_late_stop_handles() {
         stop_requests::publish_stop_handles(&stop, &ctrl_c, &notify);
     });
     let request = harness.cancel_request("session", "turn-1");
+    // The ack no longer blocks on the publish wait; the signal follows
+    // from the detached waiter once the runloop publishes.
+    let started = Instant::now();
     let (result, _) = timeout(Duration::from_secs(10), handle_request(&harness.context, &request))
         .await
         .expect("cancel must not hang")
         .expect("cancel accepted");
+    assert!(started.elapsed() < Duration::from_secs(1), "the ack stays fast while handles publish late");
     assert_eq!(result["cancelRequested"], true);
+    wait_for_cancel(&harness.ctrl_c).await;
     assert!(harness.ctrl_c.is_cancel_requested(), "a cancel during runloop startup must still stop the turn");
     assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
 }
@@ -138,7 +153,7 @@ async fn turn_cancel_without_handles_still_queues_cancel_event() {
         .await
         .expect("cancel must stay bounded without handles")
         .expect("cancel accepted");
-    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(started.elapsed() < Duration::from_secs(1), "the ack never waits out the publish bound");
     assert_eq!(result["cancelRequested"], true);
     assert!(!harness.ctrl_c.is_cancel_requested());
     assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
@@ -201,6 +216,63 @@ async fn duplicate_turn_cancel_refires_stop_signal() {
         harness.ctrl_c.is_cancel_requested(),
         "a repeated stop must re-assert the stop signal while the turn is active"
     );
+}
+
+#[tokio::test]
+async fn turn_cancel_refires_stop_signal_after_latch_reset() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(harness.ctrl_c.is_cancel_requested(), "first signal fires synchronously");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // Simulate the runloop resetting its latch while processing the Submit:
+    // the first signal is lost, and the delayed re-fire must re-assert it
+    // while the same turn is still active.
+    harness.ctrl_c.reset();
+    assert!(!harness.ctrl_c.is_cancel_requested());
+    wait_for_cancel(&harness.ctrl_c).await;
+    assert!(harness.input.try_recv().is_err(), "the re-fire sends no duplicate event");
+}
+
+#[tokio::test]
+async fn cancel_refire_skips_released_turn() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // The turn ends before the re-fire delay elapses: terminal cleanup
+    // releases the slot, so the late task must stay quiet.
+    {
+        let mut state = harness.context.state.lock().await;
+        state.active_turn_id = None;
+        state.cancel_requested_turn = None;
+    }
+    harness.ctrl_c.reset();
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    assert!(!harness.ctrl_c.is_cancel_requested(), "no re-fire after the turn is released");
+    assert!(harness.input.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn cancel_refire_skips_replaced_turn() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // A drained batch takes the slot before the re-fire lands: the late
+    // task targets turn-1 and must not stop turn-2.
+    {
+        let mut state = harness.context.state.lock().await;
+        state.active_turn_id = Some("turn-2".into());
+        state.cancel_requested_turn = None;
+    }
+    harness.ctrl_c.reset();
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    assert!(!harness.ctrl_c.is_cancel_requested(), "no re-fire into a newer turn");
+    assert!(harness.input.try_recv().is_err());
 }
 
 #[tokio::test]

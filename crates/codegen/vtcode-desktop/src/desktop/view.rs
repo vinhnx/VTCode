@@ -438,6 +438,10 @@ struct DesktopView {
     finished_turn_id: Option<String>,
     cancel_requested: bool,
     cancel_request_sent: bool,
+    /// Turn id named by the last `turn/cancel` send, so a late error cannot
+    /// reconcile a newer turn that started since. Overwritten on every send;
+    /// self-invalidating as `active_turn_id` moves on.
+    cancel_sent_turn_id: Option<String>,
     /// Last Escape with nothing to dismiss (CLI `Esc Esc` parity): a second
     /// press clears the composer draft only when the draft is unchanged since
     /// arming, so typing between the presses disarms the clear.

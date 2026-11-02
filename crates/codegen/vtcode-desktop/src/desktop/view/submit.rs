@@ -191,6 +191,11 @@ impl DesktopView {
             return;
         }
         self.cancel_requested = true;
+        // Every user press re-sends: a first signal can be lost when the
+        // runloop resets its latch while processing the Submit, and the
+        // service re-fires the out-of-band signal on repeats while deduping
+        // the queued event. Swallowing repeats here would wedge the turn.
+        self.cancel_request_sent = false;
         self.status = rust_i18n::t!("app.composer.cancelling_turn").to_string();
         self.try_send_pending_cancel();
         cx.notify();
@@ -211,9 +216,10 @@ impl DesktopView {
         let clear_queue = self.armed_running_switch.is_some();
         if self.request(
             protocol::method::TURN_CANCEL,
-            json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id, keys::CLEAR_QUEUE: clear_queue }),
+            json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id.clone(), keys::CLEAR_QUEUE: clear_queue }),
         ) {
             self.cancel_request_sent = true;
+            self.cancel_sent_turn_id = Some(turn_id);
         } else {
             self.error = Some(rust_i18n::t!("app.composer.cancellation_not_queued").to_string());
         }

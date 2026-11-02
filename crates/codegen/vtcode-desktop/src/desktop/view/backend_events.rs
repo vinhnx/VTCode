@@ -347,6 +347,23 @@ impl DesktopView {
                         }
                     } else if method == protocol::method::TURN_CANCEL {
                         self.cancel_request_sent = false;
+                        // The service is authoritative: if it rejects a cancel
+                        // for our live turn, our running state is stale (e.g. a
+                        // dropped terminal event) — reconcile instead of
+                        // spinning forever. Correlated against the last-sent
+                        // turn so a late error cannot clear a newer turn.
+                        let stale = matches!(
+                            (&self.cancel_sent_turn_id, &self.active_turn_id),
+                            (Some(sent), Some(active)) if sent == active
+                        );
+                        if stale && let Some(message) = self.error.clone() {
+                            let was_running = self.running;
+                            self.finish_unverified_turn(&message);
+                            if was_running {
+                                self.invalidate_webmcp_status();
+                                self.drain_armed_running_switch(cx);
+                            }
+                        }
                     } else if method == protocol::method::TURN_QUEUE_TAKE_LATEST {
                         self.take_latest_pending = false;
                     }

@@ -512,6 +512,7 @@ impl DesktopView {
             finished_turn_id: None,
             cancel_requested: false,
             cancel_request_sent: false,
+            cancel_sent_turn_id: None,
             last_escape_press: None,
             composer_history_index: None,
             composer_history_stash: gpui_kit::SharedString::from(""),

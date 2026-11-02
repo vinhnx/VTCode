@@ -760,3 +760,129 @@ fn delete_selected_thread_refused_in_every_state_but_idle_other_still_prompts(cx
         assert!(view.error.is_none(), "the non-selected delete raises no refusal");
     });
 }
+
+#[gpui_kit::test]
+fn repeated_cancel_presses_resend_turn_cancel(cx: &mut TestAppContext) {
+    // A first stop signal can be lost when the runloop resets its latch
+    // while processing the Submit; every press must re-send so repeats
+    // re-assert the out-of-band signal instead of wedging silently.
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        for press in 1..=2 {
+            view.update(cx, |view, cx| view.cancel_turn(cx));
+            let (method, params) = take_request(&mut requests);
+            assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL, "press {press} sends");
+            assert_eq!(
+                params,
+                json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false }),
+                "press {press} names the live turn"
+            );
+        }
+        assert!(view.read(cx).cancel_requested);
+        assert!(view.read(cx).cancel_request_sent);
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
+        });
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "no duplicate send for the same presses");
+    view.update(cx, |view, cx| {
+        assert!(!view.running);
+        view.cancel_turn(cx);
+    });
+    assert!(requests.try_recv().is_err(), "an idle press sends nothing");
+}
+
+#[gpui_kit::test]
+fn stale_cancel_error_reconciles_running_state(cx: &mut TestAppContext) {
+    // The service rejected our cancel for the live turn, so the turn is
+    // already gone server-side (e.g. a dropped terminal event): clear the
+    // stale running state instead of spinning forever.
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.cancel_turn(cx));
+        let (method, _) = take_request(&mut requests);
+        assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+        view.update(cx, |view, _| {
+            assert_eq!(view.cancel_sent_turn_id.as_deref(), Some("turn-1"));
+        });
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::TURN_CANCEL.into(),
+                    result: None,
+                    error: Some("turn is no longer active".into()),
+                },
+                cx,
+            );
+        });
+        view.update(cx, |view, _| {
+            assert!(!view.running, "stale running state reconciles");
+            assert!(view.active_turn_id.is_none());
+            assert!(!view.cancel_requested);
+            assert!(!view.cancel_request_sent);
+        });
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "reconcile sends nothing further");
+}
+
+#[gpui_kit::test]
+fn late_cancel_error_ignores_newer_turn(cx: &mut TestAppContext) {
+    // Asymmetric guard: an error for an older cancel must not clear a
+    // newer turn that started since the send.
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.cancel_turn(cx));
+        let _ = take_request(&mut requests);
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(turn_completed("thread-b", "turn-1"), cx);
+        });
+        // A newer turn starts before the stale error lands.
+        view.update(cx, |view, _| {
+            view.running = true;
+            view.active_turn_id = Some("turn-2".into());
+        });
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::TURN_CANCEL.into(),
+                    result: None,
+                    error: Some("turn is no longer active".into()),
+                },
+                cx,
+            );
+        });
+        view.update(cx, |view, _| {
+            assert!(view.running, "the newer turn keeps running");
+            assert_eq!(view.active_turn_id.as_deref(), Some("turn-2"));
+        });
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "the late error sends nothing");
+}
+
+#[gpui_kit::test]
+fn cancel_button_click_sends_turn_cancel(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("cancel-turn", cx);
+    })
+    .unwrap();
+    let (method, params) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    assert_eq!(
+        params,
+        json!({ "sessionId": "thread-b", "turnId": "turn-1", "clearQueue": false }),
+        "the button names the live turn"
+    );
+    assert!(requests.try_recv().is_err(), "one click sends once");
+    cx.update(|cx| {
+        assert!(view.read(cx).cancel_requested);
+        assert!(view.read(cx).cancel_request_sent);
+    });
+}
