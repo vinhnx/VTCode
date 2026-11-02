@@ -71,6 +71,26 @@ When requesting the mapping upstream, point at this section plus the icon files 
 with no public tracker; the channel is the private Rex Beta Discord). No CLI-side escape sequence can set
 profile artwork; do not fork the adapter to spoof another program's id.
 
+Copy-paste request body (verified against the spec 2026-11-02; emission is conformant, only the tile is missing):
+
+```text
+Please add a program-registry icon tile for VT Code (https://github.com/vinhnx/vtcode).
+
+- OSC 7501 `app` id: `vtcode` (sent on every report; root title "VT Code")
+- Foreground process name: `vtcode`
+- Artwork (monochrome V mark, white on transparent for dark tab chrome):
+  resources/icons/vtcode-mono.svg (vector source)
+  resources/icons/vtcode-mono-32.png (32x32 handoff)
+  resources/icons/vtcode-mono-120.png (120x120 handoff)
+- Spec conformance: complete-replacement reports, opaque slash-scoped ids,
+  kind/progress gated to blocked/working, base64 single-line title/msg with
+  no controls, 4KB/64-record caps, no feature query (emit unconditionally,
+  as the spec permits).
+
+Today Rex tabs running VT Code show the generic terminal glyph; mapping
+`vtcode` lights up the tile with no CLI-side change needed.
+```
+
 ## iTerm2 session status (OSC 21337)
 
 Direct iTerm2 sessions (no tmux/screen) additionally receive the proprietary session-status pill alongside the
