@@ -655,6 +655,121 @@ fn trackpad_swipe_ignores_empty_history(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn horizontal_scroll_back_loads_previous_thread_with_loading_feedback(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    scroll_swipe(window, 70., 0., cx);
+    assert!(requests.try_recv().is_err(), "a sub-threshold scroll must not navigate");
+    view.update(cx, |view, _| {
+        assert_eq!(view.swipe_scroll.armed(), Some(NavigationDirection::Back));
+    });
+
+    scroll_swipe(window, 70., 0., cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("sustained horizontal scroll should load the previous thread");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let view_state = view.read(cx);
+        assert_eq!(view_state.pending_navigation.map(|pending| pending.target_index), Some(0));
+        assert_eq!(view_state.pending_navigation_direction(), Some(NavigationDirection::Back));
+        assert_eq!(window.find("navigate-back").label(), Some("Back (navigating…)"));
+        let loading = window.find("navigation-loading");
+        assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(loading.label(), Some("Navigating back…"));
+    })
+    .unwrap();
+
+    scroll_swipe(window, 140., 0., cx);
+    assert!(requests.try_recv().is_err(), "a scroll while pending must not issue another request");
+}
+
+#[gpui_kit::test]
+fn horizontal_scroll_forward_loads_next_thread(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    scroll_swipe(window, -140., 0., cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("sustained horizontal scroll should load the next thread");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-third" }));
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("navigate-forward").label(), Some("Forward (navigating…)"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn vertical_scroll_never_navigates(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    scroll_swipe(window, 0., 500., cx);
+    scroll_swipe(window, 10., 500., cx);
+    scroll_swipe(window, -10., -500., cx);
+    assert!(requests.try_recv().is_err(), "vertical scrolling must never navigate history");
+    view.update(cx, |view, _| {
+        assert_eq!(view.swipe_scroll.armed(), None);
+    });
+}
+
+#[gpui_kit::test]
+fn horizontal_scroll_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+    })
+    .unwrap();
+    scroll_swipe(window, 140., 0., cx);
+    assert!(requests.try_recv().is_err(), "a scroll over an open palette must not navigate the background");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close_palette(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    scroll_swipe(window, 140., 0., cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("the same scroll navigates once the palette is closed");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+}
+
+#[gpui_kit::test]
+fn line_based_horizontal_scroll_navigates(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    cx.update_window(window, |_, window, cx| {
+        window.scroll("pane-root", gpui_kit::ScrollDelta::Lines(point(20., 0.)), cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("a notched horizontal wheel scroll should navigate like a trackpad swipe");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+}
+
+#[gpui_kit::test]
 fn trackpad_swipe_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

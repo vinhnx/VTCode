@@ -140,6 +140,50 @@ impl DesktopView {
             && self.file_preview.is_none()
     }
 
+    /// Whether history exists in `direction` and no transition blocks it.
+    /// Shared by the scroll path and the toolbar cue so the cue never
+    /// advertises a navigation that would no-op.
+    pub(super) fn swipe_direction_available(&self, direction: NavigationDirection) -> bool {
+        match direction {
+            NavigationDirection::Back => self.can_navigate_back(),
+            NavigationDirection::Forward => self.can_navigate_forward(),
+        }
+    }
+
+    /// Feeds a trackpad/mouse scroll event into swipe navigation. Sustained
+    /// horizontal scrolling navigates like a discrete swipe; everything else —
+    /// including all vertical scrolling — is left for the scrollable under the
+    /// cursor. Observes only: never stops propagation. The toolbar cue updates
+    /// only when the armed direction changes, not on every scroll event.
+    pub(super) fn handle_swipe_scroll(&mut self, event: &ScrollEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.swipe_navigation_allowed() {
+            let was_armed = self.swipe_scroll.armed().is_some();
+            self.swipe_scroll.reset();
+            if was_armed {
+                cx.notify();
+            }
+            return;
+        }
+        let natural_scroll = natural_scroll_enabled();
+        let before = self.swipe_scroll.armed();
+        let delta = event.delta.pixel_delta(window.line_height());
+        let fired = self.swipe_scroll.push(
+            f32::from(delta.x),
+            f32::from(delta.y),
+            event.touch_phase,
+            Instant::now(),
+            natural_scroll,
+        );
+        if self.swipe_scroll.armed() != before {
+            cx.notify();
+        }
+        match fired.filter(|direction| self.swipe_direction_available(*direction)) {
+            Some(NavigationDirection::Back) => self.navigate_back(cx),
+            Some(NavigationDirection::Forward) => self.navigate_forward(cx),
+            None => {}
+        }
+    }
+
     pub(super) fn navigate_back(&mut self, cx: &mut Context<Self>) {
         if self.can_navigate_back()
             && let Some(index) = self.navigation_history.back_index()

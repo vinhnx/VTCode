@@ -546,6 +546,15 @@ impl DesktopView {
         let pending_direction = self.pending_navigation_direction();
         let pending_back = pending_direction == Some(NavigationDirection::Back);
         let pending_forward = pending_direction == Some(NavigationDirection::Forward);
+        // Scroll-gesture cue: lights the arrow a sustained horizontal scroll
+        // is about to fire. Gated render-side so a stale gesture can never
+        // advertise a blocked navigation (overlay opened mid-swipe, pending
+        // transition). Popover, not secondary: the toolbar sits on the rail
+        // surface, where secondary would be pixel-identical to the background.
+        let swipe_cue = self
+            .swipe_scroll
+            .armed()
+            .filter(|direction| self.swipe_navigation_allowed() && self.swipe_direction_available(*direction));
         let workspace = self
             .workspace
             .as_ref()
@@ -579,8 +588,11 @@ impl DesktopView {
                                 .ghost()
                                 .small()
                                 .loading(pending_back)
+                                .when(swipe_cue == Some(NavigationDirection::Back), |button| {
+                                    button.bg(theme.colors.popover).text_color(theme.colors.foreground)
+                                })
                                 .tooltip_with_action(
-                                    rust_i18n::t!("app.navigation.back").to_string(),
+                                    format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.back")),
                                     &NavigateBack,
                                     Some(key_context::DESKTOP),
                                 )
@@ -600,8 +612,11 @@ impl DesktopView {
                                 .ghost()
                                 .small()
                                 .loading(pending_forward)
+                                .when(swipe_cue == Some(NavigationDirection::Forward), |button| {
+                                    button.bg(theme.colors.popover).text_color(theme.colors.foreground)
+                                })
                                 .tooltip_with_action(
-                                    rust_i18n::t!("app.navigation.forward").to_string(),
+                                    format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.forward")),
                                     &NavigateForward,
                                     Some(key_context::DESKTOP),
                                 )

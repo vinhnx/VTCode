@@ -56,9 +56,9 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
     FocusHandle, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollHandle, Size,
-    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, img,
-    point, px, size,
+    MouseMoveEvent, MouseUpEvent, NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollEvent,
+    ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored,
+    deferred, div, img, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -86,7 +86,9 @@ use super::transport::{
 };
 use cli_handoff::CliHandoff;
 use full_access_confirm::FullAccessConfirmState;
-use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
+use navigation_history::{
+    NavigationHistory, NavigationLocation, PendingNavigation, SwipeScrollAccumulator, natural_scroll_enabled,
+};
 use overlays::{Route, RouteHistory};
 
 mod about;
@@ -397,6 +399,7 @@ struct DesktopView {
     pending_workspace: Option<PathBuf>,
     navigation_history: NavigationHistory,
     pending_navigation: Option<PendingNavigation>,
+    swipe_scroll: SwipeScrollAccumulator,
     workspace_selection_pending: bool,
     workspace_selection_task: Option<Task<()>>,
     workspace_picker_open: bool,

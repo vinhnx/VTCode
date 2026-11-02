@@ -232,6 +232,12 @@ impl Render for DesktopView {
                     }
                 }),
             )
+            // Trackpads without the system "swipe between pages" gesture
+            // report sideways movement as scroll deltas instead of discrete
+            // swipes; sustained horizontal scrolling navigates the same way.
+            .on_scroll(cx.listener(|view, event: &ScrollEvent, window, cx| {
+                view.handle_swipe_scroll(event, window, cx);
+            }))
             .on_action(cx.listener(|view, _: &ToggleZenMode, window, cx| view.toggle_zen_mode(window, cx)))
             .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
             .on_action(cx.listener(|view, _: &ReloadCliSettings, window, cx| {

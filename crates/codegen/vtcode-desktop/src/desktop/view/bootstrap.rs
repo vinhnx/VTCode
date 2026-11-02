@@ -485,6 +485,7 @@ impl DesktopView {
             pending_workspace: None,
             navigation_history: NavigationHistory::default(),
             pending_navigation: None,
+            swipe_scroll: SwipeScrollAccumulator::default(),
             workspace_selection_pending: false,
             workspace_selection_task: None,
             workspace_picker_open: false,

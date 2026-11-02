@@ -346,6 +346,13 @@ fn swipe_navigate(window: AnyWindowHandle, direction: NavigationDirection, cx: &
     .unwrap();
 }
 
+fn scroll_swipe(window: AnyWindowHandle, dx_px: f32, dy_px: f32, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        window.scroll("pane-root", gpui_kit::ScrollDelta::Pixels(point(px(dx_px), px(dy_px))), cx);
+    })
+    .unwrap();
+}
+
 fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
     serde_json::from_value(json!({
         "provider": "openai", "model": "gpt-5.6-sol", "authenticated": true, "credentialSetupCommand": "",
