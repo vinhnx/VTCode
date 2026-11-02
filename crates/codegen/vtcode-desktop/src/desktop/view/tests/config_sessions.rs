@@ -382,6 +382,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
         view.update(cx, |view, cx| {
             view.workspace = Some(directory.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session-live".to_string());
             view.theme_id = "ciapre-blue".into();
             view.configuration = serde_json::from_value(json!({
                 "provider": "ollama",
@@ -438,8 +439,8 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
             assert_eq!(view.theme_id, "ciapre-blue");
             assert_eq!(view.preferences.follow_cli_theme, Some(true));
             assert_eq!(view.composer.read(cx).value().as_str(), "Keep this draft");
-            assert!(view.selected_session_id.is_none());
-            assert_eq!(view.status, "CLI theme saved. The next message starts a new session.");
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-live"), "theme sync preserves the thread");
+            assert_eq!(view.status, "CLI theme saved.");
         });
     })
     .unwrap();

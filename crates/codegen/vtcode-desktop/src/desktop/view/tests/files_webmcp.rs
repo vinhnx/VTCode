@@ -475,7 +475,7 @@ fn destination_dropdown_offers_detected_saved_and_system_choices(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
-fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(cx: &mut TestAppContext) {
+fn session_transitions_clear_runtime_projections_and_model_switch_preserves_the_thread(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let session = json!({
         "sessionId": "next-session", "title": "Next", "workspace": "/workspace",
@@ -556,16 +556,38 @@ fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(
         }
         cx.update_window(window, |_, _, cx| {
             let view = view.read(cx);
+            if method == vtcode_desktop_protocol::method::CONFIG_SELECT {
+                // A model switch restarts the runtime under the same session
+                // id: every thread projection stays intact.
+                let usage = view.last_usage.as_ref().expect("usage survives a model switch");
+                assert_eq!(usage.input_tokens, 100);
+                assert_eq!(usage.output_tokens, 20);
+                assert_eq!(view.changes.entries().len(), 1);
+                assert_eq!(view.selected_change.as_deref(), Some("old.rs"));
+                assert!(view.change_viewer.is_some());
+                assert_eq!(view.attachments.len(), 1);
+                assert_eq!(view.attachments[0].path, "old.rs");
+                assert_eq!(view.interaction_choice_ids, vec![Some("old-choice".to_string())]);
+                assert_eq!(view.interaction_answer_texts, vec![Some("old answer".to_string())]);
+                assert_eq!(view.interaction_step_index, 2);
+                assert!(view.attachments_picker_open);
+                // The loop shares one view: the LOAD leg's restored row plus
+                // this leg's seeded rows (answer + diff card mirror) all
+                // survive the model switch.
+                assert_eq!(view.transcript.get(0).unwrap().text, "Restored answer");
+                assert_eq!(view.transcript.get(1).unwrap().text, "Old answer");
+                assert_eq!(
+                    view.transcript.get(2).unwrap().text,
+                    "--- a/old.rs\n+++ b/old.rs\n@@ -1 +1 @@\n-before\n+after\n"
+                );
+                assert!(view.transcript.get(3).is_none());
+                return;
+            }
             assert!(view.last_usage.is_none(), "{method}");
             assert!(view.changes.entries().is_empty(), "{method}");
             assert!(view.selected_change.is_none(), "{method}");
             assert!(view.change_viewer.is_none(), "{method}");
-            if method == vtcode_desktop_protocol::method::CONFIG_SELECT {
-                assert_eq!(view.attachments.len(), 1);
-                assert_eq!(view.attachments[0].path, "old.rs");
-            } else {
-                assert!(view.attachments.is_empty(), "{method}");
-            }
+            assert!(view.attachments.is_empty(), "{method}");
             assert!(view.interaction_choice_ids.is_empty(), "{method}");
             assert!(view.interaction_answer_texts.is_empty(), "{method}");
             assert_eq!(view.interaction_step_index, 0, "{method}");

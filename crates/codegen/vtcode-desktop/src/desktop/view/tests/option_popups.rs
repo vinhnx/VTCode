@@ -747,7 +747,11 @@ fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut 
         });
         assert_eq!(view.read(cx).composer.read(cx).value(), "Preserve my draft");
         assert_eq!(view.read(cx).attachments[0].path, "source.rs");
-        assert!(view.read(cx).selected_session_id.is_none());
+        assert_eq!(
+            view.read(cx).selected_session_id.as_deref(),
+            Some("old-session"),
+            "runtime option change preserves the thread"
+        );
         assert!(view.read(cx).session_request.is_none());
     })
     .unwrap();

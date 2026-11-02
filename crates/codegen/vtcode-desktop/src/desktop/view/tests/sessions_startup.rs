@@ -535,7 +535,7 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
-fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut TestAppContext) {
+fn selecting_a_model_switches_configuration_and_preserves_the_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
     cx.update_window(window, |_, window, cx| {
@@ -543,6 +543,13 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
             view.backend = Some(BackendHandle { commands });
             view.workspace = Some(std::env::temp_dir());
             view.selected_session_id = Some("session-old".to_string());
+            view.open_tabs = vec!["session-old".to_string()];
+            view.transcript.push(TranscriptItem::new(
+                "kept-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Conversation remains visible.".into(),
+            ));
             view.models = vec![
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "ollama".to_string(),
@@ -621,8 +628,8 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
     assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
 
-    // The service answers with the new snapshot; the client resets session
-    // state and refreshes the catalog.
+    // The service answers with the new snapshot; the client keeps the thread
+    // and refreshes the catalog.
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
             view.handle_backend_event(
@@ -640,11 +647,15 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                 },
                 cx,
             );
-            assert_eq!(view.selected_session_id, None, "session resets after a model switch");
+            assert_eq!(view.selected_session_id.as_deref(), Some("session-old"), "model switch preserves the thread");
+            assert_eq!(view.open_tabs, vec!["session-old".to_string()], "tabs survive a model switch");
+            assert_eq!(view.transcript.get(0).unwrap().text, "Conversation remains visible.");
+            assert!(view.transcript.get(1).is_none(), "no transcript row is added or dropped");
             assert_eq!(
                 view.configuration.as_ref().map(|configuration| configuration.model.clone()),
                 Some("claude-sonnet-5".to_string())
             );
+            assert_eq!(view.status, "Switched to claude-sonnet-5.");
         });
     })
     .unwrap();

@@ -49,7 +49,8 @@ pub const CONFIG_OPEN_FILE: &str = "config/openFile";
 pub const COMPOSER_RESOURCES: &str = "composer/resources";
 /// List selectable models from the service's catalog.
 pub const CONFIG_MODELS: &str = "config/models";
-/// Select the provider/model used for the next session.
+/// Select the provider/model for the selected session. The service restarts
+/// the session runtime under the same session id; the thread is preserved.
 pub const CONFIG_SELECT: &str = "config/select";
 /// Store a provider API key from the desktop client in secure storage.
 /// The secret travels the local channel only and is never echoed back.

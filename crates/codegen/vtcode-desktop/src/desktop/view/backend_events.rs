@@ -460,9 +460,8 @@ impl DesktopView {
                             {
                                 self.save_workspace_permission(choice);
                             }
-                            self.reset_preserving_composer_attachments();
-                            self.selected_session_id = None;
-                            self.record_current_navigation();
+                            // The service restarts the runtime under the same
+                            // session id; keep the thread, transcript, and tabs.
                             self.configuration = Some(snapshot);
                             self.status = rust_i18n::t!("app.service.runtime_updated").to_string();
                         }
@@ -480,9 +479,8 @@ impl DesktopView {
                                 .map(|preferences| preferences.theme.clone())
                                 .filter(|theme| themes::find(theme).is_some());
                             if let Some(theme) = theme {
-                                self.reset_preserving_composer_attachments();
-                                self.selected_session_id = None;
-                                self.record_current_navigation();
+                                // A theme change leaves the live session
+                                // untouched; keep the thread and transcript.
                                 self.configuration = Some(snapshot);
                                 self.preferences.follow_cli_theme = Some(true);
                                 self.apply_theme_state(theme, None, cx);
@@ -499,11 +497,10 @@ impl DesktopView {
                         }
                     },
                     protocol::method::CONFIG_SELECT => {
-                        // The service restarted with the new provider/model and
-                        // no selected session; the next prompt starts a fresh
-                        // session under it.
+                        // The service restarted the runtime with the new
+                        // provider/model under the same session id; keep the
+                        // thread, transcript, and tabs.
                         self.configuration = serde_json::from_value::<ConfigurationSnapshot>(result).ok();
-                        self.clear_session_after_service_reset();
                         self.models.clear();
                         let _ = self.request(protocol::method::CONFIG_MODELS, json!({}));
                         let model = self

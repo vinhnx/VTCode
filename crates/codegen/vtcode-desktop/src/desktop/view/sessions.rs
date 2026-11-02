@@ -763,8 +763,10 @@ impl DesktopView {
         self.prune_attachment_thumbnails();
     }
 
-    /// Mirror a service-side session discard (provider switch, credential
-    /// repair): drop the selection and turn state, keep attachments for reuse.
+    /// Mirror a genuine service-side session discard (secret-store rotation
+    /// that reports `session_reset`): drop the selection and turn state, keep
+    /// attachments for reuse. Provider/model switches and runtime option
+    /// changes preserve the thread and must not call this.
     pub(super) fn clear_session_after_service_reset(&mut self) {
         self.selected_session_id = None;
         self.reset_preserving_composer_attachments();

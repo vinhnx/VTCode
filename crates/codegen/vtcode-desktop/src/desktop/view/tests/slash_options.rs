@@ -906,3 +906,48 @@ fn composer_policy_button_tracks_permission_mode_and_availability(cx: &mut TestA
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn runtime_option_change_preserves_the_thread_and_applies_the_snapshot(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session-live".to_string());
+            view.open_tabs = vec!["session-live".to_string()];
+            view.transcript.push(TranscriptItem::new(
+                "kept-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Conversation remains visible.".into(),
+            ));
+            let mut configuration = runtime_options_config();
+            let options = configuration.session_options.as_mut().unwrap();
+            options.mode = "plan".into();
+            options.reasoning_effort = "high".into();
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
+                    result: Some(json!(configuration)),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(
+                view.selected_session_id.as_deref(),
+                Some("session-live"),
+                "runtime option change preserves the thread"
+            );
+            assert_eq!(view.open_tabs, vec!["session-live".to_string()], "tabs survive the change");
+            assert_eq!(view.transcript.get(0).unwrap().text, "Conversation remains visible.");
+            assert!(view.transcript.get(1).is_none(), "no transcript row is added or dropped");
+            let applied = view.configuration.as_ref().unwrap().session_options.as_ref().unwrap();
+            assert_eq!(applied.mode, "plan");
+            assert_eq!(applied.reasoning_effort, "high");
+            assert_eq!(view.status, "Runtime options updated.");
+        });
+    })
+    .unwrap();
+}
