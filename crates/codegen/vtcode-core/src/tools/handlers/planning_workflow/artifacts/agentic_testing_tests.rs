@@ -459,6 +459,27 @@ fn retained_checkpoint_scope_review_accepts_explicit_readme_only_expectation() {
 }
 
 #[test]
+fn scope_review_accepts_no_other_tracked_edits_expectation() {
+    // Session-shaped step 6 from session-vtcode-20261102T034357Z: the
+    // expectation lives in the action text as "no other tracked edits",
+    // which is semantically an exclusive changed-file expectation.
+    for action in [
+        "Confirm scope limited to README.md and expect status lists only README.md with no other tracked edits",
+        "Confirm scope limited to README.md and expect status lists only README.md with no other tracked edit",
+    ] {
+        let plan = scope_review_plan(
+            action,
+            "README.md",
+            "wc -l README.md, git status --short -- README.md",
+            "scope check recorded",
+        );
+        let report = validate_plan_content(&plan);
+        assert!(report.is_ready(), "tracked-edits expectation must validate ({action}): {report:?}");
+        assert_eq!(report.scope_review_step_count, 1);
+    }
+}
+
+#[test]
 fn multiline_scope_review_preserves_separate_metadata_in_tracker() {
     let plan = scope_review_plan(
         "Review scope",
