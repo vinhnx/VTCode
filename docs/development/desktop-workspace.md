@@ -17,7 +17,7 @@ To run the app:
 - macOS 15 or newer, on Apple Silicon or Intel.
 - One-time Gatekeeper approval on first launch: builds are ad hoc signed (no Developer ID, no notarization)
   unless the release notes say otherwise, so right-click the app and choose Open, or allow it once in
-  Settings > Privacy & Security.
+  System Settings > Privacy & Security.
 - Provider credentials configured for the CLI (see below); the desktop service reuses the CLI's configuration,
   credentials, workspace trust, and sandbox policy.
 
@@ -35,13 +35,16 @@ To build and install from source (only needed when a release ships no prebuilt d
 ## Download a release build
 
 Every release ships a prebuilt Apple Silicon app on
-[GitHub Releases](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**): download
-`vtcode-desktop-<version>-aarch64-apple-darwin.zip`, unzip, and drag **VT Code.app** to `~/Applications`.
-Verify with the matching `.sha256` sidecar or `checksums.txt`. `scripts/install.sh` and
-`vtcode update` install the same prebuilt asset automatically, asking between `~/Applications` and `/Applications`
-for fresh installs (`--with-desktop` skips the question and uses `~/Applications`); only hosts without a published
-asset fall back to a from-source build, or package from a checkout
-as below.
+[GitHub Releases](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**). The easiest install is
+`vtcode desktop --install`, which downloads the same prebuilt asset automatically (`scripts/install.sh` and
+`vtcode update` offer it too, asking between `~/Applications` and `/Applications` for fresh installs, while
+`--install`/`--with-desktop` use `~/Applications` without asking). To install by hand, download
+`vtcode-desktop-<version>-aarch64-apple-darwin.zip`, unzip, and drag **VT Code.app** to `~/Applications`,
+verifying with the matching `.sha256` sidecar or `checksums.txt`. Only hosts without a published asset fall back
+to a from-source build, or package from a checkout as below.
+
+Launching the CLI without the app installed shows a reminder at most once per day; mute it permanently with
+`[desktop] suggest-install = false` in vtcode.toml.
 
 ## Build and launch
 
@@ -74,7 +77,7 @@ places the service in `Contents/Helpers`, signs both executables before signing 
 default output is `dist/VT Code.app`; the script will not overwrite an existing output. Ad hoc signatures support local
 development only. They do not establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
 Every package writes Gatekeeper first-launch steps next to the bundle (`FIRST-LAUNCH.txt`): right-click the app and
-choose Open, or allow it once in Settings > Privacy & Security.
+choose Open, or allow it once in System Settings > Privacy & Security.
 The packaged GUI uses only its bundled `Contents/Helpers/vtcode`; if that helper is missing, it asks you to rebuild or
 reinstall instead of starting an unrelated workspace binary. Development runs prefer an adjacent `vtcode` binary, then
 check the workspace `target/release` and `target/debug` outputs.
@@ -83,6 +86,8 @@ Launch a packaged build by its exact path with `scripts/open-desktop-macos.sh "d
 macOS to open a new instance of that bundle; this avoids selecting a different local copy when several development apps
 share the same display name or bundle identifier. From any terminal, `vtcode desktop [APP_PATH]` opens the GUI the same
 way on macOS: it checks the explicit path, then `VTCODE_DESKTOP_APP`, then `~/Applications` and `/Applications`.
+`vtcode desktop --install` downloads and installs the app from the prebuilt release asset instead (updates install in
+place; fresh installs go to `~/Applications`).
 
 The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.8.0 setup](https://gpui-kit.com/docs/installation/).
 

@@ -54,6 +54,26 @@ vtcode dependencies install search-tools
 
 Windows release artifacts may lag behind macOS/Linux while the build pipeline is being finalized.
 
+## Desktop App (macOS 15+)
+
+The optional native macOS GUI installs from a prebuilt release asset — no build toolchain needed. Updates reinstall
+in place; fresh installs go to `~/Applications` unless you pick `/Applications` when asked.
+
+```bash
+# During CLI install: the native installer asks (default: install)
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+
+# Anytime afterwards
+vtcode desktop --install
+
+# Or together with a CLI update
+vtcode update --with-desktop
+```
+
+First launch needs a one-time Gatekeeper approval (Right-click > Open) unless the release notes say the build is
+notarized. See the [desktop workspace guide](../development/desktop-workspace.md) for requirements and the
+[installer guide](./NATIVE_INSTALLERS.md) for flags (`--with-desktop` / `--without-desktop`, `DESKTOP_INSTALL_DIR`).
+
 ## After Installation
 
 ### 1. Verify it works
@@ -180,6 +200,14 @@ Remove-Item "$env:LOCALAPPDATA\VT Code\vtcode.exe"
 Remove-Item "C:\Program Files\VT Code\vtcode.exe"
 ```
 
+### Desktop App (macOS)
+
+```bash
+rm -rf ~/Applications/VT\ Code.app
+# or, for a system-wide install
+sudo rm -rf /Applications/VT\ Code.app
+```
+
 ## Installation Paths
 
 ### macOS & Linux Paths
@@ -187,6 +215,8 @@ Remove-Item "C:\Program Files\VT Code\vtcode.exe"
 - `/usr/local/bin/vtcode` (standard)
 - `/opt/local/bin/vtcode` (Homebrew ARM64)
 - `~/.local/bin/vtcode` (user fallback)
+- `~/Applications/VT Code.app` (desktop app, user install)
+- `/Applications/VT Code.app` (desktop app, system-wide install)
 
 ### Windows Paths
 

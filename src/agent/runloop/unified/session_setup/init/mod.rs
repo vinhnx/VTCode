@@ -46,7 +46,7 @@ use vtcode_core::{
     init_global_notification_manager,
 };
 
-use crate::startup::take_search_tools_bundle_notice;
+use crate::startup::{take_desktop_suggest_notice, take_search_tools_bundle_notice};
 use crate::updater::{Updater, append_notice_highlight};
 use vtcode_config::MiMoAuthMethod;
 use vtcode_config::core::AnthropicConfig;
@@ -219,6 +219,8 @@ pub(crate) async fn initialize_session_critical(
     let release_highlights = None;
     session_bootstrap.mcp_error = mcp_error;
     session_bootstrap.search_tools_notice = take_search_tools_bundle_notice().await;
+    let suggest_desktop = vt_cfg.is_none_or(|cfg| cfg.desktop.suggest_install);
+    session_bootstrap.desktop_notice = take_desktop_suggest_notice(suggest_desktop).await;
     if let Some(notice) = startup_update_check.cached_notice.as_ref() {
         append_notice_highlight(&mut session_bootstrap.header_highlights, notice);
     }

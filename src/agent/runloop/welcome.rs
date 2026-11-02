@@ -21,6 +21,7 @@ pub(crate) struct SessionBootstrap {
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
     pub mcp_error: Option<String>,
     pub search_tools_notice: Option<crate::startup::SearchToolsBundleNotice>,
+    pub desktop_notice: Option<crate::startup::DesktopSuggestNotice>,
     pub header_highlights: Vec<InlineHeaderHighlight>,
     pub acp_workspace_trust: Option<AgentClientProtocolZedWorkspaceTrustMode>,
     pub release_highlights: Option<(semver::Version, Vec<String>)>,
@@ -127,6 +128,7 @@ pub(crate) async fn prepare_session_bootstrap_with_mode(
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
         mcp_error,
         search_tools_notice: None,
+        desktop_notice: None,
         header_highlights,
         // Regular terminal sessions are not launched through the ACP bridge, so
         // ACP-specific workspace trust must not leak into the runtime header or

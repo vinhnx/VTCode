@@ -24,9 +24,15 @@ const DESKTOP_ASSET_SUFFIX: &str = ".zip";
 const DESKTOP_PLIST_RELATIVE_PATH: &str = "Contents/Info.plist";
 const DESKTOP_EXECUTABLE_RELATIVE_PATH: &str = "Contents/MacOS/vtcode-desktop";
 const DESKTOP_HELPER_RELATIVE_PATH: &str = "Contents/Helpers/vtcode";
+/// Gatekeeper first-launch steps shipped at the archive root by ad hoc signed
+/// builds (notarized builds omit it).
+const DESKTOP_FIRST_LAUNCH_NOTE: &str = "FIRST-LAUNCH.txt";
 
 pub(crate) enum DesktopInstallOutcome {
-    Installed(String),
+    Installed {
+        version: String,
+        needs_gatekeeper_approval: bool,
+    },
     UpToDate(String),
 }
 
@@ -113,13 +119,16 @@ pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -
 
     let extract_directory = temporary_directory.path().join("extracted");
     let destination = install_dir.join(DESKTOP_APP_NAME);
-    let installed_path =
+    let installed =
         tokio::task::spawn_blocking(move || install_desktop_bundle(&archive_path, &extract_directory, &destination))
             .await
             .context("desktop install task panicked")??;
 
-    tracing::info!("desktop app installed to {}", installed_path.display());
-    Ok(DesktopInstallOutcome::Installed(release.version.to_string()))
+    tracing::info!("desktop app installed to {}", installed.path.display());
+    Ok(DesktopInstallOutcome::Installed {
+        version: release.version.to_string(),
+        needs_gatekeeper_approval: installed.needs_gatekeeper_approval,
+    })
 }
 
 /// Read the installed desktop app's version from its bundled CLI helper.
@@ -231,9 +240,20 @@ pub(crate) fn existing_install_dir() -> Option<PathBuf> {
     bundle.parent().map(Path::to_path_buf)
 }
 
+/// A freshly installed bundle plus whether macOS Gatekeeper will block its
+/// first launch (ad hoc signed builds ship the note; notarized ones don't).
+struct InstalledBundle {
+    path: PathBuf,
+    needs_gatekeeper_approval: bool,
+}
+
 /// Validate, extract, and install a desktop archive (blocking: zip IO plus
 /// `ditto` subprocesses; callers must run this on the blocking pool).
-fn install_desktop_bundle(archive_path: &Path, extract_directory: &Path, destination: &Path) -> Result<PathBuf> {
+fn install_desktop_bundle(
+    archive_path: &Path,
+    extract_directory: &Path,
+    destination: &Path,
+) -> Result<InstalledBundle> {
     validate_desktop_archive(archive_path)?;
     std::fs::create_dir_all(extract_directory)
         .with_context(|| format!("failed to create desktop extraction directory {}", extract_directory.display()))?;
@@ -241,6 +261,7 @@ fn install_desktop_bundle(archive_path: &Path, extract_directory: &Path, destina
 
     let staged_app = extract_directory.join(DESKTOP_APP_NAME);
     validate_staged_bundle(&staged_app)?;
+    let needs_gatekeeper_approval = extract_directory.join(DESKTOP_FIRST_LAUNCH_NOTE).is_file();
 
     let install_dir = destination
         .parent()
@@ -252,7 +273,10 @@ fn install_desktop_bundle(archive_path: &Path, extract_directory: &Path, destina
     remove_previous_install(destination, elevate)?;
     run_ditto(&[], &staged_app, destination, "failed to install the desktop app", elevate)?;
     validate_staged_bundle(destination)?;
-    Ok(destination.to_path_buf())
+    Ok(InstalledBundle {
+        path: destination.to_path_buf(),
+        needs_gatekeeper_approval,
+    })
 }
 
 /// Ensure the install directory exists and decide whether the remaining steps
@@ -790,9 +814,34 @@ mod tests {
 
         let installed = install_desktop_bundle(&archive, &extract, &destination).expect("install");
 
-        assert_eq!(installed, destination);
+        assert_eq!(installed.path, destination);
+        assert!(!installed.needs_gatekeeper_approval);
         assert_eq!(std::fs::read(destination.join("Contents/MacOS/vtcode-desktop")).expect("read"), b"new-binary");
         assert!(!destination.join("Contents/stale.txt").exists());
+    }
+
+    /// An archive shipping FIRST-LAUNCH.txt (ad hoc signed) flags the install
+    /// so callers print the manual-approval steps; notarized layouts omit it.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn ad_hoc_archive_flags_gatekeeper_approval() {
+        let temp = tempfile::tempdir().expect("temp");
+        let archive = temp.path().join("desktop.zip");
+        write_zip(
+            &archive,
+            &[
+                ("VT Code.app/Contents/Info.plist", b"plist"),
+                ("VT Code.app/Contents/MacOS/vtcode-desktop", b"binary"),
+                ("FIRST-LAUNCH.txt", b"first launch note"),
+            ],
+        );
+        let extract = temp.path().join("extracted");
+        let destination = temp.path().join("Applications").join("VT Code.app");
+
+        let installed = install_desktop_bundle(&archive, &extract, &destination).expect("install");
+
+        assert_eq!(installed.path, destination);
+        assert!(installed.needs_gatekeeper_approval);
     }
 
     #[test]

@@ -322,6 +322,7 @@ desktop app is already current, the command reports that and never prompts.
   warns that the flag has no effect in that mode.
 - When the release has no desktop asset for the host, the command errors and points at `scripts/install.sh`,
   which can still build from source.
+- Outside an update, `vtcode desktop --install` installs or updates the app on its own.
 
 ### Backup and Rollback
 

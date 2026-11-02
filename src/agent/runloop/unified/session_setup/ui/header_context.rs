@@ -50,6 +50,9 @@ pub(super) async fn initialize_header_context(
     if let Some(notice) = session_bootstrap.search_tools_notice.as_ref() {
         notice.render(renderer)?;
     }
+    if let Some(notice) = session_bootstrap.desktop_notice.as_ref() {
+        notice.render(renderer)?;
+    }
     maybe_render_openai_priority_notice(renderer, config, vt_cfg)?;
     // System-prompt budget warning is rendered after session hydration via
     // `apply_post_hydration_ui`, when the composed report is available.

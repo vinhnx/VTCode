@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
   no build toolchain is needed; only releases without a desktop asset fall back to a from-source build (best-effort: a
   missing asset or toolchain only warns). `--with-desktop` installs without prompting and fails if unavailable;
   `--without-desktop` skips without prompting. The from-source fallback needs Xcode command line tools, Rust, and git,
-  and takes several minutes.
+  and takes several minutes. Once the CLI is installed, `vtcode desktop --install` installs or updates the app anytime.
 - **Desktop location**: fresh installs ask where to put the app — `~/Applications` (default, no sudo) or
   `/Applications` (all users, elevates with sudo when not user-writable). Non-interactive runs use `~/Applications`;
   setting `DESKTOP_INSTALL_DIR` beforehand selects the location without prompting.

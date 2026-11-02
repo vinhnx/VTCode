@@ -1,7 +1,7 @@
+use crate::cli::desktop::print_desktop_install_outcome;
 use crate::updater::{
-    DesktopInstallOutcome, InstallOutcome, UpdateExecutionStrategy, UpdateInfo, Updater, default_install_dir,
-    desktop_macos_major, desktop_supported, existing_install_dir, install_desktop_app, installed_desktop_version,
-    parse_highlights,
+    InstallOutcome, UpdateExecutionStrategy, UpdateInfo, Updater, default_install_dir, desktop_macos_major,
+    desktop_supported, existing_install_dir, install_desktop_app, installed_desktop_version, parse_highlights,
 };
 use anyhow::{Context, Result, anyhow};
 use crossterm::style::Stylize;
@@ -501,15 +501,7 @@ async fn maybe_offer_desktop_install(updater: &Updater, target: Option<Version>,
         }
         Err(err) => return Err(err),
     };
-    match outcome {
-        DesktopInstallOutcome::Installed(version) => {
-            println!("{} Desktop app v{} installed successfully!", "✓".green(), version.bold());
-            println!("{} Open it anytime with: vtcode desktop", "→".cyan());
-        }
-        DesktopInstallOutcome::UpToDate(version) => {
-            println!("{} Desktop app is already up to date (v{})", "✓".green(), version);
-        }
-    }
+    print_desktop_install_outcome(outcome);
     Ok(())
 }
 

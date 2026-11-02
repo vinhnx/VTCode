@@ -220,12 +220,12 @@ sandboxing, and sessions.
 Download `vtcode-desktop-<version>-aarch64-apple-darwin.zip` from the
 [latest release](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**), unzip, and drag
 **VT Code.app** to `~/Applications`. Verify with the matching `.sha256` sidecar or `checksums.txt`, then open
-it anytime with `vtcode desktop`. To skip the manual steps, let the installer offer the app, or run
-`vtcode update --with-desktop` to install it from the release asset. Fresh installs go to `~/Applications`;
-plain `vtcode update` asks between `~/Applications` and `/Applications`.
+it anytime with `vtcode desktop`. To skip the manual steps, run `vtcode desktop --install`, let the installer
+offer the app, or run `vtcode update --with-desktop`. Fresh installs go to `~/Applications`; plain `vtcode update`
+asks between `~/Applications` and `/Applications`.
 
 > **Note:** Release builds are ad hoc signed unless the release notes say otherwise. Approve the first launch
-> with Right-click > Open, or allow VT Code once in Settings > Privacy & Security.
+> with Right-click > Open, or allow VT Code once in System Settings > Privacy & Security.
 
 On hosts without a published desktop asset, the installer falls back to compiling the app from source
 (`--without-desktop` skips it). It asks where to install (`~/Applications` or `/Applications`).

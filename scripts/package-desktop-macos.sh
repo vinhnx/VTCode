@@ -163,12 +163,12 @@ be opened because it is from an unidentified developer".
 To open it:
   1. In Finder, right-click VT Code.app, choose Open, then Open again in
      the confirmation dialog, or
-  2. After a blocked launch, open Settings > Privacy & Security and click
-     Open Anyway next to the VT Code message.
+  2. After a blocked launch, open System Settings > Privacy & Security and
+     click Open Anyway next to the VT Code message.
 
 You only need to do this once; later launches open normally. To
 distribute without this prompt, sign with a Developer ID certificate
 and notarize (see scripts/macos-release-signing.sh).
 NOTICE
-printf '%b%b%s%b %s\n' "$CYAN" "$BOLD" 'First launch:' "$NC" 'right-click the app and choose Open (or allow it in Settings > Privacy & Security).'
+printf '%b%b%s%b %s\n' "$CYAN" "$BOLD" 'First launch:' "$NC" 'right-click the app and choose Open (or allow it in System Settings > Privacy & Security).'
 printf '%b%s%s%b\n' "$DIM" 'Details written to: ' "${OUTPUT_PARENT}/FIRST-LAUNCH.txt" "$NC"

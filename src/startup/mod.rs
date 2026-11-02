@@ -6,6 +6,7 @@ use vtcode_core::utils::validation::validate_path_exists;
 
 mod config_loading;
 mod dependency_advisories;
+mod desktop_notice;
 mod first_run;
 mod first_run_prompts;
 mod resume;
@@ -15,6 +16,7 @@ mod workspace_trust;
 
 use config_loading::load_startup_config;
 pub(crate) use dependency_advisories::{SearchToolsBundleNotice, take_search_tools_bundle_notice};
+pub(crate) use desktop_notice::{DesktopSuggestNotice, take_desktop_suggest_notice};
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
 use validation::{

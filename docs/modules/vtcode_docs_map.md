@@ -1485,9 +1485,9 @@ below based on the topic area.
 
 - **File**: `docs/installation/README.md`
   - **Content**: Installation Guide
-  - **Topics**: Quick Install, Supported AI Providers, Troubleshooting, Uninstall, Additional Resources
+  - **Topics**: Quick Install, Desktop App (macOS 15+), Supported AI Providers, Troubleshooting, Uninstall
   - **User Questions**: "What can you tell me about Installation Guide?", "How does Quick Install work?", "How does
-    Supported AI Providers work?"
+    Desktop App (macOS 15+) work?"
 
 - **File**: `docs/installation/DEVELOPERS.md`
   - **Content**: Installer Development Guide
@@ -1659,9 +1659,9 @@ below based on the topic area.
 
 - **File**: `docs/installation/QUICK_REFERENCE.md`
   - **Content**: Quick Reference
-  - **Topics**: Install, Uninstall, Verify, Troubleshooting, API Keys
-  - **User Questions**: "What can you tell me about Quick Reference?", "How does Install work?", "How does Uninstall
-    work?"
+  - **Topics**: Install, Desktop App (macOS 15+), Uninstall, Verify, Troubleshooting
+  - **User Questions**: "What can you tell me about Quick Reference?", "How does Install work?", "How does Desktop App
+    (macOS 15+) work?"
 
 - **File**: `docs/styling/quick-reference.md`
   - **Content**: Quick Reference: Anstyle Crates

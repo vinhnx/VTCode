@@ -34,6 +34,9 @@ pub struct DotConfig {
     /// Dependency notice display state.
     #[serde(default)]
     pub dependency_notices: DependencyNoticeStore,
+    /// Desktop install-suggestion display state.
+    #[serde(default)]
+    pub desktop_notice: DesktopNoticeStore,
 }
 
 /// User preference settings for the application.
@@ -132,6 +135,14 @@ pub struct DependencyNoticeStore {
     pub ast_grep_missing_notice_shown: bool,
 }
 
+/// Display state for the desktop install suggestion (shown at most once per day).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DesktopNoticeStore {
+    /// Unix timestamp of when the suggestion was last shown, if ever.
+    #[serde(default)]
+    pub last_shown_unix_secs: Option<u64>,
+}
+
 /// Configuration for an individual LLM provider.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
@@ -189,6 +200,7 @@ impl Default for DotConfig {
             workspace_trust: WorkspaceTrustStore::default(),
             lifecycle_hook_approvals: HashMap::new(),
             dependency_notices: DependencyNoticeStore::default(),
+            desktop_notice: DesktopNoticeStore::default(),
         }
     }
 }
@@ -805,6 +817,17 @@ pub async fn update_model_preference(provider: &str, model: &str) -> Result<(), 
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn desktop_notice_defaults_when_missing_from_stored_config() {
+        // Pre-feature config files lack the section entirely.
+        let mut stored = serde_json::to_value(DotConfig::default()).expect("serialize default");
+        stored.as_object_mut().expect("object").remove("desktop_notice");
+
+        let config: DotConfig = serde_json::from_value(stored).expect("old config parses");
+
+        assert_eq!(config.desktop_notice.last_shown_unix_secs, None);
+    }
 
     #[tokio::test]
     async fn test_dot_manager_initialization() {

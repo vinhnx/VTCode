@@ -56,8 +56,8 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         Commands::DesktopServer => {
             handle_desktop_server_command(startup).await?;
         }
-        Commands::Desktop { app_path } => {
-            desktop::handle_desktop_command(app_path)?;
+        Commands::Desktop { app_path, install } => {
+            desktop::handle_desktop_command(app_path, install).await?;
         }
         Commands::Models { command } => {
             vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;
@@ -365,5 +365,18 @@ mod tests {
         assert_eq!(desktop_choice_from_flags(false, true), Skip);
         // clap excludes this combination; without-desktop wins defensively.
         assert_eq!(desktop_choice_from_flags(true, true), Skip);
+    }
+
+    #[test]
+    fn desktop_install_flag_parses_and_conflicts_with_path() {
+        let args = Cli::parse_from(["vtcode", "desktop", "--install"]);
+        let Commands::Desktop { app_path, install } = args.command.expect("desktop command") else {
+            panic!("expected desktop command");
+        };
+        assert!(app_path.is_none());
+        assert!(install);
+
+        let conflict = Cli::try_parse_from(["vtcode", "desktop", "/tmp/VT Code.app", "--install"]);
+        assert!(conflict.is_err(), "--install must conflict with an explicit path");
     }
 }

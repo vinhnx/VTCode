@@ -555,7 +555,8 @@ export VTCODE_INSTALL_DESKTOP_TEST_FIXTURES="$FIX_MAIN"
 : >"$TEST_ROOT/curl.log"
 asset_output="$(PATH="${STUB_X64}:${PATH}" install_desktop_app "v${FIX_VERSION}" "${WORK_DIR}" 2>&1)"
 printf '%s' "${asset_output}" | grep -F "Downloading prebuilt desktop app: ${FIX_X64_ASSET}" >/dev/null
-printf '%s' "${asset_output}" | grep -F 'First launch: right-click' >/dev/null
+printf '%s' "${asset_output}" | grep -F 'First launch needs one manual approval' >/dev/null
+printf '%s' "${asset_output}" | grep -F 'System Settings > Privacy & Security > Open Anyway' >/dev/null
 [[ -f "${INSTALLED_APP}/Contents/Info.plist" ]]
 [[ "$(cat "${INSTALLED_APP}/Contents/MacOS/vtcode-desktop")" == "asset desktop x64" ]]
 [[ "$(find_installed_desktop_app)" == "${INSTALLED_APP}" ]]
@@ -567,7 +568,7 @@ printf 'PASS: prebuilt asset installs without cloning.\n'
 rm -rf "${HOME}/Applications"
 notarized_output="$(PATH="${STUB_ARM}:${PATH}" install_desktop_app "v${FIX_VERSION}" "${WORK_DIR}" 2>&1)"
 printf '%s' "${notarized_output}" | grep -F "Downloading prebuilt desktop app: ${FIX_ARM_ASSET}" >/dev/null
-if printf '%s' "${notarized_output}" | grep -F 'First launch:' >/dev/null; then
+if printf '%s' "${notarized_output}" | grep -F 'First launch needs' >/dev/null; then
     printf 'FAIL: notarized asset should not print first-launch guidance.\n' >&2
     exit 1
 fi

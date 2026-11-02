@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use crate::updater::{DesktopInstallOutcome, Updater, default_install_dir, existing_install_dir, install_desktop_app};
 use anyhow::{Context, Result, bail};
+use crossterm::style::Stylize;
 
 /// Environment override for the VT Code.app location.
 const DESKTOP_APP_ENV: &str = "VTCODE_DESKTOP_APP";
@@ -30,7 +32,7 @@ fn scan_locations(roots: &[PathBuf]) -> Result<PathBuf> {
         }
     }
     bail!(
-        "VT Code.app not found; install it with `vtcode update --with-desktop`, pass its path (`vtcode desktop <path>`), set {DESKTOP_APP_ENV}, or build it with scripts/package-desktop-macos.sh"
+        "VT Code.app not found; install it with `vtcode desktop --install`, pass its path (`vtcode desktop <path>`), set {DESKTOP_APP_ENV}, or build it with scripts/package-desktop-macos.sh"
     )
 }
 
@@ -53,9 +55,12 @@ fn validated_bundle(path: &Path) -> Result<PathBuf> {
     }
 }
 
-pub(crate) fn handle_desktop_command(app_path: Option<PathBuf>) -> Result<()> {
+pub(crate) async fn handle_desktop_command(app_path: Option<PathBuf>, install: bool) -> Result<()> {
     if !cfg!(target_os = "macos") {
         bail!("the VT Code desktop app is only available on macOS");
+    }
+    if install {
+        return handle_desktop_install().await;
     }
     let app = resolve_desktop_app(app_path)?;
     // Address the bundle path directly (mirrors scripts/open-desktop-macos.sh):
@@ -71,6 +76,42 @@ pub(crate) fn handle_desktop_command(app_path: Option<PathBuf>) -> Result<()> {
     }
     println!("Opened VT Code Desktop: {}", app.display());
     Ok(())
+}
+
+/// Download and install the desktop app from the prebuilt release asset.
+/// Updates install in place; fresh installs go to `~/Applications` (like
+/// `vtcode update --with-desktop`, this flag never prompts).
+async fn handle_desktop_install() -> Result<()> {
+    let current_version = env!("CARGO_PKG_VERSION");
+    let updater = Updater::new(current_version).context("Failed to initialize updater")?;
+    let install_dir = match existing_install_dir() {
+        Some(dir) => dir,
+        None => default_install_dir()?,
+    };
+    let outcome = install_desktop_app(&updater, &install_dir).await?;
+    print_desktop_install_outcome(outcome);
+    Ok(())
+}
+
+/// Report a desktop install/update outcome (shared by `desktop --install`
+/// and the update command's desktop step).
+pub(crate) fn print_desktop_install_outcome(outcome: DesktopInstallOutcome) {
+    match outcome {
+        DesktopInstallOutcome::Installed { version, needs_gatekeeper_approval } => {
+            println!("{} Desktop app v{} installed successfully!", "✓".green(), version.bold());
+            println!("{} Open it anytime with: vtcode desktop", "→".cyan());
+            if needs_gatekeeper_approval {
+                println!("{} First launch needs one manual approval (this build is not notarized).", "!".yellow());
+                println!(
+                    "{} Right-click VT Code.app in Finder > Open > Open again; or System Settings > Privacy & Security > Open Anyway.",
+                    "→".cyan()
+                );
+            }
+        }
+        DesktopInstallOutcome::UpToDate(version) => {
+            println!("{} Desktop app is already up to date (v{})", "✓".green(), version);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -127,9 +168,17 @@ mod tests {
 
         let error = scan_locations(&[missing]).expect_err("empty scan must fail");
         let message = format!("{error:#}");
-        assert!(message.contains("vtcode update --with-desktop"), "{message}");
+        assert!(message.contains("vtcode desktop --install"), "{message}");
         assert!(message.contains("vtcode desktop <path>"), "{message}");
         assert!(message.contains(DESKTOP_APP_ENV), "{message}");
         assert!(message.contains("scripts/package-desktop-macos.sh"), "{message}");
+    }
+
+    /// `--install` fails hard off macOS instead of silently skipping.
+    #[cfg(not(target_os = "macos"))]
+    #[tokio::test]
+    async fn install_fails_off_macos() {
+        let error = handle_desktop_command(None, true).await.expect_err("must fail, not install");
+        assert!(error.to_string().contains("only available on macOS"), "{error:#}");
     }
 }

@@ -17,6 +17,13 @@ cargo install vtcode
 
 ```
 
+## Desktop App (macOS 15+)
+
+```bash
+vtcode desktop --install   # download + install from the prebuilt release asset
+vtcode desktop             # open the app
+```
+
 ## Quick Start
 
 ```bash
@@ -35,6 +42,9 @@ brew uninstall vtcode
 
 # Cargo
 cargo uninstall vtcode
+
+# Desktop app (macOS)
+rm -rf ~/Applications/VT\ Code.app
 
 ```
 

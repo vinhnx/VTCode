@@ -510,9 +510,7 @@ check_desktop_prerequisites() {
     return 0
 }
 
-# Print the first published desktop asset for the release tag (nonzero when
-# none exists). Apple Silicon probes native then Intel (Rosetta 2); Intel
-# probes only native (it cannot run arm64 binaries).
+# Print the first published desktop asset for the tag (nonzero when none). ARM probes native then Intel; Intel probes native only.
 find_desktop_release_asset() {
     local release_tag="$1"
     local version="${release_tag#v}"
@@ -531,8 +529,7 @@ find_desktop_release_asset() {
     return 1
 }
 
-# Install the desktop app from a prebuilt release asset. Needs no toolchain:
-# curl, a checksum tool, and ditto (all present on stock macOS) are enough.
+# Install from a prebuilt release asset (curl, shasum, and ditto only).
 install_desktop_release_asset() {
     local release_tag="$1" asset_name="$2" work_dir="$3"
     local archive_file="$work_dir/vtcode-desktop.zip"
@@ -566,14 +563,19 @@ install_desktop_release_asset() {
         return 1
     fi
     install_staged_desktop_app "$staged_app" || return 1
-    # Ad hoc signed builds ship FIRST-LAUNCH.txt with Gatekeeper guidance;
-    # notarized builds need no first-launch workaround.
+    # Notarized builds omit FIRST-LAUNCH.txt and need no approval steps.
     if [[ -f "$extract_dir/FIRST-LAUNCH.txt" ]]; then
-        echo ""
-        log_warning "First launch: right-click the app and choose Open (or allow it in Settings > Privacy & Security)."
+        print_gatekeeper_note
     fi
     log_info "Open it anytime with: vtcode desktop"
     return 0
+}
+
+# First-launch Gatekeeper steps for ad hoc builds (mirrors FIRST-LAUNCH.txt).
+print_gatekeeper_note() {
+    echo ""
+    log_warning "First launch needs one manual approval (this build is not notarized)."
+    log_warning "Right-click VT Code.app in Finder > Open > Open again; or System Settings > Privacy & Security > Open Anyway."
 }
 
 # Copy a staged app bundle to the desktop location and verify it. Shared by
@@ -601,9 +603,7 @@ install_staged_desktop_app() {
 
 run_desktop_install_step() { if (( DESKTOP_NEEDS_SUDO )); then sudo "$@"; else "$@"; fi; }
 
-# Install the desktop app at the release tag into ~/Applications: prebuilt
-# release asset first (fast, no toolchain), from-source build as fallback.
-# Never prompts; main() handles the choice (it knows the explicit flags).
+# Install at the release tag (prebuilt asset first, from-source fallback). Never prompts.
 install_desktop_app() {
     local release_tag="$1"
     local work_dir="$2"
@@ -648,14 +648,12 @@ install_desktop_app() {
     fi
 
     install_staged_desktop_app "$staged_app" || return 1
-    echo ""
-    log_warning "First launch: right-click the app and choose Open (or allow it in Settings > Privacy & Security)."
+    print_gatekeeper_note
     log_info "After that, open it anytime with: vtcode desktop"
     return 0
 }
 
-# Read a yes/no answer from stdin (0 = yes); $1 prompt, $2 default (y/n).
-# Callers wire stdin (TTY, /dev/tty, or pipe); empty input or EOF takes default.
+# Read a yes/no answer (0 = yes); $1 prompt, $2 default; stdin wired by caller; empty/EOF takes default.
 ask_yes_no() {
     local prompt_text="$1" default="$2" reply="" hint="[Y/n]"
     [[ "$default" == "n" ]] && hint="[y/N]"

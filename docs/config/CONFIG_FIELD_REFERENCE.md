@@ -311,6 +311,7 @@ python3 scripts/generate_config_field_reference.py
 | `debug.trace_targets` | `array` | no | `[]` | List of tracing targets to enable Examples: "vtcode_core::agent", "vtcode_core::tools", "vtcode::*" |
 | `debug.trace_targets[]` | `string` | no | `-` | - |
 | `default_primary_agent` | `string` | no | `"build"` | Primary agent selected at startup when no session override is active. |
+| `desktop.suggest-install` | `boolean` | no | `true` | Suggest installing the macOS desktop app at startup when missing (at most once per day; `false` mutes permanently) |
 | `dotfile_protection.additional_protected_patterns` | `array` | no | `[]` | Additional dotfile patterns to protect (beyond defaults). |
 | `dotfile_protection.additional_protected_patterns[]` | `string` | no | `-` | - |
 | `dotfile_protection.audit_log_path` | `string` | no | `"/home/f2/.local/state/vtcode/audit/dotfiles.log"` | Path to the audit log file. |
