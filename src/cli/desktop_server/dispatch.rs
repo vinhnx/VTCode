@@ -818,6 +818,12 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     }
                     bail!("selected session runtime has stopped");
                 }
+            } else if !input.is_closed() {
+                // A repeated press re-asserts the out-of-band signal without
+                // re-queueing: the first signal may have been consumed
+                // already, and the turn is still active. Non-blocking: the
+                // first press owned the publish wait, so repeats stay cheap.
+                stop_requests::fire_stop_signal(&stop);
             }
             // Outside the duplicate-cancel gate: a flagged re-send after a
             // plain stop must still discard, and the discard is idempotent.

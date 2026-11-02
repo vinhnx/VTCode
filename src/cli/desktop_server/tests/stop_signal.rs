@@ -182,6 +182,28 @@ async fn duplicate_turn_cancel_sends_nothing_more() {
 }
 
 #[tokio::test]
+async fn duplicate_turn_cancel_refires_stop_signal() {
+    let mut harness = StopHarness::new().await;
+    harness.publish();
+    let request = harness.cancel_request("session", "turn-1");
+    handle_request(&harness.context, &request).await.expect("first cancel accepted");
+    assert!(matches!(harness.input.recv().await, Some(InlineEvent::Cancel)));
+    // The runloop observed the first stop but the turn is still active; a
+    // repeated press must re-assert the signal instead of wedging silently.
+    harness.ctrl_c.mark_cancel_handled();
+    assert!(!harness.ctrl_c.is_cancel_requested());
+    let (result, _) = handle_request(&harness.context, &request)
+        .await
+        .expect("duplicate cancel accepted");
+    assert_eq!(result["cancelRequested"], true);
+    assert!(harness.input.try_recv().is_err(), "a duplicate cancel must not re-queue");
+    assert!(
+        harness.ctrl_c.is_cancel_requested(),
+        "a repeated stop must re-assert the stop signal while the turn is active"
+    );
+}
+
+#[tokio::test]
 async fn flagged_cancel_discards_queued_turns_and_reports_empty_queue() {
     let mut harness = StopHarness::new().await;
     harness.publish();
