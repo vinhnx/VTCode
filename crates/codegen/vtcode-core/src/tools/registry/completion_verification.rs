@@ -450,7 +450,9 @@ impl ToolRegistry {
         let required = remaining.map_or_else(String::new, |command| {
             let preview = vtcode_commons::formatting::truncate_within(command, 1024, "...");
             format!(
-                " Next required tracker check: `{preview}`. Run this exact command; a different passing check does not satisfy it."
+                " Next required tracker check: `{preview}`. Run this exact command; a different passing check does not satisfy it. \
+                If the check itself cannot pass for reasons outside this task (missing toolchain, pre-existing failures elsewhere), \
+                correct the tracker `verify` metadata to an assertion covering this task and run it; metadata alone never verifies."
             )
         });
         format!(

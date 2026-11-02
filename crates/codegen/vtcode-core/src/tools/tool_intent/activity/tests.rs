@@ -121,8 +121,12 @@ fn markdownlint_verification_preserves_command_boundaries() {
         "npx -y markdownlint-cli2 README.md && cargo check --locked",
         "python3 scripts/check_markdown.py",
         "python ./scripts/check_markdown.py",
+        "python3 scripts/check_markdown.py README.md",
+        "python3 scripts/check_markdown.py docs/guide.md README.md",
+        "python3 scripts/check_markdown.py ./README.md",
         "python3 scripts/check_docs_links.py",
         "python ./scripts/check_docs_links.py",
+        "python3 scripts/check_docs_links.py README.md",
     ] {
         assert!(shell_command_is_admitted_verification_attempt(&exec_command(command)), "{command}");
         assert_eq!(
@@ -145,6 +149,7 @@ fn markdownlint_verification_preserves_command_boundaries() {
         "python3 scripts/check_markdown.py --fix",
         "python3 scripts/check_markdown.py --list",
         "python3 scripts/check_markdown.py --help",
+        "python3 scripts/check_markdown.py README.md --fix",
         "python3 other/check_markdown.py",
         "python3 scripts/check_docs_links.py --help",
         "python3 other/check_docs_links.py",

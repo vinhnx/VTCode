@@ -140,6 +140,7 @@ async fn completion_verification_reports_the_exact_remaining_check() {
     let reason = registry.unverified_completion_reason();
     assert!(reason.contains("Next required tracker check: `grep -n '^## ' README.md`"), "{reason}");
     assert!(reason.contains("a different passing check does not satisfy it"), "{reason}");
+    assert!(reason.contains("correct the tracker `verify` metadata"), "{reason}");
     assert!(registry.completion_verification_pending());
 }
 #[tokio::test]

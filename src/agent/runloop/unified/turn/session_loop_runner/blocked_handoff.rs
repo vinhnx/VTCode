@@ -14,7 +14,7 @@ use vtcode_core::tools::tool_intent::{VERIFIER_SHELL_FORM_NOTE, verifier_referen
 use crate::agent::runloop::git::workspace_relative_display;
 use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, harness_event};
 use crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause;
-use crate::agent::runloop::unified::state::VerificationFailureSummary;
+use crate::agent::runloop::unified::state::{VerificationFailureSummary, missing_executable_hint};
 
 const NO_ARCHIVE_RESUME_EXPLANATION: &str = "Resume is unavailable because no session archive exists.";
 const UNVERIFIED_RESUME_EXPLANATION: &str = "Resume is unavailable because the session archive could not be verified.";
@@ -130,12 +130,17 @@ pub(super) fn verification_exhausted_handoff_reason(
         let exit = failure
             .exit_code
             .map_or_else(|| "unobserved".to_string(), |code| code.to_string());
-        return format!(
+        let mut reason = format!(
             "{base} The harness auto-verification `{}` failed {} time(s) consecutively. Completion remains unverified. \
             Terminal exit: {exit}. Last output tail:\n{}\nFix the reported failure, then run `{}` {HANDOFF_VERIFIER_SHELL_FORM} and let it exit 0 \
             before typing `continue` to resume with the gate preserved.",
             failure.command, failure.consecutive_failures, failure.excerpt_tail, failure.command,
         );
+        if let Some(hint) = missing_executable_hint(&failure.excerpt_tail) {
+            reason.push(' ');
+            reason.push_str(&hint);
+        }
+        return reason;
     }
     let command = verifier.map(str::trim).filter(|command| !command.is_empty());
     let harness_note = match command {
@@ -666,6 +671,28 @@ mod tests {
         assert!(reason.contains("`cargo nextest run` failed 3 time(s) consecutively"));
         assert!(reason.contains("Last output tail:\nerror[E0308]: mismatched types\n"));
         assert!(reason.contains("then run `cargo nextest run` standalone or as a pure `&&` chain"));
+        assert!(!reason.contains("environment problem"), "genuine failures keep the repair recipe: {reason}");
+    }
+
+    #[test]
+    fn exhausted_handoff_names_missing_executable_as_environmental() {
+        let failure = VerificationFailureSummary {
+            exit_code: Some(1),
+            command: "python3 scripts/check_markdown.py".to_string(),
+            excerpt_tail: "FileNotFoundError: [Errno 2] No such file or directory: 'npx'".to_string(),
+            consecutive_failures: 2,
+        };
+        let reason = verification_exhausted_handoff_reason(
+            BASE,
+            Some("python3 scripts/check_markdown.py"),
+            1,
+            2,
+            Some(&failure),
+        );
+
+        assert!(reason.contains("failed 2 time(s) consecutively"));
+        assert!(reason.contains("`npx` was not found on PATH"), "handoff names the binary: {reason}");
+        assert!(reason.contains("environment problem"), "handoff reframes as environmental: {reason}");
     }
 
     #[test]

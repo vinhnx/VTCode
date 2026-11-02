@@ -8,6 +8,129 @@
 
 use super::SessionStats;
 
+/// A verifier failure caused by a missing executable rather than a failing
+/// assertion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MissingExecutable {
+    /// The output names the missing binary (e.g. `npx`).
+    Named(String),
+    /// The output shows a missing-executable marker but no usable name
+    /// (e.g. a truncated traceback tail).
+    Unnamed,
+}
+
+/// Environment guidance shared by the in-turn recovery coaching and the
+/// blocked handoff. A missing binary on `PATH` can never be fixed by
+/// re-running the same command, so both surfaces say so explicitly instead of
+/// repeating the generic "repair the reported failure" recipe.
+const MISSING_EXECUTABLE_GUIDANCE: &str = "was not found on PATH: this is an environment problem, not a failing \
+    assertion, so re-running the same command cannot fix it. Install the toolchain and ensure `exec_command` \
+    inherits it on PATH, or correct the tracker's `verify` metadata if the assertion itself is wrong.";
+
+/// Detect a missing-executable verifier failure from tool-output text.
+///
+/// Returns environment guidance naming the binary when the output identifies
+/// one, or `None` when the output looks like a genuine assertion failure.
+/// Matching stays narrow on purpose: a bare `No such file or directory` can
+/// name a missing input file, so only the quoted executable form and the
+/// shell/spawn markers count.
+pub(crate) fn missing_executable_hint(output: &str) -> Option<String> {
+    let subject = match detect_missing_executable(output)? {
+        MissingExecutable::Named(name) => format!("`{name}`"),
+        MissingExecutable::Unnamed => "A required executable".to_string(),
+    };
+    Some(format!("{subject} {MISSING_EXECUTABLE_GUIDANCE}"))
+}
+
+fn detect_missing_executable(output: &str) -> Option<MissingExecutable> {
+    let mut unnamed = false;
+    for line in output.lines().map(str::trim) {
+        if let Some(name) = quoted_executable_name(line) {
+            return Some(MissingExecutable::Named(name));
+        }
+        if let Some(name) = shell_not_found_name(line) {
+            return Some(MissingExecutable::Named(name));
+        }
+        if let Some(name) = spawn_enoent_name(line) {
+            return Some(MissingExecutable::Named(name));
+        }
+        unnamed |= has_unnamed_missing_executable_marker(line);
+    }
+    unnamed.then_some(MissingExecutable::Unnamed)
+}
+
+/// Python `FileNotFoundError: [Errno 2] No such file or directory: 'npx'`,
+/// Go `exec: "bun": executable file not found in $PATH`, and the
+/// `'<binary>' was not found on PATH` toolchain error quote the binary.
+fn quoted_executable_name(line: &str) -> Option<String> {
+    let quoted = if line.contains("No such file or directory: '") || line.contains("not found on PATH") {
+        first_single_quoted_token(line)
+    } else if line.contains("executable file not found in") {
+        first_double_quoted_token(line)
+    } else {
+        None
+    }?;
+    is_plausible_binary_name(quoted).then(|| quoted.to_string())
+}
+
+/// bash/zsh `npx: command not found` and dash `sh: 1: npx: not found`. The
+/// dash form requires an explicit shell prefix so `error: foo: not found`
+/// (a missing item, not a missing binary) does not match.
+fn shell_not_found_name(line: &str) -> Option<String> {
+    if let Some(prefix) = line.strip_suffix("command not found") {
+        let name = prefix
+            .trim_end()
+            .trim_end_matches(':')
+            .split_whitespace()
+            .next_back()
+            .unwrap_or("");
+        let name = name.trim_end_matches(':');
+        return is_plausible_binary_name(name).then(|| name.to_string());
+    }
+    if let Some(prefix) = line.strip_suffix(": not found") {
+        let mut tokens = prefix.split_whitespace();
+        if !matches!(tokens.next().unwrap_or(""), "sh:" | "bash:" | "zsh:" | "dash:" | "fish:") {
+            return None;
+        }
+        let name = tokens.last().unwrap_or("").trim_end_matches(':');
+        return is_plausible_binary_name(name).then(|| name.to_string());
+    }
+    None
+}
+
+/// Node `Error: spawn npx ENOENT`.
+fn spawn_enoent_name(line: &str) -> Option<String> {
+    let rest = line.split_once("spawn ")?.1;
+    if !rest.contains("ENOENT") {
+        return None;
+    }
+    let name = rest.split_whitespace().next().unwrap_or("");
+    (is_plausible_binary_name(name) && name != "ENOENT").then(|| name.to_string())
+}
+
+/// Truncated tails may keep only the marker without the binary name.
+fn has_unnamed_missing_executable_marker(line: &str) -> bool {
+    line.contains("FileNotFoundError")
+        || line.contains("command not found")
+        || line.contains("not found on PATH")
+        || line.contains("executable file not found in")
+        || (line.contains("spawn") && line.contains("ENOENT"))
+}
+
+/// Reject empty names, paths (a missing file, not a missing binary), and
+/// anything too long or too odd to be an executable name.
+fn is_plausible_binary_name(name: &str) -> bool {
+    !name.is_empty() && name.len() <= 128 && !name.contains(['/', '\\']) && !name.chars().any(char::is_whitespace)
+}
+
+fn first_single_quoted_token(line: &str) -> Option<&str> {
+    line.split_once('\'')?.1.split('\'').next()
+}
+
+fn first_double_quoted_token(line: &str) -> Option<&str> {
+    line.split_once('"')?.1.split('"').next()
+}
+
 /// Bounded record of a failed harness auto-verification, kept for handoff
 /// enrichment so the eventual manual blocker names the failing command and
 /// shows its output tail instead of repeating the generic "run a verifier"

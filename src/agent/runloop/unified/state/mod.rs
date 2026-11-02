@@ -11,7 +11,7 @@ pub(crate) use follow_up::is_follow_up_prompt_like;
 mod prompt_cache;
 pub(crate) use prompt_cache::PromptCacheDiagnostics;
 mod verification;
-pub(crate) use verification::VerificationFailureSummary;
+pub(crate) use verification::{VerificationFailureSummary, missing_executable_hint};
 mod request_envelope;
 pub(crate) use request_envelope::RequestSegmentTransition;
 use request_envelope::{RequestEnvelopeIdentity, ToolCatalogObservabilityIdentity};

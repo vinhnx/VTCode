@@ -130,3 +130,49 @@ fn verification_recovery_is_not_replenished_by_internal_progress() {
     assert_eq!(stats.verification_auto_recovery_turns(), 0);
     assert!(stats.record_verification_auto_recovery_turn_with_limit(1));
 }
+#[test]
+fn missing_executable_hint_names_the_binary_across_toolchains() {
+    let python_traceback = "Traceback (most recent call last):\n  File \"scripts/check_markdown.py\", line 74, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: 'npx'\n";
+    let cases = [
+        (python_traceback, "npx"),
+        ("npx: command not found", "npx"),
+        ("/bin/sh: npx: command not found", "npx"),
+        ("sh: 1: npx: not found", "npx"),
+        ("Error: spawn npx ENOENT", "npx"),
+        ("exec: \"bun\": executable file not found in $PATH", "bun"),
+        ("error: cannot run the Markdown linter: 'node' was not found on PATH.", "node"),
+    ];
+    for (output, binary) in cases {
+        let hint = missing_executable_hint(output).unwrap_or_else(|| panic!("must detect: {output}"));
+        assert!(hint.contains(&format!("`{binary}`")), "hint names {binary}: {hint}");
+        assert!(hint.contains("environment problem"), "hint reframes as environmental: {hint}");
+        assert!(hint.contains("verify"), "hint points at tracker metadata: {hint}");
+    }
+}
+#[test]
+fn missing_executable_hint_detects_json_escaped_tool_results() {
+    let response = r#"{"exit_code":1,"output":"Traceback (most recent call last):\nFileNotFoundError: [Errno 2] No such file or directory: 'npx'\n"}"#;
+    let hint = missing_executable_hint(response).expect("JSON-escaped output must still match");
+    assert!(hint.contains("`npx`"), "hint names the binary: {hint}");
+}
+#[test]
+fn missing_executable_hint_falls_back_to_generic_guidance_without_a_name() {
+    for output in ["FileNotFoundError", "command not found", "Error: spawn ENOENT"] {
+        let hint = missing_executable_hint(output).unwrap_or_else(|| panic!("must detect: {output}"));
+        assert!(hint.contains("A required executable"), "generic subject: {hint}");
+        assert!(!hint.contains("``"), "no empty code span: {hint}");
+    }
+}
+#[test]
+fn missing_executable_hint_ignores_genuine_check_failures() {
+    for output in [
+        "cat: missing.txt: No such file or directory",
+        "README.md:1 error MD041/first-line-heading",
+        "Error: ENOENT: no such file or directory, open '/tmp/x'",
+        "read-only file system",
+        "sh: 1: Syntax error: \"(\" unexpected",
+        "error: foo: not found",
+    ] {
+        assert!(missing_executable_hint(output).is_none(), "must not match: {output}");
+    }
+}

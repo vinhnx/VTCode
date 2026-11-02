@@ -55,18 +55,21 @@ async fn planning_prompt_size_fixed_fixture() {
     // Partial-commit and conflict-reload runtime guidance adds 229 bytes and
     // about 45 estimated tokens (Default measures 11328 bytes/2398 tokens,
     // Minimal measures 11600 bytes/2468 tokens).
+    // Scoped-verify planning guidance adds 149 bytes and about 35 estimated
+    // tokens (Default measures 11477 bytes/2433 tokens, Minimal measures
+    // 11749 bytes/2503 tokens).
     for case in [
         PlanningPromptSizeCase {
             density: "Default",
             prompt_budget_tokens: 100_000,
-            max_prompt_bytes: 11_400,
-            max_estimated_tokens: 2_435,
+            max_prompt_bytes: 11_550,
+            max_estimated_tokens: 2_470,
         },
         PlanningPromptSizeCase {
             density: "Minimal",
             prompt_budget_tokens: 1,
-            max_prompt_bytes: 11_670,
-            max_estimated_tokens: 2_505,
+            max_prompt_bytes: 11_820,
+            max_estimated_tokens: 2_540,
         },
     ] {
         let mut config = VTCodeConfig::default();
@@ -356,6 +359,10 @@ fn plan_quality_line_requires_concrete_verify_checks() {
     assert!(line.contains("grep/rg exit 1 cannot satisfy completion"));
     assert!(line.contains("both present and absent inputs"));
     assert!(line.contains("one concrete `verify:`/`verification:` command or observable check"));
+    assert!(
+        line.contains("Scope each `verify:` command to the step's files"),
+        "quality line must scope verify commands to the step's files so full-repo checks cannot fail on pre-existing out-of-scope findings"
+    );
     assert!(line.contains("vague prose"));
     assert!(line.contains("comma-separated verify entries that are not commands or observable checks"));
     assert!(
