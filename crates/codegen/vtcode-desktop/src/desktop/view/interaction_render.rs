@@ -420,7 +420,7 @@ impl DesktopView {
                 }
             }
             if let Some(digit) = card.digit
-                && let Ok(keystroke) = gpui_kit::Keystroke::parse(&digit.to_string())
+                && let Ok(keystroke) = gpui_kit::Keystroke::parse_with_os(&digit.to_string(), cx.platform_info().os)
             {
                 row = row.child(Kbd::new(keystroke).outline());
             }

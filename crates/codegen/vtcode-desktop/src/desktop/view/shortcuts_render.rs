@@ -192,8 +192,8 @@ impl DesktopView {
             return;
         }
         let mut candidate = self.shortcut_draft.clone();
-        let _previous = candidate.insert(id.as_str().to_string(), event.keystroke.unparse());
-        match shortcuts::bindings(&candidate) {
+        let _previous = candidate.insert(id.as_str().to_string(), event.keystroke.unparse(cx.platform_info().os));
+        match shortcuts::bindings(&candidate, cx) {
             Ok(_) => {
                 if candidate.get(id.as_str()) != self.shortcut_draft.get(id.as_str()) {
                     self.shortcut_draft = candidate;
@@ -224,7 +224,7 @@ impl DesktopView {
 
     fn save_shortcut_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         debug_assert!(self.shortcut_draft.len() == shortcuts::COMMANDS.len(), "shortcut draft stays a full table");
-        match shortcuts::bindings(&self.shortcut_draft) {
+        match shortcuts::bindings(&self.shortcut_draft, cx) {
             Ok(_) => {
                 let mut preferences = self.preferences.clone();
                 preferences.shortcuts = self.shortcut_draft.clone();
@@ -358,7 +358,7 @@ fn shortcut_staged_badge(
             .child(rust_i18n::t!("app.shortcuts.badge_unassigned").to_string())
             .into_any_element()
     } else {
-        match gpui_kit::Keystroke::parse(staged) {
+        match gpui_kit::Keystroke::parse_with_os(staged, shortcuts::host_operating_system()) {
             Ok(keystroke) => div().child(Kbd::new(keystroke).outline()).into_any_element(),
             Err(_) => div()
                 .text_xs()

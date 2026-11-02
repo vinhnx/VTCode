@@ -529,7 +529,7 @@ impl DesktopView {
         if staged.is_empty() {
             return None;
         }
-        gpui_kit::Keystroke::parse(staged).ok()
+        gpui_kit::Keystroke::parse_with_os(staged, shortcuts::host_operating_system()).ok()
     }
 }
 

@@ -191,7 +191,7 @@ impl DesktopView {
                 .shortcuts
                 .insert(action.clone(), keys.first().cloned().unwrap_or_default());
         }
-        let message = match shortcuts::bindings(&preferences.shortcuts) {
+        let message = match shortcuts::bindings(&preferences.shortcuts, cx) {
             Err(error) => error,
             Ok(_) => match preferences.try_save() {
                 Err(error) => error,

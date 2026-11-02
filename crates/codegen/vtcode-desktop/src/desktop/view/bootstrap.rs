@@ -25,11 +25,11 @@ pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
 ];
 
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
-    match shortcuts::bindings(&preferences.shortcuts) {
+    match shortcuts::bindings(&preferences.shortcuts, cx) {
         Ok(bindings) => cx.bind_keys(bindings),
         Err(error) => {
             eprintln!("Desktop shortcuts: {error}; using defaults");
-            if let Ok(bindings) = shortcuts::bindings(&Default::default()) {
+            if let Ok(bindings) = shortcuts::bindings(&Default::default(), cx) {
                 cx.bind_keys(bindings);
             }
         }
