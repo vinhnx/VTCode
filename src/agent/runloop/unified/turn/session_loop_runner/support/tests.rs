@@ -60,12 +60,12 @@ fn skipped_paths_turn_warning_names_exclusions_and_remedy() {
     let skipped = SnapshotSkippedPaths {
         total: 1,
         sample: vec![SnapshotSkippedPath {
-            path: "resources/gif/demo-desktop.mov".to_string(),
+            path: "resources/gif/demo-desktop.mp4".to_string(),
             reason: "larger than the 16 MiB snapshot size limit".to_string(),
         }],
     };
     let warning = skipped_paths_turn_warning(&skipped);
-    assert!(warning.contains("demo-desktop.mov"), "warning must name the skipped path: {warning}");
+    assert!(warning.contains("demo-desktop.mp4"), "warning must name the skipped path: {warning}");
     assert!(warning.contains(".filesnapignore"), "warning must name the remedy: {warning}");
     assert!(warning.contains("may be incomplete"), "warning must stay honest about rewind: {warning}");
 }

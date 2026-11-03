@@ -16,21 +16,15 @@
 
 <p>
   <!-- markdownlint-disable MD033 -->
-  <!-- NB: <video> needs absolute raw URLs; GitHub only rewrites relative src on <img>, not <video>. -->
-  <video src="https://raw.githubusercontent.com/vinhnx/VTCode/main/resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
-    poster="https://raw.githubusercontent.com/vinhnx/VTCode/main/resources/screenshots/vtcode-desktop-light.png"
-    aria-label="VT Code Desktop app demo">
-    <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mov">Open the demo video</a>
-  </video>
+  <!-- NB: plain linked images, not <video>: GitHub's README renderer strips video embeds. -->
+  <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">
+    <img src="./resources/screenshots/vtcode-desktop-light.png" width="49%"
+      alt="VT Code Desktop in light appearance — click to watch the demo video" />
+    <img src="./resources/screenshots/vtcode-desktop-dark.png" width="49%"
+      alt="VT Code Desktop in dark appearance — click to watch the demo video" />
+  </a><br />
   <!-- markdownlint-enable MD033 -->
-</p>
-
-<p>
-  <img src="./resources/screenshots/vtcode-desktop-light.png" width="49%"
-    alt="VT Code Desktop in light appearance" />
-  <img src="./resources/screenshots/vtcode-desktop-dark.png" width="49%"
-    alt="VT Code Desktop in dark appearance" />
-  <sub>Desktop app</sub>
+  <sub>Desktop app · <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">watch the demo video</a></sub>
 
 </p>
 
