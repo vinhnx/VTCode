@@ -28,7 +28,7 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(div().text_sm().child(rust_i18n::t!("app.secrets.panel_title").to_string()))
+                    .child(row_title(rust_i18n::t!("app.secrets.panel_title").to_string(), &colors))
                     .child(
                         Input::new(&self.secret_input)
                             .id("secret-input")

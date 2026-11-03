@@ -8,11 +8,10 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_6()
-            .child(
-                div()
-                    .text_color(cx.theme().colors.muted_foreground)
-                    .child(rust_i18n::t!("app.settings.accessibility.description").to_string()),
-            )
+            .child(row_description(
+                rust_i18n::t!("app.settings.accessibility.description").to_string(),
+                &cx.theme().colors,
+            ))
             .child(accessible_group_box(
                 "accessibility-display-group",
                 rust_i18n::t!("app.settings.accessibility.display").to_string(),

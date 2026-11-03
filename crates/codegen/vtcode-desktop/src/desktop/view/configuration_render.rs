@@ -536,14 +536,10 @@ impl DesktopView {
                 notes.push(rust_i18n::t!("app.configuration.read_only_note", count = read_only).to_string());
             }
         }
-        let mut footer = div()
-            .id("cli-config-footer")
-            .test_support()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(row_divider(&colors));
+        // No rule above the notes: the trailing air (gap_2 under the list
+        // card, gap_4 on the curated page) owns the boundary, matching the
+        // Kit footer rhythm.
+        let mut footer = div().id("cli-config-footer").test_support().w_full().flex().flex_col().gap_1();
         for note in notes {
             footer = footer.child(div().text_xs().text_color(colors.muted_foreground).child(note));
         }

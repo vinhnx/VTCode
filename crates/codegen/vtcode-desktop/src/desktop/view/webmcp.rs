@@ -12,7 +12,7 @@ use protocol::slash_command::{
 use serde_json::{Value, json};
 use vtcode_desktop_protocol as protocol;
 
-use super::{DesktopButtonExt, DesktopView, desktop_button, i18n};
+use super::{DesktopButtonExt, DesktopView, accessible_group_box, desktop_button, i18n, settings_group_box};
 
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
 /// Slash-parse failure: help text goes through the localized notice catalog,
@@ -173,35 +173,23 @@ impl DesktopView {
         let status = self.webmcp_status.as_ref();
         let busy = self.webmcp_request_pending.is_some();
         let configured_origins = status.map(|status| status.allowed_origins.as_slice()).unwrap_or_default();
-        let mut section = div()
-            .id(if origin_controls {
-                "webmcp-pairing"
-            } else {
-                "webmcp-status"
-            })
-            .test_support()
-            .role(gpui_kit::Role::Group)
-            .aria_label(if origin_controls {
-                rust_i18n::t!("app.webmcp.pairing_title").to_string()
-            } else {
-                rust_i18n::t!("app.webmcp.status_title").to_string()
-            })
-            .w_full()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .rounded_lg()
-            .bg(colors.secondary)
-            .p_4()
-            .child(div().font_semibold().child(if origin_controls {
-                rust_i18n::t!("app.webmcp.pair_app").to_string()
-            } else {
-                rust_i18n::t!("app.webmcp.connection_title").to_string()
-            }));
+        let (section_id, section_title, section_label) = if origin_controls {
+            (
+                "webmcp-pairing",
+                rust_i18n::t!("app.webmcp.pair_app").to_string(),
+                rust_i18n::t!("app.webmcp.pairing_title").to_string(),
+            )
+        } else {
+            (
+                "webmcp-status",
+                rust_i18n::t!("app.webmcp.connection_title").to_string(),
+                rust_i18n::t!("app.webmcp.status_title").to_string(),
+            )
+        };
+        let mut group = settings_group_box(section_title, &colors);
 
         if origin_controls {
-            section = section
+            group = group
                 .child(
                     div()
                         .text_xs()
@@ -213,7 +201,7 @@ impl DesktopView {
             if let Some(pairing) = self.webmcp_pairing.as_ref() {
                 let endpoint = pairing.endpoint.clone();
                 let pairing_code = pairing.pairing_code.clone();
-                section = section.child(
+                group = group.child(
                     div()
                         .id("webmcp-pairing-details")
                         .test_support()
@@ -289,7 +277,7 @@ impl DesktopView {
                 None if busy => rust_i18n::t!("app.webmcp.checking_state").to_string(),
                 None => rust_i18n::t!("app.webmcp.state_unavailable").to_string(),
             };
-            section = section
+            group = group
                 .child(
                     div()
                         .text_xs()
@@ -325,7 +313,7 @@ impl DesktopView {
                 );
         }
 
-        section.into_any_element()
+        accessible_group_box(section_id, section_label, group)
     }
 
     /// Origin list, pairing input, and pairing actions for one connection.
