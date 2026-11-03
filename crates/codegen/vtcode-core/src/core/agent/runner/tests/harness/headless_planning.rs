@@ -515,7 +515,7 @@ async fn headless_planning_requires_artifact_persistence_before_awaiting_approva
         assert!(snapshot.best_draft.is_some());
         store.close().await.unwrap();
         if persistable {
-            let file = runner.tool_registry.planning_workflow_state().get_plan_file().await.unwrap();
+            let file = runner.tool_registry.planning_workflow_state().get_plan_file().unwrap();
             assert!(fs::read_to_string(file).unwrap().contains("## Implementation Steps"));
         }
         assert!(runner.tool_registry.is_planning_active(), "neither handoff approves implementation");

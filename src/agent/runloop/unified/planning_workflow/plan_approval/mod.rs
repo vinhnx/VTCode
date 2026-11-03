@@ -839,7 +839,6 @@ pub(crate) async fn load_plan_text_for_approval(
     let plan_file = tool_registry
         .planning_workflow_state()
         .get_plan_file()
-        .await
         .ok_or(PlanArtifactError::Missing)?;
     let text = tokio::fs::read_to_string(&plan_file)
         .await

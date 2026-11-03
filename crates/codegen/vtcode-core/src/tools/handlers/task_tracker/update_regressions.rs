@@ -8,7 +8,7 @@ async fn setup_tracker(planning: bool) -> (TempDir, PlanningWorkflowState, TaskT
     let plan = temp.path().join(".vtcode/plans/metadata.md");
     std::fs::create_dir_all(plan.parent().unwrap()).unwrap();
     std::fs::write(&plan, "# Metadata regression\n").unwrap();
-    state.set_plan_file(Some(plan)).await;
+    state.set_plan_file(Some(plan));
     if planning {
         state.enable();
     }
@@ -126,7 +126,7 @@ async fn identical_updates_and_lists_do_not_rewrite_tracker_artifacts() {
         .unwrap();
         let indexed_args = json!({"action":"update", "index":1, "status":"completed"});
         assert_eq!(tool.execute(indexed_args.clone()).await.unwrap()["status"], "updated");
-        let plan_file = state.get_plan_file().await.unwrap();
+        let plan_file = state.get_plan_file().unwrap();
         let paths = [
             temp.path().join(".vtcode/tasks/current_task.md"),
             tracker_file_for_plan_file(&plan_file).unwrap(),
@@ -248,7 +248,7 @@ async fn unchanged_planning_update_repairs_missing_and_stale_mirrors() {
     .unwrap();
     let global = temp.path().join(".vtcode/tasks/current_task.md");
     let expected_global = std::fs::read(&global).unwrap();
-    let plan = state.get_plan_file().await.unwrap();
+    let plan = state.get_plan_file().unwrap();
     let sidecar = tracker_file_for_plan_file(&plan).unwrap();
     let original_sidecar = std::fs::read(&sidecar).unwrap();
     std::fs::remove_file(&global).unwrap();
@@ -276,7 +276,7 @@ async fn tracker_updates_keep_private_artifacts_private() {
         tool.execute(json!({"action":"create", "items":["Private task details"]}))
             .await
             .unwrap();
-        let plan = state.get_plan_file().await.unwrap();
+        let plan = state.get_plan_file().unwrap();
         let paths = [
             temp.path().join(".vtcode/tasks/current_task.md"),
             tracker_file_for_plan_file(&plan).unwrap(),
@@ -301,7 +301,7 @@ async fn failed_standard_create_does_not_publish_a_partial_global_tracker() {
     std::fs::create_dir(temp.path().join(".vtcode")).unwrap();
     let blocker = temp.path().join(".vtcode/plans");
     std::fs::write(&blocker, "preserve this blocker").unwrap();
-    state.set_plan_file(Some(blocker.join("broken.md"))).await;
+    state.set_plan_file(Some(blocker.join("broken.md")));
     let tool = TaskTrackerTool::new(temp.path().to_path_buf(), state);
     assert!(
         tool.execute(json!({"action":"create", "items":["Never published"]}))
@@ -320,7 +320,7 @@ async fn failed_planning_mirror_write_keeps_sidecar_and_plan_unchanged() {
     }]}))
     .await
     .unwrap();
-    let plan = state.get_plan_file().await.unwrap();
+    let plan = state.get_plan_file().unwrap();
     let sidecar = tracker_file_for_plan_file(&plan).unwrap();
     let original_plan = std::fs::read(&plan).unwrap();
     let original_sidecar = std::fs::read(&sidecar).unwrap();

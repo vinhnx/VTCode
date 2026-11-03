@@ -215,7 +215,7 @@ use vtcode_core::tools::handlers::planning_workflow::{
 };
 
 pub(crate) async fn persisted_plan_is_ready(state: &PlanningWorkflowState) -> bool {
-    let Some(plan_file) = state.get_plan_file().await else {
+    let Some(plan_file) = state.get_plan_file() else {
         return false;
     };
     let Ok(plan_text) = tokio::fs::read_to_string(&plan_file).await else {

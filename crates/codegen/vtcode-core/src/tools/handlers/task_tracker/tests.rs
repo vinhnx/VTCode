@@ -568,7 +568,7 @@ async fn test_planning_workflow_task_tracker_delegates_and_mirrors_global() {
     std::fs::create_dir_all(&plans_dir).unwrap();
     let plan_file = plans_dir.join("adaptive.md");
     std::fs::write(&plan_file, "# Adaptive\n").unwrap();
-    state.set_plan_file(Some(plan_file)).await;
+    state.set_plan_file(Some(plan_file));
     state.enable();
 
     let created = tool
@@ -598,7 +598,7 @@ async fn test_planning_workflow_adaptive_tool_accepts_hierarchical_index_path() 
     std::fs::create_dir_all(&plans_dir).unwrap();
     let plan_file = plans_dir.join("hierarchical.md");
     std::fs::write(&plan_file, "# Hierarchical\n").unwrap();
-    state.set_plan_file(Some(plan_file)).await;
+    state.set_plan_file(Some(plan_file));
     state.enable();
 
     tool.execute(json!({
@@ -630,7 +630,7 @@ async fn test_planning_workflow_adaptive_tool_rejects_index_zero() {
     std::fs::create_dir_all(&plans_dir).unwrap();
     let plan_file = plans_dir.join("reject-zero.md");
     std::fs::write(&plan_file, "# Reject zero\n").unwrap();
-    state.set_plan_file(Some(plan_file)).await;
+    state.set_plan_file(Some(plan_file));
     state.enable();
 
     tool.execute(json!({
@@ -661,7 +661,7 @@ async fn test_planning_workflow_mirror_preserves_notes() {
     std::fs::create_dir_all(&plans_dir).unwrap();
     let plan_file = plans_dir.join("notes.md");
     std::fs::write(&plan_file, "# Notes\n").unwrap();
-    state.set_plan_file(Some(plan_file)).await;
+    state.set_plan_file(Some(plan_file));
     state.enable();
 
     tool.execute(json!({
@@ -687,7 +687,7 @@ async fn test_edit_mode_prefers_newer_plan_mirror_when_present() {
     std::fs::create_dir_all(&plans_dir).unwrap();
     let plan_file = plans_dir.join("freshness.md");
     std::fs::write(&plan_file, "# Freshness\n").unwrap();
-    state.set_plan_file(Some(plan_file.clone())).await;
+    state.set_plan_file(Some(plan_file.clone()));
 
     let global_file = temp.path().join(".vtcode/tasks/current_task.md");
     std::fs::create_dir_all(global_file.parent().unwrap()).unwrap();
@@ -716,7 +716,7 @@ async fn test_planning_workflow_prefers_plan_sidecar_even_if_global_is_newer() {
     std::fs::create_dir_all(&plans_dir).unwrap();
     let plan_file = plans_dir.join("plan-primary.md");
     std::fs::write(&plan_file, "# Plan Primary\n").unwrap();
-    state.set_plan_file(Some(plan_file.clone())).await;
+    state.set_plan_file(Some(plan_file.clone()));
     state.enable();
 
     let global_file = temp.path().join(".vtcode/tasks/current_task.md");

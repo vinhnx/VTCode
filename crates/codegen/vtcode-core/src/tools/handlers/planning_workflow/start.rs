@@ -140,7 +140,7 @@ impl Tool for StartPlanningTool {
         // Check if already in planning workflow
         if self.state.is_active() {
             let fallback_plan_name = self.generate_plan_name(args.plan_name.as_deref());
-            let existing_plan_file = self.state.get_plan_file().await;
+            let existing_plan_file = self.state.get_plan_file();
             let requested_path = args.plan_path.as_deref().filter(|path| !path.trim().is_empty());
             let (plan_file, plan_title_seed) = resolve_plan_file_target(
                 &workspace_root,
@@ -179,9 +179,8 @@ impl Tool for StartPlanningTool {
                 .await?;
             }
 
-            self.state.set_plan_file(Some(plan_file.clone())).await;
             let baseline = plan_file_baseline(&plan_file).await;
-            self.state.set_plan_baseline(Some(baseline)).await;
+            self.state.set_plan_pointer(Some(plan_file.clone()), Some(baseline));
 
             let message = if created_plan_file {
                 "Planning workflow is already active. Initialized plan file for planning workflow."
@@ -235,11 +234,9 @@ impl Tool for StartPlanningTool {
         )
         .await?;
 
-        // Track the current plan file
-        self.state.set_plan_file(Some(plan_file.clone())).await;
+        // Track the current plan file and activate atomically.
         let baseline = plan_file_baseline(&plan_file).await;
-        self.state.set_plan_baseline(Some(baseline)).await;
-        self.state.enable();
+        self.state.activate(Some(plan_file.clone()), Some(baseline));
 
         Ok(json!({
             "status": "success",

@@ -258,7 +258,6 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
         .tool_registry
         .planning_workflow_state()
         .get_plan_file()
-        .await
         .expect("the corrected plan should publish a plan file");
     let persisted_plan = std::fs::read_to_string(plan_file).expect("read the corrected plan");
     assert!(

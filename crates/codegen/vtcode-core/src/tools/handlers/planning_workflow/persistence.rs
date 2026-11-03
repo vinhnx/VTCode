@@ -34,7 +34,7 @@ pub struct PersistedPlanDraft {
 /// Sets the file pointer and baseline and ensures the parent directory.
 /// Returns the existing path when one is already set.
 pub async fn allocate_plan_file_if_missing(state: &PlanningWorkflowState) -> Result<PathBuf> {
-    if let Some(existing) = state.get_plan_file().await {
+    if let Some(existing) = state.get_plan_file() {
         return Ok(existing);
     }
     // The dedicated plan agent can enter planning without invoking the
@@ -49,13 +49,15 @@ pub async fn allocate_plan_file_if_missing(state: &PlanningWorkflowState) -> Res
             .await
             .with_context(|| format!("Failed to create plans directory: {}", parent.display()))?;
     }
-    state.set_plan_file(Some(plan_file.clone())).await;
-    state.set_plan_baseline(Some(SystemTime::now())).await;
+    // Commit under one lock: concurrent allocators agree on a single path.
+    // (A loser may leave an empty sibling directory; the winning path is the
+    // only one ever referenced.)
+    let committed = state.set_plan_file_if_missing(plan_file, SystemTime::now());
     tracing::info!(
-        plan_file = %plan_file.display(),
+        plan_file = %committed.display(),
         "Initialized missing plan file during plan synthesis"
     );
-    Ok(plan_file)
+    Ok(committed)
 }
 
 pub async fn sync_tracker_into_plan_file(plan_file: &Path, tracker_markdown: &str) -> Result<()> {
@@ -78,9 +80,10 @@ pub async fn persist_plan_draft(state: &PlanningWorkflowState, plan_markdown: &s
         bail!("plan draft is not ready for persistence: {}", validation.reasons().join("; "));
     }
 
-    let plan_file = match state.get_plan_file().await {
+    let snapshot = state.snapshot();
+    let plan_file = match snapshot.plan_file {
         Some(path) => path,
-        None if state.is_active() => allocate_plan_file_if_missing(state).await?,
+        None if snapshot.active => allocate_plan_file_if_missing(state).await?,
         None => bail!("No active plan file. Call start_planning first."),
     };
     let existing_plan = read_optional_file(&plan_file, "plan file").await?;

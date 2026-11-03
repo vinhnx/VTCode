@@ -65,7 +65,7 @@ async fn prevalidated_execution_allows_task_tracker_in_planning_workflow() -> Re
     fs::create_dir_all(&plans_dir)?;
     let plan_file = plans_dir.join("adaptive-test.md");
     fs::write(&plan_file, "# Adaptive test\n")?;
-    registry.planning_workflow_state().set_plan_file(Some(plan_file)).await;
+    registry.planning_workflow_state().set_plan_file(Some(plan_file));
 
     let args = json!({"action": "create", "items": ["Track step"]});
 
@@ -98,7 +98,7 @@ async fn preflight_task_tracker_schema_tracks_planning_state() -> Result<()> {
     fs::create_dir_all(&plans_dir)?;
     let plan_file = plans_dir.join("preflight-schema.md");
     fs::write(&plan_file, "# Preflight schema\n")?;
-    registry.planning_workflow_state().set_plan_file(Some(plan_file)).await;
+    registry.planning_workflow_state().set_plan_file(Some(plan_file));
 
     registry.preflight_validate_call(
         tools::TASK_TRACKER,

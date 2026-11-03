@@ -44,7 +44,7 @@ async fn completion_verification_bulk_status_sync_retains_required_checks() {
             let plan_file = state.plans_dir().join("verification.md");
             std::fs::create_dir_all(plan_file.parent().unwrap()).unwrap();
             std::fs::write(&plan_file, "# Verification\n").unwrap();
-            state.set_plan_file(Some(plan_file)).await;
+            state.set_plan_file(Some(plan_file));
             state.enable();
             registry.enable_planning();
         }

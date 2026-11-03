@@ -203,15 +203,7 @@ async fn plan_task_is_not_an_approval() {
     assert!(harness.plan_session.recovery.best_draft.is_none());
     assert_eq!(harness.plan_session.restore_agent_after_planning(), Some("build"));
     assert!(harness.conversation_history.is_empty());
-    assert!(
-        harness
-            .ctx()
-            .tool_registry
-            .planning_workflow_state()
-            .get_plan_file()
-            .await
-            .is_none()
-    );
+    assert!(harness.ctx().tool_registry.planning_workflow_state().get_plan_file().is_none());
     let events = std::fs::read_to_string(event_path).expect("planning checkpoint");
     assert!(events.contains("planning-recovery"));
     assert!(!events.contains("old draft"));

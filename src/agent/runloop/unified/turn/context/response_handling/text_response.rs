@@ -534,7 +534,7 @@ impl<'a> TurnProcessingContext<'a> {
             // stays inactive; only the file pointer is set.
             if !planning_active && !approved_execution_revision {
                 let plan_state = self.tool_registry.planning_workflow_state();
-                if plan_state.get_plan_file().await.is_none()
+                if plan_state.get_plan_file().is_none()
                     && let Err(error) = allocate_plan_file_if_missing(&plan_state).await
                 {
                     let error = PlanArtifactError::Persistence { reason: error.to_string() };

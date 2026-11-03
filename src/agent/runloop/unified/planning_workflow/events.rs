@@ -55,10 +55,7 @@ pub(crate) async fn emit_plan_ready_events(
     };
 
     let item_id = format!("{turn_id}-plan");
-    let plan_path = plan_state
-        .get_plan_file()
-        .await
-        .map(|path| display_plan_path(plan_state, &path));
+    let plan_path = plan_state.get_plan_file().map(|path| display_plan_path(plan_state, &path));
 
     let _ = emitter.emit(harness_event(
         HarnessEventKind::PlanningStarted,
@@ -240,7 +237,7 @@ mod tests {
         std::fs::write(&plan_file, "# Task\n").expect("plan file");
 
         let state = PlanningWorkflowState::new(directory.path().to_path_buf());
-        state.set_plan_file(Some(plan_file)).await;
+        state.set_plan_file(Some(plan_file));
         let event_path = directory.path().join("events.jsonl");
         let emitter = HarnessEventEmitter::new(event_path.clone()).expect("harness emitter");
         let mut plan_session = PlanningWorkflowSessionState::default();

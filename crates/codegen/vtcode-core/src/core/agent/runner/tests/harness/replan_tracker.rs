@@ -208,7 +208,7 @@ async fn replan_tracker_enrichment_preserves_hierarchical_addresses_and_ambiguou
     fs::create_dir_all(state.plans_dir()).unwrap();
     let plan = state.plans_dir().join("replan.md");
     fs::write(&plan, "# Replan\n").unwrap();
-    state.set_plan_file(Some(plan)).await;
+    state.set_plan_file(Some(plan));
     state.enable();
     let tool = TaskTrackerTool::new(workspace.clone(), state);
     tool.execute(json!({"action":"create", "items":[

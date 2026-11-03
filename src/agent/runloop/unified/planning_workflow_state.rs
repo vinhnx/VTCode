@@ -506,10 +506,10 @@ pub(crate) async fn transition_to_planning_workflow(
     // `PlanningWorkflowState` (the single source of truth), so we do not call
     // `plan_state.enable()` again here.
     if reset_plan_file {
-        plan_state.set_plan_file(None).await;
+        plan_state.set_plan_file(None);
     }
     if reset_plan_baseline {
-        plan_state.set_plan_baseline(None).await;
+        plan_state.set_plan_baseline(None);
     }
 
     session_stats.reset_for_planning_workflow_entry();
@@ -549,7 +549,7 @@ pub(crate) async fn finish_planning_workflow(
     let plan_state = tool_registry.planning_workflow_state();
     plan_state.disable();
     if reason == PlanningFinishReason::Cancelled {
-        plan_state.set_plan_file(None).await;
+        plan_state.set_plan_file(None);
     }
 
     if reason == PlanningFinishReason::Approved {

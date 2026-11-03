@@ -461,7 +461,7 @@ impl TaskTrackerTool {
     }
 
     async fn plan_task_file(&self) -> Option<PathBuf> {
-        let plan_file = self.planning_workflow_state.get_plan_file().await?;
+        let plan_file = self.planning_workflow_state.get_plan_file()?;
         tracker_file_for_plan_file(&plan_file)
     }
 
