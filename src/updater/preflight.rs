@@ -14,7 +14,7 @@ const PREFLIGHT_TIMEOUT_CAP_SECS: u64 = 10;
 
 static PREFLIGHT_NOTICE: Mutex<Option<StartupUpdateNotice>> = Mutex::new(None);
 
-pub(crate) fn set_preflight_notice(notice: Option<StartupUpdateNotice>) {
+fn set_preflight_notice(notice: Option<StartupUpdateNotice>) {
     if let Ok(mut guard) = PREFLIGHT_NOTICE.lock() {
         *guard = notice;
     }

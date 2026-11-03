@@ -160,7 +160,7 @@ impl Updater {
         self.install_update_with_progress(force, true).await
     }
 
-    pub(crate) async fn install_update_with_progress(
+    async fn install_update_with_progress(
         &self,
         force: bool,
         show_progress: bool,
@@ -174,7 +174,7 @@ impl Updater {
     /// advances through download, checksum verification, extraction, and binary
     /// replacement. The download callback is throttled internally so callers can
     /// forward each event directly to the UI without flooding the render channel.
-    pub(crate) async fn install_update_reported(
+    async fn install_update_reported(
         &self,
         force: bool,
         show_progress: bool,
