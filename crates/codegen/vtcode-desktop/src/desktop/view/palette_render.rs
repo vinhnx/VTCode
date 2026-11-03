@@ -218,10 +218,8 @@ impl DesktopView {
             });
             let speed_toggle_view = weak.clone();
             let label = configuration.as_ref().map(|config| {
-                self.models
-                    .iter()
-                    .find(|model| model.provider == config.provider && model.id == config.model)
-                    .map(|model| model.display_name.clone())
+                self.model_display_name(&config.provider, &config.model)
+                    .map(str::to_owned)
                     .unwrap_or_else(|| config.model.clone())
             });
             let effort_focus = self.effort_focus.clone();

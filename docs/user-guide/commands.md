@@ -334,6 +334,10 @@ into it; the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`, `mem
   request uses the new provider, model, context budget, and reasoning effort (the same turn when it makes another
   request, otherwise the next turn). Header, session metadata, and persisted defaults reflect the effective selection
   once applied.
+- The model picker groups models under human-readable provider names in a stable order: frontier labs first
+  (OpenAI, Anthropic), then the open-source/local family (Hugging Face, Ollama, Ollama Cloud, LM Studio, llama.cpp),
+  then the remaining providers, with custom providers last. The CLI `/model` picker and the desktop model palette use
+  the same order; the active provider group is highlighted where it sits rather than moved to the top.
 - `/feedback` opens the VT Code GitHub issue form in your browser to report a bug or request a feature.
 - `/donate` opens a picker with the project's support links (Buy Me a Coffee and GitHub Sponsors) and opens the
   chosen one in your browser.

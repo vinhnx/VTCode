@@ -1,8 +1,10 @@
 //! Command palette domain: entry types, search builders, and action dispatch.
 
 use super::*;
-use std::str::FromStr;
 use vtcode_commons::provider::Provider;
+
+mod provider_identity;
+use provider_identity::{model_route_matches, provider_display_label, provider_group_key, provider_picker_rank};
 
 /// One executable entry in the command palette.
 #[derive(Debug)]
@@ -384,15 +386,14 @@ impl DesktopView {
         for (_, entries) in &mut groups {
             entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
         }
-        // The current group stays first; the rest follow the CLI picker's
-        // provider order (frontier labs, then open-source/local). Unknown
-        // codes rank after every known provider; the sort is stable so they
-        // keep arrival order. Headers show human-readable labels.
+        // Groups follow the CLI picker's provider order: frontier labs
+        // (OpenAI, Anthropic), then the open-source/local family, then the
+        // rest. The active provider is highlighted in place instead of being
+        // hoisted so the frontier-first order stays stable. Unknown codes rank
+        // after every known provider; the sort is stable so they keep arrival
+        // order. Headers show human-readable labels.
         let display_order = Provider::picker_display_order();
-        groups.sort_by_key(|(code, entries)| {
-            let current = entries.iter().any(|entry| self.is_current_palette_action(&entry.action));
-            (!current, provider_picker_rank(code, &display_order))
-        });
+        groups.sort_by_key(|(code, _)| provider_picker_rank(code, &display_order));
         let groups = groups
             .into_iter()
             .map(|(code, entries)| (provider_display_label(&code), entries))
@@ -404,10 +405,9 @@ impl DesktopView {
         self.configuration
             .as_ref()
             .filter(|configuration| {
-                !self
-                    .models
-                    .iter()
-                    .any(|model| model.provider == configuration.provider && model.id == configuration.model)
+                !self.models.iter().any(|model| {
+                    model_route_matches(&model.provider, &model.id, &configuration.provider, &configuration.model)
+                })
             })
             .map(|configuration| protocol::ModelInfo {
                 provider: configuration.provider.clone(),
@@ -422,12 +422,21 @@ impl DesktopView {
 
     pub(super) fn model_is_current(&self, provider: &str, model: &str) -> bool {
         if let Some(configuration) = self.configuration.as_ref() {
-            configuration.provider == provider && configuration.model == model
+            model_route_matches(provider, model, &configuration.provider, &configuration.model)
         } else {
             self.models
                 .iter()
-                .any(|entry| entry.provider == provider && entry.id == model && entry.current)
+                .any(|entry| model_route_matches(&entry.provider, &entry.id, provider, model) && entry.current)
         }
+    }
+
+    /// Human-readable display name for the active model route, when the
+    /// catalog knows it. Provider aliases and model-id casing still resolve.
+    pub(super) fn model_display_name(&self, provider: &str, model: &str) -> Option<&str> {
+        self.models
+            .iter()
+            .find(|entry| model_route_matches(&entry.provider, &entry.id, provider, model))
+            .map(|entry| entry.display_name.as_str())
     }
 
     pub(super) fn is_current_palette_action(&self, action: &PaletteAction) -> bool {
@@ -787,7 +796,7 @@ impl DesktopView {
                         || self
                             .models
                             .iter()
-                            .any(|entry| entry.provider == *provider && entry.id == *model))
+                            .any(|entry| model_route_matches(&entry.provider, &entry.id, provider, model)))
             }
         }
     }
@@ -898,29 +907,6 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::OpenGoTo => {}
     }
     format!("palette-label-{:016x}", hasher.finish())
-}
-
-/// Canonical grouping key for a provider code: known aliases (`google`,
-/// `meta-ai`, `llama.cpp`, …) collapse to the canonical code so the active
-/// fallback never opens a second group next to the catalog group. Unknown
-/// (custom) provider codes pass through unchanged.
-fn provider_group_key(code: &str) -> String {
-    Provider::from_str(code).map_or_else(|_| code.to_string(), |provider| provider.as_ref().to_string())
-}
-
-/// Human-readable provider name for palette group headers and entry details.
-/// Unknown (custom) provider codes pass through unchanged.
-fn provider_display_label(code: &str) -> String {
-    Provider::from_str(code).map_or_else(|_| code.to_string(), |provider| provider.label().to_string())
-}
-
-/// Rank of a provider code in the CLI picker's display order. Unknown codes
-/// sort after every known provider.
-fn provider_picker_rank(code: &str, display_order: &[Provider]) -> usize {
-    Provider::from_str(code)
-        .ok()
-        .and_then(|provider| display_order.iter().position(|ordered| *ordered == provider))
-        .unwrap_or(usize::MAX)
 }
 
 pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {

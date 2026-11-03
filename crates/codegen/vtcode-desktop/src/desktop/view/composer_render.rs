@@ -546,10 +546,8 @@ impl DesktopView {
             .configuration
             .as_ref()
             .map(|configuration| {
-                self.models
-                    .iter()
-                    .find(|model| model.provider == configuration.provider && model.id == configuration.model)
-                    .map(|model| model.display_name.clone())
+                self.model_display_name(&configuration.provider, &configuration.model)
+                    .map(str::to_owned)
                     .unwrap_or_else(|| configuration.model.clone())
             })
             .unwrap_or_else(|| rust_i18n::t!(i18n::COMPOSER_CHOOSE_MODEL).to_string());

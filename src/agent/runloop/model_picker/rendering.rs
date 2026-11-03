@@ -70,8 +70,7 @@ pub(super) fn model_search_value(
 }
 
 fn is_current_model(provider: Provider, model_id: &str, current_provider: &str, current_model: &str) -> bool {
-    provider.as_ref().eq_ignore_ascii_case(current_provider.trim())
-        && model_id.eq_ignore_ascii_case(current_model.trim())
+    provider.name_matches(current_provider.trim()) && model_id.eq_ignore_ascii_case(current_model.trim())
 }
 
 fn input_modalities_label(input_modalities: &[&str]) -> Option<String> {
@@ -606,4 +605,27 @@ fn provider_group_divider_line() -> String {
     let title_width = STEP_ONE_TITLE.chars().count();
     let divider_width = modal_width.max(title_width);
     ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(divider_width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn current_model_matches_through_provider_alias_and_model_id_casing() {
+        assert!(
+            is_current_model(Provider::Gemini, "gemini-3-flash", "google", "gemini-3-flash"),
+            "the `google` alias resolves to the same route as `gemini`"
+        );
+        assert!(
+            is_current_model(Provider::Ollama, "qwen3-coder", "OLLAMA", " QWEN3-CODER "),
+            "provider and model comparison ignore casing and surrounding whitespace"
+        );
+    }
+
+    #[test]
+    fn current_model_rejects_other_provider_or_model_routes() {
+        assert!(!is_current_model(Provider::Gemini, "gemini-3-flash", "openai", "gemini-3-flash"));
+        assert!(!is_current_model(Provider::Gemini, "gemini-3-pro", "google", "gemini-3-flash"));
+    }
 }
