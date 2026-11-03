@@ -589,13 +589,13 @@ fn selecting_a_model_switches_configuration_and_preserves_the_session(cx: &mut T
                 .selected_index()
                 .unwrap()
                 .section,
-            0,
-            "the active provider and model are placed first and selected"
+            1,
+            "frontier labs lead while the active entry stays selected in place"
         );
         let groups = &view.read(cx).palette_groups;
-        assert_eq!(groups[0].1[0].label, "GPT OSS 20B");
-        assert!(groups[0].1[0].description.as_ref().unwrap().contains("gpt-oss:20b"));
-        assert_eq!(groups[1].1[0].label, "Claude Sonnet 5");
+        assert_eq!(groups[0].1[0].label, "Claude Sonnet 5");
+        assert_eq!(groups[1].1[0].label, "GPT OSS 20B");
+        assert!(groups[1].1[0].description.as_ref().unwrap().contains("gpt-oss:20b"));
         window.input("claude-sonnet-5", cx);
     })
     .unwrap();
