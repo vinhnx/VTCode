@@ -20,6 +20,7 @@ CARGO_SCHEMA_CMD = [
     "cargo",
     "run",
     "-q",
+    "--locked",
     "-p",
     "vtcode-config",
     "--features",
@@ -66,8 +67,9 @@ def load_schema_from_cargo() -> dict[str, Any]:
             "Failed to export configuration schema.\n"
             "Remediation:\n"
             "1. Ensure Rust toolchain is installed and `cargo` is available.\n"
-            "2. Run: cargo run -p vtcode-config --features schema --example schema_dump\n"
-            f"3. Cargo stderr:\n{stderr}"
+            "2. Run: cargo run --locked -p vtcode-config --features schema --example schema_dump\n"
+            "3. If the lock file is stale, update it explicitly first (never via this script).\n"
+            f"4. Cargo stderr:\n{stderr}"
         )
 
     try:
