@@ -862,6 +862,15 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
         }
     }
 
+    // The streamed block is complete: stamp it once. Suppressed content is
+    // explicitly not the response, so it carries no footer even when deltas
+    // reached the screen before suppression was detected.
+    if supports_streaming_markdown && emitted_tokens && !aggregated.trim().is_empty() && !content_suppressed {
+        renderer
+            .finish_streamed_response()
+            .map_err(|err| map_render_error(provider_name, err))?;
+    }
+
     if !has_renderable_content || aggregated.trim().is_empty() || suppress_reasoning_due_to_duplication {
         let suppress_reasoning = suppress_reasoning_due_to_duplication;
         reasoning_state

@@ -554,4 +554,24 @@ impl AnsiRenderer {
 
         Err(anyhow!("stream_markdown_response requires an inline sink"))
     }
+
+    /// Append the wall-clock footer after a streamed TUI response completes.
+    ///
+    /// Streaming replaces the in-progress block per delta, so the footer can
+    /// only be appended once the stream ends. No-op without an inline sink,
+    /// when timestamps are disabled, or during transcript-batch replay. The
+    /// caller owns the "visible content was streamed" condition.
+    pub fn finish_streamed_response(&mut self) -> Result<()> {
+        let Some(sink) = &mut self.sink else {
+            return Ok(());
+        };
+        if !self.show_message_timestamps || sink.in_transcript_batch() {
+            return Ok(());
+        }
+        let indent = MessageStyle::Response.indent();
+        let status_style = theme::active_styles().status;
+        sink.append_response_timestamp_footer(status_style, indent)?;
+        self.last_line_was_empty = false;
+        Ok(())
+    }
 }

@@ -40,6 +40,7 @@ pub struct AnsiRenderer {
     reasoning_visible: bool,
     screen_reader_mode: bool,
     show_diagnostics_in_transcript: bool,
+    show_message_timestamps: bool,
     tool_display_mode: ToolDisplayMode,
     diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode,
     compact_command_group: Option<CompactActivityMetadata>,

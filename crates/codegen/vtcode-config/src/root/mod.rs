@@ -280,6 +280,10 @@ pub struct UiConfig {
     #[serde(default = "default_show_diagnostics_in_transcript")]
     pub show_diagnostics_in_transcript: bool,
 
+    /// Show a wall-clock footer under each completed agent response.
+    #[serde(default = "default_show_message_timestamps")]
+    pub show_message_timestamps: bool,
+
     // === Color Accessibility Configuration ===
     // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research.
     /// Minimum contrast ratio for text against background (WCAG 2.1 standard)
@@ -423,6 +427,10 @@ fn default_show_turn_timer() -> bool {
 
 fn default_show_diagnostics_in_transcript() -> bool {
     false
+}
+
+fn default_show_message_timestamps() -> bool {
+    true
 }
 
 fn default_vim_mode() -> bool {
@@ -571,6 +579,7 @@ impl Default for UiConfig {
             message_block_spacing: default_message_block_spacing(),
             show_turn_timer: default_show_turn_timer(),
             show_diagnostics_in_transcript: default_show_diagnostics_in_transcript(),
+            show_message_timestamps: default_show_message_timestamps(),
             // Color accessibility defaults
             minimum_contrast: default_minimum_contrast(),
             bold_is_bright: default_bold_is_bright(),

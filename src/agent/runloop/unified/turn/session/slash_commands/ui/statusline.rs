@@ -295,21 +295,21 @@ mod tests {
     #[test]
     fn statusline_action_toggles_clock() {
         let mut draft = StatusLineConfig::default();
-        assert!(draft.show_clock, "defaults to showing the clock");
+        assert!(!draft.show_clock, "defaults to hiding the clock");
 
         let action = apply_statusline_action("statusline:clock:toggle", &mut draft).expect("clock action");
 
-        assert_eq!(action, StatuslineSetupAction::Continue);
-        assert!(!draft.show_clock);
-
-        let action = apply_statusline_action("statusline:clock:toggle", &mut draft).expect("clock action");
         assert_eq!(action, StatuslineSetupAction::Continue);
         assert!(draft.show_clock);
+
+        let action = apply_statusline_action("statusline:clock:toggle", &mut draft).expect("clock action");
+        assert_eq!(action, StatuslineSetupAction::Continue);
+        assert!(!draft.show_clock);
     }
 
     #[test]
     fn statusline_preview_includes_clock_when_enabled() {
-        let draft = StatusLineConfig::default();
+        let draft = StatusLineConfig { show_clock: true, ..StatusLineConfig::default() };
 
         let preview = build_statusline_preview(&draft, None, Some("thread-1"), "gpt-5.6-sol");
 

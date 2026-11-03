@@ -310,3 +310,56 @@ async fn inline_batches_many_reasoning_deltas_for_performance() {
         "expected batched reasoning updates for 600 deltas, got {policy_inline_updates} inline updates"
     );
 }
+
+#[tokio::test]
+async fn inline_stream_appends_timestamp_footer_on_completion() {
+    fn is_footer(text: &str) -> bool {
+        text.strip_prefix("  · ")
+            .is_some_and(|time| time.contains(':') && (time.ends_with("AM") || time.ends_with("PM")))
+    }
+
+    let provider = ReasoningThenChunkedContentProvider {
+        chunks: vec!["hello ".to_string(), "world".to_string()],
+        reasoning_chunks: vec![],
+    };
+    let request = build_request();
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::new(&handle, None, None, "");
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = super::super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let (_resp, emitted) = stream_and_render_response(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+    )
+    .await
+    .expect("stream should succeed");
+
+    assert!(emitted, "inline renderer should emit streamed content");
+
+    let mut agent_appends = Vec::new();
+    let mut saw_replace = false;
+    while let Ok(command) = rx.try_recv() {
+        match command {
+            InlineCommand::ReplaceLast { .. } => saw_replace = true,
+            InlineCommand::AppendLine {
+                kind: vtcode_ui::tui::app::InlineMessageKind::Agent,
+                segments,
+            } => {
+                agent_appends.push(segments.iter().map(|s| s.text.as_str()).collect::<String>());
+            }
+            _ => {}
+        }
+    }
+
+    assert!(saw_replace, "content must stream through replace updates");
+    let footers = agent_appends.iter().filter(|text| is_footer(text)).count();
+    assert_eq!(footers, 1, "completed stream must stamp exactly once: {agent_appends:?}");
+    assert!(is_footer(agent_appends.last().expect("footer appends")), "footer must close the block");
+}

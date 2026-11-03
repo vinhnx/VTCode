@@ -48,6 +48,7 @@ pub mod llm;
 pub mod lr_map;
 pub mod memory;
 pub mod message_metadata;
+pub mod message_timestamp;
 pub mod misconfiguration;
 pub mod modal_hints;
 pub mod model_family;

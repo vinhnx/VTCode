@@ -156,6 +156,15 @@ fn task_panel_defaults_to_hidden_and_parses() {
 }
 
 #[test]
+fn message_timestamps_default_to_shown_and_parse() {
+    assert!(UiConfig::default().show_message_timestamps);
+
+    let disabled: UiConfig = toml::from_str("show_message_timestamps = false").expect("show_message_timestamps parses");
+    assert!(!disabled.show_message_timestamps);
+    assert!(toml::from_str::<UiConfig>("").expect("empty parses").show_message_timestamps);
+}
+
+#[test]
 fn tool_display_mode_round_trips_through_toml() {
     let compact: UiConfig = toml::from_str("tool_display_mode = \"compact\"").expect("compact mode parses");
     let expanded: UiConfig = toml::from_str("tool_display_mode = \"expanded\"").expect("expanded mode parses");

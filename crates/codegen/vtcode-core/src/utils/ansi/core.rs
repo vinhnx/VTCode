@@ -50,6 +50,7 @@ impl AnsiRenderer {
             reasoning_visible: true,
             screen_reader_mode: false,
             show_diagnostics_in_transcript: false,
+            show_message_timestamps: true,
             tool_display_mode: ToolDisplayMode::Compact,
             diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
             compact_command_group: None,
@@ -193,6 +194,18 @@ impl AnsiRenderer {
 
     pub fn set_show_diagnostics_in_transcript(&mut self, enabled: bool) {
         self.show_diagnostics_in_transcript = if cfg!(debug_assertions) { enabled } else { false };
+    }
+
+    /// Show a wall-clock footer under each completed agent response.
+    ///
+    /// Enabled by default so headless and unwired paths stay consistent;
+    /// sessions apply `ui.show_message_timestamps` through this setter.
+    pub fn set_show_message_timestamps(&mut self, enabled: bool) {
+        self.show_message_timestamps = enabled;
+    }
+
+    pub fn show_message_timestamps(&self) -> bool {
+        self.show_message_timestamps
     }
 
     pub fn set_tool_display_mode(&mut self, mode: ToolDisplayMode) {

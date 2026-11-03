@@ -42,7 +42,10 @@ pub struct StatusLineConfig {
     pub refresh_interval_ms: u64,
     #[serde(default = "default_status_line_command_timeout_ms")]
     pub command_timeout_ms: u64,
-    /// Show the current system time (`HH:MM:SS`) on the status line (default: true).
+    /// Show the current system time (`HH:MM:SS`) on the status line (default: false).
+    ///
+    /// Per-message timestamps (`ui.show_message_timestamps`) replaced the
+    /// ticking clock; this remains as an opt-in for the old behavior.
     #[serde(default = "default_status_line_show_clock")]
     pub show_clock: bool,
 }
@@ -71,7 +74,7 @@ impl Default for StatusLineConfig {
 }
 
 /// Returns the default status line clock visibility when not explicitly configured.
-const DEFAULT_STATUS_LINE_SHOW_CLOCK: bool = true;
+const DEFAULT_STATUS_LINE_SHOW_CLOCK: bool = false;
 
 fn default_status_line_show_clock() -> bool {
     DEFAULT_STATUS_LINE_SHOW_CLOCK
@@ -129,12 +132,12 @@ mod tests {
     }
 
     #[test]
-    fn show_clock_defaults_to_true() {
+    fn show_clock_defaults_to_false() {
         let config = StatusLineConfig::default();
-        assert!(config.show_clock);
+        assert!(!config.show_clock);
 
         let parsed: StatusLineConfig = toml::from_str("").expect("empty config must parse with defaults");
-        assert!(parsed.show_clock);
+        assert!(!parsed.show_clock);
     }
 
     #[test]

@@ -454,6 +454,25 @@ impl InlineSink {
         }
     }
 
+    /// Whether transcript lines are buffered for a batched load.
+    ///
+    /// Batches replay persisted history (resume, rewind), so replayed agent
+    /// lines must not gain fresh "now" timestamps.
+    pub(super) fn in_transcript_batch(&self) -> bool {
+        self.pending_transcript_batch.is_some()
+    }
+
+    /// Append the wall-clock footer for one completed agent response.
+    ///
+    /// The footer reuses `Agent` kind so reflow keeps it glued to its message
+    /// (no divider or gap between consecutive agent lines). It is never
+    /// recorded in the global transcript log: the log feeds tail-matching,
+    /// session-end hooks, and snapshot assertions that must not see chrome.
+    pub(super) fn append_response_timestamp_footer(&mut self, style: Style, indent: &str) -> Result<()> {
+        let footer = vtcode_commons::message_timestamp::current_message_timestamp_footer();
+        self.write_multiline_with_transcript(style, indent, &footer, InlineMessageKind::Agent, false, None)
+    }
+
     pub(super) fn set_highlight_config(&mut self, highlight_config: SyntaxHighlightingConfig) {
         self.highlight_config = highlight_config;
     }
