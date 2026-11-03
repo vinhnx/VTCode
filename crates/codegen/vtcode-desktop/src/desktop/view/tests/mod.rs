@@ -524,6 +524,7 @@ mod config_deep_links;
 mod config_sessions;
 mod curated_config;
 mod deeplinks;
+mod effort_rail;
 mod exec_controls;
 mod file_drop;
 mod files_destination;

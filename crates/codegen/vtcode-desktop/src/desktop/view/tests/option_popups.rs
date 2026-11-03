@@ -611,8 +611,9 @@ fn reasoning_effort_knob_click_commits_the_selected_level(cx: &mut TestAppContex
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
+        // The rail runs bottom-to-top: the top edge is the maximum level.
         let track = window.find("slider-bar-container").bounds();
-        window.click_at("slider-bar-container", point(track.size.width - px(2.), track.size.height / 2.), cx);
+        window.click_at("slider-bar-container", point(track.size.width / 2., px(2.)), cx);
     })
     .unwrap();
     cx.run_until_parked();
@@ -623,7 +624,6 @@ fn reasoning_effort_knob_click_commits_the_selected_level(cx: &mut TestAppContex
     assert_eq!(params["reasoningEffort"], "high");
     assert!(requests.try_recv().is_err());
 }
-
 #[gpui_kit::test]
 fn reasoning_effort_knob_does_not_submit_at_its_boundary(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

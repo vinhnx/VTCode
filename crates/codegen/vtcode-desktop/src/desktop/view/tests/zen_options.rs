@@ -18,8 +18,9 @@ fn zen_model_button_opens_options_and_commits_effort(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · medium"));
+        // The rail runs bottom-to-top: the top edge is the maximum level.
         let track = window.find("slider-bar-container").bounds();
-        window.click_at("slider-bar-container", point(track.size.width - px(2.), track.size.height / 2.), cx);
+        window.click_at("slider-bar-container", point(track.size.width / 2., px(2.)), cx);
     })
     .unwrap();
     cx.run_until_parked();
