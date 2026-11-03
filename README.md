@@ -18,10 +18,8 @@
   <!-- markdownlint-disable MD033 -->
   <!-- NB: plain linked images, not <video>: GitHub's README renderer strips video embeds. -->
   <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">
-    <img src="./resources/screenshots/vtcode-desktop-light.png" width="49%"
+    <img src="./resources/screenshots/vtcode-desktop-dark-agent.png"
       alt="VT Code Desktop in light appearance — click to watch the demo video" />
-    <img src="./resources/screenshots/vtcode-desktop-dark.png" width="49%"
-      alt="VT Code Desktop in dark appearance — click to watch the demo video" />
   </a><br />
   <!-- markdownlint-enable MD033 -->
   <sub>Desktop app · <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">watch the demo video</a></sub>
@@ -29,9 +27,9 @@
 </p>
 
 <p>
-  <img src="./resources/screenshots/vtcode-cli-tui.gif" width="39%"
-    alt="Terminal TUI demo: launch, ask, stream the reply, exit" />
-  <img src="./resources/screenshots/vtcode-cli-ask.gif" width="58%"
+  <img src="./resources/screenshots/vtcode-cli-tui.gif" width="100%"
+    alt="Terminal TUI demo: launch, ask, stream the reply, exit" /><br />
+  <img src="./resources/screenshots/vtcode-cli-ask.gif" width="100%"
     alt="One-shot ask demo: a single tool-free terminal reply" /><br />
   <sub>Terminal TUI &nbsp;·&nbsp; One-shot ask</sub>
 </p>
