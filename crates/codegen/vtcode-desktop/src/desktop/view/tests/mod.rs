@@ -45,6 +45,57 @@ fn test_thumbnail_image() -> std::sync::Arc<gpui_kit::Image> {
     std::sync::Arc::new(gpui_kit::Image::from_bytes(gpui_kit::ImageFormat::Png, TINY_PNG.to_vec()))
 }
 
+/// Assert one chord resolves to the expected action in the given context.
+/// Keymaps append, so a reinstalled table leaves identical duplicates behind;
+/// dispatch tries the highest-precedence hit first, which is what this pins.
+pub(super) fn assert_chord_resolves_to(
+    cx: &gpui_kit::App,
+    chord: &str,
+    context: &str,
+    expected: &dyn gpui_kit::Action,
+) {
+    let resolved = live_chord_bindings(cx, chord, context);
+    assert!(!resolved.is_empty(), "chord {chord} must stay live in {context}");
+    assert!(
+        gpui_kit::Action::partial_eq(resolved[0].action(), expected),
+        "chord {chord} resolved to the wrong action in {context}"
+    );
+}
+
+/// Assert one chord resolves exactly once to the expected action: the fresh
+/// binding with no lingering stale copy beneath it.
+pub(super) fn assert_chord_resolves_once_to(
+    cx: &gpui_kit::App,
+    chord: &str,
+    context: &str,
+    expected: &dyn gpui_kit::Action,
+) {
+    let resolved = live_chord_bindings(cx, chord, context);
+    assert_eq!(resolved.len(), 1, "chord {chord} must resolve exactly once in {context}");
+    assert!(
+        gpui_kit::Action::partial_eq(resolved[0].action(), expected),
+        "chord {chord} resolved to the wrong action in {context}"
+    );
+}
+
+/// Assert one chord resolves to nothing in the given context: unbound, or
+/// retired by a `NoAction` shadow after a rebind.
+pub(super) fn assert_chord_dead(cx: &gpui_kit::App, chord: &str, context: &str) {
+    let resolved = live_chord_bindings(cx, chord, context);
+    assert!(resolved.is_empty(), "chord {chord} must stay dead in {context}");
+}
+
+fn live_chord_bindings(cx: &gpui_kit::App, chord: &str, context: &str) -> Vec<gpui_kit::KeyBinding> {
+    // `parse` needs a `'static` source; none of these chords use `secondary-`,
+    // so the host-OS parse resolves them identically.
+    let keystroke = gpui_kit::Keystroke::parse_with_os(chord, super::shortcuts::host_operating_system()).unwrap();
+    let context = gpui_kit::KeyContext::parse(context).unwrap();
+    let keymap = cx.key_bindings();
+    let keymap = keymap.borrow();
+    let (resolved, _) = keymap.bindings_for_input(&[keystroke], &[context]);
+    resolved.into_iter().collect()
+}
+
 fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
     open_desktop_sized(cx, 1280., 900.)
 }

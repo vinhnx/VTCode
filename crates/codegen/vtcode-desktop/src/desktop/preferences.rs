@@ -738,15 +738,35 @@ impl Preferences {
         dirs::home_dir().map(|home| home.join(".vtcode").join("desktop").join("preferences.json"))
     }
 
-    /// Load preferences, returning defaults for a missing or corrupt file.
+    /// Load preferences, returning defaults for a missing file. A corrupt
+    /// file is quarantined beside the original before falling back, so the
+    /// next save cannot silently overwrite the evidence with defaults.
     pub(super) fn load() -> Self {
         let Some(path) = Self::preferences_path() else {
             return Self::default();
         };
-        std::fs::read_to_string(path)
-            .ok()
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .unwrap_or_default()
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(_) => return Self::default(),
+        };
+        match serde_json::from_str(&content) {
+            Ok(preferences) => preferences,
+            Err(error) => {
+                let quarantined = path.with_extension("json.corrupt");
+                if let Err(rename_error) = std::fs::rename(&path, &quarantined) {
+                    vtcode_commons::diagnostics::stderr(format_args!(
+                        "failed to quarantine corrupt desktop preferences ({}): {rename_error}",
+                        quarantined.display()
+                    ));
+                } else {
+                    vtcode_commons::diagnostics::stderr(format_args!(
+                        "desktop preferences corrupt ({error}); moved to {}",
+                        quarantined.display()
+                    ));
+                }
+                Self::default()
+            }
+        }
     }
 
     /// Best-effort saves for existing comfort controls. Failures are loud on

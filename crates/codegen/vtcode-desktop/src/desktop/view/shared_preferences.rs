@@ -196,6 +196,7 @@ impl DesktopView {
             Ok(_) => match preferences.try_save() {
                 Err(error) => error,
                 Ok(()) => {
+                    bootstrap::reinstall_shortcuts(cx, &self.preferences.shortcuts, &preferences.shortcuts);
                     self.shortcut_draft = shortcuts::draft_from(&preferences.shortcuts);
                     self.shortcut_capture = None;
                     self.preferences = preferences;

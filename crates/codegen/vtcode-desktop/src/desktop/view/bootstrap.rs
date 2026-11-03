@@ -27,15 +27,7 @@ pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
 ];
 
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
-    match shortcuts::bindings(&preferences.shortcuts, cx) {
-        Ok(bindings) => cx.bind_keys(bindings),
-        Err(error) => {
-            eprintln!("Desktop shortcuts: {error}; using defaults");
-            if let Ok(bindings) = shortcuts::bindings(&Default::default(), cx) {
-                cx.bind_keys(bindings);
-            }
-        }
-    }
+    bind_configurable_shortcuts(cx, &preferences.shortcuts);
     cx.bind_keys([
         KeyBinding::new("cmd-w", CloseWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-m", MinimizeWindow, Some(key_context::DESKTOP)),
@@ -76,6 +68,36 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
     ]);
+}
+
+/// Bind the configurable shortcut table, falling back to defaults when a
+/// hand-edited table fails validation. Startup binds once; shortcut saves
+/// reinstall through [`reinstall_shortcuts`] so retired chords die with them.
+fn bind_configurable_shortcuts(cx: &mut App, shortcuts: &std::collections::BTreeMap<String, String>) {
+    match shortcuts::bindings(shortcuts, cx) {
+        Ok(bindings) => cx.bind_keys(bindings),
+        Err(error) => {
+            eprintln!("Desktop shortcuts: {error}; using defaults");
+            if let Ok(bindings) = shortcuts::bindings(&Default::default(), cx) {
+                cx.bind_keys(bindings);
+            }
+        }
+    }
+}
+
+/// Live-apply a saved shortcut table: shadow retired chords with `NoAction`,
+/// then bind the fresh table. Same-chord conflicts resolve toward the latest
+/// binding, so shadows must precede the table. The fixed table never changes
+/// and stays bound once from [`init_keybindings`]. Reinstalling appends
+/// identical duplicates for unchanged chords; dispatch stops at the first
+/// hit, so they are harmless, and saves are rare user gestures.
+pub(super) fn reinstall_shortcuts(
+    cx: &mut App,
+    old_shortcuts: &std::collections::BTreeMap<String, String>,
+    new_shortcuts: &std::collections::BTreeMap<String, String>,
+) {
+    cx.bind_keys(shortcuts::stale_shadows(old_shortcuts, new_shortcuts, cx));
+    bind_configurable_shortcuts(cx, new_shortcuts);
 }
 
 pub(super) fn init_native_menus(cx: &mut App) {

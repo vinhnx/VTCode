@@ -552,3 +552,47 @@ fn try_save_reports_an_unwritable_preferences_path() {
     std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o755)).expect("restore write permission");
     assert!(result.is_err(), "an unwritable path must fail loudly instead of dropping the save");
 }
+
+#[test]
+fn corrupt_preferences_file_is_quarantined_and_defaults_loaded() {
+    let dir = tempfile::tempdir().expect("isolated corrupt-file probe");
+    let path = dir.path().join("preferences.json");
+    let corrupt = r#"{"theme":"ciapre","contrast":oops"#;
+    std::fs::write(&path, corrupt).expect("seed corrupt preferences");
+    set_test_preferences_path(path.clone());
+
+    let loaded = Preferences::load();
+
+    assert!(loaded.theme.is_none(), "corrupt content must not partially load");
+    assert!(loaded.shortcuts.is_empty());
+    assert!(!path.exists(), "the corrupt file must move aside");
+    let quarantined = path.with_extension("json.corrupt");
+    assert_eq!(std::fs::read_to_string(&quarantined).expect("quarantine holds the evidence"), corrupt);
+}
+
+#[test]
+fn missing_preferences_file_loads_defaults_without_quarantine() {
+    let dir = tempfile::tempdir().expect("isolated missing-file probe");
+    let path = dir.path().join("preferences.json");
+    set_test_preferences_path(path.clone());
+
+    let loaded = Preferences::load();
+
+    assert!(loaded.theme.is_none());
+    assert!(loaded.shortcuts.is_empty());
+    assert!(!path.with_extension("json.corrupt").exists(), "a missing file is not corruption");
+}
+
+#[test]
+fn valid_preferences_file_loads_values_without_quarantine() {
+    let dir = tempfile::tempdir().expect("isolated valid-file probe");
+    let path = dir.path().join("preferences.json");
+    std::fs::write(&path, r#"{"theme":"ciapre","contrast":42}"#).expect("seed valid preferences");
+    set_test_preferences_path(path.clone());
+
+    let loaded = Preferences::load();
+
+    assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    assert_eq!(loaded.contrast(), 42);
+    assert!(!path.with_extension("json.corrupt").exists(), "a valid file must not quarantine");
+}

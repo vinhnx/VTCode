@@ -508,6 +508,45 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result
         .map(|bindings| bindings.into_iter().flatten().collect())
 }
 
+/// `NoAction` shadows for chords a saved table retires. GPUI keymaps only
+/// append, so rebinding after a save would otherwise leave removed or rebound
+/// chords firing their stale action until restart. Callers bind these shadows
+/// before the fresh table: same-chord conflicts resolve toward the latest
+/// binding, so shared chords take the new action while dropped chords stay
+/// dead. A table startup rejected was never bound (defaults were), so retired
+/// chords diff against defaults then; chords that no longer parse are skipped
+/// because they were never bound either.
+pub(super) fn stale_shadows(
+    old_overrides: &BTreeMap<String, String>,
+    new_overrides: &BTreeMap<String, String>,
+    cx: &App,
+) -> Vec<KeyBinding> {
+    let defaults = BTreeMap::new();
+    let old = if bindings(old_overrides, cx).is_ok() {
+        old_overrides
+    } else {
+        &defaults
+    };
+    let mut shadows = Vec::new();
+    for command in COMMANDS.iter() {
+        let retired = staged_value(old, command);
+        if retired.is_empty() || retired == staged_value(new_overrides, command) {
+            continue;
+        }
+        // Mirrors `bindings()`: Settings and SettingsSearch bind twice, once
+        // per context, so both stale chords need a shadow. Keep in sync.
+        let mut contexts = vec![context_for(command.id)];
+        if command.id == CommandId::Settings || command.id == CommandId::SettingsSearch {
+            contexts.push(key_context::SETTINGS);
+        }
+        shadows.extend(contexts.into_iter().filter_map(|context| {
+            let predicate = gpui_kit::KeyBindingContextPredicate::parse(context).ok()?;
+            KeyBinding::load(retired, Box::new(NoAction {}), Some(predicate.into()), false, None, cx).ok()
+        }));
+    }
+    shadows
+}
+
 fn is_function_key(shortcut: &str) -> bool {
     shortcut
         .rsplit('-')
@@ -850,6 +889,109 @@ mod tests {
                     .unparse(host_operating_system()),
                 expected
             );
+        });
+    }
+
+    use super::super::tests::{assert_chord_dead, assert_chord_resolves_once_to, assert_chord_resolves_to};
+
+    /// Mirror a save reinstall through the live keymap: old table, shadows,
+    /// then the fresh table, exactly as `bootstrap::reinstall_shortcuts` binds.
+    fn reinstall(old: &BTreeMap<String, String>, new: &BTreeMap<String, String>, cx: &mut App) {
+        cx.bind_keys(bindings(old, cx).expect("old table builds"));
+        cx.bind_keys(stale_shadows(old, new, cx));
+        cx.bind_keys(bindings(new, cx).expect("new table builds"));
+    }
+
+    #[gpui_kit::test]
+    fn reinstall_retires_rebound_chord_and_keeps_new_live(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let old = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            let new = BTreeMap::from([("model".into(), "ctrl-alt-m".into())]);
+            reinstall(&old, &new, cx);
+            assert_chord_dead(cx, "ctrl-shift-m", key_context::DESKTOP);
+            assert_chord_resolves_once_to(cx, "ctrl-alt-m", key_context::DESKTOP, &OpenModelPicker);
+            assert_chord_resolves_to(cx, "cmd-k", key_context::DESKTOP, &OpenCommandPalette);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn reinstall_retires_unbound_chord_without_touching_neighbors(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let old = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            let new = BTreeMap::from([("model".into(), String::new())]);
+            reinstall(&old, &new, cx);
+            assert_chord_dead(cx, "ctrl-shift-m", key_context::DESKTOP);
+            assert_chord_resolves_to(cx, "cmd-k", key_context::DESKTOP, &OpenCommandPalette);
+            assert_chord_resolves_to(cx, "cmd-,", key_context::DESKTOP, &OpenSettings);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn unchanged_tables_emit_no_shadows(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let sparse = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            assert!(stale_shadows(&sparse, &sparse, cx).is_empty());
+            // The staged draft is a full table while disk holds sparse
+            // overrides: identical effective chords still mean no shadows.
+            let full = draft_from(&sparse);
+            assert!(stale_shadows(&sparse, &full, cx).is_empty());
+            assert!(stale_shadows(&BTreeMap::new(), &BTreeMap::new(), cx).is_empty());
+        });
+    }
+
+    #[gpui_kit::test]
+    fn invalid_old_table_retires_against_startup_defaults(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            // Startup rejects the garbage table and binds defaults instead,
+            // so the reinstall must retire the default chord, not the garbage.
+            let old = BTreeMap::from([("model".into(), "a-b".into())]);
+            let new = BTreeMap::from([("model".into(), "ctrl-shift-m".into())]);
+            assert!(bindings(&old, cx).is_err(), "fixture must be invalid");
+            cx.bind_keys(bindings(&BTreeMap::new(), cx).expect("defaults build"));
+            cx.bind_keys(stale_shadows(&old, &new, cx));
+            cx.bind_keys(bindings(&new, cx).expect("new table builds"));
+            assert_chord_dead(cx, "cmd-shift-m", key_context::DESKTOP);
+            assert_chord_resolves_once_to(cx, "ctrl-shift-m", key_context::DESKTOP, &OpenModelPicker);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn settings_rebind_shadows_both_contexts(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let old = BTreeMap::new();
+            let new = BTreeMap::from([("settings".into(), "ctrl-,".into())]);
+            let shadows = stale_shadows(&old, &new, cx);
+            assert_eq!(shadows.len(), 2, "the dual-context binding retires twice");
+            reinstall(&old, &new, cx);
+            for context in [key_context::DESKTOP, key_context::SETTINGS] {
+                assert_chord_dead(cx, "cmd-,", context);
+                assert_chord_resolves_once_to(cx, "ctrl-,", context, &OpenSettings);
+            }
+            // The untouched twin keeps its own chord live in both contexts.
+            for context in [key_context::DESKTOP, key_context::SETTINGS] {
+                assert_chord_resolves_to(cx, "cmd-f", context, &OpenSettingsSearch);
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn retiring_the_full_table_shadows_every_binding(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            // Structural pin: retiring everything must shadow every binding,
+            // including dual-context commands. If `bindings()` gains a
+            // context, this fails until `stale_shadows` mirrors it.
+            let unbind_all: BTreeMap<String, String> = COMMANDS
+                .iter()
+                .map(|command| (command.id.as_str().to_string(), String::new()))
+                .collect();
+            let defaults = bindings(&BTreeMap::new(), cx).expect("defaults build");
+            let shadows = stale_shadows(&BTreeMap::new(), &unbind_all, cx);
+            assert_eq!(shadows.len(), defaults.len(), "one shadow per bound chord");
+            cx.bind_keys(defaults);
+            cx.bind_keys(shadows);
+            for command in COMMANDS.iter() {
+                assert_chord_dead(cx, command.default_binding, context_for(command.id));
+            }
         });
     }
 }

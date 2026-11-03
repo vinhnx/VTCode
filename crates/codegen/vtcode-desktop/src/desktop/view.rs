@@ -56,9 +56,9 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
     FocusHandle, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollEvent,
-    ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored,
-    deferred, div, img, point, px, size,
+    MouseMoveEvent, MouseUpEvent, NavigationDirection, NoAction, OsAction, PathPromptOptions, Pixels, Render,
+    ScrollEvent, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions,
+    actions, anchored, deferred, div, img, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;

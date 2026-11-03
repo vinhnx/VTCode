@@ -1,3 +1,4 @@
+use super::super::shortcuts::{CommandId, action};
 use super::*;
 
 #[gpui_kit::test]
@@ -278,4 +279,40 @@ fn command_palette_badges_follow_saved_overrides_and_hide_unbound(cx: &mut TestA
         assert!(window.try_find(palette_action_id(&zen_mode)).is_some(), "unbinding hides the badge, not the row");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn shortcut_save_applies_rebind_live_and_retires_old_chord(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        select_settings_category(window, 2, cx);
+        view.update(cx, |view, _| {
+            let _previous = view.shortcut_draft.insert("model".into(), "ctrl-shift-m".into());
+            view.shortcuts_editing = true;
+        });
+        window.render_frame(cx);
+        window.click("save-shortcuts", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load()
+                .shortcuts
+                .get("model")
+                .map(String::as_str),
+            Some("ctrl-shift-m")
+        );
+    })
+    .unwrap();
+    let desktop = crate::desktop::strings::key_context::DESKTOP;
+    let model = action(CommandId::Model);
+    let commands = action(CommandId::Commands);
+    cx.update(|cx| {
+        assert_chord_dead(cx, "cmd-shift-m", desktop);
+        assert_chord_resolves_once_to(cx, "ctrl-shift-m", desktop, model.as_ref());
+        assert_chord_resolves_to(cx, "cmd-k", desktop, commands.as_ref());
+    });
 }
