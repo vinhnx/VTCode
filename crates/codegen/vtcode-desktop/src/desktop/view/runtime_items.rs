@@ -68,8 +68,22 @@ impl DesktopView {
                 self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &plan.text, false);
             }
             ThreadItemDetails::Reasoning(reasoning) => {
-                let title = rust_i18n::t!("app.transcript.planning_update").to_string();
-                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &reasoning.text, false);
+                if let Some(diagnostic) = reasoning.diagnostic.as_deref() {
+                    let severity = match diagnostic.severity {
+                        vtcode_exec_events::DiagnosticSeverity::Error => NoticeSeverity::Error,
+                        vtcode_exec_events::DiagnosticSeverity::Warning => NoticeSeverity::Warning,
+                        vtcode_exec_events::DiagnosticSeverity::Info => NoticeSeverity::Info,
+                    };
+                    self.transcript.upsert(TranscriptItem::diagnostic_notice(
+                        id,
+                        diagnostic.summary.as_str().into(),
+                        diagnostic.agent_details.clone(),
+                        severity,
+                    ));
+                } else {
+                    let title = rust_i18n::t!("app.transcript.planning_update").to_string();
+                    self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &reasoning.text, false);
+                }
             }
             ThreadItemDetails::Decision(decision) => {
                 let title = rust_i18n::t!("app.transcript.decision_title").to_string();

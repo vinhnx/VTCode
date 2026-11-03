@@ -134,6 +134,9 @@ pub(super) struct TranscriptItem {
     /// render projections so every prepare/clone path carries it together.
     pub has_list: bool,
     pub expanded: bool,
+    /// Whether this notice row carries collapsible operational details behind
+    /// a Show/Hide toggle. Plain notices render their full text instead.
+    pub collapsible_details: bool,
     /// Shared expansion state copied to each row so virtualized rendering stays constant-time.
     pub activity_expanded: bool,
     /// Whether this tool row is part of a consecutive group of at least two rows.
@@ -279,6 +282,16 @@ impl TranscriptItem {
         item
     }
 
+    /// Diagnostic notice from a `ThreadEvent` reasoning payload: a
+    /// severity-styled summary with collapsible operational details. Empty
+    /// evidence offers no toggle, mirroring the terminal transcript.
+    pub fn diagnostic_notice(id: String, title: SharedString, details: String, severity: NoticeSeverity) -> Self {
+        let collapsible = !details.trim().is_empty();
+        let mut item = Self::notice(id, title, details, severity);
+        item.collapsible_details = collapsible;
+        item
+    }
+
     pub fn new(id: String, role: String, title: SharedString, text: String) -> Self {
         let text = SharedString::from(text);
         let is_tool = role == TranscriptRole::Tool.as_str();
@@ -298,6 +311,7 @@ impl TranscriptItem {
             accessibility_text: SharedString::default(),
             has_list: false,
             expanded: false,
+            collapsible_details: false,
             activity_expanded: false,
             activity_grouped: false,
             activity_group_head: false,
@@ -883,6 +897,30 @@ impl Transcript {
         let index = last_index
             .filter(|index| self.items.get(*index).is_some_and(|item| item.id == id && item.is_diff()))
             .or_else(|| self.items.iter().rposition(|item| item.id == id && item.is_diff()));
+        if let Some(index) = index {
+            if let Some(item) = self.items.get_mut(index) {
+                item.expanded = !item.expanded;
+            }
+            self.bump_revision();
+            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+        }
+    }
+
+    pub fn toggle_notice(&mut self, id: &str) {
+        let last_index = self.items.len().checked_sub(1);
+        let index = last_index
+            .filter(|index| {
+                self.items
+                    .get(*index)
+                    .is_some_and(|item| item.id == id && item.is_notice() && item.collapsible_details)
+            })
+            .or_else(|| {
+                self.items
+                    .iter()
+                    .rposition(|item| item.id == id && item.is_notice() && item.collapsible_details)
+            });
         if let Some(index) = index {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;

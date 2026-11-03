@@ -42,6 +42,10 @@ F8 owns the latest incident that carries details; an incident whose payload the
 transcript does not disclose is skipped rather than retargeting an older one.
 Summary and evidence clicks preserve text selection and link interaction. Expansion affects presentation only;
 it emits no input, changes no model history, and grants no plan approval.
+Expanding while bottom-following pins the viewport so continued streaming cannot
+scroll the evidence away; collapsing stays pinned until jump-to-bottom resumes
+follow. The desktop app projects the same payload to a severity notice with a
+Show/Hide details toggle, and streaming updates preserve its expansion.
 Transcript Review always retains the complete details, including when the main
 transcript is collapsed. Resume replays the latest canonical payload per incident
 through `restore_diagnostic`, without emitting duplicate events; Local Agents

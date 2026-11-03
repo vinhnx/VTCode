@@ -147,6 +147,7 @@ mod submit;
 mod tabs;
 mod transcript_activity;
 mod transcript_nav;
+mod transcript_notice;
 mod transcript_render;
 mod typography;
 mod updates;

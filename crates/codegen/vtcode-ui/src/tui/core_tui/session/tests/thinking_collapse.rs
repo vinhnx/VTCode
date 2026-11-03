@@ -498,3 +498,69 @@ fn thinking_block_uses_distinct_dimmed_italic_style() {
     });
     assert!(!agent_uses_reasoning_style, "agent prose must remain visually distinct from reasoning");
 }
+
+#[test]
+fn thinking_expand_pins_viewport_while_following() {
+    let mut session = Session::new(InlineTheme::default(), None, 24);
+    session.apply_transcript_width(100);
+    for index in 0..40 {
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![InlineSegment {
+                text: format!("streamed line {index}"),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        );
+    }
+    let run_start = session.lines.len();
+    // Long steps so the expanded body wraps past one row: expansion must grow
+    // the transcript (a short run can be row-count neutral and needs no pin).
+    push_policy_lines(
+        &mut session,
+        &[
+            "reasoning step one considers the available approaches in some detail",
+            "reasoning step two weighs the trade-offs of each candidate approach",
+            "reasoning step three commits to the simplest approach that fits",
+        ],
+    );
+    for index in 0..2 {
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![InlineSegment {
+                text: format!("tail line {index}"),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        );
+    }
+    let top_row = |session: &mut Session| session.current_max_scroll_offset() - session.scroll_manager.offset();
+    assert_eq!(session.scroll_manager.offset(), 0, "the transcript starts bottom-following");
+    let pinned_top = top_row(&mut session);
+
+    let summary_row = session.ensure_reflow_cache(100).row_offsets[run_start];
+    assert!(session.toggle_thinking_block_at_row(100, summary_row), "the summary row toggles");
+    assert!(session.scroll_manager.offset() > 0, "expanding pins the viewport instead of following");
+    assert_eq!(top_row(&mut session), pinned_top, "expansion keeps the pre-toggle top row");
+
+    // Continued streaming must not move the pinned view.
+    for index in 0..12 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![InlineSegment {
+                text: format!("later line {index}"),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        });
+    }
+    assert_eq!(top_row(&mut session), pinned_top, "streaming preserves the pinned view");
+    assert!(session.pending_new_messages > 0, "pinned arrivals feed the new-content hint");
+
+    // Asymmetric direction: collapsing restores the summary without scrolling away.
+    let summary_row = session.ensure_reflow_cache(100).row_offsets[run_start];
+    assert!(session.toggle_thinking_block_at_row(100, summary_row), "the summary row toggles back");
+    assert!(
+        session.scroll_manager.offset() <= session.current_max_scroll_offset(),
+        "collapse keeps a valid scroll position"
+    );
+    let summary = all_text(&session.reflow_message_lines(run_start, 100, true));
+    assert!(summary.contains("Thinking"), "collapsed summary returns, got: {summary:?}");
+}

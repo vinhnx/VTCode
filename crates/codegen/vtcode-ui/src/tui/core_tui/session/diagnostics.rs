@@ -78,10 +78,15 @@ impl Session {
             return false;
         }
         diagnostic.expanded = !diagnostic.expanded;
+        let expanded_now = diagnostic.expanded;
         line.revision = revision;
+        let was_following = self.scroll_manager.offset() == 0;
         self.mark_line_dirty(index);
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
+        if expanded_now && was_following {
+            self.pin_viewport_after_expansion(previous_max_offset);
+        }
         self.request_transcript_clear();
         true
     }
@@ -353,6 +358,23 @@ mod tests {
         lines
             .iter()
             .position(|line| row_text(line).trim_start().starts_with("Details ("))
+    }
+
+    #[test]
+    fn diagnostic_toggle_preserves_payload_across_expansion() {
+        let mut session = Session::new(InlineTheme::default(), None, 30);
+        let payload = diagnostic();
+        session.upsert_diagnostic(payload.clone());
+
+        // Expand through the mouse path, collapse through F8: both are
+        // presentation-only and must leave the persisted payload untouched.
+        let affordance =
+            affordance_row(&session.reflow_message_lines(0, 100, true)).expect("disclosure affordance is rendered");
+        assert!(session.toggle_diagnostic_at_row(100, affordance));
+        assert!(session.toggle_latest_diagnostic());
+        let stored = session.lines[0].diagnostic.as_ref().expect("diagnostic entry").payload.clone();
+        assert_eq!(stored, payload, "toggling must not mutate the incident payload");
+        assert!(stored.agent_details.contains("attempts=3"), "recovery evidence stays in the payload");
     }
 
     #[test]

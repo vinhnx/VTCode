@@ -522,3 +522,53 @@ fn consecutive_full_remeasures_collapse_to_one_probe() {
         ]
     );
 }
+
+#[test]
+fn diagnostic_notices_toggle_details_while_plain_notices_stay_fixed() {
+    use super::NoticeSeverity;
+    let mut transcript = Transcript::default();
+    transcript.push(TranscriptItem::diagnostic_notice(
+        "diag-1".into(),
+        "Tool 'task_tracker' failed.".into(),
+        "Likely cause: duplicate create.".to_string(),
+        NoticeSeverity::Warning,
+    ));
+    transcript.push(TranscriptItem::notice(
+        "plain-1".into(),
+        "Run status".into(),
+        "Turn ended.".to_string(),
+        NoticeSeverity::Info,
+    ));
+
+    transcript.toggle_notice("diag-1");
+    assert!(transcript.get(0).unwrap().expanded);
+    assert!(!transcript.get(1).unwrap().expanded, "plain notices have no details toggle");
+
+    let before = transcript.revision();
+    transcript.toggle_notice("plain-1");
+    transcript.toggle_notice("missing");
+    assert_eq!(transcript.revision(), before, "no-op toggles must not bump");
+
+    // A streaming refresh keeps expansion and swaps the payload.
+    transcript.upsert(TranscriptItem::diagnostic_notice(
+        "diag-1".into(),
+        "Tool 'task_tracker' failed.".into(),
+        "Likely cause: duplicate create. Attempts: 2.".to_string(),
+        NoticeSeverity::Warning,
+    ));
+    let stored = transcript.get(0).unwrap();
+    assert!(stored.expanded, "streaming updates preserve expansion");
+    assert!(stored.text.contains("Attempts: 2"), "streaming updates refresh the details");
+
+    // Boundary: empty evidence offers no toggle.
+    transcript.push(TranscriptItem::diagnostic_notice(
+        "diag-empty".into(),
+        "Tool 'noop' failed.".into(),
+        "   ".to_string(),
+        NoticeSeverity::Error,
+    ));
+    let before = transcript.revision();
+    transcript.toggle_notice("diag-empty");
+    assert_eq!(transcript.revision(), before, "empty evidence must not toggle");
+    assert!(!transcript.get(2).unwrap().expanded);
+}

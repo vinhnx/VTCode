@@ -574,38 +574,6 @@ impl DesktopView {
             .into_any_element()
     }
 
-    /// Severity rows for runtime errors, compaction/reset notices, and run
-    /// status: a compact icon/title/body row in severity colors, with no
-    /// message bubble, Markdown, or copy action.
-    fn render_notice_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let (icon, tone, role) = match item.notice_severity {
-            NoticeSeverity::Error => (IconName::CircleAlert, colors.danger, gpui_kit::Role::Alert),
-            NoticeSeverity::Warning => (IconName::TriangleAlert, colors.warning, gpui_kit::Role::Status),
-            NoticeSeverity::Info => (IconName::Info, themes::muted_text(&colors), gpui_kit::Role::Status),
-        };
-        div()
-            .id(format!("notice-{}", item.id))
-            .test_support()
-            .role(role)
-            .aria_label(format!("{}: {}", item.title, item.accessibility_text))
-            .w_full()
-            .max_w(px(self.content_width()))
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(Icon::new(icon).small().text_color(tone))
-                    .child(div().text_sm().font_semibold().text_color(tone).child(item.title.clone())),
-            )
-            .child(div().text_sm().text_color(colors.foreground).child(item.text.clone()))
-            .into_any_element()
-    }
-
     fn render_tool_item(
         &self,
         item: &TranscriptItem,

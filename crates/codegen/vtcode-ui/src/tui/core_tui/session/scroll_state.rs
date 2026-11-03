@@ -221,6 +221,26 @@ impl Session {
         self.pending_new_messages = self.pending_new_messages.min(self.scroll_manager.offset());
     }
 
+    /// Pin a bottom-following viewport after an in-place expansion.
+    ///
+    /// Expanding details while following (offset 0) grows the transcript but
+    /// keeps the tail pinned, so continued streaming scrolls the just-expanded
+    /// content out of view before it can be read. Absorb the growth into the
+    /// offset so the pre-toggle top row stays put, and mark the session
+    /// scrolled so later appends feed the "N new" hint instead of scrolling.
+    /// Shrinks, already-scrolled views, and sub-viewport transcripts are no-ops.
+    pub(crate) fn pin_viewport_after_expansion(&mut self, previous_max_offset: usize) {
+        if self.scroll_manager.offset() != 0 {
+            return;
+        }
+        let growth = self.current_max_scroll_offset().saturating_sub(previous_max_offset);
+        if growth == 0 {
+            return;
+        }
+        self.scroll_manager.set_offset(growth);
+        self.sync_follow_state();
+    }
+
     /// Emit an inline event through the channel and callback
     #[inline]
     pub(crate) fn emit_inline_event(
