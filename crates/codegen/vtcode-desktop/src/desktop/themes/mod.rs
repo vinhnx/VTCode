@@ -182,6 +182,13 @@ impl SwatchEntry {
             Self::Palette(theme) => Some(theme.accent),
         }
     }
+
+    pub(super) fn mode(self) -> ThemeMode {
+        match self {
+            Self::System(mode) => mode,
+            Self::Palette(theme) => theme.mode,
+        }
+    }
 }
 
 /// The two system entries shown first in the picker.
@@ -192,23 +199,31 @@ pub(super) const SYSTEM_SWATCHES: [SwatchEntry; 2] = [
 
 const FEATURED_THEME_IDS: [&str; 3] = [DEFAULT_THEME_ID, "ciapre-dark", "ciapre-blue"];
 
-/// Picker order leads with the VT Code themes, then system bases and the
-/// remaining shared palette catalog in its existing order.
-pub(super) fn picker_swatches() -> impl Iterator<Item = SwatchEntry> {
+/// Picker order within one mode group leads with the VT Code themes of
+/// that mode, then the matching system base and the remaining shared
+/// palette catalog in its existing order.
+pub(super) fn picker_swatches_for(mode: ThemeMode) -> impl Iterator<Item = SwatchEntry> {
     let themes = all_themes();
     FEATURED_THEME_IDS
         .iter()
         .filter_map(|id| themes.iter().find(|theme| theme.id == *id))
         .copied()
+        .filter(move |theme| theme.mode == mode)
         .map(SwatchEntry::Palette)
-        .chain(SYSTEM_SWATCHES)
+        .chain(SYSTEM_SWATCHES.into_iter().filter(move |entry| entry.mode() == mode))
         .chain(
             themes
                 .iter()
                 .copied()
-                .filter(|theme| !FEATURED_THEME_IDS.contains(&theme.id))
+                .filter(move |theme| theme.mode == mode && !FEATURED_THEME_IDS.contains(&theme.id))
                 .map(SwatchEntry::Palette),
         )
+}
+
+/// Picker order grouped by mode: every light swatch first, then every dark
+/// swatch. The settings picker renders the two groups as separate rows.
+pub(super) fn picker_swatches() -> impl Iterator<Item = SwatchEntry> {
+    picker_swatches_for(ThemeMode::Light).chain(picker_swatches_for(ThemeMode::Dark))
 }
 
 /// Apply a theme by id: install the kit base for its mode, then override the

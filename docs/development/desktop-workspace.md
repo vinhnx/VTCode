@@ -753,12 +753,12 @@ The Settings dialog keeps its title and category tabs visible while the active p
 its width and content are constrained to the available screen. The category TabBar uses Kit's accessible tab semantics
 and scoped Left/Right/Home/End navigation. Shortcuts render with Kit `Kbd` badges in the default read-only view;
 edit fields appear only after choosing Edit shortcuts.
-Visual themes form one horizontal Kit scrolling strip with fixed-width previews, a scrollbar,
-trackpad/mouse-wheel support, and Previous/Next buttons for keyboard or pointer paging.
-Its scrolling does not move the settings below it.
+Visual themes form two grouped horizontal Kit scrolling rows — Light, then Dark —
+each with fixed-width previews, a scrollbar, and trackpad/mouse-wheel support;
+one shared Previous/Next pair pages both rows for keyboard or pointer paging.
+Their scrolling does not move the settings below them.
 Separate theme profiles retain independent themes, font families, and sizes for
-light and dark modes. Custom colors, sidebar translucency, alternate Dock icons,
-and native font-smoothing overrides
+light and dark modes. Custom colors and native font-smoothing overrides
 are not implemented in this increment.
 
 ### Component composition and visual hierarchy

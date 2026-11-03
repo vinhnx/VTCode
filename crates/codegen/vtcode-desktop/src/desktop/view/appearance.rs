@@ -572,18 +572,87 @@ impl DesktopView {
             .into_any_element()
     }
 
-    pub(super) fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        let swatches = themes::picker_swatches().collect::<Vec<_>>();
-        let mut counts = HashMap::new();
-        for entry in &swatches {
-            *counts.entry(entry.label()).or_insert(0_usize) += 1;
-        }
-        let swatch_rows = swatches
-            .into_iter()
+    /// One mode group inside the theme picker: a subordinate header plus its
+    /// own horizontal swatch scroller. Headers sit one type step below the
+    /// section title so Light/Dark read as groups under Themes.
+    fn render_theme_group(
+        &self,
+        mode: ThemeMode,
+        counts: &HashMap<&'static str, usize>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let light = mode == ThemeMode::Light;
+        let label = if light {
+            rust_i18n::t!("app.settings.appearance.light").to_string()
+        } else {
+            rust_i18n::t!("app.settings.appearance.dark").to_string()
+        };
+        let swatches = themes::picker_swatches_for(mode)
             .map(|entry| {
                 self.render_theme_swatch(entry, counts.get(entry.label()).copied().unwrap_or_default() > 1, cx)
             })
             .collect::<Vec<_>>();
+        let scroll = if light {
+            &self.theme_scroll_light
+        } else {
+            &self.theme_scroll_dark
+        };
+        let list_id = if light { "theme-list-light" } else { "theme-list-dark" };
+        let scroller_id = if light {
+            "theme-scroller-light"
+        } else {
+            "theme-scroller-dark"
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_sm()
+                    .font_semibold()
+                    .text_color(themes::label_foreground(&cx.theme().colors))
+                    .child(label.clone()),
+            )
+            .child(
+                div()
+                    .id(list_id)
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label(label)
+                    .w_full()
+                    .min_w_0()
+                    .flex_shrink_0()
+                    .h(px(128.))
+                    .relative()
+                    .child(
+                        div()
+                            .id(scroller_id)
+                            .lock_scroll_axis()
+                            .size_full()
+                            .overflow_x_scroll()
+                            .track_scroll(scroll)
+                            .flex()
+                            .items_start()
+                            .gap_2()
+                            .children(swatches)
+                            .test_support(),
+                    )
+                    .child(ScrollableMask::vertical_wheel(scroll))
+                    .child(Scrollbar::horizontal(scroll)),
+            )
+            .into_any_element()
+    }
+
+    pub(super) fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let mut counts = HashMap::new();
+        for entry in themes::picker_swatches() {
+            *counts.entry(entry.label()).or_insert(0_usize) += 1;
+        }
+        // Build the swatch groups before borrowing the theme colors: the
+        // groups need `cx` mutably while the colors borrow it immutably.
+        let light_group = self.render_theme_group(ThemeMode::Light, &counts, cx);
+        let dark_group = self.render_theme_group(ThemeMode::Dark, &counts, cx);
         let theme = cx.theme();
         let colors = &theme.colors;
         let active_theme_profile = if self.theme_mode == ThemeMode::Light {
@@ -675,7 +744,8 @@ impl DesktopView {
                             .gap_2()
                             .child(section_label(&rust_i18n::t!("app.settings.appearance.themes").to_string(), colors))
                             .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
-                                let scroll = self.theme_scroll.clone();
+                                let light = self.theme_scroll_light.clone();
+                                let dark = self.theme_scroll_dark.clone();
                                 desktop_button(if forward { "next-themes" } else { "previous-themes" })
                                     .icon(if forward {
                                         IconName::ChevronRight
@@ -693,9 +763,11 @@ impl DesktopView {
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(move |_, _, _, cx| {
-                                        let mut offset = scroll.offset();
-                                        offset.x += px(if forward { -336. } else { 336. });
-                                        scroll.set_offset(offset);
+                                        for scroll in [&light, &dark] {
+                                            let mut offset = scroll.offset();
+                                            offset.x += px(if forward { -336. } else { 336. });
+                                            scroll.set_offset(offset);
+                                        }
                                         cx.notify();
                                     }))
                             }))),
@@ -709,23 +781,11 @@ impl DesktopView {
                             .w_full()
                             .min_w_0()
                             .flex_shrink_0()
-                            .h(px(128.))
-                            .relative()
-                            .child(
-                                div()
-                                    .id("theme-scroller")
-                                    .lock_scroll_axis()
-                                    .size_full()
-                                    .overflow_x_scroll()
-                                    .track_scroll(&self.theme_scroll)
-                                    .flex()
-                                    .items_start()
-                                    .gap_2()
-                                    .children(swatch_rows)
-                                    .test_support(),
-                            )
-                            .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
-                            .child(Scrollbar::horizontal(&self.theme_scroll)),
+                            .flex()
+                            .flex_col()
+                            .gap_4()
+                            .child(light_group)
+                            .child(dark_group),
                     ),
             ))
             .child(accessible_group_box(

@@ -937,3 +937,61 @@ fn hover_takes_strongest_readable_step_in_every_theme(cx: &mut gpui_kit::TestApp
         }
     });
 }
+
+#[test]
+fn picker_swatches_group_every_entry_by_mode() {
+    // The oracle pins picker-side grouping against the CLI registry flags
+    // without reusing SwatchEntry::mode: system sentinels map explicitly and
+    // palettes follow vtcode-ui's own light/dark flag (whose correctness is
+    // covered by vtcode-ui's own scheme tests, not here).
+    fn expected_mode(id: &str) -> ThemeMode {
+        if id == SYSTEM_LIGHT_ID {
+            ThemeMode::Light
+        } else if id == SYSTEM_DARK_ID {
+            ThemeMode::Dark
+        } else if theme::is_light_theme(id) {
+            ThemeMode::Light
+        } else {
+            ThemeMode::Dark
+        }
+    }
+
+    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+        let entries: Vec<_> = picker_swatches_for(mode).collect();
+        assert!(!entries.is_empty(), "{mode:?} group must not be empty");
+        for entry in &entries {
+            assert_eq!(entry.mode(), mode, "{}", entry.id());
+            assert_eq!(expected_mode(&entry.id()), mode, "{} disagrees with the CLI registry", entry.id());
+        }
+    }
+
+    // Featured VT Code themes keep their headline slot inside their own mode
+    // group: all three are dark, so the light group starts at the system base.
+    let light_ids: Vec<_> = picker_swatches_for(ThemeMode::Light).map(|entry| entry.id()).collect();
+    let dark_ids: Vec<_> = picker_swatches_for(ThemeMode::Dark).map(|entry| entry.id()).collect();
+    assert_eq!(light_ids.first().map(String::as_str), Some(SYSTEM_LIGHT_ID));
+    let dark_head: Vec<&str> = dark_ids.iter().take(4).map(String::as_str).collect();
+    assert_eq!(dark_head, [DEFAULT_THEME_ID, "ciapre-dark", "ciapre-blue", SYSTEM_DARK_ID]);
+
+    // Combined groups cover every selectable entry exactly once: no drops,
+    // no duplicates across the mode boundary.
+    let mut expected: Vec<String> = theme::available_themes()
+        .into_iter()
+        .filter(|id| theme::builtin_theme_colors(id).is_some())
+        .map(str::to_string)
+        .chain([SYSTEM_LIGHT_ID.to_string(), SYSTEM_DARK_ID.to_string()])
+        .collect();
+    expected.sort();
+    let mut actual: Vec<String> = picker_swatches().map(|entry| entry.id()).collect();
+    actual.sort();
+    assert_eq!(actual, expected);
+
+    // Grouped order: every light swatch precedes every dark swatch.
+    let modes: Vec<ThemeMode> = picker_swatches().map(|entry| entry.mode()).collect();
+    let first_dark = modes
+        .iter()
+        .position(|mode| *mode == ThemeMode::Dark)
+        .expect("dark themes exist");
+    assert!(modes[..first_dark].iter().all(|mode| *mode == ThemeMode::Light));
+    assert!(modes[first_dark..].iter().all(|mode| *mode == ThemeMode::Dark));
+}

@@ -319,8 +319,11 @@ fn scroll_theme_into_view(
     id: &'static str,
     cx: &mut gpui_kit::App,
 ) {
+    let theme_id = id.strip_prefix("theme-").unwrap_or(id);
+    let light = super::themes::mode_for_id(theme_id) != Some(ThemeMode::Dark);
+    let viewport_id = if light { "theme-list-light" } else { "theme-list-dark" };
     for _ in 0..120 {
-        let viewport = window.find("theme-list").bounds();
+        let viewport = window.find(viewport_id).bounds();
         let item = window.find(id).bounds();
         if item.left() >= viewport.left() - px(1.) && item.right() <= viewport.right() + px(1.) {
             return;
@@ -331,14 +334,19 @@ fn scroll_theme_into_view(
             px(112.)
         };
         view.update(cx, |view, cx| {
-            let mut offset = view.theme_scroll.offset();
+            let scroll = if light {
+                &view.theme_scroll_light
+            } else {
+                &view.theme_scroll_dark
+            };
+            let mut offset = scroll.offset();
             offset.x += delta;
-            view.theme_scroll.set_offset(offset);
+            scroll.set_offset(offset);
             cx.notify();
         });
         window.render_frame(cx);
     }
-    let viewport = window.find("theme-list").bounds();
+    let viewport = window.find(viewport_id).bounds();
     let item = window.find(id).bounds();
     panic!("theme swatch {id} did not scroll into view: viewport={viewport:?}, item={item:?}");
 }

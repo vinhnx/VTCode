@@ -652,7 +652,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
 
 #[gpui_kit::test]
 fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    let (window, view) = open_desktop_sized(cx, 1280., 1100.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
@@ -718,7 +718,7 @@ fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppConte
         // Scroll back to the top, then to the reset row above the picker.
         window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(1600.))), cx);
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-640.))), cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-880.))), cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).preferences.app_icon(), AppIconPreference::Dynamic);

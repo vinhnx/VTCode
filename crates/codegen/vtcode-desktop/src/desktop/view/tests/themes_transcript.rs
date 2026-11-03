@@ -380,11 +380,17 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(window.find("edit-dark-profile").checked(), Some(false));
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
+        // The grouped picker pushes typography below the fold; scroll down
+        // for the font row, then back up for the profile buttons above.
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        window.render_frame(cx);
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(17.));
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
         assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(240.))), cx);
+        window.render_frame(cx);
         window.click("edit-dark-profile", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings);
@@ -454,7 +460,7 @@ fn profile_swatches_carry_a_visible_caption(cx: &mut TestAppContext) {
         assert_eq!(window.find("theme-catppuccin-latte-profile").label(), Some("Light"));
         assert_eq!(window.find("theme-ciapre-profile").label(), Some("Dark"));
         assert_eq!(window.find("theme-github-dark-profile").label(), None);
-        let strip = window.find("theme-list").bounds();
+        let strip = window.find("theme-list-dark").bounds();
         let swatch = window.find("theme-ciapre").bounds();
         assert!(
             swatch.bottom() <= strip.bottom(),
@@ -481,31 +487,48 @@ fn typography_rows_keep_a_compact_vertical_rhythm(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 760., 700.);
+    // Width stays narrow so both groups overflow; height fits the stacked
+    // groups plus the typography pin below them.
+    let (window, view) = open_desktop_sized(cx, 760., 900.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
         window.render_frame(cx);
-        let strip = window.find("theme-list").bounds();
-        let first = window.find("theme-system-light").bounds();
+        let light_strip = window.find("theme-list-light").bounds();
+        let dark_strip = window.find("theme-list-dark").bounds();
+        let first_light = window.find("theme-system-light").bounds();
+        let first_dark = window.find("theme-ciapre").bounds();
         let typography_top = window.find("choose-ui-font").bounds().top();
         assert!(
-            ["theme-github-dark", "theme-catppuccin-mocha", "theme-solarized-light"]
-                .into_iter()
-                .any(|id| window.find(id).bounds().left() > strip.right()),
-            "the list must overflow horizontally"
+            window.find("theme-solarized-light").bounds().left() > light_strip.right(),
+            "the light group must overflow horizontally"
         );
-        assert_eq!(first.size.width, px(104.), "swatches must not shrink to fit");
+        assert!(
+            ["theme-github-dark", "theme-catppuccin-mocha"]
+                .into_iter()
+                .any(|id| window.find(id).bounds().left() > dark_strip.right()),
+            "the dark group must overflow horizontally"
+        );
+        assert_eq!(first_light.size.width, px(104.), "swatches must not shrink to fit");
         window.click("next-themes", cx);
         window.render_frame(cx);
-        assert!(window.find("theme-system-light").bounds().left() < first.left());
+        assert!(window.find("theme-system-light").bounds().left() < first_light.left());
+        assert!(window.find("theme-ciapre").bounds().left() < first_dark.left());
         window.click("previous-themes", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("theme-system-light").bounds().left(), first.left());
+        assert_eq!(window.find("theme-system-light").bounds().left(), first_light.left());
+        assert_eq!(window.find("theme-ciapre").bounds().left(), first_dark.left());
+        assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
 
+        // The stacked groups overflow the narrow panel: reveal the dark row,
+        // then re-baseline the typography pin so the assertions below keep
+        // proving that horizontal theme scrolling leaves it untouched.
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-250.))), cx);
+        window.render_frame(cx);
+        let typography_top = window.find("choose-ui-font").bounds().top();
         scroll_theme_into_view(window, &view, "theme-catppuccin-mocha", cx);
         let mocha = window.find("theme-catppuccin-mocha").bounds();
-        assert!(mocha.left() >= strip.left() && mocha.right() <= strip.right());
+        assert!(mocha.left() >= dark_strip.left() && mocha.right() <= dark_strip.right());
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
         window.click("theme-catppuccin-mocha", cx);
         window.render_frame(cx);
@@ -513,12 +536,54 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         assert_eq!(window.find("theme-catppuccin-mocha").checked(), Some(true));
         assert_eq!(window.find("theme-catppuccin-mocha").label(), Some("Catppuccin Mocha (active)"));
 
-        window.scroll("theme-list", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
+        window.scroll("theme-list-dark", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
         window.render_frame(cx);
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(250.))), cx);
+        window.render_frame(cx);
         window.click("theme-system-light", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "system-light");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn theme_picker_groups_swatches_by_mode(cx: &mut TestAppContext) {
+    let (window, _view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("theme-list-light").label(), Some("Light"));
+        assert_eq!(window.find("theme-list-dark").label(), Some("Dark"));
+        assert_eq!(window.find("theme-list").label(), Some("Visual themes"));
+        let light = window.find("theme-list-light").bounds();
+        let dark = window.find("theme-list-dark").bounds();
+        assert!(light.bottom() <= dark.top(), "the light group sits above the dark group");
+        // Asymmetric fixtures on both sides: system bases plus a light and a
+        // dark palette theme each must land in their own vertical lane.
+        for id in ["theme-system-light", "theme-solarized-light", "theme-catppuccin-latte"] {
+            let item = window.find(id).bounds();
+            let middle = item.center().y;
+            assert!(
+                middle >= light.top() && middle <= light.bottom(),
+                "{id} sits in the light group: item={item:?} light={light:?}"
+            );
+        }
+        for id in [
+            "theme-system-dark",
+            "theme-ciapre",
+            "theme-catppuccin-mocha",
+            "theme-github-dark",
+        ] {
+            let item = window.find(id).bounds();
+            let middle = item.center().y;
+            assert!(
+                middle >= dark.top() && middle <= dark.bottom(),
+                "{id} sits in the dark group: item={item:?} dark={dark:?}"
+            );
+        }
     })
     .unwrap();
 }
