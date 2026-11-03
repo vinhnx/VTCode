@@ -64,9 +64,18 @@ fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
         window.press("right", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).contrast_slider.read(cx).value().start(), f32::from(before + 1));
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(3000.))), cx);
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        // Geometry-driven scroll: center the reset button in the viewport
+        // from the laid-out (possibly off-screen) bounds, so the click
+        // survives card-height changes that fixed-pixel choreography cannot.
+        let content = window.find("settings-content").bounds();
+        let reset = window.find("reset-appearance").bounds();
+        let content_center = content.origin.y + content.size.height / 2.;
+        let reset_center = reset.origin.y + reset.size.height / 2.;
+        window.scroll(
+            "settings-content",
+            gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - reset_center)),
+            cx,
+        );
         window.render_frame(cx);
         window.click("reset-appearance", cx);
     })

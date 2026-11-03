@@ -235,10 +235,12 @@ impl DesktopView {
                         .w_full()
                         .flex()
                         .when(narrow, |row| row.flex_col())
-                        // Two gaps flank the divider at one scale step each, so
-                        // the nav/content separation reads at panel scale (17px
-                        // total) while the hairline owns the boundary alone.
-                        .gap_2()
+                        // Two gaps flank the divider at one panel step each, so
+                        // the nav/content separation reads at major-region
+                        // scale (33px total) while the hairline owns the
+                        // boundary alone. The same gap stacks nav above
+                        // content in narrow mode.
+                        .gap_4()
                         .px_4()
                         .pb_4()
                         .child(self.render_settings_navigation(window, cx, narrow))

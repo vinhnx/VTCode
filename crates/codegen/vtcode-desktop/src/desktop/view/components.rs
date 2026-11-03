@@ -145,13 +145,12 @@ pub(super) fn panel_header(leading: impl IntoElement, trailing: impl IntoElement
 /// soft 1px theme border, with the title above the surface. Callers chain
 /// `.child(...)`/`.footer(...)` as before.
 ///
-/// Horizontal padding steps up to `px_6` while vertical keeps the Kit `p_4`:
-/// the fill matches the panel background, so the hairline alone must carry
-/// the card gestalt, and rows scan better with the boundary (`xl`) airier
-/// than the gaps between rows (`lg`). Vertical stays tight so pages do not
-/// grow extra scroll length. Rows separate by the inherited Kit `gap_4` air
-/// (the Kit Settings rhythm): do not interleave [`row_divider`] between
-/// settings rows.
+/// Padding steps up to `p_6` on both axes: the fill matches the panel
+/// background, so the hairline alone must carry the card gestalt, and the
+/// even band reads as one concentric shape. The boundary (`xl`) stays
+/// airier than the gaps between rows (`lg`). Rows separate by the inherited
+/// Kit `gap_4` air (the Kit Settings rhythm): do not interleave
+/// [`row_divider`] between settings rows.
 pub(super) fn settings_group_box(
     title: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
@@ -161,12 +160,12 @@ pub(super) fn settings_group_box(
 
 /// Untitled variant of [`settings_group_box`] for settings cards whose page
 /// header already names the surface (e.g. the curated configuration
-/// overview): same fill, border, and `px_6` rhythm, no title row.
+/// overview): same fill, border, and `p_6` rhythm, no title row.
 pub(super) fn settings_group_box_untitled(colors: &gpui_kit::component::theme::ThemeColor) -> GroupBox {
     GroupBox::new()
         .flex_shrink_0()
         .fill()
-        .content_style(card_border_style(colors).px_6())
+        .content_style(card_border_style(colors).p_6())
 }
 
 /// 1px theme-border outline for a filled Kit `GroupBox` surface, giving cards
@@ -186,7 +185,9 @@ pub(super) fn soft_edge_color(colors: &gpui_kit::component::theme::ThemeColor) -
 }
 
 /// One settings row: title and description stacked left, a control pinned
-/// right. The row wraps so the control drops below the text in narrow pages.
+/// right and top-aligned to the title frame (never centered on the help
+/// text). The row wraps so the control drops below the text, still
+/// start-aligned, in narrow pages.
 pub(super) fn settings_row(
     title: impl Into<gpui_kit::SharedString>,
     description: impl Into<gpui_kit::SharedString>,
@@ -197,7 +198,7 @@ pub(super) fn settings_row(
     div()
         .flex()
         .flex_wrap()
-        .items_center()
+        .items_start()
         .justify_between()
         .gap_3()
         .child(

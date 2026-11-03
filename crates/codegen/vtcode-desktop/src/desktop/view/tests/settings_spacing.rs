@@ -1,4 +1,4 @@
-use super::super::{row_description, settings_group_box, settings_row};
+use super::super::{row_description, settings_group_box, settings_group_box_untitled, settings_row};
 use super::*;
 use gpui_kit::component::theme::Theme;
 use gpui_kit::prelude::*;
@@ -48,6 +48,19 @@ impl Render for SettingsRowSpacingProbe {
                         .child(div().id("probe-gap-second").test_support().w_full().h(px(12.))),
                 ),
             )
+            .child(
+                div().id("probe-padding-group").test_support().child(
+                    settings_group_box_untitled(&colors)
+                        .id("probe-padding-group-surface")
+                        .child(div().id("probe-padding-child").test_support().w_full().h(px(12.))),
+                ),
+            )
+            .child(div().id("probe-align-row").test_support().child(settings_row(
+                "Interface language",
+                "Applies immediately",
+                div().id("probe-align-control").test_support().w_16().h_8(),
+                &colors,
+            )))
     }
 }
 
@@ -119,6 +132,68 @@ fn settings_group_separates_rows_by_gap_4_air(cx: &mut TestAppContext) {
             assert!(
                 (gap - px(base_size)).abs() <= px(1.),
                 "rows separate by gap_4 air ({base_size}px) without dividers: gap={gap:?} first={first:?} second={second:?}"
+            );
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
+fn settings_group_pads_content_evenly_at_p_6(cx: &mut TestAppContext) {
+    let window = open_spacing_probe(cx);
+    // Titled and untitled variants share one content-style owner, so pinning
+    // the untitled surface pins both. Untitled has no title row, so the
+    // wrapper bounds equal the surface bounds.
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let group = window.find("probe-padding-group").bounds();
+            let child = window.find("probe-padding-child").bounds();
+            // p_6 = 1.5rem per side on both axes: the visible band stays even
+            // (concentric) and airier than the gap_4 row rhythm.
+            let pad = px(base_size * 1.5);
+            let group_right = group.origin.x + group.size.width;
+            let group_bottom = group.origin.y + group.size.height;
+            for (edge, actual) in [
+                ("leading", child.origin.x - group.origin.x),
+                ("trailing", group_right - (child.origin.x + child.size.width)),
+                ("top", child.origin.y - group.origin.y),
+                ("bottom", group_bottom - (child.origin.y + child.size.height)),
+            ] {
+                assert!(
+                    (actual - pad).abs() <= px(1.),
+                    "section keeps an even {edge} band at {base_size}px: actual={actual:?} want={pad:?} child={child:?} group={group:?}"
+                );
+            }
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
+fn settings_row_pins_control_to_title_frame(cx: &mut TestAppContext) {
+    let window = open_spacing_probe(cx);
+    // Two-line text block (title + description) against a shorter rem-based
+    // control: top alignment pins the control to the title frame instead of
+    // centering it on the help text.
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let row = window.find("probe-align-row").bounds();
+            let control = window.find("probe-align-control").bounds();
+            assert!(
+                (control.origin.y - row.origin.y).abs() <= px(1.),
+                "control pins to the title frame, not the text-block center, at {base_size}px: row={row:?} control={control:?}"
             );
         })
         .unwrap();
@@ -225,9 +300,9 @@ fn settings_container_and_sections_keep_horizontal_air(cx: &mut TestAppContext) 
                 panel_bottom - (content.origin.y + content.size.height) >= px(inset),
                 "content keeps a panel-scale bottom inset at {base_size}px: content={content:?} panel={panel:?}"
             );
-            // Divider gaps at `gap_2` (0.5rem) per side: the nav/content
-            // separation reads at panel scale instead of hairline-tight.
-            let flank = base_size / 2. - 1.;
+            // Divider gaps at `gap_4` (1rem) per side: the nav/content
+            // separation reads at major-region scale instead of hairline-tight.
+            let flank = base_size - 1.;
             assert!(
                 divider.origin.x - (navigation.origin.x + navigation.size.width) >= px(flank),
                 "divider keeps air from the nav at {base_size}px: navigation={navigation:?} divider={divider:?}"
