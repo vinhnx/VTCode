@@ -44,6 +44,12 @@ impl Render for HeadingTierProbe {
                     .test_support()
                     .child(row_title("APPEARANCE SETTINGS", &colors)),
             )
+            .child(
+                div()
+                    .id("probe-content-title")
+                    .test_support()
+                    .child(content_page_title("Appearance settings", &colors)),
+            )
     }
 }
 
@@ -85,12 +91,17 @@ fn section_headings_render_one_step_above_body_text(cx: &mut TestAppContext) {
             let row = window.find("probe-row").bounds().size.height;
             let eyebrow = window.find("probe-eyebrow").bounds().size.height;
             let row_upper = window.find("probe-row-upper").bounds().size.height;
+            let content_title = window.find("probe-content-title").bounds().size.height;
             assert!(
                 section > row,
                 "section heading ({section:?}) must render taller than body text ({row:?}) at {base_size}px"
             );
             assert_eq!(group, section, "group-box titles share the section tier at {base_size}px");
             assert_eq!(eyebrow, row_upper, "eyebrows stay at body size at {base_size}px");
+            assert!(
+                content_title > section,
+                "content page title ({content_title:?}) must render one step above section headings ({section:?}) at {base_size}px"
+            );
             if let Some(previous) = previous_section {
                 assert!(
                     section > previous,

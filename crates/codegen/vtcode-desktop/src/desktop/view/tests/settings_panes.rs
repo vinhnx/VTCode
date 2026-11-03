@@ -264,3 +264,31 @@ fn windowed_zen_route_pages_start_below_the_traffic_lights(cx: &mut TestAppConte
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn settings_page_title_tracks_the_selected_tab(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        // Asymmetric pair: the first and last tabs prove the title follows
+        // selection instead of pinning one label.
+        select_settings_category(window, 0, cx);
+        window.render_frame(cx);
+        let title = window.find("settings-page-title");
+        assert_eq!(title.role(), Some(gpui_kit::Role::Heading));
+        assert_eq!(title.label(), Some("Appearance"));
+        select_settings_category(window, 6, cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-page-title").label(), Some("Storage"));
+    })
+    .unwrap();
+
+    // The config page carries its own headers, so the shared title stays out.
+    let (config_window, _config_view) = open_config_panes(cx);
+    cx.update_window(config_window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("settings-page-title").is_none());
+    })
+    .unwrap();
+}

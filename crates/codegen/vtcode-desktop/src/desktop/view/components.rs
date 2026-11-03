@@ -96,6 +96,17 @@ pub(super) fn section_label(
         .child(text.into())
 }
 
+/// Content page title: one step above section headings, naming the visible
+/// settings page. Rendered once as the first child of the scroll content so
+/// scroll geometry is unchanged; the panel header keeps the stable dialog
+/// identity.
+pub(super) fn content_page_title(
+    text: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div().text_xl().font_semibold().text_color(colors.foreground).child(text.into())
+}
+
 /// Eyebrow section label: the single owner of the ALL-CAPS short-section
 /// style used by the sidebar, the utilities pane, and popover group headers.
 /// Callers pass natural-case text; the builder applies the casing once, so no

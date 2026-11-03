@@ -399,7 +399,8 @@ impl DesktopView {
             let wide = window.viewport_size().width >= px(960.);
             return self.render_cli_config_page(wide, cx);
         }
-        let content = match self.settings_tab {
+        let title = self.settings_tab.label();
+        let page = match self.settings_tab {
             SettingsTab::Appearance => self.render_appearance_settings(cx),
             SettingsTab::Accessibility => self.render_accessibility_settings(cx),
             SettingsTab::Shortcuts => div()
@@ -412,6 +413,19 @@ impl DesktopView {
             SettingsTab::Notifications => self.render_notification_settings(cx),
             SettingsTab::Storage => self.render_storage_settings(cx),
         };
+        let content = div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(
+                div()
+                    .id("settings-page-title")
+                    .test_support()
+                    .role(gpui_kit::Role::Heading)
+                    .aria_label(title.clone())
+                    .child(content_page_title(title, &cx.theme().colors)),
+            )
+            .child(page);
         scroll_column("settings-content", &self.settings_scroll, content).into_any_element()
     }
 
