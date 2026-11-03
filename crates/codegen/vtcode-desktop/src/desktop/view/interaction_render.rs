@@ -84,12 +84,55 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_2()
-            .border_1()
-            .border_color(if is_approval { colors.warning } else { colors.border })
             .rounded_md()
             .p_4()
-            .when(is_approval, |panel| panel.bg(colors.warning.opacity(0.08)))
-            .child(div().font_semibold().child(interaction.title.clone()));
+            .when(is_approval, |panel| panel.bg(colors.warning.opacity(0.08)));
+        // Questionnaire order: progress eyebrow, title, description. The
+        // panel is deliberately unframed; approvals keep the warning tint
+        // plus an explicit icon so the tone never rests on color alone.
+        // A one-item counter restates the title without aiding navigation,
+        // so the eyebrow renders only for genuine multi-step flows.
+        if is_wizard && interaction.steps.len() > 1 {
+            let counter =
+                rust_i18n::t!("app.interaction.step_counter", n = step_index + 1, total = interaction.steps.len())
+                    .to_string();
+            panel = panel.child(
+                div()
+                    .id("question-step-counter")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(counter.clone())
+                    .text_xs()
+                    .text_color(colors.muted_foreground)
+                    .child(counter),
+            );
+        }
+        panel = panel.child(
+            div()
+                .id("interaction-title-row")
+                .test_support()
+                .flex()
+                .items_center()
+                .gap_2()
+                .when(is_approval, |row| {
+                    row.child(
+                        div()
+                            .id("interaction-approval-marker")
+                            .test_support()
+                            .flex_shrink_0()
+                            .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning)),
+                    )
+                })
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_lg()
+                        .font_semibold()
+                        .text_color(colors.foreground)
+                        .child(interaction.title.clone()),
+                ),
+        );
         // The first detail line carries the decision facts; the rest recede as
         // supporting metadata.
         for (detail_index, detail) in interaction.details.iter().enumerate() {
@@ -195,7 +238,7 @@ impl DesktopView {
 
         if is_wizard {
             if let Some(step) = interaction.steps.get(step_index) {
-                panel = panel.child(self.render_question_step(step, step_index, interaction.steps.len(), window, cx));
+                panel = panel.child(self.render_question_step(step, step_index, window, cx));
             }
         } else {
             let choices = step_choices;
@@ -308,7 +351,6 @@ impl DesktopView {
         &self,
         step: &InteractionStep,
         index: usize,
-        total: usize,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -344,20 +386,9 @@ impl DesktopView {
             .flex_col()
             .gap_2()
             .children(choice_radios);
-        let mut content = div().w_full().flex().flex_col().gap_2().when(total > 1, |content| {
-            // "Question 1 of 1" states nothing the title and question do not
-            // already say; the counter earns its line only with siblings.
-            content.child(
-                div()
-                    .id("question-step-counter")
-                    .test_support()
-                    .role(gpui_kit::Role::Status)
-                    .aria_label(rust_i18n::t!("app.interaction.step_counter", n = index + 1, total = total).to_string())
-                    .text_xs()
-                    .text_color(colors.muted_foreground)
-                    .child(rust_i18n::t!("app.interaction.step_counter", n = index + 1, total = total).to_string()),
-            )
-        });
+        // The step counter lives in the panel header eyebrow now; the step
+        // itself starts at its question.
+        let mut content = div().w_full().flex().flex_col().gap_2();
         content = content.child(div().font_medium().child(step.question.clone()));
         if !step.choices.is_empty() {
             content = content.child(options);

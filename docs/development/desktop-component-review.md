@@ -61,7 +61,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [plot](https://gpui-kit.com/component/plot) | Not needed for the current coding-workspace workflows or available data. |
 | [popover](https://gpui-kit.com/component/popover) | Replace crowded Appearance popover with a larger modal surface. |
 | [progress](https://gpui-kit.com/component/progress) | Do not invent execution percentages or phases beyond existing runtime events. |
-| [questionnaire](https://gpui-kit.com/component/questionnaire) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. |
+| [questionnaire](https://gpui-kit.com/component/questionnaire) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. Visual language adapted (2026-11-03): borderless panel, counter eyebrow above title above choices, approval marker icon plus tint; digits stay (immediate-commit contract), auto-advance not adopted. |
 | [radio](https://gpui-kit.com/component/radio) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. |
 | [rating](https://gpui-kit.com/component/rating) | Not needed for the current coding-workspace workflows or available data. |
 | [resizable](https://gpui-kit.com/component/resizable) | Applied standalone Kit handles with splitter semantics and keyboard resizing; preserve custom width bounds/persistence instead of migrating independent panes into a panel group. |

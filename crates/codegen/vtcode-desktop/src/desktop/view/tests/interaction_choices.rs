@@ -89,6 +89,25 @@ fn question_interaction(freeform: bool) -> InteractionRequest {
     }
 }
 
+/// Two-step wizard: the smallest flow that earns the progress eyebrow.
+fn two_step_question() -> InteractionRequest {
+    let mut interaction = question_interaction(false);
+    interaction.interaction_id = "two-step".into();
+    interaction.steps.push(InteractionStep {
+        title: "Detail".into(),
+        question: "How much detail?".into(),
+        choices: vec![InteractionChoice {
+            id: "third".into(),
+            label: "Third option".into(),
+            description: None,
+            recommended: false,
+        }],
+        selected_choice_id: None,
+        allow_freeform: false,
+    });
+    interaction
+}
+
 fn deliver(view: &Entity<DesktopView>, interaction: InteractionRequest, cx: &mut TestAppContext) {
     view.update(cx, |view, cx| {
         view.selected_session_id = Some(interaction.session_id.clone());
@@ -540,4 +559,84 @@ fn empty_choice_panel_hides_hint_but_keeps_escape_cancel(cx: &mut TestAppContext
     };
     assert_eq!(method, vtcode_desktop_protocol::method::INTERACTION_RESPOND);
     assert_eq!(params["cancelled"], json!(true));
+}
+
+#[gpui_kit::test]
+fn wizard_header_orders_counter_above_title_above_choices(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    deliver(&view, two_step_question(), cx);
+    focus_panel(&view, window, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 2"));
+        let counter = window.find("question-step-counter").bounds();
+        let title = window.find("interaction-title-row").bounds();
+        let first_choice = window.find("interaction-question-choice-0").bounds();
+        assert!(
+            counter.origin.y < title.origin.y,
+            "progress eyebrow sits above the title: counter={counter:?} title={title:?}"
+        );
+        assert!(
+            title.origin.y < first_choice.origin.y,
+            "title sits above the choices: title={title:?} first_choice={first_choice:?}"
+        );
+        assert!(
+            window.try_find("interaction-approval-marker").is_none(),
+            "a plain question stays neutral without the warning marker"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn approval_panel_shows_warning_marker_in_title_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    deliver(&view, tool_loop_interaction(Some("grant-40")), cx);
+    focus_panel(&view, window, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let _marker = window.within("interaction-title-row").find("interaction-approval-marker");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn choice_panel_hides_approval_marker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let mut interaction = tool_loop_interaction(None);
+    interaction.kind = InteractionKind::Choice;
+    interaction.interaction_id = "neutral-choice".into();
+    deliver(&view, interaction, cx);
+    focus_panel(&view, window, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("interaction-title-row").is_some(), "the title row renders for a plain choice");
+        assert!(
+            window.try_find("interaction-approval-marker").is_none(),
+            "a plain choice stays neutral without the warning marker"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn interaction_header_cards_actions_share_left_spine(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    deliver(&view, tool_loop_interaction(Some("grant-40")), cx);
+    focus_panel(&view, window, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let title = window.find("interaction-title-row").bounds();
+        let card = window.find("choice-grant-40").bounds();
+        let cancel = window.find("cancel-interaction").bounds();
+        assert!(
+            (title.origin.x - card.origin.x).abs() <= px(1.),
+            "title and cards share one left spine: title={title:?} card={card:?}"
+        );
+        assert!(
+            (title.origin.x - cancel.origin.x).abs() <= px(1.),
+            "title and decision row share one left spine: title={title:?} cancel={cancel:?}"
+        );
+    })
+    .unwrap();
 }
