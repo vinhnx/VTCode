@@ -545,6 +545,7 @@ impl DesktopView {
             interaction_choice_ids: Vec::new(),
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,
+            interaction_immediate_choice_id: None,
             composer,
             _composer_subscription: composer_subscription,
             ui_language_select,

@@ -255,6 +255,7 @@ impl DesktopView {
         self.interaction_choice_ids.clear();
         self.interaction_answer_texts.clear();
         self.interaction_step_index = 0;
+        self.interaction_immediate_choice_id = None;
     }
 
     pub(super) fn submit_interaction(
@@ -307,7 +308,7 @@ impl DesktopView {
         &mut self,
         step_index: usize,
         choice_id: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_interaction_response.is_some() {
@@ -316,7 +317,7 @@ impl DesktopView {
         let Some(interaction) = self.interaction.as_ref() else {
             return;
         };
-        if interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty() {
+        if interaction_render::is_wizard_interaction(interaction) {
             if step_index != self.interaction_step_index
                 || !interaction
                     .steps
@@ -332,7 +333,57 @@ impl DesktopView {
             cx.notify();
             return;
         }
+        // Immediate choices are select-then-confirm: activating the checked
+        // card is a Kit-level no-op, so without a selection step the
+        // preselected row could never be submitted by mouse.
+        if !interaction_render::visible_choices(interaction, self.interaction_step_index)
+            .iter()
+            .any(|choice| choice.id == choice_id)
+        {
+            return;
+        }
+        self.interaction_immediate_choice_id = Some(choice_id);
+        self.clear_error();
+        cx.notify();
+    }
+
+    /// Submit the highlighted immediate choice (mouse selection, else the
+    /// service default). Digit shortcuts bypass this and commit directly.
+    pub(super) fn confirm_immediate_choice(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
+        // Wizards commit through Next/Submit with per-step answers; a single
+        // immediate choice would silently discard the other steps.
+        if self.interaction.as_ref().is_some_and(interaction_render::is_wizard_interaction) {
+            return;
+        }
+        let Some(choice_id) = self.effective_immediate_choice_id() else {
+            return;
+        };
         self.submit_interaction(vec![choice_id], false, window, cx);
+    }
+
+    /// The row Confirm submits: the mouse selection when it still names a
+    /// visible row, else the service default (selected row, else first row).
+    pub(super) fn effective_immediate_choice_id(&self) -> Option<String> {
+        let interaction = self.interaction.as_ref()?;
+        let choices = interaction_render::visible_choices(interaction, self.interaction_step_index);
+        if choices.is_empty() {
+            return None;
+        }
+        if self
+            .interaction_immediate_choice_id
+            .as_deref()
+            .is_some_and(|selected| choices.iter().any(|choice| choice.id == selected))
+        {
+            return self.interaction_immediate_choice_id.clone();
+        }
+        choices
+            .iter()
+            .find(|choice| Some(choice.id.as_str()) == interaction.selected_choice_id.as_deref())
+            .or(choices.first())
+            .map(|choice| choice.id.clone())
     }
 
     fn store_current_interaction_answer(&mut self, cx: &App) {

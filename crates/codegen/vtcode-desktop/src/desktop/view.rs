@@ -495,6 +495,10 @@ struct DesktopView {
     interaction_choice_ids: Vec<Option<String>>,
     interaction_answer_texts: Vec<Option<String>>,
     interaction_step_index: usize,
+    /// Mouse selection for immediate (non-wizard) choice panels. `None` means
+    /// the service default (selected row, else first row). Clicking a card
+    /// moves this; digits still commit immediately and Confirm submits it.
+    interaction_immediate_choice_id: Option<String>,
     composer: Entity<TextareaState>,
     _composer_subscription: Subscription,
     ui_language_select: Entity<UiLanguageSelectState>,

@@ -224,7 +224,67 @@ fn digits_never_commit_while_freeform_answer_is_focused(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
-fn committing_choice_row_disables_panel_while_response_pending(cx: &mut TestAppContext) {
+fn clicking_choice_row_selects_without_submitting(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _cx| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    // Preselect the first row, click the last: the highlight must move across
+    // the full list, not just to a neighbor.
+    deliver(&view, tool_loop_interaction(Some("grant-40")), cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-grant-40").selected(), Some(true));
+        window.click("choice-stop", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-grant-40").selected(), Some(false));
+        assert_eq!(window.find("choice-grant-20").selected(), Some(false));
+        assert_eq!(window.find("choice-stop").selected(), Some(true));
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "selecting a row never submits");
+    view.update(cx, |view, _cx| {
+        assert_eq!(view.effective_immediate_choice_id().as_deref(), Some("stop"));
+        assert!(view.pending_interaction_response.is_none(), "nothing is in flight");
+    });
+}
+
+#[gpui_kit::test]
+fn confirm_submits_preselected_default_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _cx| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    // The service preselects the middle row. Clicking the checked card is a
+    // Kit-level no-op, so without Confirm this default could never be
+    // submitted by mouse — the dead-end this regression pins.
+    deliver(&view, tool_loop_interaction(Some("grant-20")), cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-grant-20").selected(), Some(true));
+        window.click("choice-grant-20", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "clicking the checked row sends nothing");
+    cx.update_window(window, |_, window, cx| {
+        window.click("confirm-interaction", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("confirm submits a response") else {
+        panic!("expected interaction response");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::INTERACTION_RESPOND);
+    assert_eq!(params["choiceId"], json!("grant-20"));
+    assert_eq!(params["choiceIds"], json!(["grant-20"]));
+    assert_eq!(params["cancelled"], json!(false));
+    assert!(requests.try_recv().is_err(), "confirm sends exactly one response");
+}
+
+#[gpui_kit::test]
+fn confirming_choice_row_disables_panel_while_response_pending(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     view.update(cx, |view, _cx| {
@@ -234,24 +294,102 @@ fn committing_choice_row_disables_panel_while_response_pending(cx: &mut TestAppC
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.click("choice-grant-20", cx);
-        window.click("choice-grant-20", cx);
+        window.render_frame(cx);
+        window.click("confirm-interaction", cx);
+        window.click("confirm-interaction", cx);
         window.render_frame(cx);
         for id in [
             "choice-grant-40",
             "choice-grant-20",
             "choice-stop",
             "cancel-interaction",
+            "confirm-interaction",
         ] {
             assert_eq!(window.find(id).disabled(), Some(true), "{id} disables while pending");
         }
     })
     .unwrap();
-    let BackendCommand::Request { method, params } = requests.try_recv().expect("click commits a response") else {
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("confirm commits a response") else {
         panic!("expected interaction response");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::INTERACTION_RESPOND);
     assert_eq!(params["choiceIds"], json!(["grant-20"]));
-    assert!(requests.try_recv().is_err(), "repeat clicks send exactly one response");
+    assert!(requests.try_recv().is_err(), "repeat confirms send exactly one response");
+}
+
+#[gpui_kit::test]
+fn confirm_ignores_wizard_questions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _cx| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    deliver(&view, question_interaction(false), cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            window.try_find("confirm-interaction").is_none(),
+            "wizards commit through Next/Submit, never an immediate Confirm"
+        );
+        view.update(cx, |view, cx| view.confirm_immediate_choice(window, cx));
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "confirm never submits a wizard step");
+    view.update(cx, |view, _cx| {
+        assert!(view.interaction.is_some(), "the wizard stays open");
+        assert!(view.pending_interaction_response.is_none(), "nothing is in flight");
+    });
+}
+
+#[gpui_kit::test]
+fn failed_confirm_keeps_selection_for_retry(cx: &mut TestAppContext) {
+    use crate::desktop::transport::InteractionResponseIdentity;
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _cx| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    deliver(&view, tool_loop_interaction(Some("grant-40")), cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("choice-stop", cx);
+        window.render_frame(cx);
+        window.click("confirm-interaction", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { params, .. } = requests.try_recv().expect("first confirm sends") else {
+        panic!("expected interaction response");
+    };
+    assert_eq!(params["choiceIds"], json!(["stop"]));
+    // The service rejects the decision: the prompt stays open with the same
+    // row highlighted, so Confirm retries instead of forcing a reselect.
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::InteractionResponded {
+                identity: InteractionResponseIdentity {
+                    session_id: "session".into(),
+                    turn_id: vtcode_desktop_protocol::SESSION_START_TURN_ID.into(),
+                    interaction_id: "tool-loop".into(),
+                    cancelled: false,
+                },
+                error: Some("Decision rejected".into()),
+            },
+            cx,
+        );
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-stop").selected(), Some(true));
+        assert_ne!(window.find("confirm-interaction").disabled(), Some(true), "confirm re-enables after the rejection");
+        window.click("confirm-interaction", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { params, .. } = requests.try_recv().expect("retry confirm sends") else {
+        panic!("expected interaction response");
+    };
+    assert_eq!(params["choiceIds"], json!(["stop"]));
+    assert!(requests.try_recv().is_err(), "retry sends exactly one response");
 }
 
 #[gpui_kit::test]
@@ -311,6 +449,7 @@ fn empty_choice_panel_hides_hint_but_keeps_escape_cancel(cx: &mut TestAppContext
             window.try_find("interaction-keyboard-hint").is_none(),
             "no hint promises shortcuts when no rows exist"
         );
+        assert!(window.try_find("confirm-interaction").is_none(), "no confirm button renders when no rows exist");
         window.press("escape", cx);
     })
     .unwrap();

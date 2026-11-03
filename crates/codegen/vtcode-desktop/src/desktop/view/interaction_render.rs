@@ -13,8 +13,9 @@ fn visible_step_index(interaction: &InteractionRequest, step_index: usize) -> us
 
 /// Rows the user actually sees: the active wizard step's options for
 /// multi-step questions, else the first step's (or top-level) choice list.
-/// Render and the digit shortcuts share this so numbers always match rows.
-fn visible_choices(interaction: &InteractionRequest, step_index: usize) -> &[InteractionChoice] {
+/// Render, the digit shortcuts, and the immediate Confirm path share this so
+/// numbers, highlight, and submission always agree on the same rows.
+pub(super) fn visible_choices(interaction: &InteractionRequest, step_index: usize) -> &[InteractionChoice] {
     if interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty() {
         let step_index = visible_step_index(interaction, step_index);
         match interaction.steps.get(step_index) {
@@ -28,16 +29,10 @@ fn visible_choices(interaction: &InteractionRequest, step_index: usize) -> &[Int
     }
 }
 
-/// Default (preselected) row: the service's selected identity when it names a
-/// visible row, else the first row — mirroring the TUI list cursor.
-fn default_choice_index(choices: &[InteractionChoice], selected_id: Option<&str>) -> Option<usize> {
-    if choices.is_empty() {
-        return None;
-    }
-    choices
-        .iter()
-        .position(|choice| Some(choice.id.as_str()) == selected_id)
-        .or(Some(0))
+/// Multi-step question prompts render the wizard (stepper + Previous/Next);
+/// every other prompt is an immediate select-then-confirm panel.
+pub(super) fn is_wizard_interaction(interaction: &InteractionRequest) -> bool {
+    interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty()
 }
 
 /// 1-based digit chip for rows inside the shortcut range.
@@ -69,7 +64,7 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let submitting = self.pending_interaction_response.as_deref() == Some(interaction.interaction_id.as_str());
         let is_question = interaction.kind == protocol::InteractionKind::Question;
-        let has_steps = !interaction.steps.is_empty();
+        let is_wizard = is_wizard_interaction(interaction);
         let step_index = visible_step_index(interaction, self.interaction_step_index);
         // A visible freeform answer owns every keystroke: typing digits must
         // never commit a row, so panel shortcuts stay off while it renders.
@@ -149,13 +144,19 @@ impl DesktopView {
                 if let Some(choice) = visible_choices(&interaction, step_index).get(choice_index) {
                     let choice_id = choice.id.clone();
                     cx.stop_propagation();
-                    this.choose_interaction_option(step_index, choice_id, window, cx);
+                    if is_wizard_interaction(&interaction) {
+                        this.choose_interaction_option(step_index, choice_id, window, cx);
+                    } else {
+                        // Digits keep their immediate-commit contract; only
+                        // mouse clicks became select-then-confirm.
+                        this.submit_interaction(vec![choice_id], false, window, cx);
+                    }
                 }
             }));
         }
 
         let step_choices = visible_choices(interaction, step_index);
-        if is_question && has_steps {
+        if is_wizard {
             let steps = interaction.steps.iter().enumerate().map(|(index, step)| {
                 let title = if step.title.trim().is_empty() {
                     rust_i18n::t!("app.interaction.step_fallback", n = index + 1).to_string()
@@ -190,13 +191,18 @@ impl DesktopView {
             );
         }
 
-        if is_question && has_steps {
+        if is_wizard {
             if let Some(step) = interaction.steps.get(step_index) {
                 panel = panel.child(self.render_question_step(step, step_index, interaction.steps.len(), window, cx));
             }
         } else {
             let choices = step_choices;
-            let default_index = default_choice_index(choices, interaction.selected_choice_id.as_deref());
+            // The highlight is the mouse selection when set, else the service
+            // default — the same row Confirm submits.
+            let effective_id = self.effective_immediate_choice_id();
+            let effective_index = effective_id
+                .as_deref()
+                .and_then(|id| choices.iter().position(|choice| choice.id == id));
             let total = choices.len();
             let mut options = div()
                 .id("interaction-choice-options")
@@ -208,7 +214,7 @@ impl DesktopView {
                 .flex_col()
                 .gap_2();
             for (choice_index, choice) in choices.iter().enumerate() {
-                options = options.child(self.render_choice(choice, choice_index, total, default_index, cx));
+                options = options.child(self.render_choice(choice, choice_index, total, effective_index, cx));
             }
             panel = panel.child(options);
         }
@@ -241,7 +247,19 @@ impl DesktopView {
                             cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
                         ),
                 )
-                .when(is_question && has_steps, |row| {
+                .when(!is_wizard && !step_choices.is_empty(), |row| {
+                    // Immediate choices commit nothing on their own: activating
+                    // the checked card is a no-op, so the highlighted row
+                    // needs an explicit default commitment next to Cancel.
+                    row.child(
+                        desktop_button("confirm-interaction")
+                            .label(rust_i18n::t!("app.interaction.confirm").to_string())
+                            .primary()
+                            .desktop_disabled(submitting)
+                            .on_click(cx.listener(|this, _, window, cx| this.confirm_immediate_choice(window, cx))),
+                    )
+                })
+                .when(is_wizard, |row| {
                     row.child(
                         div()
                             .flex()
@@ -434,7 +452,7 @@ impl DesktopView {
         choice: &InteractionChoice,
         choice_index: usize,
         total_choices: usize,
-        default_index: Option<usize>,
+        selected_index: Option<usize>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         self.render_choice_card(
@@ -443,7 +461,7 @@ impl DesktopView {
                 choice,
                 position: choice_index + 1,
                 total: total_choices,
-                checked: default_index == Some(choice_index),
+                checked: selected_index == Some(choice_index),
                 digit: digit_shortcut(choice_index),
                 step_index: 0,
             },

@@ -849,6 +849,7 @@ impl DesktopView {
                 }
                 self.interaction_answer_texts = vec![None; interaction.steps.len()];
                 self.interaction_step_index = 0;
+                self.interaction_immediate_choice_id = None;
                 self.pending_interaction_response = None;
                 self.interaction = Some(interaction);
                 self.invalidate_webmcp_status();

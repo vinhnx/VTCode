@@ -54,6 +54,7 @@ fn interaction_copy_is_localized_for_every_language() {
             "app.interaction.progress_aria",
             "app.interaction.steps_aria",
             "app.interaction.cancel_request",
+            "app.interaction.confirm",
             "app.interaction.previous",
             "app.interaction.submit_answers",
             "app.interaction.next_question",
