@@ -277,11 +277,9 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         assert_eq!(viewer.read(cx).mode(), gpui_kit::component::diff::DiffMode::Unified);
         assert_eq!(window.find("review-unified").label(), Some("Unified diff view (selected)"));
         assert_eq!(window.find("review-split").label(), Some("Split diff view"));
-        for _ in 0..8 {
-            window.press("tab", cx);
-            window.render_frame(cx);
-        }
-        assert!(view.read(cx).review_focus.contains_focused(window, cx));
+        tab_out_and_back_into_scope(window, cx, "the review surface", |window, cx| {
+            view.read(cx).review_focus.contains_focused(window, cx)
+        });
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() != Route::Review);

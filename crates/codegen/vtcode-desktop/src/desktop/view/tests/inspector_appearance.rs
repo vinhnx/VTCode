@@ -740,11 +740,9 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("theme-ciapre-blue").role(), Some(gpui_kit::Role::Button));
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
-        for _ in 0..8 {
-            window.press("tab", cx);
-            window.render_frame(cx);
-        }
-        assert!(view.read(cx).settings_focus.contains_focused(window, cx));
+        tab_out_and_back_into_scope(window, cx, "the settings surface", |window, cx| {
+            view.read(cx).settings_focus.contains_focused(window, cx)
+        });
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() != Route::Settings);

@@ -389,11 +389,9 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 1 · a.rs"));
         assert_eq!(window.find("workspace-review-previous-file").disabled(), Some(true));
         assert_eq!(window.find("workspace-review-next-file").disabled(), Some(true));
-        for _ in 0..10 {
-            window.press("tab", cx);
-            window.render_frame(cx);
-        }
-        assert!(view.read(cx).review_focus.contains_focused(window, cx));
+        tab_out_and_back_into_scope(window, cx, "the review surface", |window, cx| {
+            view.read(cx).review_focus.contains_focused(window, cx)
+        });
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).current_route() != Route::Review);

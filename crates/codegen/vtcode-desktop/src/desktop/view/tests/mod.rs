@@ -194,6 +194,34 @@ fn focus_element_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mu
     panic!("Tab did not reach focusable element {id}");
 }
 
+/// Tab until focus leaves `scope`, then keep tabbing until it cycles back in.
+/// Route panels do not trap focus, so a fixed tab count breaks whenever any
+/// window control is added, removed, or reordered. Bounded; panics naming the
+/// scope when the cycle never leaves or never returns.
+fn tab_out_and_back_into_scope(
+    window: &mut gpui_kit::Window,
+    cx: &mut gpui_kit::App,
+    scope: &'static str,
+    mut in_scope: impl FnMut(&mut gpui_kit::Window, &mut gpui_kit::App) -> bool,
+) {
+    for _ in 0..128 {
+        if !in_scope(window, cx) {
+            break;
+        }
+        window.press("tab", cx);
+        window.render_frame(cx);
+    }
+    assert!(!in_scope(window, cx), "tab never left {scope}");
+    for _ in 0..128 {
+        if in_scope(window, cx) {
+            return;
+        }
+        window.press("tab", cx);
+        window.render_frame(cx);
+    }
+    panic!("tab never cycled back into {scope}");
+}
+
 /// Embedded-panel contract: the toolbar persists above every panel, visible
 /// navigation sits beside it, and the panel stays inside the viewport.
 fn assert_panel_embeds(window: &mut gpui_kit::Window, panel_id: &'static str) {
