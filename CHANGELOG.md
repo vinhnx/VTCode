@@ -5,6 +5,71 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.3 - 2026-11-03
+
+### Highlights
+
+#### Bug Fixes
+
+- Cycle tab focus instead of fixed counts in review/settings tests (ee7579c2) (@vinhnx)
+- Drop composer prompt marker, align draft with action row (b80c78b7)
+- Send stable x-opencode-session on every request (d1db0098)
+- Relax settings spacing and pin rows to the title frame (dba5c997)
+- Add Confirm button to HITL choice panels (edbff6cd)
+- Use unwrap_or for clippy unnecessary_lazy_evaluations (49524483)
+- Persist file viewer settings across launches (3b6a09af)
+- Apply saved shortcuts live and quarantine corrupt preferences (0f963afa)
+- Builtin presets cover every provider; implement qwen presets (5d7e2c1d)
+- Resolve model routes through canonical provider identity (019408ce)
+- Show only the editing profile's theme grid (0e45c4cb)
+- Align turn-timer fallback with config default (5b7e3210)
+- Export config schema with --locked (4e2750ac)
+- Pin expanded diagnostic details while streaming (691275b3)
+- Use camo-safe shields.io badge for DeepWiki (454e0820)
+- Fork-based desktop/CLI handoff with auto-run terminal (983ccd95)
+
+#### Documentation
+
+- Fix totality test name in builtin presets comment (1c2691f6)
+
+#### Features
+
+- Add icons to settings navigation with shared rail entry builder (8b79c84f)
+- Add scrolling content page title to settings tabs (d9934752)
+- Filterable newest-first activity, changes, and output panes (140c6728)
+- Transcript CTAs that open the inspector (711447ab)
+- Transcript navigation and TUI follow-state (00f42199)
+- Guide GitHub queries to gh CLI fallback (67984abc)
+- Refine HITL confirmation hierarchy, hover, and rhythm (a2fc55d5)
+- Weakest-sufficient fills, crisper muted text, Noir option (25863bfa)
+- Threads keyboard nav, vim layer, unified reset (e401d2c4)
+- Human-readable provider names with frontier-first order (27f5f00c)
+- Composer alignment pass with extended icon bundle (c1697338)
+- Group settings theme picker by light/dark modes (e2282391)
+- Keyboard navigation for thread surfaces and activity (1c9a52b5)
+- Vertical effort rail with labeled stops in model options (8077bf67)
+- Quiet processing-tier readout in Zen composer (9b598de4)
+- File-tree context menu with open, reveal, rename, delete (7143dff5)
+- Stamp each agent response with a wall-clock footer (35a8d85b)
+- Restyle HITL panel to Questionnaire visual language (2ce88225)
+
+### Other Changes
+
+#### Refactors
+
+- Converge settings screens on Kit Settings rhythm and split panes per module (665488f4)
+- Converge remaining settings sections and items on shared builders (6f190ecc)
+- Split oversized inspector and review test modules (b6a6f564)
+- Single-lock PlanningWorkflowState with atomic transitions (ba054fc1)
+- Typed LocalAgentStatus replacing string matching (387cbb01)
+- Share consent title row across confirm modals (b3bcaec1)
+
+#### Tests
+
+- Pin inspector MIN clamp through divider drag (96539c6c)
+- Pin profile caption contrast under contrast boost (0156ef10)
+- Align model-switch test with frontier-first order (968ad2a0)
+
 ## 0.181.2 - 2026-11-03
 
 ### Highlights
