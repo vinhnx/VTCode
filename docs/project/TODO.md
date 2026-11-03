@@ -138,3 +138,13 @@ desktop app: check chat input labels seems not read and respect the font setting
 ---
 
 https://github.com/vinhnx/VTCode/issues/803
+
+---
+
+implement desktop app file brower with core fast logic from CLI. and implement proper and fast files brower for macos. current the brower is basic. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 7.40.37 AM.png'
+
+---
+
+check for all of the panels behavior and layout. when clicking away, they should close or hide properly. and make sure no overlap occurs.
+
+fix: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 7.40.37 AM.png'
