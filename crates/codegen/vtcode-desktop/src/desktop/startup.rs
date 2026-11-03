@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use vtcode_desktop_protocol::handoff_url::{HandoffLink, parse_handoff_url};
 
-/// Parse argv (without argv[0]) for `--session <id>` + `--workspace <path>`.
+/// Parse argv (without argv\[0\]) for `--session <id>` + `--workspace <path>`.
 ///
 /// Both `--flag value` and `--flag=value` forms are accepted, in any order.
 /// Everything else — including the `-psn_*` tokens macOS Finder injects — is

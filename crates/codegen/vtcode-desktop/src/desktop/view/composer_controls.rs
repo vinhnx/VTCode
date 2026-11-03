@@ -38,7 +38,7 @@ pub(super) enum DesktopSlashAction {
 }
 
 /// Settings-tab aliases shared by the `/config` and `/settings` deep-links
-/// and the [`deeplinks`](super::deeplinks) system.
+/// and the [`deeplinks`] system.
 pub(super) fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
     match name {
         "appearance" | "theme" => Some(settings::SettingsTab::Appearance),
