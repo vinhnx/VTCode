@@ -800,4 +800,6 @@ fn relative_luminance(color: Hsla) -> f32 {
 }
 
 #[cfg(test)]
+mod contrast_tests;
+#[cfg(test)]
 mod tests;
