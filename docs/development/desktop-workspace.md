@@ -10,10 +10,11 @@ the applicable ownership/lifecycle improvements, and verification boundaries.
 
 <!-- markdownlint-disable MD033 -->
 
-<video src="../../resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
-  poster="../../resources/screenshots/vtcode-desktop-light.png"
+<!-- NB: <video> needs absolute raw URLs; GitHub only rewrites relative src on <img>, not <video>. -->
+<video src="https://raw.githubusercontent.com/vinhnx/VTCode/main/resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
+  poster="https://raw.githubusercontent.com/vinhnx/VTCode/main/resources/screenshots/vtcode-desktop-light.png"
   aria-label="VT Code Desktop app demo">
-<a href="../../resources/gif/demo-desktop.mov">Open the demo video</a>
+<a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mov">Open the demo video</a>
 </video>
 
 <!-- markdownlint-enable MD033 -->

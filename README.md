@@ -16,14 +16,23 @@
 
 <p>
   <!-- markdownlint-disable MD033 -->
-  <video src="./resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
-    poster="./resources/screenshots/vtcode-desktop-light.png"
+  <!-- NB: <video> needs absolute raw URLs; GitHub only rewrites relative src on <img>, not <video>. -->
+  <video src="https://raw.githubusercontent.com/vinhnx/VTCode/main/resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
+    poster="https://raw.githubusercontent.com/vinhnx/VTCode/main/resources/screenshots/vtcode-desktop-light.png"
     aria-label="VT Code Desktop app demo">
-    <a href="./resources/gif/demo-desktop.mov">Open the demo video</a>
+    <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mov">Open the demo video</a>
   </video>
   <!-- markdownlint-enable MD033 -->
 </p>
-<sub>Desktop app demo (video; open it directly if playback is unavailable).</sub>
+
+<p>
+  <img src="./resources/screenshots/vtcode-desktop-light.png" width="49%"
+    alt="VT Code Desktop in light appearance" />
+  <img src="./resources/screenshots/vtcode-desktop-dark.png" width="49%"
+    alt="VT Code Desktop in dark appearance" />
+  <sub>Desktop app</sub>
+
+</p>
 
 <p>
   <img src="./resources/screenshots/vtcode-cli-tui.gif" width="39%"
@@ -146,26 +155,11 @@ and [full automation](./docs/guides/full-automation.md) for configuration detail
 
 ### The full VT Code engine in a native Mac app
 
-[![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](./docs/development/desktop-workspace.md)
-[![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](./docs/development/desktop-workspace.md)
-
-<p>
-  <sub>Everything the CLI does: providers, tool policy, sandboxing, sessions, behind a native interface.</sub>
-</p>
-
 </div>
 
 The GUI talks to a matching local service binary while the unified runloop still owns providers, tool policy,
 sandboxing, and sessions. Desktop reuses your CLI configuration, provider credentials, workspace trust, and sandbox
 policy. Configure a provider from Terminal first, for example with `vtcode secret add openai`.
-
-<p>
-  <img src="./resources/screenshots/vtcode-desktop-light.png" width="49%"
-    alt="VT Code Desktop in light appearance" />
-  <img src="./resources/screenshots/vtcode-desktop-dark.png" width="49%"
-    alt="VT Code Desktop in dark appearance" />
-</p>
-<p align="center"><sub>Light and dark appearances</sub></p>
 
 ### Install (macOS 15+)
 
