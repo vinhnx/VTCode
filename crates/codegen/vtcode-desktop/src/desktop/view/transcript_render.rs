@@ -724,23 +724,28 @@ impl DesktopView {
                     .flex_col()
                     .gap_1()
                     .child(
-                        div().flex().justify_end().child(
-                            desktop_button(format!("copy-tool-output-{}", item.id))
-                                .icon(IconName::Copy)
-                                .accessibility_label(
-                                    rust_i18n::t!("app.transcript.copy_output_for", title = item.title.to_string())
-                                        .to_string(),
-                                )
-                                .tooltip(rust_i18n::t!("app.transcript.copy_full_output").to_string())
-                                .ghost()
-                                .xsmall()
-                                .on_click(move |_, window, app| {
-                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
-                                        full_output.to_string(),
-                                    ));
-                                    super::super::notifications::copied_to_clipboard(window, app);
-                                }),
-                        ),
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap_1()
+                            .child(
+                                desktop_button(format!("copy-tool-output-{}", item.id))
+                                    .icon(IconName::Copy)
+                                    .accessibility_label(
+                                        rust_i18n::t!("app.transcript.copy_output_for", title = item.title.to_string())
+                                            .to_string(),
+                                    )
+                                    .tooltip(rust_i18n::t!("app.transcript.copy_full_output").to_string())
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click(move |_, window, app| {
+                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                            full_output.to_string(),
+                                        ));
+                                        super::super::notifications::copied_to_clipboard(window, app);
+                                    }),
+                            )
+                            .when(item.has_output(), |row| row.child(Self::tool_output_cta(item, cx))),
                     )
                     .child(
                         div()
@@ -810,6 +815,7 @@ impl DesktopView {
                     cx.notify();
                 })),
         );
+        actions = actions.child(Self::diff_changes_cta(&item.id, cx));
         if !diff.patch.is_empty() {
             let copy_id = id.clone();
             actions = actions.child(

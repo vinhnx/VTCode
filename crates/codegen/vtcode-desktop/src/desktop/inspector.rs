@@ -283,7 +283,7 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
                 title: item.title.clone(),
                 state: ActivityState::from_status(&status),
                 status,
-                has_output: item.output.is_some(),
+                has_output: item.has_output(),
             }
         })
         .collect();

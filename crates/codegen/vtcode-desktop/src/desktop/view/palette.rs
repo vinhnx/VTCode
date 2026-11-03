@@ -685,12 +685,12 @@ impl DesktopView {
                     && (self
                         .restored_activity
                         .iter()
-                        .any(|item| item.id == *item_id && item.is_tool() && item.output.is_some())
+                        .any(|item| item.id == *item_id && item.is_tool() && item.has_output())
                         || self
                             .transcript
                             .position_by_id(item_id)
                             .and_then(|index| self.transcript.get(index))
-                            .is_some_and(|item| item.is_tool() && item.output.is_some()))
+                            .is_some_and(|item| item.is_tool() && item.has_output()))
             }
             PaletteAction::SelectSessionOptions(_) => self.can_select_session_options(),
             PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => {

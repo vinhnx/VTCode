@@ -186,8 +186,7 @@ impl DesktopView {
     }
 
     pub(super) fn focus_workspace_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.inspector_open = true;
-        self.set_inspector_tab(InspectorTab::Files, cx);
+        self.open_inspector_tab(InspectorTab::Files, cx);
 
         let view = cx.entity().downgrade();
         window.defer(cx, move |window, cx| {

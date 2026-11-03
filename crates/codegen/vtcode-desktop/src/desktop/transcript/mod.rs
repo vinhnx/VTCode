@@ -256,6 +256,13 @@ impl TranscriptItem {
         self.has_role(TranscriptRole::Notice)
     }
 
+    /// Whether this row carries captured output worth jumping to. Shared by
+    /// the activity projection, the transcript output CTA, and conversation
+    /// search so the affordance can never disagree across surfaces.
+    pub(super) fn has_output(&self) -> bool {
+        self.output.is_some()
+    }
+
     /// Notice row (runtime errors, compaction/reset notices, run status) with
     /// its severity set at construction.
     pub fn notice(id: String, title: SharedString, text: String, severity: NoticeSeverity) -> Self {

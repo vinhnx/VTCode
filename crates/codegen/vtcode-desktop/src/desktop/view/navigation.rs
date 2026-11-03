@@ -2,8 +2,7 @@ use super::*;
 
 impl DesktopView {
     pub(super) fn open_utilities(&mut self, cx: &mut Context<Self>) {
-        self.inspector_open = true;
-        self.set_inspector_tab(InspectorTab::Utilities, cx);
+        self.open_inspector_tab(InspectorTab::Utilities, cx);
     }
 
     pub(super) fn render_navigation(&mut self, narrow_panel: bool, cx: &mut Context<Self>) -> AnyElement {

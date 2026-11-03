@@ -495,6 +495,7 @@ mod startup_interactions;
 mod storage_settings;
 mod themes_transcript;
 mod thread_tabs;
+mod transcript_inspector_ctas;
 mod transcript_navigation;
 mod turn_queue;
 mod turns_transcript;
