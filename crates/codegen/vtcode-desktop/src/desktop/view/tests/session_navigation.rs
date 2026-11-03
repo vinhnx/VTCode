@@ -65,6 +65,46 @@ fn session_arrows_navigate_threads_paint_rail_clamp_and_heal_stale_ids(cx: &mut 
 }
 
 #[gpui_kit::test]
+fn session_list_is_one_tab_stop_rows_are_skipped(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        seed_threads(&view, cx, &["skip-first", "skip-second"]);
+        window.render_frame(cx);
+        focus_element_by_tab(window, "session-list", cx);
+        for _ in 0..6 {
+            window.press("tab", cx);
+            window.render_frame(cx);
+            for id in ["session-skip-first", "session-skip-second"] {
+                assert!(
+                    !window.try_find(id).is_some_and(|element| element.focused() == Some(true)),
+                    "{id} stays out of Tab order"
+                );
+            }
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn session_rail_aligns_to_highlighted_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        seed_threads(&view, cx, &["geo-first", "geo-second", "geo-third"]);
+        window.render_frame(cx);
+        focus_element_by_tab(window, "session-list", cx);
+        window.press("down", cx);
+        window.press("down", cx);
+        assert_eq!(view.read(cx).keyboard_focused_session.as_deref(), Some("geo-second"));
+        window.render_frame(cx);
+        let row = window.find("session-row-geo-second").bounds();
+        let rail = window.find("session-focus-rail-geo-second").bounds();
+        assert_eq!(rail.origin, row.origin, "rail starts at the row's top-left");
+        assert_eq!(rail.size.height, row.size.height, "rail spans exactly the row");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn session_home_end_jump_to_edges_and_empty_list_is_inert(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -378,9 +418,10 @@ fn transcript_home_end_jump_to_first_and_last_visible_message(cx: &mut TestAppCo
 #[gpui_kit::test]
 fn vim_toggle_binds_and_retires_every_chord(cx: &mut TestAppContext) {
     use super::super::{
-        FocusComposer, NextInspectorTab, NextSettingsTab, OpenConversationSearch, PreviousInspectorTab,
-        PreviousSettingsTab, SessionFirst, SessionLast, SessionNext, SessionPrevious, TranscriptFirst, TranscriptLast,
-        TranscriptNext, TranscriptPrevious,
+        ActivityFirst, ActivityLast, ActivityNext, ActivityPrevious, FocusComposer, NextInspectorTab, NextSettingsTab,
+        NextThreadTab, OpenConversationSearch, PreviousInspectorTab, PreviousSettingsTab, PreviousThreadTab,
+        SessionFirst, SessionLast, SessionNext, SessionPrevious, TranscriptFirst, TranscriptLast, TranscriptNext,
+        TranscriptPrevious,
     };
     use crate::desktop::strings::key_context;
 
@@ -406,6 +447,16 @@ fn vim_toggle_binds_and_retires_every_chord(cx: &mut TestAppContext) {
         ("l", key_context::SETTINGS, Box::new(NextSettingsTab)),
         ("i", key_context::SETTINGS, Box::new(FocusComposer)),
         ("/", key_context::SETTINGS, Box::new(OpenConversationSearch)),
+        ("h", key_context::THREAD_TABS, Box::new(PreviousThreadTab)),
+        ("l", key_context::THREAD_TABS, Box::new(NextThreadTab)),
+        ("i", key_context::THREAD_TABS, Box::new(FocusComposer)),
+        ("/", key_context::THREAD_TABS, Box::new(OpenConversationSearch)),
+        ("j", key_context::ACTIVITY, Box::new(ActivityNext)),
+        ("k", key_context::ACTIVITY, Box::new(ActivityPrevious)),
+        ("g", key_context::ACTIVITY, Box::new(ActivityFirst)),
+        ("shift-g", key_context::ACTIVITY, Box::new(ActivityLast)),
+        ("i", key_context::ACTIVITY, Box::new(FocusComposer)),
+        ("/", key_context::ACTIVITY, Box::new(OpenConversationSearch)),
     ];
     let (window, view) = open_desktop(cx);
     cx.update(|cx| {

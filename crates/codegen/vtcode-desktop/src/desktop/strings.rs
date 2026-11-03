@@ -57,6 +57,8 @@ pub(super) mod key_context {
     pub const COMPOSER: &str = "VTCodeComposer";
     pub const TRANSCRIPT: &str = "VTCodeTranscript";
     pub const SESSIONS: &str = "VTCodeSessions";
+    pub const THREAD_TABS: &str = "VTCodeThreadTabs";
+    pub const ACTIVITY: &str = "VTCodeActivity";
 }
 
 /// macOS app-bundle layout fragments shared by backend resolution and

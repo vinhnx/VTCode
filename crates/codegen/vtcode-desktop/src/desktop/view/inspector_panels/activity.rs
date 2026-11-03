@@ -1,5 +1,6 @@
 //! Inspector Activity panel.
 
+use super::super::session_nav::step_highlight_order;
 use super::*;
 
 /// One nonzero status line in the activity summary legend.
@@ -26,7 +27,65 @@ fn activity_pinned_to_top(scroll: &VirtualListScrollHandle) -> bool {
     scroll.offset().y + px(1.) >= px(0.)
 }
 
+/// Visible activity rows in render order as projection indices. Render and
+/// keyboard movement share this so the highlight can never drift from the
+/// painted rows.
+fn activity_visible_indices(rows: &[ActivityRow], filter: Option<ActivityState>) -> Vec<usize> {
+    rows.iter()
+        .enumerate()
+        .filter(|(_, row)| filter.is_none_or(|state| state == row.state))
+        .map(|(index, _)| index)
+        .collect()
+}
+
 impl DesktopView {
+    /// Move the keyboard highlight across Activity rows (Up/Down with the
+    /// list focused). Steps visible rows only; clamps at both ends and
+    /// scrolls the row into view. Navigation-only: actions stay on the row
+    /// buttons, which keep their tab stops (no Enter binding, so no
+    /// focus/button ambiguity).
+    pub(super) fn move_activity_focus(&mut self, down: bool, cx: &mut Context<Self>) {
+        let target = {
+            let activity = self.cached_activity_projection();
+            let visible = activity_visible_indices(&activity.rows, self.activity_filter);
+            let order: Vec<&str> = visible
+                .iter()
+                .filter_map(|&index| activity.rows.get(index).map(|row| row.id.as_str()))
+                .collect();
+            step_highlight_order(&order, self.keyboard_focused_activity.as_deref(), down)
+                .and_then(|position| order.get(position).map(|id| (position, id.to_string())))
+        };
+        let Some((position, row_id)) = target else {
+            return;
+        };
+        self.focus_activity_at(position, row_id, cx);
+    }
+
+    /// Jump the Activity highlight to the first/last visible row (Home/End).
+    pub(super) fn move_activity_focus_edge(&mut self, first: bool, cx: &mut Context<Self>) {
+        let target = {
+            let activity = self.cached_activity_projection();
+            let visible = activity_visible_indices(&activity.rows, self.activity_filter);
+            let position = if first { 0 } else { visible.len().saturating_sub(1) };
+            visible
+                .get(position)
+                .and_then(|&index| activity.rows.get(index))
+                .map(|row| (position, row.id.clone()))
+        };
+        let Some((position, row_id)) = target else {
+            return;
+        };
+        self.focus_activity_at(position, row_id, cx);
+    }
+
+    fn focus_activity_at(&mut self, position: usize, row_id: String, cx: &mut Context<Self>) {
+        self.keyboard_focused_activity = Some(row_id);
+        // Same Kit limitation as the thread lists: `scroll_to_item` pins to the
+        // viewport top, so every step re-pins instead of revealing minimally.
+        self.activity_scroll.scroll_to_item(position, gpui_kit::ScrollStrategy::Top);
+        cx.notify();
+    }
+
     pub(in super::super) fn render_activity_tab(
         &mut self,
         colors: &gpui_kit::component::theme::ThemeColor,
@@ -38,15 +97,7 @@ impl DesktopView {
         // The legend always reflects the full projection so its counts stay
         // stable; only the rendered rows narrow to the selected status.
         let filter = self.activity_filter;
-        let visible: Rc<Vec<usize>> = Rc::new(
-            activity
-                .rows
-                .iter()
-                .enumerate()
-                .filter(|(_, row)| filter.is_none_or(|state| state == row.state))
-                .map(|(index, _)| index)
-                .collect(),
-        );
+        let visible: Rc<Vec<usize>> = Rc::new(activity_visible_indices(&activity.rows, filter));
         let mut body = inspector_tab_body()
             .id("activity-list")
             .test_support()
@@ -268,12 +319,19 @@ impl DesktopView {
         let activity_count = visible.len();
         let activity_rows = Rc::clone(&activity);
         let visible_rows = Rc::clone(&visible);
+        let focused_activity = self.keyboard_focused_activity.clone();
         let row_colors = *colors;
         let weak_view = cx.entity().downgrade();
         body = body.child(
             div()
                 .id("activity-rows")
                 .test_support()
+                .track_focus(&self.activity_focus)
+                .key_context(key_context::ACTIVITY)
+                .on_action(cx.listener(|view, _: &ActivityPrevious, _, cx| view.move_activity_focus(false, cx)))
+                .on_action(cx.listener(|view, _: &ActivityNext, _, cx| view.move_activity_focus(true, cx)))
+                .on_action(cx.listener(|view, _: &ActivityFirst, _, cx| view.move_activity_focus_edge(true, cx)))
+                .on_action(cx.listener(|view, _: &ActivityLast, _, cx| view.move_activity_focus_edge(false, cx)))
                 .role(gpui_kit::Role::List)
                 .aria_label(rust_i18n::t!("app.inspector.recent_activity").to_string())
                 .relative()
@@ -359,6 +417,7 @@ impl DesktopView {
                                                 activity_count,
                                                 jump_action,
                                                 output_action,
+                                                focused_activity.as_deref() == Some(row.id.as_str()),
                                             )
                                             .into_any_element()
                                         },
@@ -459,14 +518,17 @@ impl DesktopView {
         set_size: usize,
         jump_action: Option<AnyElement>,
         output_action: Option<AnyElement>,
+        keyboard_focused: bool,
     ) -> impl IntoElement {
         let status_color = Self::activity_status_color(row.state, colors);
         let status = gpui_kit::SharedString::from(row.status.as_str());
+        let rail_id = format!("activity-focus-rail-{}", row.id);
         let mut row_element =
             div()
                 .id(format!("activity-{}", row.id))
                 .test_support()
                 .role(gpui_kit::Role::ListItem)
+                .when(keyboard_focused, |row| row.aria_active_descendant())
                 .aria_label(row.title.clone())
                 .aria_description(status.clone())
                 .aria_position_in_set(position)
@@ -490,7 +552,22 @@ impl DesktopView {
                         .justify_center()
                         .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
                         .child(div().text_xs().truncate().text_color(themes::muted_text(&colors)).child(status)),
-                );
+                )
+                // Absolutely positioned so the highlight never reflows the
+                // row; mirrors the thread-list focus rails.
+                .when(keyboard_focused, |row| {
+                    row.child(
+                        div()
+                            .id(rail_id)
+                            .test_support()
+                            .absolute()
+                            .left_0()
+                            .top_0()
+                            .bottom_0()
+                            .w(px(2.))
+                            .bg(colors.accent),
+                    )
+                });
         if let Some(jump_action) = jump_action {
             row_element = row_element.child(div().flex_shrink_0().child(jump_action));
         }

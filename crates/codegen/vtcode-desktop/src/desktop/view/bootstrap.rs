@@ -74,6 +74,17 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("home", SessionFirst, Some(key_context::SESSIONS)),
         KeyBinding::new("end", SessionLast, Some(key_context::SESSIONS)),
         KeyBinding::new("enter", OpenSelectedSession, Some(key_context::SESSIONS)),
+        KeyBinding::new("backspace", DeleteHighlightedSession, Some(key_context::SESSIONS)),
+        KeyBinding::new("delete", DeleteHighlightedSession, Some(key_context::SESSIONS)),
+        KeyBinding::new("left", PreviousThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("right", NextThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("home", FirstThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("end", LastThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("enter", OpenSelectedThreadTab, Some(key_context::THREAD_TABS)),
+        KeyBinding::new("up", ActivityPrevious, Some(key_context::ACTIVITY)),
+        KeyBinding::new("down", ActivityNext, Some(key_context::ACTIVITY)),
+        KeyBinding::new("home", ActivityFirst, Some(key_context::ACTIVITY)),
+        KeyBinding::new("end", ActivityLast, Some(key_context::ACTIVITY)),
     ]);
     if preferences.vim_navigation {
         apply_vim_navigation(cx, true);
@@ -140,6 +151,16 @@ pub(super) const VIM_CHORDS: &[(&str, &str)] = &[
     ("l", key_context::SETTINGS),
     ("i", key_context::SETTINGS),
     ("/", key_context::SETTINGS),
+    ("h", key_context::THREAD_TABS),
+    ("l", key_context::THREAD_TABS),
+    ("i", key_context::THREAD_TABS),
+    ("/", key_context::THREAD_TABS),
+    ("j", key_context::ACTIVITY),
+    ("k", key_context::ACTIVITY),
+    ("g", key_context::ACTIVITY),
+    ("shift-g", key_context::ACTIVITY),
+    ("i", key_context::ACTIVITY),
+    ("/", key_context::ACTIVITY),
 ];
 
 /// Live out or retire the vim layer. Same-chord conflicts resolve toward the
@@ -169,6 +190,16 @@ pub(super) fn apply_vim_navigation(cx: &mut App, enabled: bool) {
             KeyBinding::new("l", NextSettingsTab, Some(key_context::SETTINGS)),
             KeyBinding::new("i", FocusComposer, Some(key_context::SETTINGS)),
             KeyBinding::new("/", OpenConversationSearch, Some(key_context::SETTINGS)),
+            KeyBinding::new("h", PreviousThreadTab, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("l", NextThreadTab, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::THREAD_TABS)),
+            KeyBinding::new("j", ActivityNext, Some(key_context::ACTIVITY)),
+            KeyBinding::new("k", ActivityPrevious, Some(key_context::ACTIVITY)),
+            KeyBinding::new("g", ActivityFirst, Some(key_context::ACTIVITY)),
+            KeyBinding::new("shift-g", ActivityLast, Some(key_context::ACTIVITY)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::ACTIVITY)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::ACTIVITY)),
         ]);
     } else {
         cx.bind_keys(
@@ -606,6 +637,7 @@ impl DesktopView {
             sessions: Vec::new(),
             selected_session_id: None,
             open_tabs: Vec::new(),
+            tab_strip_focus: cx.focus_handle().tab_stop(true),
             active_primary_agent_display: None,
             transcript: Transcript::default(),
             message_scroller,
@@ -702,6 +734,7 @@ impl DesktopView {
             workspace_review: None,
             review_focus: cx.focus_handle().tab_stop(true),
             browser_focus: cx.focus_handle().tab_stop(true),
+            browser_list_focus: cx.focus_handle().tab_stop(true),
             git_branch: None,
             palette: None,
             palette_kind: PaletteKind::Commands,
@@ -736,6 +769,8 @@ impl DesktopView {
             activity_filter: None,
             activity_follow_filter: None,
             activity_seen_head: None,
+            activity_focus: cx.focus_handle().tab_stop(true),
+            keyboard_focused_activity: None,
             change_list_scroll: VirtualListScrollHandle::new(),
             browser_scroll: VirtualListScrollHandle::new(),
             session_row_sizes: FixedRowSizeCache::default(),

@@ -653,7 +653,10 @@ fn browser_row_cancel_returns_focus_to_browser(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(requests.try_recv().is_err());
         assert!(window.try_find("thread-browser").is_some(), "the browser stays open behind the modal");
-        assert!(view.read(cx).browser_focus.is_focused(window), "cancel returns focus to the visible route");
+        assert!(
+            view.read(cx).browser_list_focus.is_focused(window),
+            "cancel returns focus to the visible route's list"
+        );
     })
     .unwrap();
 }

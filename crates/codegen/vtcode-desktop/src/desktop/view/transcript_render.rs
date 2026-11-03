@@ -407,9 +407,13 @@ impl DesktopView {
         let message_id = item.id.clone();
         let clicked_id = item.id.clone();
         let keyboard_focused = self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
+        // Active-descendant announcements need a role, so user/assistant rows
+        // (deliberately role-less) stay silent.
+        let announceable = item.is_tool() || item.is_diff();
         div()
             .id(format!("transcript-row-{}", item.id))
-            .when(item.is_tool() || item.is_diff(), |row| row.role(gpui_kit::Role::ListItem))
+            .when(announceable, |row| row.role(gpui_kit::Role::ListItem))
+            .when(keyboard_focused && announceable, |row| row.aria_active_descendant())
             .test_support()
             .w_full()
             .flex()

@@ -54,6 +54,8 @@ pub(super) enum PaletteKind {
 pub(super) enum PaletteAction {
     NewSession,
     CloseSession,
+    CopyThreadTitle,
+    CloseOtherTabs,
     OpenInCli,
     OpenConversationSearch {
         session_id: String,
@@ -112,6 +114,11 @@ impl DesktopView {
             vec![
                 command(rust_i18n::t!("app.palette.command.new_session").to_string(), PaletteAction::NewSession),
                 command(rust_i18n::t!("app.palette.command.close_session").to_string(), PaletteAction::CloseSession),
+                // English literals match the thread-menu precedent: new
+                // user-visible strings stay untranslated until full
+                // native-quality translations ship for every locale.
+                command("Copy thread title".to_string(), PaletteAction::CopyThreadTitle),
+                command("Close other tabs".to_string(), PaletteAction::CloseOtherTabs),
                 command(rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(), PaletteAction::OpenInCli),
                 command(
                     rust_i18n::t!(i18n::PALETTE_COMMAND_SWITCH_WORKSPACE).to_string(),
@@ -570,6 +577,16 @@ impl DesktopView {
                 self.close_active_route(window, cx);
                 let _ = self.close_session_from_ui(window, cx);
             }
+            PaletteAction::CopyThreadTitle => {
+                if let Some(session_id) = self.selected_session_id.clone() {
+                    self.copy_thread_title(&session_id, cx);
+                }
+            }
+            PaletteAction::CloseOtherTabs => {
+                if let Some(session_id) = self.selected_session_id.clone() {
+                    self.close_other_tabs(&session_id, window, cx);
+                }
+            }
             PaletteAction::OpenInCli => self.open_cli_handoff(cx),
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.open_conversation_search(session_id, window, cx);
@@ -713,6 +730,13 @@ impl DesktopView {
             | PaletteAction::CompleteSlashCommand(_)
             | PaletteAction::InsertHistoryPrompt(_) => true,
             PaletteAction::CloseSession => self.selected_session_id.is_some() && self.new_thread_available(),
+            PaletteAction::CopyThreadTitle => self.selected_session_id.is_some(),
+            PaletteAction::CloseOtherTabs => {
+                self.selected_session_id
+                    .as_deref()
+                    .is_some_and(|id| self.open_tabs.iter().any(|tab| tab == id))
+                    && self.open_tabs.len() > 1
+            }
             PaletteAction::OpenInCli => self.selected_session_id.is_some(),
             PaletteAction::LoadSession(session_id) => self.load_session_available(session_id),
             PaletteAction::SelectWorkspaceReviewFile(_) => {
@@ -858,6 +882,8 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
         PaletteAction::OpenDeepLink(link) => link.path().unwrap_or_else(|| format!("{link:?}")).hash(&mut hasher),
         PaletteAction::NewSession
         | PaletteAction::CloseSession
+        | PaletteAction::CopyThreadTitle
+        | PaletteAction::CloseOtherTabs
         | PaletteAction::OpenInCli
         | PaletteAction::CopyLatestMessage
         | PaletteAction::ChooseModel

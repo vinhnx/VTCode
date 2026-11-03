@@ -134,6 +134,8 @@ fn action_path(action: &PaletteAction) -> Option<String> {
     match action {
         PaletteAction::NewSession => Some("action/new-session".to_string()),
         PaletteAction::CloseSession => Some("action/close-session".to_string()),
+        PaletteAction::CopyThreadTitle => Some("action/copy-thread-title".to_string()),
+        PaletteAction::CloseOtherTabs => Some("action/close-other-tabs".to_string()),
         PaletteAction::OpenInCli => Some("action/open-in-cli".to_string()),
         PaletteAction::CopyLatestMessage => Some("action/copy-latest".to_string()),
         PaletteAction::ChooseModel => Some("action/choose-model".to_string()),
@@ -309,6 +311,8 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
     let action = match verb.to_ascii_lowercase().as_str() {
         "new-session" => exact(rest, PaletteAction::NewSession)?,
         "close-session" => exact(rest, PaletteAction::CloseSession)?,
+        "copy-thread-title" => exact(rest, PaletteAction::CopyThreadTitle)?,
+        "close-other-tabs" => exact(rest, PaletteAction::CloseOtherTabs)?,
         "open-in-cli" => exact(rest, PaletteAction::OpenInCli)?,
         "copy-latest" => exact(rest, PaletteAction::CopyLatestMessage)?,
         "choose-model" => exact(rest, PaletteAction::ChooseModel)?,
@@ -726,6 +730,8 @@ mod tests {
             DeepLink::Command(CommandId::ZenMode),
             DeepLink::Action(PaletteAction::ToggleInspector),
             DeepLink::Action(PaletteAction::PreviewFile("src/main.rs".into())),
+            DeepLink::Action(PaletteAction::CopyThreadTitle),
+            DeepLink::Action(PaletteAction::CloseOtherTabs),
         ];
         for link in links {
             let path = link.path().expect("addressable links have paths");

@@ -336,6 +336,9 @@ impl DesktopView {
                 .on_action(
                     cx.listener(|view, _: &OpenSelectedSession, window, cx| view.activate_focused_session(window, cx)),
                 )
+                .on_action(cx.listener(|view, _: &DeleteHighlightedSession, window, cx| {
+                    view.delete_highlighted_session(window, cx)
+                }))
                 .role(gpui_kit::Role::List)
                 .aria_label(rust_i18n::t!("app.workspace.recent_threads").to_string())
                 .relative()
@@ -366,6 +369,7 @@ impl DesktopView {
                                             .id(format!("session-row-{session_id}"))
                                             .test_support()
                                             .role(gpui_kit::Role::ListItem)
+                                            .when(keyboard_focused, |row| row.aria_active_descendant())
                                             .aria_label(label.clone())
                                             .aria_position_in_set(index + 1)
                                             .aria_size_of_set(view.sessions.len())
@@ -418,6 +422,9 @@ impl DesktopView {
                                                     })
                                                     .ghost()
                                                     .toggled(selected)
+                                                    // Single-tab-stop list: arrows drive the shared
+                                                    // highlight, so rows stay out of Tab order.
+                                                    .tab_stop(false)
                                                     .desktop_disabled(!enabled)
                                                     .w_full()
                                                     .justify_start()

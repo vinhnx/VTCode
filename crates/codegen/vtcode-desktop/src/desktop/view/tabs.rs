@@ -6,6 +6,7 @@
 //! Tab-scoped menu items dispatch payload actions (the first in this crate)
 //! because popup menus cannot run view callbacks directly.
 
+use super::session_nav::step_highlight_order;
 use super::*;
 use gpui_kit::Action;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -152,6 +153,51 @@ impl DesktopView {
         session_display_title(session_id, title.as_deref())
     }
 
+    /// Move the keyboard highlight across open tabs (Left/Right with the
+    /// strip focused), stepping the shared thread highlight in first-open
+    /// order. Clamps at both ends; the strip never scrolls.
+    pub(super) fn move_tab_focus(&mut self, next: bool, cx: &mut Context<Self>) {
+        let target = {
+            let order: Vec<&str> = self.open_tabs.iter().map(String::as_str).collect();
+            step_highlight_order(&order, self.keyboard_focused_session.as_deref(), next)
+                .and_then(|position| order.get(position).map(|id| id.to_string()))
+        };
+        let Some(session_id) = target else {
+            return;
+        };
+        self.keyboard_focused_session = Some(session_id);
+        cx.notify();
+    }
+
+    /// Jump the tab highlight to the first/last open tab (Home/End).
+    pub(super) fn move_tab_focus_edge(&mut self, first: bool, cx: &mut Context<Self>) {
+        let target = (if first {
+            self.open_tabs.first()
+        } else {
+            self.open_tabs.last()
+        })
+        .cloned();
+        let Some(session_id) = target else {
+            return;
+        };
+        self.keyboard_focused_session = Some(session_id);
+        cx.notify();
+    }
+
+    /// Load the highlighted tab (Enter). The strip is a subset view: a
+    /// highlight left on an untabbed thread is position memory for the
+    /// thread lists, not a visible tab action, so Enter only fires when
+    /// the highlight names an open tab.
+    pub(super) fn activate_focused_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let visible = self
+            .keyboard_focused_session
+            .as_deref()
+            .is_some_and(|id| self.open_tabs.iter().any(|tab| tab == id));
+        if visible {
+            self.activate_focused_session(window, cx);
+        }
+    }
+
     /// Horizontal quick-switch strip: one button per open tab with a close
     /// affordance, a trailing new-thread button, and a right-click menu per
     /// tab. Rendered only while more than one tab is open; zero/single-tab
@@ -161,6 +207,13 @@ impl DesktopView {
         let mut strip = div()
             .id("thread-tabs")
             .test_support()
+            .track_focus(&self.tab_strip_focus)
+            .key_context(key_context::THREAD_TABS)
+            .on_action(cx.listener(|view, _: &PreviousThreadTab, _, cx| view.move_tab_focus(false, cx)))
+            .on_action(cx.listener(|view, _: &NextThreadTab, _, cx| view.move_tab_focus(true, cx)))
+            .on_action(cx.listener(|view, _: &FirstThreadTab, _, cx| view.move_tab_focus_edge(true, cx)))
+            .on_action(cx.listener(|view, _: &LastThreadTab, _, cx| view.move_tab_focus_edge(false, cx)))
+            .on_action(cx.listener(|view, _: &OpenSelectedThreadTab, window, cx| view.activate_focused_tab(window, cx)))
             .flex()
             .items_center()
             .gap_1()
@@ -171,22 +224,46 @@ impl DesktopView {
             let title = self.tab_title(&id);
             let selected = self.selected_session_id.as_deref() == Some(id.as_str());
             let running = self.is_session_running(&id);
+            let keyboard_focused = self.keyboard_focused_session.as_deref() == Some(id.as_str());
             let select_id = id.clone();
             let close_id = id.clone();
             let menu_id = id.clone();
             strip = strip.child(
                 div()
                     .id(format!("thread-tab-row-{id}"))
+                    .test_support()
+                    .role(gpui_kit::Role::ListItem)
+                    .when(keyboard_focused, |row| row.aria_active_descendant())
+                    .relative()
                     .flex()
                     .items_center()
                     .flex_shrink_1()
                     .min_w_0()
                     .max_w(px(220.))
+                    // Absolutely positioned so the highlight never reflows the
+                    // tab; mirrors the thread-list focus rails.
+                    .when(keyboard_focused, |row| {
+                        row.child(
+                            div()
+                                .id(format!("thread-tab-focus-rail-{id}"))
+                                .test_support()
+                                .absolute()
+                                .left_0()
+                                .top_0()
+                                .bottom_0()
+                                .w(px(2.))
+                                .bg(colors.accent),
+                        )
+                    })
                     .child(
                         desktop_button(format!("thread-tab-{id}"))
                             .icon(IconName::MessageSquare)
                             .ghost()
                             .toggled(selected)
+                            // Single-tab-stop strip: Left/Right drive the shared
+                            // highlight, so tabs stay out of Tab order (their
+                            // close buttons remain stops).
+                            .tab_stop(false)
                             .with_size(gpui_kit::component::Size::Medium)
                             .flex_1()
                             .min_w_0()
@@ -209,6 +286,9 @@ impl DesktopView {
                                 button.child(running_indicator(format!("thread-tab-running-{id}"), &colors))
                             })
                             .on_click(cx.listener(move |this, _, window, cx| {
+                                // Clicking anchors the keyboard highlight as
+                                // position memory, like thread-list rows.
+                                this.keyboard_focused_session = Some(select_id.clone());
                                 let _ = this.load_session_from_ui(select_id.clone(), window, cx);
                             })),
                     )

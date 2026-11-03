@@ -167,13 +167,25 @@ impl DesktopView {
     }
 
     /// Focus the entry point of a route: the panel focus for panels, the
-    /// composer for the workspace.
+    /// composer for the workspace. The browser lands in its session list so
+    /// arrows work immediately; header buttons stay one Shift+Tab away.
     pub(super) fn focus_route(&mut self, route: Route, window: &mut Window, cx: &mut Context<Self>) {
         match route {
             Route::Settings => self.settings_navigation_focus.focus(window, cx),
-            Route::Browser => self.browser_focus.focus(window, cx),
+            Route::Browser => self.focus_browser_list(window, cx),
             Route::Review => self.review_focus.focus(window, cx),
             Route::Workspace => self.focus_composer(window, cx),
+        }
+    }
+
+    /// Focus the browser's actionable list when it renders. The empty
+    /// browser shows no list, so focus keeps the panel instead of a handle
+    /// with no element.
+    fn focus_browser_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.sessions.is_empty() {
+            self.browser_focus.focus(window, cx);
+        } else {
+            self.browser_list_focus.focus(window, cx);
         }
     }
 

@@ -369,6 +369,16 @@ actions!(
         SessionFirst,
         SessionLast,
         OpenSelectedSession,
+        NextThreadTab,
+        PreviousThreadTab,
+        FirstThreadTab,
+        LastThreadTab,
+        OpenSelectedThreadTab,
+        ActivityPrevious,
+        ActivityNext,
+        ActivityFirst,
+        ActivityLast,
+        DeleteHighlightedSession,
         DismissOverlay,
         OpenSettings,
         CloseWindow,
@@ -428,6 +438,10 @@ struct DesktopView {
     /// `selected_session_id`. Tabs are window-local shortcuts — closing one
     /// never touches server-side session state.
     open_tabs: Vec<String>,
+    /// Tracked focus for the tab strip. Left/Right move the shared
+    /// [`Self::keyboard_focused_session`] highlight in first-open order
+    /// while this handle is focused.
+    tab_strip_focus: FocusHandle,
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
     message_scroller: Entity<MessageScrollerState>,
@@ -564,6 +578,10 @@ struct DesktopView {
     workspace_review: Option<WorkspaceReviewState>,
     review_focus: FocusHandle,
     browser_focus: FocusHandle,
+    /// Tracked focus for the thread-browser session list. Arrows move the
+    /// shared [`Self::keyboard_focused_session`] highlight in browser-row
+    /// order while this handle is focused; `browser_focus` keeps the panel.
+    browser_list_focus: FocusHandle,
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,
@@ -607,6 +625,14 @@ struct DesktopView {
     /// Head row id at the last Activity render; a change means new entries
     /// arrived at the top while the reader may have scrolled away.
     activity_seen_head: Option<String>,
+    /// Tracked focus for the Activity list. Arrows move
+    /// [`Self::keyboard_focused_activity`] in visible-row order; row action
+    /// buttons stay tab stops (transcript pattern — no Enter binding, so no
+    /// focus/button ambiguity).
+    activity_focus: FocusHandle,
+    /// Keyboard highlight over Activity rows (row id). Navigation and
+    /// screen-reader position only; actions stay on the row buttons.
+    keyboard_focused_activity: Option<String>,
     change_list_scroll: VirtualListScrollHandle,
     browser_scroll: VirtualListScrollHandle,
     session_row_sizes: FixedRowSizeCache,
