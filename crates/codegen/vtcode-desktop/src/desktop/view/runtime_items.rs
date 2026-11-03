@@ -230,11 +230,22 @@ impl DesktopView {
             .change_viewer
             .as_ref()
             .map(|viewer| viewer.read(cx).mode())
-            .unwrap_or(DiffMode::Unified);
+            .unwrap_or_else(|| self.preferences.diff_mode());
         self.selected_change = Some(path);
         self.change_viewer_dirty = false;
         self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx).with_mode(mode)));
         self.open_inspector_tab(InspectorTab::Changes, cx);
+    }
+
+    /// Inspector diff layout toggle: updates the live viewer and records the
+    /// shared viewer default so relaunches keep the user's choice.
+    pub(super) fn set_inspector_diff_mode(&mut self, mode: DiffMode, cx: &mut Context<Self>) {
+        if let Some(viewer) = self.change_viewer.as_ref() {
+            viewer.update(cx, |viewer, cx| viewer.set_mode(mode, cx));
+        }
+        self.preferences.set_diff_mode(mode);
+        self.preferences.save();
+        cx.notify();
     }
 
     pub(super) fn select_activity_output(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {

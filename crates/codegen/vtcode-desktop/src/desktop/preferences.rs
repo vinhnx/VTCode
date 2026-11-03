@@ -12,6 +12,7 @@ use objc2_foundation::NSDictionary;
 
 use gpui_kit::SharedString;
 use gpui_kit::component::IndexPath;
+use gpui_kit::component::diff::DiffMode;
 use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{SearchableVec, SelectState};
 use gpui_kit::component::theme::ThemeMode;
@@ -472,6 +473,8 @@ pub(super) struct Preferences {
     pub ui_language: Option<String>,
     /// Default file open destination id. Unknown values fall back to the viewer.
     pub file_open_destination: Option<String>,
+    /// Diff viewer layout id (`unified`/`split`). Unknown values fall back to Unified.
+    pub diff_mode: Option<String>,
     /// The optional diagnostics footer is hidden on a fresh installation.
     pub show_status_bar: bool,
     pub reduced_motion: ReducedMotionPreference,
@@ -550,6 +553,25 @@ impl Preferences {
 
     pub(super) fn set_file_open_destination(&mut self, destination: FileOpenDestination) {
         self.file_open_destination = Some(destination.id().to_owned());
+    }
+
+    pub(super) fn diff_mode(&self) -> DiffMode {
+        if self
+            .diff_mode
+            .as_deref()
+            .is_some_and(|id| id.trim().eq_ignore_ascii_case("split"))
+        {
+            DiffMode::Split
+        } else {
+            DiffMode::Unified
+        }
+    }
+
+    pub(super) fn set_diff_mode(&mut self, mode: DiffMode) {
+        // `DiffMode` is non-exhaustive: compare instead of matching so a
+        // future kit variant degrades to the default layout.
+        let id = if mode == DiffMode::Split { "split" } else { "unified" };
+        self.diff_mode = Some(id.to_owned());
     }
 
     pub(super) fn code_font_size(&self) -> u8 {
@@ -727,9 +749,12 @@ impl Preferences {
             .unwrap_or_default()
     }
 
-    /// Best-effort saves for existing comfort controls.
+    /// Best-effort saves for existing comfort controls. Failures are loud on
+    /// stderr so a silently unpersisted setting stays diagnosable.
     pub(super) fn save(&self) {
-        drop(self.try_save());
+        if let Err(error) = self.try_save() {
+            vtcode_commons::diagnostics::stderr(format_args!("failed to save desktop preferences: {error}"));
+        }
     }
 
     pub(super) fn try_save(&self) -> Result<(), String> {

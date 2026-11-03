@@ -583,7 +583,6 @@ impl DesktopView {
                     ("review-unified", rust_i18n::t!(i18n::WORKSPACE_REVIEW_UNIFIED).to_string(), DiffMode::Unified),
                     ("review-split", rust_i18n::t!(i18n::WORKSPACE_REVIEW_SPLIT).to_string(), DiffMode::Split),
                 ] {
-                    let state = viewer.clone();
                     let selected_suffix = if mode == target {
                         rust_i18n::t!("app.inspector.selected_suffix").to_string()
                     } else {
@@ -602,7 +601,7 @@ impl DesktopView {
                             .ghost()
                             .small()
                             .when(mode == target, |button| button.bg(colors.secondary))
-                            .on_click(move |_, _, cx| state.update(cx, |state, cx| state.set_mode(target, cx))),
+                            .on_click(cx.listener(move |view, _, _, cx| view.set_inspector_diff_mode(target, cx))),
                     );
                 }
                 header = header

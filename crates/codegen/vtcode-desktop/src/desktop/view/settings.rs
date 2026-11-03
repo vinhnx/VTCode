@@ -454,10 +454,8 @@ impl DesktopView {
         destination: preferences::FileOpenDestination,
         cx: &mut Context<Self>,
     ) {
-        if self.preferences.file_open_destination() == destination {
-            return;
-        }
-
+        // An explicit selection always persists, even when it matches the
+        // effective default, so the saved file records the user's choice.
         self.preferences.set_file_open_destination(destination);
         self.preferences.save();
         cx.notify();

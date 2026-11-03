@@ -516,3 +516,39 @@ fn ui_font_size_follows_the_system_scale_only_when_unset() {
     assert_eq!(scaled_ui_font_size(Some(18), 1.5), 18);
     assert_eq!(scaled_ui_font_size(Some(12), 1.0), MIN_UI_FONT_SIZE);
 }
+
+#[test]
+fn diff_mode_round_trips_and_invalid_values_fall_back_to_unified() {
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.diff_mode(), DiffMode::Unified);
+
+    let mut preferences = legacy;
+    for mode in [DiffMode::Split, DiffMode::Unified] {
+        preferences.set_diff_mode(mode);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.diff_mode(), mode);
+        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    }
+
+    for saved in ["", "  ", "sideways"] {
+        let parsed: Preferences = serde_json::from_str(&format!(r#"{{"diffMode":"{saved}"}}"#)).unwrap();
+        assert_eq!(parsed.diff_mode(), DiffMode::Unified, "{saved:?}");
+    }
+    let cased: Preferences = serde_json::from_str(r#"{"diffMode":"  SPLIT "}"#).unwrap();
+    assert_eq!(cased.diff_mode(), DiffMode::Split);
+}
+
+#[test]
+fn try_save_reports_an_unwritable_preferences_path() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let dir = tempfile::tempdir().expect("isolated unwritable probe");
+    let blocked = dir.path().join("blocked");
+    std::fs::create_dir(&blocked).expect("seed blocked directory");
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o555)).expect("remove write permission");
+    set_test_preferences_path(blocked.join("preferences.json"));
+    let result = Preferences::default().try_save();
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o755)).expect("restore write permission");
+    assert!(result.is_err(), "an unwritable path must fail loudly instead of dropping the save");
+}

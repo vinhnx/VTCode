@@ -73,7 +73,7 @@ impl DesktopView {
             selected_file: None,
             include_untracked: false,
             error: None,
-            mode: DiffMode::Unified,
+            mode: self.preferences.diff_mode(),
         });
         self.show_review(window, cx);
     }
@@ -239,6 +239,9 @@ impl DesktopView {
                 viewer.update(cx, |viewer, cx| viewer.set_mode(mode, cx));
             }
         }
+        self.preferences.set_diff_mode(mode);
+        self.preferences.save();
+        cx.notify();
     }
 
     pub(super) fn render_workspace_review_content(&self, cx: &mut Context<Self>) -> AnyElement {

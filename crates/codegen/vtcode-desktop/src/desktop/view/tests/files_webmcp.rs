@@ -411,7 +411,7 @@ fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestA
     })
     .unwrap();
 
-    // A repeat confirmation is a no-op that keeps the saved choice.
+    // A repeat confirmation re-saves the same choice.
     cx.update_window(window, |_, _, cx| {
         let select = view.read(cx).file_destination_select.clone();
         select.update(cx, |_, cx| cx.emit(SelectEvent::Confirm(Some(FileOpenDestination::Xcode))));
