@@ -539,7 +539,8 @@ impl DesktopView {
     /// Model picker button with the current effort and speed, shared by the
     /// normal composer and the zen option cluster. Call sites add their own
     /// width and fade: normal mode animates the button itself, while zen
-    /// fades the whole cluster at once.
+    /// fades the whole cluster at once. Zen renders the speed as quiet text
+    /// instead of the filled badge; effort is quiet in both modes.
     fn render_model_button(&self, cx: &Context<Self>) -> Button {
         let colors = cx.theme().colors;
         let current_model = self
@@ -563,6 +564,8 @@ impl DesktopView {
             .chain(selected_speed.as_deref())
             .collect::<Vec<_>>()
             .join(display::MIDDOT);
+        // One muted tone for both quiet suffixes: effort always, speed in zen.
+        let muted = themes::muted_text(&colors);
         let model_label = div()
             .min_w_0()
             .flex()
@@ -570,18 +573,29 @@ impl DesktopView {
             .gap_1()
             .child(div().min_w_0().max_w(px(176.)).truncate().child(current_model))
             .when_some(selected_effort, |row, effort| {
-                row.child(
-                    div()
-                        .id("composer-model-effort")
-                        .test_support()
-                        .role(gpui_kit::Role::Label)
-                        .aria_label(rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort).to_string())
-                        .flex_shrink_0()
-                        .text_color(themes::muted_text(&colors))
-                        .child(format!("· {effort}")),
-                )
+                row.child(composer_controls::quiet_option_suffix(
+                    "composer-model-effort",
+                    rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort).to_string(),
+                    &effort,
+                    muted,
+                ))
             })
-            .when_some(selected_speed, |row, speed| row.child(composer_controls::processing_tier_badge(&speed, cx)));
+            .when_some(selected_speed, |row, speed| {
+                if self.zen_mode {
+                    // Zen reads the tier as quiet text: the filled badge
+                    // would compete with the send action on a
+                    // distraction-free surface. Identity, role, and
+                    // accessible label stay put; only the paint changes.
+                    row.child(composer_controls::quiet_option_suffix(
+                        "composer-model-speed",
+                        rust_i18n::t!("app.composer.speed_aria", label = speed).to_string(),
+                        &speed,
+                        muted,
+                    ))
+                } else {
+                    row.child(composer_controls::processing_tier_badge(&speed, cx))
+                }
+            });
         desktop_button("pick-model")
             .accessibility_label(model_summary)
             .child(model_label)

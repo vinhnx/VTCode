@@ -302,6 +302,22 @@ pub(super) fn permission_indicator(
     }
 }
 
+/// Quiet `· value` suffix for the model button: the reasoning effort always,
+/// and the processing tier in Zen mode (where the filled badge would compete
+/// with the send action). Same identity/role contract as the badge; muted
+/// text instead of a filled pill.
+pub(super) fn quiet_option_suffix(id: &'static str, accessible_label: String, value: &str, muted: Hsla) -> AnyElement {
+    div()
+        .id(id)
+        .test_support()
+        .role(gpui_kit::Role::Label)
+        .aria_label(accessible_label)
+        .flex_shrink_0()
+        .text_color(muted)
+        .child(format!("· {value}"))
+        .into_any_element()
+}
+
 pub(super) fn processing_tier_badge(label: &str, cx: &App) -> AnyElement {
     let colors = cx.theme().colors;
     let ultrafast = label == "Ultrafast";
