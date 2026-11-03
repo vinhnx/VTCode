@@ -20,6 +20,7 @@ use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -33,6 +34,12 @@ use transport::duckduckgo_search;
 
 const MAX_QUERY_CHARS: usize = 500;
 const MAX_RESULTS_CAP: usize = 20;
+
+/// Shared fallback hint for GitHub-flavored queries. The `gh` CLI queries
+/// `api.github.com` instead of the DuckDuckGo HTML endpoint, so it stays
+/// usable while web_search is cooling down, capped, blocked, or empty.
+const GITHUB_GH_FALLBACK: &str =
+    "For GitHub queries, use `gh search`/`gh api` via exec_command instead (subject to exec policy).";
 
 pub(crate) const WEB_SEARCH_DESCRIPTION: &str = "Searches the web with keyless DuckDuckGo HTML search and returns ranked results (title, url, snippet). Accepts { query: string (up to 500 characters), max_results?: number }. Results are cached briefly to reduce rate limiting; cooldown and session caps bound requests. Use web_fetch on a promising result URL to read full content, subject to separate approval. Returns { query, provider, count, cached, results: [{ title, url, snippet }] } or a structured error with error_type, retryable, and next_action.";
 
@@ -243,10 +250,10 @@ impl WebSearchTool {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct SearchErrorClassification {
     error_type: &'static str,
-    next_action: &'static str,
+    next_action: Cow<'static, str>,
     retryable: bool,
 }
 
@@ -259,34 +266,44 @@ fn classify_search_error(message: &str) -> SearchErrorClassification {
     if matches!(status, Some(202 | 403 | 429)) || lower.contains("anti-bot") || lower.contains("challenge") {
         return SearchErrorClassification {
             error_type: "antiban_blocked",
-            next_action: "DuckDuckGo declined this request (likely an anti-bot challenge for this network). Do not retry immediately from this network; pick a result URL from this session's earlier searches and use web_fetch on it instead, or ask the user to confirm a different search provider.",
+            next_action: Cow::Owned(format!(
+                "DuckDuckGo declined this request (likely an anti-bot challenge for this network). Do not retry immediately from this network; pick a result URL from this session's earlier searches and use web_fetch on it instead, or ask the user to confirm a different search provider. {GITHUB_GH_FALLBACK}"
+            )),
             retryable: false,
         };
     }
     if lower.contains("response exceeds") || lower.contains("body exceeded") {
         return SearchErrorClassification {
             error_type: "response_too_large",
-            next_action: "DuckDuckGo returned an oversized response. Narrow the query before explicitly retrying.",
+            next_action: Cow::Borrowed(
+                "DuckDuckGo returned an oversized response. Narrow the query before explicitly retrying.",
+            ),
             retryable: false,
         };
     }
     if status.is_some_and(|status| (500..=599).contains(&status)) {
         return SearchErrorClassification {
             error_type: "upstream_error",
-            next_action: "The search service is currently unavailable. Retry once after a short delay, or use web_fetch on a known URL as a fallback.",
+            next_action: Cow::Borrowed(
+                "The search service is currently unavailable. Retry once after a short delay, or use web_fetch on a known URL as a fallback.",
+            ),
             retryable: true,
         };
     }
     if lower.contains("timeout") || lower.contains("timed out") {
         return SearchErrorClassification {
             error_type: "network_error",
-            next_action: "DuckDuckGo timed out. Retry once after a short delay, or use web_fetch on a known URL as a fallback.",
+            next_action: Cow::Borrowed(
+                "DuckDuckGo timed out. Retry once after a short delay, or use web_fetch on a known URL as a fallback.",
+            ),
             retryable: true,
         };
     }
     SearchErrorClassification {
         error_type: "network_error",
-        next_action: "Retry once after a short delay, or use web_fetch directly if you already know a relevant URL.",
+        next_action: Cow::Borrowed(
+            "Retry once after a short delay, or use web_fetch directly if you already know a relevant URL.",
+        ),
         retryable: true,
     }
 }
@@ -305,9 +322,9 @@ fn results_response(query: &str, provider: &str, results: Vec<SearchResult>) -> 
     });
 
     if count == 0 {
-        payload["warning"] = json!(
-            "No results were returned. DuckDuckGo may have rate-limited the request or matched nothing. Try a different query, or wait a few seconds and try again."
-        );
+        payload["warning"] = json!(format!(
+            "No results were returned. DuckDuckGo may have rate-limited the request or matched nothing. Try a different query, or wait a few seconds and try again. {GITHUB_GH_FALLBACK}"
+        ));
     }
 
     payload
@@ -342,7 +359,7 @@ fn cooldown_response(provider: &str, query: &str, wait: Duration) -> Value {
         "error_type": "cooldown",
         "retryable": true,
         "retry_after_ms": retry_after_ms,
-        "next_action": format!("Wait at least {retry_after_ms} ms before the next web search to avoid being rate-limited.")
+        "next_action": format!("Wait at least {retry_after_ms} ms before the next web search to avoid being rate-limited. {GITHUB_GH_FALLBACK}")
     })
 }
 
@@ -355,7 +372,7 @@ fn session_cap_reached_response(provider: &str, query: &str, cap: u32) -> Value 
         "retryable": false,
         "session_max_requests": cap,
         "request_budget_remaining": 0,
-        "next_action": format!("This session has used its {cap} web searches. Use web_fetch on a known URL or restart the session to search again.")
+        "next_action": format!("This session has used its {cap} web searches. Use web_fetch on a known URL or restart the session to search again. {GITHUB_GH_FALLBACK}")
     })
 }
 

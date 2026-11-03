@@ -57,6 +57,10 @@ or ask the user whether to configure another backend in a future provider extens
 failures are marked retryable for at most one explicit retry after the supplied `next_action`; the tool does not
 automatically retry DuckDuckGo requests.
 
+For GitHub-flavored queries, `gh search`/`gh api` via `exec_command` (subject to exec policy) is the preferred
+fallback whenever web_search is throttled, capped, blocked, or returns no results: it queries `api.github.com`
+rather than the DuckDuckGo HTML endpoint, so it does not consume the web_search session budget.
+
 ## Configuration
 
 Configure via `vtcode.toml` under `[tools.web_search]`:

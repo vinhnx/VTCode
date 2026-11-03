@@ -87,6 +87,13 @@ fn session_cap_short_circuits_with_structured_error() {
     assert_eq!(payload["retryable"], false);
     assert_eq!(payload["session_max_requests"], 2);
     assert_eq!(payload["request_budget_remaining"], 0);
+    // Non-retryable for web_search itself, but GitHub queries still have the
+    // `gh` fallback, which does not consume the web_search session budget.
+    assert!(
+        payload["next_action"].as_str().unwrap_or("").contains("gh search"),
+        "cap next_action must name the gh fallback: {}",
+        payload["next_action"]
+    );
 }
 
 #[test]
@@ -132,6 +139,12 @@ fn cooldown_short_circuits_with_retry_after() {
     assert_eq!(payload["error_type"], "cooldown");
     assert_eq!(payload["retryable"], true);
     assert!(payload["retry_after_ms"].as_u64().unwrap() > 0);
+    // The wait applies to web_search; GitHub queries may proceed via `gh`.
+    assert!(
+        payload["next_action"].as_str().unwrap_or("").contains("gh search"),
+        "cooldown next_action must name the gh fallback: {}",
+        payload["next_action"]
+    );
 }
 
 #[test]
@@ -156,8 +169,9 @@ fn result_payloads_report_the_canonical_backend() {
     assert_eq!(empty["results"], json!([]));
     assert_eq!(
         empty["warning"],
-        "No results were returned. DuckDuckGo may have rate-limited the request or matched nothing. Try a different query, or wait a few seconds and try again."
+        "No results were returned. DuckDuckGo may have rate-limited the request or matched nothing. Try a different query, or wait a few seconds and try again. For GitHub queries, use `gh search`/`gh api` via exec_command instead (subject to exec policy)."
     );
+    assert!(empty["warning"].as_str().unwrap_or("").contains("gh search"));
 }
 
 #[test]
@@ -201,6 +215,7 @@ fn classify_search_error_flags_antiban_statuses() {
         assert_eq!(classification.error_type, "antiban_blocked");
         assert!(!classification.retryable);
         assert!(classification.next_action.contains("Do not retry immediately"));
+        assert!(classification.next_action.contains("gh search"));
     }
 }
 
