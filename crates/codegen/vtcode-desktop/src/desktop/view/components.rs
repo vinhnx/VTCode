@@ -334,8 +334,13 @@ pub(super) fn nav_group_header(
 /// one spine. Shared by the settings navigation and the configuration group
 /// rail (Kit `Button` centers its built-in icon/label pair, so rails use
 /// this custom child instead). The icon is decorative; the owning button
-/// carries the accessible name.
-pub(super) fn nav_entry_content(label_id: impl Into<gpui_kit::ElementId>, icon: IconName, label: String) -> AnyElement {
+/// carries the accessible name. The leading mark is any `Icon`, so a Lucide
+/// `IconName` and brand SVG bytes share one size/color path and align.
+pub(super) fn nav_entry_content(
+    label_id: impl Into<gpui_kit::ElementId>,
+    icon: impl Into<Icon>,
+    label: String,
+) -> AnyElement {
     div()
         .w_full()
         .min_w_0()
@@ -345,6 +350,17 @@ pub(super) fn nav_entry_content(label_id: impl Into<gpui_kit::ElementId>, icon: 
         .child(Icon::new(icon).small())
         .child(div().id(label_id).test_support().flex_1().min_w_0().truncate().child(label))
         .into_any_element()
+}
+
+/// Brand V mark shared by the welcome empty states and the settings
+/// navigation. GPUI paints SVGs as tinted monochrome sprites, so the mark
+/// follows the surrounding text color in every theme.
+const VTCODE_NAV_MARK_SVG: &[u8] = include_bytes!("../../../../../../resources/icons/vtcode-mark.svg");
+
+/// Settings-nav leading mark for the VT Code entry: the brand V at the same
+/// small size and inherited color as the Lucide sibling rows.
+pub(super) fn vtcode_nav_mark() -> Icon {
+    Icon::default().data(VTCODE_NAV_MARK_SVG)
 }
 
 /// Shared inspector tab container: every inspector tab (Changes, Files,
@@ -487,7 +503,7 @@ pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl
 
 pub(super) fn welcome_brand_mark(size: f32, color: gpui_kit::Hsla) -> impl IntoElement {
     gpui_kit::svg()
-        .data(include_bytes!("../../../../../../resources/icons/vtcode-mark.svg"))
+        .data(VTCODE_NAV_MARK_SVG)
         .size(px(size))
         .text_color(color)
         .id("welcome-brand-mark")
@@ -711,6 +727,25 @@ impl DesktopButtonExt for Button {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Transparent brand mark: exactly the stroke-only V path, no tile rect.
+    fn is_transparent_mark(svg: &str) -> bool {
+        svg.starts_with("<svg")
+            && svg.matches("<path").count() == 1
+            && svg.contains("fill=\"none\"")
+            && !svg.contains("fill=\"#")
+    }
+
+    #[test]
+    fn vtcode_nav_mark_is_the_stroke_only_v_on_transparency() {
+        let mark = std::str::from_utf8(VTCODE_NAV_MARK_SVG).expect("nav mark must be UTF-8 SVG");
+        assert!(is_transparent_mark(mark), "nav mark must be the stroke-only V on transparency");
+        // The full tile carries an opaque background rect and must never
+        // stand in for the nav mark: this arm proves the check discriminates.
+        let tile = std::str::from_utf8(include_bytes!("../../../../../../resources/icons/vtcode.svg"))
+            .expect("tile must be UTF-8 SVG");
+        assert!(!is_transparent_mark(tile), "opaque tile must fail the nav-mark check");
+    }
 
     #[gpui_kit::test]
     fn card_border_style_pins_a_1px_theme_border(cx: &mut gpui_kit::TestAppContext) {

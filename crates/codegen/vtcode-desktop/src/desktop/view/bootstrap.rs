@@ -174,7 +174,7 @@ pub(super) fn apply_vim_navigation(cx: &mut App, enabled: bool) {
         cx.bind_keys(
             VIM_CHORDS
                 .iter()
-                .map(|(chord, context)| KeyBinding::new(*chord, NoAction {}, Some(*context))),
+                .map(|(chord, context)| KeyBinding::new(chord, NoAction {}, Some(*context))),
         );
     }
 }

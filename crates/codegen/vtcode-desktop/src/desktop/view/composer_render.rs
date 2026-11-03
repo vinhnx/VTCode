@@ -401,38 +401,43 @@ impl DesktopView {
         // Normal mode folds workspace, connection, and mode controls into the
         // sidebar, Settings, and the button row; only the zen no-workspace
         // state keeps this row, where the picker is the only visible path to
-        // choose one (the zen empty state has no workspace link).
+        // choose one (the zen empty state has no workspace link). The row
+        // consumes the composer frame's own content inset (the zen group pad
+        // plus the size input token shared with the draft padding and the
+        // button-row addon), so its buttons start on the input spine.
         if self.zen_mode && self.workspace.is_none() {
             panel = panel.child(
-                div()
-                    .id("composer-context")
-                    .test_support()
-                    .w_full()
-                    .min_w_0()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_2()
-                    .px_1()
-                    .py_1()
-                    .with_animation("composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
-                        el.opacity(delta)
-                    })
-                    .child(self.render_workspace_picker(cx))
-                    .child(
-                        desktop_button("composer-cli-webmcp")
-                            .icon(IconName::Terminal)
-                            .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
-                                rust_i18n::t!("app.composer.webmcp_connected").to_string()
-                            } else {
-                                rust_i18n::t!("app.composer.connect_webmcp").to_string()
-                            })
-                            .accessibility_label(rust_i18n::t!("app.composer.webmcp_accessibility").to_string())
-                            .tooltip(rust_i18n::t!("app.composer.webmcp_tooltip").to_string())
-                            .ghost()
-                            .small()
-                            .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
-                    ),
+                div().w_full().pl_3().child(
+                    div()
+                        .id("composer-context")
+                        .test_support()
+                        .w_full()
+                        .min_w_0()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .pl(composer_size.input_px())
+                        .py_1()
+                        .with_animation("composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
+                            el.opacity(delta)
+                        })
+                        .child(self.render_workspace_picker(cx))
+                        .child(
+                            desktop_button("composer-cli-webmcp")
+                                .icon(IconName::Terminal)
+                                .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
+                                    rust_i18n::t!("app.composer.webmcp_connected").to_string()
+                                } else {
+                                    rust_i18n::t!("app.composer.connect_webmcp").to_string()
+                                })
+                                .accessibility_label(rust_i18n::t!("app.composer.webmcp_accessibility").to_string())
+                                .tooltip(rust_i18n::t!("app.composer.webmcp_tooltip").to_string())
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
+                        ),
+                ),
             );
         }
         div().w_full().flex().justify_center().child(
