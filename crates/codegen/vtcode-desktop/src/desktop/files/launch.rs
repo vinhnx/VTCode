@@ -56,6 +56,21 @@ pub(crate) fn open_in_editor(root: &Path, rel_path: &str, editor: ExternalEditor
     run_open_command(editor_command(editor, &path))
 }
 
+/// Reveal one workspace entry (file or directory) in Finder: `open -R`
+/// selects the item in its parent folder. Unlike [`open_in_editor`],
+/// directories are accepted — revealing answers "where is this item"
+/// for both kinds. Confined to the workspace like every other launch;
+/// symlink escapes and missing entries fail closed. Performs filesystem
+/// and process work and must run in the background.
+pub(crate) fn reveal_in_finder(root: &Path, rel_path: &str) -> Result<(), String> {
+    let path = resolve_attachment_path(root, Path::new(rel_path))
+        .map_err(|_error| rust_i18n::t!("app.files.missing").to_string())?;
+    if !fs::metadata(&path).is_ok() {
+        return Err(rust_i18n::t!("app.files.missing").to_string());
+    }
+    run_open_command(editor_command(ExternalEditor::Finder, &path))
+}
+
 /// Open Terminal at a workspace root (no file anchor needed, e.g. for the
 /// CLI handoff card). Same argv-boundary discipline as [`open_in_editor`]:
 /// a fixed argv, never a shell command.
@@ -177,5 +192,19 @@ mod tests {
         assert!(launch_path(&root, "missing.rs", ExternalEditor::Ghostty).is_err());
         assert!(launch_path(&root, "../escape.rs", ExternalEditor::Terminal).is_err());
         assert!(launch_path(&root, "nested", ExternalEditor::VsCode).is_err(), "directories are rejected");
+    }
+
+    #[test]
+    fn reveal_rejects_missing_and_escaping_paths_without_launching() {
+        use std::os::unix::fs::symlink;
+        // The success path spawns Finder, so only the fail-closed guards are
+        // pinned here; the launch itself is covered by view interception tests.
+        let workspace = temp_workspace();
+        let outside = temp_workspace();
+        fs::write(outside.path().join("outside.rs"), "private").unwrap();
+        symlink(outside.path(), workspace.path().join("escape")).unwrap();
+        assert!(reveal_in_finder(workspace.path(), "missing.rs").is_err());
+        assert!(reveal_in_finder(workspace.path(), "../escape.rs").is_err());
+        assert!(reveal_in_finder(workspace.path(), "escape/outside.rs").is_err());
     }
 }

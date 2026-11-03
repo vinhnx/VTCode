@@ -224,6 +224,12 @@ impl DesktopView {
                     .on_action(
                         cx.listener(|this, _: &OpenSelectedFile, window, cx| this.open_selected_file(window, cx)),
                     )
+                    .on_action(
+                        cx.listener(|this, _: &RenameSelectedFile, window, cx| this.rename_selected_file(window, cx)),
+                    )
+                    .on_action(
+                        cx.listener(|this, _: &DeleteSelectedFile, window, cx| this.delete_selected_file(window, cx)),
+                    )
                     .child(
                         Tree::new(&self.file_tree, move |_index, entry, selected, _window, app| {
                             let rel_path = entry.item().id.to_string();
@@ -289,18 +295,8 @@ impl DesktopView {
                             let directory_paths = menu_directory_paths.clone();
                             move |_, entry, menu, _, _| {
                                 let rel_path = entry.item().id.to_string();
-                                let menu = menu.menu(
-                                    "Copy path",
-                                    Box::new(files_panel::CopyFilePath { path: rel_path.clone().into() }),
-                                );
-                                if directory_paths.contains(&rel_path) {
-                                    menu
-                                } else {
-                                    menu.menu(
-                                        "Open preview",
-                                        Box::new(files_panel::OpenFilePath { path: rel_path.clone().into() }),
-                                    )
-                                }
+                                let is_dir = directory_paths.contains(&rel_path);
+                                files_panel::file_row_menu(menu, &rel_path, is_dir)
                             }
                         }),
                     ),

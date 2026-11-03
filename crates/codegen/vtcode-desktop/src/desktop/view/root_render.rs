@@ -317,6 +317,15 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, action: &files_panel::OpenFilePath, window, cx| {
                 view.open_file_preview(action.path.to_string(), window, cx)
             }))
+            .on_action(cx.listener(|view, action: &files_panel::RevealFilePath, window, cx| {
+                view.reveal_file_in_finder(&action.path, window, cx)
+            }))
+            .on_action(cx.listener(|view, action: &files_panel::RenameFilePath, window, cx| {
+                view.open_file_rename(action.path.to_string(), window, cx)
+            }))
+            .on_action(cx.listener(|view, action: &files_panel::DeleteFilePath, window, cx| {
+                view.confirm_delete_file(&action.path, window, cx)
+            }))
             .when(self.session_change_allowed(None), |body| {
                 body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_options(window, cx)))
             })
@@ -363,6 +372,10 @@ impl Render for DesktopView {
         }
         if self.running_confirm.is_some() {
             body = body.child(self.render_running_confirm(cx));
+        }
+        // Rename paints above the preview: it can repoint a previewing file.
+        if self.file_rename.is_some() {
+            body = body.child(self.render_file_rename(cx));
         }
         // About is the topmost modal: it opens from the application menu over
         // any route, so it paints last and Escape dismisses it first.

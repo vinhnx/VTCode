@@ -1,4 +1,5 @@
-//! Bounded read-only workspace file listing and previews for the sidebar.
+//! Bounded workspace file listing and previews for the sidebar, plus the
+//! confined mutation helpers (`mutate`) behind the file context menu.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -9,8 +10,10 @@ use std::sync::Arc;
 use super::strings::bundle;
 
 mod launch;
+mod mutate;
 
-pub(super) use launch::{open_in_editor, open_terminal_at};
+pub(super) use launch::{open_in_editor, open_terminal_at, reveal_in_finder};
+pub(super) use mutate::{rename_entry, trash_entry, validated_file_name};
 
 /// Bounds on retained sidebar rows and recursive traversal depth.
 const MAX_ENTRIES: usize = 400;

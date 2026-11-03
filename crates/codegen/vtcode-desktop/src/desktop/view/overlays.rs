@@ -438,6 +438,9 @@ impl DesktopView {
         } else if self.full_access_confirm.is_some() {
             self.disarm_double_escape();
             self.cancel_full_access_confirm(window, cx);
+        } else if self.file_rename.is_some() {
+            self.disarm_double_escape();
+            self.cancel_file_rename(window, cx);
         } else if self.license_viewer.is_some() {
             self.disarm_double_escape();
             self.close_license_viewer(window, cx);

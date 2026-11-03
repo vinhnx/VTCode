@@ -13,6 +13,10 @@ pub(super) const HELP_URL: &str = "https://github.com/vinhnx/vtcode";
 /// Bare fixed chords need no entry — the modifier rule rejects them already.
 /// Keep in sync with the table below.
 pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
+    // Function keys pass the configurable table's modifier rule, so the
+    // tree-scoped rename chord needs an explicit entry (bare delete and
+    // backspace are rejected by that rule already).
+    "f2",
     "ctrl-w",
     "alt-d",
     "ctrl-u",
@@ -47,6 +51,9 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("home", FirstSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("end", LastSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
+        KeyBinding::new("f2", RenameSelectedFile, Some(gpui_kit::base::tree_key_context())),
+        KeyBinding::new("delete", DeleteSelectedFile, Some(gpui_kit::base::tree_key_context())),
+        KeyBinding::new("backspace", DeleteSelectedFile, Some(gpui_kit::base::tree_key_context())),
         // No fixed `cmd-[`: the configurable NavigateBack default owns that
         // chord with superset behavior (route-back, then session history),
         // so a fixed twin would be dead weight — the old twin never
@@ -704,6 +711,7 @@ impl DesktopView {
             files: Vec::new(),
             file_directory_paths: Arc::new(HashSet::new()),
             file_tree,
+            pending_tree_select: None,
             expanded_file_directories: HashSet::new(),
             _file_tree_subscription: file_tree_subscription,
             files_task: None,
@@ -717,6 +725,9 @@ impl DesktopView {
             test_launch_intercept: None,
             preview_focus: cx.focus_handle(),
             preview_return_focus: None,
+            file_rename: None,
+            rename_focus: cx.focus_handle(),
+            rename_return_focus: None,
             palette_return_focus: None,
             palette_focus: cx.focus_handle(),
             sidebar_resize_focus: cx.focus_handle().tab_stop(true),

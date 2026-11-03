@@ -487,6 +487,8 @@ impl DesktopView {
         self.external_launch_task = None;
         self.refresh_files(cx);
         self.file_preview = None;
+        self.file_rename = None;
+        self.rename_return_focus = None;
         self.models.clear();
     }
 

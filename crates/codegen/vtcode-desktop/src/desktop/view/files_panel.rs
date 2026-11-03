@@ -2,6 +2,7 @@
 
 use super::*;
 use gpui_kit::Action;
+use gpui_kit::component::menu::PopupMenu;
 
 #[derive(Action, Clone, PartialEq, Debug)]
 #[action(namespace = desktop, no_json)]
@@ -13,6 +14,40 @@ pub(super) struct CopyFilePath {
 #[action(namespace = desktop, no_json)]
 pub(super) struct OpenFilePath {
     pub path: gpui_kit::SharedString,
+}
+
+#[derive(Action, Clone, PartialEq, Debug)]
+#[action(namespace = desktop, no_json)]
+pub(super) struct RevealFilePath {
+    pub path: gpui_kit::SharedString,
+}
+
+#[derive(Action, Clone, PartialEq, Debug)]
+#[action(namespace = desktop, no_json)]
+pub(super) struct RenameFilePath {
+    pub path: gpui_kit::SharedString,
+}
+
+#[derive(Action, Clone, PartialEq, Debug)]
+#[action(namespace = desktop, no_json)]
+pub(super) struct DeleteFilePath {
+    pub path: gpui_kit::SharedString,
+}
+
+/// Right-click menu shared by every workspace-file surface (today: the
+/// inspector file tree). Primary action first, mutating entries after a
+/// separator. Mirrors `tabs::session_row_menu`.
+pub(super) fn file_row_menu(menu: PopupMenu, rel_path: &str, is_dir: bool) -> PopupMenu {
+    let menu = if is_dir {
+        menu
+    } else {
+        menu.menu("Open", Box::new(OpenFilePath { path: rel_path.into() }))
+    };
+    menu.menu("Reveal in Finder", Box::new(RevealFilePath { path: rel_path.into() }))
+        .menu("Copy path", Box::new(CopyFilePath { path: rel_path.into() }))
+        .separator()
+        .menu("Rename…", Box::new(RenameFilePath { path: rel_path.into() }))
+        .menu("Delete…", Box::new(DeleteFilePath { path: rel_path.into() }))
 }
 
 struct FileScanCancellationGuard(Arc<AtomicBool>);
@@ -205,7 +240,10 @@ impl DesktopView {
     }
 
     fn replace_file_entries(&mut self, entries: Vec<FileEntry>, cx: &mut Context<Self>) {
-        let selected_path = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string());
+        let selected_path = self
+            .pending_tree_select
+            .take()
+            .or_else(|| self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()));
         let directory_paths: HashSet<_> = entries
             .iter()
             .filter(|entry| entry.is_dir)
@@ -232,6 +270,20 @@ impl DesktopView {
         if self.files.iter().any(|entry| entry.rel_path == path && !entry.is_dir) {
             self.open_file_preview(path, window, cx);
         }
+    }
+
+    pub(super) fn rename_selected_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()) else {
+            return;
+        };
+        self.open_file_rename(path, window, cx);
+    }
+
+    pub(super) fn delete_selected_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()) else {
+            return;
+        };
+        self.confirm_delete_file(&path, window, cx);
     }
 
     pub(super) fn open_file_preview(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -359,6 +411,115 @@ impl DesktopView {
                 view.apply_external_launch_result(&workspace, result, cx);
             });
         }));
+    }
+
+    /// Reveal one workspace entry in Finder (`open -R`), for files and
+    /// directories alike. Same interception and completion channel as
+    /// [`Self::open_file_in_editor`] so headless tests observe the launch.
+    pub(super) fn reveal_file_in_finder(&mut self, rel_path: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(workspace) = self.workspace.clone() else {
+            return;
+        };
+        #[cfg(test)]
+        if let Some(result) = self.intercept_test_launch(rel_path, files::ExternalEditor::Finder) {
+            self.apply_external_launch_result(&workspace, result, cx);
+            return;
+        }
+        let rel_path = rel_path.to_owned();
+        // Stored, not detached: replacing the task supersedes an older launch
+        // so only the latest completion can publish or clear the error notice.
+        self.external_launch_task = Some(cx.spawn_in(window, async move |view, cx| {
+            let root = workspace.clone();
+            let path = rel_path.clone();
+            let result = cx.background_spawn(async move { files::reveal_in_finder(&root, &path) }).await;
+            let _updated = view.update_in(cx, |view, _, cx| {
+                view.apply_external_launch_result(&workspace, result, cx);
+            });
+        }));
+    }
+
+    /// Delete one workspace entry from the file context menu, behind the
+    /// same native warning prompt as thread deletes. The prompt is
+    /// headless-untestable, so the post-confirm write lives in
+    /// [`Self::delete_file_after_confirm`], which tests drive directly.
+    pub(super) fn confirm_delete_file(&mut self, rel_path: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(workspace) = self.workspace.clone() else {
+            return;
+        };
+        if !self.files.iter().any(|entry| entry.rel_path == rel_path) {
+            return;
+        }
+        let base = rel_path.rsplit('/').next().unwrap_or(rel_path).to_string();
+        let title = format!("Delete “{base}”?");
+        let detail = "The item moves to the Trash. You can restore it from there.".to_string();
+        let answer = window.prompt(
+            gpui_kit::PromptLevel::Warning,
+            title.as_str(),
+            Some(detail.as_str()),
+            &["Delete", "Cancel"],
+            cx,
+        );
+        let rel_path = rel_path.to_owned();
+        cx.spawn_in(window, async move |view, cx| {
+            if matches!(answer.await, Ok(0)) {
+                let _updated = view.update_in(cx, |view, window, cx| {
+                    view.delete_file_after_confirm(workspace, rel_path, window, cx);
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Trash one entry after its delete prompt was confirmed. Split from the
+    /// prompt so headless tests cover the whole post-confirm path: the write
+    /// runs on the background executor and the tree refreshes on success.
+    pub(super) fn delete_file_after_confirm(
+        &mut self,
+        workspace: PathBuf,
+        rel_path: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.workspace.as_ref() != Some(&workspace) {
+            return;
+        }
+        let root = workspace.clone();
+        let path = rel_path.clone();
+        cx.spawn_in(window, async move |view, cx| {
+            let outcome = cx.background_spawn(async move { files::trash_entry(&root, &path) }).await;
+            let _updated = view.update_in(cx, |view, window, cx| {
+                view.finish_file_delete(&workspace, &rel_path, outcome, window, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Publish one background trash. Success closes a preview of the deleted
+    /// entry (there is nothing to repoint at) and refreshes the tree; failure
+    /// surfaces on the view.
+    fn finish_file_delete(
+        &mut self,
+        workspace: &Path,
+        rel_path: &str,
+        outcome: Result<(), String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.workspace.as_deref() != Some(workspace) {
+            return;
+        }
+        match outcome {
+            Ok(()) => {
+                if self.file_preview.as_ref().is_some_and(|preview| preview.rel_path == rel_path) {
+                    self.close_file_preview(window, cx);
+                }
+                self.refresh_files(cx);
+            }
+            Err(error) => {
+                self.error = Some(error);
+                cx.notify();
+            }
+        }
     }
 
     /// Shared completion for direct external launches, used by production and tests.

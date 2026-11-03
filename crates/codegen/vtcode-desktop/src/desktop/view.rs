@@ -85,6 +85,7 @@ use super::transport::{
     request_fits_frame,
 };
 use cli_handoff::CliHandoff;
+use file_rename::FileRenameState;
 use full_access_confirm::FullAccessConfirmState;
 use navigation_history::{
     NavigationHistory, NavigationLocation, PendingNavigation, SwipeScrollAccumulator, natural_scroll_enabled,
@@ -112,6 +113,7 @@ mod configuration_render;
 mod curated;
 mod deeplinks;
 mod exec_controls;
+mod file_rename;
 mod files_panel;
 mod full_access_confirm;
 mod inspector_changes;
@@ -322,6 +324,8 @@ actions!(
         OpenPermissions,
         OpenModePicker,
         OpenSelectedFile,
+        RenameSelectedFile,
+        DeleteSelectedFile,
         NewSession,
         CloseSession,
         OpenCliHandoff,
@@ -547,6 +551,10 @@ struct DesktopView {
     files: Vec<FileEntry>,
     file_directory_paths: Arc<HashSet<String>>,
     file_tree: Entity<TreeState>,
+    /// One-shot selection for the next tree rebuild (rename repoints the
+    /// selection at the new path, since the old one no longer exists).
+    /// Consumed by `replace_file_entries`.
+    pending_tree_select: Option<String>,
     expanded_file_directories: HashSet<String>,
     _file_tree_subscription: Subscription,
     files_task: Option<Task<()>>,
@@ -560,6 +568,9 @@ struct DesktopView {
     test_launch_intercept: Option<TestLaunchIntercept>,
     preview_focus: FocusHandle,
     preview_return_focus: Option<FocusHandle>,
+    file_rename: Option<FileRenameState>,
+    rename_focus: FocusHandle,
+    rename_return_focus: Option<FocusHandle>,
     palette_return_focus: Option<FocusHandle>,
     palette_focus: FocusHandle,
     sidebar_resize_focus: FocusHandle,
