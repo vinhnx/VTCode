@@ -134,3 +134,7 @@ contribute back to OSS with learning from this project. check gotchas and decici
 ---
 
 desktop app: check chat input labels seems not read and respect the font settings? the label size is fixed and not dynamic -> fix it
+
+---
+
+https://github.com/vinhnx/VTCode/issues/803

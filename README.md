@@ -14,8 +14,6 @@
 [![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](#desktop-app)
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
 
-> **Native macOS app:** the full engine behind a desktop interface — see the [desktop app](#desktop-app).
-
 <p>
   <!-- markdownlint-disable MD033 -->
   <video src="./resources/gif/demo-desktop.mov" width="100%" autoplay loop muted playsinline controls
