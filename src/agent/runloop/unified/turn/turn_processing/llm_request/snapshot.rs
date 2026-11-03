@@ -39,7 +39,7 @@ pub(super) fn is_openai_prompt_cache_enabled(
 }
 
 /// Shared session-affinity gate (OpenAI/Merge honor the OpenAI cache flag;
-/// OpenRouter/xAI use lineage for sticky routing when global cache is on).
+/// sticky-routing providers use lineage when global cache is on).
 pub(crate) fn is_session_affinity_key_enabled(
     provider_name: &str,
     global_prompt_cache_enabled: bool,

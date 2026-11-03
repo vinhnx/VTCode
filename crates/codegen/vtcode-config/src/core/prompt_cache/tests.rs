@@ -139,7 +139,7 @@ fn build_openai_prompt_cache_key_uses_trimmed_lineage_id() {
 }
 
 #[test]
-fn map_prompt_cache_key_namespaces_merge_gateway() {
+fn map_prompt_cache_key_namespaces_providers() {
     assert_eq!(
         map_prompt_cache_key_for_provider("merge-gateway", "vtcode:openai:abc".to_string()),
         "vtcode:merge:abc"
@@ -150,18 +150,25 @@ fn map_prompt_cache_key_namespaces_merge_gateway() {
         "vtcode:openrouter:abc"
     );
     assert_eq!(map_prompt_cache_key_for_provider("xai", "vtcode:openai:abc".to_string()), "vtcode:xai:abc");
+    assert_eq!(
+        map_prompt_cache_key_for_provider("opencode-go", "vtcode:openai:abc".to_string()),
+        "vtcode:opencode-go:abc"
+    );
 }
 
 #[test]
-fn session_affinity_key_gate_covers_openrouter_and_xai() {
+fn session_affinity_key_gate_covers_sticky_routing_providers() {
     assert!(session_affinity_key_enabled("openrouter", true, false));
     assert!(session_affinity_key_enabled("xai", true, false));
+    assert!(session_affinity_key_enabled("opencode-go", true, false));
     assert!(session_affinity_key_enabled("openai", true, true));
     assert!(!session_affinity_key_enabled("openai", true, false));
     assert!(!session_affinity_key_enabled("openrouter", false, true));
+    assert!(!session_affinity_key_enabled("opencode-go", false, true));
     assert!(!session_affinity_key_enabled("anthropic", true, true));
     assert!(session_affinity_provider("openrouter"));
     assert!(session_affinity_provider("xai"));
+    assert!(session_affinity_provider("opencode-go"));
     assert!(!session_affinity_provider("anthropic"));
 }
 
@@ -184,7 +191,11 @@ fn build_session_affinity_prompt_cache_key_namespaces_providers() {
         build_session_affinity_prompt_cache_key("xai", true, &mode, Some("lineage-1")).as_deref(),
         Some("vtcode:xai:lineage-1")
     );
-    // OpenAI/Merge honor Off mode; OpenRouter/xAI ignore it for sticky routing.
+    assert_eq!(
+        build_session_affinity_prompt_cache_key("opencode-go", true, &mode, Some("lineage-1")).as_deref(),
+        Some("vtcode:opencode-go:lineage-1")
+    );
+    // OpenAI/Merge honor Off mode; OpenRouter/xAI/OpenCode Go ignore it for sticky routing.
     assert_eq!(
         build_session_affinity_prompt_cache_key("openai", true, &OpenAIPromptCacheKeyMode::Off, Some("lineage-1")),
         None
@@ -193,6 +204,11 @@ fn build_session_affinity_prompt_cache_key_namespaces_providers() {
         build_session_affinity_prompt_cache_key("openrouter", true, &OpenAIPromptCacheKeyMode::Off, Some("lineage-1"))
             .as_deref(),
         Some("vtcode:openrouter:lineage-1")
+    );
+    assert_eq!(
+        build_session_affinity_prompt_cache_key("opencode-go", true, &OpenAIPromptCacheKeyMode::Off, Some("lineage-1"))
+            .as_deref(),
+        Some("vtcode:opencode-go:lineage-1")
     );
     // Disabled gate or blank lineage yields None.
     assert_eq!(build_session_affinity_prompt_cache_key("openrouter", false, &mode, Some("lineage-1")), None);

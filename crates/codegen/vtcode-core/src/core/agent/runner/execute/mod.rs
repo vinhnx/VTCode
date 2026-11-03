@@ -456,8 +456,8 @@ impl AgentRunner {
                     // otherwise reusable routing affinity every few turns.
                     // Prefix identity stays tracked per request via
                     // `tool_catalog_hash` / `system_prompt_prefix_hash` below.
-                    // OpenRouter/xAI receive namespaced session lineage for
-                    // documented sticky routing even when the OpenAI cache
+                    // Sticky-routing providers receive namespaced session lineage
+                    // for documented sticky routing even when the OpenAI cache
                     // block is off.
                     prompt_cache_key: build_session_affinity_prompt_cache_key(
                         &provider_name,

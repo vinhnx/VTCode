@@ -26,6 +26,11 @@ pub(super) fn validate_normalized_request(
     }
 }
 
+/// Required session header for every OpenCode Go request. The Go endpoint
+/// rejects traffic without it (`MissingSessionID`); the value must stay
+/// stable per conversation for efficient routing.
+pub(crate) const OPENCODE_GO_SESSION_HEADER: &str = "x-opencode-session";
+
 /// Wire-dialect spec for the OpenCode Go OpenAI-compatible protocol.
 pub(crate) struct OpenCodeGoInnerSpec;
 
@@ -42,6 +47,10 @@ impl OpenAiCompatSpec for OpenCodeGoInnerSpec {
     const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
     const INCLUDE_TOP_P: bool = false;
     const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
+
+    fn session_affinity_header() -> Option<&'static str> {
+        Some(OPENCODE_GO_SESSION_HEADER)
+    }
 }
 
 /// Wire-dialect spec for the OpenCode Zen OpenAI-compatible protocol.

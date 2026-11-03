@@ -53,19 +53,18 @@ pub(crate) fn split_dynamic_prompt_suffix(text: &str) -> (String, Option<String>
 
 /// Stable session lineage from a VT Code `prompt_cache_key`.
 ///
-/// Strips `vtcode:` provider namespaces and any residual `-{16 hex}` prefix-hash
-/// suffix so cache-routing identity does not rotate when the system prefix or
-/// tool catalog changes. Blank keys yield `None`.
+/// Strips the `vtcode:{namespace}:` prefix for any provider namespace, plus any
+/// residual `-{16 hex}` prefix-hash suffix, so cache-routing identity does not
+/// rotate when the system prefix or tool catalog changes. Keys without a
+/// two-segment `vtcode:` prefix pass through untouched. Blank keys yield `None`.
 pub(crate) fn session_lineage_from_prompt_cache_key(prompt_cache_key: Option<&str>) -> Option<String> {
     let key = prompt_cache_key?.trim();
     if key.is_empty() {
         return None;
     }
     let id = key
-        .strip_prefix("vtcode:merge:")
-        .or_else(|| key.strip_prefix("vtcode:openai:"))
-        .or_else(|| key.strip_prefix("vtcode:openrouter:"))
-        .or_else(|| key.strip_prefix("vtcode:xai:"))
+        .strip_prefix("vtcode:")
+        .and_then(|rest| rest.split_once(':').map(|(_, id)| id))
         .unwrap_or(key)
         .trim();
     let id = strip_prefix_hash_suffix(id);
@@ -131,6 +130,23 @@ mod tests {
             Some("session-1".to_string())
         );
         assert_eq!(session_lineage_from_prompt_cache_key(Some("vtcode:xai:session-2")), Some("session-2".to_string()));
+        assert_eq!(
+            session_lineage_from_prompt_cache_key(Some("vtcode:opencode-go:session-3")),
+            Some("session-3".to_string())
+        );
+        // Future namespaces strip without code changes; single-segment keys pass through.
+        assert_eq!(
+            session_lineage_from_prompt_cache_key(Some("vtcode:future-prov:session-9")),
+            Some("session-9".to_string())
+        );
+        assert_eq!(
+            session_lineage_from_prompt_cache_key(Some("vtcode:lone-segment")),
+            Some("vtcode:lone-segment".to_string())
+        );
+        assert_eq!(
+            session_lineage_from_prompt_cache_key(Some("  vtcode:xai:padded-4  ")),
+            Some("padded-4".to_string())
+        );
         assert_eq!(session_lineage_from_prompt_cache_key(Some("  ")), None);
         assert_eq!(session_lineage_from_prompt_cache_key(None), None);
         assert_eq!(session_lineage_from_prompt_cache_key(Some("plain-id")), Some("plain-id".to_string()));
