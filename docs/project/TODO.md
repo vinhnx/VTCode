@@ -15,27 +15,7 @@ also refine the overall design system for more modern macos 27 look and feels. c
 
 ---
 
-desktop app: implement keyboard navigation for threads panel. also consider adding keyboard navigation for other panels for a non-mouse user.
-
----
-
-check and fix desktop themes doesn't grouped by modes (light/dark) in the settings
-
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 11.01.13 AM.png'
-
----
-
-For both cli and desktop app, show human-readable provider names in the model picker list instead of codes. also regroup and sort and move the frontier company and models to top. Move OpenAI, Anthropic to top. Then open source ones (HuggingFace, Ollama, LM Studio, etc).
-
----
-
 click on a notification should deeplink and open to the related information.
-
----
-
-revamp and refine model effort picker design, https://gpui-kit.com/component/slider/
-
-maybe implement a vertical slider for effort selection. make it special and intuitive for users. premium feel.
 
 ---
 
@@ -258,7 +238,3 @@ https://gpui-kit.com/component/focus-trap/
 
 check and fix splitting the two 1000+ line
   files — is large surgery in view/, where the peer
-
----
-
-seperate the theme grids and filtered by mode selection group, currently it just show all which is not ideal '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 5.01.55 PM.png' 
