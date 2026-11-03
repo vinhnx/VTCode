@@ -26,16 +26,35 @@ impl DesktopView {
         !(item.activity_grouped && !item.activity_group_head && !item.activity_expanded)
     }
 
-    /// Move the keyboard highlight across messages (Up/Down with the
-    /// transcript focused). Clamps at both ends and scrolls the row into view.
-    pub(super) fn move_transcript_focus(&mut self, down: bool, cx: &mut Context<Self>) {
-        let visible: Vec<usize> = self
-            .transcript
+    /// Visible row indexes backing keyboard navigation, in transcript order.
+    fn visible_transcript_rows(&self) -> Vec<usize> {
+        self.transcript
             .items()
             .enumerate()
             .filter(|(_, item)| Self::transcript_row_visible(item))
             .map(|(index, _)| index)
-            .collect();
+            .collect()
+    }
+
+    /// Anchor the keyboard highlight on one row and scroll it into view.
+    fn focus_transcript_at(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(id) = self.transcript.get(index).map(|item| item.id.clone()) else {
+            return;
+        };
+        self.keyboard_focused_message = Some(id);
+        // Kit limitation: `scroll_to_item` pins to viewport top and the
+        // scroller exposes no visible-range query, so reveal-only-if-outside
+        // is unimplementable; every step recenters.
+        self.message_scroller.update(cx, |state, cx| {
+            let _scrolled = state.scroll_to_item(index, cx);
+        });
+        cx.notify();
+    }
+
+    /// Move the keyboard highlight across messages (Up/Down with the
+    /// transcript focused). Clamps at both ends and scrolls the row into view.
+    pub(super) fn move_transcript_focus(&mut self, down: bool, cx: &mut Context<Self>) {
+        let visible = self.visible_transcript_rows();
         if visible.is_empty() {
             return;
         }
@@ -53,17 +72,17 @@ impl DesktopView {
         let Some(&index) = visible.get(next) else {
             return;
         };
-        let Some(item) = self.transcript.get(index) else {
+        self.focus_transcript_at(index, cx);
+    }
+
+    /// Jump the highlight to the first/last visible message (Home/End, vim `g`/`G`).
+    pub(super) fn move_transcript_focus_edge(&mut self, first: bool, cx: &mut Context<Self>) {
+        let visible = self.visible_transcript_rows();
+        let edge = if first { visible.first() } else { visible.last() };
+        let Some(&index) = edge else {
             return;
         };
-        self.keyboard_focused_message = Some(item.id.clone());
-        // Kit limitation: `scroll_to_item` pins to viewport top and the
-        // scroller exposes no visible-range query, so reveal-only-if-outside
-        // is unimplementable; every step recenters.
-        self.message_scroller.update(cx, |state, cx| {
-            let _scrolled = state.scroll_to_item(index, cx);
-        });
-        cx.notify();
+        self.focus_transcript_at(index, cx);
     }
 
     /// Jump the transcript scroller to the row with this stable id.

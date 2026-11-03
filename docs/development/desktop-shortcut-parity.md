@@ -116,6 +116,16 @@ difference; **oos** = out of scope (terminal-only).
 | `Ctrl+L` clear screen | no transcript-clear surface | gap (needs product decision) |
 | `F8` diagnostics, `Alt+G` task panel, `Alt+S` subprocesses | inspector/terminal/output tabs exist | gap (needs command bindings) |
 
+### Threads / panels / experimental vim
+
+| CLI | Desktop | Status |
+|---|---|---|
+| Thread-list keyboard nav | `VTCodeSessions` context: `Up/Down/Home/End` highlight + focus rail, `Enter` loads via the row-click path (running-confirm guards shared) | done (`session_arrows…`, `session_enter…`, `session_click…` tests) |
+| Vim list motions | `j/k/g/G` in threads + transcript, gated on the experimental Settings toggle (off by default, persisted) | done (`vim_motions…`, `vim_keys_are_inert…` tests) |
+| Vim tab motions | `h/l` cycle the inspector + settings rails under the same gate | done (`vim_hl…` test) |
+| Vim `i` / `/` | focus composer / open conversation search under the same gate; typing in inputs never triggers vim actions | done (`vim_i…`, `vim_keys_typed…` tests) |
+| Reset keyboard config | Reset restores shortcut defaults (staged, Save persists) and turns the vim toggle off (immediate, no draft) | done (`vim_toggle_persists…` test) |
+
 ## Shipped in this increment
 
 1. Fixed: `cmd-enter` while running queued standalone (`batchable=false`).
@@ -126,7 +136,7 @@ difference; **oos** = out of scope (terminal-only).
 
 ## Remaining gaps (ranked)
 
-1. Medium: palette `PgUp/PgDn`/folder-ref/digits; review vim keymap.
+1. Medium: palette `PgUp/PgDn`/folder-ref/digits; review-route vim keymap (the desktop vim layer covers threads/transcript/tabs only — review stays F7-only).
 2. Medium: transpose/case edits (needs Kit primitives or undo-safe surgery).
 3. Low: `!`/`#` triggers verification; `Ctrl+L`/`F8` product decisions; jump-to-last-change.
 4. Service gaps (protocol work): archived-prompt history, rewind, external-editor round-trip.

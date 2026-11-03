@@ -67,7 +67,17 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("ctrl-n", HistoryNext, Some(key_context::COMPOSER)),
         KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
+        KeyBinding::new("home", TranscriptFirst, Some(key_context::TRANSCRIPT)),
+        KeyBinding::new("end", TranscriptLast, Some(key_context::TRANSCRIPT)),
+        KeyBinding::new("up", SessionPrevious, Some(key_context::SESSIONS)),
+        KeyBinding::new("down", SessionNext, Some(key_context::SESSIONS)),
+        KeyBinding::new("home", SessionFirst, Some(key_context::SESSIONS)),
+        KeyBinding::new("end", SessionLast, Some(key_context::SESSIONS)),
+        KeyBinding::new("enter", OpenSelectedSession, Some(key_context::SESSIONS)),
     ]);
+    if preferences.vim_navigation {
+        apply_vim_navigation(cx, true);
+    }
 }
 
 /// Bind the configurable shortcut table, falling back to defaults when a
@@ -98,6 +108,75 @@ pub(super) fn reinstall_shortcuts(
 ) {
     cx.bind_keys(shortcuts::stale_shadows(old_shortcuts, new_shortcuts, cx));
     bind_configurable_shortcuts(cx, new_shortcuts);
+}
+
+/// (chord, key context) rows of the experimental vim layer. Vim chords reuse
+/// the plain navigation actions, so toggling is pure keymap surgery: live
+/// bindings while the toggle holds, `NoAction` shadows when it drops (keymaps
+/// only append — see [`reinstall_shortcuts`]). Scoped to the navigation
+/// containers on purpose: a bare letter bound under `DESKTOP` would hijack
+/// typing in every text input, and a fixed-then-gated handler would still
+/// swallow the keystroke when off (bubble listeners stop by default). Bare
+/// chords need no `FIXED_RESERVED_CHORDS` entry — the configurable table's
+/// modifier rule rejects them already.
+pub(super) const VIM_CHORDS: &[(&str, &str)] = &[
+    ("j", key_context::SESSIONS),
+    ("k", key_context::SESSIONS),
+    ("g", key_context::SESSIONS),
+    ("G", key_context::SESSIONS),
+    ("i", key_context::SESSIONS),
+    ("/", key_context::SESSIONS),
+    ("j", key_context::TRANSCRIPT),
+    ("k", key_context::TRANSCRIPT),
+    ("g", key_context::TRANSCRIPT),
+    ("G", key_context::TRANSCRIPT),
+    ("i", key_context::TRANSCRIPT),
+    ("/", key_context::TRANSCRIPT),
+    ("h", key_context::INSPECTOR),
+    ("l", key_context::INSPECTOR),
+    ("i", key_context::INSPECTOR),
+    ("/", key_context::INSPECTOR),
+    ("h", key_context::SETTINGS),
+    ("l", key_context::SETTINGS),
+    ("i", key_context::SETTINGS),
+    ("/", key_context::SETTINGS),
+];
+
+/// Live out or retire the vim layer. Same-chord conflicts resolve toward the
+/// latest binding, so enabling re-binds over stale shadows and disabling
+/// shadows over stale live rows; toggles are rare user gestures, so the
+/// appended duplicates are harmless (same tradeoff as [`reinstall_shortcuts`]).
+pub(super) fn apply_vim_navigation(cx: &mut App, enabled: bool) {
+    if enabled {
+        cx.bind_keys([
+            KeyBinding::new("j", SessionNext, Some(key_context::SESSIONS)),
+            KeyBinding::new("k", SessionPrevious, Some(key_context::SESSIONS)),
+            KeyBinding::new("g", SessionFirst, Some(key_context::SESSIONS)),
+            KeyBinding::new("G", SessionLast, Some(key_context::SESSIONS)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::SESSIONS)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::SESSIONS)),
+            KeyBinding::new("j", TranscriptNext, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("k", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("g", TranscriptFirst, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("G", TranscriptLast, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::TRANSCRIPT)),
+            KeyBinding::new("h", PreviousInspectorTab, Some(key_context::INSPECTOR)),
+            KeyBinding::new("l", NextInspectorTab, Some(key_context::INSPECTOR)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::INSPECTOR)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::INSPECTOR)),
+            KeyBinding::new("h", PreviousSettingsTab, Some(key_context::SETTINGS)),
+            KeyBinding::new("l", NextSettingsTab, Some(key_context::SETTINGS)),
+            KeyBinding::new("i", FocusComposer, Some(key_context::SETTINGS)),
+            KeyBinding::new("/", OpenConversationSearch, Some(key_context::SETTINGS)),
+        ]);
+    } else {
+        cx.bind_keys(
+            VIM_CHORDS
+                .iter()
+                .map(|(chord, context)| KeyBinding::new(*chord, NoAction {}, Some(*context))),
+        );
+    }
 }
 
 pub(super) fn init_native_menus(cx: &mut App) {
@@ -550,6 +629,8 @@ impl DesktopView {
             composer_history_index: None,
             composer_history_stash: gpui_kit::SharedString::from(""),
             transcript_focus: cx.focus_handle().tab_stop(true),
+            session_focus: cx.focus_handle().tab_stop(true),
+            keyboard_focused_session: None,
             keyboard_focused_message: None,
             running: false,
             turn_content_seen: false,

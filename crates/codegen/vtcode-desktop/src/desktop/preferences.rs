@@ -479,6 +479,9 @@ pub(super) struct Preferences {
     pub show_status_bar: bool,
     pub reduced_motion: ReducedMotionPreference,
     pub shortcuts: std::collections::BTreeMap<String, String>,
+    /// Experimental vim-style navigation (`j`/`k`/`g`/`G`/`h`/`l`, `i`, `/`).
+    /// Missing values keep existing installs on the default off behavior.
+    pub vim_navigation: bool,
     pub ui_font_family: Option<String>,
     pub code_font_family: Option<String>,
     pub ui_font_size: Option<u8>,

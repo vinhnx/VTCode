@@ -472,8 +472,8 @@ impl DesktopView {
                 self.last_escape_press = Some((now, draft));
                 cx.propagate();
             }
-        } else if self.transcript_focus.is_focused(window) {
-            // Leave transcript navigation where it is and return to the composer.
+        } else if self.transcript_focus.is_focused(window) || self.session_focus.is_focused(window) {
+            // Leave list navigation where it is and return to the composer.
             self.focus_composer(window, cx);
         } else {
             cx.propagate();

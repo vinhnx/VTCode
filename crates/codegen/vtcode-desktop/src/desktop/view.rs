@@ -130,6 +130,7 @@ mod root_render;
 mod running_confirm;
 mod runtime_items;
 mod secret_store;
+mod session_nav;
 mod sessions;
 mod settings;
 mod settings_accessibility;
@@ -361,6 +362,13 @@ actions!(
         HistoryNext,
         TranscriptPrevious,
         TranscriptNext,
+        TranscriptFirst,
+        TranscriptLast,
+        SessionPrevious,
+        SessionNext,
+        SessionFirst,
+        SessionLast,
+        OpenSelectedSession,
         DismissOverlay,
         OpenSettings,
         CloseWindow,
@@ -471,6 +479,10 @@ struct DesktopView {
     /// Keyboard highlight for Up/Down transcript navigation (message id).
     /// Reveals the same row actions as hover; Esc leaves it as position memory.
     keyboard_focused_message: Option<String>,
+    session_focus: FocusHandle,
+    /// Keyboard highlight for Up/Down threads-panel navigation (session id).
+    /// Distinct from the loaded selection; Enter loads it, clicks anchor it.
+    keyboard_focused_session: Option<String>,
     running: bool,
     /// Whether the active turn has produced transcript content. Meaningful
     /// only while `running`: reset when a turn begins (submit, `TurnStarted`),

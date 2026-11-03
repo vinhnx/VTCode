@@ -539,6 +539,7 @@ mod search_config;
 mod secret_store;
 mod service_navigation;
 mod session_link;
+mod session_navigation;
 mod sessions_startup;
 mod settings_panes;
 mod settings_spacing;

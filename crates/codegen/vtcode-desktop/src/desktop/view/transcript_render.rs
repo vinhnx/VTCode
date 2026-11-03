@@ -283,6 +283,8 @@ impl DesktopView {
             .key_context(key_context::TRANSCRIPT)
             .on_action(cx.listener(|view, _: &TranscriptPrevious, _, cx| view.move_transcript_focus(false, cx)))
             .on_action(cx.listener(|view, _: &TranscriptNext, _, cx| view.move_transcript_focus(true, cx)))
+            .on_action(cx.listener(|view, _: &TranscriptFirst, _, cx| view.move_transcript_focus_edge(true, cx)))
+            .on_action(cx.listener(|view, _: &TranscriptLast, _, cx| view.move_transcript_focus_edge(false, cx)))
             .flex_1()
             .min_h_0()
             .w_full()

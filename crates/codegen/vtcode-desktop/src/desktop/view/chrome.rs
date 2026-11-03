@@ -326,6 +326,16 @@ impl DesktopView {
             div()
                 .id("session-list")
                 .test_support()
+                .track_focus(&self.session_focus)
+                .when(self.sessions.is_empty(), |el| el.tab_stop(false))
+                .key_context(key_context::SESSIONS)
+                .on_action(cx.listener(|view, _: &SessionPrevious, _, cx| view.move_session_focus(false, cx)))
+                .on_action(cx.listener(|view, _: &SessionNext, _, cx| view.move_session_focus(true, cx)))
+                .on_action(cx.listener(|view, _: &SessionFirst, _, cx| view.move_session_focus_edge(true, cx)))
+                .on_action(cx.listener(|view, _: &SessionLast, _, cx| view.move_session_focus_edge(false, cx)))
+                .on_action(
+                    cx.listener(|view, _: &OpenSelectedSession, window, cx| view.activate_focused_session(window, cx)),
+                )
                 .role(gpui_kit::Role::List)
                 .aria_label(rust_i18n::t!("app.workspace.recent_threads").to_string())
                 .relative()
@@ -349,6 +359,8 @@ impl DesktopView {
                                     let label = session_display_title(&session_id, session.title.as_deref());
                                     let running = view.is_session_running(&session_id);
                                     let enabled = view.load_session_available(&session_id);
+                                    let keyboard_focused =
+                                        view.keyboard_focused_session.as_deref() == Some(session_id.as_str());
                                     Some(
                                         div()
                                             .id(format!("session-row-{session_id}"))
@@ -360,6 +372,21 @@ impl DesktopView {
                                             .aria_selected(selected)
                                             .h(px(session_row_height))
                                             .w_full()
+                                            // Absolutely positioned so the highlight never reflows the
+                                            // row; mirrors the transcript focus rail.
+                                            .when(keyboard_focused, |row| {
+                                                row.child(
+                                                    div()
+                                                        .id(format!("session-focus-rail-{session_id}"))
+                                                        .test_support()
+                                                        .absolute()
+                                                        .left_0()
+                                                        .top_0()
+                                                        .bottom_0()
+                                                        .w(px(2.))
+                                                        .bg(cx.theme().colors.accent),
+                                                )
+                                            })
                                             .child(
                                                 desktop_button(format!("session-{session_id}"))
                                                     .accessibility_label(if running {
@@ -400,6 +427,9 @@ impl DesktopView {
                                                             .text_color(cx.theme().colors.foreground)
                                                     })
                                                     .on_click(cx.listener(move |this, _, window, cx| {
+                                                        // Clicking anchors the keyboard highlight as
+                                                        // position memory, like transcript rows.
+                                                        this.keyboard_focused_session = Some(session_id.clone());
                                                         if this.load_session_from_ui(session_id.clone(), window, cx) {
                                                             this.close_active_route(window, cx);
                                                         }

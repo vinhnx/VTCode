@@ -126,7 +126,37 @@ impl DesktopView {
                     .text_color(cx.theme().colors.muted_foreground)
                     .child(rust_i18n::t!("app.shortcuts.footer_hint").to_string()),
             );
-        accessible_group_box("keyboard-shortcuts-group", rust_i18n::t!("app.shortcuts.group_label").to_string(), group)
+        // English literals: new user-visible strings stay untranslated until
+        // full native-quality translations ship for every locale.
+        let vim_group = settings_group_box("Vim navigation (experimental)".to_string(), colors).child(settings_row(
+            "Vim navigation".to_string(),
+            "Move with j/k, jump with g/G, switch tabs with h/l, focus the composer with i, search with /.".to_string(),
+            gpui_kit::component::switch::Switch::new("vim-navigation")
+                .accessibility_label("Vim navigation".to_string())
+                .checked(self.preferences.vim_navigation)
+                .on_click(cx.listener(|view, _, _, cx| view.toggle_vim_navigation(cx))),
+            colors,
+        ));
+        // The experimental toggle sits below the shortcut table so existing
+        // rows keep their positions (headed tests click them unscrolled).
+        div()
+            .flex()
+            .flex_col()
+            .gap_6()
+            .child(accessible_group_box(
+                "keyboard-shortcuts-group",
+                rust_i18n::t!("app.shortcuts.group_label").to_string(),
+                group,
+            ))
+            .child(accessible_group_box("vim-navigation-group", "Vim navigation (experimental)".to_string(), vim_group))
+            .into_any_element()
+    }
+
+    pub(super) fn toggle_vim_navigation(&mut self, cx: &mut Context<Self>) {
+        self.preferences.vim_navigation = !self.preferences.vim_navigation;
+        self.save_preferences();
+        bootstrap::apply_vim_navigation(cx, self.preferences.vim_navigation);
+        cx.notify();
     }
 
     fn begin_shortcut_capture(&mut self, id: shortcuts::CommandId, window: &mut Window, cx: &mut Context<Self>) {
@@ -256,14 +286,27 @@ impl DesktopView {
         // its single role as the persistence point.
         let defaults = shortcuts::draft_from(&std::collections::BTreeMap::new());
         self.shortcut_capture = None;
-        if defaults == self.shortcut_draft {
+        // Vim navigation is an immediately-applied Switch with no draft, so
+        // its reset persists and retires its chords at once while shortcuts
+        // keep staged semantics.
+        let vim_reset = std::mem::replace(&mut self.preferences.vim_navigation, false);
+        if vim_reset {
+            self.save_preferences();
+            bootstrap::apply_vim_navigation(cx, false);
+        }
+        let shortcuts_staged = defaults != self.shortcut_draft;
+        if !shortcuts_staged && !vim_reset {
             self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.already_default").to_string());
             cx.notify();
             return;
         }
-        self.shortcut_draft = defaults;
-        self.shortcuts_editing = true;
-        self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.staged_defaults").to_string());
+        if shortcuts_staged {
+            self.shortcut_draft = defaults;
+            self.shortcuts_editing = true;
+            self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.staged_defaults").to_string());
+        } else {
+            self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.saved").to_string());
+        }
         self.focus_shortcut_search(window, cx);
         cx.notify();
     }
