@@ -1,6 +1,8 @@
 //! Command palette domain: entry types, search builders, and action dispatch.
 
 use super::*;
+use std::str::FromStr;
+use vtcode_commons::provider::Provider;
 
 /// One executable entry in the command palette.
 #[derive(Debug)]
@@ -369,13 +371,25 @@ impl DesktopView {
         let active_model = self.active_model_fallback();
         for model in self.models.iter().chain(active_model.iter()) {
             let entry = model_palette_command(model, self.model_is_current(&model.provider, &model.id));
-            groups.entry(model.provider.clone()).or_default().push(entry);
+            groups.entry(provider_group_key(&model.provider)).or_default().push(entry);
         }
         let mut groups = groups.into_iter().collect::<Vec<_>>();
         for (_, entries) in &mut groups {
             entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
         }
-        groups.sort_by_key(|(_, entries)| !entries.iter().any(|entry| self.is_current_palette_action(&entry.action)));
+        // The current group stays first; the rest follow the CLI picker's
+        // provider order (frontier labs, then open-source/local). Unknown
+        // codes rank after every known provider; the sort is stable so they
+        // keep arrival order. Headers show human-readable labels.
+        let display_order = Provider::picker_display_order();
+        groups.sort_by_key(|(code, entries)| {
+            let current = entries.iter().any(|entry| self.is_current_palette_action(&entry.action));
+            (!current, provider_picker_rank(code, &display_order))
+        });
+        let groups = groups
+            .into_iter()
+            .map(|(code, entries)| (provider_display_label(&code), entries))
+            .collect();
         self.show_palette(PaletteKind::Models, groups, window, cx);
     }
 
@@ -860,6 +874,29 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
     format!("palette-label-{:016x}", hasher.finish())
 }
 
+/// Canonical grouping key for a provider code: known aliases (`google`,
+/// `meta-ai`, `llama.cpp`, …) collapse to the canonical code so the active
+/// fallback never opens a second group next to the catalog group. Unknown
+/// (custom) provider codes pass through unchanged.
+fn provider_group_key(code: &str) -> String {
+    Provider::from_str(code).map_or_else(|_| code.to_string(), |provider| provider.as_ref().to_string())
+}
+
+/// Human-readable provider name for palette group headers and entry details.
+/// Unknown (custom) provider codes pass through unchanged.
+fn provider_display_label(code: &str) -> String {
+    Provider::from_str(code).map_or_else(|_| code.to_string(), |provider| provider.label().to_string())
+}
+
+/// Rank of a provider code in the CLI picker's display order. Unknown codes
+/// sort after every known provider.
+fn provider_picker_rank(code: &str, display_order: &[Provider]) -> usize {
+    Provider::from_str(code)
+        .ok()
+        .and_then(|provider| display_order.iter().position(|ordered| *ordered == provider))
+        .unwrap_or(usize::MAX)
+}
+
 pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {
     let context = model
         .context_window
@@ -878,7 +915,8 @@ pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) 
             model: model.id.clone(),
         },
     );
-    let mut details = vec![model.provider.clone()];
+    let provider_label = provider_display_label(&model.provider);
+    let mut details = vec![provider_label.clone()];
     details.extend(capabilities.iter().map(|(_, display)| display.clone()));
     if !context.is_empty() {
         details.push(context.trim_start_matches(display::MIDDOT).to_string());
@@ -888,7 +926,7 @@ pub(super) fn model_palette_command(model: &protocol::ModelInfo, current: bool) 
         details.push(current.trim_start_matches(display::MIDDOT).to_string());
     }
     entry.description = Some(details.join(display::MIDDOT));
-    entry.keywords = vec![model.provider.clone(), model.id.clone()];
+    entry.keywords = vec![model.provider.clone(), provider_label, model.id.clone()];
     entry
         .keywords
         .extend(capabilities.into_iter().map(|(keyword, _)| keyword.to_string()));

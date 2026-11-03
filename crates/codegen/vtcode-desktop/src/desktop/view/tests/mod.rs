@@ -556,3 +556,4 @@ mod turns_transcript;
 mod worktree_a11y;
 mod zen_options;
 mod zen_workspace;
+mod model_palette;

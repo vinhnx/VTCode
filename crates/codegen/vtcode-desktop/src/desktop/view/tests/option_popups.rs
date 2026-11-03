@@ -964,11 +964,11 @@ fn compact_model_picker_shows_current_options_and_full_search_selects_the_real_r
                 .find(claude_id)
                 .label()
                 .unwrap()
-                .starts_with("Claude Sonnet 5 · anthropic · 200K context")
+                .starts_with("Claude Sonnet 5 · Anthropic · 200K context")
         );
         let gemini_item = window.find(gemini_id.clone());
         let gemini_row = gemini_item.label().unwrap().to_owned();
-        assert!(gemini_row.starts_with("Gemini 3.8 Flash · google · Reasoning · Vision · Tools"));
+        assert!(gemini_row.starts_with("Gemini 3.8 Flash · Gemini · Reasoning · Vision · Tools"));
         assert!(gemini_row.contains("Structured output · Pro · Audio · Video · PDF · 1M context"));
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);

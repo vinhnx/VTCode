@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::fmt::Write;
+use std::str::FromStr;
 
 use vtcode_commons::modal_hints::MODEL_PICKER_NAVIGATE_FILTER;
 use vtcode_core::config::constants::ui;
@@ -267,7 +268,10 @@ pub(super) fn current_model_line(current_provider: &str, current_model: &str) ->
         return "Pick a model provider and model id.".to_string();
     }
 
-    let base = format!("Current: {current_provider} / {current_model}");
+    let provider_label = Provider::from_str(current_provider.trim())
+        .map(|provider| provider.label().to_string())
+        .unwrap_or_else(|_| current_provider.to_string());
+    let base = format!("Current: {provider_label} / {current_model}");
     if let Some(context_window) = context_window_segment(current_provider, current_model) {
         format!("{base} • {context_window}")
     } else {

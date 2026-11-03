@@ -55,14 +55,7 @@ static PROVIDER_OPTION_INDEXES: Lazy<HashMap<Provider, Box<[usize]>>> = Lazy::ne
     map.into_iter().map(|(k, v)| (k, v.into_boxed_slice())).collect()
 });
 
-static PICKER_PROVIDER_ORDER: Lazy<Box<[Provider]>> = Lazy::new(|| {
-    Provider::all_providers()
-        .into_iter()
-        .filter(|p| !matches!(p, Provider::Ollama | Provider::LlamaCpp))
-        .chain([Provider::LlamaCpp, Provider::Ollama])
-        .collect::<Vec<_>>()
-        .into_boxed_slice()
-});
+static PICKER_PROVIDER_ORDER: Lazy<Box<[Provider]>> = Lazy::new(|| Provider::picker_display_order().into_boxed_slice());
 
 pub(super) fn build_model_options_with_overrides(
     overrides: &BTreeMap<String, ProviderOverrideConfig>,
