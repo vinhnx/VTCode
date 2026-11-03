@@ -337,7 +337,7 @@ impl DesktopView {
             rail = rail.child(
                 desktop_button("config-category-curated")
                     .accessibility_label(label.clone())
-                    .child(config_rail_entry_content(
+                    .child(nav_entry_content(
                         "config-category-label-curated",
                         config_group_icon(curated::CURATED_GROUP_NAME),
                         label,
@@ -367,11 +367,7 @@ impl DesktopView {
             rail = rail.child(
                 desktop_button(format!("config-category-{name}"))
                     .accessibility_label(label.clone())
-                    .child(config_rail_entry_content(
-                        format!("config-category-label-{name}"),
-                        config_group_icon(&name),
-                        label,
-                    ))
+                    .child(nav_entry_content(format!("config-category-label-{name}"), config_group_icon(&name), label))
                     .small()
                     .flex_shrink_0()
                     .when(wide, |button| button.w_full().justify_start())
@@ -780,16 +776,4 @@ fn switch_tooltip(enabled: bool) -> String {
 /// rail shares one reading spine. Callers set the button's accessible name
 /// separately since the built-in `.label()` (and its screen-reader fallback)
 /// is unused.
-fn config_rail_entry_content(label_id: impl Into<gpui_kit::ElementId>, icon: IconName, label: String) -> AnyElement {
-    div()
-        .w_full()
-        .min_w_0()
-        .flex()
-        .items_center()
-        .gap_2()
-        .child(Icon::new(icon).small())
-        .child(div().id(label_id).test_support().flex_1().min_w_0().truncate().child(label))
-        .into_any_element()
-}
-
 mod curated_overview;

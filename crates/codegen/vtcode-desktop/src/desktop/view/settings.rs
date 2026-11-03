@@ -44,6 +44,18 @@ impl SettingsTab {
         .to_string()
     }
 
+    pub(super) fn icon(self) -> IconName {
+        match self {
+            Self::Appearance => IconName::Palette,
+            Self::Accessibility => IconName::Accessibility,
+            Self::Shortcuts => IconName::Keyboard,
+            Self::VtCode => IconName::Bot,
+            Self::Connections => IconName::Plug,
+            Self::Notifications => IconName::Bell,
+            Self::Storage => IconName::HardDrive,
+        }
+    }
+
     pub(super) fn search_keywords(self) -> &'static [&'static str] {
         match self {
             Self::Appearance => &[
@@ -261,7 +273,11 @@ impl DesktopView {
             desktop_entries.push(
                 desktop_button(format!("settings-nav-{tab:?}").to_lowercase())
                     .accessibility_label(tab.label())
-                    .child(div().flex_1().min_w_0().truncate().child(tab.label()))
+                    .child(nav_entry_content(
+                        format!("settings-nav-label-{tab:?}").to_lowercase(),
+                        tab.icon(),
+                        tab.label(),
+                    ))
                     .desktop_selected(active, &colors)
                     .w_full()
                     .justify_start()
@@ -273,7 +289,7 @@ impl DesktopView {
         let config_label = rust_i18n::t!("app.configuration.page_title").to_string();
         let config_entry = desktop_button("settings-nav-configuration")
             .accessibility_label(config_label.clone())
-            .child(div().flex_1().min_w_0().truncate().child(config_label))
+            .child(nav_entry_content("settings-nav-label-configuration", IconName::Settings2, config_label))
             .desktop_selected(config_active, &colors)
             .w_full()
             .justify_start()
@@ -513,5 +529,25 @@ impl DesktopView {
             (current + count - 1) % count
         };
         self.select_settings_page_from_keyboard(index, window, cx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_tab_icons_cover_every_tab_exactly_once() {
+        assert_eq!(SettingsTab::Appearance.icon(), IconName::Palette);
+        assert_eq!(SettingsTab::Accessibility.icon(), IconName::Accessibility);
+        assert_eq!(SettingsTab::Shortcuts.icon(), IconName::Keyboard);
+        assert_eq!(SettingsTab::VtCode.icon(), IconName::Bot);
+        assert_eq!(SettingsTab::Connections.icon(), IconName::Plug);
+        assert_eq!(SettingsTab::Notifications.icon(), IconName::Bell);
+        assert_eq!(SettingsTab::Storage.icon(), IconName::HardDrive);
+        let icons = SettingsTab::ALL.map(SettingsTab::icon);
+        for (index, icon) in icons.iter().enumerate() {
+            assert!(icons.iter().skip(index + 1).all(|other| other != icon), "duplicate nav icon {icon:?}");
+        }
     }
 }

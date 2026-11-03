@@ -318,6 +318,23 @@ pub(super) fn nav_group_header(
         .into_any_element()
 }
 
+/// Navigation entry content: a small icon pinned to a truncating label on
+/// one spine. Shared by the settings navigation and the configuration group
+/// rail (Kit `Button` centers its built-in icon/label pair, so rails use
+/// this custom child instead). The icon is decorative; the owning button
+/// carries the accessible name.
+pub(super) fn nav_entry_content(label_id: impl Into<gpui_kit::ElementId>, icon: IconName, label: String) -> AnyElement {
+    div()
+        .w_full()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(Icon::new(icon).small())
+        .child(div().id(label_id).test_support().flex_1().min_w_0().truncate().child(label))
+        .into_any_element()
+}
+
 /// Shared inspector tab container: every inspector tab (Changes, Files,
 /// Activity, Output, Utilities) fills the card below the tab rail with the
 /// same flex geometry. Returns `Div` so callers chain their stable id,
