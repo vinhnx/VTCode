@@ -5,6 +5,21 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.2 - 2026-11-03
+
+### Highlights
+
+#### Bug Fixes
+
+- Bump async-executor past yanked 1.14.0 (da20eaa8) (@vinhnx)
+
+#### Documentation
+
+- Remux desktop demo to mp4 for README playback (d7cfedd2) (@vinhnx)
+- Link desktop demo video instead of embedding (d2b78d1f) (@vinhnx)
+
+### Other Changes
+
 ## 0.181.1 - 2026-11-02
 
 ### Highlights
