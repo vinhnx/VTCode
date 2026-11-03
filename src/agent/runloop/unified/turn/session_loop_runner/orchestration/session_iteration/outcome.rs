@@ -278,7 +278,7 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
     let mut turn_diagnostics = outcome.turn_diagnostics.clone();
     turn_diagnostics.elapsed_ms = turn_elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
     *last_turn_diagnostics = Some(turn_diagnostics.clone());
-    let show_turn_timer = vt_cfg.as_ref().map(|cfg| cfg.ui.show_turn_timer).unwrap_or(true);
+    let show_turn_timer = resolve_show_turn_timer(vt_cfg.as_ref());
     let harness_snapshot = tool_registry.harness_context_snapshot();
     if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
         outcome,
@@ -664,4 +664,34 @@ pub(super) async fn run_outcome_gate(gate: OutcomeGate<'_>) -> Result<OutcomeFlo
         return Ok(OutcomeFlow::BreakLoop);
     }
     Ok(OutcomeFlow::ContinueLoop)
+}
+
+/// Resolve whether the per-turn elapsed timer line renders.
+///
+/// Missing config means default config, and the timer defaults off
+/// (`ui.show_turn_timer`), so `None` must not re-enable it.
+fn resolve_show_turn_timer(vt_cfg: Option<&VTCodeConfig>) -> bool {
+    vt_cfg.is_some_and(|cfg| cfg.ui.show_turn_timer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_config_disables_turn_timer() {
+        assert!(!resolve_show_turn_timer(None));
+    }
+
+    #[test]
+    fn default_config_disables_turn_timer() {
+        assert!(!resolve_show_turn_timer(Some(&VTCodeConfig::default())));
+    }
+
+    #[test]
+    fn explicit_config_opt_in_enables_turn_timer() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.ui.show_turn_timer = true;
+        assert!(resolve_show_turn_timer(Some(&cfg)));
+    }
 }
