@@ -218,7 +218,7 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // Remaining providers in `Provider::all_providers` relative order. Every
     // provider needs presets here: the global manager seeds from this list,
     // and anything missing warns as unknown in `create_provider_for_model`.
-    // The `builtin_presets_cover_every_provider` test guards against drift.
+    // The `builtin_presets_cover_every_provider_except_poolside` test guards against drift.
     presets.extend(presets::mimo_presets());
     presets.extend(presets::mistral_presets());
     presets.extend(presets::huggingface_presets());
