@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::core_tui::types::LocalAgentStatus;
 use vtcode_commons::ui_protocol::ProgressOperation;
 
 fn enabled() -> ProgramStatus {
@@ -27,7 +28,7 @@ fn child(id: &str, kind: LocalAgentKind, state: ProgramState, updated_at: i64) -
         updated_at,
         display_label: "secret command".into(),
         agent_name: "private agent".into(),
-        status: "untrusted display state".into(),
+        status: LocalAgentStatus::Unknown,
         color: None,
         summary: Some("secret summary".into()),
         preview: "private path".into(),

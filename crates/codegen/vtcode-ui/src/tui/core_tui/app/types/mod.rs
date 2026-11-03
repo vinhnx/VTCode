@@ -23,7 +23,7 @@ pub use crate::tui::core_tui::types::{
     ContentPart, ExecSessionAction, FocusChangeCallback, InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight,
     InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineItemKind, InlineLinkRange, InlineLinkTarget, InlineListItem,
     InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineStatus, InlineTextStyle,
-    InlineTheme, InlineTone, LocalAgentEntry, LocalAgentKind, OpenAIServiceTierChoice, OverlayEvent,
+    InlineTheme, InlineTone, LocalAgentEntry, LocalAgentKind, LocalAgentStatus, OpenAIServiceTierChoice, OverlayEvent,
     OverlaySelectionChange, PreviewCallback, RewindAction, SecurePromptConfig, WizardModalMode, WizardStep,
 };
 pub use vtcode_commons::ui_protocol::{CompactActivityMetadata, ToolOutputId};

@@ -6,9 +6,9 @@ use vtcode_core::subagents::{
     SubagentStatus, SubagentStatusEntry, SubagentThreadSnapshot,
 };
 use vtcode_core::tools::exec_session::ExecSessionManager;
-use vtcode_core::tools::types::VTCodeExecSession;
+use vtcode_core::tools::types::{VTCodeExecSession, VTCodeSessionLifecycleState};
 use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
-use vtcode_ui::tui::app::{InlineHandle, LocalAgentEntry, LocalAgentKind};
+use vtcode_ui::tui::app::{InlineHandle, LocalAgentEntry, LocalAgentKind, LocalAgentStatus};
 
 pub(crate) async fn refresh_local_agents(
     handle: &InlineHandle,
@@ -72,7 +72,7 @@ async fn build_local_agent_entries(
                 kind: LocalAgentKind::Delegated,
                 program_status: delegated_program_state(entry.status),
                 updated_at: entry.updated_at.timestamp_millis(),
-                status: entry.status.as_str().to_string(),
+                status: local_agent_status_from_subagent(entry.status),
                 summary,
                 preview,
                 transcript_path: entry.transcript_path.clone(),
@@ -110,7 +110,7 @@ async fn build_local_agent_entries(
                 kind: LocalAgentKind::Background,
                 program_status: background_program_state(&entry),
                 updated_at: entry.ended_at.unwrap_or(entry.updated_at).timestamp_millis(),
-                status: entry.status.as_str().to_string(),
+                status: local_agent_status_from_background(entry.status),
                 summary: Some(background_local_agent_summary(&entry)),
                 preview,
                 transcript_path: entry.transcript_path.clone().or(entry.archive_path.clone()),
@@ -130,7 +130,7 @@ async fn build_local_agent_entries(
                 kind: LocalAgentKind::ExecSession,
                 program_status: command_program_state(&metadata, snapshot.termination_requested),
                 updated_at: snapshot.updated_at.timestamp_millis(),
-                status: metadata.status_label(),
+                status: local_agent_status_from_exec_session(&metadata),
                 summary: Some(exec_session_summary(&metadata)),
                 preview: snapshot.preview,
                 transcript_path: None,
@@ -140,6 +140,38 @@ async fn build_local_agent_entries(
 
     entries.sort_by_key(|left| std::cmp::Reverse(left.0));
     entries.into_iter().map(|(_, entry)| entry).collect()
+}
+
+/// Decode a delegated-agent status once, at the UI boundary.
+fn local_agent_status_from_subagent(status: SubagentStatus) -> LocalAgentStatus {
+    match status {
+        SubagentStatus::Queued => LocalAgentStatus::Queued,
+        SubagentStatus::Running => LocalAgentStatus::Running,
+        SubagentStatus::Waiting => LocalAgentStatus::Waiting,
+        SubagentStatus::Completed => LocalAgentStatus::Completed,
+        SubagentStatus::Failed => LocalAgentStatus::Failed,
+        SubagentStatus::Closed => LocalAgentStatus::Closed,
+    }
+}
+
+/// Decode a background-subprocess status once, at the UI boundary.
+fn local_agent_status_from_background(status: BackgroundSubprocessStatus) -> LocalAgentStatus {
+    match status {
+        BackgroundSubprocessStatus::Starting => LocalAgentStatus::Starting,
+        BackgroundSubprocessStatus::Running => LocalAgentStatus::Running,
+        BackgroundSubprocessStatus::Stopped => LocalAgentStatus::Stopped,
+        BackgroundSubprocessStatus::Error => LocalAgentStatus::Error,
+    }
+}
+
+/// Decode exec-session liveness from the typed lifecycle state (not the
+/// display label), preserving the exit code for the `exited (code)` row.
+fn local_agent_status_from_exec_session(metadata: &VTCodeExecSession) -> LocalAgentStatus {
+    match metadata.lifecycle_state {
+        Some(VTCodeSessionLifecycleState::Running) => LocalAgentStatus::Running,
+        Some(VTCodeSessionLifecycleState::Exited) => LocalAgentStatus::Exited { code: metadata.exit_code },
+        None => LocalAgentStatus::Unknown,
+    }
 }
 
 fn delegated_program_state(status: SubagentStatus) -> ProgramState {
@@ -167,7 +199,6 @@ fn background_program_state(entry: &BackgroundSubprocessEntry) -> ProgramState {
 }
 
 fn command_program_state(metadata: &VTCodeExecSession, termination_requested: bool) -> ProgramState {
-    use vtcode_core::tools::types::VTCodeSessionLifecycleState;
     if termination_requested {
         return ProgramState::Idle;
     }
@@ -465,7 +496,7 @@ mod tests {
         assert_eq!(delegated_program_state(SubagentStatus::Failed), ProgramState::Error);
         let mut metadata: VTCodeExecSession = serde_json::from_value(serde_json::json!({"id":"opaque-session", "command":"ignored", "backend":"pipe", "args":[], "working_dir":null})).unwrap();
         assert_eq!(command_program_state(&metadata, false), ProgramState::Idle);
-        metadata.lifecycle_state = Some(vtcode_core::tools::types::VTCodeSessionLifecycleState::Running);
+        metadata.lifecycle_state = Some(VTCodeSessionLifecycleState::Running);
         assert_eq!(command_program_state(&metadata, false), ProgramState::Working);
         metadata.exit_code = Some(0);
         assert_eq!(command_program_state(&metadata, false), ProgramState::Done);
@@ -483,5 +514,50 @@ mod tests {
         assert_eq!(background_program_state(&entry), ProgramState::Error);
         entry.termination_requested = true;
         assert_eq!(background_program_state(&entry), ProgramState::Idle);
+    }
+
+    #[test]
+    fn local_agent_status_decodes_each_producer_exhaustively() {
+        for (source, expected) in [
+            (SubagentStatus::Queued, LocalAgentStatus::Queued),
+            (SubagentStatus::Running, LocalAgentStatus::Running),
+            (SubagentStatus::Waiting, LocalAgentStatus::Waiting),
+            (SubagentStatus::Completed, LocalAgentStatus::Completed),
+            (SubagentStatus::Failed, LocalAgentStatus::Failed),
+            (SubagentStatus::Closed, LocalAgentStatus::Closed),
+        ] {
+            let decoded = local_agent_status_from_subagent(source);
+            assert_eq!(decoded, expected, "{source:?} mapping");
+            assert_eq!(decoded.to_string(), source.as_str(), "{source:?} label");
+        }
+
+        for (source, expected) in [
+            (BackgroundSubprocessStatus::Starting, LocalAgentStatus::Starting),
+            (BackgroundSubprocessStatus::Running, LocalAgentStatus::Running),
+            (BackgroundSubprocessStatus::Stopped, LocalAgentStatus::Stopped),
+            (BackgroundSubprocessStatus::Error, LocalAgentStatus::Error),
+        ] {
+            let decoded = local_agent_status_from_background(source);
+            assert_eq!(decoded, expected, "{source:?} mapping");
+            assert_eq!(decoded.to_string(), source.as_str(), "{source:?} label");
+        }
+
+        let mut metadata: VTCodeExecSession = serde_json::from_value(serde_json::json!({"id":"opaque-session", "command":"ignored", "backend":"pipe", "args":[], "working_dir":null})).unwrap();
+        assert_eq!(local_agent_status_from_exec_session(&metadata), LocalAgentStatus::Unknown);
+        metadata.lifecycle_state = Some(VTCodeSessionLifecycleState::Running);
+        assert_eq!(local_agent_status_from_exec_session(&metadata), LocalAgentStatus::Running);
+        metadata.lifecycle_state = Some(VTCodeSessionLifecycleState::Exited);
+        metadata.exit_code = None;
+        assert_eq!(local_agent_status_from_exec_session(&metadata), LocalAgentStatus::Exited { code: None });
+        metadata.exit_code = Some(3);
+        let exited = local_agent_status_from_exec_session(&metadata);
+        assert_eq!(exited, LocalAgentStatus::Exited { code: Some(3) });
+        assert_eq!(exited.to_string(), "exited (3)");
+
+        // Liveness matches the pre-refactor per-kind string sets.
+        assert!(LocalAgentStatus::Queued.is_live());
+        assert!(LocalAgentStatus::Starting.is_live());
+        assert!(!LocalAgentStatus::Unknown.is_live());
+        assert!(!LocalAgentStatus::Exited { code: Some(0) }.is_live());
     }
 }

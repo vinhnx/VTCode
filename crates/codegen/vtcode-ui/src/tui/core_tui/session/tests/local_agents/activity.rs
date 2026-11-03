@@ -120,7 +120,7 @@ fn exited_exec_entries_do_not_drive_shimmer_while_running_ones_do() {
 
     let mut exited =
         sample_local_agent_entry_with_id("exec-exited", "cargo check", app_types::LocalAgentKind::ExecSession);
-    exited.status = "exited (0)".to_string();
+    exited.status = crate::tui::core_tui::types::LocalAgentStatus::Exited { code: Some(0) };
     let running =
         sample_local_agent_entry_with_id("exec-running", "cargo test", app_types::LocalAgentKind::ExecSession);
 

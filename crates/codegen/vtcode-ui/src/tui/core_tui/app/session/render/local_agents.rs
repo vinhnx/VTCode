@@ -280,14 +280,15 @@ fn local_agent_title_line(session: &Session, entry: &LocalAgentEntry) -> Line<'s
         Span::styled(" · ".to_string(), muted),
     ];
 
+    let status_label = entry.status.to_string();
     if entry.is_loading() && session.core.appearance.should_animate_progress_status() {
         spans.extend(shimmer_spans_with_style_at_phase(
-            &entry.status,
+            &status_label,
             accent_style(session),
             session.core.shimmer_state.phase(),
         ));
     } else {
-        spans.push(Span::styled(entry.status.clone(), accent_style(session)));
+        spans.push(Span::styled(status_label, accent_style(session)));
     }
 
     Line::from(spans)
@@ -335,10 +336,10 @@ mod tests {
         Session, format_local_agent_preview, local_agent_status_line, local_agent_title_line,
         local_agents_expanded_panel_height, local_agents_fixed_rows, local_agents_header_summary,
     };
-    use crate::tui::core_tui::types::{InlineTheme, LocalAgentEntry, LocalAgentKind};
+    use crate::tui::core_tui::types::{InlineTheme, LocalAgentEntry, LocalAgentKind, LocalAgentStatus};
     use std::time::Duration;
 
-    fn sample_entry(status: &str) -> LocalAgentEntry {
+    fn sample_entry(status: LocalAgentStatus) -> LocalAgentEntry {
         LocalAgentEntry {
             program_status: vtcode_commons::program_status::ProgramState::Idle,
             updated_at: 0,
@@ -347,7 +348,7 @@ mod tests {
             agent_name: "rust-engineer".to_string(),
             color: Some("cyan".to_string()),
             kind: LocalAgentKind::Delegated,
-            status: status.to_string(),
+            status,
             summary: Some("Reviewing the workspace".to_string()),
             preview: "assistant: reviewing the workspace".to_string(),
             transcript_path: None,
@@ -369,7 +370,7 @@ mod tests {
     #[test]
     fn terminal_preview_keeps_status_lines_static() {
         let session = Session::new(InlineTheme::default(), None, 14);
-        let lines = format_local_agent_preview(&session, &sample_entry("completed"));
+        let lines = format_local_agent_preview(&session, &sample_entry(LocalAgentStatus::Completed));
 
         assert_eq!(lines[1].spans.len(), 1);
     }
@@ -378,7 +379,7 @@ mod tests {
     fn reduce_motion_keeps_loading_agent_status_static_and_visible() {
         let mut session = Session::new(InlineTheme::default(), None, 14);
         session.core.appearance.reduce_motion_mode = true;
-        let mut entry = sample_entry("running");
+        let mut entry = sample_entry(LocalAgentStatus::Running);
         entry.summary = Some("Reviewing the workspace".to_string());
 
         let title = local_agent_title_line(&session, &entry);

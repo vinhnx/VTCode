@@ -184,7 +184,7 @@ pub(crate) fn sample_local_agent_entry_with_id(
         agent_name: display_label.to_string(),
         color: Some("cyan".to_string()),
         kind,
-        status: "running".to_string(),
+        status: app_types::LocalAgentStatus::Running,
         summary: Some("Reviewing the workspace".to_string()),
         preview: "assistant: reviewing the workspace".to_string(),
         transcript_path: None,

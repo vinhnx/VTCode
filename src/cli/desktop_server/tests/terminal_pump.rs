@@ -249,7 +249,7 @@ async fn session_pump_ignores_stale_progress_and_clears_on_finish() {
 #[tokio::test]
 async fn session_pump_tracks_live_background_and_blocked_states() {
     use vtcode_commons::ui_protocol::ActivityState;
-    use vtcode_ui::tui::app::{LocalAgentEntry, LocalAgentKind};
+    use vtcode_ui::tui::app::{LocalAgentEntry, LocalAgentKind, LocalAgentStatus};
     let state = std::sync::Arc::new(Mutex::new(ServerState {
         session_id: Some("session-b".into()),
         ..Default::default()
@@ -273,7 +273,7 @@ async fn session_pump_tracks_live_background_and_blocked_states() {
         kind: LocalAgentKind::ExecSession,
         program_status: vtcode_commons::program_status::ProgramState::Working,
         updated_at: 0,
-        status: "running".into(),
+        status: LocalAgentStatus::Running,
         summary: None,
         preview: String::new(),
         transcript_path: None,

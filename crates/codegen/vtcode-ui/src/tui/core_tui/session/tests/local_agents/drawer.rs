@@ -137,7 +137,7 @@ fn mixed_local_agents_keep_exec_session_selection_when_snapshot_changes() {
                     "cargo test --locked",
                     app_types::LocalAgentKind::ExecSession,
                 );
-                entry.status = "exited (0)".to_string();
+                entry.status = crate::tui::core_tui::types::LocalAgentStatus::Exited { code: Some(0) };
                 entry.preview = "finished".to_string();
                 entry
             },
@@ -203,13 +203,13 @@ fn ctrl_r_still_opens_history_picker_for_non_exec_local_agents() {
 #[test]
 fn auto_opened_local_agents_window_closes_when_delegated_work_finishes() {
     let mut running = sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated);
-    running.status = "running".to_string();
+    running.status = crate::tui::core_tui::types::LocalAgentStatus::Running;
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![running.clone()] });
     assert!(session.local_agents_visible());
 
     let mut done = running;
-    done.status = "completed".to_string();
+    done.status = crate::tui::core_tui::types::LocalAgentStatus::Completed;
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![done] });
     assert!(!session.local_agents_visible(), "auto-opened window should close once live delegated work finishes");
 }
