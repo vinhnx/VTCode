@@ -18,17 +18,6 @@ also refine the overall design system for more modern macos 27 look and feels. c
 click on a notification should deeplink and open to the related information.
 
 ---
-
-for zen mode, when activated, hide distractions and focus on the main content. move and group the chat input accessory buttons like models/effort, build modes, approval modes together. keep it minimal and simple with clean layout, and must focused on the main content. and easy to toggle on/off.
-
----
-
-add current time at each agent's message response. reference: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-02 at 3.12.46 PM.png'. also implement for the CLI replacing current status clock.
-
----
-
-implement context menu on files for quick actions like open, delete, rename. maybe also add copy path. available in desktop app where the file is shown.
-
 ---
 
 implement a simple markdown preview for desktop app.
@@ -50,18 +39,6 @@ for search, it should able to deeplink to specific item when click, and scroll t
 desktop and cli, implement enter to jump to latest message, but only when chat input is not-empty.
 
 ---
-
-check and fix TUI
-
-```
-
-Tool 'task_tracker' failed. Expand Details for recovery
-steps.
-Details (click or F8 to expand)
-```
-
-when the thread message runloop is running, clicking on this doesn't do anything. may need to handle it differently in the UI for both clid and desktop. for the context for the agent, it should still show relevant info.
-
 ---
 
 check auto mode seems can't use web search tool? /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261102T044638Z_528994-20422
@@ -73,10 +50,6 @@ https://github.com/longbridge/gpui-kit/releases/tag/v0.9.0
 ---
 
 contribute back to OSS with learning from this project. check gotchas and decicions.
-
----
-
-desktop app: check chat input labels seems not read and respect the font settings? the label size is fixed and not dynamic -> fix it
 
 ---
 
@@ -92,28 +65,6 @@ check for all of the panels behavior and layout. when clicking away, they should
 
 fix: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 7.40.37 AM.png'
 
----
-
-check and fix desktop to cli handoff doesn't work, it seems, it just open Terminal and doesn't do anything. it just show as CTA, for security can we launch it differently?
-
-error:
-
-```
-Error: session session-vtcode-20261103T010100Z_820673-41390 is already open in another process; continue there or fork a new session with --session-id <suffix>
-```
-
-1. for security can we directly launch the terminal differently? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 8.04.43 AM.png'
-2. check for properly passing context to CLI when handoff occurs.
-3. make sure CLI can handle it correctly.
-4. test the handoff flow end-to-end.
-5. check error handling if CLI fails.
-6. also check cli -> desktop handoff works.
-7. test with different contexts.
-8. also for desktop CLI handoff, also add option to choose which terminal to use.
-
----
-
-try to fix Ask Deep Wiki badge keep falling on github remote markdown, though it can render fine locally. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 7.41.56 AM.png'
 
 ---
 
@@ -160,16 +111,6 @@ improve existing desktop shimmer https://gpui-kit.com/component/shimmer/
 revamp existing manual build settings/config screen with https://gpui-kit.com/component/settings/ for more consistency
 
 ---
-
-revampe desktop app HITL confirmation popup shared component with https://gpui-kit.com/component/questionnaire/
-
-1. remove the main hitl container border.
-2. keep the button and layout consistent with the new design.
-3. update the text and labels to match the new style.
-4. check alignment and spacing for consistency.
-5. test the popup in different scenarios.
-6. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 11.19.09 AM.png' refernce this style from example
-
 ---
 
 use this https://gpui-kit.com/component/plot/ and https://gpui-kit.com/component/chart/ components for all data visualization
