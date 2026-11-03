@@ -151,7 +151,7 @@ impl DesktopView {
             let insert_at = ids
                 .iter()
                 .position(|id| self.transcript.position_by_id(id).is_some_and(|pos| pos > picked_pos))
-                .unwrap_or_else(|| ids.len());
+                .unwrap_or(ids.len());
             ids.insert(insert_at, picked_id.to_string());
         }
         if ids.is_empty() {
