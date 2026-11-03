@@ -81,8 +81,8 @@ use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, NoticeSeverity, Transcript, TranscriptItem, TranscriptRole, status as tool_status,
 };
 use super::transport::{
-    BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, launch_backend,
-    request_fits_frame,
+    BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,
+    launch_backend, request_fits_frame,
 };
 use cli_handoff::CliHandoff;
 use file_rename::FileRenameState;
@@ -407,12 +407,23 @@ pub(super) struct ExternalLaunchCall {
     pub editor: files::ExternalEditor,
 }
 
+/// A recorded CLI handoff script launch: the exact script content that would
+/// have been written and opened, so GUI tests assert routing without spawning
+/// `/usr/bin/open`.
+#[cfg(test)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct HandoffScriptCall {
+    pub content: String,
+    pub editor: files::ExternalEditor,
+}
+
 /// Test-only interception of external-editor launches so GUI tests never shell
 /// out to `/usr/bin/open`. The completion path stays shared with production.
 #[cfg(test)]
 #[derive(Debug, Default)]
 pub(super) struct TestLaunchIntercept {
     pub calls: Vec<ExternalLaunchCall>,
+    pub handoff_scripts: Vec<HandoffScriptCall>,
     /// Simulated failure for every intercepted launch; `None` means success.
     pub fail_with: Option<String>,
 }
@@ -545,6 +556,8 @@ struct DesktopView {
     _ui_language_subscription: Subscription,
     file_destination_select: Entity<preferences::FileDestinationSelectState>,
     _file_destination_subscription: Subscription,
+    cli_terminal_select: Entity<preferences::CliTerminalSelectState>,
+    _cli_terminal_subscription: Subscription,
     turn_completion_select: Entity<preferences::TurnCompletionModeSelectState>,
     _turn_completion_subscription: Subscription,
     question_answer: Entity<TextareaState>,

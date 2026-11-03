@@ -206,6 +206,70 @@ fn offered_destinations_combine_always_available_detected_and_saved() {
 }
 
 #[test]
+fn cli_terminal_round_trips_and_invalid_values_fall_back_to_terminal() {
+    assert_eq!(CliTerminal::default(), CliTerminal::Terminal);
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert_eq!(legacy.cli_terminal(), CliTerminal::Terminal);
+
+    for terminal in CliTerminal::ALL {
+        let mut preferences = Preferences::default();
+        preferences.set_cli_terminal(terminal);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(
+            serialized.contains(&format!("\"cliTerminal\":\"{}\"", terminal.id())),
+            "saved id is stable for {terminal:?}: {serialized}"
+        );
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.cli_terminal(), terminal);
+        assert_eq!(loaded.cli_terminal, Some(terminal.id().to_owned()));
+    }
+    assert_eq!(CliTerminal::ALL.len(), 3, "extend this table when adding a terminal");
+    for (terminal, label, editor) in [
+        (CliTerminal::Terminal, "Terminal", ExternalEditor::Terminal),
+        (CliTerminal::ITerm2, "iTerm2", ExternalEditor::ITerm2),
+        (CliTerminal::Ghostty, "Ghostty", ExternalEditor::Ghostty),
+    ] {
+        assert_eq!(terminal.label(), label);
+        assert_eq!(terminal.external_editor(), editor);
+    }
+
+    // Parsing is case-insensitive and trims whitespace, like destination ids.
+    assert_eq!(CliTerminal::from_saved(Some("  ITERM2 ")), CliTerminal::ITerm2);
+    assert_eq!(CliTerminal::from_saved(Some("Ghostty")), CliTerminal::Ghostty);
+
+    // Unknown or empty ids fall back without touching other preferences.
+    for saved in ["konsole", "", "   "] {
+        let content = format!(r#"{{"theme":"ciapre","cliTerminal":{saved:?}}}"#);
+        let loaded: Preferences = serde_json::from_str(&content).unwrap();
+        assert_eq!(loaded.cli_terminal(), CliTerminal::Terminal, "saved {saved:?}");
+        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+    }
+}
+
+#[test]
+fn offered_terminals_combine_always_available_detected_and_saved() {
+    // Terminal alone when nothing is detected: it ships with macOS.
+    assert_eq!(CliTerminal::offered(CliTerminal::Terminal, &[]), vec![CliTerminal::Terminal]);
+
+    // Detected terminals join in canonical order, not detection order.
+    assert_eq!(
+        CliTerminal::offered(CliTerminal::Terminal, &[ExternalEditor::Ghostty, ExternalEditor::ITerm2]),
+        vec![CliTerminal::Terminal, CliTerminal::ITerm2, CliTerminal::Ghostty]
+    );
+
+    // Non-terminal detections never leak into the terminal picker.
+    assert_eq!(CliTerminal::offered(CliTerminal::Terminal, &[ExternalEditor::VsCode]), vec![CliTerminal::Terminal]);
+
+    // The saved choice stays selectable even when its app is missing, so
+    // the control never renders blank and reinstalls restore behavior.
+    assert_eq!(CliTerminal::offered(CliTerminal::Ghostty, &[]), vec![CliTerminal::Terminal, CliTerminal::Ghostty]);
+
+    // A saved choice that is also detected appears exactly once.
+    let present = CliTerminal::offered(CliTerminal::ITerm2, &[ExternalEditor::ITerm2]);
+    assert_eq!(present.iter().filter(|t| **t == CliTerminal::ITerm2).count(), 1);
+}
+
+#[test]
 fn destination_availability_matches_editor_availability() {
     // The viewer has no editor; every other always-available destination
     // maps to an always-available editor, and vice versa.

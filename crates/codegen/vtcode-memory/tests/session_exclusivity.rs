@@ -104,6 +104,7 @@ fn two_processes_share_a_workspace_but_not_a_session() -> TestResult {
     let stderr = String::from_utf8_lossy(&output_a2.stderr);
     assert!(stderr.contains("already open in another process"), "must name the contention: {stderr}");
     assert!(stderr.contains("session-a"), "must name the session: {stderr}");
+    assert!(stderr.contains("vtcode --fork-session session-a"), "must print the exact fork retry: {stderr}");
     assert!(!ready_a2.exists(), "refused open must not signal readiness");
 
     assert!(child_a.wait()?.success(), "holder A must exit cleanly");

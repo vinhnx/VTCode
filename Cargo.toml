@@ -589,6 +589,7 @@ assert_cmd = "2.1"
 predicates = "3.1"
 insta = "1.39"
 serial_test = { workspace = true }
+fs2 = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = []

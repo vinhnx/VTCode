@@ -189,6 +189,7 @@ mod exec_commands;
 mod model_review;
 mod secret_store;
 mod session_history;
+mod session_load_probe;
 mod shutdown_turns;
 mod spooled_scope;
 mod startup_interaction;

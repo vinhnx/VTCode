@@ -74,14 +74,25 @@ fn legacy_desktop_open(ctx: &mut SlashCommandContext<'_>, workspace: &Path, link
 
 fn report_desktop_opened(ctx: &mut SlashCommandContext<'_>, linked: bool, workspace: &Path) -> Result<()> {
     if linked {
+        // The CLI holds the thread's exclusive lock until this session ends,
+        // so the desktop load fails fast until the user exits here.
         if workspace != ctx.config.workspace.as_path() {
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!("Opened VT Code Desktop linked to thread {} in {}.", ctx.thread_id, workspace.display()),
+                &format!(
+                    "Opened VT Code Desktop linked to thread {} in {}. Exit this session so the desktop can load it.",
+                    ctx.thread_id,
+                    workspace.display()
+                ),
             )?;
         } else {
-            ctx.renderer
-                .line(MessageStyle::Info, &format!("Opened VT Code Desktop linked to thread {}.", ctx.thread_id))?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Opened VT Code Desktop linked to thread {}. Exit this session so the desktop can load it.",
+                    ctx.thread_id
+                ),
+            )?;
         }
     } else if history_persistence_enabled() {
         ctx.renderer.line(

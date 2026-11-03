@@ -11974,6 +11974,7 @@ dependencies = [
  "dialoguer",
  "dirs 7.0.0",
  "flate2",
+ "fs2",
  "futures",
  "hashbrown 0.17.1",
  "hotpath",

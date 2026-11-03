@@ -336,6 +336,107 @@ impl SearchableListItem for FileDestinationOption {
 
 pub(super) type FileDestinationSelectState = SelectState<SearchableVec<FileDestinationOption>>;
 
+/// Terminal used by the CLI handoff ("Continue in terminal").
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum CliTerminal {
+    #[default]
+    Terminal,
+    ITerm2,
+    Ghostty,
+}
+
+impl CliTerminal {
+    pub(super) const ALL: [Self; 3] = [Self::Terminal, Self::ITerm2, Self::Ghostty];
+
+    pub(super) const fn id(self) -> &'static str {
+        match self {
+            Self::Terminal => "terminal",
+            Self::ITerm2 => "iterm2",
+            Self::Ghostty => "ghostty",
+        }
+    }
+
+    pub(super) const fn external_editor(self) -> ExternalEditor {
+        match self {
+            Self::Terminal => ExternalEditor::Terminal,
+            Self::ITerm2 => ExternalEditor::ITerm2,
+            Self::Ghostty => ExternalEditor::Ghostty,
+        }
+    }
+
+    /// Dropdown options in canonical order: Terminal always (it ships on the
+    /// sealed system volume and cannot be uninstalled), the rest when
+    /// detected, plus the saved choice even when undetected so the control
+    /// never renders blank and reinstalls restore behavior.
+    pub(super) fn offered(saved: Self, detected: &[ExternalEditor]) -> Vec<Self> {
+        Self::ALL
+            .into_iter()
+            .filter(|terminal| {
+                matches!(terminal, Self::Terminal)
+                    || *terminal == saved
+                    || detected.contains(&terminal.external_editor())
+            })
+            .collect()
+    }
+
+    /// Display label. Terminal brand names are proper nouns and stay as-is.
+    pub(super) fn label(self) -> String {
+        match self {
+            Self::Terminal => "Terminal".to_string(),
+            Self::ITerm2 => "iTerm2".to_string(),
+            Self::Ghostty => "Ghostty".to_string(),
+        }
+    }
+
+    /// Parse a saved id. Missing or unknown values fall back to the default
+    /// so a corrupt preference never breaks the handoff.
+    pub(super) fn from_saved(value: Option<&str>) -> Self {
+        let Some(id) = value.map(str::trim) else {
+            return Self::default();
+        };
+        Self::ALL
+            .into_iter()
+            .find(|terminal| terminal.id().eq_ignore_ascii_case(id))
+            .unwrap_or_default()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct CliTerminalOption(CliTerminal);
+
+impl CliTerminalOption {
+    pub(super) fn for_terminals(terminals: &[CliTerminal]) -> SearchableVec<Self> {
+        SearchableVec::new(terminals.iter().map(|terminal| Self(*terminal)).collect::<Vec<_>>())
+    }
+
+    pub(super) fn selected_index(terminals: &[CliTerminal], terminal: CliTerminal) -> Option<IndexPath> {
+        terminals.iter().position(|option| *option == terminal).map(IndexPath::new)
+    }
+}
+
+impl SearchableListItem for CliTerminalOption {
+    type Value = CliTerminal;
+
+    fn title(&self) -> SharedString {
+        self.0.label().into()
+    }
+
+    fn render(&self, _: &mut gpui_kit::Window, _: &mut App) -> impl gpui_kit::IntoElement {
+        super::accessible_select_option(format!("terminal-option-{}", self.0.id()), self.title())
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.0
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_lowercase();
+        self.0.label().to_lowercase().contains(&query) || self.0.id().contains(&query)
+    }
+}
+
+pub(super) type CliTerminalSelectState = SelectState<SearchableVec<CliTerminalOption>>;
+
 /// When turn-terminal notifications (completed, failed, blocked) post.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum TurnCompletionMode {
@@ -473,6 +574,8 @@ pub(super) struct Preferences {
     pub ui_language: Option<String>,
     /// Default file open destination id. Unknown values fall back to the viewer.
     pub file_open_destination: Option<String>,
+    /// Terminal for CLI handoff id. Unknown values fall back to Terminal.
+    pub cli_terminal: Option<String>,
     /// Diff viewer layout id (`unified`/`split`). Unknown values fall back to Unified.
     pub diff_mode: Option<String>,
     /// The optional diagnostics footer is hidden on a fresh installation.
@@ -556,6 +659,14 @@ impl Preferences {
 
     pub(super) fn set_file_open_destination(&mut self, destination: FileOpenDestination) {
         self.file_open_destination = Some(destination.id().to_owned());
+    }
+
+    pub(super) fn cli_terminal(&self) -> CliTerminal {
+        CliTerminal::from_saved(self.cli_terminal.as_deref())
+    }
+
+    pub(super) fn set_cli_terminal(&mut self, terminal: CliTerminal) {
+        self.cli_terminal = Some(terminal.id().to_owned());
     }
 
     pub(super) fn diff_mode(&self) -> DiffMode {

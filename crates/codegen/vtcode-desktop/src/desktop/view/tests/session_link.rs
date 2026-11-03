@@ -81,6 +81,57 @@ fn handoff_link_in_current_workspace_loads_directly(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn contended_handoff_load_surfaces_the_close_and_reload_error(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let workspace = tempfile::TempDir::new().unwrap();
+    let canonical = vtcode_commons::paths::canonicalize(workspace.path()).expect("canonicalize");
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(canonical.clone());
+            view.backend = Some(BackendHandle { commands });
+            view.handle_handoff_link(
+                HandoffLink {
+                    session_id: "live-session".into(),
+                    workspace: canonical,
+                },
+                window,
+                cx,
+            );
+            assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+        });
+    })
+    .unwrap();
+    let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+        panic!("same-workspace handoff should load immediately");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+
+    // The service fail-fast probe rejects the load while the CLI holds the
+    // session; the banner must carry the remedy, not a generic failure.
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                result: None,
+                error: Some(
+                    "session live-session is already open in another process; close it there and reload".into(),
+                ),
+            },
+            cx,
+        );
+        assert_eq!(
+            view.error.as_deref(),
+            Some("session live-session is already open in another process; close it there and reload")
+        );
+        assert!(view.session_request.is_none(), "a failed load must not block retry");
+        assert!(view.backend.is_some(), "the service connection survives a rejected load");
+    });
+}
+
+#[gpui_kit::test]
 fn handoff_link_in_other_workspace_arms_pending_navigation(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::handoff_url::HandoffLink;
 

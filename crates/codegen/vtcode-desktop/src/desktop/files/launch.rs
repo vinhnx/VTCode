@@ -4,7 +4,9 @@
 //! resolves its target at launch time and runs a fixed argv, never a shell.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::{ExternalEditor, OpenAction, resolve_attachment_path};
 
@@ -79,6 +81,86 @@ pub(crate) fn open_terminal_at(root: &Path) -> Result<(), String> {
         return Err(rust_i18n::t!("app.files.missing").to_string());
     }
     run_open_command(editor_command(ExternalEditor::Terminal, root))
+}
+
+/// CLI flag the desktop handoff uses to continue a thread: a fork (not
+/// `--resume`) because the desktop service holds the session's exclusive lock
+/// while the thread is open. Shared with the display builder in
+/// `view/settings_connections.rs` so the shown command and the auto-run
+/// script can never disagree on the argv.
+pub(crate) const CLI_FORK_SESSION_FLAG: &str = "--fork-session";
+
+/// Whether `open -b <bundle> <script>` executes a `.command` handoff script
+/// in this terminal. Only Terminal.app is verified end-to-end; iTerm2/Ghostty
+/// `.command` handling is unconfirmed, so they stay on copy+open until a
+/// manual run proves otherwise.
+pub(crate) fn terminal_runs_handoff_script(terminal: ExternalEditor) -> bool {
+    matches!(terminal, ExternalEditor::Terminal)
+}
+
+/// Build the `.command` script that continues `session_id` in a fresh
+/// terminal: `cd` to the workspace, then `exec` the version-matched `vtcode`
+/// binary. Every interpolated value is single-quoted, so hostile characters
+/// (`$()`, backticks, `;`, newlines, unicode) stay literal. A trailing echo
+/// keeps failures visible instead of opening an empty terminal. Returns
+/// `None` when a path is not UTF-8: the caller falls back to copy+open
+/// rather than quoting a lossy path.
+pub(crate) fn build_handoff_script(vtcode: &Path, workspace: &Path, session_id: &str) -> Option<String> {
+    let vtcode = vtcode.to_str()?;
+    let workspace = workspace.to_str()?;
+    Some(format!(
+        "#!/bin/sh\ncd {} && exec {} {} {}\necho \"vtcode handoff failed with exit $?\"\nexit 1\n",
+        shell_quote(workspace),
+        shell_quote(vtcode),
+        CLI_FORK_SESSION_FLAG,
+        shell_quote(session_id),
+    ))
+}
+
+/// Single-quote one shell word: `'` becomes `'\''` (close, escaped quote,
+/// reopen). Newlines and `$()` stay literal inside single quotes.
+fn shell_quote(word: &str) -> String {
+    let mut quoted = String::with_capacity(word.len() + 2);
+    quoted.push('\'');
+    for (index, part) in word.split('\'').enumerate() {
+        if index > 0 {
+            quoted.push_str("'\\''");
+        }
+        quoted.push_str(part);
+    }
+    quoted.push('\'');
+    quoted
+}
+
+/// Write a handoff script to an owner-only temp file, exclusively created so
+/// a pre-existing symlink can never hijack the path. Names carry pid + a
+/// per-process counter so concurrent handoffs never collide. No cleanup: the
+/// OS purges temp, and deleting eagerly would race the terminal launch.
+pub(crate) fn write_handoff_script(content: &str) -> Result<PathBuf, String> {
+    static NEXT_SCRIPT_ID: AtomicU64 = AtomicU64::new(0);
+    let id = NEXT_SCRIPT_ID.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!("vtcode-handoff-{}-{id}.command", std::process::id()));
+    let mut options = fs::OpenOptions::new();
+    let _options = options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let _options = options.mode(0o700);
+    }
+    let mut file = options
+        .open(&path)
+        .map_err(|error| rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string())?;
+    file.write_all(content.as_bytes())
+        .map_err(|error| rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string())?;
+    Ok(path)
+}
+
+/// Open a handoff script in the terminal: fixed `open -b <bundle> <script>`
+/// argv, never a shell command. Callers must check
+/// [`terminal_runs_handoff_script`] first.
+pub(crate) fn open_script_in_terminal(script: &Path, terminal: ExternalEditor) -> Result<(), String> {
+    debug_assert!(terminal_runs_handoff_script(terminal), "handoff scripts only auto-run in verified terminals");
+    run_open_command(editor_command(terminal, script))
 }
 
 fn run_open_command(mut command: std::process::Command) -> Result<(), String> {
@@ -206,5 +288,135 @@ mod tests {
         assert!(reveal_in_finder(workspace.path(), "missing.rs").is_err());
         assert!(reveal_in_finder(workspace.path(), "../escape.rs").is_err());
         assert!(reveal_in_finder(workspace.path(), "escape/outside.rs").is_err());
+    }
+
+    #[test]
+    fn only_terminal_app_runs_handoff_scripts() {
+        assert!(terminal_runs_handoff_script(ExternalEditor::Terminal));
+        for editor in [ExternalEditor::ITerm2, ExternalEditor::Ghostty] {
+            assert!(!terminal_runs_handoff_script(editor), "{editor:?} stays on copy+open until verified");
+        }
+    }
+
+    #[test]
+    fn handoff_script_quotes_values_and_reports_failure() {
+        let script = build_handoff_script(
+            Path::new("/Applications/VT Code.app/Contents/Helpers/vtcode"),
+            Path::new("/repo/workspace"),
+            "sess-1",
+        )
+        .expect("plain paths encode");
+        assert_eq!(
+            script,
+            "#!/bin/sh\ncd '/repo/workspace' && exec '/Applications/VT Code.app/Contents/Helpers/vtcode' --fork-session 'sess-1'\necho \"vtcode handoff failed with exit $?\"\nexit 1\n"
+        );
+        // Asymmetric pair: a quote inside the path becomes '\'' (close,
+        // escaped quote, reopen), everything else untouched.
+        let hostile = build_handoff_script(Path::new("/bin/vtcode"), Path::new("/sp ace/o'brien"), "sess-1")
+            .expect("hostile paths encode");
+        assert_eq!(
+            hostile,
+            "#!/bin/sh\ncd '/sp ace/o'\\''brien' && exec '/bin/vtcode' --fork-session 'sess-1'\necho \"vtcode handoff failed with exit $?\"\nexit 1\n"
+        );
+    }
+
+    #[test]
+    fn handoff_script_executes_literally_under_a_real_shell() {
+        let temp = temp_workspace();
+        // Hostile workspace: spaces, quote, command substitution, separator,
+        // newline, unicode. If quoting breaks, `touch nope` fires or argv splits.
+        let hostile_dir = temp.path().join("a b'c$(touch nope);d\nüñî");
+        fs::create_dir(&hostile_dir).unwrap();
+        // Stub vtcode records its cwd + argv through env-passed output files.
+        // Separate files because the cwd itself contains a newline, which
+        // would break line-based parsing of a shared record.
+        let stub = temp.path().join("vtcode");
+        let out = temp.path().join("argv.txt");
+        let dir_out = temp.path().join("cwd.txt");
+        fs::write(
+            &stub,
+            "#!/bin/sh\nprintf 'cwd=%s\\n' \"$PWD\" > \"$STUB_DIR\"\nprintf '%s\\n' \"$@\" > \"$STUB_OUT\"\n",
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&stub, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let script = build_handoff_script(&stub, &hostile_dir, "sess-1").expect("hostile paths encode");
+        let script_path = temp.path().join("handoff.command");
+        fs::write(&script_path, &script).unwrap();
+        let output = std::process::Command::new("sh")
+            .arg(&script_path)
+            .env("STUB_OUT", &out)
+            .env("STUB_DIR", &dir_out)
+            .output()
+            .expect("sh runs the script");
+        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.stdout.is_empty(), "the failure echo must not run on success");
+        let recorded_cwd = fs::read_to_string(&dir_out).unwrap();
+        let cwd = recorded_cwd
+            .strip_prefix("cwd=")
+            .and_then(|cwd| cwd.strip_suffix('\n'))
+            .expect("cwd record");
+        assert_eq!(
+            vtcode_commons::paths::canonicalize(Path::new(cwd)).unwrap(),
+            vtcode_commons::paths::canonicalize(&hostile_dir).unwrap(),
+            "cd must land literally in the hostile directory"
+        );
+        let recorded_argv = fs::read_to_string(&out).unwrap();
+        assert_eq!(recorded_argv.lines().collect::<Vec<_>>(), vec!["--fork-session", "sess-1"], "argv must not split");
+        assert!(!temp.path().join("nope").exists(), "$(touch nope) must not execute");
+    }
+
+    #[test]
+    fn handoff_script_reports_failure_instead_of_exiting_silently() {
+        let temp = temp_workspace();
+        // A workspace deleted between launch and run: cd fails, so the
+        // script must print a visible failure and exit nonzero (keeping the
+        // terminal window open) instead of landing nowhere silently.
+        let missing = temp.path().join("deleted-workspace");
+        let script = build_handoff_script(Path::new("/bin/vtcode"), &missing, "sess-1").expect("paths encode");
+        let script_path = temp.path().join("handoff.command");
+        fs::write(&script_path, &script).unwrap();
+        let output = std::process::Command::new("sh")
+            .arg(&script_path)
+            .output()
+            .expect("sh runs the script");
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("vtcode handoff failed"),
+            "stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+
+    #[test]
+    fn handoff_script_rejects_non_utf8_paths() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+        let raw = OsString::from_vec(b"/tmp/\xff\xfe".to_vec());
+        assert!(build_handoff_script(Path::new("/bin/vtcode"), Path::new(&raw), "sess-1").is_none());
+        assert!(build_handoff_script(Path::new(&raw), Path::new("/tmp/ws"), "sess-1").is_none());
+    }
+
+    #[test]
+    fn handoff_script_files_are_owner_only_and_unique() {
+        struct RemoveOnDrop(PathBuf);
+        impl Drop for RemoveOnDrop {
+            fn drop(&mut self) {
+                drop(fs::remove_file(&self.0));
+            }
+        }
+        let first = write_handoff_script("#!/bin/sh\necho hi\n").expect("first write");
+        let _first_guard = RemoveOnDrop(first.clone());
+        let second = write_handoff_script("#!/bin/sh\necho hi\n").expect("second write");
+        let _second_guard = RemoveOnDrop(second.clone());
+        assert_ne!(first, second, "concurrent handoffs must not share a path");
+        assert_eq!(first.extension().and_then(|ext| ext.to_str()), Some("command"));
+        assert_eq!(fs::read_to_string(&first).unwrap(), "#!/bin/sh\necho hi\n");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&first).unwrap().permissions().mode() & 0o777, 0o700);
+        }
     }
 }

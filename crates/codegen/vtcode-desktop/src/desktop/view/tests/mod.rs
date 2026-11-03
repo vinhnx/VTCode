@@ -15,13 +15,13 @@ pub(super) use serde_json::json;
 
 pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation};
 pub(super) use super::{
-    ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, Route,
-    TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page, content_page_title, eyebrow_label,
-    group_box_title, opaque_path_element_id, restored_output_for_copy, row_title, scale_row_height_for_ui_font,
-    section_label, workspace_picker_options,
+    ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, HandoffScriptCall,
+    MAX_UI_EVENTS_PER_TICK, Route, TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page,
+    content_page_title, eyebrow_label, group_box_title, opaque_path_element_id, restored_output_for_copy, row_title,
+    scale_row_height_for_ui_font, section_label, workspace_picker_options,
 };
 pub(super) use crate::desktop::files::{ExternalEditor, FileEntry};
-pub(super) use crate::desktop::preferences::FileOpenDestination;
+pub(super) use crate::desktop::preferences::{CliTerminal, FileOpenDestination};
 pub(super) use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 pub(super) use crate::desktop::transcript::TranscriptItem;
 pub(super) use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};

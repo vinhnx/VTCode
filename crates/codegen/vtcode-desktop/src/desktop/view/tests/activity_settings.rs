@@ -874,10 +874,10 @@ fn narrow_composer_wraps_actions_and_bounds_long_model_names(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn connections_terminal_row_copies_the_resume_command(cx: &mut TestAppContext) {
+fn connections_terminal_row_copies_the_fork_command(cx: &mut TestAppContext) {
     // Pure builder oracles: a selected session yields a directory-independent
-    // resume command, no selection yields a plain terminal session.
-    assert_eq!(DesktopView::terminal_command_for_session(Some("sess-1")), "vtcode --resume sess-1 --all");
+    // fork command, no selection yields a plain terminal session.
+    assert_eq!(DesktopView::terminal_command_for_session(Some("sess-1")), "vtcode --fork-session sess-1");
     assert_eq!(DesktopView::terminal_command_for_session(None), "vtcode");
 
     let (window, view) = open_desktop(cx);
@@ -891,7 +891,7 @@ fn connections_terminal_row_copies_the_resume_command(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(window.try_find("copy-terminal-command").is_some());
         window.click("copy-terminal-command", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode --resume sess-1 --all"));
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode --fork-session sess-1"));
     })
     .unwrap();
 }

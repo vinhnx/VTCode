@@ -12,7 +12,10 @@ use super::strings::bundle;
 mod launch;
 mod mutate;
 
-pub(super) use launch::{open_in_editor, open_terminal_at, reveal_in_finder};
+pub(super) use launch::{
+    CLI_FORK_SESSION_FLAG, build_handoff_script, open_in_editor, open_script_in_terminal, open_terminal_at,
+    reveal_in_finder, terminal_runs_handoff_script, write_handoff_script,
+};
 pub(super) use mutate::{rename_entry, trash_entry, validated_file_name};
 
 /// Bounds on retained sidebar rows and recursive traversal depth.

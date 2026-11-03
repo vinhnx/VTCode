@@ -28,7 +28,7 @@ per terminal pane), each with its own session. The stores are built for this:
 - Event log: one session, one writer. The runloop's event sink opens the log
   with `open_exclusive`, which fails closed with `SessionBusy` when another
   process already holds the session — resume the session in its own terminal
-  or fork with `--session-id <suffix>` instead. Readers (`session-store
+  or fork with `vtcode --fork-session <id>` instead. Readers (`session-store
   inspect`, retention scans) use the shared `open`, which degrades
   gracefully and never fails on a live writer.
 - Checkpoints: each session owns disjoint `turn_{key}_{n}.json` records plus

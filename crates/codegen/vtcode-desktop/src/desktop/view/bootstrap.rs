@@ -573,8 +573,10 @@ impl DesktopView {
         });
         let destination = preferences.file_open_destination();
         // Bounded Info.plist scan; fast enough to run inline so the
-        // dropdown is correct on its first render.
-        let offered = preferences::FileOpenDestination::offered(destination, &files::detect_installed_editors());
+        // dropdowns are correct on their first render. One scan feeds both
+        // the file destination and the CLI terminal pickers.
+        let detected = files::detect_installed_editors();
+        let offered = preferences::FileOpenDestination::offered(destination, &detected);
         let file_destination_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
                 preferences::FileDestinationOption::for_destinations(&offered),
@@ -590,6 +592,22 @@ impl DesktopView {
                     view.set_file_open_destination(*destination, cx);
                 }
             });
+        let terminal = preferences.cli_terminal();
+        let offered_terminals = preferences::CliTerminal::offered(terminal, &detected);
+        let cli_terminal_select = cx.new(|cx| {
+            gpui_kit::component::select::SelectState::new(
+                preferences::CliTerminalOption::for_terminals(&offered_terminals),
+                preferences::CliTerminalOption::selected_index(&offered_terminals, terminal),
+                window,
+                cx,
+            )
+            .searchable(false)
+        });
+        let cli_terminal_subscription = cx.subscribe_in(&cli_terminal_select, window, |view, _, event, _, cx| {
+            if let SelectEvent::Confirm(Some(terminal)) = event {
+                view.set_cli_terminal(*terminal, cx);
+            }
+        });
         let turn_completion_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
                 preferences::TurnCompletionModeOption::for_modes(),
@@ -704,6 +722,8 @@ impl DesktopView {
             _ui_language_subscription: ui_language_subscription,
             file_destination_select,
             _file_destination_subscription: file_destination_subscription,
+            cli_terminal_select,
+            _cli_terminal_subscription: cli_terminal_subscription,
             turn_completion_select,
             _turn_completion_subscription: turn_completion_subscription,
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),

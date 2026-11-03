@@ -280,5 +280,9 @@ mod tests {
 
         let err = result.expect_err("expected missing session error");
         assert!(err.to_string().contains("No session with identifier"), "unexpected error: {err:#}");
+        assert!(
+            err.to_string().contains("run a turn first so there is a checkpoint to fork"),
+            "missing handoff remedy: {err:#}"
+        );
     }
 }

@@ -555,6 +555,21 @@ impl DesktopView {
         Some(intercept.fail_with.clone().map_or(Ok(()), Err))
     }
 
+    /// Test-only interception for handoff script launches, mirroring
+    /// [`intercept_test_launch`]: records the script content instead of
+    /// writing a file and spawning `/usr/bin/open`. Returns `None` when no
+    /// hook is set.
+    #[cfg(test)]
+    pub(super) fn intercept_test_handoff_script(
+        &mut self,
+        content: String,
+        editor: files::ExternalEditor,
+    ) -> Option<Result<(), String>> {
+        let intercept = self.test_launch_intercept.as_mut()?;
+        intercept.handoff_scripts.push(HandoffScriptCall { content, editor });
+        Some(intercept.fail_with.clone().map_or(Ok(()), Err))
+    }
+
     fn open_preview_in_editor(&mut self, editor: files::ExternalEditor, window: &mut Window, cx: &mut Context<Self>) {
         let (Some(workspace), Some(preview)) = (self.workspace.clone(), self.file_preview.as_ref()) else {
             return;

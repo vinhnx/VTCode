@@ -421,6 +421,46 @@ fn resolve_backend_executable() -> Result<PathBuf, String> {
         .ok_or_else(|| missing_message.to_string())
 }
 
+/// Binary for CLI handoff scripts: the same resolved backend executable, so a
+/// GUI-spawned terminal (minimal PATH, no user profile) runs the
+/// version-matched binary instead of failing to find `vtcode` on PATH.
+pub(crate) fn handoff_vtcode_binary() -> Result<PathBuf, String> {
+    #[cfg(test)]
+    if let Some(overridden) = TEST_HANDOFF_BINARY.with(|slot| slot.borrow().clone()) {
+        return overridden;
+    }
+    resolve_backend_executable()
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static TEST_HANDOFF_BINARY: std::cell::RefCell<Option<Result<PathBuf, String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Redirect handoff binary resolution for one GUI test: `Ok` pins the script
+/// binary, `Err` simulates resolution failure (copy+open fallback). Hold the
+/// returned guard for the test's duration; dropping it restores real resolution.
+#[cfg(test)]
+#[must_use = "hold the guard or the override leaks into other tests"]
+pub(super) fn set_test_handoff_binary(binary: Result<PathBuf, String>) -> TestHandoffBinaryGuard {
+    TEST_HANDOFF_BINARY.with(|slot| *slot.borrow_mut() = Some(binary));
+    TestHandoffBinaryGuard { _private: () }
+}
+
+/// RAII guard restoring real binary resolution on drop, even on failure.
+#[cfg(test)]
+pub(super) struct TestHandoffBinaryGuard {
+    _private: (),
+}
+
+#[cfg(test)]
+impl Drop for TestHandoffBinaryGuard {
+    fn drop(&mut self) {
+        TEST_HANDOFF_BINARY.with(|slot| *slot.borrow_mut() = None);
+    }
+}
+
 fn packaged_backend_candidates(current_dir: &Path) -> Option<Vec<PathBuf>> {
     if current_dir.file_name() != Some(std::ffi::OsStr::new(bundle::MACOS_DIR)) {
         return None;

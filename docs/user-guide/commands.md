@@ -256,9 +256,9 @@ Desktop-to-CLI protocol handshake; a standalone CLI process cannot observe anoth
 
 ## Desktop and CLI handoff
 
-Each surface can hand its current thread to the other. Both directions link the same archived thread (resume in
-place), so work in one side at a time: each side checkpoints on its own turns and the latest checkpoint wins the
-archive.
+Each surface can hand its current thread to the other. A loaded session holds an exclusive lock for its whole
+lifetime (idle included), so the two directions differ: Desktop → CLI forks (both sides stay open), while CLI →
+Desktop loads the same thread (exit the CLI session first).
 
 - **CLI → Desktop (`/desktop`, macOS only)** — Opens VT Code Desktop with the current thread selected. Delivery
   goes through a `vtcode://session/<id>?workspace=<path>` URL handled by the running app, so handoff to an open
@@ -267,12 +267,16 @@ archive.
   `vtcode desktop` (explicit path, `VTCODE_DESKTOP_APP`, then the standard install locations) with `--session` /
   `--workspace` argv. Linking needs a saved checkpoint: threads checkpoint after every turn, so a fresh thread with
   no turns yet opens unlinked with a notice — run a turn and retry. With history persistence disabled the thread
-  cannot be linked.
+  cannot be linked. The CLI holds the thread open until it exits, so the desktop load fails fast with a
+  close-and-reload error until then — exit this session and reload the thread there.
 - **Desktop → CLI** — The thread-header Terminal button, `/cli`, and the ⌘K "Continue in terminal" entry all open
-  the same handoff card showing `vtcode --resume <id> --all` for the selected thread (the same command as Settings →
-  Connections → Terminal). **Copy** copies it; **Continue in terminal** copies it and opens Terminal at the
-  workspace; **Dismiss** closes the card. With no thread selected the button is disabled and the other entries
-  explain why.
+  the same handoff card showing `vtcode --fork-session <id>` for the selected thread (the same command as Settings →
+  Connections → Terminal). Fork, not resume: the desktop keeps the thread open, so the CLI continues an independent
+  copy while the desktop thread stays live. **Copy** copies it; **Continue in terminal** copies it and runs it in
+  the chosen terminal (Terminal.app runs it automatically via a generated script; iTerm2/Ghostty open at the
+  workspace for pasting until their script handling is verified); **Dismiss** closes the card. The terminal is
+  chosen in Settings → Connections. With no thread selected the button is disabled and the other entries explain
+  why. While a turn runs, the card notes the copy includes only completed turns.
 - Typing `/desktop` inside Desktop reports that you are already there instead of opening a second instance.
 
 ## Configuration quick reference

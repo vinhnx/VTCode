@@ -660,6 +660,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             let load_started = Instant::now();
             let params: protocol::SessionIdParams = parse_params(&request.params)?;
             ensure_no_active_turn(context).await?;
+            ensure_session_not_held_elsewhere(&context.workspace, &params.session_id).await?;
             let archive_started = Instant::now();
             let listing = find_session_by_identifier(&params.session_id)
                 .await?

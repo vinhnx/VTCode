@@ -64,7 +64,7 @@ use turn_queue::{EnqueueMode, dispatch_drained_turn, enqueue_turn, publish_queue
 mod webmcp;
 #[cfg(test)]
 use webmcp::install_session_runtime;
-use webmcp::{DesktopWebmcpRuntime, start_session};
+use webmcp::{DesktopWebmcpRuntime, ensure_session_not_held_elsewhere, start_session};
 mod restore;
 mod secret_store;
 mod storage;

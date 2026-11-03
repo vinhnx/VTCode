@@ -1,13 +1,26 @@
 use super::*;
 
 impl DesktopView {
-    /// Continue a session from any directory; bounded archive IDs are safe to
-    /// interpolate unquoted.
+    /// Continue a session from any directory as an independent fork; bounded
+    /// archive IDs are safe to interpolate unquoted. A fork (not `--resume`)
+    /// because the desktop service holds the session's exclusive lock while
+    /// the thread is open, so an in-place resume would fail with `SessionBusy`.
+    /// No `--all`: direct-id lookup is global, the scope only affects the
+    /// latest/interactive pickers.
     pub(super) fn terminal_command_for_session(selected_session_id: Option<&str>) -> String {
         match selected_session_id {
-            Some(id) => format!("vtcode --resume {id} --all"),
+            Some(id) => format!("vtcode {} {id}", files::CLI_FORK_SESSION_FLAG),
             None => "vtcode".to_string(),
         }
+    }
+
+    pub(super) fn set_cli_terminal(&mut self, terminal: preferences::CliTerminal, cx: &mut Context<Self>) {
+        if self.preferences.cli_terminal() == terminal {
+            return;
+        }
+        self.preferences.set_cli_terminal(terminal);
+        self.save_preferences();
+        cx.notify();
     }
 
     pub(super) fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -66,24 +79,39 @@ impl DesktopView {
             .child({
                 let group_title = rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string();
                 let command = Self::terminal_command_for_session(self.selected_session_id.as_deref());
+                // English literals: the repo does not add locale keys without
+                // full native-quality translations for every locale.
+                let terminal_row_title = "Terminal application".to_string();
                 accessible_group_box(
                     "terminal-settings-group",
                     group_title.clone(),
-                    settings_group_box(group_title, &cx.theme().colors).child(settings_row(
-                        rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(),
-                        command.clone(),
-                        desktop_button("copy-terminal-command")
-                            .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
-                            .ghost()
-                            .small()
-                            .on_click({
-                                move |_, window: &mut Window, cx: &mut App| {
-                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.clone()));
-                                    super::super::notifications::copied_to_clipboard(window, cx);
-                                }
-                            }),
-                        &cx.theme().colors,
-                    )),
+                    settings_group_box(group_title, &cx.theme().colors)
+                        .child(settings_row(
+                            rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(),
+                            command.clone(),
+                            desktop_button("copy-terminal-command")
+                                .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
+                                .ghost()
+                                .small()
+                                .on_click({
+                                    move |_, window: &mut Window, cx: &mut App| {
+                                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.clone()));
+                                        super::super::notifications::copied_to_clipboard(window, cx);
+                                    }
+                                }),
+                            &cx.theme().colors,
+                        ))
+                        .child(settings_row(
+                            terminal_row_title.clone(),
+                            "Terminal runs the handoff automatically; other terminals open with the command copied."
+                                .to_string(),
+                            Select::new(&self.cli_terminal_select)
+                                .id("cli-terminal-select")
+                                .accessibility_label(terminal_row_title)
+                                .menu_max_h(px(320.))
+                                .w(px(240.)),
+                            &cx.theme().colors,
+                        )),
                 )
             })
             .child(accessible_group_box(
