@@ -20,7 +20,58 @@ impl FixedRowSizeCache {
     }
 }
 
+/// Stable per-kind slug for change-filter element ids.
+fn change_kind_slug(kind: DiffFileKind) -> &'static str {
+    match kind {
+        DiffFileKind::Add => "added",
+        DiffFileKind::Delete => "deleted",
+        DiffFileKind::Update => "modified",
+    }
+}
+
+/// Localized name for a change kind, shared by rows and the kind filter.
+fn change_kind_name(kind: DiffFileKind) -> String {
+    match kind {
+        DiffFileKind::Add => rust_i18n::t!("app.inspector.kind_added").to_string(),
+        DiffFileKind::Delete => rust_i18n::t!("app.inspector.kind_deleted").to_string(),
+        DiffFileKind::Update => rust_i18n::t!("app.inspector.kind_modified").to_string(),
+    }
+}
+
+/// One-letter badge and tone for a change kind, shared by rows and the filter.
+fn change_kind_badge(
+    kind: DiffFileKind,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> (&'static str, gpui_kit::Hsla) {
+    match kind {
+        DiffFileKind::Add => ("A", colors.success),
+        DiffFileKind::Delete => ("D", colors.danger),
+        DiffFileKind::Update => ("M", colors.muted_foreground),
+    }
+}
+
 impl DesktopView {
+    /// Entry indexes matching the active kind filter, newest first.
+    pub(super) fn visible_change_indexes(&self) -> Vec<usize> {
+        let filter = self.change_kind_filter;
+        self.changes
+            .entries()
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| filter.is_none_or(|kind| kind == entry.kind))
+            .map(|(index, _)| index)
+            .collect()
+    }
+
+    /// Toggle the Changes list kind filter; selecting the active kind clears it.
+    pub(super) fn toggle_change_kind_filter(&mut self, kind: DiffFileKind) {
+        self.change_kind_filter = if self.change_kind_filter == Some(kind) {
+            None
+        } else {
+            Some(kind)
+        };
+    }
+
     fn select_inspector_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.update_inspector_tab(index, false, Some(window), cx);
     }
@@ -33,6 +84,14 @@ impl DesktopView {
         if let Some(index) = InspectorTab::ALL.iter().position(|candidate| *candidate == tab) {
             self.update_inspector_tab(index, true, None, cx);
         }
+    }
+
+    /// Reveal the inspector on one tab without moving focus, for transcript
+    /// CTAs that navigate beside the reading position. Postcondition:
+    /// `inspector_open` holds and `inspector_tab == tab`.
+    pub(super) fn open_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
+        self.inspector_open = true;
+        self.set_inspector_tab(tab, cx);
     }
 
     fn update_inspector_tab(&mut self, index: usize, reveal: bool, focus: Option<&mut Window>, cx: &mut Context<Self>) {
@@ -248,6 +307,23 @@ impl DesktopView {
             .into_any_element();
         }
 
+        let filter = self.change_kind_filter;
+        let visible: Rc<Vec<usize>> = Rc::new(self.visible_change_indexes());
+        let mut kinds_present = Vec::with_capacity(3);
+        for kind in [DiffFileKind::Add, DiffFileKind::Delete, DiffFileKind::Update] {
+            // The active filter stays rendered even at zero so it never
+            // strands: the toggle that set it is always the toggle that clears it.
+            if filter == Some(kind) || self.changes.entries().iter().any(|entry| entry.kind == kind) {
+                kinds_present.push(kind);
+            }
+        }
+        let files_count = if filter.is_some() {
+            rust_i18n::t!("app.inspector.filtered_count", shown = visible.len(), total = self.changes.entries().len())
+                .to_string()
+        } else {
+            rust_i18n::t!("app.inspector.files_count", count = self.changes.entries().len()).to_string()
+        };
+        let filtered_preview_count = self.changes.filtered_preview_count(filter);
         let totals = self.changes.totals();
         let files_header = panel_header(
             div()
@@ -257,7 +333,14 @@ impl DesktopView {
                 .items_center()
                 .gap_2()
                 .text_xs()
-                .child(rust_i18n::t!("app.inspector.files_count", count = self.changes.entries().len()).to_string())
+                .child(
+                    div()
+                        .id("change-files-count")
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(files_count.clone())
+                        .child(files_count),
+                )
                 .when_some(totals, |summary, (additions, deletions)| {
                     summary
                         .child(div().text_color(colors.success).child(format!("+{additions}")))
@@ -288,7 +371,7 @@ impl DesktopView {
                         )
                         .ghost()
                         .small()
-                        .desktop_disabled(self.changes.preview_count() < 2)
+                        .desktop_disabled(filtered_preview_count < 2)
                         .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(false, cx))),
                 )
                 .child(
@@ -302,17 +385,17 @@ impl DesktopView {
                         )
                         .ghost()
                         .small()
-                        .desktop_disabled(self.changes.preview_count() < 2)
+                        .desktop_disabled(filtered_preview_count < 2)
                         .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
                 ),
         );
 
         let change_row_height = scale_row_height_for_ui_font(CHANGE_ROW_HEIGHT, cx.theme().font_size);
-        let change_sizes = self.change_row_sizes.get(self.changes.entries().len(), change_row_height);
+        let change_sizes = self.change_row_sizes.get(visible.len(), change_row_height);
         let max_height = if expanded { 220. } else { 112. };
         let mut visible_rows = 0;
         let mut list_height = 0.;
-        while visible_rows < self.changes.entries().len() && list_height + change_row_height <= max_height {
+        while visible_rows < visible.len() && list_height + change_row_height <= max_height {
             visible_rows += 1;
             list_height += change_row_height;
         }
@@ -335,7 +418,8 @@ impl DesktopView {
                 v_virtual_list(cx.entity(), "change-virtual-list", change_sizes, move |view, visible_range, _, cx| {
                     visible_range
                         .filter_map(|index| {
-                            let entry = view.changes.entries().get(index)?;
+                            let entry_index = visible.get(index)?;
+                            let entry = view.changes.entries().get(*entry_index)?;
                             let path = entry.path.clone();
                             let selected = view.selected_change.as_deref() == Some(entry.path.as_str());
                             let preview_available = view.changes.has_preview(&path);
@@ -346,16 +430,8 @@ impl DesktopView {
                                 }
                                 _ => rust_i18n::t!("app.inspector.preview_unavailable").to_string(),
                             };
-                            let kind_label = match entry.kind {
-                                DiffFileKind::Add => ("A", change_row_colors.success),
-                                DiffFileKind::Delete => ("D", change_row_colors.danger),
-                                DiffFileKind::Update => ("M", change_row_colors.muted_foreground),
-                            };
-                            let kind_name = match entry.kind {
-                                DiffFileKind::Add => rust_i18n::t!("app.inspector.kind_added").to_string(),
-                                DiffFileKind::Delete => rust_i18n::t!("app.inspector.kind_deleted").to_string(),
-                                DiffFileKind::Update => rust_i18n::t!("app.inspector.kind_modified").to_string(),
-                            };
+                            let kind_label = change_kind_badge(entry.kind, &change_row_colors);
+                            let kind_name = change_kind_name(entry.kind);
                             let row_accessibility_label = format!("{kind_name} {path}, {file_summary}");
                             Some(
                                 div()
@@ -364,7 +440,7 @@ impl DesktopView {
                                     .role(gpui_kit::Role::ListItem)
                                     .aria_label(row_accessibility_label)
                                     .aria_position_in_set(index + 1)
-                                    .aria_size_of_set(view.changes.entries().len())
+                                    .aria_size_of_set(visible.len())
                                     .aria_selected(selected)
                                     .h(px(change_row_height))
                                     .w_full()
@@ -439,8 +515,54 @@ impl DesktopView {
                 .track_scroll(&self.change_list_scroll),
             )
             .child(Scrollbar::vertical(&self.change_list_scroll));
-        body = body
-            .child(diff_pane_group(div().w_full().flex().flex_col().child(files_header).child(change_list), colors));
+        let mut file_column = div().w_full().flex().flex_col().child(files_header);
+        // The filter only earns its row when kinds actually differ, but the row
+        // always stays while a filter is active so the toggle can clear it.
+        // Each button stays fully labeled so the row needs no group chrome.
+        if kinds_present.len() > 1 || filter.is_some() {
+            file_column = file_column.child(
+                div()
+                    .id("change-kind-filter")
+                    .test_support()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_3()
+                    .py_1()
+                    .children(kinds_present.iter().map(|kind| {
+                        let kind = *kind;
+                        let active = filter == Some(kind);
+                        let name = change_kind_name(kind);
+                        let (letter, tone) = change_kind_badge(kind, colors);
+                        let tooltip = if active {
+                            rust_i18n::t!("app.inspector.show_all_files").to_string()
+                        } else {
+                            rust_i18n::t!("app.inspector.filter_by_status", status = name.as_str()).to_string()
+                        };
+                        desktop_button(format!("change-filter-{}", change_kind_slug(kind)))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(div().text_xs().font_semibold().text_color(tone).child(letter))
+                                    .child(div().text_sm().child(name.clone())),
+                            )
+                            .accessibility_label(name)
+                            .tooltip(tooltip)
+                            .toggled(active)
+                            .selected(active)
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.toggle_change_kind_filter(kind);
+                                cx.notify();
+                            }))
+                    })),
+            );
+        }
+        body = body.child(diff_pane_group(file_column.child(change_list), colors));
 
         // Full syntax-highlighted diff of the selected file.
         if let (Some(path), Some(viewer)) = (self.selected_change.clone(), self.change_viewer.clone()) {

@@ -170,6 +170,55 @@ fn output_tab_pauses_follow_when_scrolled_up_until_jump_to_latest(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn output_tab_filters_lines_by_query_with_counts_and_empty_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item = TranscriptItem::new(
+                "filtered-output".into(),
+                "tool".into(),
+                "Filtered command".into(),
+                "completed".into(),
+            );
+            item.output = Some("alpha one\nbeta two\nALPHA three\n".into());
+            view.transcript.push(item);
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+        });
+        window.render_frame(cx);
+
+        assert!(window.try_find("output-filter-count").is_none(), "no count without a query");
+        assert_eq!(window.find("output-body").label(), Some("alpha one\nbeta two\nALPHA three\n"));
+
+        view.update(cx, |view, cx| {
+            view.output_filter_input
+                .update(cx, |input, cx| input.set_value("alpha", window, cx));
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("output-body").label(), Some("alpha one\nALPHA three"));
+        assert_eq!(window.find("output-filter-count").label(), Some("2 of 3 shown"));
+
+        view.update(cx, |view, cx| {
+            view.output_filter_input
+                .update(cx, |input, cx| input.set_value("zzz", window, cx));
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("output-filter-empty").label(), Some("No lines match this filter"));
+        assert_eq!(window.find("output-filter-count").label(), Some("0 of 3 shown"));
+
+        view.update(cx, |view, cx| {
+            view.output_filter_input.update(cx, |input, cx| input.set_value("", window, cx));
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("output-body").label(), Some("alpha one\nbeta two\nALPHA three\n"));
+        assert!(window.try_find("output-filter-count").is_none(), "clearing restores the full tail");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn output_tab_resets_scroll_when_switching_captures(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

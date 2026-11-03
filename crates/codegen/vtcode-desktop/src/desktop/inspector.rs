@@ -240,8 +240,13 @@ impl ChangesProjection {
         self.projected.get(path).is_some_and(|projected| projected.preview.is_some())
     }
 
-    pub(super) fn preview_count(&self) -> usize {
-        self.entries.iter().filter(|entry| self.has_preview(&entry.path)).count()
+    /// Previewable entries matching an optional kind filter.
+    pub(super) fn filtered_preview_count(&self, filter: Option<DiffFileKind>) -> usize {
+        self.entries
+            .iter()
+            .filter(|entry| filter.is_none_or(|kind| kind == entry.kind))
+            .filter(|entry| self.has_preview(&entry.path))
+            .count()
     }
 
     /// The full raw patch text for the change-set that last touched a path.
@@ -259,13 +264,16 @@ impl ChangesProjection {
 }
 
 /// One tool row projected for the Activity tab, with its latest status.
+///
+/// Rows read newest-first so the live edge stays visible without scrolling;
+/// the cap keeps the newest rows and reports the dropped tail via `has_older`.
 pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]) -> ActivityProjection {
     let mut activities = restored
         .iter()
         .chain(transcript.items())
         .rev()
         .filter(|item| item.has_activity_status);
-    let mut rows: Vec<_> = activities
+    let rows: Vec<_> = activities
         .by_ref()
         .take(MAX_ACTIVITY_ROWS)
         .map(|item| {
@@ -280,7 +288,6 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
         })
         .collect();
     let has_older = activities.next().is_some();
-    rows.reverse();
     ActivityProjection { rows, has_older }
 }
 
@@ -355,6 +362,31 @@ pub(super) fn output_tail(text: &SharedString) -> SharedString {
     rendered.push_str(&notice);
     rendered.push_str(tail);
     rendered.into()
+}
+
+/// Narrow output text to lines matching a case-insensitive substring query.
+///
+/// Returns the kept text plus matched/total line counts. An empty query keeps
+/// everything, so callers only branch on whether the query is blank.
+pub(super) fn filter_output_lines(tail: &str, query: &str) -> (String, usize, usize) {
+    let total = tail.lines().count();
+    let query = query.trim();
+    if query.is_empty() {
+        return (tail.to_string(), total, total);
+    }
+    let folded = query.to_lowercase();
+    let mut kept = String::new();
+    let mut matched = 0;
+    for line in tail.lines() {
+        if line.to_lowercase().contains(&folded) {
+            if matched > 0 {
+                kept.push('\n');
+            }
+            kept.push_str(line);
+            matched += 1;
+        }
+    }
+    (kept, matched, total)
 }
 
 /// Memoized [`activity_rows`] projection, keyed on both input generations.
@@ -557,6 +589,41 @@ mod tests {
     }
 
     #[test]
+    fn output_line_filter_matches_case_insensitively_and_counts() {
+        let tail = "alpha one\nbeta two\nALPHA three\n";
+        let (kept, matched, total) = filter_output_lines(tail, "  AlPhA ");
+        assert_eq!(kept, "alpha one\nALPHA three");
+        assert_eq!((matched, total), (2, 3));
+        let (kept, matched, total) = filter_output_lines(tail, "zzz");
+        assert_eq!(kept, "");
+        assert_eq!((matched, total), (0, 3));
+        let (kept, matched, total) = filter_output_lines(tail, "   ");
+        assert_eq!(kept, tail);
+        assert_eq!((matched, total), (3, 3));
+    }
+
+    #[test]
+    fn activity_rows_lead_with_the_newest_tool_action() {
+        let mut transcript = Transcript::default();
+        // Asymmetric statuses so a reversed projection cannot pass by symmetry.
+        for (id, status) in [("old", "completed"), ("mid", "failed"), ("new", "in progress")] {
+            transcript.push(TranscriptItem::new(
+                id.to_string(),
+                "tool".to_string(),
+                format!("tool {id}").into(),
+                status.to_string(),
+            ));
+        }
+
+        let projection = activity_rows(&transcript, &[]);
+
+        let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+        assert_eq!(ids, vec!["new", "mid", "old"]);
+        assert_eq!(projection.rows[0].state, ActivityState::Running);
+        assert!(!projection.has_older);
+    }
+
+    #[test]
     fn changes_projection_parses_and_orders_files_newest_first() {
         let mut transcript = Transcript::default();
         transcript.push(diff_item(
@@ -688,7 +755,7 @@ mod tests {
     }
 
     #[test]
-    fn activity_limit_keeps_the_newest_rows_in_chronological_order() {
+    fn activity_limit_keeps_the_newest_rows_newest_first() {
         let mut transcript = Transcript::default();
         for index in 0..=MAX_ACTIVITY_ROWS {
             transcript.push(TranscriptItem::new(
@@ -701,8 +768,8 @@ mod tests {
         let rows = activity_rows(&transcript, &[]);
         assert_eq!(rows.rows.len(), MAX_ACTIVITY_ROWS);
         assert!(rows.has_older);
-        assert_eq!(rows.rows[0].id, "tool-1");
-        assert_eq!(rows.rows[MAX_ACTIVITY_ROWS - 1].id, format!("tool-{MAX_ACTIVITY_ROWS}"));
+        assert_eq!(rows.rows[0].id, format!("tool-{MAX_ACTIVITY_ROWS}"));
+        assert_eq!(rows.rows[MAX_ACTIVITY_ROWS - 1].id, "tool-1");
     }
 
     #[test]

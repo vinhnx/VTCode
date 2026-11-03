@@ -215,8 +215,16 @@ impl DesktopView {
         let Some(file) = self.changes.select(&path) else {
             return;
         };
-        if let Some(index) = self.changes.entries().iter().position(|entry| entry.path == path) {
-            self.change_list_scroll.scroll_to_item(index, gpui_kit::ScrollStrategy::Top);
+        let filter = self.change_kind_filter;
+        let position = self
+            .changes
+            .entries()
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| filter.is_none_or(|kind| kind == entry.kind))
+            .position(|(_, entry)| entry.path == path);
+        if let Some(position) = position {
+            self.change_list_scroll.scroll_to_item(position, gpui_kit::ScrollStrategy::Top);
         }
         let mode = self
             .change_viewer
@@ -226,14 +234,12 @@ impl DesktopView {
         self.selected_change = Some(path);
         self.change_viewer_dirty = false;
         self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx).with_mode(mode)));
-        self.inspector_open = true;
-        self.set_inspector_tab(InspectorTab::Changes, cx);
+        self.open_inspector_tab(InspectorTab::Changes, cx);
     }
 
     pub(super) fn select_activity_output(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_output_id = Some(id);
-        self.inspector_open = true;
-        self.set_inspector_tab(InspectorTab::Output, cx);
+        self.open_inspector_tab(InspectorTab::Output, cx);
         self.inspector_focus.focus(window, cx);
     }
 
@@ -242,6 +248,7 @@ impl DesktopView {
             .changes
             .entries()
             .iter()
+            .filter(|entry| self.change_kind_filter.is_none_or(|kind| kind == entry.kind))
             .filter(|entry| self.changes.has_preview(&entry.path))
             .collect::<Vec<_>>();
         if available.len() < 2 {

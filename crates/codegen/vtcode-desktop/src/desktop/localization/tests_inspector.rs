@@ -61,6 +61,11 @@ fn inspector_copy_is_localized_for_every_language() {
             "app.inspector.open_file",
             "app.inspector.partial_review_history",
             "app.inspector.diff_view_label",
+            "app.inspector.show_all_activity",
+            "app.inspector.show_all_files",
+            "app.inspector.jump_latest_activity",
+            "app.inspector.filter_output_lines",
+            "app.inspector.no_matching_output_lines",
         ] {
             let value = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!value.is_empty(), "{locale}/{key}");
@@ -96,6 +101,12 @@ fn inspector_copy_is_localized_for_every_language() {
         assert!(statuses.contains("demo-older"), "{locale}: {statuses}");
         let shown = rust_i18n::t!("app.inspector.shown_count", locale = locale, count = 7).to_string();
         assert!(shown.contains('7'), "{locale}: {shown}");
+        let filtered = rust_i18n::t!("app.inspector.filtered_count", locale = locale, shown = 2, total = 9).to_string();
+        assert!(filtered.contains('2'), "{locale}: {filtered}");
+        assert!(filtered.contains('9'), "{locale}: {filtered}");
+        let filter =
+            rust_i18n::t!("app.inspector.filter_by_status", locale = locale, status = "demo-status").to_string();
+        assert!(filter.contains("demo-status"), "{locale}: {filter}");
         let view_output =
             rust_i18n::t!("app.inspector.view_output_for", locale = locale, title = "demo-title").to_string();
         assert!(view_output.contains("demo-title"), "{locale}: {view_output}");

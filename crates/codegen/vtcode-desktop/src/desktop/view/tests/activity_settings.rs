@@ -210,7 +210,7 @@ fn sidebar_changed_file_navigation_wraps_and_copies_the_selected_patch(cx: &mut 
             });
             view.transcript.push(unavailable);
             view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
-            assert_eq!(view.changes.preview_count(), 2);
+            assert_eq!(view.changes.filtered_preview_count(None), 2);
             view.select_change("first.rs".into(), cx);
         });
         window.render_frame(cx);

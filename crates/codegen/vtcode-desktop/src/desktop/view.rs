@@ -51,7 +51,7 @@ use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::component::toolbar::{Toolbar, ToolbarGroup};
 use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::{Icon, Sizable, StyleSized, VirtualListScrollHandle, v_virtual_list};
+use gpui_kit::component::{Icon, Selectable, Sizable, StyleSized, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
@@ -535,6 +535,8 @@ struct DesktopView {
     inspector_tabs_scroll: ScrollHandle,
     changes: ChangesProjection,
     selected_change: Option<String>,
+    /// Kind filter for the Changes list; `None` shows every file.
+    change_kind_filter: Option<DiffFileKind>,
     change_viewer: Option<Entity<DiffState>>,
     change_viewer_dirty: bool,
     route_history: RouteHistory,
@@ -564,6 +566,8 @@ struct DesktopView {
     config_rail_scroll: ScrollHandle,
     utilities_scroll: ScrollHandle,
     output_scroll: ScrollHandle,
+    output_filter_input: Entity<InputState>,
+    _output_filter_subscription: Subscription,
     /// Byte length of the Output tab tail at the last render; growth while
     /// running and pinned drives tail-following (see `render_output_tab`).
     output_tail_len: usize,
@@ -573,6 +577,14 @@ struct DesktopView {
     review_scroll: ScrollHandle,
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
+    /// Status filter for the Activity tab; `None` shows every row.
+    activity_filter: Option<ActivityState>,
+    /// Filter value at the last Activity render; a change resets the list to
+    /// the top because a filtered list is a new document.
+    activity_follow_filter: Option<ActivityState>,
+    /// Head row id at the last Activity render; a change means new entries
+    /// arrived at the top while the reader may have scrolled away.
+    activity_seen_head: Option<String>,
     change_list_scroll: VirtualListScrollHandle,
     browser_scroll: VirtualListScrollHandle,
     session_row_sizes: FixedRowSizeCache,

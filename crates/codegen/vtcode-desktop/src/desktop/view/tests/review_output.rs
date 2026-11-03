@@ -326,6 +326,187 @@ fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: 
 }
 
 #[gpui_kit::test]
+fn changes_tab_filters_by_kind_and_gates_navigation_on_visible_previews(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_open = true;
+            // One added, one modified, one deleted file: asymmetric kinds so
+            // the filter cannot pass on identical rows.
+            let mut item = TranscriptItem::new("edits".into(), "diff".into(), "Edits".into(), String::new());
+            item.diff = Some(super::super::DiffCard {
+                files: Vec::new(),
+                additions: Some(2),
+                deletions: Some(2),
+                incomplete: false,
+                failed: false,
+                patch: "--- /dev/null\n+++ b/added.rs\n@@ -0,0 +1 @@\n+new\n--- a/edited.rs\n+++ b/edited.rs\n@@ -1 +1 @@\n-old\n+new\n--- a/removed.rs\n+++ /dev/null\n@@ -1 +0,0 @@\n-gone\n"
+                    .into(),
+            });
+            view.transcript.push(item);
+            view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
+            assert_eq!(view.changes.entries().len(), 3);
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("change-files-count").label(), Some("3 files"));
+        assert_eq!(window.find("change-filter-added").label(), Some("Added"));
+        assert_eq!(window.find("change-filter-added").checked(), Some(false));
+        assert!(window.try_find("change-filter-modified").is_some());
+        assert!(window.try_find("change-filter-deleted").is_some());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "added.rs")).is_some());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "edited.rs")).is_some());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "removed.rs")).is_some());
+
+        window.click("change-filter-added", cx);
+        window.render_frame(cx);
+
+        assert_eq!(window.find("change-filter-added").checked(), Some(true));
+        assert_eq!(window.find("change-files-count").label(), Some("1 of 3 shown"));
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "added.rs")).is_some());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "edited.rs")).is_none());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "removed.rs")).is_none());
+        assert_eq!(
+            window.find("next-change-file").disabled(),
+            Some(true),
+            "one visible preview leaves nowhere to navigate"
+        );
+
+        window.click("change-filter-added", cx);
+        window.render_frame(cx);
+
+        assert_eq!(window.find("change-filter-added").checked(), Some(false));
+        assert_eq!(window.find("change-files-count").label(), Some("3 files"));
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "removed.rs")).is_some());
+        assert_ne!(
+            window.find("next-change-file").disabled(),
+            Some(true),
+            "clearing the filter restores navigation"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn changes_filter_stays_clearable_when_its_kind_disappears(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_open = true;
+            let mut item = TranscriptItem::new("edits".into(), "diff".into(), "Edits".into(), String::new());
+            item.diff = Some(super::super::DiffCard {
+                files: Vec::new(),
+                additions: Some(1),
+                deletions: Some(1),
+                incomplete: false,
+                failed: false,
+                patch: "--- /dev/null\n+++ b/added.rs\n@@ -0,0 +1 @@\n+new\n--- a/edited.rs\n+++ b/edited.rs\n@@ -1 +1 @@\n-old\n+new\n"
+                    .into(),
+            });
+            view.transcript.push(item);
+            view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
+        });
+        window.render_frame(cx);
+
+        window.click("change-filter-added", cx);
+        window.render_frame(cx);
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "added.rs")).is_some());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "edited.rs")).is_none());
+
+        // Re-editing the added file flips its kind to Modified; the stale
+        // Added toggle must stay so the filter never strands.
+        view.update(cx, |view, _| {
+            let mut reedit = TranscriptItem::new("reedit".into(), "diff".into(), "Edits".into(), String::new());
+            reedit.diff = Some(super::super::DiffCard {
+                files: Vec::new(),
+                additions: Some(1),
+                deletions: Some(1),
+                incomplete: false,
+                failed: false,
+                patch: "--- a/added.rs\n+++ b/added.rs\n@@ -1 +1 @@\n-new\n+newer\n".into(),
+            });
+            view.transcript.push(reedit);
+            view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
+            assert_eq!(view.changes.entries().len(), 2);
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("change-filter-added").checked(), Some(true));
+        assert_eq!(window.find("change-files-count").label(), Some("0 of 2 shown"));
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "added.rs")).is_none());
+
+        // Switching to the sole surviving kind must keep the row: hiding it
+        // would strand the new filter with no toggle to clear it.
+        window.click("change-filter-modified", cx);
+        window.render_frame(cx);
+
+        assert_eq!(window.find("change-filter-modified").checked(), Some(true));
+        assert_eq!(window.find("change-files-count").label(), Some("2 of 2 shown"));
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "added.rs")).is_some());
+
+        window.click("change-filter-modified", cx);
+        window.render_frame(cx);
+
+        assert!(window.try_find("change-kind-filter").is_none(), "the row leaves with the last filter");
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "added.rs")).is_some());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "edited.rs")).is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn changes_filter_clears_directly_from_a_stale_toggle(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_open = true;
+            let mut item = TranscriptItem::new("edits".into(), "diff".into(), "Edits".into(), String::new());
+            item.diff = Some(super::super::DiffCard {
+                files: Vec::new(),
+                additions: Some(1),
+                deletions: Some(1),
+                incomplete: false,
+                failed: false,
+                patch: "--- /dev/null\n+++ b/added.rs\n@@ -0,0 +1 @@\n+new\n--- a/edited.rs\n+++ b/edited.rs\n@@ -1 +1 @@\n-old\n+new\n"
+                    .into(),
+            });
+            view.transcript.push(item);
+            view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
+        });
+        window.render_frame(cx);
+
+        window.click("change-filter-added", cx);
+        window.render_frame(cx);
+
+        view.update(cx, |view, _| {
+            let mut reedit = TranscriptItem::new("reedit".into(), "diff".into(), "Edits".into(), String::new());
+            reedit.diff = Some(super::super::DiffCard {
+                files: Vec::new(),
+                additions: Some(1),
+                deletions: Some(1),
+                incomplete: false,
+                failed: false,
+                patch: "--- a/added.rs\n+++ b/added.rs\n@@ -1 +1 @@\n-new\n+newer\n".into(),
+            });
+            view.transcript.push(reedit);
+            view.changes = super::super::ChangesProjection::rebuild(&view.transcript);
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find("change-filter-added").checked(), Some(true));
+
+        window.click("change-filter-added", cx);
+        window.render_frame(cx);
+
+        assert!(window.try_find("change-filter-added").is_none(), "absent kinds leave with the filter");
+        assert!(window.try_find("change-kind-filter").is_none(), "one surviving kind needs no row");
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "added.rs")).is_some());
+        assert!(window.try_find(opaque_path_element_id("change-list-item", "edited.rs")).is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut TestAppContext) {
     use vtcode_exec_events::*;
     let (window, view) = open_desktop(cx);
@@ -386,9 +567,9 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             );
             assert!(!view.transcript.get(0).unwrap().expanded);
             assert!(!view.transcript.get(0).unwrap().has_activity_status);
-            assert_eq!(rows.rows[0].state, ActivityState::Completed);
-            assert_eq!(rows.rows[1].status, "interrupted");
-            assert_eq!(rows.rows[1].state, ActivityState::Interrupted);
+            assert_eq!(rows.rows[0].status, "interrupted", "newest activity leads");
+            assert_eq!(rows.rows[0].state, ActivityState::Interrupted);
+            assert_eq!(rows.rows[1].state, ActivityState::Completed);
             assert!(rows.rows[0].has_output);
             assert!(rows.rows[1].has_output);
             assert!(view.transcript.items().any(|item| item.text == "Unstructured archive result"));

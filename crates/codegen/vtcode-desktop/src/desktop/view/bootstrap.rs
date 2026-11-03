@@ -377,6 +377,14 @@ impl DesktopView {
                 cx.notify();
             }
         });
+        let output_filter_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(rust_i18n::t!("app.inspector.filter_output_lines").to_string())
+        });
+        let output_filter_subscription = cx.subscribe_in(&output_filter_input, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         let message_scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
         let file_tree = cx.new(|cx| TreeState::new(cx));
         let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
@@ -582,6 +590,7 @@ impl DesktopView {
             inspector_tabs_scroll: ScrollHandle::default(),
             changes: ChangesProjection::default(),
             selected_change: None,
+            change_kind_filter: None,
             change_viewer: None,
             change_viewer_dirty: false,
             route_history: RouteHistory::new(),
@@ -611,11 +620,16 @@ impl DesktopView {
             config_rail_scroll: ScrollHandle::default(),
             utilities_scroll: ScrollHandle::default(),
             output_scroll: ScrollHandle::default(),
+            output_filter_input,
+            _output_filter_subscription: output_filter_subscription,
             output_tail_len: 0,
             output_follow_selection: None,
             review_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),
+            activity_filter: None,
+            activity_follow_filter: None,
+            activity_seen_head: None,
             change_list_scroll: VirtualListScrollHandle::new(),
             browser_scroll: VirtualListScrollHandle::new(),
             session_row_sizes: FixedRowSizeCache::default(),

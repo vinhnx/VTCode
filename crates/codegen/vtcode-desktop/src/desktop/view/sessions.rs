@@ -715,11 +715,15 @@ impl DesktopView {
         self.output_page_error = None;
         self.selected_output_id = None;
         self.activity_scroll = VirtualListScrollHandle::new();
+        self.activity_filter = None;
+        self.activity_follow_filter = None;
+        self.activity_seen_head = None;
         self.change_list_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
         self.changes = ChangesProjection::default();
         self.selected_change = None;
+        self.change_kind_filter = None;
         self.change_viewer = None;
         self.change_viewer_dirty = false;
         if self.current_route() == Route::Review {
