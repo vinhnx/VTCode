@@ -645,14 +645,24 @@ impl DesktopView {
     }
 
     pub(super) fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        // Count every swatch in both modes so labels never rename when the
+        // visible grid changes.
         let mut counts = HashMap::new();
         for entry in themes::picker_swatches() {
             *counts.entry(entry.label()).or_insert(0_usize) += 1;
         }
+        // With separate profiles only the editing profile's grid renders, so
+        // the picker never shows the mode the user is not editing. Without
+        // separate profiles both grids stay visible: there is no mode
+        // selector, so an opposite-mode click is the mode switch.
         // Build the swatch groups before borrowing the theme colors: the
         // groups need `cx` mutably while the colors borrow it immutably.
-        let light_group = self.render_theme_group(ThemeMode::Light, &counts, cx);
-        let dark_group = self.render_theme_group(ThemeMode::Dark, &counts, cx);
+        let separate = self.preferences.separate_theme_profiles;
+        let editing = self.theme_mode;
+        let show_light = !separate || editing == ThemeMode::Light;
+        let show_dark = !separate || editing == ThemeMode::Dark;
+        let light_group = show_light.then(|| self.render_theme_group(ThemeMode::Light, &counts, cx));
+        let dark_group = show_dark.then(|| self.render_theme_group(ThemeMode::Dark, &counts, cx));
         let theme = cx.theme();
         let colors = &theme.colors;
         let active_theme_profile = if self.theme_mode == ThemeMode::Light {
@@ -746,6 +756,11 @@ impl DesktopView {
                             .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
                                 let light = self.theme_scroll_light.clone();
                                 let dark = self.theme_scroll_dark.clone();
+                                // Owned copies: the click listener below is
+                                // 'static and cannot borrow this render frame.
+                                // Both arrays stay `Copy` so the `Fn` listener
+                                // can reuse them on every click.
+                                let visible = [show_light, show_dark];
                                 desktop_button(if forward { "next-themes" } else { "previous-themes" })
                                     .icon(if forward {
                                         IconName::ChevronRight
@@ -763,7 +778,10 @@ impl DesktopView {
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(move |_, _, _, cx| {
-                                        for scroll in [&light, &dark] {
+                                        for (shown, scroll) in visible.into_iter().zip([&light, &dark]) {
+                                            if !shown {
+                                                continue;
+                                            }
                                             let mut offset = scroll.offset();
                                             offset.x += px(if forward { -336. } else { 336. });
                                             scroll.set_offset(offset);
@@ -784,8 +802,8 @@ impl DesktopView {
                             .flex()
                             .flex_col()
                             .gap_4()
-                            .child(light_group)
-                            .child(dark_group),
+                            .when_some(light_group, |list, group| list.child(group))
+                            .when_some(dark_group, |list, group| list.child(group)),
                     ),
             ))
             .child(accessible_group_box(

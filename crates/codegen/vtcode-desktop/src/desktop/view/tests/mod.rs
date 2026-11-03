@@ -561,6 +561,7 @@ mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
 mod storage_settings;
+mod theme_picker;
 mod themes_transcript;
 mod thread_tabs;
 mod transcript_inspector_ctas;
