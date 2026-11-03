@@ -160,11 +160,7 @@ impl Updater {
         self.install_update_with_progress(force, true).await
     }
 
-    async fn install_update_with_progress(
-        &self,
-        force: bool,
-        show_progress: bool,
-    ) -> Result<InstallOutcome> {
+    async fn install_update_with_progress(&self, force: bool, show_progress: bool) -> Result<InstallOutcome> {
         self.install_update_reported(force, show_progress, |_| {}).await
     }
 
