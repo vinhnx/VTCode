@@ -435,6 +435,27 @@ pub(super) fn modal_scrim(colors: &gpui_kit::component::theme::ThemeColor) -> gp
     colors.background.opacity(0.85)
 }
 
+/// Warning title row shared by the consent modals: an alert icon plus a
+/// large semibold title naming the decision. One shape for every consent
+/// surface — tune here, not per modal.
+pub(super) fn consent_title_row(
+    title: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap_3()
+        .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning))
+        .child(
+            div()
+                .font_semibold()
+                .text_lg()
+                .text_color(colors.foreground)
+                .child(title.into()),
+        )
+}
+
 /// Quiet full-width break between conversation turns on the canvas. The
 /// single-sided rhythm keeps the row compact: preceding rows already carry
 /// bottom padding, and user bubbles must start within 16px of their column.

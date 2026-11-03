@@ -204,20 +204,7 @@ impl DesktopView {
                     .border_color(colors.border)
                     .shadow_md()
                     .p_5()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(Icon::new(IconName::TriangleAlert).text_color(colors.warning))
-                            .child(
-                                div()
-                                    .font_semibold()
-                                    .text_lg()
-                                    .text_color(colors.foreground)
-                                    .child(rust_i18n::t!("app.session.running_switch_title").to_string()),
-                            ),
-                    )
+                    .child(consent_title_row(rust_i18n::t!("app.session.running_switch_title").to_string(), &colors))
                     .child(
                         div()
                             .id("running-confirm-body")
