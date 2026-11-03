@@ -138,16 +138,24 @@ pub(super) fn panel_header(leading: impl IntoElement, trailing: impl IntoElement
 /// the fill matches the panel background, so the hairline alone must carry
 /// the card gestalt, and rows scan better with the boundary (`xl`) airier
 /// than the gaps between rows (`lg`). Vertical stays tight so pages do not
-/// grow extra scroll length.
+/// grow extra scroll length. Rows separate by the inherited Kit `gap_4` air
+/// (the Kit Settings rhythm): do not interleave [`row_divider`] between
+/// settings rows.
 pub(super) fn settings_group_box(
     title: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> GroupBox {
+    settings_group_box_untitled(colors).title(group_box_title(title, colors))
+}
+
+/// Untitled variant of [`settings_group_box`] for settings cards whose page
+/// header already names the surface (e.g. the curated configuration
+/// overview): same fill, border, and `px_6` rhythm, no title row.
+pub(super) fn settings_group_box_untitled(colors: &gpui_kit::component::theme::ThemeColor) -> GroupBox {
     GroupBox::new()
         .flex_shrink_0()
         .fill()
         .content_style(card_border_style(colors).px_6())
-        .title(group_box_title(title, colors))
 }
 
 /// 1px theme-border outline for a filled Kit `GroupBox` surface, giving cards
@@ -227,8 +235,10 @@ pub(super) fn row_description(
     div().text_sm().text_color(themes::muted_text(colors)).child(text.into())
 }
 
-/// 1px separator between settings rows, drawn in the softened edge tone
-/// with breathing room so it reads as a quiet hairline rather than a rule.
+/// 1px separator for non-settings surfaces (navigation chrome, inspector
+/// lists), drawn in the softened edge tone with breathing room so it reads
+/// as a quiet hairline rather than a rule. Settings groups separate rows by
+/// `gap_4` air instead (see [`settings_group_box`]).
 pub(super) fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
     div()
         .w_full()
@@ -337,44 +347,21 @@ pub(super) fn diff_pane_group(
         .child(child)
 }
 
-/// Trailing settings control pairing a right-aligned label with a switch.
-///
-/// The fixed-width lane keeps every row's toggle on one trailing spine while
-/// the labels right-align against it, so rows with different label lengths
-/// still scan as one column. The lane never exceeds the row width; longer
-/// labels wrap instead of crowding the toggle. The switch keeps its accessible
-/// name and owns activation; the visible label is descriptive text.
+/// Trailing settings toggle: the row title already names the setting, so the
+/// control renders the switch alone and keeps the title as its accessible
+/// name (Kit Settings parity: fields inherit their setting's title). The
+/// row's trailing pin keeps every toggle on one spine with no label lane.
 pub(super) fn settings_switch(
     id: impl Into<gpui_kit::ElementId>,
     label: impl Into<gpui_kit::SharedString>,
     checked: bool,
     on_click: impl Fn(&bool, &mut Window, &mut App) + 'static,
-    colors: &gpui_kit::component::theme::ThemeColor,
 ) -> impl IntoElement {
-    let label = label.into();
-    div()
-        .w_64()
-        .max_w_full()
-        .flex()
-        .items_center()
-        .justify_end()
-        .gap_2()
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_right()
-                .text_sm()
-                .text_color(colors.foreground)
-                .child(label.clone()),
-        )
-        .child(
-            gpui_kit::component::switch::Switch::new(id)
-                .flex_shrink_0()
-                .checked(checked)
-                .accessibility_label(label)
-                .on_click(on_click),
-        )
+    gpui_kit::component::switch::Switch::new(id)
+        .flex_shrink_0()
+        .checked(checked)
+        .accessibility_label(label.into())
+        .on_click(on_click)
 }
 
 /// Route container shared by the settings, browser, and review pages:

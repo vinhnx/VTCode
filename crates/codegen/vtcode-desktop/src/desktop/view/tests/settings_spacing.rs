@@ -1,4 +1,4 @@
-use super::super::{row_description, settings_row};
+use super::super::{row_description, settings_group_box, settings_row};
 use super::*;
 use gpui_kit::component::theme::Theme;
 use gpui_kit::prelude::*;
@@ -41,6 +41,13 @@ impl Render for SettingsRowSpacingProbe {
                 div(),
                 &colors,
             )))
+            .child(
+                div().id("probe-gap-group").test_support().child(
+                    settings_group_box("Probe group", &colors)
+                        .child(div().id("probe-gap-first").test_support().w_full().h(px(12.)))
+                        .child(div().id("probe-gap-second").test_support().w_full().h(px(12.))),
+                ),
+            )
     }
 }
 
@@ -87,6 +94,31 @@ fn settings_row_separates_title_from_description(cx: &mut TestAppContext) {
             assert_eq!(
                 row_empty, title,
                 "an empty description adds no dead gap: row ({row_empty:?}) must equal title ({title:?}) at {base_size}px"
+            );
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
+fn settings_group_separates_rows_by_gap_4_air(cx: &mut TestAppContext) {
+    let window = open_spacing_probe(cx);
+    // Asymmetric extremes: the Kit Settings rhythm (gap_4 = 1rem) must hold
+    // at the smallest and largest UI base sizes, not just the default.
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let first = window.find("probe-gap-first").bounds();
+            let second = window.find("probe-gap-second").bounds();
+            let gap = second.origin.y - (first.origin.y + first.size.height);
+            assert!(
+                (gap - px(base_size)).abs() <= px(1.),
+                "rows separate by gap_4 air ({base_size}px) without dividers: gap={gap:?} first={first:?} second={second:?}"
             );
         })
         .unwrap();

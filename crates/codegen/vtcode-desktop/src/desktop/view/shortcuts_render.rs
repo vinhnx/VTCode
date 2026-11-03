@@ -67,11 +67,8 @@ impl DesktopView {
                     .on_click(cx.listener(|view, _, window, cx| view.import_cli_shortcuts(window, cx))),
             );
 
-        let mut children = Vec::with_capacity(visible.len() * 2);
-        for (index, command) in visible.iter().enumerate() {
-            if index > 0 {
-                children.push(row_divider(colors).into_any_element());
-            }
+        let mut children = Vec::with_capacity(visible.len());
+        for command in visible.iter() {
             children.push(shortcut_row(
                 command,
                 shortcuts::staged_value(&self.shortcut_draft, command),

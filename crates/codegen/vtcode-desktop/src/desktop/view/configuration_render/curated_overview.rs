@@ -60,11 +60,8 @@ impl DesktopView {
 
     fn render_curated_overview_card(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let mut card = GroupBox::new().flex_shrink_0().fill().content_style(card_border_style(&colors));
-        for (index, row) in curated::curated_rows().iter().enumerate() {
-            if index > 0 {
-                card = card.child(row_divider(&colors));
-            }
+        let mut card = settings_group_box_untitled(&colors);
+        for row in curated::curated_rows().iter() {
             card = card.child(self.render_curated_row(row, cx));
         }
         accessible_group_box(
@@ -204,7 +201,6 @@ impl DesktopView {
                 .on_click(cx.listener(move |view, enabled, _, cx| {
                     view.set_available_effort(level.as_str(), *enabled, cx);
                 }));
-            card = card.child(row_divider(&colors));
             card = card.child(settings_row(label, "", switch, &colors));
         }
         accessible_group_box(

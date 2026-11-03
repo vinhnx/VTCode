@@ -216,9 +216,6 @@ impl DesktopView {
                             .filter_map(|index| snapshot.settings.get(*index))
                             .take(limit)
                         {
-                            if shown > 0 {
-                                list = list.child(row_divider(&colors));
-                            }
                             shown += 1;
                             list = list.child(self.render_config_setting_row(setting, cx));
                         }

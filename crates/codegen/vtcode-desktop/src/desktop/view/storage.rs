@@ -480,7 +480,7 @@ impl DesktopView {
                 content.child(row_description(rust_i18n::t!("app.settings.storage.no_sessions").to_string(), &colors));
         }
         content
-            .child(div().flex().flex_col().gap_3().children(sessions.into_iter().map(|session| {
+            .child(div().flex().flex_col().gap_4().children(sessions.into_iter().map(|session| {
                 let name = session
                     .title
                     .clone()
@@ -488,8 +488,7 @@ impl DesktopView {
                     .unwrap_or_else(|| session.session_id.clone());
                 let meta =
                     format!("{} · {}", format_archive_date(session.updated_at), format_bytes(session.size_bytes));
-                let row = settings_row(name.clone(), meta, self.storage_review_action(session, cx), &colors);
-                div().flex().flex_col().child(row_divider(&colors)).child(row)
+                settings_row(name.clone(), meta, self.storage_review_action(session, cx), &colors)
             })))
             .into_any_element()
     }
@@ -580,7 +579,7 @@ impl DesktopView {
                 div()
                     .flex()
                     .flex_col()
-                    .gap_3()
+                    .gap_4()
                     .children(self.storage.worktrees.iter().map(|entry| {
                         let head = entry.head.as_deref().map(|head| head.chars().take(7).collect::<String>());
                         let meta = if entry.is_dirty {
@@ -590,7 +589,7 @@ impl DesktopView {
                         };
                         let name = entry.name.clone();
                         let is_dirty = entry.is_dirty;
-                        let row = settings_row(
+                        settings_row(
                             entry.name.clone(),
                             meta,
                             desktop_button(format!("remove-worktree-{name}"))
@@ -604,8 +603,7 @@ impl DesktopView {
                                     view.confirm_remove_worktree(name.clone(), is_dirty, window, cx);
                                 })),
                             &colors,
-                        );
-                        div().flex().flex_col().child(row_divider(&colors)).child(row)
+                        )
                     })),
             )
             .into_any_element()

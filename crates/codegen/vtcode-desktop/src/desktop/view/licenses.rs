@@ -296,7 +296,6 @@ impl DesktopView {
                         })),
                     &colors,
                 ))
-                .child(row_divider(&colors))
                 .child(settings_row(
                     rust_i18n::t!("app.licenses.third_party_title").to_string(),
                     rust_i18n::t!("app.licenses.third_party_description").to_string(),
