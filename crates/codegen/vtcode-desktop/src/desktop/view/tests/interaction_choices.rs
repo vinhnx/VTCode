@@ -419,6 +419,88 @@ fn digit_selects_without_submitting_for_question_steps(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
+fn single_step_question_hides_stepper_and_counter(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Both answer modes: the header collapses whether or not a freeform box follows.
+    // (Multi-step keeps both; see multi_step_question_progress_tracks_the_runtime_step_order.)
+    for freeform in [false, true] {
+        deliver(&view, question_interaction(freeform), cx);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            // One step is not progress: no stepper, no "Question 1 of 1".
+            for id in [
+                "interaction-question-progress",
+                "interaction-question-stepper",
+                "question-step-counter",
+            ] {
+                assert!(window.try_find(id).is_none(), "{id} earns no line with a single step (freeform={freeform})");
+            }
+            // The decision itself still renders: options group plus both rows.
+            assert!(window.find("interaction-question-options").visible());
+            assert!(window.find("interaction-question-choice-0").visible());
+            assert!(window.find("interaction-question-choice-1").visible());
+            assert!(window.find("continue-question").visible());
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
+fn hovering_choice_card_never_selects_or_commits(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    deliver(&view, question_interaction(false), cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.hover("interaction-question-choice-1", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(false));
+        assert!(view.read(cx).pending_interaction_response.is_none(), "hover never submits");
+        // Hover leaves the card fully interactive: the same row still selects.
+        window.click("interaction-question-choice-1", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn interaction_decision_row_keeps_group_air_and_shared_baseline(cx: &mut TestAppContext) {
+    use gpui_kit::component::theme::Theme;
+
+    let (window, view) = open_desktop(cx);
+    deliver(&view, question_interaction(false), cx);
+    // Asymmetric extremes: the rem-based rhythm must hold at the smallest
+    // and largest UI base sizes, not just the default.
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let hint = window.find("interaction-keyboard-hint").bounds();
+            let cancel = window.find("cancel-interaction").bounds();
+            let submit = window.find("continue-question").bounds();
+            // Panel gap_2 plus the decision row's own mt_2: one full rem of
+            // group air between the options block and the actions.
+            let air = cancel.origin.y - (hint.origin.y + hint.size.height);
+            assert!(
+                (air - px(base_size)).abs() <= px(1.),
+                "decision row keeps lg air above it at {base_size}px: air={air:?} hint={hint:?} cancel={cancel:?}"
+            );
+            assert!(
+                (cancel.origin.y - submit.origin.y).abs() <= px(1.),
+                "cancel and submit share one baseline at {base_size}px: cancel={cancel:?} submit={submit:?}"
+            );
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
 fn empty_choice_panel_hides_hint_but_keeps_escape_cancel(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

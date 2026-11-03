@@ -156,7 +156,9 @@ impl DesktopView {
         }
 
         let step_choices = visible_choices(interaction, step_index);
-        if is_wizard {
+        // A one-item stepper restates the title and counter without aiding
+        // navigation, so progress renders only for genuine multi-step flows.
+        if is_wizard && interaction.steps.len() > 1 {
             let steps = interaction.steps.iter().enumerate().map(|(index, step)| {
                 let title = if step.title.trim().is_empty() {
                     rust_i18n::t!("app.interaction.step_fallback", n = index + 1).to_string()
@@ -238,6 +240,9 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_between()
+                // The decision row is its own group, not another option:
+                // one extra step over the panel gap lands it on the lg rung.
+                .mt_2()
                 .child(
                     desktop_button("cancel-interaction")
                         .label(rust_i18n::t!("app.interaction.cancel_request").to_string())
@@ -339,12 +344,10 @@ impl DesktopView {
             .flex_col()
             .gap_2()
             .children(choice_radios);
-        let mut content = div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
+        let mut content = div().w_full().flex().flex_col().gap_2().when(total > 1, |content| {
+            // "Question 1 of 1" states nothing the title and question do not
+            // already say; the counter earns its line only with siblings.
+            content.child(
                 div()
                     .id("question-step-counter")
                     .test_support()
@@ -354,7 +357,8 @@ impl DesktopView {
                     .text_color(colors.muted_foreground)
                     .child(rust_i18n::t!("app.interaction.step_counter", n = index + 1, total = total).to_string()),
             )
-            .child(div().font_medium().child(step.question.clone()));
+        });
+        content = content.child(div().font_medium().child(step.question.clone()));
         if !step.choices.is_empty() {
             content = content.child(options);
         }
@@ -367,7 +371,7 @@ impl DesktopView {
                         .cursor_text()
                         .disabled(self.pending_interaction_response.is_some())
                         .bg(colors.popover)
-                        .h(px(72.)),
+                        .h(gpui_kit::rems(4.5)),
                 ),
             );
         }
@@ -383,11 +387,12 @@ impl DesktopView {
         } else {
             card.choice.label.clone()
         };
+        let disabled = self.pending_interaction_response.is_some();
         let mut radio = Radio::new(card.element_id)
             .label(label.clone())
             .accessibility_label(label)
             .checked(card.checked)
-            .disabled(self.pending_interaction_response.is_some())
+            .disabled(disabled)
             .w_full()
             .p_3()
             .rounded_md()
@@ -401,6 +406,13 @@ impl DesktopView {
                 colors.primary.opacity(0.08)
             } else {
                 colors.popover
+            })
+            // Kit Radio owns no hover state, so unchecked cards borrow a
+            // lighter cut of the checked border: rest, hover, and checked
+            // still read as three distinct rungs. Disabled and checked
+            // cards stay put — selection and submission already speak.
+            .when(!disabled && !card.checked, |radio| {
+                radio.hover(|hover| hover.border_color(colors.primary.opacity(0.35)))
             });
         let choice_id = card.choice.id.clone();
         let step_index = card.step_index;
