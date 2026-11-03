@@ -105,8 +105,7 @@ fn composer_labels_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
 }
 
 /// The input text itself must track the UI font size. Three lines exceed the
-/// 32px input minimum at both extremes, so the frame height is content-driven
-/// and the prompt marker (a single inherited-size glyph) tracks line height.
+/// 32px input minimum at both extremes, so the frame height is content-driven.
 #[gpui_kit::test]
 fn composer_input_text_scales_with_the_ui_font_size(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -124,18 +123,15 @@ fn composer_input_text_scales_with_the_ui_font_size(cx: &mut TestAppContext) {
             });
             window.render_frame(cx);
             store.push(window.find("message-composer-frame").bounds().size.height);
-            store.push(window.find("composer-prompt-marker").bounds().size.height);
         })
         .unwrap();
     }
-    for (index, id) in ["message-composer-frame", "composer-prompt-marker"].iter().enumerate() {
-        assert!(
-            large[index] > small[index],
-            "{id} must grow with the UI font size ({} at 14px vs {} at 24px)",
-            small[index].as_f32(),
-            large[index].as_f32()
-        );
-    }
+    assert!(
+        large[0] > small[0],
+        "message-composer-frame must grow with the UI font size ({} at 14px vs {} at 24px)",
+        small[0].as_f32(),
+        large[0].as_f32()
+    );
 }
 
 /// Composer-anchored popup rows (the model list here; slash commands and

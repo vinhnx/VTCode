@@ -259,8 +259,9 @@ keyboard-selectable inspector tabs and accessible named controls as the other vi
 ### Compact composer
 
 The composer is centered with a 720-pixel width cap and a one-to-six-line growing text field. The input is
-borderless like the CLI: a `>` prompt marker and placeholder carry the affordance, with attachment, execution-policy,
-agent-mode, model selection, and send/cancel controls in one quiet row beneath at typical widths. Workspace selection
+borderless like the CLI: placeholder and caret carry the affordance, with the draft sharing the leading spine of the
+attachment, execution-policy, agent-mode, model selection, and send/cancel controls in one quiet row beneath at typical
+widths. Workspace selection
 lives in the sidebar (the toolbar shows its name); switch via the sidebar, the palette, or ⌘O. WebMCP connections live
 in Settings → Connections, so the composer keeps a single control row; only the Zen no-workspace state keeps a picker
 row above the input, where it is the sole visible path to choose one.

@@ -470,11 +470,12 @@ fn composer_stays_true_borderless_in_both_focus_states(cx: &mut TestAppContext) 
             // the controls in the true-borderless design.
             assert!(window.try_find("composer-controls-divider").is_none());
             let frame = window.find("message-composer-frame").bounds();
-            let marker = window.find("composer-prompt-marker").bounds();
+            let actions = window.find("composer-actions").bounds();
             let send = window.find("send-prompt").bounds();
             assert!(frame.size.height > px(0.));
-            assert!(frame.contains(&marker.center()), "marker must sit inside the composer frame");
-            assert!(marker.bottom() <= send.top(), "marker {marker:?} must sit above send {send:?}");
+            assert!(frame.contains(&actions.center()), "actions must sit inside the composer frame");
+            assert!(frame.contains(&send.center()), "send must sit inside the composer frame");
+            assert!(actions.top() > frame.top(), "text row must reserve space above the actions");
             // One quiet option group: attach, policy, and mode share a row in
             // leading-to-trailing order.
             let attach = window.find("attach-files").bounds();
@@ -485,13 +486,13 @@ fn composer_stays_true_borderless_in_both_focus_states(cx: &mut TestAppContext) 
             assert!(attach.right() <= policy.left(), "attach precedes policy");
             assert!(policy.right() <= mode.left(), "policy precedes mode");
         };
-        // Unfocused side of the marker-tint branch.
+        // Unfocused side.
         let root_focus = view.read(cx).focus_handle.clone();
         window.focus(&root_focus, cx);
         window.render_frame(cx);
         assert!(!view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
         assert_composer_geometry(window);
-        // Focused side: the marker tints, geometry must not move.
+        // Focused side: geometry must not move.
         view.update(cx, |view, cx| view.activate_composer(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));

@@ -958,17 +958,17 @@ fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn borderless_composer_keeps_prompt_marker_and_layout(cx: &mut TestAppContext) {
+fn borderless_composer_keeps_input_and_layout(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.activate_composer(window, cx));
         window.render_frame(cx);
-        // CLI-minimal contract: the card chrome is gone, so the prompt marker
-        // is the input affordance and the frame must still lay out with height.
+        // CLI-minimal contract: the card chrome and the prompt marker are
+        // gone, so the placeholder and caret carry the input affordance and
+        // the frame must still lay out with height.
+        assert!(window.try_find("composer-prompt-marker").is_none());
         let frame = window.find("message-composer-frame").bounds();
-        let marker = window.find("composer-prompt-marker").bounds();
         assert!(frame.size.height > px(0.));
-        assert!(frame.contains(&marker.center()), "prompt marker must sit inside the composer frame");
         assert!(
             view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
             "activating the composer focuses its input"

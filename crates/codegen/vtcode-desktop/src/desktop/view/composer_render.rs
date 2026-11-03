@@ -135,9 +135,15 @@ impl DesktopView {
             );
         }
         let weak_view = cx.entity().downgrade();
+        // One size owns the composer geometry. The multiline control carries
+        // no horizontal inset of its own, while the BlockEnd action row insets
+        // by the group's input token: pad the text by that same token so the
+        // draft shares the buttons' leading spine at every zoom level.
+        let composer_size = gpui_kit::component::Size::default();
         let input = Textarea::new(&self.composer)
             .accessibility_id("composer")
             .aria_label(rust_i18n::t!("app.composer.input_label").to_string())
+            .input_pl(composer_size)
             .cursor_text()
             // Files copied in Finder arrive on the clipboard as
             // `ExternalPaths`; pasting them attaches instead of letting the
@@ -501,17 +507,11 @@ impl DesktopView {
                     )
                     .child({
                         // True borderless: the group's own tint is cleared so
-                        // the input sits directly on the canvas. The marker,
-                        // placeholder, and caret carry the input affordance;
-                        // focus tints the marker with the caret color.
-                        let composer_focused = self.composer.read(cx).focus_handle(cx).is_focused(window);
-                        let marker_tone = if composer_focused {
-                            colors.caret
-                        } else {
-                            colors.muted_foreground
-                        };
+                        // the input sits directly on the canvas. The
+                        // placeholder and caret carry the input affordance.
                         div().id("message-composer-frame").test_support().w_full().min_w_0().child(
                             InputGroup::new("message-composer")
+                                .with_size(composer_size)
                                 .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
                                 .w_full()
                                 .border_0()
@@ -520,11 +520,6 @@ impl DesktopView {
                                 .p_2()
                                 .when(self.zen_mode, |group| group.p_3())
                                 .input(input)
-                                .addon(
-                                    InputGroupAddon::new("composer-prompt-marker")
-                                        .align(InputGroupAddonAlignment::InlineStart)
-                                        .child(div().text_color(marker_tone).child(">")),
-                                )
                                 .addon(
                                     InputGroupAddon::new("composer-actions")
                                         .align(InputGroupAddonAlignment::BlockEnd)
