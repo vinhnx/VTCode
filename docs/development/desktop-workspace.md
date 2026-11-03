@@ -509,7 +509,7 @@ role, content, and duplicate occurrence so bounded-history shifts do not transfe
 ## Themes
 
 The desktop builds its theme catalog from the full shared VT Code theme registry (`available_themes()` in
-`vtcode-ui`), so every CLI built-in theme — **Ciapre** (the default), the Ciapre variants, Solarized, Gruvbox,
+`vtcode-ui`), so every CLI built-in theme — **Ciapre** (the default), Noir, the Ciapre variants, Solarized, Gruvbox,
 Catppuccin, Nord, Vitesse, Tomorrow, and the rest of the registry — is selectable on desktop, alongside the kit's
 System Light/Dark bases. The catalog is not enumerated here; see the [color guidelines](../guides/COLOR_GUIDELINES.md)
 for the registry list and the desktop↔CLI sync rules. A theme sets background,

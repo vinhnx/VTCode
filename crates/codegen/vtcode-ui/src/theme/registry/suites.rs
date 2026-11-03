@@ -166,7 +166,7 @@ impl GpuiKitThemeSet {
 
     fn member_ids(&self) -> &'static [&'static str] {
         match self {
-            Self::Ciapre => &["ciapre", "ciapre-blue", "ciapre-dark"],
+            Self::Ciapre => &["ciapre", "ciapre-blue", "ciapre-dark", "noir"],
             Self::Vitesse => &[
                 "vitesse-black",
                 "vitesse-dark",

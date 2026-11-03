@@ -53,7 +53,7 @@ pub fn get_syntax_theme_for_ui_theme(ui_theme: &str) -> &'static str {
         "nord-light" => "base16-ocean.light",
         "apple-system-colors-light" => "base16-ocean.light",
         "vitesse-light" | "vitesse-light-soft" => "base16-ocean.light",
-        "ciapre" | "ciapre-dark" | "ciapre-blue" => "base16-ocean.dark",
+        "noir" | "ciapre" | "ciapre-dark" | "ciapre-blue" => "base16-ocean.dark",
         "vitesse-black" | "vitesse-dark" | "vitesse-dark-soft" => "base16-ocean.dark",
         // longbridge/gpui-kit ports: dark palettes share the neutral Base16
         // Ocean Dark ramp, light palettes the Ocean Light ramp.

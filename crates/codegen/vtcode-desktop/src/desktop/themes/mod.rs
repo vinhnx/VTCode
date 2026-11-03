@@ -357,11 +357,21 @@ fn subtle_border(secondary: Hsla, popover: Hsla, foreground: Hsla) -> Hsla {
     border
 }
 
+/// Hard ceilings (percent of the background-to-foreground span) for the fill
+/// search. Fills take the *weakest* step that still separates from the canvas,
+/// so dark themes read as layered black; the ceiling only binds on themes
+/// whose contrast curve needs larger steps (notably near-white canvases, where
+/// equal ratios need bigger lightness moves). Hover keeps its own stronger cap:
+/// a state change must stay visible, so it takes the strongest readable step.
+const RESTING_FILL_MAX_STEP: u8 = 10;
+const RAISED_FILL_MAX_STEP: u8 = 24;
+const HOVER_FILL_MAX_STEP: u8 = 10;
+
 /// Give panels and controls a visible neutral fill while keeping their text at
 /// WCAG AA. Popovers and input fields use a stronger layer than resting panels.
 fn apply_filled_surfaces(colors: &mut ThemeColor) {
-    let surface = filled_surface(colors.background, colors.foreground, 10);
-    let raised_surface = filled_surface(colors.background, colors.foreground, 24);
+    let surface = filled_surface(colors.background, colors.foreground, RESTING_FILL_MAX_STEP, None);
+    let raised_surface = filled_surface(colors.background, colors.foreground, RAISED_FILL_MAX_STEP, Some(surface));
 
     colors.secondary = surface;
     colors.secondary_foreground = colors.foreground;
@@ -439,18 +449,29 @@ fn strongest_track_step(background: Hsla, foreground: Hsla, minimum_text: f32) -
         })
 }
 
-fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8) -> Hsla {
-    for step in (4_u8..=maximum_step).rev() {
+/// Weakest fill that still separates from the canvas while keeping text at
+/// WCAG AA. Raised layers additionally pass their lower seat so the stack
+/// keeps a visible order instead of collapsing onto one fill.
+fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8, distinct_from: Option<Hsla>) -> Hsla {
+    const SEPARATION_FLOOR: f32 = 1.04;
+    const LAYER_GAP: f32 = 1.02;
+    for step in 4_u8..=maximum_step {
         let candidate = mix(background, foreground, f32::from(step) / 100.0);
-        if contrast_ratio(foreground, candidate) >= 4.5 && contrast_ratio(background, candidate) >= 1.04 {
+        let layered = distinct_from.is_none_or(|seat| contrast_ratio(seat, candidate) >= LAYER_GAP);
+        if contrast_ratio(foreground, candidate) >= 4.5
+            && contrast_ratio(background, candidate) >= SEPARATION_FLOOR
+            && layered
+        {
             return candidate;
         }
     }
     background
 }
 
+/// Strongest readable hover step: unlike resting fills, a state change must
+/// stay visible, so hover maximizes within its cap instead of minimizing.
 fn hover_surface(background: Hsla, foreground: Hsla) -> Hsla {
-    for step in (4_u8..=18).rev() {
+    for step in (4_u8..=HOVER_FILL_MAX_STEP).rev() {
         let candidate = mix(background, foreground, f32::from(step) / 100.0);
         if contrast_ratio(foreground, candidate) >= 4.5 {
             return candidate;
@@ -601,13 +622,14 @@ pub(super) fn label_foreground(colors: &ThemeColor) -> Hsla {
     colors.foreground
 }
 
-/// The softest text color that still meets WCAG AA against `background`:
-/// the palette foreground blended toward the background just until the
-/// 4.5:1 threshold holds. Returns the foreground untouched when even it
-/// cannot reach AA (the contrast test then flags the theme).
+/// The softest text color that stays crisp against `background`: the palette
+/// foreground blended toward the background just until a 5.0:1 floor holds
+/// (one half-point above WCAG AA — small text at the 4.5 floor reads washed).
+/// Returns the foreground untouched when even it cannot reach the floor (the
+/// contrast test then flags the theme).
 pub(super) fn aa_muted(background: Hsla, foreground: Hsla) -> Hsla {
-    const AA_RATIO: f32 = 4.5;
-    text_at_contrast(background, foreground, AA_RATIO)
+    const MUTED_RATIO: f32 = 5.0;
+    text_at_contrast(background, foreground, MUTED_RATIO)
 }
 
 /// Faintest chrome-icon tone on `background` that still meets the 3:1
@@ -620,7 +642,7 @@ pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
 }
 
 /// Secondary copy (row descriptions, hints) one step brighter than
-/// [`aa_muted`]: small muted text at the 4.5 floor reads washed, so this
+/// [`aa_muted`]: small muted text at the muted floor reads washed, so this
 /// targets 7:1 on the hardest surface (the raised popover fill, which is
 /// lighter than canvas, panel, and sidebar fills, so the ratio only grows
 /// there). Falls back toward the palette foreground on low-headroom themes
@@ -705,12 +727,12 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
         }
     };
     let rail = if contrast_ratio(background, surfaces.rail) < 1.02 {
-        filled_surface(background, foreground, 10)
+        filled_surface(background, foreground, RESTING_FILL_MAX_STEP, None)
     } else {
         surfaces.rail
     };
     let panel = if contrast_ratio(rail, surfaces.panel) < 1.02 || contrast_ratio(background, surfaces.panel) < 1.02 {
-        filled_surface(background, foreground, 24)
+        filled_surface(background, foreground, RAISED_FILL_MAX_STEP, Some(rail))
     } else {
         surfaces.panel
     };

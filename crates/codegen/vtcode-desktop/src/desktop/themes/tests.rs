@@ -636,7 +636,8 @@ fn permission_fallback_seeds_stay_distinct_and_readable() {
     let (ask_seed, auto_seed) = distinct_permission_seeds();
     assert_ne!(ask_seed, auto_seed, "Ask and Auto-approve fallbacks must differ");
     for theme in all_themes() {
-        let raised = filled_surface(theme.background, theme.foreground, 24);
+        let resting = filled_surface(theme.background, theme.foreground, RESTING_FILL_MAX_STEP, None);
+        let raised = filled_surface(theme.background, theme.foreground, RAISED_FILL_MAX_STEP, Some(resting));
         for (background, seat) in [(theme.background, "canvas"), (raised, "raised popover")] {
             let ask = readable_indicator_color(background, theme.foreground, ask_seed);
             let auto = readable_indicator_color(background, theme.foreground, auto_seed);
@@ -760,16 +761,22 @@ fn rgb_hex(color: Hsla) -> u32 {
 fn contrast_blend_covers_fallback_and_blend_arms_in_both_directions() {
     let black = Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
     let white = Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
-    // Below the threshold the foreground passes through untouched.
+    // Below the 5.0 crispness floor the foreground passes through
+    // untouched — including the AA band between 4.5 and 5.0, which is
+    // readable but cannot fund a dimmer muted tone.
     let faint = Hsla { h: 0.0, s: 0.0, l: 0.08, a: 1.0 };
     assert!(contrast_ratio(faint, black) < 4.5);
     assert_eq!(aa_muted(black, faint), faint);
+    let aa_only = Hsla { h: 0.0, s: 0.0, l: 0.47, a: 1.0 };
+    let aa_ratio = contrast_ratio(aa_only, black);
+    assert!((4.5..5.0).contains(&aa_ratio), "fixture must sit in the AA-only band ({aa_ratio:.2})");
+    assert_eq!(aa_muted(black, aa_only), aa_only);
     // Above it both theme directions blend toward the background while
     // holding the threshold.
     for (background, foreground) in [(black, white), (white, black)] {
         let muted = aa_muted(background, foreground);
         assert_ne!(muted, foreground);
-        assert!(contrast_ratio(muted, background) >= 4.5, "unreadable muted text");
+        assert!(contrast_ratio(muted, background) >= 5.0, "muted text misses the crispness floor");
         assert!(
             (muted.l - background.l).abs() < (foreground.l - background.l).abs(),
             "blend must move toward the background"
@@ -804,4 +811,129 @@ fn contrast_ratio_matches_known_values() {
     let white = Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
     assert!((contrast_ratio(black, white) - 21.0).abs() < 0.1);
     assert!((contrast_ratio(black, black) - 1.0).abs() < 0.01);
+}
+
+#[gpui_kit::test]
+fn flagship_surfaces_and_muted_text_read_crisp_not_grey(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        assert_eq!(DEFAULT_THEME_ID, "ciapre", "Ciapre is the flagship default");
+        let _mode = apply_by_id(DEFAULT_THEME_ID, None, cx);
+        let colors = cx.theme().colors;
+        // Layers stack in a strict order above the canvas (direction-free:
+        // contrast ratios, not signed lightness lifts, so the pin survives
+        // palettes with different spans and blend directions).
+        let panel = contrast_ratio(colors.secondary, colors.background);
+        let popover = contrast_ratio(colors.popover, colors.background);
+        let hover = contrast_ratio(colors.accent, colors.background);
+        assert!(popover > panel, "popover must sit above panels ({popover:.3} vs {panel:.3})");
+        assert!(hover >= panel, "hover must stay at least as raised as panels ({hover:.3} vs {panel:.3})");
+        // Muted text clears a crispness floor above WCAG AA on every seat.
+        for (name, surface) in [
+            ("canvas", colors.background),
+            ("panel", colors.secondary),
+            ("popover", colors.popover),
+        ] {
+            let ratio = contrast_ratio(colors.muted_foreground, surface);
+            assert!(ratio >= 5.0, "default muted text on {name} is washed ({ratio:.2})");
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn muted_text_holds_crispness_floor_or_palette_ceiling(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            // Muted text reaches the 5.0 crispness floor unless the palette's
+            // own foreground is dimmer — then it holds that ceiling instead of
+            // inventing contrast the palette cannot support.
+            for (name, surface) in [
+                ("canvas", colors.background),
+                ("panel", colors.secondary),
+                ("group box", colors.group_box),
+                ("popover", colors.popover),
+            ] {
+                let muted = contrast_ratio(colors.muted_foreground, surface);
+                let ceiling = contrast_ratio(colors.foreground, surface).min(5.0);
+                assert!(muted + 0.01 >= ceiling, "{id}: muted text on {name} is {muted:.2}, ceiling {ceiling:.2}");
+            }
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn fills_take_weakest_separating_step_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            // No weaker step meets the floors: fills minimize within the
+            // readability + separation contract (mirror of the
+            // maximal-separation pin on the segmented track).
+            let resting = contrast_ratio(colors.background, colors.secondary);
+            for step in 4_u8..=RESTING_FILL_MAX_STEP {
+                let candidate = mix(colors.background, colors.foreground, f32::from(step) / 100.0);
+                if contrast_ratio(colors.foreground, candidate) >= 4.5
+                    && contrast_ratio(colors.background, candidate) >= 1.04
+                {
+                    assert!(
+                        resting <= contrast_ratio(colors.background, candidate) + 0.001,
+                        "{id}: resting fill leaves subtlety on the table at step {step}"
+                    );
+                }
+            }
+            // Raised fills additionally keep the layer gap above resting.
+            let raised = contrast_ratio(colors.background, colors.popover);
+            for step in 4_u8..=RAISED_FILL_MAX_STEP {
+                let candidate = mix(colors.background, colors.foreground, f32::from(step) / 100.0);
+                if contrast_ratio(colors.foreground, candidate) >= 4.5
+                    && contrast_ratio(colors.background, candidate) >= 1.04
+                    && contrast_ratio(colors.secondary, candidate) >= 1.02
+                {
+                    assert!(
+                        raised <= contrast_ratio(colors.background, candidate) + 0.001,
+                        "{id}: raised fill leaves subtlety on the table at step {step}"
+                    );
+                }
+            }
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn hover_takes_strongest_readable_step_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            // Unlike resting fills, a state change must stay visible: no
+            // stronger step keeps text readable, and hover never collapses
+            // onto the resting panel fill it highlights.
+            assert_ne!(colors.accent, colors.secondary, "{id}: hover is pixel-identical to the panel it highlights");
+            let hover = contrast_ratio(colors.background, colors.accent);
+            for step in 4_u8..=HOVER_FILL_MAX_STEP {
+                let candidate = mix(colors.background, colors.foreground, f32::from(step) / 100.0);
+                if contrast_ratio(colors.foreground, candidate) >= 4.5 {
+                    assert!(
+                        hover + 0.001 >= contrast_ratio(colors.background, candidate),
+                        "{id}: hover leaves visibility on the table at step {step}"
+                    );
+                }
+            }
+        }
+    });
 }

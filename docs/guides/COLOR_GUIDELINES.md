@@ -149,6 +149,7 @@ desktop client, so the same theme id renders the same palette in the terminal an
 
 | Theme                        | Mode  | Description                       |
 | ---------------------------- | ----- | --------------------------------- |
+| noir                         | Dark  | Near-black canvas, neutral white text, Ciapre accents |
 | ciapre                       | Dark  | Default warm amber theme          |
 | ciapre-dark                  | Dark  | Alternative warm amber theme      |
 | ciapre-blue                  | Dark  | Blue variant of Ciapre            |
