@@ -131,7 +131,7 @@ fn saved_preferences_restore_theme_widths_and_inspector_state(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
-fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
+fn dragging_pane_dividers_resizes_and_clamps_both_panes(cx: &mut TestAppContext) {
     use gpui_kit::{InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent};
 
     let dispatch_mouse = |window: &mut gpui_kit::Window, position, event: MousePhase, cx: &mut gpui_kit::App| {
@@ -221,6 +221,24 @@ fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
             view_state.inspector_width > inspector_start_width + 30.
                 && view_state.inspector_width < inspector_start_width + 50.,
             "moving the inspector edge left grows it: {}",
+            view_state.inspector_width
+        );
+        assert_eq!(view_state.preferences.inspector_width, Some(view_state.inspector_width));
+
+        // Shrinking past the bound clamps at the minimum (the asymmetric
+        // boundary to the sidebar maximum above). Re-find the handle: the
+        // previous drag moved it. The +400px drag stays inside the 1280px
+        // test viewport from the inspector edge.
+        let handle = window.find("resize-inspector").bounds();
+        let start = point(handle.center().x, handle.center().y);
+        dispatch_mouse(window, start, MousePhase::Down, cx);
+        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x + px(400.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x + px(400.), start.y), MousePhase::Up, cx);
+        let view_state = view.read(cx);
+        assert!(
+            (view_state.inspector_width - crate::desktop::preferences::MIN_PANE_WIDTH).abs() < f32::EPSILON,
+            "shrinking past the bound clamps at the minimum: {}",
             view_state.inspector_width
         );
         assert_eq!(view_state.preferences.inspector_width, Some(view_state.inspector_width));
