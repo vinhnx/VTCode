@@ -10,6 +10,10 @@ https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool
 
 ---
 
+convert demo mp4 to gif 
+
+---
+
 also refine the overall design system for more modern macos 27 look and feels. check apple guidelines.
 
 
