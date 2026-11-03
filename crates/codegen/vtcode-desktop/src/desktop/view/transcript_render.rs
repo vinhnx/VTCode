@@ -228,23 +228,36 @@ impl DesktopView {
                 }
                 transcript_content = transcript_content.child(history_bar);
             }
-            let scroller = MessageScroller::new(
-                "transcript-scroller",
-                self.message_scroller.clone(),
-                cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
-            )
-            .with_jump_button_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
-            .with_jump_button_renderer(|button| {
-                button.accessibility_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
-            })
-            // Row spacing is applied by render_transcript_row so collapsed tool
-            // placeholders do not each reserve the scroller's default 32 px gap.
-            .with_row_style(gpui_kit::StyleRefinement::default().pb_0())
-            .w_full()
-            .flex_1()
-            .min_h_0()
-            .py_6()
-            .into_any_element();
+            // Relative column mirroring the original flex structure exactly: the
+            // scroller keeps its flex_1 relationship, and the absolutely
+            // positioned overlay sibling takes no layout space.
+            let scroller = div()
+                .relative()
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(
+                    MessageScroller::new(
+                        "transcript-scroller",
+                        self.message_scroller.clone(),
+                        cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
+                    )
+                    .with_jump_button_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
+                    .with_jump_button_renderer(|button| {
+                        button.accessibility_label(rust_i18n::t!("app.transcript.jump_latest").to_string())
+                    })
+                    // Row spacing is applied by render_transcript_row so collapsed tool
+                    // placeholders do not each reserve the scroller's default 32 px gap.
+                    .with_row_style(gpui_kit::StyleRefinement::default().pb_0())
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .py_6(),
+                )
+                .children(self.render_transcript_overlays(cx))
+                .into_any_element();
             transcript_content = transcript_content.child(scroller);
             if self.turn_awaiting_content() {
                 transcript_content =
@@ -252,6 +265,14 @@ impl DesktopView {
             }
             transcript_content.into_any_element()
         };
+        // The first transcript layout settles list readers; overlay
+        // visibility waits for it. Set after content is built so this very
+        // render still suppresses the overlay. One extra frame, guarded by
+        // the flag so it can never loop.
+        if !self.transcript_layout_settled && !self.pending_blank_transition() && !empty_conversation {
+            self.transcript_layout_settled = true;
+            cx.notify();
+        }
         div()
             .id("transcript-scroll")
             .aria_label(rust_i18n::t!("app.transcript.conversation_label").to_string())
@@ -347,52 +368,6 @@ impl DesktopView {
             .child(shimmer_label("navigation-loading-label", label))
     }
 
-    /// Rows the renderer hides (collapsed activity members) are also skipped by
-    /// keyboard navigation, so the highlight never lands on an invisible row.
-    fn transcript_row_visible(item: &TranscriptItem) -> bool {
-        !(item.activity_grouped && !item.activity_group_head && !item.activity_expanded)
-    }
-
-    /// Move the keyboard highlight across messages (Up/Down with the
-    /// transcript focused). Clamps at both ends and scrolls the row into view.
-    pub(super) fn move_transcript_focus(&mut self, down: bool, cx: &mut Context<Self>) {
-        let visible: Vec<usize> = self
-            .transcript
-            .items()
-            .enumerate()
-            .filter(|(_, item)| Self::transcript_row_visible(item))
-            .map(|(index, _)| index)
-            .collect();
-        if visible.is_empty() {
-            return;
-        }
-        let current = self.keyboard_focused_message.as_deref().and_then(|id| {
-            visible
-                .iter()
-                .position(|&index| self.transcript.get(index).is_some_and(|item| item.id.as_str() == id))
-        });
-        let next = match (current, down) {
-            (Some(position), true) => (position + 1).min(visible.len() - 1),
-            (Some(position), false) => position.saturating_sub(1),
-            (None, true) => 0,
-            (None, false) => visible.len() - 1,
-        };
-        let Some(&index) = visible.get(next) else {
-            return;
-        };
-        let Some(item) = self.transcript.get(index) else {
-            return;
-        };
-        self.keyboard_focused_message = Some(item.id.clone());
-        // Kit limitation: `scroll_to_item` pins to viewport top and the
-        // scroller exposes no visible-range query, so reveal-only-if-outside
-        // is unimplementable; every step recenters.
-        self.message_scroller.update(cx, |state, cx| {
-            let _scrolled = state.scroll_to_item(index, cx);
-        });
-        cx.notify();
-    }
-
     fn render_transcript_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
         // Resolve the tail before borrowing the row for render: the cache
         // needs `&mut self` while the row borrows the transcript.
@@ -428,6 +403,7 @@ impl DesktopView {
             })
             .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)));
         let message_id = item.id.clone();
+        let clicked_id = item.id.clone();
         let keyboard_focused = self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
         div()
             .id(format!("transcript-row-{}", item.id))
@@ -436,6 +412,13 @@ impl DesktopView {
             .w_full()
             .flex()
             .justify_center()
+            // Clicking a row anchors the keyboard highlight as position
+            // memory (and reveals its actions); the row is already visible,
+            // so no scroll is needed. Child controls keep their own clicks.
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.keyboard_focused_message = Some(clicked_id.clone());
+                cx.notify();
+            }))
             // Absolutely positioned so the highlight never reflows the row.
             .when(keyboard_focused, |row| {
                 row.child(

@@ -78,8 +78,10 @@ impl Session {
                 self.request_transcript_clear();
             }
             InlineCommand::AppendPastedMessage { kind, text, line_count } => {
+                let previous_max_offset = self.current_max_scroll_offset();
                 self.clear_thinking_spinner_if_active(kind);
                 self.append_pasted_message(kind, text, line_count);
+                self.adjust_scroll_after_change(previous_max_offset);
                 self.request_transcript_clear();
             }
             InlineCommand::Inline { kind, segment } => {
@@ -250,6 +252,7 @@ impl Session {
                     self.input_manager.set_content(content);
                     self.input_compact_mode = self.input_compact_placeholder().is_some();
                     self.scroll_manager.set_offset(0);
+                    self.sync_follow_state();
                 }
             }
             InlineCommand::RestoreInputDraft(input) => {
@@ -259,10 +262,12 @@ impl Session {
                 self.input_manager.set_attachments(input.attachments);
                 self.input_compact_mode = self.input_compact_placeholder().is_some();
                 self.scroll_manager.set_offset(0);
+                self.sync_follow_state();
             }
             InlineCommand::ApplySuggestedPrompt(content) => {
                 self.apply_suggested_prompt(content);
                 self.scroll_manager.set_offset(0);
+                self.sync_follow_state();
             }
             InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated } => {
                 self.set_inline_prompt_suggestion(suggestion, llm_generated);

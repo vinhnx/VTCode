@@ -256,6 +256,14 @@ impl TranscriptItem {
         self.has_role(TranscriptRole::Notice)
     }
 
+    /// Whether this row offers searchable conversation content: a searchable
+    /// role with non-empty body. Shared by the palette search list, its
+    /// availability check, and the filter-match snapshot.
+    pub(super) fn is_conversation_searchable(&self) -> bool {
+        TranscriptRole::from_str(&self.role).is_some_and(TranscriptRole::is_searchable_conversation)
+            && !self.text.trim().is_empty()
+    }
+
     /// Whether this row carries captured output worth jumping to. Shared by
     /// the activity projection, the transcript output CTA, and conversation
     /// search so the affordance can never disagree across surfaces.
@@ -815,6 +823,11 @@ impl Transcript {
     }
 
     /// Expand a tool row and its containing activity group so a search result is visible.
+    ///
+    /// Queues remeasurement but deliberately no tail pause: the sole caller
+    /// navigates to the row immediately, and `scroll_to_item` disengages
+    /// tail-following itself. A pause here would write its stale anchor over
+    /// the jump in the same sync pass.
     pub(super) fn reveal_tool_item(&mut self, id: &str) -> Option<usize> {
         let index = self.position_by_id(id)?;
         if !self.items.get(index).is_some_and(|item| item.is_tool()) {
@@ -831,7 +844,6 @@ impl Transcript {
         }
 
         self.bump_revision();
-        self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
         if expand_group && let Some(range) = group {
             for group_index in range.clone() {
                 if let Some(item) = self.items.get_mut(group_index) {

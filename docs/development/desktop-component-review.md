@@ -53,7 +53,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [marker](https://gpui-kit.com/component/marker) | Do not invent execution percentages or phases beyond existing runtime events. |
 | [menu](https://gpui-kit.com/component/menu) | Applied: thread overflow uses canonical guarded new/close commands. |
 | [message](https://gpui-kit.com/component/message) | Applied: sender headers, outlined user prompts, unframed assistant responses, and copy footers. |
-| [message-scroller](https://gpui-kit.com/component/message-scroller) | Retain measured transcript ListState and existing anchoring/following behavior. |
+| [message-scroller](https://gpui-kit.com/component/message-scroller) | Applied: transcript mounts MessageScroller with `TranscriptLayoutChange` sync (reset/prepend/splice/remeasure, pause/follow tail). App-owned navigation composes from Kit readers: scroll-to-first overlay, shared jump-to-message helper (palette search, activity rows, deep links), click-to-anchor rows. |
 | [notification](https://gpui-kit.com/component/notification) | Applied system-only notices for inactive-window run completion, failure/blocking, and pending decisions; preserve transcript/interaction state as the source of truth and route clicks through the originating Kit window. |
 | [number-input](https://gpui-kit.com/component/number-input) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [otp-input](https://gpui-kit.com/component/otp-input) | Not needed for the current coding-workspace workflows or available data. |

@@ -587,6 +587,7 @@ fn conversation_search_filters_loaded_messages_and_jumps_to_the_selected_row(cx:
         let target_action = super::super::PaletteAction::JumpToTranscriptItem {
             session_id: session_id.clone(),
             item_id: target_id.clone(),
+            from_search: true,
         };
         window.within("command-palette").input("Needle phrase", cx);
         window.render_frame(cx);

@@ -53,10 +53,19 @@ pub(super) enum PaletteAction {
     NewSession,
     CloseSession,
     OpenInCli,
-    OpenConversationSearch { session_id: String },
+    OpenConversationSearch {
+        session_id: String,
+    },
     CopyLatestMessage,
-    JumpToTranscriptItem { session_id: String, item_id: String },
-    ShowActivityOutput { session_id: String, item_id: String },
+    JumpToTranscriptItem {
+        session_id: String,
+        item_id: String,
+        from_search: bool,
+    },
+    ShowActivityOutput {
+        session_id: String,
+        item_id: String,
+    },
     ChooseModel,
     ChooseWorkspace,
     RefreshSessions,
@@ -64,12 +73,18 @@ pub(super) enum PaletteAction {
     BrowseThreads,
     ToggleInspector,
     ToggleTheme,
-    SelectFont { target: FontTarget, family: Option<String> },
+    SelectFont {
+        target: FontTarget,
+        family: Option<String>,
+    },
     SelectSettingsTab(settings::SettingsTab),
     EditConfigSetting(String),
     LoadSession(String),
     PreviewFile(String),
-    SelectModel { provider: String, model: String },
+    SelectModel {
+        provider: String,
+        model: String,
+    },
     SelectSessionOptions(protocol::SessionOptionsSelectParams),
     ToggleZenMode,
     AttachFiles,
@@ -249,7 +264,7 @@ impl DesktopView {
     fn conversation_search_messages(&self, session_id: &str) -> Vec<PaletteCommand> {
         self.transcript
             .items_newest_first()
-            .filter(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
+            .filter(|item| item.is_conversation_searchable())
             .take(MAX_CONVERSATION_SEARCH_ROWS)
             .map(|item| {
                 let speaker = if item.is_user() {
@@ -267,6 +282,7 @@ impl DesktopView {
                     PaletteAction::JumpToTranscriptItem {
                         session_id: session_id.to_string(),
                         item_id: item.id.clone(),
+                        from_search: true,
                     },
                 );
                 entry.shared_keywords.extend([item.text.clone(), item.title.clone()]);
@@ -334,7 +350,7 @@ impl DesktopView {
 
     pub(super) fn has_searchable_conversation_content(&self) -> bool {
         self.transcript.items().any(|item| {
-            (is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
+            item.is_conversation_searchable()
                 || (item.is_tool() && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
         }) || self
             .restored_activity
@@ -528,6 +544,8 @@ impl DesktopView {
             cx.notify();
             return;
         }
+        // Close clears the query, so search jumps capture it first.
+        let palette_query = self.palette_query.clone();
         self.close_palette(window, cx);
         match action {
             PaletteAction::NewSession => {
@@ -543,32 +561,12 @@ impl DesktopView {
                 self.open_conversation_search(session_id, window, cx);
             }
             PaletteAction::CopyLatestMessage => self.copy_latest_message(window, cx),
-            PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+            PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search } => {
                 if self.selected_session_id.as_deref() != Some(session_id.as_str()) {
                     return;
                 }
-                if let Some(index) = self.transcript.position_by_id(&item_id) {
-                    if self.transcript.get(index).is_some_and(|item| item.is_tool()) {
-                        if self.transcript.reveal_tool_item(&item_id).is_none() {
-                            return;
-                        }
-                        cx.notify();
-                        let session_id = session_id.clone();
-                        cx.on_next_frame(window, move |view, _, cx| {
-                            if view.selected_session_id.as_deref() != Some(session_id.as_str()) {
-                                return;
-                            }
-                            if let Some(index) = view.transcript.position_by_id(&item_id) {
-                                view.message_scroller.update(cx, |state, cx| {
-                                    let _scrolled = state.scroll_to_item(index, cx);
-                                });
-                            }
-                        });
-                    } else {
-                        self.message_scroller.update(cx, |state, cx| {
-                            let _scrolled = state.scroll_to_item(index, cx);
-                        });
-                    }
+                if self.jump_to_transcript_item(&item_id, window, cx) && from_search {
+                    self.remember_filter_matches(palette_query.as_str(), &item_id);
                 }
             }
             PaletteAction::ShowActivityOutput { session_id, item_id } => {
@@ -672,7 +670,7 @@ impl DesktopView {
                     && self.has_searchable_conversation_content()
             }
             PaletteAction::CopyLatestMessage => self.latest_copyable_message().is_some(),
-            PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+            PaletteAction::JumpToTranscriptItem { session_id, item_id, .. } => {
                 self.selected_session_id.as_deref() == Some(session_id.as_str())
                     && self.transcript.position_by_id(item_id).is_some_and(|index| {
                         self.transcript
@@ -817,9 +815,10 @@ pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::InsertHistoryPrompt(value)
         | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
         PaletteAction::OpenConversationSearch { session_id } => session_id.hash(&mut hasher),
-        PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+        PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search } => {
             session_id.hash(&mut hasher);
             item_id.hash(&mut hasher);
+            from_search.hash(&mut hasher);
         }
         PaletteAction::ShowActivityOutput { session_id, item_id } => {
             session_id.hash(&mut hasher);

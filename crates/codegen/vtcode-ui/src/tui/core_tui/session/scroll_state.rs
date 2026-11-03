@@ -13,7 +13,7 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(1);
         if self.scroll_manager.offset() != previous_offset {
-            self.user_scrolled = self.scroll_manager.offset() != 0;
+            self.sync_follow_state();
             self.visible_lines_cache = None;
             self.sticky_prompt_target = None;
             // Content moves down on screen; shift selection to match.
@@ -27,7 +27,7 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(1);
         if self.scroll_manager.offset() != previous_offset {
-            self.user_scrolled = self.scroll_manager.offset() != 0;
+            self.sync_follow_state();
             self.visible_lines_cache = None;
             self.sticky_prompt_target = None;
             // Content moves up on screen; shift selection to match.
@@ -43,7 +43,7 @@ impl Session {
         self.scroll_manager.scroll_down(page);
         if self.scroll_manager.offset() != previous_offset {
             let actual_delta = self.scroll_manager.offset() - previous_offset;
-            self.user_scrolled = self.scroll_manager.offset() != 0;
+            self.sync_follow_state();
             self.visible_lines_cache = None;
             self.sticky_prompt_target = None;
             self.mouse_selection.adjust_for_scroll(actual_delta as i32);
@@ -58,7 +58,7 @@ impl Session {
         self.scroll_manager.scroll_up(page);
         if self.scroll_manager.offset() != previous_offset {
             let actual_delta = previous_offset - self.scroll_manager.offset();
-            self.user_scrolled = self.scroll_manager.offset() != 0;
+            self.sync_follow_state();
             self.visible_lines_cache = None;
             self.sticky_prompt_target = None;
             self.mouse_selection.adjust_for_scroll(-(actual_delta as i32));
@@ -98,7 +98,7 @@ impl Session {
 
         // Invalidate visible lines cache if offset actually changed
         if self.scroll_manager.offset() != previous_offset {
-            self.user_scrolled = self.scroll_manager.offset() != 0;
+            self.sync_follow_state();
             self.invalidate_transcript_viewport();
             // Compute actual row delta for selection adjustment.
             // Inverted model: increasing offset → content moves down → positive row delta.
@@ -185,6 +185,17 @@ impl Session {
         (top_offset, clamped_total)
     }
 
+    /// Recompute follow state from the live offset after any scroll move.
+    ///
+    /// Single predicate for the scrolled flag and the unseen-arrival count:
+    /// reaching the bottom edge clears both, and partial moves toward it
+    /// reveal rows from the top of the hidden region, so unseen arrivals cap
+    /// at the rows still below the view.
+    pub(crate) fn sync_follow_state(&mut self) {
+        self.user_scrolled = self.scroll_manager.offset() != 0;
+        self.pending_new_messages = self.pending_new_messages.min(self.scroll_manager.offset());
+    }
+
     /// Adjust scroll position after content changes to keep the current view stable.
     /// When the viewport is at the bottom (offset 0), new content naturally stays
     /// in view without adjustment. Only when the user has scrolled up (offset > 0)
@@ -193,6 +204,7 @@ impl Session {
     /// Bottom-follow returns immediately so appends never force a reflow.
     pub(crate) fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
         if self.scroll_manager.offset() == 0 {
+            self.pending_new_messages = 0;
             return;
         }
         let new_max_offset = self.current_max_scroll_offset();
@@ -202,8 +214,11 @@ impl Session {
             let current_offset = self.scroll_manager.offset();
             let delta = new_max_offset - previous_max_offset;
             self.scroll_manager.set_offset(min(current_offset + delta, new_max_offset));
+            // Rows appended below the viewport while scrolled feed the "N new" hint.
+            self.pending_new_messages = self.pending_new_messages.saturating_add(delta);
         }
         self.enforce_scroll_bounds();
+        self.pending_new_messages = self.pending_new_messages.min(self.scroll_manager.offset());
     }
 
     /// Emit an inline event through the channel and callback

@@ -143,6 +143,7 @@ mod storage;
 mod submit;
 mod tabs;
 mod transcript_activity;
+mod transcript_nav;
 mod transcript_render;
 mod typography;
 mod updates;
@@ -165,6 +166,7 @@ use queue::*;
 use running_confirm::{RunningSwitch, RunningSwitchIntent};
 use runtime_items::*;
 use sessions::*;
+use transcript_nav::*;
 use typography::FontTarget;
 use workspace_review::WorkspaceReviewState;
 
@@ -421,6 +423,13 @@ struct DesktopView {
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
     message_scroller: Entity<MessageScrollerState>,
+    /// Whether the transcript scroller has completed a layout pass. List
+    /// readers (`logical_scroll_top`) are unsettled before the first layout,
+    /// so overlay visibility must wait for it. Reset with the transcript.
+    transcript_layout_settled: bool,
+    /// Snapshot of conversation-search matches for overlay cycling, seeded
+    /// by search jumps and cleared on session switch or dismiss.
+    filter_matches: Option<FilterMatches>,
     /// Restored history rows; mutate only via the `*_restored_activity`
     /// helpers so `restored_activity_revision` stays in sync for the
     /// inspector projection caches.

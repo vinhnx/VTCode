@@ -819,6 +819,7 @@ impl Session {
         self.collapsed_pastes.clear();
         self.thinking_runs.clear();
         self.user_scrolled = false;
+        self.pending_new_messages = 0;
         self.last_change_line_idx = None;
         self.scroll_manager.set_offset(0);
         self.invalidate_transcript_cache();

@@ -225,7 +225,7 @@ impl Session {
         self.ensure_scroll_metrics();
         self.scroll_manager
             .set_offset(self.scroll_manager.max_offset().saturating_sub(source_row));
-        self.user_scrolled = self.scroll_manager.offset() != 0;
+        self.sync_follow_state();
         self.mouse_selection.clear();
         self.mouse_drag_target = MouseDragTarget::None;
         self.cancel_drag_auto_scroll();

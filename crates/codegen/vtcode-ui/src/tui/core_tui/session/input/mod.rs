@@ -823,7 +823,10 @@ impl Session {
             return None;
         }
 
-        let pending = self.pending_new_messages;
+        // Defensive cap: passive clamps (resize, eviction) can shrink the
+        // viewport without owning follow state, so unseen arrivals never
+        // exceed the rows still below the view.
+        let pending = self.pending_new_messages.min(self.scroll_manager.offset());
         let total = self.transcript_rows.max(1) as usize;
         let top = self.scroll_manager.offset().saturating_add(1).min(total);
 

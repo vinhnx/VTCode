@@ -148,7 +148,7 @@ fn action_path(action: &PaletteAction) -> Option<String> {
         PaletteAction::OpenConversationSearch { session_id } => {
             Some(format!("action/conversation-search/{session_id}"))
         }
-        PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+        PaletteAction::JumpToTranscriptItem { session_id, item_id, .. } => {
             Some(format!("action/jump/{session_id}/{item_id}"))
         }
         PaletteAction::ShowActivityOutput { session_id, item_id } => {
@@ -334,7 +334,7 @@ fn parse_action(tail: &str) -> Option<DeepLink> {
         }
         "jump" => {
             let (session_id, item_id) = pair(rest)?;
-            PaletteAction::JumpToTranscriptItem { session_id, item_id }
+            PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search: false }
         }
         "output" => {
             let (session_id, item_id) = pair(rest)?;
@@ -648,6 +648,7 @@ mod tests {
             Some(DeepLink::Action(PaletteAction::JumpToTranscriptItem {
                 session_id: "sess".into(),
                 item_id: "item-1".into(),
+                from_search: false,
             }))
         );
     }

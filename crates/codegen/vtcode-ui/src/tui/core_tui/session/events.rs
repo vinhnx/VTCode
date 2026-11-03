@@ -664,6 +664,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                         session.input_manager.set_content(latest);
                         session.input_compact_mode = session.input_compact_placeholder().is_some();
                         session.scroll_manager.set_offset(0);
+                        session.sync_follow_state();
                     }
                     session.mark_dirty();
                     return Some(InlineEvent::EditQueue);
@@ -813,6 +814,7 @@ fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
 /// Notice shown when the user requests a primary-agent mode switch while a turn
 /// is actively processing. Mode switches are locked for the duration of a turn.
 fn push_mode_switch_busy_notice(session: &mut Session) {
+    let previous_max_offset = session.current_max_scroll_offset();
     session.push_line(
         InlineMessageKind::Warning,
         vec![InlineSegment {
@@ -820,6 +822,7 @@ fn push_mode_switch_busy_notice(session: &mut Session) {
             style: Arc::new(InlineTextStyle::default()),
         }],
     );
+    session.adjust_scroll_after_change(previous_max_offset);
     session.mark_dirty();
 }
 
@@ -861,4 +864,5 @@ fn clear_submitted_input(session: &mut Session) {
     session.clear_inline_prompt_suggestion();
     session.input_compact_mode = false;
     session.scroll_manager.set_offset(0);
+    session.sync_follow_state();
 }

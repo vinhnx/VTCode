@@ -870,6 +870,35 @@ impl DesktopView {
                                     .map_or_else(
                                         || div().into_any_element(),
                                         |row| {
+                                            let jump_action = row.in_transcript.then(|| {
+                                                let view = weak_view.clone();
+                                                let jump_id = row.id.clone();
+                                                let jump_title = row.title.to_string();
+                                                desktop_button(format!("activity-jump-{}", row.id))
+                                                    .icon(IconName::MessageSquare)
+                                                    .ghost()
+                                                    .small()
+                                                    .accessibility_label(
+                                                        rust_i18n::t!(
+                                                            "app.inspector.jump_to_message_for",
+                                                            title = jump_title.as_str()
+                                                        )
+                                                        .to_string(),
+                                                    )
+                                                    .tooltip(rust_i18n::t!("app.inspector.jump_to_message").to_string())
+                                                    .on_click(move |_, window, app| {
+                                                        if let Some(view) = view.upgrade() {
+                                                            view.update(app, |view, cx| {
+                                                                let _jumped = view.jump_to_transcript_item(
+                                                                    jump_id.as_str(),
+                                                                    window,
+                                                                    cx,
+                                                                );
+                                                            });
+                                                        }
+                                                    })
+                                                    .into_any_element()
+                                            });
                                             let output_action = row.has_output.then(|| {
                                                 let view = weak_view.clone();
                                                 let output_id = row.id.clone();
@@ -907,6 +936,7 @@ impl DesktopView {
                                                 activity_row_height,
                                                 index + 1,
                                                 activity_count,
+                                                jump_action,
                                                 output_action,
                                             )
                                             .into_any_element()
@@ -1006,6 +1036,7 @@ impl DesktopView {
         row_height: f32,
         position: usize,
         set_size: usize,
+        jump_action: Option<AnyElement>,
         output_action: Option<AnyElement>,
     ) -> impl IntoElement {
         let status_color = Self::activity_status_color(row.state, colors);
@@ -1039,6 +1070,9 @@ impl DesktopView {
                         .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
                         .child(div().text_xs().truncate().text_color(themes::muted_text(&colors)).child(status)),
                 );
+        if let Some(jump_action) = jump_action {
+            row_element = row_element.child(div().flex_shrink_0().child(jump_action));
+        }
         if let Some(output_action) = output_action {
             row_element = row_element.child(div().flex_shrink_0().child(output_action));
         }

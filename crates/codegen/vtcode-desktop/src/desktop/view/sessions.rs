@@ -704,6 +704,10 @@ impl DesktopView {
         self.ui_progress_active = false;
         self.cancel_session_load_task();
         self.active_primary_agent_display = None;
+        self.keyboard_focused_message = None;
+        self.hovered_message = None;
+        self.transcript_layout_settled = false;
+        self.filter_matches = None;
         self.transcript.clear();
         self.clear_restored_activity();
         self.history_start_index = 0;

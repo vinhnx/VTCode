@@ -191,6 +191,83 @@ fn wheel_scroll_via_coalesced_path_shows_jump_hint() {
 }
 
 #[test]
+fn append_while_scrolled_counts_pending_and_preserves_position() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    let offset_before = session.scroll_offset();
+    assert!(offset_before > 0);
+    assert_eq!(session.pending_new_messages, 0, "scrolling over old content counts nothing");
+
+    for index in 0..3 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![make_segment(&format!("fresh {index}"))],
+        });
+    }
+    assert_eq!(session.pending_new_messages, 3, "one unseen row per appended line");
+    assert_eq!(session.scroll_offset(), offset_before + 3, "viewport must not drift toward new content");
+
+    let status = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
+    let text = status.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
+    assert!(text.contains("↓ 3 new"), "pending arrivals surface in the footer, got: {text}");
+}
+
+#[test]
+fn append_while_following_pins_bottom_without_pending() {
+    let mut session = prepare_sized_session(10);
+    for index in 0..3 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![make_segment(&format!("fresh {index}"))],
+        });
+    }
+    assert_eq!(session.scroll_offset(), 0, "following pins to the live bottom");
+    assert_eq!(session.pending_new_messages, 0, "visible arrivals count nothing");
+    assert!(session.build_scroll_indicator().is_none(), "no indicator at the bottom edge");
+}
+
+#[test]
+fn moving_toward_bottom_shrinks_pending_until_it_clears() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    for index in 0..4 {
+        session.handle_command(InlineCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![make_segment(&format!("fresh {index}"))],
+        });
+    }
+    assert_eq!(session.pending_new_messages, 4);
+    // Rows reveal oldest-first, so the count only shrinks once the new rows
+    // themselves start entering the viewport.
+    while session.scroll_offset() > 2 {
+        session.scroll_line_down();
+    }
+    assert_eq!(session.pending_new_messages, 2);
+    session.scroll_to_bottom();
+    assert_eq!(session.pending_new_messages, 0);
+    assert!(session.build_scroll_indicator().is_none());
+}
+
+#[test]
+fn pasted_message_while_scrolled_preserves_position() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    let offset_before = session.scroll_offset();
+    let max_before = session.current_max_scroll_offset();
+    session.handle_command(InlineCommand::AppendPastedMessage {
+        kind: InlineMessageKind::User,
+        text: "pasted body".to_string(),
+        line_count: 1,
+    });
+    // User rows carry chrome, so assert the layout-independent invariant:
+    // the viewport shifts by exactly the row growth, all of it unseen.
+    let grown = session.current_max_scroll_offset().saturating_sub(max_before);
+    assert!(grown > 0, "paste must add rows");
+    assert_eq!(session.scroll_offset(), offset_before + grown, "paste must not drag a scrolled view");
+    assert_eq!(session.pending_new_messages, grown);
+}
+
+#[test]
 fn footer_hint_appends_jump_label_while_scrolled() {
     let mut session = prepare_sized_session(10);
     session.handle_command(InlineCommand::SetInputStatus {

@@ -39,6 +39,8 @@ fn inspector_copy_is_localized_for_every_language() {
             "app.inspector.older_excluded",
             "app.inspector.recent_activity",
             "app.inspector.view_captured_output",
+            "app.inspector.jump_to_message",
+            "app.inspector.jump_to_message_for",
             "app.inspector.partial_activity_history",
             "app.inspector.inspector_tabs",
             "app.inspector.tabs_hint",
@@ -110,6 +112,9 @@ fn inspector_copy_is_localized_for_every_language() {
         let view_output =
             rust_i18n::t!("app.inspector.view_output_for", locale = locale, title = "demo-title").to_string();
         assert!(view_output.contains("demo-title"), "{locale}: {view_output}");
+        let jump_message =
+            rust_i18n::t!("app.inspector.jump_to_message_for", locale = locale, title = "demo-title").to_string();
+        assert!(jump_message.contains("demo-title"), "{locale}: {jump_message}");
         let files = rust_i18n::t!("app.inspector.files_count", locale = locale, count = 3).to_string();
         assert!(files.contains('3'), "{locale}: {files}");
         let review =

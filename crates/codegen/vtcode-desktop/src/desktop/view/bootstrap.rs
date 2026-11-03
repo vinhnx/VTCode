@@ -508,6 +508,8 @@ impl DesktopView {
             active_primary_agent_display: None,
             transcript: Transcript::default(),
             message_scroller,
+            transcript_layout_settled: false,
+            filter_matches: None,
             restored_activity: Vec::new(),
             restored_activity_revision: 0,
             activity_projection_cache: None,

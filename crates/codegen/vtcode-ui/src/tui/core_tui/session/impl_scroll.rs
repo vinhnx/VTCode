@@ -145,7 +145,7 @@ impl Session {
         self.scroll_manager.scroll_to_top();
         let offset_delta = self.scroll_manager.offset() as i64 - previous_offset as i64;
         self.mouse_selection.adjust_for_scroll(offset_delta as i32);
-        self.user_scrolled = false;
+        self.sync_follow_state();
         self.invalidate_transcript_viewport();
         self.mark_dirty();
     }
@@ -189,7 +189,7 @@ impl Session {
         if offset_delta != 0 {
             self.mouse_selection.adjust_for_scroll(offset_delta as i32);
         }
-        self.user_scrolled = new_offset != 0;
+        self.sync_follow_state();
         self.invalidate_transcript_viewport();
         self.mark_dirty();
         true

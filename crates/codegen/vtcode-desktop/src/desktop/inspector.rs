@@ -67,6 +67,9 @@ pub(super) struct ActivityRow {
     pub status: String,
     pub state: ActivityState,
     pub has_output: bool,
+    /// Whether the row resolves in the live transcript. Restored-only rows
+    /// predate the loaded window, so they offer output but no transcript jump.
+    pub in_transcript: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -270,13 +273,14 @@ impl ChangesProjection {
 pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]) -> ActivityProjection {
     let mut activities = restored
         .iter()
-        .chain(transcript.items())
+        .map(|item| (item, false))
+        .chain(transcript.items().map(|item| (item, true)))
         .rev()
-        .filter(|item| item.has_activity_status);
+        .filter(|(item, _)| item.has_activity_status);
     let rows: Vec<_> = activities
         .by_ref()
         .take(MAX_ACTIVITY_ROWS)
-        .map(|item| {
+        .map(|(item, in_transcript)| {
             let status = item.text.lines().next().unwrap_or_default().to_string();
             ActivityRow {
                 id: item.id.clone(),
@@ -284,6 +288,7 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
                 state: ActivityState::from_status(&status),
                 status,
                 has_output: item.has_output(),
+                in_transcript,
             }
         })
         .collect();
@@ -580,6 +585,7 @@ mod tests {
             status: String::new(),
             state,
             has_output: false,
+            in_transcript: true,
         })
         .collect::<Vec<_>>();
 
