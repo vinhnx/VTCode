@@ -8,7 +8,6 @@ use gpui_kit::{AssetSource, Result, SharedString};
 icon_assets!(
     ExtraIcons,
     [
-        Accessibility,
         Activity,
         FileCode,
         FileImage,
@@ -23,6 +22,7 @@ icon_assets!(
         Maximize2,
         MessageSquare,
         Pencil,
+        PersonStanding,
         Plug,
         Shield,
         ShieldCheck,
@@ -62,7 +62,6 @@ mod tests {
     use super::DesktopAssets;
 
     const DESKTOP_ICONS: &[IconName] = &[
-        IconName::Accessibility,
         IconName::Activity,
         IconName::ArrowDown,
         IconName::ArrowLeft,
@@ -104,6 +103,7 @@ mod tests {
         IconName::PanelLeft,
         IconName::PanelRight,
         IconName::Pencil,
+        IconName::PersonStanding,
         IconName::Plug,
         IconName::Plus,
         IconName::RefreshCw,

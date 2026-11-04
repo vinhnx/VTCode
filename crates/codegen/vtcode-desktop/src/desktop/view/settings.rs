@@ -49,7 +49,7 @@ impl SettingsTab {
     pub(super) fn icon(self) -> Option<IconName> {
         match self {
             Self::Appearance => Some(IconName::Palette),
-            Self::Accessibility => Some(IconName::Accessibility),
+            Self::Accessibility => Some(IconName::PersonStanding),
             Self::Shortcuts => Some(IconName::Keyboard),
             Self::VtCode => None,
             Self::Connections => Some(IconName::Plug),
@@ -555,7 +555,7 @@ mod tests {
     #[test]
     fn settings_tab_icons_cover_every_tab_exactly_once() {
         assert_eq!(SettingsTab::Appearance.icon(), Some(IconName::Palette));
-        assert_eq!(SettingsTab::Accessibility.icon(), Some(IconName::Accessibility));
+        assert_eq!(SettingsTab::Accessibility.icon(), Some(IconName::PersonStanding));
         assert_eq!(SettingsTab::Shortcuts.icon(), Some(IconName::Keyboard));
         assert_eq!(SettingsTab::VtCode.icon(), None);
         assert_eq!(SettingsTab::Connections.icon(), Some(IconName::Plug));
