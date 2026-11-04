@@ -450,7 +450,7 @@ pub(super) fn model_options_header(
     }
     let mut panel = div().p_3().flex().flex_col().gap_2().min_w_0().child(summary);
     if let Some(slider) = slider {
-        panel = panel.child(effort_knob(slider, focus, effort_levels, effort, enabled, cx));
+        panel = panel.child(effort_options(slider, focus, effort_levels, effort, enabled, cx));
     }
     if let Some(speed_control) = speed_control {
         panel = panel.child(
@@ -465,18 +465,14 @@ pub(super) fn model_options_header(
     panel.into_any_element()
 }
 
-/// Vertical effort-rail height in rem: roomy enough to hit a stop, compact
-/// enough that the summary, rail, speed row, and footer fit the 360px palette
-/// cap. Total over every count (the caller only builds a knob for 2..=8).
-fn effort_rail_height_rems(level_count: usize) -> f32 {
-    const REMS_PER_INTERVAL: f32 = 1.75;
-    const MIN_REMS: f32 = 6.0;
-    const MAX_REMS: f32 = 11.0;
-    let intervals = level_count.saturating_sub(1) as f32;
-    (REMS_PER_INTERVAL * intervals).clamp(MIN_REMS, MAX_REMS)
-}
-
-fn effort_knob(
+/// One radio row per reasoning-effort level: discrete levels read as a
+/// small visible set, not a continuous drag, so one click commits.
+/// Selection pairs the primary indicator with the choice-card tint, hover
+/// pairs the accent fill with foreground text like Kit menus, and rows
+/// commit through the same SliderState channel the old rail used, so
+/// release-to-commit, revert-on-blocked, and the palette lifecycle stay
+/// in one place.
+fn effort_options(
     state: &Entity<gpui_kit::component::slider::SliderState>,
     focus: &FocusHandle,
     levels: &[String],
@@ -484,129 +480,57 @@ fn effort_knob(
     enabled: bool,
     cx: &App,
 ) -> AnyElement {
-    use gpui_kit::base::slider::{SliderIndicator, SliderThumb, SliderTrack};
-    use gpui_kit::relative;
-
     let colors = cx.theme().colors;
-    let slider_bar = colors.slider_bar;
-    let slider_thumb = colors.slider_thumb;
-    let slider = state.read(cx);
-    let span = slider.max_value() - slider.min_value();
-    let position = if span > 0. {
-        (slider.value().start() - slider.min_value()) / span
-    } else {
-        0.
-    };
-    let position = position.clamp(0., 1.);
-    let level_count = levels.len();
-    let intervals = level_count.saturating_sub(1).max(1) as f32;
     let selected_index = effort.and_then(|effort| levels.iter().position(|level| level.as_str() == effort));
-    let rail_height = cx.theme().font_size * effort_rail_height_rems(level_count);
-    // Zero-height rows centered on each stop line: the dot and thumb stay
-    // aligned with the value mapping at any zoom without pixel offsets.
-    let stops = (0..level_count).map(|index| {
-        let fraction = 1. - index as f32 / intervals;
-        let selected = selected_index == Some(index);
-        div()
-            .absolute()
-            .left_0()
-            .right_0()
-            .top(relative(fraction))
-            .h_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                div()
-                    .id(("effort-stop", index))
-                    .test_support()
-                    .size_2()
-                    .rounded_full()
-                    .bg(if selected {
-                        slider_bar
-                    } else {
-                        colors.foreground.opacity(0.35)
-                    }),
-            )
-    });
-    let labels = levels.iter().enumerate().map(|(index, level)| {
-        let fraction = 1. - index as f32 / intervals;
-        let selected = selected_index == Some(index);
+    let level_count = levels.len();
+    // Highest effort first, matching the old bottom-to-top rail order.
+    // Element ids stay on the levels index (not the visual row) so
+    // existing queries keep working; only the announced set position
+    // follows the visual order.
+    let rows = levels.iter().enumerate().rev().map(|(index, level)| {
         let label = capitalize_agent_label(level);
-        div()
-            .absolute()
-            .left_0()
-            .right_0()
-            .top(relative(fraction))
-            .h_0()
-            .flex()
-            .items_center()
-            .child(
-                div()
-                    .id(("effort-label", index))
-                    .test_support()
-                    .role(gpui_kit::Role::Label)
-                    .aria_label(label.clone())
-                    .text_sm()
-                    .when(selected, |label| label.font_semibold().text_color(colors.foreground))
-                    .when(!selected, |label| label.text_color(colors.muted_foreground))
-                    .child(label),
-            )
+        let target = state.clone();
+        let selected = selected_index == Some(index);
+        Radio::new(("effort-label", index))
+            .label(label.clone())
+            .accessibility_label(label)
+            .checked(selected)
+            .disabled(!enabled)
+            .small()
+            .w_full()
+            .py_1()
+            .px_2()
+            .rounded_md()
+            .when(selected, |row| {
+                row.bg(colors.primary.opacity(0.08))
+                    .font_semibold()
+                    .text_color(colors.foreground)
+            })
+            .when(!selected, |row| row.text_color(colors.muted_foreground))
+            .when(enabled && !selected, |row| row.hover(|hover| hover.bg(colors.accent).text_color(colors.foreground)))
+            .when(enabled, |row| row.cursor_pointer())
+            .aria_position_in_set(level_count - index)
+            .aria_size_of_set(level_count)
+            .on_change(move |checked: &bool, window, cx| {
+                if *checked {
+                    settle_effort(&target, index as f32, window, cx);
+                }
+            })
     });
-    let thumb_row = div()
-        .absolute()
-        .left_0()
-        .right_0()
-        .top(relative(1. - position))
-        .h_0()
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            SliderThumb::new(state)
-                .axis(Axis::Vertical)
-                .disabled(!enabled)
-                .size_6()
-                .flex_shrink_0()
-                .rounded_full()
-                .bg(slider_thumb)
-                .shadow_md(),
-        );
-
-    let slider_id = state.entity_id();
-    let increment = state.clone();
-    let decrement = state.clone();
     let keyboard = state.clone();
-    let release = state.clone();
-    let release_outside = state.clone();
     let click_focus = focus.clone();
     div()
-        .id(("slider", slider_id))
+        .id("effort-options")
         .test_support()
-        .role(gpui_kit::Role::Slider)
+        .role(gpui_kit::Role::RadioGroup)
         .aria_label(
             effort
                 .map(|effort| rust_i18n::t!(i18n::COMPOSER_REASONING_EFFORT, effort = effort).to_string())
                 .unwrap_or_else(|| rust_i18n::t!("app.composer.reasoning_effort_generic").to_string()),
         )
         .aria_description(rust_i18n::t!("app.composer.reasoning_effort_hint").to_string())
-        .aria_numeric_value(slider.value().start() as f64)
-        .aria_min_numeric_value(slider.min_value() as f64)
-        .aria_max_numeric_value(slider.max_value() as f64)
-        .aria_numeric_value_step(slider.step_value() as f64)
-        .aria_orientation(gpui_kit::Orientation::Vertical)
         .track_focus(focus)
         .focus_visible(|style| style.border_1().border_color(colors.ring))
-        .on_a11y_action(gpui_kit::AccessibleAction::Increment, move |_, window, cx| {
-            if enabled {
-                step_effort(&increment, 1., window, cx);
-            }
-        })
-        .on_a11y_action(gpui_kit::AccessibleAction::Decrement, move |_, window, cx| {
-            if enabled {
-                step_effort(&decrement, -1., window, cx);
-            }
-        })
         .on_key_down(move |event, window, cx| {
             if event.keystroke.modifiers.control
                 || event.keystroke.modifiers.alt
@@ -632,54 +556,13 @@ fn effort_knob(
             }
         })
         .on_mouse_down(MouseButton::Left, move |_, window, cx| click_focus.focus(window, cx))
-        .on_mouse_up(MouseButton::Left, move |_, _, cx| {
-            release.update(cx, |state, cx| state.handle_release(cx));
-        })
-        .on_mouse_up_out(MouseButton::Left, move |_, _, cx| {
-            release_outside.update(cx, |state, cx| state.handle_release(cx));
-        })
-        .when(enabled, |knob| knob.cursor_pointer())
-        .when(!enabled, |knob| knob.opacity(0.5))
+        .when(!enabled, |options| options.opacity(0.5))
         .w_full()
         .min_w_0()
-        .child(
-            SliderTrack::new(state)
-                .axis(Axis::Vertical)
-                .disabled(!enabled)
-                .w_full()
-                .py_4()
-                .child(
-                    SliderIndicator::new(state)
-                        .relative()
-                        .w_full()
-                        .h(rail_height)
-                        .flex()
-                        .flex_row()
-                        .child(
-                            div().w_6().h_full().relative().flex().justify_center().child(
-                                div()
-                                    .w_1p5()
-                                    .h_full()
-                                    .relative()
-                                    .rounded_full()
-                                    .bg(slider_bar.opacity(0.2))
-                                    .child(
-                                        div()
-                                            .absolute()
-                                            .bottom_0()
-                                            .left_0()
-                                            .right_0()
-                                            .top(relative(1. - position))
-                                            .rounded_full()
-                                            .bg(slider_bar),
-                                    )
-                                    .children(stops)
-                                    .child(thumb_row),
-                            ),
-                        )
-                        .child(div().flex_1().min_w_0().h_full().relative().pl_3().children(labels)),
-                ),
-        )
+        .flex()
+        .flex_col()
+        .gap_1()
+        .children(rows)
         .into_any_element()
 }
 

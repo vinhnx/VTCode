@@ -728,7 +728,7 @@ fn failed_working_tree_refresh_keeps_the_last_successful_snapshot(cx: &mut TestA
 }
 
 #[gpui_kit::test]
-fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) {
+fn effort_option_click_commits_the_supported_level(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -739,7 +739,7 @@ fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) 
         });
         window.render_frame(cx);
         window.render_frame(cx);
-        window.click(("effort-stop", 2usize), cx);
+        window.click(("effort-label", 2usize), cx);
     })
     .unwrap();
     cx.run_until_parked();

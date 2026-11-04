@@ -151,6 +151,24 @@ fn flagship_surfaces_and_muted_text_read_crisp_not_grey(cx: &mut gpui_kit::TestA
 }
 
 #[gpui_kit::test]
+fn foreground_reads_on_accent_hover_for_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        // Hover rows (effort options, Kit menus) pair foreground text with
+        // the accent fill: the pair must clear AA in every palette.
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let ratio = contrast_ratio(colors.foreground, colors.accent);
+            assert!(ratio >= 4.5, "{id}: foreground on accent hover is {ratio:.2}");
+        }
+    });
+}
+
+#[gpui_kit::test]
 fn muted_text_holds_crispness_floor_or_palette_ceiling(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);

@@ -349,7 +349,7 @@ notes](../../patches/gpui-pre-macos/PATCH.md).
 
 The composer renders borderless on the page background. Muted text is tested at WCAG AA 4.5:1 on the page, composer,
 popover, and chrome surfaces for every built-in palette, rather than only against the page background. Conversation
-and thread-heading nodes have stable accessible IDs and labels. Knob step buttons retain Kit focus, keyboard
+and thread-heading nodes have stable accessible IDs and labels. Effort option rows retain Kit focus, keyboard
 activation, disabled boundaries, and accessible labels.
 
 ### Native window chrome
@@ -446,7 +446,8 @@ resize handles retain their own cursors.
 ### Model picker
 
 The composer opens a compact 352 px model/effort panel above the input; the full catalog search is 392 px wide.
-The compact panel shows the selected model name, its current reasoning-effort value, and a supported effort knob.
+The compact panel shows the selected model name, its current reasoning-effort value, and one radio row per
+supported reasoning-effort level.
 The composer model button also shows the acknowledged effort and effective Fast or Ultrafast tier. Ultrafast
 uses a filled theme-accent badge and active toggle; Fast uses a quieter surface. Both labels are capitalized.
 Both refresh from the CLI configuration response after a selection is accepted. Long model names truncate in
@@ -454,9 +455,9 @@ the composer button while the accessible name retains the complete model, effort
 Model choices stay in the full search opened by **Search all models…**. Long model names wrap within the compact
 panel. Catalog rows expose supported reasoning, vision, tool use,
 structured output, pro tier, audio/video/PDF input, and a compact context-window size when the CLI provides them.
-The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
-the same change through keyboard and assistive activation. The slider's accessible name includes the current CLI
-level (for example, “Reasoning effort: medium”). Changes commit on release, and restart the idle
+Effort rows appear only for advertised provider/model capabilities. One click commits a level; arrow keys
+step through levels and Home/End jump to the ends. The group's accessible name includes the current CLI
+level (for example, “Reasoning effort: medium”). Changes commit immediately, and restart the idle
 session so the runtime receives the new effort. Compatible native OpenAI and Anthropic routes expose a
 toggle for the CLI's Ultrafast or Fast tier. Eligibility uses the same CLI rules as `/fast`; a change is validated,
 saved through the CLI config writer, and applied when the next session starts. The control is a labeled accessible

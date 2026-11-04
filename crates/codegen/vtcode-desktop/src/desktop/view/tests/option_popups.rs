@@ -567,7 +567,7 @@ fn workspace_permission_choices_persist_after_acknowledgement_and_restore_on_rec
 }
 
 #[gpui_kit::test]
-fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAppContext) {
+fn reasoning_effort_options_accessible_label_tracks_the_cli_level(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(1);
     cx.update_window(window, |_, window, cx| {
@@ -579,10 +579,9 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
         window.click("pick-model", cx);
         window.render_frame(cx);
 
-        let slider_id = view.read(cx).effort_slider.as_ref().unwrap().entity_id();
-        let slider = window.find(("slider", slider_id));
-        assert_eq!(slider.role(), Some(gpui_kit::Role::Slider));
-        assert_eq!(slider.label(), Some("Reasoning effort: medium"));
+        let options = window.find("effort-options");
+        assert_eq!(options.role(), Some(gpui_kit::Role::RadioGroup));
+        assert_eq!(options.label(), Some("Reasoning effort: medium"));
         assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: medium"));
 
         view.update(cx, |view, cx| {
@@ -591,8 +590,7 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
         });
         window.render_frame(cx);
 
-        let slider_id = view.read(cx).effort_slider.as_ref().unwrap().entity_id();
-        assert_eq!(window.find(("slider", slider_id)).label(), Some("Reasoning effort: high"));
+        assert_eq!(window.find("effort-options").label(), Some("Reasoning effort: high"));
         assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: high"));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · high"));
     })
@@ -600,7 +598,7 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
-fn reasoning_effort_knob_click_commits_the_selected_level(cx: &mut TestAppContext) {
+fn reasoning_effort_option_click_commits_the_selected_level(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
     cx.update_window(window, |_, window, cx| {
@@ -611,9 +609,14 @@ fn reasoning_effort_knob_click_commits_the_selected_level(cx: &mut TestAppContex
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        // The rail runs bottom-to-top: the top edge is the maximum level.
-        let track = window.find("slider-bar-container").bounds();
-        window.click_at("slider-bar-container", point(track.size.width / 2., px(2.)), cx);
+        // Levels render highest-first; index 2 is high in the low/medium/high fixture.
+        assert_eq!(window.find(("effort-label", 1usize)).selected(), Some(true));
+        let top = window.find(("effort-label", 2usize)).bounds();
+        let bottom = window.find(("effort-label", 0usize)).bounds();
+        assert!(top.origin.y < bottom.origin.y, "highest effort renders first: top={top:?} bottom={bottom:?}");
+        window.click(("effort-label", 2usize), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find(("effort-label", 2usize)).selected(), Some(true));
     })
     .unwrap();
     cx.run_until_parked();
@@ -625,7 +628,7 @@ fn reasoning_effort_knob_click_commits_the_selected_level(cx: &mut TestAppContex
     assert!(requests.try_recv().is_err());
 }
 #[gpui_kit::test]
-fn reasoning_effort_knob_does_not_submit_at_its_boundary(cx: &mut TestAppContext) {
+fn reasoning_effort_option_does_not_submit_at_its_boundary(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
     cx.update_window(window, |_, window, cx| {

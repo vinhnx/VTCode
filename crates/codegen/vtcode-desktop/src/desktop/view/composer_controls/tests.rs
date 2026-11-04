@@ -4,7 +4,7 @@ use gpui_kit::assets::IconName;
 use super::settings::SettingsTab;
 use super::{
     ComposerTriggerKind, DesktopSlashAction, capitalize_agent_label, composer_trigger, desktop_slash_action, effort_at,
-    effort_rail_height_rems, file_mention_token, permission_indicator, settings_tab_for_name,
+    file_mention_token, permission_indicator, settings_tab_for_name,
 };
 
 #[test]
@@ -309,17 +309,4 @@ fn effort_knob_respects_discrete_capability_boundaries() {
     for value in [-1., 3., f32::NAN, f32::INFINITY] {
         assert!(effort_at(&levels, value).is_none());
     }
-}
-
-#[test]
-fn effort_rail_height_grows_per_interval_within_usable_bounds() {
-    // Degenerate counts cannot underflow or collapse the rail.
-    assert_eq!(effort_rail_height_rems(0), 6.0);
-    assert_eq!(effort_rail_height_rems(1), 6.0);
-    assert_eq!(effort_rail_height_rems(2), 6.0);
-    // Mid-range grows linearly: 6 levels span 5 intervals.
-    assert_eq!(effort_rail_height_rems(6), 8.75);
-    // The 8-stop cap still fits the palette beside summary and footer.
-    assert_eq!(effort_rail_height_rems(8), 11.0);
-    assert_eq!(effort_rail_height_rems(usize::MAX), 11.0);
 }
