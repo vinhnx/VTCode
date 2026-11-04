@@ -14,13 +14,17 @@ also refine the overall design system for more modern macos 27 look and feels. c
 
 ---
 
-fix tool call display being raw on the HITL popup on desktop. can we syntax highlight it? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 9.50.38 AM.png'
-
---
-
-check /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261104T023707Z_635862-12025 session, it seems vtcode having a lot of error and tool call failure for such a simple user's reqeust. Help me reason through this problem step by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the simplest practical approach before implementation. 
+implement lazy loading for threads data and heavy listing for all places on desktop app.
 
 ---
+
+fix tool call display being raw on the HITL popup on desktop. can we syntax highlight it? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 9.50.38 AM.png'
+
+---
+
+check and improve the model reasoning effort UI. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 10.23.13 AM.png' it doesn't look good. find another UI component for more modern and premium. also use theme's accent. make it easy to use
+
+--
 
 check stop and cancel active run on desktop doesn't work and doesn't end the session. the element and loading global state still showing as active running. find and fix and improve the force stop active loop
 
