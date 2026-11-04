@@ -731,13 +731,7 @@ impl DesktopView {
                                         .accessibility_label(
                                             rust_i18n::t!(profile_action_key, profile = label).to_string(),
                                         )
-                                        .toggled(selected)
-                                        .ghost()
-                                        // Popover, not secondary: the panel sits on the shared
-                                        // surface fill, which would swallow a secondary pill.
-                                        .when(selected, |button| {
-                                            button.bg(colors.popover).text_color(colors.foreground)
-                                        })
+                                        .desktop_selected(selected, colors)
                                         .on_click(cx.listener(move |view, _, window, cx| {
                                             if view.theme_mode != mode {
                                                 view.apply_theme_mode(mode, window, cx);

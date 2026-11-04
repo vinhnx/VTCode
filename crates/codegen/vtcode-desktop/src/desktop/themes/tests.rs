@@ -1,6 +1,26 @@
 use super::*;
 use gpui_kit::component::theme::ActiveTheme;
 
+#[gpui_kit::test]
+fn selected_controls_use_a_readable_stronger_surface(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            assert!(contrast_ratio(colors.foreground, colors.button_active) >= 4.5, "{id}: selected label");
+            assert!(
+                contrast_ratio(colors.secondary, colors.button_active) + 0.001
+                    >= contrast_ratio(colors.secondary, colors.popover),
+                "{id}: selection must not be weaker than the raised surface"
+            );
+        }
+    });
+}
+
 /// The subtle-border contract: opaque, at the hairline floor on the panel
 /// seats it outlines most, and separated from every other fill it can sit on.
 fn assert_subtle_surface_borders(id: &str, colors: &ThemeColor) {

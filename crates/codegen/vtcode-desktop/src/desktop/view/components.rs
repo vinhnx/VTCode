@@ -856,12 +856,12 @@ pub(super) trait DesktopButtonExt {
     /// `.when(enabled, ...)` so disabled buttons stay flat: Kit replays the
     /// instance style inside its disabled arm, after its own shadow reset.
     fn desktop_elevated(self) -> Self;
-    /// Selected-option treatment: pressed-state metadata plus a popover
-    /// fill when selected, quiet ghost otherwise. Every call site sits on a
-    /// `secondary`-equivalent surface (settings panel, group-box fill), where
+    /// Selected-option treatment: pressed-state metadata plus a stronger
+    /// interaction fill when selected, quiet ghost otherwise. Every call site
+    /// sits on a `secondary`-equivalent surface (settings panel, group-box fill), where
     /// a `secondary` fill would be pixel-identical to the background, so the
-    /// highlight uses `popover` like the settings navigation. Ghost-base
-    /// (theme profiles, diff layout) and label-only (reduced motion)
+    /// highlight uses the readable pressed fill. Ghost-base
+    /// (diff layout) and label-only (reduced motion)
     /// selections keep their bespoke chains.
     fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self;
 }
@@ -877,8 +877,9 @@ impl DesktopButtonExt for Button {
 
     fn desktop_selected(self, selected: bool, colors: &gpui_kit::component::theme::ThemeColor) -> Self {
         self.toggled(selected)
+            .selected(selected)
             .ghost()
-            .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
+            .when(selected, |button| button.bg(colors.button_active).text_color(colors.foreground))
     }
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {

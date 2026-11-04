@@ -266,8 +266,7 @@ impl DesktopView {
     /// Left navigation: shared search plus one button per settings page,
     /// grouped into desktop tabs and the CLI configuration entry.
     /// Buttons keep Kit Button keyboard handling; the panel fill is
-    /// `secondary`, so selection uses `popover` (a `secondary` fill would
-    /// be pixel-identical to the background).
+    /// `secondary`, so selection uses the shared stronger interaction fill.
     fn render_settings_navigation(&self, window: &Window, cx: &mut Context<Self>, narrow: bool) -> AnyElement {
         let colors = cx.theme().colors;
         let selected = self.settings_page_index();

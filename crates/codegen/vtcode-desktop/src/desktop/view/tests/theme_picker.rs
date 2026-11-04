@@ -60,6 +60,10 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit the Light appearance profile"));
         assert_eq!(window.find("edit-dark-profile").checked(), Some(true));
         assert_eq!(window.find("edit-light-profile").checked(), Some(false));
+        window.hover("edit-dark-profile", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("edit-dark-profile").checked(), Some(true));
+        assert_eq!(window.find("edit-light-profile").checked(), Some(false));
 
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
