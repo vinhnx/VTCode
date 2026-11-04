@@ -5,6 +5,10 @@ use super::*;
 impl DesktopView {
     pub(super) fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
+        // Borderless on the transcript spine: the panel carries no horizontal
+        // pad of its own, so the draft starts exactly where assistant body
+        // text starts. The outer centering wrapper below owns the narrow-
+        // window edge inset (mirroring the scroller's row wrapper).
         let mut panel = div()
             .w_full()
             .max_w(px(self.content_width()))
@@ -12,13 +16,12 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_2()
-            .px_4()
             .pb_4()
             .pt_2()
-            // Zen tightens the panel pad by the step the composer group
-            // loosens below, so the horizontal and bottom insets match
-            // normal mode instead of shrinking with the column.
-            .when(self.zen_mode, |panel| panel.px_3().pb_3());
+            // Zen tightens the bottom pad by the step the composer group
+            // loosens below, so the bottom inset matches normal mode
+            // instead of shrinking with the column.
+            .when(self.zen_mode, |panel| panel.pb_3());
         if !self.attachments.is_empty() {
             panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(self.attachments.iter().map(
                 |attachment| {
@@ -138,15 +141,20 @@ impl DesktopView {
             );
         }
         let weak_view = cx.entity().downgrade();
-        // One size owns the composer geometry. The multiline control carries
-        // no horizontal inset of its own, while the BlockEnd action row insets
-        // by the group's input token: pad the text by that same token so the
-        // draft shares the buttons' leading spine at every zoom level.
+        // One size owns the composer geometry. The borderless input carries
+        // no horizontal inset: the draft starts on the transcript spine,
+        // while the button frames below start on it too and their ghost
+        // labels inset by button padding (matching transcript tool rows).
         let composer_size = gpui_kit::component::Size::default();
         let input = Textarea::new(&self.composer)
             .accessibility_id("composer")
             .aria_label(rust_i18n::t!("app.composer.input_label").to_string())
-            .input_pl(composer_size)
+            // Kit insets multiline editor text by the size input token
+            // with no override (`set_editor_paddings` is crate-private
+            // and unconditional), so shift the element back by that same
+            // public token: the draft starts on the transcript spine.
+            // Pinned with Kit =0.8.1; recheck the formula on upgrade.
+            .ml(-composer_size.input_px())
             .cursor_text()
             // Files copied in Finder arrive on the clipboard as
             // `ExternalPaths`; pasting them attaches instead of letting the
@@ -379,11 +387,14 @@ impl DesktopView {
             && let Some(state) = self.palette.clone()
         {
             if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
+                // The panel carries no horizontal pad, so the zero-size
+                // anchor docks flush at its trailing edge: the
+                // BottomRight-anchored popup ends on the frame edge.
                 panel = panel.child(
                     div()
                         .absolute()
                         .top(gpui_kit::rems(0.5))
-                        .right(gpui_kit::rems(1.))
+                        .right_0()
                         .w_0()
                         .h_0()
                         .child(self.render_command_palette(state, window, cx)),
@@ -400,13 +411,12 @@ impl DesktopView {
         // Normal mode folds workspace, connection, and mode controls into the
         // sidebar, Settings, and the button row; only the zen no-workspace
         // state keeps this row, where the picker is the only visible path to
-        // choose one (the zen empty state has no workspace link). The row
-        // consumes the composer frame's own content inset (the zen group pad
-        // plus the size input token shared with the draft padding and the
-        // button-row addon), so its buttons start on the input spine.
+        // choose one (the zen empty state has no workspace link). The frame
+        // carries no horizontal inset, so the row needs none either: its
+        // button frames start on the input spine directly.
         if self.zen_mode && self.workspace.is_none() {
             panel = panel.child(
-                div().w_full().pl_3().child(
+                div().w_full().child(
                     div()
                         .id("composer-context")
                         .test_support()
@@ -416,7 +426,6 @@ impl DesktopView {
                         .flex_wrap()
                         .items_center()
                         .gap_2()
-                        .pl(composer_size.input_px())
                         .py_1()
                         .with_animation("composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
                             el.opacity(delta)
@@ -439,7 +448,7 @@ impl DesktopView {
                 ),
             );
         }
-        div().w_full().flex().justify_center().child(
+        div().w_full().flex().justify_center().px_3().child(
             panel.child(
                 div()
                     .w_full()
@@ -521,12 +530,16 @@ impl DesktopView {
                                 .border_0()
                                 .bg(cx.theme().transparent)
                                 .focus_ring(false)
-                                .p_2()
-                                .when(self.zen_mode, |group| group.p_3())
+                                .py_2()
+                                .when(self.zen_mode, |group| group.py_3())
                                 .input(input)
                                 .addon(
                                     InputGroupAddon::new("composer-actions")
                                         .align(InputGroupAddonAlignment::BlockEnd)
+                                        // Block addons inset by the size input
+                                        // token; zero it so button frames start
+                                        // on the transcript spine like the draft.
+                                        .px_0()
                                         .child(buttons),
                                 ),
                         )

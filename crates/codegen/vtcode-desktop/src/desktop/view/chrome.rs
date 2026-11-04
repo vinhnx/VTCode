@@ -498,8 +498,10 @@ impl DesktopView {
             .as_deref()
             .is_some_and(|session_id| self.is_session_running(session_id));
         // Centered on the conversation spine: the title shares the transcript
-        // and composer column instead of hugging the workspace edge.
-        div().w_full().flex().justify_center().child(
+        // and composer column instead of hugging the workspace edge. The
+        // edge inset lives on the outer wrapper (mirroring the scroller's
+        // row wrapper), so the title starts on the spine.
+        div().w_full().flex().justify_center().px_3().child(
             div()
                 .id("thread-header")
                 .test_support()
@@ -510,7 +512,6 @@ impl DesktopView {
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .px_4()
                 .py_1()
                 .when(running, |header| {
                     header

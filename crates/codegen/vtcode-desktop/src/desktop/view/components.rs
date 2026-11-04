@@ -91,7 +91,9 @@ fn loading_marker_row_inner(
 /// runs with no content yet. It lives outside the measured list on purpose:
 /// scroller geometry never churns when the row appears or clears. The label
 /// reuses the owned turn-phase status, so it tracks
-/// submitting/running/cancelling with no extra copy.
+/// submitting/running/cancelling with no extra copy. The edge inset lives on
+/// the outer wrapper (mirroring the scroller's row wrapper), so the label
+/// text starts on the transcript spine instead of one step inside it.
 pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> AnyElement {
     div()
         .id("turn-pending")
@@ -101,6 +103,7 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
         .w_full()
         .flex()
         .justify_center()
+        .px_3()
         .child(
             div()
                 .w_full()
@@ -109,7 +112,6 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
                 .flex()
                 .flex_col()
                 .gap_2()
-                .px_3()
                 .py_2()
                 .text_sm()
                 .text_color(cx.theme().colors.muted_foreground)

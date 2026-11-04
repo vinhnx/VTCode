@@ -51,7 +51,7 @@ use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::component::toolbar::{Toolbar, ToolbarGroup};
 use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::{Icon, Selectable, Sizable, StyleSized, VirtualListScrollHandle, v_virtual_list};
+use gpui_kit::component::{Icon, Selectable, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
