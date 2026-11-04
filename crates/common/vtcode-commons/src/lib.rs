@@ -108,9 +108,10 @@ pub use modal_hints::{
     APPROVAL_NAVIGATE_CANCEL, APPROVAL_NAVIGATE_DENY, APPROVAL_NAVIGATE_STOP, choose_handling_line, truncate_modal_text,
 };
 pub use paths::{
-    PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths, canonicalize, canonicalize_async,
-    file_name_from_path, is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,
+    PathExt, PathResolver, PathScope, StrPathExt, WorkspacePathDisplay, WorkspacePaths, canonicalize,
+    canonicalize_async, file_name_from_path, is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,
     safe_archive_relative_path, validate_no_escaping_symlink_ancestors, workspace_relative_display,
+    workspace_relative_slash,
 };
 pub use project::{ProjectOverview, build_project_overview};
 pub use reference::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};
