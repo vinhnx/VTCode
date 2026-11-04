@@ -102,13 +102,18 @@ fn default_max_debug_log_age_days() -> u32 {
 
 impl Default for DebugConfig {
     fn default() -> Self {
+        // Every per-field serde default (`max_debug_log_size_mb`,
+        // `max_debug_log_age_days`, `enabled`, …) must also apply to a config
+        // built with `DebugConfig::default()`. Calling the `default_*()` fns
+        // keeps that in sync; restating their values here would silently keep
+        // the old number when one of them changes.
         Self {
             enable_tracing: false,
             trace_level: TraceLevel::Info,
             trace_targets: Vec::new(),
             debug_log_dir: None,
-            max_debug_log_size_mb: 50,
-            max_debug_log_age_days: 7,
+            max_debug_log_size_mb: default_max_debug_log_size_mb(),
+            max_debug_log_age_days: default_max_debug_log_age_days(),
         }
     }
 }

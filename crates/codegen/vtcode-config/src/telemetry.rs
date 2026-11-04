@@ -26,7 +26,7 @@ pub struct TelemetryConfig {
     pub atif_enabled: bool,
 
     /// Emit bottleneck traces for slow paths
-    #[serde(default)]
+    #[serde(default = "default_true")]
     bottleneck_tracing: bool,
 
     /// Emit performance events for file I/O, spawns, and UI latency
@@ -54,7 +54,7 @@ impl Default for TelemetryConfig {
             dashboards_enabled: true,
             sample_interval_ms: default_interval(),
             retention_days: default_retention_days(),
-            bottleneck_tracing: true,
+            bottleneck_tracing: default_true(),
             perf_events: true,
             trajectory_max_files: default_trajectory_max_files(),
             trajectory_max_age_days: default_trajectory_max_age_days(),

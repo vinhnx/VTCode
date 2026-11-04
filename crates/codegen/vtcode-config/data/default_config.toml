@@ -243,47 +243,18 @@ session_max_requests = 12
 
 # Command security - Define safe and dangerous command patterns
 [commands]
-# Commands that are always allowed without confirmation
-allow_list = [
-    "ls",           # List directory contents
-    "pwd",          # Print working directory
-    "git status",   # Show git status
-    "git diff",     # Show git differences
-    "cargo check",  # Check Rust code
-    "echo",         # Print text
-]
-
-# Commands that are never allowed
-deny_list = [
-    "rm -rf /",        # Delete root directory (dangerous)
-    "rm -rf ~",        # Delete home directory (dangerous)
-    "shutdown",        # Shut down system (dangerous)
-    "reboot",          # Reboot system (dangerous)
-    "sudo *",          # Any sudo command (dangerous)
-    ":(){ :|:& };:",   # Fork bomb (dangerous)
-]
-
-# Command patterns that are allowed (supports glob patterns)
-allow_glob = [
-    "git *",        # All git commands
-    "cargo *",      # All cargo commands
-    "python -m *",  # Python module commands
-]
-
-# Command patterns that are denied (supports glob patterns)
-deny_glob = [
-    "rm *",         # All rm commands
-    "sudo *",       # All sudo commands
-    "chmod *",      # All chmod commands
-    "chown *",      # All chown commands
-    "kubectl *",    # All kubectl commands (admin access)
-]
-
-# Regular expression patterns for allowed commands (if needed)
-allow_regex = []
-
-# Regular expression patterns for denied commands (if needed)
-deny_regex = []
+# These lists are intentionally omitted so the built-in defaults apply: a
+# curated allow list plus 57 deny rules covering destructive deletion, privilege
+# escalation, disk operations, and sensitive-file reads. Writing a shorter list
+# here would *replace* those rules and leave you less protected than shipping no
+# config at all. Uncomment and edit only to narrow the defaults deliberately.
+#
+# allow_list = ["ls", "pwd", "git status", "cargo check"]
+# deny_list = ["rm -rf /", "rm -rf ~", ":(){ :|:& };:"]
+# allow_glob = ["git *", "cargo *"]
+# deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
+# allow_regex = []
+# deny_regex = []
 
 # Security configuration - Safety settings for automated operations
 [security]

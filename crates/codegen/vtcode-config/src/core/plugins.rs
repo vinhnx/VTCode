@@ -1,4 +1,4 @@
-use crate::env_helpers::default_enabled;
+use crate::env_helpers::default_true;
 use serde::{Deserialize, Serialize};
 
 /// Trust model for third-party plugins.
@@ -20,7 +20,7 @@ pub enum PluginTrustLevel {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PluginRuntimeConfig {
     /// Toggle the plugin runtime. When disabled, manifests are ignored.
-    #[serde(default = "default_enabled")]
+    #[serde(default = "default_true")]
     pub enabled: bool,
 
     /// Manifest paths (files or directories) that should be scanned for plugins.
@@ -40,7 +40,7 @@ pub struct PluginRuntimeConfig {
     pub deny: Vec<String>,
 
     /// Enable hot-reload polling for manifests to support rapid iteration.
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub auto_reload: bool,
 }
 
@@ -52,7 +52,7 @@ impl Default for PluginRuntimeConfig {
             default_trust: PluginTrustLevel::Sandbox,
             allow: Vec::new(),
             deny: Vec::new(),
-            auto_reload: true,
+            auto_reload: default_true(),
         }
     }
 }

@@ -266,7 +266,9 @@ impl Default for FileReadCacheConfig {
             max_size_bytes: crate::constants::optimization::FILE_READ_CACHE_MAX_SIZE_BYTES,
             ttl_secs: crate::constants::optimization::FILE_READ_CACHE_TTL_SECS,
             max_entries: crate::constants::optimization::FILE_READ_CACHE_MAX_ENTRIES,
-            max_read_lines: crate::constants::optimization::DEFAULT_MAX_READ_LINES,
+            // Same source as the serde default, so a partial config and
+            // `FileReadCacheConfig::default()` cannot disagree.
+            max_read_lines: default_max_read_lines(),
         }
     }
 }

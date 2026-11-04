@@ -219,7 +219,7 @@ python3 scripts/generate_config_field_reference.py
 | `chat.askQuestions.enabled` | `boolean` | no | `true` | Enable the Ask Questions tool in interactive chat |
 | `commands.allow_glob` | `array` | no | `[]` | Glob patterns allowed for shell commands (applies to Bash) |
 | `commands.allow_glob[]` | `string` | no | `-` | - |
-| `commands.allow_list` | `array` | no | `[]` | Commands that can be executed without prompting |
+| `commands.allow_list` | `array` | no | `["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "tree", "stat", "file", "sort", "uniq", "cut", "awk", "sed", "tar", "zip", "unzip", "gzip", "gunzip", "make", "cmake", "ninja", "which", "echo", "printf", "read", "date", "sleep", "git status", "git diff", "git log", "git show", "git branch", "git remote", "cargo check", "cargo build", "cargo build --release", "cargo build --profile release", "cargo test", "cargo run", "cargo clippy", "cargo fmt", "cargo tree", "cargo metadata", "cargo doc", "rustc", "python3", "python3 -m pip install", "python3 -m pytest", "python3 -m build", "python", "pip3", "pip", "virtualenv", "node", "npm", "npm run build", "npm run test", "npm install", "yarn", "yarn build", "yarn test", "pnpm", "pnpm build", "pnpm test", "bun", "bun install", "bun run", "bun test", "npx", "go", "go build", "go test", "gcc", "g++", "clang", "clang++", "javac", "java", "mvn", "gradle", "docker", "docker-compose"]` | Commands that can be executed without prompting |
 | `commands.allow_list[]` | `string` | no | `-` | - |
 | `commands.allow_regex` | `array` | no | `[]` | Regex allow patterns for shell commands |
 | `commands.allow_regex[]` | `string` | no | `-` | - |
@@ -743,7 +743,7 @@ python3 scripts/generate_config_field_reference.py
 | `sandbox.sensitive_paths.exceptions[]` | `string` | no | `-` | - |
 | `sandbox.sensitive_paths.use_defaults` | `boolean` | no | `true` | Use default sensitive paths (SSH, AWS, etc.) |
 | `security.auto_apply_detected_patches` | `boolean` | no | `false` | Automatically apply detected patch blocks in assistant replies when no write tool was executed. Defaults to false for safety. |
-| `security.encrypt_payloads` | `boolean` | no | `false` | Encrypt payloads passed across executors. |
+| `security.encrypt_payloads` | `boolean` | no | `true` | Encrypt payloads passed across executors. |
 | `security.gatekeeper.auto_clear_paths` | `array` | no | `[".vtcode/bin", "/home/f2/.local/bin", "/home/f2/.vtcode/bin"]` | Paths eligible for quarantine auto-clear |
 | `security.gatekeeper.auto_clear_paths[]` | `string` | no | `-` | - |
 | `security.gatekeeper.auto_clear_quarantine` | `boolean` | no | `false` | Attempt to clear quarantine automatically (opt-in) |
@@ -752,7 +752,7 @@ python3 scripts/generate_config_field_reference.py
 | `security.human_in_the_loop` | `boolean` | no | `true` | Require human confirmation for critical actions |
 | `security.integrity_checks` | `boolean` | no | `true` | Enable runtime integrity tagging for critical paths. |
 | `security.require_write_tool_for_claims` | `boolean` | no | `true` | Require a successful write tool before accepting claims like "I've updated the file" as applied. When true, such claims are treated as proposals unless a write tool executed successfully. |
-| `security.zero_trust_mode` | `boolean` | no | `false` | Enable zero-trust checks between components. |
+| `security.zero_trust_mode` | `boolean` | no | `true` | Enable zero-trust checks between components. |
 | `skills.bundled.enabled` | `boolean` | no | `true` | Enable bundled skills shipped with VT Code. |
 | `skills.enable-auto-trigger` | `boolean` | no | `true` | Enable auto-trigger on $skill-name mentions |
 | `skills.enable-description-matching` | `boolean` | no | `true` | Enable description-based keyword matching for auto-trigger |

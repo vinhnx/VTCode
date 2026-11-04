@@ -15,6 +15,107 @@ fn compiled_default_config_contains_release_loop_budgets() {
     assert_eq!(config.agent.max_conversation_turns, tool_limits::DEFAULT_MAX_CONVERSATION_TURNS);
 }
 
+/// A config file that names a section but omits keys inside it must fall back
+/// to the same built-in defaults as `VTCodeConfig::default()`, not to the
+/// type's zero value.
+///
+/// Regression: these fields carried a bare `#[serde(default)]`, so `[security]`
+/// with any single key silently flipped `zero_trust_mode`/`encrypt_payloads`
+/// from `true` to `false`, and a `[commands]` section dropped all 57 built-in
+/// `deny_list` entries — including `rm -rf /` — to nothing. With no section at
+/// all the inner `Default` applies, which is why the bug only appeared for
+/// partially specified configs.
+#[test]
+fn partial_section_keeps_builtin_defaults() {
+    // Each section contains exactly one key, so every sibling must come from
+    // its own default_*() source.
+    let partial: VTCodeConfig = toml::from_str(
+        r#"
+[security]
+human_in_the_loop = true
+
+[commands]
+approval_prefixes = []
+
+[telemetry]
+trajectory_enabled = true
+
+[plugins]
+manifests = []
+"#,
+    )
+    .expect("partial sections parse");
+
+    let compiled = VTCodeConfig::default();
+
+    assert_eq!(
+        partial.security.zero_trust_mode, compiled.security.zero_trust_mode,
+        "omitting zero_trust_mode must not disable zero-trust checks"
+    );
+    assert!(partial.security.zero_trust_mode, "zero-trust must stay on for a partial [security]");
+
+    assert_eq!(partial.commands.deny_list, compiled.commands.deny_list, "built-in deny rules must survive");
+    assert!(!partial.commands.deny_list.is_empty(), "a [commands] section must not wipe the deny list");
+    assert_eq!(partial.commands.allow_glob, compiled.commands.allow_glob);
+    assert_eq!(partial.commands.allow_list, compiled.commands.allow_list);
+    assert_eq!(partial.commands.deny_regex, compiled.commands.deny_regex);
+    assert_eq!(
+        partial.telemetry.trajectory_max_files, compiled.telemetry.trajectory_max_files,
+        "sibling telemetry keys must keep their defaults"
+    );
+
+    // An explicit value must still win over the built-in.
+    let overridden: VTCodeConfig = toml::from_str("[commands]\ndeny_list = []\n").expect("explicit parse");
+    assert!(overridden.commands.deny_list.is_empty(), "an explicit empty list must still override");
+}
+
+/// `data/default_config.toml` is what `vtcode init` scaffolds as the user's
+/// starting config, so a section it declares must not weaken the compiled
+/// defaults by restating a subset of them.
+///
+/// Restating a list *replaces* it during deserialization; it does not extend it.
+/// The scaffold therefore omits the curated security lists, and this test pins
+/// that: a scaffolded config must carry at least the safety rules a config with
+/// no file at all would get.
+///
+/// Deliberately narrow rather than a full field-by-field diff: the scaffold
+/// legitimately differs from `VTCodeConfig::default()` in quickstart
+/// presentation (provider, theme, status-line timings, a commented example MCP
+/// server). Only the security-relevant invariants are asserted here.
+#[test]
+fn scaffold_config_does_not_weaken_security_defaults() {
+    let scaffold_text = include_str!("../../../data/default_config.toml");
+    let scaffold: VTCodeConfig = toml::from_str(scaffold_text).expect("scaffold config must parse");
+    let compiled = VTCodeConfig::default();
+
+    assert!(
+        scaffold.commands.deny_list.len() >= compiled.commands.deny_list.len(),
+        "scaffold deny_list has {} entries but the built-in default has {}; restating a shorter \
+         list replaces the built-in rules instead of extending them",
+        scaffold.commands.deny_list.len(),
+        compiled.commands.deny_list.len()
+    );
+    assert!(
+        scaffold.commands.deny_regex.len() >= compiled.commands.deny_regex.len(),
+        "scaffold deny_regex must not drop the built-in deny patterns"
+    );
+    assert!(
+        scaffold.commands.deny_glob.len() >= compiled.commands.deny_glob.len(),
+        "scaffold deny_glob must not drop the built-in deny globs"
+    );
+
+    // The same rule for the security switches: a scaffolded config must not be
+    // less strict than a default-constructed one.
+    assert!(
+        scaffold.security.zero_trust_mode || !compiled.security.zero_trust_mode,
+        "scaffold must not disable zero-trust checks that are on by default"
+    );
+    assert!(
+        scaffold.tools.policies.len() <= compiled.tools.policies.len(),
+        "scaffold must not add tool policies the built-in default does not set"
+    );
+}
+
 #[test]
 fn tool_profile_parses_and_serialises_in_tools_table() {
     let config: VTCodeConfig = toml::from_str(

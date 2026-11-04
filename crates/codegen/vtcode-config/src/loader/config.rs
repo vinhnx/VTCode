@@ -14,6 +14,7 @@ use crate::core::{
     ToolsConfig,
 };
 use crate::debug::DebugConfig;
+use crate::env_helpers::default_true;
 use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
 use crate::models::{MiMoAuthMethod, Provider};
@@ -95,10 +96,6 @@ impl Default for WorkspaceConfig {
             max_context_size: None,
         }
     }
-}
-
-fn default_true() -> bool {
-    true
 }
 
 /// Main configuration structure for VT Code
