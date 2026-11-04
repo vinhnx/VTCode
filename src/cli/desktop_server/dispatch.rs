@@ -75,9 +75,8 @@ pub(super) fn dispatch_interaction_response(
     Ok(())
 }
 
-/// Bound for a starting runloop to publish its stop handles before a cancel
-/// falls back to the queued event alone. Host shell setup is in-memory work,
-/// so a missing slot after this long means the runtime is gone.
+/// Bound the cooperative stop wait on the session shutdown path. A turn stop
+/// itself waits for readiness independently of this timeout.
 const STOP_HANDLE_WAIT: Duration = Duration::from_secs(2);
 const STOP_HANDLE_POLL: Duration = Duration::from_millis(10);
 
@@ -105,39 +104,6 @@ pub(super) async fn signal_runloop_stop_with_timeout(stop: &StopHandleSlot, wait
         }
     })
     .await;
-}
-
-/// Wait for a starting runloop to publish its stop handles, then fire.
-/// Detached so the cancel ack never blocks on runloop startup.
-fn spawn_late_stop_signal(stop: StopHandleSlot) {
-    tokio::spawn(async move {
-        signal_runloop_stop_with_timeout(&stop, STOP_HANDLE_WAIT).await;
-    });
-}
-
-/// Re-assert a cancel signal after `delay` when the same turn is still
-/// active and still cancel-requested. Closes the Submit-reset race for
-/// single presses; the gate keeps a late task from touching a later turn.
-fn spawn_cancel_refire(
-    state: std::sync::Arc<Mutex<ServerState>>,
-    stop: StopHandleSlot,
-    session_id: String,
-    turn_id: String,
-    delay: Duration,
-) {
-    tokio::spawn(async move {
-        tokio::time::sleep(delay).await;
-        let live = {
-            let state = state.lock().await;
-            state.session_id.as_deref() == Some(session_id.as_str())
-                && state.active_turn_id.as_deref() == Some(turn_id.as_str())
-                && state.cancel_requested_turn.as_deref() == Some(turn_id.as_str())
-                && state.runtime.as_ref().is_some_and(|runtime| !runtime.input.is_closed())
-        };
-        if live {
-            stop_requests::fire_stop_signal(&stop);
-        }
-    });
 }
 
 pub(super) async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool) -> Result<()> {
@@ -847,7 +813,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
         }
         method::TURN_CANCEL => {
             let params: protocol::TurnCancelParams = parse_params(&request.params)?;
-            let (input, stop, should_send) = {
+            let queue_status = {
                 let mut state = context.state.lock().await;
                 if state.session_id.as_deref() != Some(params.session_id.as_str())
                     || state.active_turn_id.as_deref() != Some(params.turn_id.as_str())
@@ -863,65 +829,52 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                 let should_send = state.cancel_requested_turn.as_deref() != Some(params.turn_id.as_str());
                 if should_send {
                     state.cancel_requested_turn = Some(params.turn_id.clone());
-                }
-                (input, stop, should_send)
-            };
-            if should_send {
-                // The out-of-band signal is what stops the running turn; the
-                // queued event only dismisses overlay waits. A closed channel
-                // proves the runtime is gone, so skip the signal and go
-                // straight to the send-failure bail below.
-                if !input.is_closed() {
-                    if stop_requests::fire_stop_signal(&stop) {
-                        // The runloop resets its latch while processing the
-                        // Submit, so a signal fired into that window is lost.
-                        // The delayed re-fire lands after the reset while the
-                        // turn still runs.
-                        spawn_cancel_refire(
-                            context.state.clone(),
-                            stop.clone(),
-                            params.session_id.clone(),
-                            params.turn_id.clone(),
-                            CANCEL_REFIRE_DELAY,
-                        );
-                    } else {
-                        // Handles unpublished (runloop still starting): wait
-                        // detached so the ack stays fast.
-                        spawn_late_stop_signal(stop.clone());
+                    // The out-of-band signal is what stops the running turn; the
+                    // queued event only dismisses overlay waits. A closed channel
+                    // proves the runtime is gone, so skip the signal and go
+                    // straight to the send-failure bail below.
+                    if !input.is_closed() {
+                        if stop_requests::fire_stop_signal(&stop) {
+                            // Reassert while the same turn is active as a
+                            // backstop for older interruption paths.
+                            spawn_cancel_refire(
+                                context.state.clone(),
+                                stop.clone(),
+                                params.session_id.clone(),
+                                params.turn_id.clone(),
+                                CANCEL_REFIRE_DELAY,
+                            );
+                        } else {
+                            // Startup is not ready for turn cancellation yet.
+                            spawn_late_stop_signal(
+                                context.state.clone(),
+                                stop.clone(),
+                                input.clone(),
+                                params.session_id.clone(),
+                                params.turn_id.clone(),
+                            );
+                        }
                     }
-                }
-                if input.send(InlineEvent::Cancel).is_err() {
-                    let mut state = context.state.lock().await;
-                    if state.cancel_requested_turn.as_deref() == Some(params.turn_id.as_str()) {
+                    if input.send(InlineEvent::Cancel).is_err() {
                         state.cancel_requested_turn = None;
+                        bail!("selected session runtime has stopped");
                     }
-                    bail!("selected session runtime has stopped");
+                } else if !input.is_closed() {
+                    // A repeated press re-asserts the out-of-band signal without
+                    // re-queueing: the first signal may have been consumed
+                    // already, and the turn is still active. Non-blocking: the
+                    // first press owned the publish wait, so repeats stay cheap.
+                    stop_requests::fire_stop_signal(&stop);
                 }
-            } else if !input.is_closed() {
-                // A repeated press re-asserts the out-of-band signal without
-                // re-queueing: the first signal may have been consumed
-                // already, and the turn is still active. Non-blocking: the
-                // first press owned the publish wait, so repeats stay cheap.
-                stop_requests::fire_stop_signal(&stop);
-            }
-            // Outside the duplicate-cancel gate: a flagged re-send after a
-            // plain stop must still discard, and the discard is idempotent.
-            if params.clear_queue {
-                let status = {
-                    let mut state = context.state.lock().await;
-                    // The lock was released for the runloop signal above, so
-                    // the session may have moved on; teardown already owns
-                    // that queue.
-                    if state.session_id.as_deref() != Some(params.session_id.as_str()) || state.queue.is_empty() {
-                        None
-                    } else {
-                        state.queue.clear();
-                        Some(state.queue_status(&params.session_id))
-                    }
-                };
-                if let Some(status) = status {
-                    publish_queue_status_sync(&context.notifications, &status);
+                if params.clear_queue && !state.queue.is_empty() {
+                    state.queue.clear();
+                    Some(state.queue_status(&params.session_id))
+                } else {
+                    None
                 }
+            };
+            if let Some(status) = queue_status {
+                publish_queue_status_sync(&context.notifications, &status);
             }
             Ok((json!({ "cancelRequested": true }), false))
         }

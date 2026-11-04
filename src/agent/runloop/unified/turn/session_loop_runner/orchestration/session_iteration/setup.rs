@@ -740,6 +740,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         crate::updater::display_release_notes(&handle, version, highlights);
         crate::updater::record_current_version_seen();
     }
+    if let Some(slot) = stop_slot.as_ref() {
+        crate::agent::runloop::unified::stop_requests::mark_host_turns_ready(slot);
+    }
     Ok(SetupFlow::Proceed(Box::new(Setup {
         config,
         session_skip_confirmations,

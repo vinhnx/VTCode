@@ -547,10 +547,9 @@ pub(super) async fn run_interaction_loop_impl(
             .begin_progress(vtcode_commons::ui_protocol::ProgressPhase::PreparingContext);
         tracing::debug!(target: "vtcode.response_latency", operation_id = submission_progress.operation().id(), "submission accepted");
 
-        // A fresh submitted input starts a new turn. Clear any stale local cancel
-        // latch left behind by a prior interrupted turn so permission modals and
-        // the provider stream don't inherit a spurious "interrupted" state.
-        ctx.ctrl_c_state.reset();
+        // Clear only an already-handled stop. An unhandled stop may have
+        // arrived after this submission was accepted and belongs to this turn.
+        ctx.ctrl_c_state.reset_handled_cancel();
 
         if let Err(err) = crate::agent::runloop::unified::turn::workspace::refresh_vt_config(
             &ctx.config.workspace,

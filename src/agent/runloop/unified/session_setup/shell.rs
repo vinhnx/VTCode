@@ -281,8 +281,7 @@ pub(crate) fn build_session_event_callback(
         InlineEvent::Exit => {
             crate::agent::runloop::unified::stop_requests::request_local_exit(&state, &notify);
         }
-        InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) if state.is_cancel_handled() => {
-            state.reset();
+        InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) if state.reset_handled_cancel() => {
             notify.notify_one();
         }
         InlineEvent::BackgroundOperation => {

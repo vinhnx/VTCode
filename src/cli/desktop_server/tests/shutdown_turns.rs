@@ -20,6 +20,7 @@ async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
     let ctrl_c = std::sync::Arc::new(CtrlCState::new());
     let stop = stop_requests::new_stop_handle_slot();
     stop_requests::publish_stop_handles(&stop, &ctrl_c, &std::sync::Arc::new(Notify::new()));
+    stop_requests::mark_host_turns_ready(&stop);
     let state = std::sync::Arc::clone(&context.state);
     let finished = std::sync::Arc::clone(&context.turn_finished);
     let runtime_task = tokio::spawn(async move {

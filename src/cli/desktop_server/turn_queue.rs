@@ -29,16 +29,13 @@ impl EnqueueMode {
     }
 }
 
-/// Busy/idle decision made under the state lock; the runtime send and the
-/// notifications happen after the lock is released.
+/// Busy/idle decision made under the state lock; notifications happen after
+/// the lock is released.
 enum EnqueuePlan {
     Immediate {
-        input: mpsc::UnboundedSender<InlineEvent>,
-        stop: StopHandleSlot,
-        submission: SubmittedInput,
+        turn_id: String,
     },
     Queued {
-        stop: StopHandleSlot,
         status: protocol::TurnQueueStatus,
         dropped: usize,
     },
@@ -132,39 +129,33 @@ pub(super) async fn enqueue_turn(
                 bail!("selected session runtime has stopped; reload the session to continue");
             }
             let input = runtime.input.clone();
-            let stop = runtime.stop.clone();
+            // Clear the previous turn's handled stop before exposing the new
+            // turn to cancellation, and preserve Submit/Cancel ordering.
+            stop_requests::reset_handled_stop(&runtime.stop);
+            input
+                .send(InlineEvent::Submit(submission))
+                .map_err(|_error| anyhow!("selected session runtime has stopped; reload the session to continue"))?;
             state.cancel_requested_turn = None;
             state.active_turn_id = Some(turn_id.clone());
-            EnqueuePlan::Immediate { input, stop, submission }
+            EnqueuePlan::Immediate { turn_id }
         } else if mode.queueable() {
             // A turn is running: queue behind it with CLI batching semantics
             // instead of rejecting. Pending interactions do not block
             // queueing; the prompt dispatches once the turn ends (CLI parity:
             // the TUI queues regardless of overlays).
-            let stop = state
-                .runtime
-                .as_ref()
-                .filter(|runtime| !runtime.input.is_closed())
-                .map(|runtime| runtime.stop.clone());
-            let Some(stop) = stop else {
+            let runtime = state.runtime.as_ref().filter(|runtime| !runtime.input.is_closed());
+            if runtime.is_none() {
                 bail!("selected session runtime has stopped; reload the session to continue");
-            };
+            }
             let dropped = push_capped(&mut state.queue, QueuedInput::new(submission, None));
             state.queue_dropped_total += dropped;
-            EnqueuePlan::Queued {
-                stop,
-                status: state.queue_status(session_id),
-                dropped,
-            }
+            EnqueuePlan::Queued { status: state.queue_status(session_id), dropped }
         } else {
             bail!("another turn is already running");
         }
     };
     match plan {
-        EnqueuePlan::Queued { stop, status, dropped } => {
-            // TUI parity: a fresh submission clears a handled cancellation so
-            // a stop pressed during initialization resumes instead of wedging.
-            stop_requests::reset_handled_stop(&stop);
+        EnqueuePlan::Queued { status, dropped } => {
             publish_queue_status_sync(notifications, &status);
             Ok(protocol::TurnAccepted {
                 session_id: session_id.to_string(),
@@ -177,19 +168,7 @@ pub(super) async fn enqueue_turn(
                 dropped,
             })
         }
-        EnqueuePlan::Immediate { input, stop, submission } => {
-            if input.send(InlineEvent::Submit(submission)).is_err() {
-                let mut state = state.lock().await;
-                if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
-                    state.active_turn_id = None;
-                    state.cancel_requested_turn = None;
-                }
-                bail!("selected session runtime has stopped; reload the session to continue");
-            }
-            // TUI parity: a fresh submission clears a handled cancellation (see
-            // the queued arm above). Only after a successful send: a dead
-            // runtime owns no stop state worth clearing.
-            stop_requests::reset_handled_stop(&stop);
+        EnqueuePlan::Immediate { turn_id } => {
             // The prompt has crossed the runtime boundary. Status is advisory: waiting
             // for this queue here can deadlock the request loop, and reporting failure
             // after delivery could cause a client to submit the same prompt twice.

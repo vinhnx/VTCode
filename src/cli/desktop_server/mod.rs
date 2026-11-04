@@ -47,6 +47,8 @@ use crate::agent::runloop::unified::stop_requests::StopHandleSlot;
 use crate::agent::runloop::unified::turn::run_single_agent_loop_unified_with_host;
 use crate::startup::StartupContext;
 
+mod cancel;
+use cancel::{spawn_cancel_refire, spawn_late_stop_signal};
 mod catalog;
 mod dispatch;
 use dispatch::{

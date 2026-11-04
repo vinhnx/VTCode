@@ -142,7 +142,7 @@ where
                     close_overlay(handle).await;
                     return Ok(OverlayWaitOutcome::Interrupted);
                 }
-                ctrl_c_state.reset();
+                ctrl_c_state.reset_handled_cancel();
                 if let Some(mapped) = map_submission(submission) {
                     close_overlay(handle).await;
                     return Ok(OverlayWaitOutcome::Submitted(mapped));
@@ -161,7 +161,7 @@ where
                     close_overlay(handle).await;
                     return Ok(OverlayWaitOutcome::Interrupted);
                 }
-                ctrl_c_state.reset();
+                ctrl_c_state.reset_handled_cancel();
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Cancelled);
             }
@@ -170,7 +170,7 @@ where
                     target: "vtcode.planning_workflow",
                     "wait_for_overlay_submission: exit event"
                 );
-                ctrl_c_state.reset();
+                ctrl_c_state.reset_handled_cancel();
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Exit);
             }

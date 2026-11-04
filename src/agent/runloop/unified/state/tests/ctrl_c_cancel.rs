@@ -61,6 +61,21 @@ fn ctrl_c_state_local_cancel_does_not_arm_exit_window() {
     assert!(state.is_cancel_requested());
     assert!(!state.is_exit_requested());
 }
+
+#[test]
+fn resetting_handled_cancel_preserves_pending_cancel_and_exit() {
+    let state = CtrlCState::new();
+    assert!(!state.reset_handled_cancel());
+    state.request_local_cancel();
+    assert!(!state.reset_handled_cancel());
+    assert!(state.is_cancel_requested());
+    state.mark_cancel_handled();
+    assert!(state.reset_handled_cancel());
+    assert!(!state.is_cancel_requested());
+    state.request_exit();
+    assert!(!state.reset_handled_cancel());
+    assert!(state.is_exit_requested());
+}
 #[test]
 fn ctrl_c_state_window_expires_after_one_second() {
     let state = CtrlCState::new();

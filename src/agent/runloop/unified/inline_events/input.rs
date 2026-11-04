@@ -89,6 +89,21 @@ mod tests {
         assert!(ctrl_c_state.is_exit_requested());
     }
 
+    #[test]
+    fn submission_does_not_clear_a_pending_stop() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+        let ctrl_c_state = CtrlCState::new();
+        ctrl_c_state.request_local_cancel();
+        let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+        let mut displayed = false;
+        let mut state = InlineEventState::new(&mut renderer, interrupts, &mut displayed);
+        let action = InlineInputProcessor::new(&mut state).submit("accepted before stop".into());
+        assert!(matches!(action, InlineLoopAction::Submit(input) if input.text == "accepted before stop"));
+        assert!(ctrl_c_state.is_cancel_requested());
+    }
+
     #[tokio::test]
     async fn deferred_webmcp_prompt_is_available_through_ui_session() {
         let (command_sender, _command_receiver) = tokio::sync::mpsc::unbounded_channel();
