@@ -344,7 +344,14 @@ impl DesktopView {
         // The inspector hides while a panel owns the content slot; flipping
         // invisible state would surprise on return, so the toggle waits.
         if self.workspace.is_some() && self.current_route() == Route::Workspace {
-            self.inspector_open = !self.inspector_open;
+            if self.zen_mode {
+                // Zen hides the inspector regardless of state, so there is
+                // nothing visible to close: reveal the current tab instead of
+                // flipping (and persisting) invisible state.
+                self.open_inspector_tab(self.inspector_tab, cx);
+            } else {
+                self.inspector_open = !self.inspector_open;
+            }
             self.save_preferences();
             cx.notify();
         }

@@ -121,6 +121,43 @@ fn inspector_close_button_collapses_the_card_and_round_trips_through_the_toolbar
 }
 
 #[gpui_kit::test]
+fn toggle_inspector_in_zen_reveals_instead_of_flipping(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        // Closed in zen: the toggle reveals rather than flipping
+        // invisible state.
+        view.update(cx, |view, _| {
+            view.zen_mode = true;
+            view.inspector_open = false;
+            view.inspector_tab = InspectorTab::Utilities;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("inspector-panel").is_none());
+        view.update(cx, |view, cx| view.toggle_inspector(cx));
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode, "toggle reveals by exiting zen");
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).preferences.inspector_open, Some(true));
+        assert!(window.try_find("utilities-pane").is_some());
+
+        // Open-but-hidden in zen: a naive flip would close (and persist)
+        // something the user never saw; reveal keeps it open.
+        view.update(cx, |view, _| {
+            view.zen_mode = true;
+            view.inspector_open = true;
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.toggle_inspector(cx));
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode);
+        assert!(view.read(cx).inspector_open, "reveal must not close hidden state");
+        assert_eq!(view.read(cx).preferences.inspector_open, Some(true));
+        assert!(window.try_find("inspector-panel").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn closing_the_inspector_gives_the_workspace_the_full_row(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

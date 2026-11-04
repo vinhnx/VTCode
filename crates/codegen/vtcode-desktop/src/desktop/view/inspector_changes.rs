@@ -87,9 +87,12 @@ impl DesktopView {
     }
 
     /// Reveal the inspector on one tab without moving focus, for transcript
-    /// CTAs that navigate beside the reading position. Postcondition:
-    /// `inspector_open` holds and `inspector_tab == tab`.
+    /// CTAs that navigate beside the reading position. An explicit reveal
+    /// request also exits Zen mode: the inspector never renders while Zen
+    /// holds, so keeping Zen would flip invisible state. Postcondition:
+    /// `inspector_open` holds, `inspector_tab == tab`, and `zen_mode` is off.
     pub(super) fn open_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
+        self.zen_mode = false;
         self.inspector_open = true;
         self.set_inspector_tab(tab, cx);
     }

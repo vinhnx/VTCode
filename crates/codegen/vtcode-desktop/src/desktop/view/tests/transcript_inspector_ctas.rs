@@ -74,6 +74,67 @@ fn activity_group_ctas_open_inspector_tabs_without_toggling_group(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn activity_group_cta_exits_zen_to_reveal_inspector(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            // Same asymmetric group as the normal-mode test: the head
+            // carries output, the tail fails without any.
+            view.transcript.push(TranscriptItem::new(
+                "intro".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Inspecting the build.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "read".into(),
+                "tool".into(),
+                "Read Cargo.toml".into(),
+                "completed\nmanifest".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "build".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "failed (exit 1)\nstructured details".into(),
+            ));
+            view.transcript.set_output("read", Some("read-output-marker".into()));
+            view.inspector_open = false;
+            view.zen_mode = true;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("utilities-pane").is_none(), "zen hides the inspector");
+        assert!(window.try_find("activity-group-open-utilities-read").is_some(), "CTA stays reachable in zen");
+
+        window.click("activity-group-open-utilities-read", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode, "explicit reveal exits zen");
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
+        assert!(window.try_find("utilities-pane").is_some());
+        assert_eq!(window.find("activity-group-read").checked(), Some(false), "CTA must not toggle the group");
+
+        // A second deeplink from a fresh zen state proves the funnel exit,
+        // not one button.
+        view.update(cx, |view, _| {
+            view.zen_mode = true;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        window.click("activity-group-open-output-read", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode);
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Output);
+        assert!(
+            window.find("output-body").label().unwrap().contains("read-output-marker"),
+            "zen output CTA lands on the newest output"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn tool_output_cta_selects_that_tool_output_and_hides_without_output(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
