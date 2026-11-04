@@ -243,10 +243,15 @@ fn build_http_client(timeouts: Option<&TimeoutsConfig>) -> Result<Client> {
     let request_timeout = timeouts
         .and_then(|config| config.ceiling_duration(config.default_ceiling_seconds))
         .unwrap_or_else(|| Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS));
+    // Catalog pagination runs many sequential requests; honoring the user's
+    // connect budget here is what makes a slow link usable instead of flaky.
+    let connect_timeout = timeouts
+        .and_then(|config| config.ceiling_duration(config.http_connect_seconds))
+        .unwrap_or_else(|| Duration::from_secs(DEFAULT_CONNECT_TIMEOUT_SECS));
 
     Client::builder()
         .timeout(request_timeout)
-        .connect_timeout(Duration::from_secs(DEFAULT_CONNECT_TIMEOUT_SECS))
+        .connect_timeout(connect_timeout)
         .build()
         .context("failed to build Merge Gateway catalog HTTP client")
 }

@@ -6,7 +6,6 @@
 //!
 //! [openai/codex]: https://github.com/openai/codex
 use std::io;
-use std::time::Duration;
 
 use futures::StreamExt;
 use futures::stream::BoxStream;
@@ -28,10 +27,11 @@ impl OllamaClient {
     /// Create a client from a base URL and verify the server is reachable.
     pub(crate) async fn try_from_base_url(base_url: &str) -> io::Result<Self> {
         let host_root = base_url_to_host_root(base_url);
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        // Connect-only timeouts are not enough: a local server that accepts the
+        // socket and then stalls (loading weights, deadlock) would hang the
+        // probe forever. These are metadata GETs, so the installed request
+        // budget is the right bound.
+        let client = vtcode_commons::http::create_default_client();
 
         let instance = Self { client, host_root };
         instance.probe_server().await?;

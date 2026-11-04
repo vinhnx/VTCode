@@ -24,21 +24,33 @@ include_context = true
 max_context_size = 1048576  # 1MB
 ```
 
-### execution.timeout
+### Timeout defaults
 
-Controls timeout settings for various operations:
+All execution deadlines live in a single `[timeouts]` table. There is no
+`[execution]` timeout section; per-phase knobs were consolidated so that one
+place answers "how long may this take?".
 
 ```toml
-[execution]
-# Timeout for tool executions in seconds
-tool_timeout = 300  # 5 minutes
+[timeouts]
+# Tool ceilings by category (seconds; 0 disables the ceiling)
+default_ceiling_seconds = 180
+pty_ceiling_seconds = 300
+mcp_ceiling_seconds = 120
+streaming_ceiling_seconds = 600
+long_running_command_ceiling_seconds = 3600
 
-# Timeout for API calls in seconds
-api_timeout = 120   # 2 minutes
-
-# Maximum time for participant context resolution
-participant_timeout = 30  # 30 seconds
+# Outbound HTTP defaults for every network client (seconds; 0 disables)
+http_connect_seconds = 5
+http_request_seconds = 30
+http_download_seconds = 300
 ```
+
+The three `http_*` keys are the override for "my connection is slower than the
+author's": they also read `VTCODE_HTTP_CONNECT_TIMEOUT_SECS`,
+`VTCODE_HTTP_REQUEST_TIMEOUT_SECS`, and `VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS` when
+the TOML key is absent, and edits apply without a restart. `http_download_seconds`
+covers large artifact transfers (release downloads); `http_request_seconds`
+covers ordinary API calls.
 
 ### Long-running command waits
 

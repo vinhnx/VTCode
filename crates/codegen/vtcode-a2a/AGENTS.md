@@ -21,6 +21,7 @@
 ## Rules
 
 - The `server` module is feature-gated behind `a2a-server` — never import unconditionally. `shutdown_signal_logged()` is defined in lib.rs (not a separate module) — used by server.rs. Re-export facade in vtcode-core (`a2a/mod.rs`) must stay in sync with feature gates.
+- Layer 0 means zero internal VT Code dependencies: never add `vtcode-commons`/`vtcode-config` here to read `[timeouts]`. `A2aClient::with_timeouts` takes explicit connect/request budgets; the host (vtcode-core) resolves them from the installed HTTP defaults and passes them in. `A2aClient::new` applies local safe defaults, never an unbounded client.
 
 ## Gotchas
 

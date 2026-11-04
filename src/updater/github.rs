@@ -112,8 +112,20 @@ fn parse_release(value: &serde_json::Value) -> Result<GithubRelease> {
     })
 }
 
+/// Connect-phase bound shared by the updater clients.
+///
+/// Requests carry their own `.timeout(...)` from `update.toml`, but reqwest
+/// leaves the connect phase unbounded unless it is set, so a stalled handshake
+/// could still hang the update check.
+fn connect_timeout() -> Option<Duration> {
+    vtcode_commons::http::http_timeouts().connect
+}
+
 pub(super) fn github_client() -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder().user_agent("vtcode-updater");
+    if let Some(connect) = connect_timeout() {
+        builder = builder.connect_timeout(connect);
+    }
 
     // Authenticate with GitHub API when a token is available.
     // Unauthenticated requests are limited to 60/hour per IP; authenticated
@@ -141,10 +153,11 @@ pub(super) fn github_token() -> Option<String> {
 /// fallback requests. Asset URLs come from remote release metadata and must
 /// never receive the GitHub API token.
 pub(super) fn unauthenticated_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .user_agent("vtcode-updater")
-        .build()
-        .context("Failed to create HTTP client")
+    let mut builder = reqwest::Client::builder().user_agent("vtcode-updater");
+    if let Some(connect) = connect_timeout() {
+        builder = builder.connect_timeout(connect);
+    }
+    builder.build().context("Failed to create HTTP client")
 }
 
 /// Fetch JSON from `url` using the configured (possibly authenticated) client.

@@ -81,10 +81,10 @@ impl AstGrepStatus {
         }
 
         let install_result: Result<AstGrepInstallOutcome> = async {
-            let client = reqwest::Client::builder()
-                .user_agent("vtcode-ast-grep-installer")
-                .build()
-                .context("Failed to create HTTP client")?;
+            // Release archives are tens of megabytes on a cold cache; use the
+            // download budget (not the short request default) so a slow link
+            // does not abort a legitimate install.
+            let client = vtcode_commons::http::create_download_client("vtcode-ast-grep-installer");
 
             let release = fetch_latest_release(&client).await?;
             let platform = current_platform_asset_spec()?;

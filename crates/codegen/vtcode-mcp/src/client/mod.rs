@@ -84,6 +84,17 @@ impl McpClient {
         self.config.ui.apps
     }
 
+    /// Resolve `(connection timeout, tool timeout)` in seconds.
+    ///
+    /// `connection_timeout_seconds` bounds the connect-and-handshake phase and
+    /// `request_timeout_seconds` the per-tool call budget. They are distinct on
+    /// purpose: a provider that never finishes connecting must fail on the short
+    /// connection key, not consume the tool budget. Both clamp to at least one
+    /// second so a `0` cannot produce an instantly-failing deadline.
+    fn pool_timeouts(&self) -> (u64, u64) {
+        (self.config.connection_timeout_seconds.max(1), self.config.request_timeout_seconds.max(1))
+    }
+
     /// Establish connections to all configured providers and complete the
     /// MCP handshake.
     pub async fn initialize(&mut self) -> Result<()> {
@@ -96,8 +107,9 @@ impl McpClient {
         info!("Initializing MCP client with {} configured providers", self.config.providers.len());
 
         let max_connections = self.config.max_concurrent_connections.max(1);
-        let pool = McpConnectionPool::new(max_connections, self.config.request_timeout_seconds);
-        let tool_timeout = Some(Duration::from_secs(self.config.request_timeout_seconds));
+        let (connection_timeout_seconds, tool_timeout_seconds) = self.pool_timeouts();
+        let pool = McpConnectionPool::new(max_connections, connection_timeout_seconds);
+        let tool_timeout = Some(Duration::from_secs(tool_timeout_seconds));
         let allowlist_snapshot = self.state.read().allowlist.clone();
 
         let provider_configs: Vec<McpProviderConfig> =

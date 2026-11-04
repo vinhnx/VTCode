@@ -472,7 +472,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.providers[].protocol_version` | `string` | no | `"2025-11-25"` | Protocol version |
 | `mcp.providers[].startup_timeout_ms` | `integer \| null` | no | `null` | Startup timeout in milliseconds for this provider |
 | `mcp.providers[].working_directory` | `null \| string` | no | `null` | Working directory for the command |
-| `mcp.request_timeout_seconds` | `integer` | no | `30` | Request timeout in seconds |
+| `mcp.request_timeout_seconds` | `integer` | no | `30` | Timeout (seconds) for a single MCP tool call. Distinct from `connection_timeout_seconds`, which bounds the connect-and-handshake phase during startup. |
 | `mcp.requirements.allowed_http_endpoints` | `array` | no | `[]` | Allowed HTTP endpoints when enforcement is enabled |
 | `mcp.requirements.allowed_http_endpoints[]` | `string` | no | `-` | - |
 | `mcp.requirements.allowed_stdio_commands` | `array` | no | `[]` | Allowed stdio command names when enforcement is enabled |
@@ -554,7 +554,7 @@ python3 scripts/generate_config_field_reference.py
 | `optimization.profiling.max_history_size` | `integer` | no | `1000` | Maximum benchmark history size |
 | `optimization.profiling.max_regression_percent` | `number` | no | `10.0` | Maximum allowed performance regression percentage |
 | `optimization.profiling.monitor_interval_ms` | `integer` | no | `100` | Resource monitoring interval in milliseconds |
-| `optimization.tool_registry.default_timeout_secs` | `integer` | no | `180` | Tool execution timeout in seconds |
+| `optimization.tool_registry.default_timeout_secs` | `integer` | no | `180` | Deprecated and unused for enforcement. The authoritative tool deadline is `[timeouts] default_ceiling_seconds`. |
 | `optimization.tool_registry.hot_cache_size` | `integer` | no | `16` | Hot cache size for frequently used tools |
 | `optimization.tool_registry.max_concurrent_tools` | `integer` | no | `4` | Maximum concurrent tool executions |
 | `optimization.tool_registry.middleware_fail_open` | `boolean` | no | `false` | When `true`, middleware `before_execute` failures are logged but do not block the tool call (fail-open). When `false` (the default), middleware errors deny execution (fail-closed). |
@@ -699,7 +699,7 @@ python3 scripts/generate_config_field_reference.py
 | `provider_overrides.*.models[]` | `string` | no | `-` | - |
 | `providers_whitelist` | `array` | no | `[]` | Restrict which providers may be used. When non-empty, only providers listed here are visible in the model picker, selectable at first-run, and instantiable at runtime. Empty (the default) means all built-in and custom providers are available. |
 | `providers_whitelist[]` | `string` | no | `-` | - |
-| `pty.command_timeout_seconds` | `integer` | no | `300` | Command timeout in seconds (prevents hanging commands) |
+| `pty.command_timeout_seconds` | `integer` | no | `300` | Deprecated and unused for enforcement. The authoritative PTY deadline is `[timeouts] pty_ceiling_seconds`. |
 | `pty.default_cols` | `integer` | no | `80` | Default terminal columns for PTY sessions |
 | `pty.default_rows` | `integer` | no | `24` | Default terminal rows for PTY sessions |
 | `pty.enabled` | `boolean` | no | `true` | Enable PTY support for interactive commands |
@@ -791,6 +791,9 @@ python3 scripts/generate_config_field_reference.py
 | `timeouts.adaptive_min_floor_ms` | `integer` | no | `1000` | Minimum timeout floor in milliseconds when applying adaptive clamps. |
 | `timeouts.adaptive_success_streak` | `integer` | no | `5` | Number of consecutive successes before relaxing adaptive ceiling. |
 | `timeouts.default_ceiling_seconds` | `integer` | no | `180` | Maximum duration (in seconds) for standard, non-PTY tools. |
+| `timeouts.http_connect_seconds` | `integer` | no | `5` | Timeout (in seconds) for the connect phase of outbound HTTP clients. `0` disables the limit. Also settable via `VTCODE_HTTP_CONNECT_TIMEOUT_SECS`. |
+| `timeouts.http_download_seconds` | `integer` | no | `300` | Timeout (in seconds) for large HTTP transfers such as release downloads. `0` disables the limit. Also settable via `VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS`. |
+| `timeouts.http_request_seconds` | `integer` | no | `30` | Timeout (in seconds) for a whole outbound HTTP request, including body. `0` disables the limit. Also settable via `VTCODE_HTTP_REQUEST_TIMEOUT_SECS`. |
 | `timeouts.long_running_command_ceiling_seconds` | `integer` | no | `3600` | Maximum duration (in seconds) for an explicit long-running command wait. |
 | `timeouts.mcp_ceiling_seconds` | `integer` | no | `120` | Maximum duration (in seconds) for MCP calls. |
 | `timeouts.pty_ceiling_seconds` | `integer` | no | `300` | Maximum duration (in seconds) for PTY-backed commands. |

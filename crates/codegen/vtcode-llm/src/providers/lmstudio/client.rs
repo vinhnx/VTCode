@@ -7,7 +7,6 @@
 /// See: https://lmstudio.ai/docs/developer
 use std::io;
 use std::path::Path;
-use std::time::Duration;
 
 use serde_json::Value as JsonValue;
 
@@ -38,10 +37,10 @@ impl LMStudioClient {
     /// - `use_native_api = false`: Use OpenAI-compatible endpoints at `/v1/*` (default)
     /// - `use_native_api = true`: Use native REST API at `/api/v0/*`
     async fn try_from_base_url_with_api_version(base_url: &str, use_native_api: bool) -> io::Result<Self> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        // A connect-only timeout leaves `check_server`/`fetch_models` unbounded
+        // when LM Studio accepts the socket but stalls; use the installed
+        // request budget so model discovery cannot hang the picker.
+        let client = vtcode_commons::http::create_default_client();
 
         let instance = Self {
             client,

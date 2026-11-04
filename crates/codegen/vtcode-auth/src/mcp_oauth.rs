@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use reqwest::{Client, Url};
+use reqwest::Url;
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -449,9 +449,9 @@ async fn refresh_token(config: &McpOAuthConfig, current: &McpOAuthToken) -> Resu
 }
 
 async fn send_token_request(token_url: &str, form: &[(String, String)]) -> Result<McpOAuthToken> {
-    let response = Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
+    // Bounded by the installed HTTP defaults: a token endpoint that accepts the
+    // connection and then stalls must not block session startup forever.
+    let response = vtcode_commons::http::create_default_client_without_redirects()
         .context("failed to create MCP OAuth client")?
         .post(token_url)
         .header("Content-Type", "application/x-www-form-urlencoded")

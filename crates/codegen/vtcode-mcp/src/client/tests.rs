@@ -321,3 +321,28 @@ async fn connect_server_rejects_interactive_tier_before_lookup() {
         .expect_err("interactive tier rejected");
     assert!(err.to_string().contains("interactive"), "{err:?}");
 }
+
+#[test]
+fn pool_timeouts_keep_connection_and_tool_budgets_separate() {
+    // Regression: the pool used to be built from `request_timeout_seconds`, so
+    // the documented `connection_timeout_seconds` key was silently ignored and a
+    // provider that never finished connecting burned the whole tool budget.
+    // `request_timeout_seconds` still drives the per-tool budget via
+    // `tool_timeout()`, so the two keys now govern distinct phases.
+    let config = McpClientConfig {
+        connection_timeout_seconds: 7,
+        request_timeout_seconds: 45,
+        ..base_config()
+    };
+    assert_eq!(McpClient::new(config).pool_timeouts(), (7, 45));
+}
+
+#[test]
+fn pool_timeouts_clamp_zero_to_one_second() {
+    let config = McpClientConfig {
+        connection_timeout_seconds: 0,
+        request_timeout_seconds: 0,
+        ..base_config()
+    };
+    assert_eq!(McpClient::new(config).pool_timeouts(), (1, 1));
+}

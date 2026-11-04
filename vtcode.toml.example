@@ -88,3 +88,21 @@ code_search = "allow"
 # 12h writes cost 2.5x ordinary input; 30m writes cost 1.25x.
 [prompt_cache.providers.openai]
 # prompt_cache_ttl = "12h"
+
+# Timeouts. Every value is in seconds; 0 disables that limit.
+# The defaults suit a fast, warm connection. Raise them if you are on a slow or
+# high-latency link, a large repository, or a cold model/server start -- those
+# are slow, not broken. Edits apply without restarting the session.
+[timeouts]
+# Tool ceilings by category.
+default_ceiling_seconds = 180
+pty_ceiling_seconds = 300
+mcp_ceiling_seconds = 120
+streaming_ceiling_seconds = 600
+long_running_command_ceiling_seconds = 3600
+# Outbound HTTP defaults for every network client. These also read
+# VTCODE_HTTP_CONNECT_TIMEOUT_SECS / VTCODE_HTTP_REQUEST_TIMEOUT_SECS /
+# VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS when the key below is absent.
+http_connect_seconds = 5
+http_request_seconds = 30
+http_download_seconds = 300
