@@ -10,32 +10,25 @@
 [![Rust](https://img.shields.io/badge/rust-1.99.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-30363D?style=flat-square)](#license)
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
+
 <!-- NB: not https://deepwiki.com/badge.svg — that route is behind a Vercel bot
   challenge, so GitHub's camo proxy gets 429 and renders the alt text instead.
   This shields.io URL reproduces the same 109x20 badge, logo, and colors. -->
 <!-- markdownlint-disable-next-line MD013 -->
+
 [![Ask DeepWiki](https://img.shields.io/badge/-Ask_DeepWiki-007ec6?logo=data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAPoAAAD6AG1e1JrAAACIUlEQVRYw%2B2XP2gUQRTGv7d3JhYWQawkIBaCVWzETos0gmAnVoKNTSoLK0E7EQQvC20sBVFBtLPQRgTBtBaKjYgIQUSxiJq7fT%2BLvCGPJZdNLt4dQj5Y3u7sznzfzLw%2Fs9IO%2FicANiniCujEfWdsQgBLxAbsbraPZcmBfcAt4DNwKQsZNfEUsAB8YRV12LfA6ZHuedg7AO7ed%2Fc%2BUBcbQhbiu%2B6wXIM6EnZWkszMJe2Ke0n6I2la0v51hFeSMLN6OwIK6jJwEBdUYb2MAxRSz6sY4geiahFgLe1Hwq6YWe3us8AN4FQQU4QM64SPY69Xyr43fADgNjAPXHb3peSsD4FDQ0VLEjAHvIhBPS6AHvA1bBO9JPAXcHFbIRtJ5yzwIQZ9CZwAusDJENIkLqsG8DpNyIZJwSUk9wLHgakcesC1JCCjiHm1kYDNOEjptCxpSVK%2F8f73OFLxPLAYM3oCzEX7MXf%2FlJbc%2F8kWpA4HgQdpYI9IWAbeh83whi84cHXL%2B58EPBoQhnmm94EzwE3gZ2p%2FDhzdbhg%2BTaRr01x7ftb4%2FjBwFzjXrCvDpmLW9crVLNeR9CaapoGemb2TdCERW1tNaBNQ8jktwmozqwtpqRNtdWAjARYk39IS12ZWRX7vmJmA71nQZgi36gN7gCvAj5xc3P0jcH7kx7Ik5IC73wsh14GZsZySow5002l4Jr0b6%2Bm4eSyvpAn8lEzsx2QHo8RfUrlN%2BuPq4ksAAAAASUVORK5CYII%3D&labelColor=000000)](https://deepwiki.com/vinhnx/vtcode)
 [![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=flat-square&logo=apple)](#desktop-app)
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
 
 <p>
-  <!-- markdownlint-disable MD033 -->
-  <!-- NB: plain linked images, not <video>: GitHub's README renderer strips video embeds. -->
-  <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">
-    <img src="./resources/screenshots/vtcode-desktop-dark-agent.png"
-      alt="VT Code Desktop — click to watch the demo video" />
-  </a><br />
-  <!-- markdownlint-enable MD033 -->
-  <sub>Desktop app · <a href="https://github.com/vinhnx/VTCode/blob/main/resources/gif/demo-desktop.mp4">demo video</a></sub>
-
+  <img src="./resources/gif/demo-desktop.gif" alt="VT Code Desktop" />
+  <sub>Desktop app</sub>
 </p>
 
 <p>
   <img src="./resources/screenshots/vtcode-cli-tui.gif" width="100%"
     alt="Terminal TUI demo" /><br />
-  <img src="./resources/screenshots/vtcode-cli-ask.gif" width="100%"
-    alt="One-shot ask demo" /><br />
-  <sub>Terminal TUI &nbsp;·&nbsp; One-shot ask</sub>
+  <sub>Terminal TUI</sub>
 </p>
 
 </div>
@@ -45,14 +38,14 @@
 VT Code works on your repository from the terminal or its native macOS app. It owns context, tool calls, and
 execution policy, so long tasks stay auditable and resumable.
 
-| At a glance | What you get |
-| --- | --- |
-| **Planning** | [Plan read-only](./docs/guides/planning-workflow.md), then review turn diffs. |
-| **Safety** | [Auditable command policy](./docs/security/SECURITY_MODEL.md) and sandboxing. |
+| At a glance      | What you get                                                                    |
+| ---------------- | ------------------------------------------------------------------------------- |
+| **Planning**     | [Plan read-only](./docs/guides/planning-workflow.md), then review turn diffs.   |
+| **Safety**       | [Auditable command policy](./docs/security/SECURITY_MODEL.md) and sandboxing.   |
 | **Self-correct** | [HOVER loop](./docs/development/hypothesis-revision-validation.md) on mismatch. |
-| **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction. |
-| **Integrations** | [MCP](./docs/guides/mcp-integration.md), Skills, plugins, editor bridges. |
-| **Models** | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task. |
+| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction.     |
+| **Integrations** | [MCP](./docs/guides/mcp-integration.md), Skills, plugins, editor bridges.       |
+| **Models**       | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.      |
 
 ## Quick start
 
@@ -117,15 +110,15 @@ automation and session commands.
 
 Common commands:
 
-| Goal | Command |
-| --- | --- |
-| Start the TUI | `vtcode` |
-| Ask without tools | `vtcode ask "explain Rc vs Arc"` |
-| Run a task headlessly | `vtcode exec "refactor main.rs"` |
-| Review pending changes | `vtcode review` |
+| Goal                    | Command                                            |
+| ----------------------- | -------------------------------------------------- |
+| Start the TUI           | `vtcode`                                           |
+| Ask without tools       | `vtcode ask "explain Rc vs Arc"`                   |
+| Run a task headlessly   | `vtcode exec "refactor main.rs"`                   |
+| Review pending changes  | `vtcode review`                                    |
 | Schedule recurring work | `vtcode schedule create --prompt "..." --every 1h` |
-| Resume the last session | `vtcode continue` |
-| Inspect a run log | `vtcode trajectory` |
+| Resume the last session | `vtcode continue`                                  |
+| Inspect a run log       | `vtcode trajectory`                                |
 
 For larger tasks, begin with [read-only planning](./docs/guides/planning-workflow.md), then review the
 [turn diff](./docs/development/diff-preview.md) before committing. Run `/explain` to summarize the outcome
