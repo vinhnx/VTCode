@@ -98,12 +98,6 @@ note integrate pele to desktop app
 update readme and docs show badges and bullet list all vtcode platforms
 
 ---
-
-use marker to refine and build all current components in the desktop app https://gpui-kit.com/component/marker/. idea
-
-1. port the TUI info/warning/error message to use "Status" marker component for labels info
-2. check other marker components example for idea and replace and build where suitable. '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.52.43 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.52.40 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.52.21 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.52.14 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.52.11 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.52.08 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.52.04 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.51.48 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.51.46 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.51.20 AM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/markers/Screenshot 2026-11-03 at 9.51.07 AM.png'
-
 ---
 
 build and replace/revamp current desktop app components where suitable https://gpui-kit.com/component/dropdown_button/
@@ -143,6 +137,11 @@ use this https://gpui-kit.com/component/plot/ and https://gpui-kit.com/component
 3. test with different data sets.
 4. check responsiveness for different screen sizes.
 5. update any outdated chart references.
+
+---
+
+check and fix the alignment of the loading "Running" it seems misaligned. or it is because the chat input container itself is misaligned? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 1.33.54 PM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 1.33.21 PM.png'
+check the input container padding and margin to aligned with the whole transcript layout fit
 
 ---
 
@@ -201,4 +200,4 @@ https://gpui-kit.com/component/focus-trap/
 ---
 
 check and fix splitting the two 1000+ line
-  files — is large surgery in view/, where the peer
+  files — is large surgery in view/
