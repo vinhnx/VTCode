@@ -603,3 +603,23 @@ fn test_entry_kind_classified_for_files() {
     assert_eq!(kind_of("assets/logo.png"), FileKind::Image);
     assert_eq!(kind_of("data/archive.tar"), FileKind::Other);
 }
+
+#[cfg(unix)]
+#[test]
+fn breadcrumb_survives_a_workspace_root_alias() {
+    use std::os::unix::fs::symlink;
+
+    // `current_dir` is populated from walker output, which reports resolved
+    // paths, while `workspace_root` keeps whatever the caller passed. A bare
+    // `strip_prefix` therefore fails and the breadcrumb leaks an absolute path.
+    let temp = tempfile::tempdir().expect("tempdir");
+    let real = temp.path().join("workspace");
+    std::fs::create_dir_all(real.join("src")).expect("mkdir");
+    let alias = temp.path().join("workspace-alias");
+    symlink(&real, &alias).expect("symlink");
+
+    let mut palette = FilePalette::new(real.clone());
+    palette.current_dir = alias.join("src");
+
+    assert_eq!(palette.breadcrumb(), "/src");
+}
