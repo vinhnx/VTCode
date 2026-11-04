@@ -18,6 +18,7 @@ optimizer, the standard library, and day-to-day coding decisions.
 - [When Rust Can Be Slower Than C/C++](#when-rust-can-be-slower-than-cc)
 - [Breaking Inter-Iteration Dependencies (Value Speculation)](#breaking-inter-iteration-dependencies-value-speculation)
 - [Branchless Programming: Removing Unpredictable Branches](#branchless-programming-removing-unpredictable-branches)
+- [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows)
 - [Checklist for VT Code Hot Paths](#checklist-for-vt-code-hot-paths)
 
 ---
@@ -619,6 +620,59 @@ survivor sets, byte totals, empty/no-match/all-match boundaries, and value relea
 references. These deterministic checks establish eliminated key clones, not an end-to-end latency
 improvement. Tool-result invalidation regressions cover callers that discard stale filesystem data.
 
+## Hoist What the Loop Already Knows
+
+The largest directory-listing win measured here was not codegen, allocation, or a tighter algorithm. It was
+deleting syscalls the loop did not need, because the iterator had already answered the question.
+
+Two shapes recur, and both are invisible in a single-call code review:
+
+1. **A helper re-resolves the root on every call.** `workspace_relative_display(root, path)` canonicalizes
+   `root` *and* `path` per invocation. That is correct but redundant for callers rendering one path, and
+   quadratic-ish for callers rendering a directory: the root's answer cannot change mid-loop.
+
+   ```rust
+   // before: two realpath calls per entry
+   for entry in entries {
+       let display = workspace_relative_display(&root, entry.path());
+   }
+
+   // after: the root is resolved once; only the unknown leaf is resolved
+   let display = WorkspacePathDisplay::new(&root);
+   for entry in entries {
+       let display = display.render_entry(entry.path(), entry.file_type());
+   }
+   ```
+
+   Measured on 102 entries: 2.50 ms → 1.27 ms hoisting the root, → 0.10 ms once the walker's own
+   `FileType` removed the leaf `realpath` too. Same output for every entry, asserted in
+   `path_display_matches_one_shot_render_for_many_entries`.
+
+2. **A predicate stats for data the iterator already returned.** `read_dir` yields each entry's type;
+   `Path::is_dir()` then asks the kernel again. Anything shaped like
+   `matcher.matched(path, path.is_dir())` inside a `read_dir`/walker loop is paying one syscall per entry
+   for a fact in hand — measured at ~2 µs/entry versus ~14 ns for the dirent type. Use
+   `vtcode_commons::walk::{entry_is_dir, entry_is_file}` rather than re-deriving it, and pass a known
+   type to `VTCodeGitignore::should_exclude_with_file_type` so the matcher does not stat either.
+   Both helpers and the matcher still resolve symlinks, because a link's own type says nothing about
+   its target.
+
+The safety rule that makes this non-negotiable: **only skip a resolution when you can prove it cannot
+change the answer.** A walker with `follow_links(false)` cannot produce symlinked ancestors, so the
+lexical strip equals the resolved strip. A symlink's *own* type proves nothing about its target, so
+symlinks and unknown types must keep the resolving path — `WorkspacePathDisplay::render_entry` and
+`VTCodeGitignore::should_exclude_with_file_type` both fall back for exactly that case, and
+`path_display_entry_fast_path_defers_for_symlinks` pins it.
+
+A related trap: resolving once is not the same as stripping lexically. `render` normalizes `.`/`..`
+while `strip_prefix` does not, so a fast path must reject paths containing those components rather than
+emit a differently-shaped path (`path_display_entry_fast_path_rejects_dot_components`).
+
+Not every such redundancy is worth removing. Measure first. In this codebase a `read_dir` of the
+workspace root plus a `to_lowercase()` per entry cost 0.05 ms, and one `ensure_path_within_workspace_resolved`
+cost 0.44 ms — real numbers, but paid once per tool call and dwarfed by the I/O they guard. Leaving them
+alone is the correct KISS outcome; the syscall removes worth doing are the ones multiplied by entry count.
+
 ## Checklist for VT Code Hot Paths
 
 When reviewing or writing a hot path in vtcode:
@@ -660,6 +714,9 @@ When reviewing or writing a hot path in vtcode:
 - [ ] Is a runtime-derived pattern (config glob, deny list) recompiled per call instead of memoized
       behind a signature-keyed cache?
 - [ ] Does any per-unit path acquire a global lock or re-read shared state per element?
+- [ ] Does a per-entry loop call a helper that re-derives a fact the iterator already handed over —
+      an entry's `FileType`, or the workspace root's canonical form? See
+      [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows).
 - [ ] Has the performance been measured against baseline before/after?
 
 ---
