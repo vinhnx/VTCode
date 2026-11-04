@@ -137,6 +137,10 @@ impl HarnessTurnState {
     /// path this turn. Independent of slice (offset/limit/raw) — catches
     /// paginated reads of the same file that the slice-aware family key lets
     /// through.
+    ///
+    /// `path` must be workspace-normalized (`normalize_workspace_path`): the
+    /// same file read via different spellings shares one counter, and
+    /// [`Self::record_written_file`] resets this exact key on a write.
     pub(crate) fn record_file_read_path_call(&mut self, path: String) -> usize {
         let count = self.file_read_path_counts.entry(path).or_insert(0);
         *count = count.saturating_add(1);
@@ -150,6 +154,13 @@ impl HarnessTurnState {
 
     pub(crate) fn record_written_file(&mut self, path: &str) {
         self.recently_written_files.insert(path.to_string());
+        // A successful write invalidates the looping re-read hypothesis for
+        // this path: post-write reads verify new content instead of
+        // paginating stale evidence, so the per-path counter restarts. The
+        // identical-slice family cap still bounds true retry loops. Callers
+        // record normalized paths (see `record_file_read_path_call`), so this
+        // exact-key removal matches regardless of the model's spelling.
+        self.file_read_path_counts.remove(path);
     }
 
     pub(crate) fn was_recently_written(&self, path: &str) -> bool {

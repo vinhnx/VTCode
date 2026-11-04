@@ -46,6 +46,9 @@ fn flush_loop_notices(ctx: &mut TurnProcessingContext<'_>, loop_tracker: &mut su
     if let Some(guidance) = loop_tracker.take_verifier_failed_guidance() {
         ctx.push_system_message(guidance);
     }
+    if let Some(guidance) = loop_tracker.take_verifier_stalled_guidance() {
+        ctx.push_system_message(guidance);
+    }
     if loop_tracker.take_verification_result_lost_notice() {
         ctx.renderer
             .line(vtcode_core::utils::ansi::MessageStyle::Warning, VERIFICATION_RESULT_LOST_WARNING)

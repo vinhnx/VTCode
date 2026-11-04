@@ -156,8 +156,8 @@ pub fn validate_shell_script(script: &str) -> anyhow::Result<()> {
     if shell_parser::contains_dynamic_find_syntax(script) {
         bail!("dynamic shell expansion in find commands is not allowed");
     }
-    if contains_command_substitution(script) {
-        bail!("Command injection pattern detected");
+    if let Some((kind, byte_idx)) = find_command_substitution(script) {
+        return Err(shell_parser::substitution_error(kind, byte_idx));
     }
     shell_parser::validate_redirection_paths(script)?;
     let commands = shell_parser::parse_shell_commands(script)
@@ -185,6 +185,16 @@ fn dangerous_command_rejection(command: &[String]) -> anyhow::Error {
 }
 
 fn contains_command_substitution(script: &str) -> bool {
+    find_command_substitution(script).is_some()
+}
+
+/// Locate the first live-shell command substitution, if any.
+///
+/// Returns the construct and the byte offset of its trigger (the backtick or
+/// the `$` of `$(`) so rejections can name the exact span. Shares its scan
+/// with [`contains_command_substitution`] so the predicate and the error can
+/// never disagree about what counts as substitution.
+fn find_command_substitution(script: &str) -> Option<(shell_parser::SubstitutionKind, usize)> {
     let mut in_single_quote = false;
     let mut in_double_quote = false;
     let mut escaped = false;
@@ -192,8 +202,8 @@ fn contains_command_substitution(script: &str) -> bool {
     // yet. The opener line stays live shell; the body is skipped at the
     // unquoted opener newline.
     let mut pending_heredoc: Option<String> = None;
-    let mut characters = script.chars().peekable();
-    while let Some(character) = characters.next() {
+    let mut characters = script.char_indices().peekable();
+    while let Some((byte_idx, character)) = characters.next() {
         if escaped {
             escaped = false;
             continue;
@@ -218,16 +228,16 @@ fn contains_command_substitution(script: &str) -> bool {
             // or `$()` placed there executes in bash — so the skip only starts
             // at the unquoted opener newline. A heredoc never starts inside a
             // double-quoted string while substitution stays active there.
-            if character == '<' && !in_double_quote && characters.peek() == Some(&'<') {
+            if character == '<' && !in_double_quote && matches!(characters.peek(), Some((_, '<'))) {
                 // Probe without mutating so an unquoted `<<` keeps both marks.
                 let mut probe = characters.clone();
                 let _ = probe.next(); // second '<'
-                let rest: String = probe.collect();
+                let rest: String = probe.map(|(_, c)| c).collect();
                 if let Some((delim, token_len)) = shell_parser::quoted_heredoc_delim(&rest) {
                     let _ = characters.next(); // second '<'
                     let mut consumed = 0usize;
                     while consumed < token_len
-                        && let Some(ch) = characters.next()
+                        && let Some((_, ch)) = characters.next()
                     {
                         consumed += ch.len_utf8();
                     }
@@ -236,12 +246,12 @@ fn contains_command_substitution(script: &str) -> bool {
                 }
             }
             if character == '`' {
-                return true;
+                return Some((shell_parser::SubstitutionKind::Backtick, byte_idx));
             }
             if character == '$' {
                 let mut lookahead = characters.clone();
-                if lookahead.next() == Some('(') && lookahead.next() != Some('(') {
-                    return true;
+                if matches!(lookahead.next(), Some((_, '('))) && !matches!(lookahead.next(), Some((_, '('))) {
+                    return Some((shell_parser::SubstitutionKind::DollarParen, byte_idx));
                 }
             }
         }
@@ -253,18 +263,18 @@ fn contains_command_substitution(script: &str) -> bool {
             // Quoted heredoc body: literal data, skipped through the closing
             // delimiter line. Without a closing delimiter the body keeps
             // being scanned, so executable content in it is still detected.
-            let rest: String = characters.clone().collect();
+            let rest: String = characters.clone().map(|(_, c)| c).collect();
             if let Some(skip) = shell_parser::heredoc_body_skip_len(&rest, &delim) {
                 let mut consumed = 0usize;
                 while consumed < skip
-                    && let Some(ch) = characters.next()
+                    && let Some((_, ch)) = characters.next()
                 {
                     consumed += ch.len_utf8();
                 }
             }
         }
     }
-    false
+    None
 }
 
 #[cfg(test)]
@@ -468,6 +478,55 @@ mod tests {
         // Content after the closing delimiter is live shell again.
         let script = "cat <<'EOF'\nbody\nEOF\necho $(whoami)\n";
         assert!(contains_command_substitution(script), "post-heredoc substitution is live shell: {script:?}");
+    }
+
+    #[test]
+    fn substitution_finder_reports_construct_and_byte_offset() {
+        use shell_parser::SubstitutionKind;
+
+        // (script, expected kind, expected byte offset of the trigger)
+        for (script, kind, byte_idx) in [
+            ("echo $(whoami)", SubstitutionKind::DollarParen, 5),
+            ("echo `whoami`", SubstitutionKind::Backtick, 5),
+            ("echo \"$(whoami)\"", SubstitutionKind::DollarParen, 6),
+            ("echo \"a`b`\"", SubstitutionKind::Backtick, 7),
+            // First hit wins when both constructs are present.
+            ("echo `a` $(b)", SubstitutionKind::Backtick, 5),
+            ("echo $(a) `b`", SubstitutionKind::DollarParen, 5),
+        ] {
+            assert_eq!(
+                find_command_substitution(script),
+                Some((kind, byte_idx)),
+                "finder must locate the first hit in {script:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn substitution_finder_preserves_predicate_exclusions() {
+        // The finder is the predicate's core: everything the predicate
+        // excludes must stay excluded, so error enrichment cannot fail open.
+        for clean in [
+            "echo $((1 + 2))",          // arithmetic expansion is not substitution
+            "echo '$(x)'",              // single-quoted text is inert
+            "echo \\$(x)",              // escaped dollar is inert
+            "cat <<'EOF'\n$(x)\nEOF\n", // quoted heredoc body is literal data
+        ] {
+            assert_eq!(find_command_substitution(clean), None, "must stay clean: {clean:?}");
+            assert!(!contains_command_substitution(clean), "predicate must agree: {clean:?}");
+        }
+    }
+
+    #[test]
+    fn explicit_script_rejection_names_substitution_construct_and_offset() {
+        let err = validate_shell_script("echo $(whoami)").expect_err("substitution must be rejected");
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("Command injection pattern detected"),
+            "legacy prefix must survive for downstream policy matchers: {message}"
+        );
+        assert!(message.contains("'$('"), "rejection must name the construct: {message}");
+        assert!(message.contains("byte 5"), "rejection must carry the byte offset: {message}");
     }
 
     #[test]

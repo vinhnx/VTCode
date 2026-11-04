@@ -296,9 +296,29 @@ fn update_repetition_tracker_inner(
                     // marks completion pending. Tool-level Failure/Timeout (never
                     // executed, e.g. argument errors) provides no terminal verdict.
                     loop_tracker.record_failed_verification();
-                    loop_tracker.verifier_failed_notice_pending = matches!(&outcome.status,
-                        ToolExecutionStatus::Success { output, .. }
-                            if output.get("exit_code").and_then(serde_json::Value::as_i64).is_some_and(|code| code != 0));
+                    if let ToolExecutionStatus::Success { output, stdout, .. } = &outcome.status
+                        && let Some(exit_code) = output.get("exit_code").and_then(serde_json::Value::as_i64)
+                        && exit_code != 0
+                    {
+                        // A byte-identical rerun made no progress: surface the
+                        // stall guidance instead of another repair-loop pass.
+                        let stderr_text = output
+                            .get("stderr")
+                            .or_else(|| output.get("stderr_preview"))
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("");
+                        let command_key = vtcode_core::tools::command_args::raw_command_text(&executed)
+                            .unwrap_or_else(|| executed.to_string());
+                        let stalled = loop_tracker.record_failed_verifier_run(
+                            command_key,
+                            exit_code,
+                            stdout.as_deref().unwrap_or(""),
+                            stderr_text,
+                        );
+                        loop_tracker.verifier_failed_notice_pending = !stalled;
+                    } else {
+                        loop_tracker.verifier_failed_notice_pending = false;
+                    }
                     loop_tracker.reset_navigation_window(low_signal_family.is_none());
                     return true;
                 } else if loop_tracker.verification_is_pending()

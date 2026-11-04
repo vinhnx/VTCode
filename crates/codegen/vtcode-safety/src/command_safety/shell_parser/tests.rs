@@ -237,3 +237,28 @@ fn cached_tree_hit_preserves_extraction_across_repeated_and_mixed_calls() {
     let strict = parse_shell_commands_tree_sitter(script).expect("strict parse of cached tree");
     assert_eq!(strict, first);
 }
+
+#[test]
+fn segment_split_rejection_names_substitution_construct_and_offset() {
+    // Both quote states (unquoted, double-quoted) and both constructs
+    // (backtick, `$()`) must name the construct and its byte offset so the
+    // caller can locate the rejected span in its own command.
+    for (script, construct, byte_idx) in [
+        ("echo $(whoami)", "'$('", 5),
+        ("echo `whoami`", "backtick", 5),
+        ("echo \"$(whoami)\"", "'$('", 6),
+        ("echo \"a`b`\"", "backtick", 7),
+    ] {
+        let err = split_shell_segments(script).expect_err("substitution must be rejected");
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("Command injection pattern detected"),
+            "legacy prefix must survive for downstream policy matchers: {message}"
+        );
+        assert!(message.contains(construct), "rejection must name the construct ({script:?}): {message}");
+        assert!(
+            message.contains(&format!("byte {byte_idx}")),
+            "rejection must carry the byte offset ({script:?}): {message}"
+        );
+    }
+}

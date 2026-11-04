@@ -18,4 +18,5 @@ mod lifecycle;
 mod patching;
 mod planning;
 mod preflight;
+mod read_path_cap;
 mod read_reuse;

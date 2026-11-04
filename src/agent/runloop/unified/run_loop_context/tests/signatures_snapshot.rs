@@ -87,6 +87,24 @@ fn file_read_path_counts_track_per_path_regardless_of_slice() {
     state.reset_file_read_path_counts();
     assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1);
 }
+
+#[test]
+fn written_file_resets_only_its_own_read_path_counter() {
+    let mut state =
+        HarnessTurnState::new(TurnRunId("run-reset".to_string()), TurnId("turn-reset".to_string()), 20, 600, 3);
+
+    assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1);
+    assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 2);
+    assert_eq!(state.record_file_read_path_call("src/main.rs".to_string()), 1);
+    assert_eq!(state.record_file_read_path_call("src/main.rs".to_string()), 2);
+
+    // A successful write invalidates the looping re-read hypothesis for that
+    // path only: post-write reads are verification of new content.
+    state.record_written_file("src/lib.rs");
+    assert!(state.was_recently_written("src/lib.rs"));
+    assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1, "written path restarts its counter");
+    assert_eq!(state.record_file_read_path_call("src/main.rs".to_string()), 3, "unwritten path keeps counting");
+}
 #[test]
 fn session_limit_grant_is_recorded_once_and_exposed_for_cleanup() {
     let mut state =
