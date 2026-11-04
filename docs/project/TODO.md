@@ -129,6 +129,15 @@ revamp existing manual build settings/config screen with https://gpui-kit.com/co
 
 ---
 
+fix The three pre-existing failures I flagged earlier remain untouched and unrelated: two vtcode-config loader tests (test_config_loader_phase_timing_recorded, detects_workspace_config_change — both fail on a pristine tree), one vtcode-core flake that passes in isolation, and the vtcode-auth pkce doctest referencing a private field. Worth a separate fix if you want them gone.
+
+---
+
+check the mac icons, it seems missing the macos 27 subtle icon borders? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 3.25.21 PM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 3.25.06 PM.png'
+
+
+---
+
 update the overall desktop icon size baseline, make sure the icon is not too small not too big, matching the font size UI settings baseline
 
 ----
