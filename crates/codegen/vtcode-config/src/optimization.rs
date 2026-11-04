@@ -121,7 +121,11 @@ pub struct ToolRegistryConfig {
     /// Hot cache size for frequently used tools
     pub hot_cache_size: usize,
 
-    /// Tool execution timeout in seconds
+    /// Deprecated and unused for enforcement.
+    ///
+    /// The authoritative tool deadline is `[timeouts] default_ceiling_seconds`.
+    /// Kept as a private field so existing files keep parsing; it is not read
+    /// by the tool registry.
     default_timeout_secs: u64,
 
     /// When `true`, middleware `before_execute` failures are logged but do

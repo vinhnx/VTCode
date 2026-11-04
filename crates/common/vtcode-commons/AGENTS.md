@@ -10,7 +10,7 @@
 
 ## Rules
 
-- Re-export key types from `lib.rs`: `WorkspacePaths`, `TelemetrySink`, `ErrorFormatter`, `BackendKind`, etc. `reference.rs` provides in-memory test adapters: `StaticWorkspacePaths`, `MemoryTelemetry`, `MemoryErrorReporter`. `ui_protocol/` is a submodule, not a flat module. Origin-bound HTTP consumers use fallible `http::create_client_without_redirects`; do not replace construction failures with a redirect-following fallback. `diff_theme` is the shared diff palette and capability boundary: color-capable consumers layer row and intraline backgrounds, while `NO_COLOR` resolves to `Ansi16` so fallbacks stay foreground-only.
+- Re-export key types from `lib.rs`: `WorkspacePaths`, `TelemetrySink`, `ErrorFormatter`, `BackendKind`, etc. `reference.rs` provides in-memory test adapters: `StaticWorkspacePaths`, `MemoryTelemetry`, `MemoryErrorReporter`. `ui_protocol/` is a submodule, not a flat module. Origin-bound HTTP consumers use fallible `http::create_client_without_redirects`; do not replace construction failures with a redirect-following fallback. `http::HttpTimeouts` is the single process-global HTTP timeout default set (`install_http_timeouts`/`http_timeouts`, `ArcSwap` whole-value swap): `None` means the phase is disabled, never a zero deadline, and `[timeouts] http_*_seconds` is the only source — callers with explicit budgets pass them, so do not add per-module timeout constants. Clients built before an install keep their old values. `diff_theme` is the shared diff palette and capability boundary: color-capable consumers layer row and intraline backgrounds, while `NO_COLOR` resolves to `Ansi16` so fallbacks stay foreground-only.
 
 ## Gotchas
 

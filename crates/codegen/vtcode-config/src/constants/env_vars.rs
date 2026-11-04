@@ -18,6 +18,16 @@ pub const LLAMACPP_BINARY_PATH: &str = "LLAMACPP_BINARY_PATH";
 pub const LLAMACPP_MODEL_PATH: &str = "LLAMACPP_MODEL_PATH";
 pub const LLAMACPP_EXTRA_ARGS: &str = "LLAMACPP_EXTRA_ARGS";
 pub const LLAMACPP_STARTUP_TIMEOUT_SECONDS: &str = "LLAMACPP_STARTUP_TIMEOUT_SECONDS";
+/// Default connect timeout (seconds) for outbound HTTP clients. Applies when
+/// `[timeouts] http_connect_seconds` is absent from `vtcode.toml`.
+pub const VTCODE_HTTP_CONNECT_TIMEOUT_SECS: &str = "VTCODE_HTTP_CONNECT_TIMEOUT_SECS";
+/// Default whole-request timeout (seconds) for outbound HTTP clients. Applies
+/// when `[timeouts] http_request_seconds` is absent from `vtcode.toml`.
+pub const VTCODE_HTTP_REQUEST_TIMEOUT_SECS: &str = "VTCODE_HTTP_REQUEST_TIMEOUT_SECS";
+/// Default large-transfer timeout (seconds) for outbound HTTP clients. Applies
+/// when `[timeouts] http_download_seconds` is absent from `vtcode.toml`.
+pub const VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS: &str = "VTCODE_HTTP_DOWNLOAD_TIMEOUT_SECS";
+
 pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
 pub const MIMO_BASE_URL: &str = "MIMO_BASE_URL";
 pub const MIMO_TOKEN_PLAN_BASE_URL: &str = "MIMO_TOKEN_PLAN_BASE_URL";

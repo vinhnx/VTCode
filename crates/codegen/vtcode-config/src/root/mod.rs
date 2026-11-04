@@ -659,7 +659,11 @@ pub struct PtyConfig {
     #[serde(default = "default_max_pty_sessions")]
     pub max_sessions: usize,
 
-    /// Command timeout in seconds (prevents hanging commands)
+    /// Deprecated and unused for enforcement.
+    ///
+    /// The authoritative PTY deadline is `[timeouts] pty_ceiling_seconds`.
+    /// This key is retained so existing `vtcode.toml` files keep parsing, but
+    /// changing it has no effect on command execution.
     #[serde(default = "default_pty_timeout")]
     pub command_timeout_seconds: u64,
 

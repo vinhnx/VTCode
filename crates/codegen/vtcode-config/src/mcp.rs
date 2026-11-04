@@ -41,7 +41,10 @@ pub struct McpClientConfig {
     #[serde(default = "default_max_concurrent_connections")]
     pub max_concurrent_connections: usize,
 
-    /// Request timeout in seconds
+    /// Timeout (seconds) for a single MCP tool call.
+    ///
+    /// Distinct from `connection_timeout_seconds`, which bounds the
+    /// connect-and-handshake phase during startup.
     #[serde(default = "default_request_timeout_seconds")]
     pub request_timeout_seconds: u64,
 

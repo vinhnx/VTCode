@@ -64,6 +64,7 @@ nucleo-matcher = "0.3"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+serial_test = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt"] }
 
 [lints]
