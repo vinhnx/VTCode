@@ -311,7 +311,11 @@ impl PromptCache {
 // Users must explicitly call save_cache() or use a wrapper that handles this.
 
 /// Cache statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// `Default` is derived: every field's own default is the semantic zero, so a
+/// hand-written impl would only restate `usize::default()`, `f64::default()`,
+/// and friends.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CacheStats {
     /// Total number of entries currently in the cache.
     pub total_entries: usize,
@@ -321,17 +325,6 @@ pub struct CacheStats {
     pub total_tokens_saved: u32,
     /// Average quality score across all cached entries.
     pub avg_quality: f64,
-}
-
-impl Default for CacheStats {
-    fn default() -> Self {
-        Self {
-            total_entries: 0,
-            total_usage: 0,
-            total_tokens_saved: 0,
-            avg_quality: 0.0,
-        }
-    }
 }
 
 /// Prompt cache errors

@@ -108,11 +108,19 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             "off" => Some(DesktopSlashAction::FastMode(Some(false))),
             _ => None,
         },
-        "theme" => match args.split_whitespace().collect::<Vec<_>>().as_slice() {
-            [] => Some(DesktopSlashAction::Theme(None)),
-            [theme] => Some(DesktopSlashAction::Theme(Some((*theme).to_string()))),
-            _ => None,
-        },
+        // Zero or one theme name: no argument opens the picker, exactly one
+        // routes natively, and anything longer falls through to the service
+        // (headless-safe, same as before). Reading two tokens off the
+        // iterator keeps that rule without materializing a Vec just to match
+        // on its slice.
+        "theme" => {
+            let mut words = args.split_whitespace();
+            match (words.next(), words.next()) {
+                (None, _) => Some(DesktopSlashAction::Theme(None)),
+                (Some(theme), None) => Some(DesktopSlashAction::Theme(Some(theme.to_string()))),
+                (Some(_), Some(_)) => None,
+            }
+        }
         "config" if args.is_empty() => Some(DesktopSlashAction::Configuration(None)),
         "settings" if args.is_empty() => Some(DesktopSlashAction::Settings(None)),
         "go" => Some(DesktopSlashAction::Go(args.to_string())),
