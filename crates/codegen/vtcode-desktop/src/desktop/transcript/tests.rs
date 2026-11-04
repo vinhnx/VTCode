@@ -1,6 +1,6 @@
 use super::{
     ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, ToolCategory, ToolCategoryCounts, Transcript,
-    TranscriptItem, TranscriptRole, describe_activity_verbs,
+    TranscriptItem, TranscriptRole, describe_activity_verbs, tool_row_gist,
 };
 use vtcode_exec_events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, DecisionItem, ErrorItem, FileChangeItem,
@@ -741,18 +741,100 @@ fn activity_verbs_compose_in_fixed_order_with_english_plurals() {
     single.add(ToolCategory::Other);
     single.add(ToolCategory::Other);
     assert_eq!(describe_activity_verbs(&single).as_deref(), Some("Ran 1 command · 2 other actions"));
-    // Complementary boundaries: every noun renders in both numbers.
-    let mut flipped = ToolCategoryCounts::default();
-    flipped.add(ToolCategory::Read);
-    flipped.add(ToolCategory::Read);
-    flipped.add(ToolCategory::Edit);
-    flipped.add(ToolCategory::Run);
-    flipped.add(ToolCategory::Run);
-    flipped.add(ToolCategory::Search);
+}
+
+fn invocation_item(name: &str, arguments: Option<serde_json::Value>) -> ToolInvocationItem {
+    ToolInvocationItem {
+        tool_name: name.into(),
+        arguments,
+        tool_call_id: None,
+        status: ToolCallStatus::Completed,
+        outcome: None,
+    }
+}
+
+fn gist(name: &str, arguments: serde_json::Value) -> String {
+    tool_row_gist(&invocation_item(name, Some(arguments)))
+}
+
+#[test]
+fn tool_row_gist_verbs_file_objects_with_basenames() {
+    use serde_json::json;
+    assert_eq!(gist("read_file", json!({"path": "src/lib/Cargo.toml"})), "Read Cargo.toml");
+    assert_eq!(gist("edit_file", json!({"file_path": "crates/x/main.rs"})), "Edited main.rs");
+    assert_eq!(gist("write_file", json!({"filepath": "notes.txt"})), "Edited notes.txt");
+    assert_eq!(gist("delete_file", json!({"target_path": "/tmp/stale.log"})), "Edited stale.log");
+    // Trailing separators resolve to the last real segment; separators alone
+    // carry no name and fall back.
+    assert_eq!(gist("read_file", json!({"path": "src/"})), "Read src");
+    assert_eq!(gist("read_file", json!({"path": "C:\\work\\lib.rs"})), "Read lib.rs");
+    assert_eq!(gist("read_file", json!({"path": "///"})), "read_file");
+    // Fetch tools read URLs, which keep the host: a basename would mislead.
     assert_eq!(
-        describe_activity_verbs(&flipped).as_deref(),
-        Some("Read 2 files · Edited 1 file · Ran 2 commands · Searched 1 query")
+        gist("web_fetch", json!({"url": "https://example.com/page?x=1"})),
+        "Read https://example.com/page?x=1"
     );
+}
+
+#[test]
+fn tool_row_gist_key_order_matches_service_precedence() {
+    use serde_json::json;
+    // Every adjacent pair disagrees, so each assert pins one precedence edge.
+    assert_eq!(gist("read_file", json!({"path": "a.rs", "file_path": "b.rs"})), "Read a.rs");
+    assert_eq!(gist("read_file", json!({"file_path": "b.rs", "filepath": "c.rs"})), "Read b.rs");
+    assert_eq!(gist("read_file", json!({"filepath": "c.rs", "target_path": "d.rs"})), "Read c.rs");
+    assert_eq!(gist("code_search", json!({"query": "Widget", "pattern": "Widg.*"})), "Widget");
+    assert_eq!(gist("exec_command", json!({"command": "cargo check", "cmd": "cargo build"})), "cargo check");
+    // A blank winner does not shadow a usable fallback key.
+    assert_eq!(gist("read_file", json!({"path": "  ", "file_path": "fallback.rs"})), "Read fallback.rs");
+}
+
+#[test]
+fn tool_row_gist_renders_commands_and_queries_bare() {
+    use serde_json::json;
+    assert_eq!(gist("exec_command", json!({"cmd": "cargo check --all"})), "cargo check --all");
+    assert_eq!(gist("exec_command", json!({"command": "  make test  "})), "make test");
+    assert_eq!(gist("exec_command", json!({"command": ["cargo", "check", "--all"]})), "cargo check --all");
+    assert_eq!(gist("exec_command", json!({"command": ["echo", 42, true, "hi"]})), "echo hi");
+    assert_eq!(gist("code_search", json!({"query": "Widget"})), "Widget");
+    // Grep scope stays out: the pattern alone matches the WebSearch row shape.
+    assert_eq!(gist("grep", json!({"pattern": "TODO", "path": "src"})), "TODO");
+}
+
+#[test]
+fn tool_row_gist_falls_back_to_raw_tool_name() {
+    use serde_json::json;
+    assert_eq!(tool_row_gist(&invocation_item("read_file", None)), "read_file");
+    for arguments in [
+        json!({}),
+        json!({"path": ""}),
+        json!({"path": "   "}),
+        json!({"path": 42}),
+        json!({"path": true}),
+        json!({"path": ["a.rs"]}),
+        json!({"path": null}),
+        json!({"command": ["", 42]}),
+    ] {
+        assert_eq!(gist("read_file", arguments.clone()), "read_file");
+        assert_eq!(gist("exec_command", arguments), "exec_command");
+    }
+    // Other-category tools keep raw names even with file-shaped args.
+    assert_eq!(gist("task_tracker", json!({"path": "plan.md"})), "task_tracker");
+    assert_eq!(gist("request_user_input", json!({"query": "color?"})), "request_user_input");
+    assert_eq!(gist("read_pty_session", json!({"session_id": "run-1"})), "read_pty_session");
+}
+
+#[test]
+fn tool_row_gist_covers_unified_and_mcp_names() {
+    use serde_json::json;
+    assert_eq!(gist("file_operation_internal", json!({"action": "edit", "path": "src/main.rs"})), "Edited main.rs");
+    assert_eq!(gist("file_operation_internal", json!({"action": "read", "path": "README.md"})), "Read README.md");
+    assert_eq!(gist("command_session_internal", json!({"action": "run", "cmd": "ls"})), "ls");
+    assert_eq!(
+        gist("command_session_internal", json!({"action": "poll", "session_id": "run-1"})),
+        "command_session_internal"
+    );
+    assert_eq!(gist("mcp__github__read_file", json!({"path": "issues.md"})), "Read issues.md");
 }
 
 #[test]

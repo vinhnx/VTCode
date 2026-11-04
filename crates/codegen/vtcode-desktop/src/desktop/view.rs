@@ -79,7 +79,7 @@ use super::strings::{app, bundle, display, i18n, key_context, keys};
 use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, NoticeSeverity, ToolCategory, ToolCategoryCounts, Transcript, TranscriptItem,
-    TranscriptRole, describe_activity_verbs, status as tool_status,
+    TranscriptRole, describe_activity_verbs, status as tool_status, tool_row_gist,
 };
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, handoff_vtcode_binary,

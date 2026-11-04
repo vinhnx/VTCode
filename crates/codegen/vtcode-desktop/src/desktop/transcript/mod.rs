@@ -7,7 +7,7 @@ use vtcode_exec_events::AppPreviewItem;
 use super::markdown::prepare_markdown;
 
 mod activity_verbs;
-pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs};
+pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs, tool_row_gist};
 
 pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
 
@@ -148,9 +148,9 @@ pub(super) struct TranscriptItem {
     pub activity_group_head: bool,
     /// Status totals kept on the group head so streamed updates do not rescan every tool row.
     pub activity_group_summary: ActivityGroupSummary,
-    /// Verb category for the group summary, set at projection from the event
-    /// details. `None` for rows that never pass through projection; those
-    /// groups keep the legacy count label.
+    /// Verb category for the group summary, set at projection from the live
+    /// event details. `None` for rows that never pass through projection;
+    /// those groups keep the legacy count label.
     pub activity_category: Option<ToolCategory>,
     /// Whether this row carries structured activity status rather than archive text.
     pub has_activity_status: bool,

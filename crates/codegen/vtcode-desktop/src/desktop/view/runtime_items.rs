@@ -303,7 +303,7 @@ impl DesktopView {
 fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String, String) {
     use vtcode_exec_events::ThreadItemDetails;
     match details {
-        ThreadItemDetails::ToolInvocation(tool) => (tool.tool_name.clone(), tool_status_label(&tool.status)),
+        ThreadItemDetails::ToolInvocation(tool) => (tool_row_gist(tool), tool_status_label(&tool.status)),
         ThreadItemDetails::ToolOutput(output) => {
             (rust_i18n::t!("app.transcript.tool_output_title").to_string(), tool_status_label(&output.status))
         }

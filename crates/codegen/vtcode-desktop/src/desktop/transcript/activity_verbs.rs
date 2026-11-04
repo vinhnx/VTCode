@@ -5,7 +5,7 @@
 //! instead of maintaining incremental counters: unlike streaming status,
 //! there is no derived state that could drift.
 
-use vtcode_exec_events::ThreadItemDetails;
+use vtcode_exec_events::{ThreadItemDetails, ToolInvocationItem};
 
 use super::super::strings::display;
 
@@ -155,4 +155,74 @@ pub(crate) fn describe_activity_verbs(counts: &ToolCategoryCounts) -> Option<Str
 
 fn verb_part(count: usize, verb: &str, singular: &str, plural: &str) -> String {
     format!("{verb} {count} {}", if count == 1 { singular } else { plural })
+}
+
+/// One-line outcome gist for a tool row ("Read Cargo.toml", "cargo check").
+///
+/// Read/Edit rows take the shared header verbs plus the argument's basename —
+/// a bare filename cannot tell read from write, so only these two categories
+/// take a verb. Run/Search rows render the command or query bare, matching
+/// their `CommandExecution`/`WebSearch` siblings. Anything without a usable
+/// object (missing, empty, or mistyped args, `Other` tools) keeps the raw
+/// tool name, never worse than today.
+pub(crate) fn tool_row_gist(tool: &ToolInvocationItem) -> String {
+    let args = tool.arguments.as_ref();
+    let category = ToolCategory::from_tool_name(&tool.tool_name, args);
+    let gist = match category {
+        ToolCategory::Read => args.and_then(read_object).map(|object| format!("Read {object}")),
+        ToolCategory::Edit => args.and_then(file_basename).map(|base| format!("Edited {base}")),
+        ToolCategory::Run => args.and_then(command_text),
+        ToolCategory::Search => args.and_then(|args| first_string(args, &["query", "pattern"])),
+        ToolCategory::Other => None,
+    };
+    gist.unwrap_or_else(|| tool.tool_name.clone())
+}
+
+/// File basename, else the bare URL fetch tools carry. URLs keep the host:
+/// a basename would mislead ("page" from two different sites).
+fn read_object(args: &serde_json::Value) -> Option<String> {
+    file_basename(args).or_else(|| first_string(args, &["url"]))
+}
+
+/// Basename of the path argument, scanning keys in service order
+/// (`primary_path_arg` in `vtcode-core/src/tools/safety_gateway/file_targets.rs`).
+fn file_basename(args: &serde_json::Value) -> Option<String> {
+    first_string(args, &["path", "file_path", "filepath", "target_path"])
+        .as_deref()
+        .and_then(basename)
+        .map(str::to_string)
+}
+
+/// Command text in service display order (`DISPLAY_COMMAND_KEYS` in
+/// `vtcode-core/src/tools/command_args/mod.rs`), plus the `command` array
+/// form joined with spaces.
+fn command_text(args: &serde_json::Value) -> Option<String> {
+    if let Some(text) = first_string(args, &["command", "cmd", "raw_command", "bash_command"]) {
+        return Some(text);
+    }
+    let parts: Vec<&str> = args
+        .get("command")?
+        .as_array()?
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    let joined = parts.join(" ");
+    (!joined.trim().is_empty()).then(|| joined.trim().to_string())
+}
+
+/// First non-blank string under the given keys, trimmed.
+fn first_string(args: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    keys.iter()
+        .filter_map(|key| args.get(key).and_then(serde_json::Value::as_str))
+        .find_map(|text| {
+            let trimmed = text.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        })
+}
+
+/// Last non-empty `/`- or `\`-separated segment. Plain splitting, not
+/// `Path`: arg values are display strings, and `Path` separators are
+/// platform-bound.
+fn basename(path: &str) -> Option<&str> {
+    path.split(['/', '\\']).rfind(|segment| !segment.is_empty())
 }

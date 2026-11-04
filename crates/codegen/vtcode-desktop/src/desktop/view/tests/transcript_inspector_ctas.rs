@@ -332,6 +332,36 @@ fn activity_group_header_summarizes_tool_verbs(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn expanded_tool_rows_show_argument_gists_not_registry_names(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem};
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let invocation = |id: &str, tool_name: &str, arguments: serde_json::Value| ThreadItem {
+            context: None,
+            id: id.into(),
+            details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+                tool_name: tool_name.into(),
+                arguments: Some(arguments),
+                tool_call_id: None,
+                status: ToolCallStatus::Completed,
+                outcome: None,
+            })),
+        };
+        view.update(cx, |view, _| {
+            view.update_runtime_item(&invocation("read-1", "read_file", serde_json::json!({"path": "src/Cargo.toml"})));
+            view.update_runtime_item(&invocation("exec-1", "exec_command", serde_json::json!({"cmd": "cargo check"})));
+        });
+        window.render_frame(cx);
+        window.click("activity-group-read-1", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("tool-read-1").label(), Some("Show details for Read Cargo.toml, status: completed"));
+        assert_eq!(window.find("tool-exec-1").label(), Some("Show details for cargo check, status: completed"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn activity_group_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

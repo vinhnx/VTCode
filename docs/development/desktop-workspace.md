@@ -471,8 +471,10 @@ recommended/default model group.
 ### Conversation activity
 
 Consecutive tool calls appear as one expandable activity summary between assistant messages.
-The summary includes action counts and running/failed counts; assistant commentary always breaks a group.
-Expand the summary to see compact action rows, then activate a row to show its output. Long action titles
+The summary names what happened as a verb phrase ("Read 2 files · Ran 1 command") with running/failed
+counts, falling back to the count label when no verb applies; assistant commentary always breaks a group.
+Expand the summary to see compact action rows titled by outcome ("Read Cargo.toml", "cargo check"),
+then activate a row to show its output. Long action titles
 truncate visually and remain available in tooltips and accessible names. Command/tool output uses the
 configured code font, with structured event details as a fallback when plain output is unavailable.
 Streaming updates retain group and detail expansion. Collapsing activity pauses automatic tail following,
