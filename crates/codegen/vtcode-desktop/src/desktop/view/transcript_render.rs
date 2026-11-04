@@ -445,7 +445,9 @@ impl DesktopView {
             .when(item.is_tool(), |row| row.pb_1())
             .when(item.is_user() || item.is_assistant(), |row| row.pb_6())
             .when(!item.is_tool() && !item.is_user() && !item.is_assistant(), |row| row.pb_3())
-            .when(item.is_assistant(), |row| {
+            // Hover tracking covers every row with revealable actions:
+            // assistant copy plus the group, diff, and tool-row jumps.
+            .when(item.is_assistant() || item.is_tool() || item.is_diff(), |row| {
                 row.on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
                     let next = hovered.then(|| message_id.clone());
                     if view.hovered_message != next {
@@ -456,6 +458,15 @@ impl DesktopView {
             })
             .child(content)
             .into_any_element()
+    }
+
+    /// Whether a transcript row's secondary actions are currently revealed:
+    /// mouse hover or keyboard highlight (row clicks, Up/Down navigation, and
+    /// palette jumps all anchor it). Toggles, labels, and status always
+    /// render; only inspector-navigation jumps recede, and every destination
+    /// stays reachable through the inspector toggle plus tab keys.
+    pub(super) fn transcript_row_revealed(&self, id: &str) -> bool {
+        self.hovered_message.as_deref() == Some(id) || self.keyboard_focused_message.as_deref() == Some(id)
     }
 
     fn render_transcript_item(
@@ -543,8 +554,7 @@ impl DesktopView {
                 // slot keeps the xsmall button height so rows never reflow.
                 // Keyboard and screen-reader users can also copy through the
                 // palette command.
-                let revealed = self.hovered_message.as_deref() == Some(item.id.as_str())
-                    || self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
+                let revealed = self.transcript_row_revealed(item.id.as_str());
                 message.footer(
                     MessageFooter::new().child(
                         div()
@@ -704,7 +714,13 @@ impl DesktopView {
                                         super::super::notifications::copied_to_clipboard(window, app);
                                     }),
                             )
-                            .when(item.has_output(), |row| row.child(Self::tool_output_cta(item, cx))),
+                            .when(item.has_output(), |row| {
+                                row.child(Self::tool_output_cta(
+                                    item,
+                                    self.transcript_row_revealed(item.id.as_str()),
+                                    cx,
+                                ))
+                            }),
                     )
                     .child(
                         div()
@@ -780,7 +796,7 @@ impl DesktopView {
                         cx.notify();
                     })),
             )
-            .child(Self::diff_changes_cta(&item.id, cx));
+            .child(Self::diff_changes_cta(&item.id, self.transcript_row_revealed(item.id.as_str()), cx));
 
         let header = div()
             .w_full()

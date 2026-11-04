@@ -40,6 +40,8 @@ fn activity_group_cta_opens_activity_without_toggling_group(cx: &mut TestAppCont
         assert!(window.try_find("activity-group-open-output-read").is_none());
         assert!(window.try_find("activity-group-open-utilities-read").is_none());
 
+        window.hover("transcript-row-read", cx);
+        window.render_frame(cx);
         window.click("activity-group-open-activity-read", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open, "CTA opens a closed inspector");
@@ -108,6 +110,8 @@ fn activity_group_cta_exits_zen_to_reveal_inspector(cx: &mut TestAppContext) {
         assert!(window.try_find("activity-group-open-output-read").is_none());
         assert!(window.try_find("activity-group-open-utilities-read").is_none());
 
+        window.hover("transcript-row-read", cx);
+        window.render_frame(cx);
         window.click("activity-group-open-activity-read", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).zen_mode, "explicit reveal exits zen");
@@ -177,6 +181,20 @@ fn tool_output_cta_selects_that_tool_output_and_hides_without_output(cx: &mut Te
 
         window.click("tool-second", cx);
         window.render_frame(cx);
+        // The row click focuses and hovers, so clear both to observe the
+        // rest state: the jump recedes but the copy action stays (it has no
+        // palette path).
+        view.update(cx, |view, _| view.keyboard_focused_message = None);
+        window.hover("transcript-scroll", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("tool-open-output-second").is_some(), "jump keeps its space");
+        assert!(!window.find("tool-open-output-second").visible(), "jump hides at rest");
+        assert!(window.find("copy-tool-output-second").visible(), "copy stays visible");
+        let row = window.find("transcript-row-second").bounds();
+        window.hover("transcript-row-second", cx);
+        window.render_frame(cx);
+        assert!(window.find("tool-open-output-second").visible(), "hover reveals the jump");
+        assert_eq!(window.find("transcript-row-second").bounds(), row, "reveal must not reflow the row");
         let cta = window.find("tool-open-output-second");
         assert_eq!(cta.role(), Some(gpui_kit::Role::Button));
         assert_eq!(cta.label(), Some("View output for Second command"));
@@ -246,6 +264,8 @@ fn diff_card_cta_selects_first_previewable_file_or_just_opens_changes(cx: &mut T
         assert_eq!(window.find("diff-open-changes-edits").role(), Some(gpui_kit::Role::Button));
         assert_eq!(window.find("diff-open-changes-edits").label(), Some("Changes"));
 
+        window.hover("transcript-row-edits", cx);
+        window.render_frame(cx);
         window.click("diff-open-changes-edits", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
@@ -258,6 +278,12 @@ fn diff_card_cta_selects_first_previewable_file_or_just_opens_changes(cx: &mut T
             view.selected_change = None;
             view.inspector_open = false;
         });
+        // Settle the close, then reveal through keyboard focus: hover
+        // coverage lives in the dedicated recede tests, and this flow only
+        // needs the jump reachable for the no-preview fallback.
+        window.render_frame(cx);
+        view.update(cx, |view, _| view.keyboard_focused_message = Some("pending".into()));
+        window.render_frame(cx);
         window.click("diff-open-changes-pending", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
@@ -295,10 +321,93 @@ fn activity_group_header_summarizes_tool_verbs(cx: &mut TestAppContext) {
             Some("Expand Read 1 file · Ran 1 command · 1 other action · 1 failed")
         );
         // The single inspector entry keeps working beside the verb phrase.
+        window.hover("transcript-row-read-1", cx);
+        window.render_frame(cx);
         window.click("activity-group-open-activity-read-1", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
         assert_eq!(view.read(cx).inspector_tab, InspectorTab::Activity);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn activity_group_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "read".into(),
+                "tool".into(),
+                "Read Cargo.toml".into(),
+                "completed".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "exec".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "completed".into(),
+            ));
+        });
+        window.render_frame(cx);
+        // Present but hidden at rest; the toggle stays visible.
+        assert!(window.try_find("activity-group-open-activity-read").is_some(), "receded CTA keeps its space");
+        assert!(!window.find("activity-group-open-activity-read").visible(), "CTA hides at rest");
+        assert!(window.find("activity-group-read").visible(), "toggle stays visible");
+        let row = window.find("transcript-row-read").bounds();
+        // Hover reveals without reflow.
+        window.hover("transcript-row-read", cx);
+        window.render_frame(cx);
+        assert!(window.find("activity-group-open-activity-read").visible(), "hover reveals the CTA");
+        assert_eq!(window.find("transcript-row-read").bounds(), row, "reveal must not reflow the row");
+        assert_eq!(view.read(cx).hovered_message.as_deref(), Some("read"));
+        // Leaving hides again.
+        window.hover("transcript-scroll", cx);
+        window.render_frame(cx);
+        assert!(!window.find("activity-group-open-activity-read").visible(), "leaving hides the CTA");
+        assert!(view.read(cx).hovered_message.is_none());
+        // Keyboard highlight reveals without the mouse.
+        view.update(cx, |view, _| view.keyboard_focused_message = Some("read".into()));
+        window.render_frame(cx);
+        assert!(window.find("activity-group-open-activity-read").visible(), "focus reveals the CTA");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn diff_changes_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut edits = TranscriptItem::new("edits".into(), "diff".into(), "Edits".into(), String::new());
+            edits.diff = Some(super::super::DiffCard {
+                files: vec![super::super::DiffFile {
+                    path: "src/app.rs".into(),
+                    kind: super::super::DiffFileKind::Update,
+                }],
+                additions: Some(1),
+                deletions: Some(1),
+                incomplete: false,
+                failed: false,
+                patch: "@@ -1 +1 @@\n-old\n+new\n".into(),
+            });
+            view.transcript.push(edits);
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("diff-open-changes-edits").is_some(), "receded jump keeps its space");
+        assert!(!window.find("diff-open-changes-edits").visible(), "jump hides at rest");
+        assert!(window.find("diff-edits").visible(), "toggle stays visible");
+        let row = window.find("transcript-row-edits").bounds();
+        window.hover("transcript-row-edits", cx);
+        window.render_frame(cx);
+        assert!(window.find("diff-open-changes-edits").visible(), "hover reveals the jump");
+        assert_eq!(window.find("transcript-row-edits").bounds(), row, "reveal must not reflow the row");
+        window.hover("transcript-scroll", cx);
+        window.render_frame(cx);
+        assert!(!window.find("diff-open-changes-edits").visible(), "leaving hides the jump");
+        view.update(cx, |view, _| view.keyboard_focused_message = Some("edits".into()));
+        window.render_frame(cx);
+        assert!(window.find("diff-open-changes-edits").visible(), "focus reveals the jump");
     })
     .unwrap();
 }

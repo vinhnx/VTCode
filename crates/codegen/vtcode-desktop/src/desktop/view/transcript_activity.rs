@@ -111,39 +111,43 @@ impl DesktopView {
             .items_center()
             .gap_1()
             .child(toggle)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .flex_shrink_0()
-                    .child(Self::activity_group_cta(&head.id, cx)),
-            )
+            .child(div().flex().items_center().flex_shrink_0().child(Self::activity_group_cta(
+                &head.id,
+                self.transcript_row_revealed(head.id.as_str()),
+                cx,
+            )))
             .into_any_element()
     }
 
     /// Single transcript entry point into the inspector, landing on Activity:
     /// the tab that lists this group's rows with their per-row output actions.
     /// The label reuses the inspector tab vocabulary so both surfaces name the
-    /// same destination.
-    fn activity_group_cta(head_id: &str, cx: &mut Context<Self>) -> impl IntoElement {
+    /// same destination. Recedes until the row is hovered or keyboard
+    /// highlighted, keeping its space so the toggle never re-truncates.
+    fn activity_group_cta(head_id: &str, revealed: bool, cx: &mut Context<Self>) -> impl IntoElement {
         desktop_button(format!("activity-group-open-activity-{head_id}"))
             .label(InspectorTab::Activity.label())
             .ghost()
             .xsmall()
+            .when(!revealed, |button| button.invisible())
+            .tab_stop(false)
             .on_click(cx.listener(move |view, _, _, cx| view.open_inspector_tab(InspectorTab::Activity, cx)))
     }
 
     /// Jump button beside an expanded tool row's copy action, opening that
     /// exact capture in Output. Same affordance as the Activity tab's per-row
     /// output action; callers gate on [`TranscriptItem::has_output`] so the
-    /// CTA never lands on an unrelated fallback.
-    pub(super) fn tool_output_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
+    /// CTA never lands on an unrelated fallback. Recedes until the row is
+    /// hovered or keyboard highlighted, keeping its space.
+    pub(super) fn tool_output_cta(item: &TranscriptItem, revealed: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let output_id = item.id.clone();
         let output_title = item.title.to_string();
         desktop_button(format!("tool-open-output-{}", item.id))
             .icon(IconName::Terminal)
             .ghost()
             .xsmall()
+            .when(!revealed, |button| button.invisible())
+            .tab_stop(false)
             .accessibility_label(
                 rust_i18n::t!("app.inspector.view_output_for", title = output_title.as_str()).to_string(),
             )
@@ -156,13 +160,16 @@ impl DesktopView {
     /// Jump button in a diff card header, opening Changes on the change-set's
     /// first previewable file, or the tab alone when nothing previews. The
     /// target resolves at click time from the live transcript (like the
-    /// copy-patch action), so a rebuilt projection cannot strand it.
-    pub(super) fn diff_changes_cta(item_id: &str, cx: &mut Context<Self>) -> impl IntoElement {
+    /// copy-patch action), so a rebuilt projection cannot strand it. Recedes
+    /// until the row is hovered or keyboard highlighted, keeping its space.
+    pub(super) fn diff_changes_cta(item_id: &str, revealed: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let id = item_id.to_string();
         desktop_button(format!("diff-open-changes-{item_id}"))
             .label(rust_i18n::t!("app.inspector.tab_changes").to_string())
             .ghost()
             .xsmall()
+            .when(!revealed, |button| button.invisible())
+            .tab_stop(false)
             .on_click(cx.listener(move |view, _, _, cx| {
                 let open_path = view
                     .transcript
