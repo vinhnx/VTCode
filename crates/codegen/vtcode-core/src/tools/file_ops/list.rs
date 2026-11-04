@@ -15,6 +15,33 @@ use tracing::{info, warn};
 mod metrics;
 mod search;
 mod tree;
+mod walk_entry;
+
+/// One directory entry reduced to what a listing response needs.
+///
+/// A listing returns a page (20 items by default) out of a directory that may
+/// hold thousands, so entries stay in this cheap form until the page is known.
+/// Building a `serde_json` object per entry meant allocating and then dropping
+/// thousands of maps to emit a handful.
+struct ListEntry {
+    name: String,
+    relative_path: String,
+    is_dir: bool,
+}
+
+impl ListEntry {
+    /// Convert one entry into its response object.
+    ///
+    /// Fields stay identical to the previous eager form: basic listings never
+    /// carried `modified`, so there is nothing to add back for `detailed`.
+    fn to_json(&self) -> Value {
+        json!({
+            "name": self.name.as_str(),
+            "path": self.relative_path.as_str(),
+            "type": if self.is_dir { "directory" } else { "file" },
+        })
+    }
+}
 
 pub(super) fn compile_list_glob(input: &ListInput) -> Result<Option<Pattern>> {
     let Some(pattern) = input
@@ -162,7 +189,7 @@ impl FileOpsTool {
         let name_matcher = ListNameMatcher::new(input);
 
         // Pre-allocate with reasonable estimate for directory entries
-        let mut all_items = Vec::with_capacity(32);
+        let mut all_items: Vec<ListEntry> = Vec::with_capacity(32);
         if base_is_file {
             let file_name = base
                 .file_name()
@@ -183,11 +210,7 @@ impl FileOpsTool {
                     "pattern": input.glob_pattern.as_deref().unwrap_or("")
                 }));
             }
-            all_items.push(json!({
-                "name": file_name,
-                "path": relative_path,
-                "type": "file"
-            }));
+            all_items.push(ListEntry { name: file_name, relative_path, is_dir: false });
         } else if base_is_dir {
             let mut entries = tokio::fs::read_dir(&base).await.with_context(|| {
                 format!("Failed to read directory: {}. Workspace root: {}", input.path, self.workspace_root.display())
@@ -208,27 +231,26 @@ impl FileOpsTool {
                     continue;
                 }
 
+                // Read the entry type once: it classifies the item, feeds the
+                // ignore check (avoids a `stat` inside the matcher), and lets
+                // path rendering skip a redundant `realpath`.
+                let file_type = entry
+                    .file_type()
+                    .await
+                    .with_context(|| format!("Failed to read file type for: {}", path.display()))?;
+                let is_dir = file_type.is_dir();
+
                 // Batch check using shared guard instead of repeated lock acquisition
-                if gitignore.should_exclude(&path) {
+                if gitignore.should_exclude_with_file_type(&path, Some(file_type)) {
                     continue;
                 }
 
-                let is_dir = entry
-                    .file_type()
-                    .await
-                    .with_context(|| format!("Failed to read file type for: {}", path.display()))?
-                    .is_dir();
-
-                let relative_path = self.relative_path_json(&path);
+                let relative_path = self.relative_path_json_for_entry(&path, Some(file_type));
                 if !list_entry_matches(&name_matcher, &relative_path, &name, list_glob.as_ref()) {
                     continue;
                 }
 
-                all_items.push(json!({
-                    "name": name,
-                    "path": relative_path,
-                    "type": if is_dir { "directory" } else { "file" }
-                }));
+                all_items.push(ListEntry { name, relative_path, is_dir });
             }
         } else {
             warn!(
@@ -249,15 +271,16 @@ impl FileOpsTool {
             input.per_page.unwrap_or(20).max(1), // Keep bounded but avoid overly sparse default pages
         );
         let start = (page - 1).saturating_mul(per_page);
-        let end = (start + per_page).min(capped_total);
+        // `page`/`per_page` are user-supplied; a plain add overflows and release
+        // keeps `overflow-checks = true`, so saturate instead of aborting.
+        let end = start.saturating_add(per_page).min(capped_total);
         let has_more = end < capped_total;
         let has_overflow = all_items.len() > input.max_items;
 
-        let mut page_items = if start < end {
-            all_items[start..end].to_vec()
-        } else {
-            vec![]
-        };
+        // Only this page is converted to JSON; the rest of the directory is
+        // dropped as plain structs.
+        let page_entries: &[ListEntry] = if start < end { &all_items[start..end] } else { &[] };
+        let page_items: Vec<Value> = page_entries.iter().map(ListEntry::to_json).collect();
 
         // Respect response_format
         let concise = input
@@ -265,13 +288,6 @@ impl FileOpsTool {
             .as_deref()
             .map(|s| s.eq_ignore_ascii_case("concise"))
             .unwrap_or(true);
-        if concise {
-            for obj in page_items.iter_mut() {
-                if let Some(map) = obj.as_object_mut() {
-                    map.remove("modified");
-                }
-            }
-        }
 
         // Implement AGENTS.md pattern for context optimization: show summary with sample
         let guidance = if has_overflow {
@@ -279,24 +295,10 @@ impl FileOpsTool {
             Some(format!("[+{} more items]", all_items.len() - input.max_items))
         } else if all_items.len() > 50 && page == 1 {
             // For large directories on first page, show summary pattern
-            let file_count = page_items
-                .iter()
-                .filter(|item| {
-                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("file")
-                })
-                .count();
-            let dir_count = page_items
-                .iter()
-                .filter(|item| {
-                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("directory")
-                })
-                .count();
+            let file_count = page_entries.iter().filter(|entry| !entry.is_dir).count();
+            let dir_count = page_entries.iter().filter(|entry| entry.is_dir).count();
 
-            let mut sample_names = page_items
-                .iter()
-                .take(5)
-                .filter_map(|item| item.as_object().and_then(|obj| obj.get("name")).and_then(|n| n.as_str()))
-                .collect::<Vec<_>>();
+            let mut sample_names: Vec<&str> = page_entries.iter().take(5).map(|entry| entry.name.as_str()).collect();
 
             if sample_names.len() > 3 {
                 sample_names.truncate(3);
@@ -381,7 +383,9 @@ impl FileOpsTool {
         let (page, per_page) = (input.page.unwrap_or(1).max(1), input.per_page.unwrap_or(50).max(1));
         let total_capped = total_count.min(input.max_items);
         let start = (page - 1).saturating_mul(per_page);
-        let end = (start + per_page).min(total_capped);
+        // `page`/`per_page` are user-supplied; saturate so an extreme page cannot
+        // abort the process through overflow checks.
+        let end = start.saturating_add(per_page).min(total_capped);
         let has_more = end < total_capped;
 
         // Log pagination operation details

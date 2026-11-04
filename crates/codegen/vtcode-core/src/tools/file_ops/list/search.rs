@@ -1,3 +1,4 @@
+use super::walk_entry::{walk_entries, walk_first_matching};
 use super::{FileOpsTool, ListNameMatcher, compile_list_glob, list_entry_matches};
 use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::grep_file::GrepSearchInput;
@@ -7,8 +8,6 @@ use crate::types::CompactStr;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use tokio::task::spawn_blocking;
-use vtcode_commons::walk::build_default_walker;
 
 impl FileOpsTool {
     /// Execute recursive file search
@@ -36,27 +35,12 @@ impl FileOpsTool {
         let mut count = 0;
         let mut matched_total = 0;
 
-        let walker_entries: Vec<(PathBuf, bool, usize)> = spawn_blocking({
-            let search_path = search_path.clone();
-            move || {
-                let mut entries = Vec::new();
-                for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
-                    let entry = match entry {
-                        Ok(e) => e,
-                        Err(_) => continue,
-                    };
-                    let path = entry.path().to_path_buf();
-                    let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
-                    let depth = entry.depth();
-                    entries.push((path, is_dir, depth));
-                }
-                entries
-            }
-        })
-        .await
-        .context("Failed to spawn walker task")?;
+        let walker_entries = walk_entries(search_path.clone()).await?;
 
-        for (path, is_dir, depth) in walker_entries {
+        for entry in walker_entries {
+            let path = entry.path;
+            let depth = entry.depth;
+            let is_dir = entry.is_dir;
             if self.should_exclude(&path).await {
                 continue;
             }
@@ -66,7 +50,7 @@ impl FileOpsTool {
                 continue;
             }
 
-            let relative_path = self.relative_path_json(&path);
+            let relative_path = self.relative_path_json_for_entry(&path, entry.file_type);
             if !list_entry_matches(&name_matcher, &relative_path, &name, list_glob.as_ref()) {
                 continue;
             }
@@ -120,46 +104,33 @@ impl FileOpsTool {
             Some(CompactStr::from(file_name.to_lowercase()))
         };
 
-        let walker_entries: Vec<(PathBuf, bool)> = spawn_blocking({
-            let search_path = search_path.clone();
-            move || {
-                let mut entries = Vec::new();
-                for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
-                    let entry = match entry {
-                        Ok(e) => e,
-                        Err(_) => continue,
-                    };
-                    let path = entry.path().to_path_buf();
-                    let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
-                    entries.push((path, is_dir));
-                }
-                entries
-            }
-        })
-        .await
-        .context("Failed to spawn walker task")?;
-
-        for (path, is_dir) in walker_entries {
-            if self.should_exclude(&path).await {
-                continue;
-            }
-
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
+        // This mode answers with one path, so the walk stops at the first
+        // surviving match instead of collecting the whole tree. Exclusion is an
+        // independent per-entry predicate, so evaluating it inside the walk
+        // cannot change which entry wins; the ignore snapshot is taken once and
+        // moved in so no lock is held across the traversal.
+        let gitignore = crate::utils::vtcodegitignore::snapshot_global_vtcode_gitignore().await;
+        let wanted = file_name.clone();
+        let found = walk_first_matching(search_path.clone(), move |entry| {
+            let name = entry.file_name();
             let matches = match &wanted_lower {
-                Some(wanted) => name.to_lowercase().as_str() == wanted.as_str(),
-                None => name == file_name.as_str(),
+                Some(lowered) => name.to_string_lossy().to_lowercase() == lowered.as_str(),
+                None => name == std::ffi::OsStr::new(wanted.as_str()),
             };
+            matches && !gitignore.should_exclude_with_file_type(entry.path(), entry.file_type())
+        })
+        .await?;
 
-            if matches {
-                return Ok(json!({
-                    "success": true,
-                    "found": true,
-                    "name": name,
-                    "path": self.relative_path_json(&path),
-                    "type": if is_dir { "directory" } else { "file" },
-                    "mode": "find_name"
-                }));
-            }
+        if let Some(entry) = found {
+            let path = entry.path;
+            return Ok(json!({
+                "success": true,
+                "found": true,
+                "name": path.file_name().unwrap_or_default().to_string_lossy(),
+                "path": self.relative_path_json_for_entry(&path, entry.file_type),
+                "type": if entry.is_dir { "directory" } else { "file" },
+                "mode": "find_name"
+            }));
         }
 
         Ok(json!({
@@ -246,12 +217,14 @@ impl FileOpsTool {
             }
 
             if tokio::fs::try_exists(&absolute_path).await.unwrap_or(false) {
+                // Render through the shared helper rather than a bare
+                // `strip_prefix(workspace_root)`: grep reports resolved paths,
+                // and a workspace reached through an alias (`/var` vs macOS's
+                // `/private/var`) would otherwise stay absolute here while the
+                // same file renders relative in `list` mode.
                 items.push(json!({
                     "name": absolute_path.file_name().unwrap_or_default().to_string_lossy(),
-                    "path": absolute_path
-                        .strip_prefix(&self.workspace_root)
-                        .unwrap_or(&absolute_path)
-                        .to_string_lossy(),
+                    "path": self.relative_path_json(&absolute_path),
                     "type": "file",
                     "pattern_found": true
                 }));

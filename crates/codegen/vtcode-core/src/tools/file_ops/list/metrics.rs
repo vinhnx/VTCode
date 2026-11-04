@@ -5,7 +5,7 @@ use crate::tools::types::ListInput;
 use anyhow::{Result, anyhow};
 use hashbrown::HashSet;
 use serde_json::{Value, json};
-use std::path::Path;
+use std::path::PathBuf;
 use vtcode_commons::walk::build_walker_single_threaded;
 
 impl FileOpsTool {
@@ -27,18 +27,29 @@ impl FileOpsTool {
             .as_ref()
             .map(|exts| exts.iter().map(|ext| normalize_extension(ext)).collect::<HashSet<_>>());
 
-        let path_has_hidden = |path: &Path| {
-            path.components().any(|component| {
-                let value = component.as_os_str().to_string_lossy();
-                value.starts_with('.') && value != "." && value != ".."
-            })
-        };
+        // Workspace-relative rendering must run inside the blocking scan, and it
+        // needs the resolved root: the walker reports paths through the
+        // canonical alias (`/private/var/...` on macOS) while `workspace_root`
+        // may keep the user-facing form (`/var/...`). Hand-rolling
+        // `strip_prefix(workspace_root)` silently failed on that mismatch and
+        // then treated the aliased prefix as a hidden component.
+        let path_display = self.path_display.clone();
+        let include_hidden = input.include_hidden;
 
         // Perform directory traversal in a blocking task to avoid blocking the async executor
         let search_root_clone = search_root.clone();
-        let workspace_root = self.workspace_root.clone();
-        let include_hidden = input.include_hidden;
         let extension_filter_clone = extension_filter.clone();
+
+        /// Any `.`-prefixed component other than `.` and `..` marks the path hidden.
+        ///
+        /// Walks components rather than splitting text so the platform separator
+        /// is handled, and inspects raw bytes so no allocation is paid per entry.
+        fn has_hidden_component(relative: &std::path::Path) -> bool {
+            relative.components().any(|component| {
+                let bytes = component.as_os_str().as_encoded_bytes();
+                bytes.first() == Some(&b'.') && bytes != b"." && bytes != b".."
+            })
+        }
 
         let raw_entries = tokio::task::spawn_blocking(move || {
             let mut entries = Vec::new();
@@ -52,11 +63,20 @@ impl FileOpsTool {
                 };
                 let path = entry.path();
 
-                if !path.is_file() {
+                // A regular file needs no `is_file()` probe: the dirent type
+                // from `readdir` already settled it, saving one stat for the
+                // common case. Symlinks and special files keep the original
+                // follow-then-decide gate, because only the target can say
+                // whether they are a file.
+                let file_type = entry.file_type();
+                if !file_type.is_some_and(|file_type| file_type.is_file()) && !path.is_file() {
                     continue;
                 }
 
-                if !include_hidden && path_has_hidden(path.strip_prefix(&workspace_root).unwrap_or(path)) {
+                // Render once: the same relative form feeds both the hidden
+                // check and the response path.
+                let relative_path = PathBuf::from(path_display.render_entry(path, file_type));
+                if !include_hidden && has_hidden_component(&relative_path) {
                     continue;
                 }
 
@@ -81,7 +101,6 @@ impl FileOpsTool {
                     continue;
                 }
 
-                let relative_path = path.strip_prefix(&workspace_root).unwrap_or(path).to_path_buf();
                 let modified = metadata
                     .modified()
                     .ok()
@@ -96,13 +115,35 @@ impl FileOpsTool {
         .await
         .map_err(|e| anyhow!("Blocking task join error: {e}"))?;
 
-        // Filter excluded paths asynchronously
-        let mut entries = Vec::new();
+        // AGENTS.md requires max 5 items for context optimization.
+        let effective_max = input.max_items.min(5);
+
+        // Keep only the top `effective_max` rows instead of collecting and
+        // sorting every file in the tree: the answer is a bounded ranking, and
+        // the caller only needs a count of the rest.
+        let mut entries: Vec<(u64, PathBuf, Option<u64>)> = Vec::with_capacity(effective_max.min(8));
+        let mut total_entries = 0usize;
         for (size, rel_path, modified, abs_path) in raw_entries {
-            if self.should_exclude(&abs_path).await {
+            // Every row here already passed the `is_file` gate above, so the
+            // directory flag is known: pass it instead of letting the matcher
+            // stat each path again.
+            if self.should_exclude_with_is_dir(&abs_path, false).await {
                 continue;
             }
-            entries.push((size, rel_path, modified));
+            total_entries += 1;
+
+            // Descending size, then ascending path — the same order the full
+            // sort produced, applied while inserting.
+            let position = entries
+                .iter()
+                .position(|(existing_size, existing_path, _)| {
+                    size > *existing_size || (size == *existing_size && rel_path < *existing_path)
+                })
+                .unwrap_or(entries.len());
+            if position < effective_max {
+                entries.insert(position, (size, rel_path, modified));
+                entries.truncate(effective_max);
+            }
         }
 
         if entries.is_empty() {
@@ -119,16 +160,12 @@ impl FileOpsTool {
             }));
         }
 
-        entries.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
-
-        // AGENTS.md requires max 5 items for context optimization
-        let effective_max = input.max_items.min(5);
-        let selected_total = entries.len().min(effective_max);
-        let has_overflow = entries.len() > effective_max;
-        let total_entries = entries.len();
+        // Already ordered by the bounded insert above.
+        let selected_total = entries.len();
+        let has_overflow = total_entries > effective_max;
 
         let mut ranked = Vec::with_capacity(selected_total);
-        for (idx, (size, rel_path, modified)) in entries.into_iter().take(selected_total).enumerate() {
+        for (idx, (size, rel_path, modified)) in entries.into_iter().enumerate() {
             let name = rel_path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -169,5 +206,92 @@ impl FileOpsTool {
         }
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::grep_file::GrepSearchManager;
+    use crate::tools::traits::Tool;
+    use serde_json::json;
+    use std::path::Path;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    fn make_tool(workspace: &TempDir) -> FileOpsTool {
+        FileOpsTool::new(
+            workspace.path().to_path_buf(),
+            Arc::new(GrepSearchManager::new(workspace.path().to_path_buf())),
+        )
+    }
+
+    fn write_sized(dir: &Path, name: &str, size: usize) {
+        std::fs::write(dir.join(name), vec![b'x'; size]).expect("fixture file");
+    }
+
+    fn ranked(result: &Value) -> Vec<(String, u64)> {
+        result["items"]
+            .as_array()
+            .expect("items array")
+            .iter()
+            .map(|item| (item["name"].as_str().expect("name").to_string(), item["size"].as_u64().expect("size")))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn largest_ranks_by_size_desc_then_path_asc_and_caps_to_five() {
+        let workspace = TempDir::new().unwrap();
+        let scan = workspace.path().join("scan");
+        std::fs::create_dir(&scan).unwrap();
+
+        // Eight files; only the five largest may be returned.
+        write_sized(&scan, "tiny.txt", 1);
+        write_sized(&scan, "a.txt", 40);
+        write_sized(&scan, "b.txt", 40);
+        write_sized(&scan, "c.txt", 30);
+        write_sized(&scan, "d.txt", 20);
+        write_sized(&scan, "e.txt", 10);
+        write_sized(&scan, "f.txt", 5);
+        write_sized(&scan, "g.txt", 2);
+
+        let result = make_tool(&workspace)
+            .execute(json!({"path": "scan", "mode": "largest", "max_items": 20}))
+            .await
+            .unwrap();
+
+        // Equal sizes break ties by ascending path, and the cap holds at five.
+        assert_eq!(
+            ranked(&result),
+            vec![
+                ("a.txt".to_string(), 40),
+                ("b.txt".to_string(), 40),
+                ("c.txt".to_string(), 30),
+                ("d.txt".to_string(), 20),
+                ("e.txt".to_string(), 10),
+            ]
+        );
+        assert_eq!(result["count"], 5);
+        // The reported total counts every candidate, not just the kept page.
+        assert_eq!(result["total"], 5);
+        assert_eq!(result["has_more"], false);
+        assert_eq!(result["overflow"], "[+3 more items]");
+    }
+
+    #[tokio::test]
+    async fn largest_skips_zero_byte_and_directory_entries() {
+        let workspace = TempDir::new().unwrap();
+        let scan = workspace.path().join("scan");
+        std::fs::create_dir(&scan).unwrap();
+        std::fs::create_dir(scan.join("subdir")).unwrap();
+        write_sized(&scan, "empty.txt", 0);
+        write_sized(&scan, "kept.txt", 7);
+
+        let result = make_tool(&workspace)
+            .execute(json!({"path": "scan", "mode": "largest"}))
+            .await
+            .unwrap();
+
+        assert_eq!(ranked(&result), vec![("kept.txt".to_string(), 7)]);
     }
 }

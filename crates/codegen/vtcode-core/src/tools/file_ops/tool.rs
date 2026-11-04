@@ -12,15 +12,18 @@ use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde_json::Value;
+use std::fs::FileType;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use vtcode_commons::workspace_relative_display;
+use vtcode_commons::WorkspacePathDisplay;
 
 /// File operations tool with multiple modes
 #[derive(Clone)]
 pub struct FileOpsTool {
     pub(super) workspace_root: PathBuf,
     pub(super) canonical_workspace_root: PathBuf,
+    /// Root resolved once for entry rendering; listing loops must not re-resolve it per entry.
+    pub(super) path_display: WorkspacePathDisplay,
     pub(super) grep_manager: Arc<GrepSearchManager>,
     pub(super) edited_file_monitor: Arc<EditedFileMonitor>,
 }
@@ -38,10 +41,12 @@ impl FileOpsTool {
     ) -> Self {
         // grep_file manager is unused; keep param to avoid broad call-site churn
         let canonical_workspace_root = canonicalize_workspace(&workspace_root);
+        let path_display = WorkspacePathDisplay::new(&workspace_root);
 
         Self {
             workspace_root,
             canonical_workspace_root,
+            path_display,
             grep_manager: grep_search,
             edited_file_monitor,
         }
@@ -79,7 +84,45 @@ impl FileOpsTool {
     /// Get relative path as JSON value (for API responses)
     #[inline]
     pub(super) fn relative_path_json(&self, path: &Path) -> String {
-        workspace_relative_display(&self.workspace_root, path)
+        self.path_display.render(path)
+    }
+
+    /// Ignore check for a path whose directory-ness the caller already proved.
+    ///
+    /// Only for callers that established the flag from the target itself; use
+    /// [`Self::should_exclude_with_file_type`] when starting from a walk type.
+    pub(super) async fn should_exclude_with_is_dir(&self, path: &Path, is_dir: bool) -> bool {
+        crate::utils::vtcodegitignore::should_exclude_file_with_is_dir(path, is_dir).await
+    }
+
+    /// Ignore check that reuses a `FileType` the walker already returned.
+    ///
+    /// Symlinks still stat: their own type cannot tell us whether the target is
+    /// a directory, and the matcher has always judged the target.
+    pub(super) async fn should_exclude_with_file_type(&self, path: &Path, file_type: Option<FileType>) -> bool {
+        crate::utils::vtcodegitignore::should_exclude_file_with_file_type(path, file_type).await
+    }
+
+    /// Workspace-relative key for a path produced by a traversal.
+    ///
+    /// Keys are compared, not displayed, and tree building derives one per
+    /// walked directory, so this prefers the syscall-free lexical strip and
+    /// only resolves paths that do not lexically sit under either known root
+    /// (which then stay absolute, matching the pre-existing fallback).
+    pub(super) fn relative_key_json(&self, path: &Path) -> String {
+        self.path_display
+            .relative_lexical(path)
+            .unwrap_or_else(|| self.path_display.render(path))
+    }
+
+    /// Relative path for an entry whose own file type is already known.
+    ///
+    /// Only valid for entries reached through a traversal that cannot cross a
+    /// symlink (`read_dir` children of a canonical directory, or the shared
+    /// non-following walker). See [`WorkspacePathDisplay::render_entry`].
+    #[inline]
+    pub(super) fn relative_path_json_for_entry(&self, path: &Path, file_type: Option<FileType>) -> String {
+        self.path_display.render_entry(path, file_type)
     }
 }
 

@@ -1,14 +1,13 @@
 use super::FileOpsTool;
+use super::walk_entry::walk_entries;
 use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use hashbrown::HashMap;
 use serde_json::{Value, json};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::fs;
-use tokio::task::spawn_blocking;
-use vtcode_commons::walk::build_default_walker;
 
 /// Hard cap on emitted tree nodes. A depth-10 whole-repo walk otherwise
 /// serializes the entire workspace tree into one tool result and is then
@@ -33,28 +32,20 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
 
     let mut dir_contents: HashMap<String, Vec<(String, String)>> = HashMap::new(); // path -> [(name, type)]
 
-    // Collect walker entries in a blocking task, then process async
-    let walker_entries: Vec<(PathBuf, bool)> = spawn_blocking({
-        let search_path = search_path.clone();
-        move || {
-            let mut entries = Vec::new();
-            for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
-                let entry = match entry {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
-                let path = entry.path().to_path_buf();
-                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
-                entries.push((path, is_dir));
-            }
-            entries
-        }
-    })
-    .await
-    .context("Failed to spawn walker task")?;
+    let walker_entries = walk_entries(search_path.clone()).await?;
 
-    for (path, is_dir) in walker_entries {
-        if tool.should_exclude(&path).await {
+    // One pass builds the child map: the walker already enumerated every
+    // directory, so re-reading each one with `read_dir` doubled the syscalls
+    // for no new information.
+    for entry in walker_entries {
+        if entry.depth == 0 {
+            continue;
+        }
+        let path = entry.path;
+        let is_dir = entry.is_dir;
+        // The walker's own type is already in hand, so the ignore matcher does
+        // not need to stat again to learn `is_dir`.
+        if tool.should_exclude_with_file_type(&path, entry.file_type).await {
             continue;
         }
 
@@ -63,33 +54,18 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
             continue;
         }
 
-        if is_dir {
-            let mut children = Vec::with_capacity(16);
-            if let Ok(entries) = fs::read_dir(&path).await {
-                let mut entries_list = Vec::with_capacity(32);
-                let mut entry = entries;
-                while let Ok(Some(file_entry)) = entry.next_entry().await {
-                    let entry_name = file_entry.file_name().to_string_lossy().into_owned();
-                    if !input.include_hidden && entry_name.starts_with('.') {
-                        continue;
-                    }
-                    if tool.should_exclude(&file_entry.path()).await {
-                        continue;
-                    }
-                    let is_dir = file_entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false);
-
-                    entries_list.push((entry_name, if is_dir { "directory" } else { "file" }.to_string()));
-                }
-                children = entries_list;
-            }
-
-            let relative_path = path
-                .strip_prefix(&tool.workspace_root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .to_string();
-            dir_contents.insert(relative_path, children);
-        }
+        let Some(parent) = path.parent() else {
+            continue;
+        };
+        // Key by workspace-relative form through the shared helper: the walker
+        // reports resolved paths, so a bare `strip_prefix(workspace_root)`
+        // silently falls back to absolute keys when the workspace is reached
+        // through an alias (`/var` vs macOS's `/private/var`).
+        let parent_key = tool.relative_key_json(parent);
+        dir_contents
+            .entry(parent_key)
+            .or_insert_with(|| Vec::with_capacity(16))
+            .push((name.into_owned(), if is_dir { "directory" } else { "file" }.to_string()));
     }
 
     let mut budget = TREE_MAX_NODES;
@@ -121,11 +97,9 @@ fn build_tree_structure(
     budget: &mut usize,
     truncated: &mut bool,
 ) -> Value {
-    let relative_path = base_path
-        .strip_prefix(&tool.workspace_root)
-        .unwrap_or(base_path)
-        .to_string_lossy()
-        .to_string();
+    // Must match how `dir_contents` keys were produced, or an aliased workspace
+    // root (`/var` vs `/private/var`) looks up nothing and emits an empty tree.
+    let relative_path = tool.relative_key_json(base_path);
 
     let mut items = Vec::new();
 
@@ -147,11 +121,7 @@ fn build_tree_structure(
 
             let item = if entry_type == "directory" {
                 let sub_path = base_path.join(name);
-                let sub_relative_path = sub_path
-                    .strip_prefix(&tool.workspace_root)
-                    .unwrap_or(&sub_path)
-                    .to_string_lossy()
-                    .to_string();
+                let sub_relative_path = tool.relative_key_json(&sub_path);
 
                 *budget = budget.saturating_sub(1);
                 let sub_children = if let Some(sub_contents) = dir_contents.get(&sub_relative_path) {
@@ -186,14 +156,15 @@ fn build_tree_structure(
                     "name": name,
                     "type": entry_type,
                     "children": sub_children,
-                    "path": sub_path.to_string_lossy()
+                    "path": tool.relative_key_json(&sub_path)
                 })
             } else {
                 *budget = budget.saturating_sub(1);
+                let file_path = base_path.join(name);
                 json!({
                     "name": name,
                     "type": entry_type,
-                    "path": base_path.join(name).to_string_lossy()
+                    "path": tool.relative_key_json(&file_path)
                 })
             };
 
@@ -225,6 +196,60 @@ mod tests {
         }
         map.insert(String::new(), children);
         map
+    }
+
+    #[tokio::test]
+    async fn tree_mode_builds_children_from_a_single_walk() {
+        let workspace = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(workspace.path().join("src/nested")).unwrap();
+        std::fs::write(workspace.path().join("top.rs"), "x").unwrap();
+        std::fs::write(workspace.path().join("src/lib.rs"), "x").unwrap();
+        std::fs::write(workspace.path().join("src/nested/deep.rs"), "x").unwrap();
+
+        let tool = FileOpsTool::new(
+            workspace.path().to_path_buf(),
+            Arc::new(GrepSearchManager::new(workspace.path().to_path_buf())),
+        );
+        let tree = execute_tree_view(
+            &tool,
+            &ListInput {
+                path: String::new(),
+                max_items: 20,
+                page: None,
+                per_page: None,
+                response_format: None,
+                include_hidden: false,
+                glob_pattern: None,
+                mode: Some("tree".to_string()),
+                name_pattern: None,
+                content_pattern: None,
+                file_extensions: None,
+                case_sensitive: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let items = tree["tree_structure"].as_array().expect("tree array");
+        let names: Vec<&str> = items.iter().filter_map(|item| item["name"].as_str()).collect();
+        assert!(names.contains(&"top.rs"), "{names:?}");
+        assert!(names.contains(&"src"), "{names:?}");
+
+        // Nested children must be populated from the walk, not a second readdir.
+        let src = items.iter().find(|item| item["name"] == "src").expect("src node");
+        let children = src["children"].as_array().expect("src children");
+        let child_names: Vec<&str> = children.iter().filter_map(|c| c["name"].as_str()).collect();
+        assert!(child_names.contains(&"lib.rs"), "{child_names:?}");
+        assert!(child_names.contains(&"nested"), "{child_names:?}");
+        assert_eq!(src["type"], "directory");
+
+        // Emitted paths must be workspace-relative. The walker reports resolved
+        // paths while `workspace_root` keeps the tempdir spelling, so a bare
+        // `strip_prefix(workspace_root)` used to leak absolute paths here.
+        for item in items {
+            let path = item["path"].as_str().expect("path field");
+            assert!(!Path::new(path).is_absolute(), "tree path must be workspace-relative, got {path:?}");
+        }
     }
 
     #[test]

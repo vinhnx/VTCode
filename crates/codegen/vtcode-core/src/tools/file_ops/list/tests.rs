@@ -369,3 +369,28 @@ async fn find_by_name_matches_exact_case_and_folds_when_insensitive() {
     let unknown = find("nope.txt", None).await.unwrap();
     assert_eq!(unknown["found"], false);
 }
+
+#[tokio::test]
+async fn list_extreme_page_does_not_overflow() {
+    let workspace = TempDir::new().unwrap();
+    let directory = workspace.path().join("paging");
+    fs::create_dir(&directory).unwrap();
+    fs::write(directory.join("a.txt"), "fixture").unwrap();
+    let tool = make_tool(&workspace);
+
+    // `page` and `per_page` arrive straight from tool arguments as `usize`.
+    // `start + per_page` must saturate instead of panicking: release builds keep
+    // `overflow-checks = true`, so a plain add is an agent-reachable abort.
+    let result = tool
+        .execute(json!({"path": "paging", "page": usize::MAX, "per_page": 20}))
+        .await
+        .expect("extreme page must not panic");
+    assert_eq!(result["items"], json!([]));
+    assert_eq!(result["count"], 0);
+
+    let recursive = tool
+        .execute(json!({"path": "paging", "mode": "recursive", "page": usize::MAX, "per_page": usize::MAX}))
+        .await
+        .expect("extreme paging in recursive mode must not panic");
+    assert_eq!(recursive["count"], 0);
+}
