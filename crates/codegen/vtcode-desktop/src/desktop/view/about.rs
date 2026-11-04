@@ -141,34 +141,30 @@ impl DesktopView {
                             .gap_2()
                             .w_full()
                             .child(
-                                desktop_button("about-license")
+                                desktop_default_button("about-license")
                                     .label(rust_i18n::t!("app.licenses.about_license").to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.open_license(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_button("about-acknowledgments")
+                                desktop_default_button("about-acknowledgments")
                                     .label(rust_i18n::t!("app.about.acknowledgments").to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.open_acknowledgments(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_button("about-website")
+                                desktop_default_button("about-website")
                                     .label(rust_i18n::t!("app.menus.help_website").to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_about(window, cx);
                                         cx.open_url(HELP_URL);
                                     })),
                             )
                             .child(
-                                desktop_button("about-done")
+                                desktop_primary_button("about-done")
                                     .label(rust_i18n::t!("app.about.done").to_string())
-                                    .primary()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_about(window, cx);
                                     })),

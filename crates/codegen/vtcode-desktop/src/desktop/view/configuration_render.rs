@@ -595,10 +595,9 @@ impl DesktopView {
         });
 
         group = group.child(target_buttons).child(
-            desktop_button("browse-cli-config")
+            desktop_default_button("browse-cli-config")
                 .label(rust_i18n::t!("app.configuration.browse_all").to_string())
                 .accessibility_label(rust_i18n::t!("app.configuration.browse_all_label").to_string())
-                .ghost()
                 .desktop_disabled(snapshot.is_none() || !self.can_edit_cli_settings())
                 .on_click(cx.listener(|view, _, window, cx| view.open_cli_config_palette(window, cx))),
         );
@@ -727,21 +726,19 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_button("cancel-cli-config-edit")
+                                desktop_default_button("cancel-cli-config-edit")
                                     .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                                    .ghost()
                                     .on_click(
                                         cx.listener(|view, _, window, cx| view.close_cli_config_editor(window, cx)),
                                     ),
                             )
                             .child(
-                                desktop_button("save-cli-config-edit")
+                                desktop_primary_button("save-cli-config-edit")
                                     .label(if self.config_write_pending {
                                         rust_i18n::t!("app.configuration.saving").to_string()
                                     } else {
                                         rust_i18n::t!("app.configuration.save_reload").to_string()
                                     })
-                                    .primary()
                                     .desktop_disabled(self.config_write_pending || !self.can_edit_cli_settings())
                                     .on_click(
                                         cx.listener(|view, _, window, cx| view.submit_cli_config_edit(window, cx)),

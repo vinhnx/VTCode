@@ -880,9 +880,8 @@ impl DesktopView {
         ));
 
         content = content.child(
-            desktop_button("reset-appearance")
+            desktop_default_button("reset-appearance")
                 .label(rust_i18n::t!("app.settings.appearance.reset").to_string())
-                .ghost()
                 .on_click(cx.listener(|view, _, window, cx| {
                     view.preferences.separate_theme_profiles = false;
                     view.preferences.light_theme = None;

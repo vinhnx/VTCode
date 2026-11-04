@@ -173,9 +173,8 @@ impl DesktopView {
                 .gap_3()
                 .p_4()
                 .child(
-                    desktop_button("picker-choose-files")
+                    desktop_primary_button("picker-choose-files")
                         .label(rust_i18n::t!("app.composer.attach_files").to_string())
-                        .primary()
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.close_attachment_picker(window, cx);
                             this.attach_files(window, cx);

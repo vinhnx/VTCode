@@ -775,6 +775,28 @@ pub(super) fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer()
 }
 
+/// Ordinary visible action: a filled push button for commands that deserve a
+/// control frame (dialog secondaries, Save/Cancel pairs, labeled toolbar
+/// actions). Kit's Default variant paints the themed button fill with an input
+/// hairline; rails, nav rows, and icon-only toolbar actions stay on
+/// [`desktop_button`] + `.ghost()` instead.
+pub(super) fn desktop_default_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id)
+}
+
+/// Decision-area default commit: the one emphasized action per view, normally
+/// the Enter action. Paints the brand accent fill; never use for destructive
+/// actions even when destruction is the most likely choice.
+pub(super) fn desktop_primary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id).primary()
+}
+
+/// Destructive commitment: irreversible or data-losing actions only. Pair with
+/// an explicit confirmation for consequential work.
+pub(super) fn desktop_danger_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    desktop_button(id).danger()
+}
+
 /// Running-turn marker shared by every thread surface (tab strip, sidebar,
 /// browser, compact header): a muted spinner under a caller-owned stable id.
 /// The owning button already names the running state for assistive tech, so
@@ -828,6 +850,12 @@ pub(super) fn zen_fade_animation(theme: &Theme) -> Animation {
 pub(super) trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
+    /// Floating-layer elevation for a primary that sits over content (the
+    /// composer send). In-layer primaries (dialog commits) take no shadow:
+    /// the dialog already carries the elevation. Gate at the call site with
+    /// `.when(enabled, ...)` so disabled buttons stay flat: Kit replays the
+    /// instance style inside its disabled arm, after its own shadow reset.
+    fn desktop_elevated(self) -> Self;
     /// Selected-option treatment: pressed-state metadata plus a popover
     /// fill when selected, quiet ghost otherwise. Every call site sits on a
     /// `secondary`-equivalent surface (settings panel, group-box fill), where
@@ -856,6 +884,10 @@ impl DesktopButtonExt for Button {
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
         self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
     }
+
+    fn desktop_elevated(self) -> Self {
+        self.shadow_xs()
+    }
 }
 
 #[cfg(test)]
@@ -879,6 +911,35 @@ mod tests {
         let tile = std::str::from_utf8(include_bytes!("../../../../../../resources/icons/vtcode.svg"))
             .expect("tile must be UTF-8 SVG");
         assert!(!is_transparent_mark(tile), "opaque tile must fail the nav-mark check");
+    }
+
+    #[test]
+    fn button_tiers_keep_the_pointing_hand_cursor() {
+        for mut button in [
+            desktop_default_button("tier-cursor-default"),
+            desktop_primary_button("tier-cursor-primary"),
+            desktop_danger_button("tier-cursor-danger"),
+        ] {
+            assert_eq!(
+                button.style().mouse_cursor,
+                Some(CursorStyle::PointingHand),
+                "every tier delegates to desktop_button"
+            );
+        }
+    }
+
+    #[test]
+    fn desktop_elevated_pins_an_instance_shadow_while_plain_buttons_stay_flat() {
+        let mut plain = desktop_primary_button("tier-shadow-plain");
+        assert!(plain.style().box_shadow.is_none(), "in-layer primaries carry no instance shadow");
+
+        let mut elevated = desktop_primary_button("tier-shadow-elevated").desktop_elevated();
+        let shadows = elevated
+            .style()
+            .box_shadow
+            .as_ref()
+            .expect("elevated buttons set an instance shadow");
+        assert_eq!(shadows.len(), 1, "elevation is one xs shadow layer");
     }
 
     #[gpui_kit::test]

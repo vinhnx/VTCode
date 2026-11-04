@@ -240,17 +240,15 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_button("running-confirm-cancel")
+                                desktop_default_button("running-confirm-cancel")
                                     .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.cancel_running_confirm(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_button("running-confirm-stop")
+                                desktop_danger_button("running-confirm-stop")
                                     .label(rust_i18n::t!("app.session.running_switch_stop").to_string())
-                                    .danger()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.confirm_running_switch(window, cx);
                                     })),

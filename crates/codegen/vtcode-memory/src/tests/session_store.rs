@@ -223,7 +223,7 @@ fn exclusive_open_fails_when_held_elsewhere_and_recovers_on_release() {
         "must fail closed with SessionBusy, got: {err}"
     );
     assert!(err.to_string().contains("sess-busy"), "must name the session: {err}");
-    assert!(err.to_string().contains("--session-id"), "must name the remedy: {err}");
+    assert!(err.to_string().contains("--fork-session"), "must name the remedy: {err}");
     assert_eq!(
         fs::read(&manifest_path).expect("manifest"),
         manifest_before,

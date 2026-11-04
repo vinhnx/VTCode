@@ -181,20 +181,16 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_button("full-access-cancel")
+                                desktop_default_button("full-access-cancel")
                                     .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.cancel_full_access_confirm(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_button("full-access-confirm")
+                                desktop_danger_button("full-access-confirm")
                                     .label(rust_i18n::t!("app.permissions.enable_full").to_string())
-                                    .danger()
-                                    .disabled(!acknowledged)
-                                    .when(!acknowledged, |button| button.cursor_default())
-                                    .when(acknowledged, |button| button.cursor_pointer())
+                                    .desktop_disabled(!acknowledged)
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.confirm_full_access(window, cx);
                                     })),

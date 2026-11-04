@@ -19,7 +19,7 @@ use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
 };
 use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
-use gpui_kit::component::button::{Button, ButtonVariants, Toggle, ToggleVariants};
+use gpui_kit::component::button::{Button, ButtonRounded, ButtonVariants, Toggle, ToggleVariants};
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
 use gpui_kit::component::description_list::DescriptionList;
 use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};

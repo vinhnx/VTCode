@@ -287,9 +287,8 @@ impl DesktopView {
                 // one extra step over the panel gap lands it on the lg rung.
                 .mt_2()
                 .child(
-                    desktop_button("cancel-interaction")
+                    desktop_default_button("cancel-interaction")
                         .label(rust_i18n::t!("app.interaction.cancel_request").to_string())
-                        .ghost()
                         .desktop_disabled(submitting)
                         .on_click(
                             cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
@@ -300,9 +299,8 @@ impl DesktopView {
                     // the checked card is a no-op, so the highlighted row
                     // needs an explicit default commitment next to Cancel.
                     row.child(
-                        desktop_button("confirm-interaction")
+                        desktop_primary_button("confirm-interaction")
                             .label(rust_i18n::t!("app.interaction.confirm").to_string())
-                            .primary()
                             .desktop_disabled(submitting)
                             .on_click(cx.listener(|this, _, window, cx| this.confirm_immediate_choice(window, cx))),
                     )
@@ -315,10 +313,9 @@ impl DesktopView {
                             .gap_2()
                             .when(self.interaction_step_index > 0, |row| {
                                 row.child(
-                                    desktop_button("previous-question")
+                                    desktop_default_button("previous-question")
                                         .label(rust_i18n::t!("app.interaction.previous").to_string())
                                         .icon(IconName::ChevronLeft)
-                                        .ghost()
                                         .desktop_disabled(submitting)
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.show_interaction_step(
@@ -330,13 +327,12 @@ impl DesktopView {
                                 )
                             })
                             .child(
-                                desktop_button("continue-question")
+                                desktop_primary_button("continue-question")
                                     .label(if self.interaction_step_index + 1 == interaction.steps.len() {
                                         rust_i18n::t!("app.interaction.submit_answers").to_string()
                                     } else {
                                         rust_i18n::t!("app.interaction.next_question").to_string()
                                     })
-                                    .primary()
                                     .desktop_disabled(submitting)
                                     .on_click(
                                         cx.listener(|this, _, window, cx| this.advance_interaction_step(window, cx)),

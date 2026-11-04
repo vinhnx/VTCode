@@ -307,21 +307,19 @@ impl DesktopView {
                             .justify_end()
                             .gap_2()
                             .child(
-                                desktop_button("file-rename-cancel")
+                                desktop_default_button("file-rename-cancel")
                                     .label("Cancel".to_string())
-                                    .ghost()
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.cancel_file_rename(window, cx);
                                     })),
                             )
                             .child(
-                                desktop_button("file-rename-commit")
+                                desktop_primary_button("file-rename-commit")
                                     .label(if pending {
                                         "Renaming…".to_string()
                                     } else {
                                         "Rename".to_string()
                                     })
-                                    .primary()
                                     .desktop_disabled(blank || pending)
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.commit_file_rename(window, cx);

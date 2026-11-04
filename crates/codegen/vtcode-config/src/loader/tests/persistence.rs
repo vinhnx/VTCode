@@ -503,6 +503,7 @@ idle_backoff_ms = 1000
 }
 
 #[test]
+#[serial]
 fn test_config_loader_phase_timing_recorded() {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
     let manager = ConfigManager::load_from_workspace(temp_dir.path()).expect("load workspace config");

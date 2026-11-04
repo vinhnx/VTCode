@@ -130,25 +130,22 @@ impl DesktopView {
                     .flex_wrap()
                     .gap_2()
                     .child(
-                        desktop_button("sync-cli-theme")
+                        desktop_default_button("sync-cli-theme")
                             .label(sync_label.as_str())
-                            .ghost()
                             .tooltip_with_action(sync_label.as_str(), &SyncCliTheme, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_sync_theme_to_cli())
                             .dispatches_desktop_action(SyncCliTheme, self.focus_handle.clone()),
                     )
                     .child(
-                        desktop_button("reload-cli-settings")
+                        desktop_default_button("reload-cli-settings")
                             .label(reload_label.as_str())
-                            .ghost()
                             .tooltip_with_action(reload_label.as_str(), &ReloadCliSettings, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_reload_cli_settings())
                             .dispatches_desktop_action(ReloadCliSettings, self.focus_handle.clone()),
                     )
                     .child(
-                        desktop_button("use-cli-theme")
+                        desktop_default_button("use-cli-theme")
                             .label(use_theme_label.as_str())
-                            .ghost()
                             .desktop_disabled(theme.as_deref().is_none_or(|theme| !known_theme(theme)))
                             .on_click(cx.listener(|view, _, window, cx| {
                                 let theme = view

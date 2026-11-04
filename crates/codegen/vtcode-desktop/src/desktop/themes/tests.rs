@@ -325,6 +325,38 @@ fn hover_surfaces_are_unified_and_contrast_safe_in_every_theme(cx: &mut gpui_kit
 }
 
 #[gpui_kit::test]
+fn button_press_states_stay_visible_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let press = active_surface(colors.background, colors.foreground);
+            assert_eq!(colors.button_active, press, "{id}: Default press uses the shared press fill");
+            assert_eq!(colors.button_secondary_active, press, "{id}: Secondary press uses the shared press fill");
+            let text_ratio = contrast_ratio(colors.foreground, press);
+            assert!(text_ratio >= 4.5, "{id}: press text contrast {text_ratio:.2}");
+            assert_eq!(
+                (press.l - colors.background.l).signum(),
+                (colors.foreground.l - colors.background.l).signum(),
+                "{id}: press should move gently toward the foreground"
+            );
+            let hover = hover_surface(colors.background, colors.foreground);
+            assert!(
+                contrast_ratio(press, colors.background) >= contrast_ratio(hover, colors.background),
+                "{id}: press must read at least as deep as hover"
+            );
+            if hover != colors.button {
+                assert_ne!(press, colors.button, "{id}: press is invisible where hover is visible");
+            }
+        }
+    });
+}
+
+#[gpui_kit::test]
 fn filled_surfaces_are_distinct_and_readable_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);

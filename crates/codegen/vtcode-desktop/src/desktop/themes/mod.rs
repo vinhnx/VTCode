@@ -378,9 +378,12 @@ fn subtle_border(secondary: Hsla, popover: Hsla, foreground: Hsla) -> Hsla {
 /// whose contrast curve needs larger steps (notably near-white canvases, where
 /// equal ratios need bigger lightness moves). Hover keeps its own stronger cap:
 /// a state change must stay visible, so it takes the strongest readable step.
+/// Press goes one band deeper so the resting -> hover -> press ramp never runs
+/// backwards; it also degrades to the hover step on palettes without headroom.
 const RESTING_FILL_MAX_STEP: u8 = 10;
 const RAISED_FILL_MAX_STEP: u8 = 24;
 const HOVER_FILL_MAX_STEP: u8 = 10;
+const ACTIVE_FILL_MAX_STEP: u8 = 16;
 
 /// Give panels and controls a visible neutral fill while keeping their text at
 /// WCAG AA. Popovers and input fields use a stronger layer than resting panels.
@@ -399,10 +402,14 @@ fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.list_active = surface;
     colors.button = surface;
     colors.button_foreground = colors.foreground;
-    colors.button_active = surface;
+    // Press states sit deeper than resting so Default, Secondary, and Ghost
+    // buttons all show a visible press; Kit keeps border and text identical
+    // across states, so the fill carries the whole signal.
+    let press = active_surface(colors.background, colors.foreground);
+    colors.button_active = press;
     colors.button_secondary = surface;
     colors.button_secondary_foreground = colors.foreground;
-    colors.button_secondary_active = surface;
+    colors.button_secondary_active = press;
     colors.secondary_active = surface;
     colors.popover = raised_surface;
     colors.popover_foreground = colors.foreground;
@@ -493,6 +500,19 @@ fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8, distinct
 /// stay visible, so hover maximizes within its cap instead of minimizing.
 fn hover_surface(background: Hsla, foreground: Hsla) -> Hsla {
     for step in (4_u8..=HOVER_FILL_MAX_STEP).rev() {
+        let candidate = mix(background, foreground, f32::from(step) / 100.0);
+        if contrast_ratio(foreground, candidate) >= 4.5 {
+            return candidate;
+        }
+    }
+    background
+}
+
+/// Strongest readable press step: one band deeper than hover so a press reads
+/// as a deeper state, never a repeat of resting. Shares hover's step range, so
+/// on palettes without headroom it degrades to exactly the hover fill.
+fn active_surface(background: Hsla, foreground: Hsla) -> Hsla {
+    for step in (4_u8..=ACTIVE_FILL_MAX_STEP).rev() {
         let candidate = mix(background, foreground, f32::from(step) / 100.0);
         if contrast_ratio(foreground, candidate) >= 4.5 {
             return candidate;

@@ -167,9 +167,18 @@ run_docs() {
     print_status "Checking documentation..."
     if cargo doc --workspace --no-deps; then
         print_success "Documentation generated successfully!"
-        return 0
     else
         print_error "Documentation generation failed."
+        return 1
+    fi
+    # nextest never runs doctests and `cargo doc` never compiles them, so
+    # doc-example rot (e.g. references to private APIs) is otherwise invisible.
+    print_status "Running doctests..."
+    if cargo test --workspace --locked --doc; then
+        print_success "All doctests passed!"
+        return 0
+    else
+        print_error "Doctests failed."
         return 1
     fi
 }
@@ -474,7 +483,7 @@ case "${1:-}" in
         echo "  test    - Run tests"
         echo "  harness - Run focused PTY/TUI harness regression tests"
         echo "  build   - Build the project"
-        echo "  docs    - Generate documentation"
+        echo "  docs    - Generate documentation and run doctests"
         echo "  legibility - Run agent legibility hotspot checks"
         echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
         echo "  contracts - Run release-artifact contract tests"

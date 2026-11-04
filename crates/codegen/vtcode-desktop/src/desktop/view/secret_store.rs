@@ -42,14 +42,12 @@ impl DesktopView {
                     ),
             )
             .child(
-                desktop_button("save-secret")
+                desktop_primary_button("save-secret")
                     .label(if pending {
                         rust_i18n::t!("app.secrets.saving").to_string()
                     } else {
                         rust_i18n::t!("app.secrets.save_key").to_string()
                     })
-                    .primary()
-                    .small()
                     .desktop_disabled(!sendable)
                     .on_click(cx.listener(move |view, _, window, cx| {
                         view.save_secret_store(provider.clone(), value.clone(), window, cx);

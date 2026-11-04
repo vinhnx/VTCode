@@ -36,33 +36,25 @@ impl DesktopView {
         if self.shortcuts_editing {
             actions = actions
                 .child(
-                    desktop_button("save-shortcuts")
+                    desktop_primary_button("save-shortcuts")
                         .label(rust_i18n::t!("app.shortcuts.save").to_string())
-                        .primary()
-                        .small()
                         .on_click(cx.listener(|view, _, window, cx| view.save_shortcut_draft(window, cx))),
                 )
                 .child(
-                    desktop_button("cancel-shortcuts")
+                    desktop_default_button("cancel-shortcuts")
                         .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                        .ghost()
-                        .small()
                         .on_click(cx.listener(|view, _, window, cx| view.cancel_shortcut_edit(window, cx))),
                 );
         }
         actions = actions
             .child(
-                desktop_button("reset-shortcuts")
+                desktop_default_button("reset-shortcuts")
                     .label(rust_i18n::t!("app.shortcuts.reset_all").to_string())
-                    .ghost()
-                    .small()
                     .on_click(cx.listener(|view, _, window, cx| view.reset_shortcuts(window, cx))),
             )
             .child(
-                desktop_button("import-cli-shortcuts")
+                desktop_default_button("import-cli-shortcuts")
                     .label(rust_i18n::t!("app.shortcuts.import_cli").to_string())
-                    .ghost()
-                    .small()
                     .desktop_disabled(!cli_shortcuts_available)
                     .on_click(cx.listener(|view, _, window, cx| view.import_cli_shortcuts(window, cx))),
             );

@@ -352,15 +352,14 @@ impl DesktopView {
                         .on_click(cx.listener(|this, _, _, cx| this.background_foreground_session(cx))),
                 )
                 .child(
-                    desktop_button("force-cancel-exec")
+                    desktop_danger_button("force-cancel-exec")
                         .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
                         .icon(IconName::X)
-                        .danger()
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
                 .child(
-                    desktop_button("cancel-turn")
+                    desktop_danger_button("cancel-turn")
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
@@ -368,16 +367,17 @@ impl DesktopView {
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                         .icon(IconName::Square)
-                        .danger()
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                 );
         } else {
             model_actions = model_actions.child(
-                desktop_button("send-prompt")
+                desktop_primary_button("send-prompt")
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
-                    .primary()
+                    .large()
+                    .rounded(ButtonRounded::Large)
+                    .when(can_submit, |button| button.desktop_elevated())
                     .desktop_disabled(!can_submit)
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
             );

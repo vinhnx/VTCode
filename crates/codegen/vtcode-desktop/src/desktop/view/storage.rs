@@ -507,10 +507,9 @@ impl DesktopView {
             .clone()
             .filter(|title| !title.trim().is_empty())
             .unwrap_or_else(|| session.session_id.clone());
-        desktop_button(format!("delete-session-{session_id}"))
+        desktop_danger_button(format!("delete-session-{session_id}"))
             .label(rust_i18n::t!("app.settings.storage.delete").to_string())
             .accessibility_label(rust_i18n::t!("app.settings.storage.delete_title", name = name).to_string())
-            .danger()
             .small()
             .on_click(cx.listener(move |view, _, window, cx| {
                 view.confirm_delete_session(session_id.clone(), name.clone(), window, cx);
@@ -592,12 +591,11 @@ impl DesktopView {
                         settings_row(
                             entry.name.clone(),
                             meta,
-                            desktop_button(format!("remove-worktree-{name}"))
+                            desktop_danger_button(format!("remove-worktree-{name}"))
                                 .label(rust_i18n::t!("app.settings.storage.remove").to_string())
                                 .accessibility_label(
                                     rust_i18n::t!("app.settings.storage.remove_title", name = name).to_string(),
                                 )
-                                .danger()
                                 .small()
                                 .on_click(cx.listener(move |view, _, window, cx| {
                                     view.confirm_remove_worktree(name.clone(), is_dirty, window, cx);
