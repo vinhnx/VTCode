@@ -12,6 +12,25 @@ https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool
 
 also refine the overall design system for more modern macos 27 look and feels. check apple guidelines.
 
+---
+
+fix tool call display being raw on the HITL popup on desktop. can we syntax highlight it? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 9.50.38 AM.png'
+
+--
+
+check /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261104T023707Z_635862-12025 session, it seems vtcode having a lot of error and tool call failure for such a simple user's reqeust. Help me reason through this problem step by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the simplest practical approach before implementation. 
+
+---
+
+check stop and cancel active run on desktop doesn't work and doesn't end the session. the element and loading global state still showing as active running. find and fix and improve the force stop active loop
+
+---
+
+check content overflow on HITL popup if content is too wide '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 9.46.09 AM.png'
+
+---
+
+adjust the main container width for comformtable read.
 
 ---
 
