@@ -445,3 +445,32 @@ fn zen_toggle_round_trips_through_command_palette(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn zen_empty_state_matches_welcome_title_size(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        // No workspace: both empty states render the identical greeting text,
+        // so any height difference is the title size, not the copy.
+        view.workspace = None;
+        view.welcome_period = WelcomePeriod::Morning;
+        view.welcome_copy_index = 0;
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        // Suite baseline is normal mode: record the welcome title height.
+        window.render_frame(cx);
+        assert!(window.try_find("welcome").is_some());
+        let normal_title = window.find("welcome-prompt").bounds();
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+        let zen_title = window.find("zen-welcome-prompt").bounds();
+        assert!(
+            (zen_title.size.height - normal_title.size.height).abs() <= px(1.),
+            "zen greeting keeps the welcome title size: zen={zen_title:?} normal={normal_title:?}"
+        );
+    })
+    .unwrap();
+}

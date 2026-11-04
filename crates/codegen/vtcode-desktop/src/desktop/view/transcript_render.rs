@@ -20,6 +20,33 @@ impl DesktopView {
         WelcomeHeader { copy, greeting, workspace_name, prompt }
     }
 
+    /// Shared greeting scaffold for the welcome and Zen empty states: one
+    /// owner for the brand mark, title type, and gap, so the two greetings
+    /// cannot drift apart in size. Callers pass their own title content
+    /// (workspace link vs plain text) and wrap the scaffold in their own
+    /// labelled group.
+    fn greeting_empty_state(
+        &self,
+        title: impl IntoElement,
+        colors: gpui_kit::component::theme::ThemeColor,
+    ) -> impl IntoElement {
+        EmptyState::new()
+            .header(
+                EmptyHeader::new()
+                    .max_w(px(self.content_width()))
+                    .gap_6()
+                    .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
+                    .title(
+                        EmptyTitle::new()
+                            .text_size(gpui_kit::rems(1.75))
+                            .font_weight(gpui_kit::FontWeight::NORMAL)
+                            .text_color(colors.foreground)
+                            .child(title),
+                    ),
+            )
+            .size_full()
+    }
+
     pub(super) fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
         self.transcript.upsert(TranscriptItem::new(
             id,
@@ -109,81 +136,64 @@ impl DesktopView {
                 workspace_name,
                 prompt,
             } = self.welcome_header();
-            let title = EmptyTitle::new()
-                .text_size(gpui_kit::rems(1.75))
-                .font_weight(gpui_kit::FontWeight::NORMAL)
-                .text_color(colors.foreground)
-                .child(
-                    div()
-                        .id("welcome-prompt")
-                        .test_support()
-                        .role(gpui_kit::Role::Heading)
-                        .aria_label(prompt.clone())
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .justify_center()
-                        .gap_2()
-                        .child(if workspace_name.is_some() {
-                            format!("{greeting}. {}", welcome_copy.workspace_action)
-                        } else {
-                            prompt
-                        })
-                        .when_some(workspace_name, |title, name| {
-                            title.child(
-                                desktop_button("welcome-workspace")
-                                    .accessibility_label(
-                                        rust_i18n::t!("app.transcript.change_workspace", name = name.as_str())
-                                            .to_string(),
-                                    )
-                                    .tooltip_with_action(
-                                        rust_i18n::t!("app.transcript.choose_workspace").to_string(),
-                                        &ChooseWorkspace,
-                                        Some(key_context::DESKTOP),
-                                    )
-                                    .text()
-                                    .text_color(colors.foreground)
-                                    .h_auto()
-                                    .p_0()
-                                    .min_w_0()
-                                    .max_w_full()
-                                    .desktop_disabled(
-                                        !self.workspace_switch_idle()
-                                            || self.workspace_picker_open
-                                            || self.retained_submission.is_some(),
-                                    )
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_size(gpui_kit::rems(1.75))
-                                            .font_weight(gpui_kit::FontWeight::NORMAL)
-                                            .border_b_1()
-                                            .border_dashed()
-                                            .border_color(colors.muted_foreground)
-                                            .child(format!("{name}?")),
-                                    )
-                                    .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
+            let title = div()
+                .id("welcome-prompt")
+                .test_support()
+                .role(gpui_kit::Role::Heading)
+                .aria_label(prompt.clone())
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .child(if workspace_name.is_some() {
+                    format!("{greeting}. {}", welcome_copy.workspace_action)
+                } else {
+                    prompt
+                })
+                .when_some(workspace_name, |title, name| {
+                    title.child(
+                        desktop_button("welcome-workspace")
+                            .accessibility_label(
+                                rust_i18n::t!("app.transcript.change_workspace", name = name.as_str()).to_string(),
                             )
-                        }),
-                );
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.transcript.choose_workspace").to_string(),
+                                &ChooseWorkspace,
+                                Some(key_context::DESKTOP),
+                            )
+                            .text()
+                            .text_color(colors.foreground)
+                            .h_auto()
+                            .p_0()
+                            .min_w_0()
+                            .max_w_full()
+                            .desktop_disabled(
+                                !self.workspace_switch_idle()
+                                    || self.workspace_picker_open
+                                    || self.retained_submission.is_some(),
+                            )
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(gpui_kit::rems(1.75))
+                                    .font_weight(gpui_kit::FontWeight::NORMAL)
+                                    .border_b_1()
+                                    .border_dashed()
+                                    .border_color(colors.muted_foreground)
+                                    .child(format!("{name}?")),
+                            )
+                            .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
+                    )
+                });
             div()
                 .id("welcome")
                 .test_support()
                 .role(gpui_kit::Role::Group)
                 .aria_label(rust_i18n::t!("app.transcript.welcome_label").to_string())
                 .size_full()
-                .child(
-                    EmptyState::new()
-                        .header(
-                            EmptyHeader::new()
-                                .max_w(px(self.content_width()))
-                                .gap_6()
-                                .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
-                                .title(title),
-                        )
-                        .size_full(),
-                )
+                .child(self.greeting_empty_state(title, colors))
                 .into_any_element()
         } else if empty_conversation {
             self.render_zen_empty_state(cx)
@@ -296,6 +306,8 @@ impl DesktopView {
     /// focal point, followed by one greeting line; the workspace name renders
     /// as plain text because Zen hides the title-bar identity. The workspace
     /// picker stays reachable through the composer context row when none is set.
+    /// Mark, title, and gap come from the shared greeting scaffold, so
+    /// toggling modes never resizes the greeting.
     fn render_zen_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let WelcomeHeader { prompt, .. } = self.welcome_header();
@@ -306,28 +318,15 @@ impl DesktopView {
             .aria_label(rust_i18n::t!("app.transcript.zen_start_label").to_string())
             .size_full()
             .child(
-                EmptyState::new()
-                    .header(
-                        EmptyHeader::new()
-                            .max_w(px(self.content_width()))
-                            .gap_4()
-                            .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(40., colors.primary)))
-                            .title(
-                                EmptyTitle::new()
-                                    .text_size(gpui_kit::rems(1.5))
-                                    .font_weight(gpui_kit::FontWeight::NORMAL)
-                                    .text_color(colors.foreground)
-                                    .child(
-                                        div()
-                                            .id("zen-welcome-prompt")
-                                            .test_support()
-                                            .role(gpui_kit::Role::Heading)
-                                            .aria_label(prompt.clone())
-                                            .child(prompt),
-                                    ),
-                            ),
-                    )
-                    .size_full(),
+                self.greeting_empty_state(
+                    div()
+                        .id("zen-welcome-prompt")
+                        .test_support()
+                        .role(gpui_kit::Role::Heading)
+                        .aria_label(prompt.clone())
+                        .child(prompt),
+                    colors,
+                ),
             )
             .into_any_element()
     }

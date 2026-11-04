@@ -170,9 +170,10 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
             "zen composer narrows: {zen_frame:?} vs {normal_frame:?}"
         );
         assert!(zen_frame.size.width <= px(600.), "zen column cap: {zen_frame:?}");
-        assert!(
-            window.find("send-prompt").bounds().size.height < normal_send.size.height,
-            "zen send action shrinks with the composer"
+        assert_eq!(
+            window.find("send-prompt").bounds().size.height,
+            normal_send.size.height,
+            "zen keeps the send action at the composer size"
         );
         assert_eq!(
             window.find("transcript-content-zen-message").bounds().center().x,

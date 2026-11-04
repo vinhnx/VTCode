@@ -15,6 +15,9 @@ impl DesktopView {
             .px_4()
             .pb_4()
             .pt_2()
+            // Zen tightens the panel pad by the step the composer group
+            // loosens below, so the horizontal and bottom insets match
+            // normal mode instead of shrinking with the column.
             .when(self.zen_mode, |panel| panel.px_3().pb_3());
         if !self.attachments.is_empty() {
             panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(self.attachments.iter().map(
@@ -338,7 +341,6 @@ impl DesktopView {
                         .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
                         .icon(IconName::ArrowDown)
                         .ghost()
-                        .when(self.zen_mode, |button| button.small())
                         .on_click(cx.listener(|this, _, _, cx| this.background_foreground_session(cx))),
                 )
                 .child(
@@ -347,7 +349,6 @@ impl DesktopView {
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
                         .icon(IconName::X)
                         .danger()
-                        .when(self.zen_mode, |button| button.small())
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
                 .child(
@@ -360,7 +361,6 @@ impl DesktopView {
                         .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                         .icon(IconName::Square)
                         .danger()
-                        .when(self.zen_mode, |button| button.small())
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                 );
         } else {
@@ -370,7 +370,6 @@ impl DesktopView {
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
                     .primary()
-                    .when(self.zen_mode, |button| button.small())
                     .desktop_disabled(!can_submit)
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
             );
