@@ -40,6 +40,76 @@ fn digit_shortcut(choice_index: usize) -> Option<usize> {
     (choice_index < MAX_DIGIT_SHORTCUT).then_some(choice_index + 1)
 }
 
+/// A detail that is exactly one `` `$ ...` `` span is the tool call under
+/// review: return the shell source so it renders highlighted. Anything else
+/// (prose, mixed spans) stays on its own path.
+fn shell_command_span(detail: &str) -> Option<&str> {
+    let inner = detail.trim().strip_prefix("`$")?.strip_suffix('`')?;
+    let command = inner.trim_start();
+    (!command.is_empty()).then_some(command)
+}
+
+/// One supporting line under the title.
+///
+/// Prose keeps the plain themed paragraph (first-line hierarchy intact); a
+/// lone `` `$ ...` `` span renders as a highlighted `sh` block and any other
+/// backtick content as inline Markdown, so tool calls never show raw ticks.
+/// Parsing runs per render over a handful of short strings (unlike the
+/// transcript, which prepares hundreds of streaming rows at ingestion);
+/// memoize at the call site if profiling ever implicates this.
+/// Every wrapper clamps to the panel width: `min_w_0` breaks the flex
+/// min-content chain that otherwise shoves trailing content past the card
+/// edge, and `overflow_hidden` clips unbreakable paint instead of the layout.
+fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx: &App) -> AnyElement {
+    let colors = cx.theme().colors;
+    let wrapper = div()
+        .id(format!("interaction-detail-{detail_index}"))
+        .test_support()
+        .w_full()
+        .min_w_0()
+        .max_w_full()
+        .overflow_hidden();
+    if let Some(command) = shell_command_span(detail) {
+        let mut fenced = String::with_capacity(command.len().saturating_add(8));
+        fenced.push_str("```sh\n");
+        fenced.push_str(&command);
+        fenced.push_str("\n```");
+        let prepared = prepare_markdown(&gpui_kit::SharedString::from(fenced));
+        return wrapper
+            .role(gpui_kit::Role::Label)
+            .aria_label(format!("Command: {}", prepared.accessible_text))
+            .child(render_markdown_with_style(
+                format!("interaction-detail-code-{detail_index}"),
+                prepared.markdown,
+                false,
+                markdown_style(cx),
+            ))
+            .into_any_element();
+    }
+    if detail.contains('`') {
+        let prepared = prepare_markdown(&gpui_kit::SharedString::from(detail));
+        return wrapper
+            .role(gpui_kit::Role::Label)
+            .aria_label(prepared.accessible_text.to_string())
+            .child(render_markdown_with_style(
+                format!("interaction-detail-md-{detail_index}"),
+                prepared.markdown,
+                false,
+                markdown_style(cx),
+            ))
+            .into_any_element();
+    }
+    wrapper
+        .text_sm()
+        .text_color(if first {
+            colors.foreground
+        } else {
+            themes::muted_text(&colors)
+        })
+        .child(detail.to_string())
+        .into_any_element()
+}
+
 /// One selectable option card: label, inline description, digit chip.
 struct ChoiceCard<'a> {
     element_id: String,
@@ -136,16 +206,7 @@ impl DesktopView {
         // The first detail line carries the decision facts; the rest recede as
         // supporting metadata.
         for (detail_index, detail) in interaction.details.iter().enumerate() {
-            panel = panel.child(
-                div()
-                    .text_sm()
-                    .text_color(if detail_index == 0 {
-                        colors.foreground
-                    } else {
-                        themes::muted_text(&colors)
-                    })
-                    .child(detail.clone()),
-            );
+            panel = panel.child(render_interaction_detail(detail, detail_index, detail_index == 0, cx));
         }
         if submitting {
             panel = panel.child(
@@ -452,12 +513,17 @@ impl DesktopView {
                 }
             }));
         // Decision-critical descriptions stay fully visible (never truncated,
-        // never tooltip-only); the digit chip trails in its own lane.
+        // never tooltip-only); the digit chip trails in its own lane. The row
+        // breaks the flex min-content chain (`min_w_0`) so a long command in
+        // the description cannot shove the chip past the card edge; the chip
+        // itself never shrinks and unbreakable paint clips inside the text
+        // instead of escaping the layout.
         if card.choice.description.is_some() || card.digit.is_some() {
             let mut row = div()
                 .id(format!("choice-desc-{}", card.choice.id))
                 .test_support()
                 .w_full()
+                .min_w_0()
                 .flex()
                 .items_start()
                 .gap_2();
@@ -467,6 +533,8 @@ impl DesktopView {
                         div()
                             .flex_1()
                             .min_w_0()
+                            .max_w_full()
+                            .overflow_hidden()
                             .text_sm()
                             .text_color(themes::muted_text(&colors))
                             .child(description.clone()),
@@ -479,7 +547,13 @@ impl DesktopView {
             if let Some(digit) = card.digit
                 && let Ok(keystroke) = gpui_kit::Keystroke::parse_with_os(&digit.to_string(), cx.platform_info().os)
             {
-                row = row.child(Kbd::new(keystroke).outline());
+                row = row.child(
+                    div()
+                        .id(format!("choice-digit-{}", card.choice.id))
+                        .test_support()
+                        .flex_shrink_0()
+                        .child(Kbd::new(keystroke).outline()),
+                );
             }
             radio = radio.child(row);
         }
@@ -506,5 +580,24 @@ impl DesktopView {
             },
             cx,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shell_command_span;
+
+    #[test]
+    fn shell_span_detects_only_lone_dollar_spans() {
+        // Both sides of every boundary: spacing, position, emptiness.
+        assert_eq!(shell_command_span("`$ python3 -c 'print(1)'`"), Some("python3 -c 'print(1)'"));
+        assert_eq!(shell_command_span("`$cmd`"), Some("cmd"));
+        assert_eq!(shell_command_span("  `$  ls`  "), Some("ls"));
+        assert_eq!(shell_command_span("Run `$ foo` now"), None);
+        assert_eq!(shell_command_span("`code`"), None);
+        assert_eq!(shell_command_span("$ bare"), None);
+        assert_eq!(shell_command_span("`$ `"), None);
+        assert_eq!(shell_command_span("``"), None);
+        assert_eq!(shell_command_span(""), None);
     }
 }

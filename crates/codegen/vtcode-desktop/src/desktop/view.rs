@@ -73,7 +73,9 @@ use vtcode_desktop_protocol::{
 use super::app_icon;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
-use super::markdown::{markdown_style, render_markdown, render_markdown_with_style, render_output_sections};
+use super::markdown::{
+    markdown_style, prepare_markdown, render_markdown, render_markdown_with_style, render_output_sections,
+};
 use super::preferences;
 use super::strings::{app, bundle, display, i18n, key_context, keys};
 use super::themes;

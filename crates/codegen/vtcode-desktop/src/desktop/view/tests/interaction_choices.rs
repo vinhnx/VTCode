@@ -620,6 +620,70 @@ fn choice_panel_hides_approval_marker(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn tool_call_detail_renders_highlighted_code_without_raw_ticks(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let mut interaction = tool_loop_interaction(Some("grant-40"));
+    interaction.details = vec![
+        "Environment: default policy".into(),
+        "`$ python3 -c 'print(1)'`".into(),
+        "Run `vitest` to verify".into(),
+    ];
+    deliver(&view, interaction, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Prose keeps the plain paragraph: visible, but with no accessible
+        // label of its own (the code and Markdown branches both set one).
+        let prose = window.find("interaction-detail-0");
+        assert!(prose.visible());
+        assert_eq!(prose.label(), None);
+        // A lone `$` span becomes a labeled code block with the ticks gone.
+        // The "Command: ..." prefix plus the stripped `$` prove the code
+        // branch ran: the Markdown branch would announce the span verbatim.
+        let code = window.find("interaction-detail-1");
+        assert_eq!(code.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(code.label(), Some("Command: python3 -c 'print(1)'"));
+        assert!(!code.label().unwrap_or_default().contains('`'), "no raw ticks survive");
+        // Mixed spans render as Markdown, also without raw ticks.
+        let mixed = window.find("interaction-detail-2");
+        assert_eq!(mixed.label(), Some("Run vitest to verify"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn unbreakable_text_stays_inside_the_panel_and_cards(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let mut interaction = tool_loop_interaction(Some("grant-40"));
+    // Worst case on both surfaces: a spaceless token with no wrap opportunity.
+    let token = "x".repeat(300);
+    interaction.details = vec![format!("`$ deploy {token}`"), format!("plain {token}")];
+    let description = Some(format!("Stop after {token}"));
+    interaction.choices[2].description = description.clone();
+    interaction.steps[0].choices[2].description = description;
+    deliver(&view, interaction, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let panel = window.find("runtime-interaction").bounds();
+        for id in ["interaction-detail-0", "interaction-detail-1"] {
+            let detail = window.find(id).bounds();
+            let overhang = (detail.origin.x + detail.size.width) - (panel.origin.x + panel.size.width);
+            assert!(overhang <= px(1.), "{id} must not escape the panel: detail={detail:?} panel={panel:?}");
+        }
+        // The digit chip trails the description row: if the row escaped the
+        // card, the chip would clip past its edge (the reported bug).
+        let card = window.find("choice-stop").bounds();
+        let card_right = card.origin.x + card.size.width;
+        let row = window.find("choice-desc-stop").bounds();
+        let row_overhang = (row.origin.x + row.size.width) - card_right;
+        assert!(row_overhang <= px(1.), "description row must not escape its card: row={row:?} card={card:?}");
+        let chip = window.find("choice-digit-stop").bounds();
+        let chip_overhang = (chip.origin.x + chip.size.width) - card_right;
+        assert!(chip_overhang <= px(1.), "digit chip must not clip past the card edge: chip={chip:?} card={card:?}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn interaction_header_cards_actions_share_left_spine(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     deliver(&view, tool_loop_interaction(Some("grant-40")), cx);
