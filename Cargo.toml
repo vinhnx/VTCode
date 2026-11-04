@@ -227,7 +227,15 @@ rust.unused_qualifications = "warn"
 rust.unused_results = "warn"
 rust.trivial_numeric_casts = "warn"
 rust.unsafe_code = "warn"
-rust.unstable_features = "warn"
+# The workspace ships on one exact stable release (`rust-toolchain.toml`), so an
+# `#![feature(...)]` gate can never be exercised by users and would silently
+# require a nightly toolchain to rebuild. Deny rather than warn: a bare
+# `cargo build` has no `-D warnings`. Deny rather than forbid so a vetted
+# exception stays possible as an explicit, reviewable
+# `#[allow(unstable_features, reason = "...")]` instead of an invisible default.
+# No `reason` key here: `[lints]` accepts only rustc lint options, and cargo
+# rejects a `reason` field with an "unused manifest key" warning.
+rust.unstable_features = "deny"
 rust.missing_docs = "warn"
 
 [workspace.lints.clippy]

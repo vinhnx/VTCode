@@ -16,6 +16,31 @@ moving that pin.
   `fuzz/`, and `extensions/` are excluded by the guards. `.vtcode/perf/` snapshots copy whole workspaces and keep the
   toolchain they were audited with.
 
+### Stable-only source
+
+First-party code compiles on the pinned stable channel and nothing else:
+
+- No `#![feature(...)]` anywhere in `src/` or `crates/`. `rust.unstable_features` is `deny` in `[workspace.lints.rust]`,
+  so a gate fails a plain `cargo build`, not just a `-D warnings` run. The level is `deny` rather than `forbid` so a
+  genuinely needed gate stays possible as an explicit `#[allow(unstable_features, reason = "...")]`, which reviewers
+  see in the diff.
+- `RUSTC_BOOTSTRAP=1` is reserved for building the compiler itself. The only sanctioned use in this repository is
+  `scripts/hawk.sh`, which sets it to install the `cargo-hawk` analyzer with a nightly toolchain; it never touches a
+  first-party build. `-Z` flags follow the same rule: `scripts/compile-profile.sh` (`-Zmacro-stats`) and
+  `scripts/fuzz-test.sh` (`cargo +nightly fuzz`) are opt-in developer tooling, not gates.
+- Prefer the stable equivalent of a nightly convenience instead of a gate. The features `rustc` itself leans on are
+  usually expressible today with slightly more code, and the stable form is what ships:
+
+  | Nightly feature | Stable equivalent in this repo |
+  | --------------- | ------------------------------ |
+  | `deref_patterns` | Match a slice view (`parts.as_slice()`), or read the values off the iterator. Do not collect a `Vec` only to pattern-match it. |
+  | `default_field_values` | `#[derive(Default)]` when every field's own default is the intended one; a hand-written `Default` when it is not; serde `default = "fn"` for per-field parse defaults. |
+  | `try_blocks` | A small `fn` returning `Result` and `?` at the call site, or a labelled block that breaks with a value. |
+  | `option_into_flat_iter` | `option.into_iter().flatten()`. |
+  | `iter_intersperse` | `slice.join(sep)` for string-ish output, or `Iterator::enumerate` plus a leading-separator guard. |
+
+  See [rust-style-guide](rust-style-guide.md) for the borrow and API conventions these substitutions should preserve.
+
 ## Pin map
 
 | Surface | File | Guard |
