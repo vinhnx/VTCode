@@ -21,7 +21,6 @@ use crate::tools::request_response::{ToolCallRequest, ToolCallResponse};
 use crate::tools::tool_intent;
 use crate::tools::unified_error::UnifiedErrorKind;
 use crate::tools::unified_error::UnifiedToolError;
-use crate::ui::search::fuzzy_match;
 
 use super::assembly::public_tool_name_candidates;
 use super::execution_kernel;
@@ -331,7 +330,7 @@ impl ToolRegistry {
             let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
-                format!("Tool '{display_name}' is not permitted while full-auto permission review is active"),
+                super::execution_stages::full_auto_denial_message(&tool_name, &display_name),
             );
 
             record_failure(
@@ -347,7 +346,7 @@ impl ToolRegistry {
                 false,
             );
 
-            return Err(anyhow!("Tool '{display_name}' is not permitted while full-auto permission review is active")
+            return Err(anyhow!(super::execution_stages::full_auto_denial_message(&tool_name, &display_name))
                 .context("tool denied by full-auto allowlist"));
         }
 

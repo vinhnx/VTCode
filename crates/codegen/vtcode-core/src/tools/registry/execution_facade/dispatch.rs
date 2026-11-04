@@ -105,19 +105,7 @@ impl ToolRegistry {
             similar_tools.push(resolved);
         }
 
-        for tool in &tool_names {
-            if similar_tools.len() >= 3 {
-                break;
-            }
-
-            if similar_tools.iter().any(|candidate| candidate == tool) {
-                continue;
-            }
-
-            if requested_candidates.iter().any(|candidate| fuzzy_match(candidate, tool)) {
-                similar_tools.push(tool.clone());
-            }
-        }
+        super::super::assembly::push_similar_tools(&mut similar_tools, &requested_candidates, &tool_names);
 
         (tool_names, similar_tools)
     }

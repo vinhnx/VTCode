@@ -1,4 +1,5 @@
 use rustc_hash::FxHashMap;
+use vtcode_commons::search::fuzzy_match;
 
 use crate::config::constants::tools;
 use crate::tool_policy::ToolPolicy;
@@ -75,10 +76,41 @@ impl ToolAssembly {
         {
             return Ok(resolution.clone());
         }
-        public_tool_name_candidates(requested_name)
+        if let Some(resolution) = public_tool_name_candidates(requested_name)
             .into_iter()
             .find_map(|candidate| self.public_routes.get(&candidate).cloned())
-            .ok_or_else(|| ToolCallError::respond(format!("Unknown tool: {}", canonical_tool_name(requested_name))))
+        {
+            return Ok(resolution);
+        }
+        // Dotted-namespace hallucinations (`default.web_fetch`) recover on the
+        // model-public path only: canonical names are `[a-z0-9_]` so a dot
+        // guarantees a non-canonical prefix. Internal dispatch deliberately
+        // keeps rejecting unknown dotted prefixes (fail loud on harness typos).
+        if let Some(resolution) = dotted_suffix_candidates(requested_name)
+            .into_iter()
+            .find_map(|candidate| self.public_routes.get(&candidate).cloned())
+        {
+            return Ok(resolution);
+        }
+        let suggestion = self.unknown_tool_suggestion(requested_name);
+        Err(ToolCallError::respond(format!("Unknown tool: {}{suggestion}", canonical_tool_name(requested_name))))
+    }
+
+    /// `Did you mean` hint over currently routed public names, empty when
+    /// nothing is similar. Sorted for deterministic output.
+    fn unknown_tool_suggestion(&self, requested_name: &str) -> String {
+        let mut names: Vec<String> = self.public_routes.keys().cloned().collect();
+        names.sort_unstable();
+        names.dedup();
+        let mut candidates = public_tool_name_candidates(requested_name);
+        candidates.extend(dotted_suffix_candidates(requested_name));
+        let mut similar = Vec::new();
+        push_similar_tools(&mut similar, &candidates, &names);
+        if similar.is_empty() {
+            String::new()
+        } else {
+            format!(" Did you mean: {}?", similar.join(", "))
+        }
     }
 }
 
@@ -101,6 +133,39 @@ pub(super) fn public_tool_name_candidates(name: &str) -> Vec<String> {
     }
 
     candidates
+}
+
+/// Model-public-only recovery for dotted-namespace hallucinations: the suffix
+/// after the last dot, normalized like every other candidate. Not shared with
+/// internal dispatch, which rejects unknown dotted prefixes by contract.
+fn dotted_suffix_candidates(name: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    let raw = strip_wrapping_quotes(name);
+    if let Some((_, suffix)) = raw.rsplit_once('.') {
+        push_candidate(&mut candidates, suffix);
+    }
+    candidates
+}
+
+/// Maximum `Did you mean` suggestions attached to an unknown-tool error.
+const MAX_TOOL_SUGGESTIONS: usize = 3;
+
+/// Push registered names fuzzy-matching any requested candidate, preserving
+/// `tool_names` order and the suggestion cap. Shared by the assembly
+/// preflight error and the execution-facade error so both surfaces suggest
+/// identically; callers may pre-seed `similar` (deduplicated here).
+pub(super) fn push_similar_tools(similar: &mut Vec<String>, requested_candidates: &[String], tool_names: &[String]) {
+    for tool in tool_names {
+        if similar.len() >= MAX_TOOL_SUGGESTIONS {
+            break;
+        }
+        if similar.iter().any(|candidate| candidate == tool) {
+            continue;
+        }
+        if requested_candidates.iter().any(|candidate| fuzzy_match(candidate, tool)) {
+            similar.push(tool.clone());
+        }
+    }
 }
 
 fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, PublicToolResolution> {
@@ -242,6 +307,9 @@ mod tests {
             "functions.fallback_tool",
             "left<|channel|>right",
             "prefix:suffix",
+            "unknown.literal_tool",
+            "default.literal_tool",
+            "a.b.literal_tool",
         ] {
             let resolution = assembly.resolve_public_tool(name).unwrap();
             assert_eq!(resolution.registration_name(), "literal_tool", "{name}");
@@ -253,6 +321,8 @@ mod tests {
             "functions.FALLBACK_TOOL",
             "unknown<|channel|>right",
             "unknown:suffix",
+            "unknown.suffix",
+            "default.suffix",
             "right",
             "suffix",
         ] {
@@ -260,10 +330,38 @@ mod tests {
             assert_eq!(resolution.registration_name(), "fallback_tool", "{name}");
             assert_eq!(resolution.default_permission(), &ToolPolicy::Deny, "{name}");
         }
-        for name in ["", " \t\u{2003}", "functions.not_registered", "READ ACTİON"] {
+        for name in [
+            "",
+            " \t\u{2003}",
+            "functions.not_registered",
+            "a.b.not_registered",
+            "READ ACTİON",
+        ] {
             let error = assembly.resolve_public_tool(name).unwrap_err();
             assert!(error.to_string().contains(&format!("Unknown tool: {name}")), "{error}");
         }
+    }
+
+    #[test]
+    fn unknown_tool_error_suggests_similar_public_names() {
+        let web_fetch = ToolRegistration::new("web_fetch", CapabilityLevel::Bash, true, noop_executor)
+            .with_description("Fetch a URL")
+            .with_parameter_schema(json!({"type": "object"}))
+            .with_permission(ToolPolicy::Prompt);
+        let code_search = ToolRegistration::new("code_search", CapabilityLevel::Bash, true, noop_executor)
+            .with_description("Search code")
+            .with_parameter_schema(json!({"type": "object"}))
+            .with_permission(ToolPolicy::Allow);
+        let assembly = ToolAssembly::from_registrations(vec![web_fetch, code_search]);
+
+        let typo = assembly.resolve_public_tool("web_fech").unwrap_err();
+        assert!(typo.to_string().contains("Unknown tool: web_fech"), "{typo}");
+        assert!(typo.to_string().contains("Did you mean"), "{typo}");
+        assert!(typo.to_string().contains("web_fetch"), "{typo}");
+
+        let unrelated = assembly.resolve_public_tool("zzz_nope_qqq").unwrap_err();
+        assert!(unrelated.to_string().contains("Unknown tool: zzz_nope_qqq"), "{unrelated}");
+        assert!(!unrelated.to_string().contains("Did you mean"), "{unrelated}");
     }
 
     #[test]

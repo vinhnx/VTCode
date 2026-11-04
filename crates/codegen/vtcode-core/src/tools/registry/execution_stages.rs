@@ -205,11 +205,19 @@ impl ToolRegistry {
     /// Returns `None` if allowed, or `Some(error_message)` if denied.
     pub async fn check_full_auto_denied(&self, tool_name: &str, display_name: &str) -> Option<String> {
         if self.is_denied_in_full_auto(tool_name).await {
-            Some(format!("Tool '{display_name}' is not permitted while full-auto permission review is active"))
+            Some(full_auto_denial_message(tool_name, display_name))
         } else {
             None
         }
     }
+}
+
+/// Shared full-auto denial message so every enforcement site names the same
+/// remediation: the canonical tool name to add to the allow-list.
+pub(super) fn full_auto_denial_message(tool_name: &str, display_name: &str) -> String {
+    format!(
+        "Tool '{display_name}' is not permitted while full-auto permission review is active; add '{tool_name}' to [automation.full_auto] allowed_tools in vtcode.toml to permit it"
+    )
 }
 
 /// Result of tool route resolution.

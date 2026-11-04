@@ -326,6 +326,19 @@ async fn unknown_discovery_failure_preserves_error_payload_and_history() -> Resu
     Ok(())
 }
 
+#[test]
+fn full_auto_denial_message_names_tool_and_remediation() {
+    for tool in ["web_search", "web_fetch"] {
+        let message = full_auto_denial_message(tool, tool);
+        assert!(message.contains(tool), "{message}");
+        assert!(message.contains("[automation.full_auto] allowed_tools"), "{message}");
+        assert!(message.contains("vtcode.toml"), "{message}");
+    }
+    let aliased = full_auto_denial_message("web_fetch", "web (alias for web_fetch)");
+    assert!(aliased.contains("web (alias for web_fetch)"), "{aliased}");
+    assert!(aliased.contains("add 'web_fetch' to"), "{aliased}");
+}
+
 #[tokio::test]
 async fn canonical_mcp_route_skips_disconnected_discovery() -> Result<()> {
     let workspace = TempDir::new()?;

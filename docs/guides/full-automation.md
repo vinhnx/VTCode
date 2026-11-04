@@ -143,6 +143,9 @@ Tips:
 - Combine with granular agent permissions if you need per-tool constraints in normal interactive sessions.
 - Treat the list as a hard execution boundary for full-auto: outside the list is denied, and inside the list still
   passes deny and policy checks before automatic review.
+- Research tasks that read remote URLs need `"web_search"` and `"web_fetch"` in the list: `curl`/`wget` stay blocked
+  by command safety, so the dedicated web tools are the only network path. A denied web tool reports the exact
+  `[automation.full_auto] allowed_tools` entry to add.
 
 ## Propose/Verify Sub-agent
 
