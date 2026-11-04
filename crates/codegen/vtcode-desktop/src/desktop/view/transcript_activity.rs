@@ -18,7 +18,16 @@ impl DesktopView {
             ActivityState::Other
         };
         let status_color = Self::activity_status_color(status, colors);
-        let mut label = rust_i18n::t!("app.transcript.activity_total", total = summary.total).to_string();
+        let mut counts = ToolCategoryCounts::default();
+        for index in range.clone() {
+            if let Some(item) = self.transcript.get(index)
+                && let Some(category) = item.activity_category
+            {
+                counts.add(category);
+            }
+        }
+        let mut label = describe_activity_verbs(&counts)
+            .unwrap_or_else(|| rust_i18n::t!("app.transcript.activity_total", total = summary.total).to_string());
         if running > 0 {
             label.push_str(display::MIDDOT);
             label.push_str(rust_i18n::t!("app.transcript.activity_running", count = running).as_ref());

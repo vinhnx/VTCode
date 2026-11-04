@@ -113,6 +113,7 @@ impl DesktopView {
                         TranscriptItem::new(id, TranscriptRole::Tool.as_str().to_string(), title.into(), text);
                     item.output = output;
                     item.app_previews = app_previews;
+                    item.activity_category = ToolCategory::from_details(details);
                     self.push_restored_activity(item);
                 } else {
                     self.append_or_update_item(id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
@@ -121,6 +122,9 @@ impl DesktopView {
                     }
                     if !app_previews.is_empty() {
                         self.transcript.set_app_previews(&id, app_previews);
+                    }
+                    if let Some(category) = ToolCategory::from_details(details) {
+                        self.transcript.set_activity_category(&id, category);
                     }
                 }
             }
@@ -182,9 +186,9 @@ impl DesktopView {
             card.patch.clone(),
         );
         item.diff = Some(card);
-        // The inline diff reads open by default; `upsert` preserves the
-        // user's toggle on later updates to the same card.
-        item.expanded = true;
+        // New cards arrive collapsed: the header (files, +/− counts, apply
+        // status) summarizes the change, and the patch expands on demand.
+        // `upsert` preserves the user's toggle on later updates to the card.
         self.transcript.upsert(item);
     }
 

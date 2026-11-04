@@ -266,3 +266,39 @@ fn diff_card_cta_selects_first_previewable_file_or_just_opens_changes(cx: &mut T
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn activity_group_header_summarizes_tool_verbs(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem};
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let invocation = |id: &str, tool_name: &str, status: ToolCallStatus| ThreadItem {
+            context: None,
+            id: id.into(),
+            details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+                tool_name: tool_name.into(),
+                arguments: None,
+                tool_call_id: None,
+                status,
+                outcome: None,
+            })),
+        };
+        view.update(cx, |view, _| {
+            view.update_runtime_item(&invocation("read-1", "read_file", ToolCallStatus::Completed));
+            view.update_runtime_item(&invocation("exec-1", "exec_command", ToolCallStatus::Completed));
+            view.update_runtime_item(&invocation("track-1", "task_tracker", ToolCallStatus::Failed));
+        });
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("activity-group-read-1").label(),
+            Some("Expand Read 1 file · Ran 1 command · 1 other action · 1 failed")
+        );
+        // The single inspector entry keeps working beside the verb phrase.
+        window.click("activity-group-open-activity-read-1", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Activity);
+    })
+    .unwrap();
+}

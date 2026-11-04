@@ -1,4 +1,12 @@
-use super::{ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, Transcript, TranscriptItem, TranscriptRole};
+use super::{
+    ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, ToolCategory, ToolCategoryCounts, Transcript,
+    TranscriptItem, TranscriptRole, describe_activity_verbs,
+};
+use vtcode_exec_events::{
+    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, DecisionItem, ErrorItem, FileChangeItem,
+    HarnessEventItem, HarnessEventKind, McpToolCallItem, PatchApplyStatus, PlanItem, ReasoningItem, ThreadItemDetails,
+    ToolCallStatus, ToolInvocationItem, ToolOutputItem, WebSearchItem,
+};
 
 fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
     TranscriptItem::new(id.to_string(), role.to_string(), "Activity".into(), text.to_string())
@@ -571,4 +579,196 @@ fn diagnostic_notices_toggle_details_while_plain_notices_stay_fixed() {
     transcript.toggle_notice("diag-empty");
     assert_eq!(transcript.revision(), before, "empty evidence must not toggle");
     assert!(!transcript.get(2).unwrap().expanded);
+}
+
+fn invocation(name: &str) -> ThreadItemDetails {
+    ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+        tool_name: name.into(),
+        arguments: None,
+        tool_call_id: None,
+        status: ToolCallStatus::Completed,
+        outcome: None,
+    }))
+}
+
+fn invocation_with_action(name: &str, action: &str) -> ThreadItemDetails {
+    ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+        tool_name: name.into(),
+        arguments: Some(serde_json::json!({"action": action})),
+        tool_call_id: None,
+        status: ToolCallStatus::Completed,
+        outcome: None,
+    }))
+}
+
+#[test]
+fn tool_category_mirrors_service_labels_at_summary_granularity() {
+    use ToolCategory::{Edit, Other, Read, Run, Search};
+    let classified = [
+        ("read_file", Read),
+        ("read_pty_session", Read),
+        ("web_fetch", Read),
+        ("fetch_url", Read),
+        ("defuddle_fetch", Read),
+        ("fetch", Read),
+        ("get_errors", Read),
+        ("list_files", Read),
+        ("edit_file", Edit),
+        ("write_file", Edit),
+        ("create_file", Edit),
+        ("delete_file", Edit),
+        ("apply_patch", Edit),
+        ("search_replace", Edit),
+        ("exec_command", Run),
+        ("code_search", Search),
+        ("grep", Search),
+        ("grep_file", Search),
+        ("task_tracker", Other),
+        ("request_user_input", Other),
+        ("some_future_tool", Other),
+    ];
+    for (name, expected) in classified {
+        assert_eq!(ToolCategory::from_details(&invocation(name)), Some(expected), "tool {name}");
+    }
+    // MCP prefixes normalize to the suffixed builtin, matching the service.
+    assert_eq!(ToolCategory::from_details(&invocation("mcp__github__read_file")), Some(Read));
+    assert_eq!(ToolCategory::from_details(&invocation("mcp::github::exec_command")), Some(Run));
+    assert_eq!(ToolCategory::from_details(&invocation("mcp__github__list_issues")), Some(Other));
+    // Unified tools dispatch on their action arg; a missing action reads
+    // (file) or runs (exec), and matching is case-insensitive.
+    assert_eq!(ToolCategory::from_details(&invocation("file_operation_internal")), Some(Read));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("file_operation_internal", "edit")), Some(Edit));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("file_operation_internal", "DELETE")), Some(Edit));
+    assert_eq!(
+        ToolCategory::from_details(&invocation_with_action("file_operation_internal", "frobnicate")),
+        Some(Other)
+    );
+    assert_eq!(ToolCategory::from_details(&invocation("command_session_internal")), Some(Run));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("command_session_internal", "poll")), Some(Read));
+    assert_eq!(ToolCategory::from_details(&invocation_with_action("command_session_internal", "wait")), Some(Other));
+}
+
+#[test]
+fn tool_category_covers_every_event_variant() {
+    assert_eq!(
+        ToolCategory::from_details(&ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: "cargo check".into(),
+            arguments: None,
+            aggregated_output: String::new(),
+            exit_code: None,
+            status: CommandExecutionStatus::Completed,
+        }))),
+        Some(ToolCategory::Run)
+    );
+    assert_eq!(
+        ToolCategory::from_details(&ThreadItemDetails::WebSearch(Box::new(WebSearchItem {
+            query: "gpui".into(),
+            provider: None,
+            results: None,
+        }))),
+        Some(ToolCategory::Search)
+    );
+    for details in [
+        ThreadItemDetails::McpToolCall(Box::new(McpToolCallItem {
+            tool_name: "list_issues".into(),
+            arguments: None,
+            result: None,
+            status: None,
+        })),
+        ThreadItemDetails::Harness(Box::new(HarnessEventItem::new(HarnessEventKind::PlanningStarted))),
+        ThreadItemDetails::Error(ErrorItem { message: "boom".into() }),
+    ] {
+        assert_eq!(ToolCategory::from_details(&details), Some(ToolCategory::Other));
+    }
+    // Follow-up output keeps its invocation's category; non-tool rows carry none.
+    for details in [
+        ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            call_id: "call".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: "done".into(),
+            exit_code: None,
+            status: ToolCallStatus::Completed,
+            app_previews: Vec::new(),
+        })),
+        ThreadItemDetails::AgentMessage(AgentMessageItem { text: "hi".into() }),
+        ThreadItemDetails::Plan(PlanItem { text: "plan".into() }),
+        ThreadItemDetails::Reasoning(Box::new(ReasoningItem { diagnostic: None, text: "why".into(), stage: None })),
+        ThreadItemDetails::Decision(Box::new(DecisionItem {
+            summary: "s".into(),
+            rationale: "r".into(),
+            alternatives: Vec::new(),
+            evidence_ids: Vec::new(),
+        })),
+        ThreadItemDetails::FileChange(Box::new(FileChangeItem {
+            diff_incomplete: None,
+            changes: Vec::new(),
+            status: PatchApplyStatus::Completed,
+            unified_diff: None,
+            additions: None,
+            deletions: None,
+        })),
+    ] {
+        assert_eq!(ToolCategory::from_details(&details), None);
+    }
+}
+
+#[test]
+fn activity_verbs_compose_in_fixed_order_with_english_plurals() {
+    assert_eq!(describe_activity_verbs(&ToolCategoryCounts::default()), None);
+    let mut other_only = ToolCategoryCounts::default();
+    other_only.add(ToolCategory::Other);
+    other_only.add(ToolCategory::Other);
+    assert_eq!(describe_activity_verbs(&other_only), None, "verb-less groups keep the count label");
+    assert!(!other_only.has_verbs());
+    // Asymmetric insertion: edits arrive before reads, but Read still leads.
+    let mut counts = ToolCategoryCounts::default();
+    assert!(!counts.has_verbs());
+    counts.add(ToolCategory::Edit);
+    counts.add(ToolCategory::Edit);
+    counts.add(ToolCategory::Read);
+    counts.add(ToolCategory::Run);
+    counts.add(ToolCategory::Search);
+    counts.add(ToolCategory::Search);
+    counts.add(ToolCategory::Other);
+    assert!(counts.has_verbs());
+    assert_eq!(
+        describe_activity_verbs(&counts).as_deref(),
+        Some("Read 1 file · Edited 2 files · Ran 1 command · Searched 2 queries · 1 other action")
+    );
+    let mut single = ToolCategoryCounts::default();
+    single.add(ToolCategory::Run);
+    single.add(ToolCategory::Other);
+    single.add(ToolCategory::Other);
+    assert_eq!(describe_activity_verbs(&single).as_deref(), Some("Ran 1 command · 2 other actions"));
+    // Complementary boundaries: every noun renders in both numbers.
+    let mut flipped = ToolCategoryCounts::default();
+    flipped.add(ToolCategory::Read);
+    flipped.add(ToolCategory::Read);
+    flipped.add(ToolCategory::Edit);
+    flipped.add(ToolCategory::Run);
+    flipped.add(ToolCategory::Run);
+    flipped.add(ToolCategory::Search);
+    assert_eq!(
+        describe_activity_verbs(&flipped).as_deref(),
+        Some("Read 2 files · Edited 1 file · Ran 2 commands · Searched 1 query")
+    );
+}
+
+#[test]
+fn activity_category_survives_follow_up_output_upserts() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "tool", "in-progress\n\nmeta"));
+    transcript.set_activity_category("1", ToolCategory::Read);
+    assert_eq!(transcript.get(0).unwrap().activity_category, Some(ToolCategory::Read));
+    // Follow-up output arrives as a fresh unclassified row for the same id.
+    let mut output = item(1, "tool", "completed\n\nmeta");
+    output.output = Some("done".into());
+    transcript.upsert(output);
+    assert_eq!(
+        transcript.get(0).unwrap().activity_category,
+        Some(ToolCategory::Read),
+        "output upsert must not wipe the invocation's verb"
+    );
+    assert_eq!(transcript.get(0).unwrap().output.as_deref(), Some("done"));
 }

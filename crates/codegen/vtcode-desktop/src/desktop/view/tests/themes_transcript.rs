@@ -355,13 +355,18 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
 
-        // The inline diff reads open by default; the patch text and the
-        // copy action are available without expanding first.
+        // New diff cards arrive collapsed: the header summarizes the change
+        // while the patch and its export stay one toggle away.
+        assert!(!view.read(cx).transcript.get(0).unwrap().expanded, "diff collapsed by default");
+        assert!(window.try_find("diff-lines-change-1").is_none());
         assert!(
-            window.try_find("diff-lines-change-1").is_some(),
-            "new diff cards render their patch lines without a toggle"
+            window.try_find("copy-patch-change-1").is_none(),
+            "collapsed cards hide the export with the patch it copies"
         );
-        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "diff expanded by default");
+
+        window.click("diff-change-1", cx);
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded);
+        assert!(window.try_find("diff-lines-change-1").is_some());
         window.click("copy-patch-change-1", cx);
         assert!(
             cx.read_from_clipboard().unwrap().text().unwrap().contains("+new line"),
@@ -386,6 +391,7 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
             );
             cx.notify();
         });
+        assert!(view.read(cx).transcript.get(0).unwrap().expanded, "streaming updates preserve the user's toggle");
         window.click("copy-patch-change-1", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(updated_patch));
 
@@ -393,10 +399,7 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         window.click("diff-change-1", cx);
         assert!(!view.read(cx).transcript.get(0).unwrap().expanded);
         window.render_frame(cx);
-        assert!(
-            window.try_find("copy-patch-change-1").is_none(),
-            "collapsed cards hide the export with the patch it copies"
-        );
+        assert!(window.try_find("diff-lines-change-1").is_none());
 
         // Narrow-conversation regression: the header actions stay inside the
         // card (and clickable) even at the widest inspector setting, with the

@@ -6,6 +6,9 @@ use vtcode_exec_events::AppPreviewItem;
 
 use super::markdown::prepare_markdown;
 
+mod activity_verbs;
+pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs};
+
 pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -145,6 +148,10 @@ pub(super) struct TranscriptItem {
     pub activity_group_head: bool,
     /// Status totals kept on the group head so streamed updates do not rescan every tool row.
     pub activity_group_summary: ActivityGroupSummary,
+    /// Verb category for the group summary, set at projection from the event
+    /// details. `None` for rows that never pass through projection; those
+    /// groups keep the legacy count label.
+    pub activity_category: Option<ToolCategory>,
     /// Whether this row carries structured activity status rather than archive text.
     pub has_activity_status: bool,
     pub diff: Option<DiffCard>,
@@ -316,6 +323,7 @@ impl TranscriptItem {
             activity_grouped: false,
             activity_group_head: false,
             activity_group_summary,
+            activity_category: None,
             diff: None,
             output: None,
             app_previews: Vec::new(),
@@ -678,6 +686,9 @@ impl Transcript {
             if item.output.is_none() {
                 item.output.clone_from(&existing.output);
             }
+            if item.activity_category.is_none() {
+                item.activity_category = existing.activity_category;
+            }
             let remeasure_row = role_changed
                 || title_changed
                 || has_activity_status_changed
@@ -726,6 +737,21 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 if item.output != output {
                     item.output = output;
+                    self.bump_revision();
+                }
+            }
+        }
+    }
+
+    /// Record the verb category projected from a live event, mirroring
+    /// [`Transcript::set_output`]: find by id, set on change, no layout
+    /// remeasure (the category lands in the same cycle as the row push or
+    /// upsert that already remeasures the affected rows).
+    pub fn set_activity_category(&mut self, id: &str, category: ToolCategory) {
+        if let Some(index) = self.position_by_id(id) {
+            if let Some(item) = self.items.get_mut(index) {
+                if item.activity_category != Some(category) {
+                    item.activity_category = Some(category);
                     self.bump_revision();
                 }
             }
