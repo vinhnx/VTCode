@@ -60,7 +60,11 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
     // otherwise expose the cheap crate version. Both branches are `'static`
     // without per-launch `Box::leak` churn on the hot path.
     let version_leak: &'static str = if argv_requests_version() {
-        Box::leak(vtcode_core::cli::args::long_version().into_boxed_str())
+        // Read the root build script's stamp here: this crate sees its own
+        // `cargo:rustc-env`, while `vtcode-core` (where `long_version` lives)
+        // never would.
+        let git_info = option_env!("VT_CODE_GIT_INFO").unwrap_or(env!("CARGO_PKG_VERSION"));
+        Box::leak(vtcode_core::cli::args::long_version(git_info).into_boxed_str())
     } else {
         env!("CARGO_PKG_VERSION")
     };

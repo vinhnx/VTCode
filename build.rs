@@ -29,27 +29,31 @@ fn main() {
         }
     }
 
-    let git_output = std::process::Command::new("git")
-        .args(["describe", "--always", "--tags", "--long", "--dirty"])
-        .output()
-        .ok();
-    let git_info = git_output
-        .as_ref()
-        .and_then(|output| std::str::from_utf8(&output.stdout).ok().map(str::trim));
     let cargo_pkg_version = env!("CARGO_PKG_VERSION");
 
-    // Default git_describe to cargo_pkg_version
+    // Build stamp: `{version}+{short_sha}[.dirty]` (semver build metadata).
+    // Build metadata is ignored in precedence, so the desktop updater's
+    // `installed >= release` check treats a stamped local build exactly like
+    // its bare release — while `--version` triage still shows which commit
+    // produced the binary. Single token, always: the updater's helper-version
+    // parse rejects anything but `name <semver>` on the first line.
+    let sha = std::process::Command::new("git")
+        .args(["rev-parse", "--short=12", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|sha| sha.trim().to_string())
+        .filter(|sha| !sha.is_empty());
+    let dirty = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .output()
+        .ok()
+        .is_some_and(|output| !output.stdout.iter().all(u8::is_ascii_whitespace));
     let mut git_describe = String::from(cargo_pkg_version);
-
-    if let Some(git_info) = git_info {
-        // If the `git_info` contains `CARGO_PKG_VERSION`, we simply use `git_info` as it is.
-        // Otherwise, prepend `CARGO_PKG_VERSION` to `git_info`.
-        if git_info.contains(cargo_pkg_version) {
-            // Remove the 'g' before the commit sha
-            let git_info = &git_info.replace('g', "");
-            git_describe = git_info.to_string();
-        } else {
-            git_describe = format!("v{cargo_pkg_version}-{git_info}");
+    if let Some(sha) = sha {
+        git_describe = format!("{cargo_pkg_version}+{sha}");
+        if dirty {
+            git_describe.push_str(".dirty");
         }
     }
 

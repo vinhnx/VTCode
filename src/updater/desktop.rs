@@ -167,7 +167,9 @@ async fn installed_desktop_version_with_timeout(timeout: Duration) -> Option<Ver
 /// proceed with the install. A lenient parse could mistake unexpected helper
 /// output for an up-to-date app and skip a needed update. The first token is
 /// the clap binary name, `vtcode-core` today (`vtcode` is accepted too in case
-/// the display name is ever aligned with the binary).
+/// the display name is ever aligned with the binary). A `+sha` build-metadata
+/// suffix (stamped dev builds) parses and compares equal to the bare release,
+/// since semver ignores build metadata in precedence.
 fn parse_helper_version(output: &str) -> Option<Version> {
     let first_line = output.lines().next().unwrap_or_default();
     let mut tokens = first_line.split_whitespace();
@@ -501,6 +503,16 @@ mod tests {
         // multi-line environment report; only the first line carries the version.
         assert_eq!(parse_helper_version("vtcode-core 0.181.0\n\nAuthors: Someone\n"), current);
         assert_eq!(parse_helper_version("vtcode 0.181.0\n"), current);
+        // Stamped dev builds stay parseable and compare equal to their
+        // release (build metadata is ignored in precedence), so the
+        // `installed >= release` up-to-date check never loops on them.
+        let stamped = parse_helper_version("vtcode-core 0.181.0+f19a52f2f1a2b\n\nAuthors: Someone\n");
+        assert_eq!(stamped, Some(Version::parse("0.181.0+f19a52f2f1a2b").expect("semver")));
+        assert!(stamped.is_some_and(|version| version >= Version::parse("0.181.0").expect("semver")));
+        assert_eq!(
+            parse_helper_version("vtcode-core 0.181.0+f19a52f2f1a2b.dirty\n"),
+            Some(Version::parse("0.181.0+f19a52f2f1a2b.dirty").expect("semver"))
+        );
         assert_eq!(parse_helper_version("vtcode 0.181.0-extra words here\n"), None);
         assert_eq!(parse_helper_version(""), None);
         assert_eq!(parse_helper_version("something else 1.2.3"), None);

@@ -514,8 +514,8 @@ startup work is observable without adding work to normal launches.
   config.
 - **Join pre-paint builders.** `ToolRegistry` construction overlaps `discover_controller_subagents`, and prompt-template
   discovery overlaps the dot-config load, via `tokio::join!`.
-- **Lazy `--version` diagnostics.** `build_augmented_cli_command` only formats `long_version()` (storage paths + env
-  dump) when argv contains a version flag; interactive launches use the static crate version.
+- **Lazy `--version` diagnostics.** `build_augmented_cli_command` only formats `long_version(git_info)` (storage
+  paths + env dump) when argv contains a version flag; interactive launches use the static crate version.
 - **Reuse subagent discovery.** Critical path caches `DiscoveredSubagents` in `SessionState`; hydration builds via
   `SubagentController::new_with_discovered` instead of a second workspace/plugin scan.
 - **Skeleton-first slash palette.** TUI spawns with built-ins only; workspace templates merge post-paint via app-level

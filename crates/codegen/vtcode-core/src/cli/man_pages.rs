@@ -27,7 +27,8 @@ impl ManPageGenerator {
             cmd = cmd.about("Advanced coding agent with Decision Ledger");
         }
         if cmd.get_version().is_none() {
-            let version: &'static str = Box::leak(long_version().into_boxed_str());
+            // Man pages pin the bare release version: generated docs must not churn with dev SHAs.
+            let version: &'static str = Box::leak(long_version(env!("CARGO_PKG_VERSION")).into_boxed_str());
             cmd = cmd.version(version);
         }
         Self::render_page(cmd, None, &|buf| Self::append_main_sections(buf))
