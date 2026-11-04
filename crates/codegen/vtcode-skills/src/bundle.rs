@@ -85,7 +85,8 @@ fn add_dir_to_zip<W: Write + std::io::Seek>(
             .strip_prefix(root)
             .with_context(|| format!("stripping prefix from {}", path.display()))?;
 
-        if path.is_dir() {
+        // Trust the dirent type rather than stat-ing each entry again.
+        if vtcode_commons::walk::entry_is_dir(&entry) {
             let dir_name = format!("{}/", rel.to_string_lossy());
             zip_writer
                 .add_directory(&dir_name, options)
@@ -249,7 +250,7 @@ fn find_skill_md(dir: &Path) -> Result<PathBuf> {
 
     for entry in fs::read_dir(dir).context("Failed to read extracted directory")? {
         let entry = entry?;
-        if entry.path().is_dir() {
+        if vtcode_commons::walk::entry_is_dir(&entry) {
             let nested = entry.path().join("SKILL.md");
             if nested.exists() {
                 return Ok(nested);
@@ -322,7 +323,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
         let file_name = entry.file_name();
         let dst_path = dst.join(&file_name);
 
-        if src_path.is_dir() {
+        if vtcode_commons::walk::entry_is_dir(&entry) {
             fs::create_dir_all(&dst_path)?;
             let (c, s) = copy_dir_recursive(&src_path, &dst_path)?;
             count += c;

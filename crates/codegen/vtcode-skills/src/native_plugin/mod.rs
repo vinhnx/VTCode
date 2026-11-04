@@ -563,7 +563,8 @@ impl PluginLoader {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_dir() && path.join("plugin.json").exists() {
+            // Trust the dirent type; only real plugin dirs get the manifest probe.
+            if vtcode_commons::walk::entry_is_dir(&entry) && path.join("plugin.json").exists() {
                 match self.load_plugin(&path) {
                     Ok(plugin) => plugins.push(plugin),
                     Err(e) => {

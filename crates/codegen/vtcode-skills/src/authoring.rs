@@ -396,7 +396,8 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(zip: &mut zip::ZipWriter<W>, d
         let path = entry.path();
         let name = path.strip_prefix(base)?;
 
-        if path.is_file() {
+        // Trust the dirent type rather than stat-ing each entry again.
+        if vtcode_commons::walk::entry_is_file(&entry) {
             debug!("Adding file: {}", name.display());
             let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
             zip.start_file(name.to_string_lossy().to_string(), options)?;
@@ -404,7 +405,7 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(zip: &mut zip::ZipWriter<W>, d
             let mut buffer = Vec::new();
             file.read_to_end(&mut buffer)?;
             zip.write_all(&buffer)?;
-        } else if path.is_dir() {
+        } else if vtcode_commons::walk::entry_is_dir(&entry) {
             add_directory_to_zip(zip, &path, base)?;
         }
     }

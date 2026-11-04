@@ -112,8 +112,11 @@ fn list_md_files(dir: &Path, filter: impl Fn(&str) -> bool) -> Result<Vec<PathBu
             return Ok(());
         }
         for entry in std::fs::read_dir(dir).with_context(|| format!("Failed to list {}", dir.display()))? {
-            let path = entry?.path();
-            if path.is_dir() {
+            let entry = entry?;
+            let path = entry.path();
+            // `readdir` already reported the type; `Path::is_dir` would pay a
+            // `stat` per entry for the same answer.
+            if vtcode_commons::walk::entry_is_dir(&entry) {
                 walk(&path, files, filter)?;
             } else if path.extension().and_then(|v| v.to_str()) == Some("md")
                 && filter(path.file_name().and_then(|v| v.to_str()).unwrap_or(""))

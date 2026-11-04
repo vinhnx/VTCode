@@ -535,7 +535,7 @@ impl SimpleCache {
         let dir = canonical_existing_storage_dir(&self.cache_dir)?;
         for entry in fs::read_dir(&dir)? {
             let entry = entry?;
-            if entry.path().is_file() {
+            if vtcode_commons::walk::entry_is_file(&entry) {
                 fs::remove_file(entry.path())?;
             }
         }

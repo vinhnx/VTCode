@@ -12,7 +12,8 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() {
+            // Trust the dirent type instead of stat-ing each entry again.
+            if vtcode_commons::walk::entry_is_file(&entry) {
                 let rel_path = path
                     .strip_prefix(skill_path)
                     .map(|p| p.to_string_lossy().to_string())
@@ -37,7 +38,7 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() {
+            if vtcode_commons::walk::entry_is_file(&entry) {
                 let rel_path = path
                     .strip_prefix(skill_path)
                     .map(|p| p.to_string_lossy().to_string())
@@ -63,7 +64,7 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() {
+            if vtcode_commons::walk::entry_is_file(&entry) {
                 let rel_path = path
                     .strip_prefix(skill_path)
                     .map(|p| p.to_string_lossy().to_string())

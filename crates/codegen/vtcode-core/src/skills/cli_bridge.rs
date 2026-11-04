@@ -156,7 +156,9 @@ impl CliToolBridge {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() {
+            // Trust the dirent type: `path.is_file()` was a `stat` and the
+            // `entry.metadata()` below already fetches permissions.
+            if vtcode_commons::walk::entry_is_file(&entry) {
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
@@ -188,11 +190,13 @@ impl CliToolBridge {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
+            // Resolve the entry type once instead of stat-ing inside the filter.
+            let is_file = vtcode_commons::walk::entry_is_file(&entry);
 
             if let Some(_name) = path
                 .file_name()
                 .and_then(|n| n.to_str())
-                .filter(|n| path.is_file() && n.to_lowercase().starts_with("readme") && n.ends_with(".md"))
+                .filter(|n| is_file && n.to_lowercase().starts_with("readme") && n.ends_with(".md"))
             {
                 readmes.push(path);
             }

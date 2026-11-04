@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 use vtcode_commons::VtCodePaths;
+use vtcode_commons::walk::{entry_is_dir, entry_is_file};
 
 /// Enhanced skill discovery configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,7 +199,7 @@ impl SkillDiscovery {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_dir() {
+            if entry_is_dir(&entry) {
                 stats.directories_scanned += 1;
 
                 // Check for SKILL.md file
@@ -269,7 +270,7 @@ impl SkillDiscovery {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() {
+            if entry_is_file(&entry) {
                 stats.files_checked += 1;
 
                 // Single shared predicate lives in `cli_bridge` so the

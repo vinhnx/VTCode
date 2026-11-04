@@ -106,7 +106,8 @@ fn load_subagents_from_dir(dir: &Path, source: SubagentSource) -> Result<Vec<Sub
     for entry in fs::read_dir(dir).with_context(|| format!("failed to read subagent directory {}", dir.display()))? {
         let entry = entry?;
         let path = entry.path();
-        if !path.is_file() {
+        // `readdir` already reported the type; skip the extra `stat`.
+        if !vtcode_commons::walk::entry_is_file(&entry) {
             continue;
         }
         if path.extension().and_then(|ext| ext.to_str()) != Some(extension) {

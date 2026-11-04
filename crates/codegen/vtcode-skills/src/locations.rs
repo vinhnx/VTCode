@@ -10,6 +10,7 @@ use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 use vtcode_commons::VtCodePaths;
+use vtcode_commons::walk::entry_is_dir;
 
 /// Maximum recursion depth when walking a skill location.
 ///
@@ -90,20 +91,23 @@ impl SkillLocation {
         }
     }
 
-    /// Check if this location exists
+    /// Check if this location exists as a directory.
+    ///
+    /// `is_dir()` already resolves the path, so pairing it with `exists()`
+    /// only added a second stat for the same answer.
     fn exists(&self) -> bool {
-        self.base_path.exists() && self.base_path.is_dir()
+        self.base_path.is_dir()
     }
 
-    /// Get skill name from path
+    /// Get the skill name for a directory that the caller already proved is one.
+    ///
+    /// Callers obtain that fact from `readdir` or a single `is_dir()`, so this
+    /// deliberately does not re-resolve the path; only the `SKILL.md` probe is
+    /// a real filesystem question.
     fn get_skill_name(&self, skill_path: &Path) -> Option<String> {
-        if !skill_path.exists() || !skill_path.is_dir() {
-            return None;
-        }
-
         // Check if this path contains a SKILL.md file
         let skill_md = skill_path.join("SKILL.md");
-        if !skill_md.exists() {
+        if !skill_md.is_file() {
             return None;
         }
 
@@ -278,7 +282,7 @@ fn walk_directory(
         return Ok(());
     }
 
-    if !dir.exists() || !dir.is_dir() {
+    if !dir.is_dir() {
         return Ok(());
     }
 
@@ -333,18 +337,15 @@ fn walk_directory(
     // and VCS trees that cannot contain skills.
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() {
+            // Skip the name filter before touching the filesystem: a skipped
+            // tree (`node_modules`, `target`) never needs its type resolved.
+            if entry.file_name().to_str().is_some_and(discovery_dir_skipped) {
                 continue;
             }
-            if path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(discovery_dir_skipped)
-            {
+            if !entry_is_dir(&entry) {
                 continue;
             }
-            walk_directory(&path, location, discovered, stats, depth + 1)?;
+            walk_directory(&entry.path(), location, discovered, stats, depth + 1)?;
         }
     }
 
@@ -359,15 +360,20 @@ impl SkillLocations {
         discovered: &mut HashMap<String, DiscoveredSkill>,
         stats: &mut DiscoveryStats,
     ) -> Result<()> {
-        if !location.base_path.exists() || !location.base_path.is_dir() {
+        if !location.base_path.is_dir() {
             return Ok(());
         }
 
         for entry in std::fs::read_dir(&location.base_path)? {
             let entry = entry?;
+            // The dirent type settles directory-ness without a second stat;
+            // `get_skill_name` relies on this proof instead of re-resolving.
+            if !entry_is_dir(&entry) {
+                continue;
+            }
             let path = entry.path();
 
-            if let Some(skill_name) = location.get_skill_name(&path).filter(|_| path.is_dir()) {
+            if let Some(skill_name) = location.get_skill_name(&path) {
                 match parse_skill_file(&path) {
                     Ok((manifest, _)) => {
                         // Check precedence
