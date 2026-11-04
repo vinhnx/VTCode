@@ -2,8 +2,8 @@
 
 The inline UI can display a single-line status bar beneath the prompt. By default VT Code shows the current git branch
 (with an asterisk when the working tree is dirty) on the left and the active model with its reasoning effort on the
-right. Each completed agent response carries its own wall-clock footer (see `ui.show_message_timestamps`), which
-replaced the old ticking status-line clock; the clock remains available as an opt-in. The `[ui.status_line]` table
+right. Each completed turn carries one wall-clock footer after its final agent message (see `ui.show_message_timestamps`),
+which replaced the old ticking status-line clock; the clock remains available as an opt-in. The `[ui.status_line]` table
 in `vtcode.toml` lets you override this behaviour or turn the status line off entirely.
 
 If you want VT Code to scaffold the command setup for you, run `/statusline` in an interactive session. VT Code asks

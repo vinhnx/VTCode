@@ -312,7 +312,7 @@ async fn inline_batches_many_reasoning_deltas_for_performance() {
 }
 
 #[tokio::test]
-async fn inline_stream_appends_timestamp_footer_on_completion() {
+async fn inline_stream_defers_timestamp_footer_to_turn_end() {
     fn is_footer(text: &str) -> bool {
         text.strip_prefix("  · ")
             .is_some_and(|time| time.contains(':') && (time.ends_with("AM") || time.ends_with("PM")))
@@ -327,6 +327,9 @@ async fn inline_stream_appends_timestamp_footer_on_completion() {
     let handle = InlineHandle::new_for_tests(tx);
     let spinner = PlaceholderSpinner::new(&handle, None, None, "");
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    // Real turns arm deferral at the turn boundary; without it a completed
+    // response stamps immediately instead of waiting for the turn end.
+    renderer.begin_turn_message_timestamp();
     let ctrl_c_state = super::super::state::CtrlCState::new();
     let ctrl_c_notify = Arc::new(Notify::new());
 
@@ -343,8 +346,8 @@ async fn inline_stream_appends_timestamp_footer_on_completion() {
 
     assert!(emitted, "inline renderer should emit streamed content");
 
-    let mut agent_appends = Vec::new();
     let mut saw_replace = false;
+    let mut streamed_appends = Vec::new();
     while let Ok(command) = rx.try_recv() {
         match command {
             InlineCommand::ReplaceLast { .. } => saw_replace = true,
@@ -352,14 +355,32 @@ async fn inline_stream_appends_timestamp_footer_on_completion() {
                 kind: vtcode_ui::tui::app::InlineMessageKind::Agent,
                 segments,
             } => {
-                agent_appends.push(segments.iter().map(|s| s.text.as_str()).collect::<String>());
+                streamed_appends.push(segments.iter().map(|s| s.text.as_str()).collect::<String>());
             }
             _ => {}
         }
     }
 
     assert!(saw_replace, "content must stream through replace updates");
-    let footers = agent_appends.iter().filter(|text| is_footer(text)).count();
-    assert_eq!(footers, 1, "completed stream must stamp exactly once: {agent_appends:?}");
-    assert!(is_footer(agent_appends.last().expect("footer appends")), "footer must close the block");
+    assert!(
+        !streamed_appends.iter().any(|text| is_footer(text)),
+        "streaming must not stamp before the turn ends: {streamed_appends:?}"
+    );
+
+    renderer.finish_turn_message_timestamp().expect("turn footer stamp");
+
+    let mut footer_appends = Vec::new();
+    while let Ok(command) = rx.try_recv() {
+        if let InlineCommand::AppendLine {
+            kind: vtcode_ui::tui::app::InlineMessageKind::Agent,
+            segments,
+        } = command
+        {
+            footer_appends.push(segments.iter().map(|s| s.text.as_str()).collect::<String>());
+        }
+    }
+
+    let footers = footer_appends.iter().filter(|text| is_footer(text)).count();
+    assert_eq!(footers, 1, "turn end must stamp exactly once: {footer_appends:?}");
+    assert!(is_footer(footer_appends.last().expect("footer appends")), "footer must close the block");
 }

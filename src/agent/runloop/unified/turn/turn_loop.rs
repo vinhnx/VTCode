@@ -184,6 +184,7 @@ pub(crate) async fn run_turn_loop(
     // must start a fresh contiguous group even when the renderer is reused by
     // the session loop.
     ctx.renderer.flush_compact_command_group();
+    ctx.renderer.begin_turn_message_timestamp();
     ctx.set_phase(TurnPhase::Preparing);
     super::turn_loop_helpers::restore_fresh_turn_tool_guidance(
         working_history,
@@ -871,6 +872,12 @@ pub(crate) async fn run_turn_loop(
     }
 
     ctx.renderer.flush_compact_command_group();
+    // Exactly one clock per turn: intermediate agent responses rendered above
+    // (pre-tool commentary, plan prose) leave the footer pending, and this
+    // stamp closes the turn's final message.
+    if let Err(err) = ctx.renderer.finish_turn_message_timestamp() {
+        tracing::debug!(error = %err, "turn timestamp footer emission failed");
+    }
     ctx.set_phase(TurnPhase::Finalizing);
     finalize_turn(&mut ctx, working_history, &result, &turn_usage).await;
 

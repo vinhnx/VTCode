@@ -462,7 +462,7 @@ impl InlineSink {
         self.pending_transcript_batch.is_some()
     }
 
-    /// Append the wall-clock footer for one completed agent response.
+    /// Append the turn's single wall-clock footer after its final agent message.
     ///
     /// The footer reuses `Agent` kind so reflow keeps it glued to its message
     /// (no divider or gap between consecutive agent lines). It is never

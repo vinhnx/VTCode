@@ -891,7 +891,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.safe_colors_only` | `boolean` | no | `false` | Restrict color palette to the 11 "safe" ANSI colors portable across common themes. Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes), white/brwhite (light themes), brblue (Basic Dark). See: <https://blog.xoria.org/terminal-colors/> |
 | `ui.screen_reader_mode` | `boolean` | no | `false` | Screen reader mode: disables animations, uses plain text thinking indicators, and opens Transcript Review in raw mode. Alternate-screen compatibility depends on the terminal and assistive technology. Can also be enabled via VTCODE_SCREEN_READER=1 environment variable. |
 | `ui.show_diagnostics_in_transcript` | `boolean` | no | `false` | Show warning/error/fatal diagnostic lines in the TUI transcript and log panel. Also controls whether ERROR-level tracing logs appear in the TUI session log. Errors are always captured in the session archive JSON regardless of this setting. |
-| `ui.show_message_timestamps` | `boolean` | no | `true` | Show a wall-clock footer under each completed agent response. |
+| `ui.show_message_timestamps` | `boolean` | no | `true` | Show one wall-clock footer after the final agent message of each turn. |
 | `ui.show_sidebar` | `boolean` | no | `true` | Show the right sidebar (queue, context, tools) |
 | `ui.show_task_panel` | `boolean` | no | `false` | Automatically show the plan-mode TODO task tracking panel when a plan is approved or the task tracker is updated. When disabled, the panel can still be toggled with the `toggle_task_panel` keybinding. |
 | `ui.show_turn_timer` | `boolean` | no | `false` | Show per-turn elapsed timer line after completed turns |
@@ -899,7 +899,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.status_line.command_timeout_ms` | `integer` | no | `200` | - |
 | `ui.status_line.mode` | `string` | no | `"auto"` | - |
 | `ui.status_line.refresh_interval_ms` | `integer` | no | `1000` | - |
-| `ui.status_line.show_clock` | `boolean` | no | `false` | Show the current system time (`HH:MM:SS`) on the status line (default: false). Per-message timestamps (`ui.show_message_timestamps`) replaced the ticking clock; this remains as an opt-in for the old behavior. |
+| `ui.status_line.show_clock` | `boolean` | no | `false` | Show the current system time (`HH:MM:SS`) on the status line (default: false). Per-turn timestamps (`ui.show_message_timestamps`) replaced the ticking clock; this remains as an opt-in for the old behavior. |
 | `ui.terminal_title.items` | `array \| null` | no | `null` | Ordered title items; `None` resolves to `["spinner", "project"]` (spinner enabled by default), and an empty array disables VT Code-managed titles. |
 | `ui.terminal_title.items[]` | `string` | no | `-` | - |
 | `ui.thinking_display` | `string` | no | `"collapsed"` | Default collapse state of agent thinking/reasoning blocks ("collapsed" or "extended") |

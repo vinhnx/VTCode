@@ -280,7 +280,7 @@ pub struct UiConfig {
     #[serde(default = "default_show_diagnostics_in_transcript")]
     pub show_diagnostics_in_transcript: bool,
 
-    /// Show a wall-clock footer under each completed agent response.
+    /// Show one wall-clock footer after the final agent message of each turn.
     #[serde(default = "default_show_message_timestamps")]
     pub show_message_timestamps: bool,
 

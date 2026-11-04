@@ -16,9 +16,10 @@ The row disappears when the operation ends.
 Approval waits stay static; reduced-motion and screen-reader settings keep labels visible without shimmer. Progress
 does not appear in saved conversation history or exports, and queued messages keep their existing display.
 
-Completed agent responses carry a wall-clock footer (`· 3:12 PM`, local time) in both the TUI transcript and plain
-CLI output. Replayed history (resume, rewind) keeps its original text without fresh stamps. Disable all footers with
-`ui.show_message_timestamps = false`.
+A completed turn carries one wall-clock footer (`· 3:12 PM`, local time) after its final agent message in both the
+TUI transcript and plain CLI output. Intermediate responses within the same turn (pre-tool commentary, plan prose) stay
+unstamped, so the clock marks the turn's summary point. Replayed history (resume, rewind) keeps its original text
+without fresh stamps. Disable all footers with `ui.show_message_timestamps = false`.
 
 For measurements and integration details, see [response progress and latency](../development/response-progress.md).
 

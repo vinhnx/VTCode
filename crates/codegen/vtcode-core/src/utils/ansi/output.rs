@@ -555,22 +555,61 @@ impl AnsiRenderer {
         Err(anyhow!("stream_markdown_response requires an inline sink"))
     }
 
-    /// Append the wall-clock footer after a streamed TUI response completes.
+    /// Finish a streamed response, stamping it when no turn is open.
     ///
-    /// Streaming replaces the in-progress block per delta, so the footer can
-    /// only be appended once the stream ends. No-op without an inline sink,
-    /// when timestamps are disabled, or during transcript-batch replay. The
-    /// caller owns the "visible content was streamed" condition.
+    /// Streaming replaces the in-progress block per delta, so inside a turn the
+    /// footer is only marked here and emitted by
+    /// [`AnsiRenderer::finish_turn_message_timestamp`] once the turn ends;
+    /// intermediate responses stay unstamped and only the turn's final message
+    /// carries the clock. Outside a turn this stamps immediately. No-op without
+    /// an inline sink, when timestamps are disabled, or during transcript-batch
+    /// replay. The caller owns the "visible content was streamed" condition.
     pub fn finish_streamed_response(&mut self) -> Result<()> {
-        let Some(sink) = &mut self.sink else {
+        let Some(sink) = self.sink.as_mut() else {
             return Ok(());
         };
         if !self.show_message_timestamps || sink.in_transcript_batch() {
             return Ok(());
         }
+        if self.defer_turn_footer {
+            self.pending_response_footer = true;
+            return Ok(());
+        }
         let indent = MessageStyle::Response.indent();
         let status_style = theme::active_styles().status;
         sink.append_response_timestamp_footer(status_style, indent)?;
+        self.last_line_was_empty = false;
+        Ok(())
+    }
+
+    /// Emit the single wall-clock footer for the turn that just completed.
+    ///
+    /// Called once at the turn boundary after the final agent message has been
+    /// rendered. Disarms deferral so the next out-of-turn response stamps
+    /// immediately again. A no-op when no response body was rendered, when
+    /// timestamps are disabled, or during transcript-batch replay.
+    pub fn finish_turn_message_timestamp(&mut self) -> Result<()> {
+        // Disarm before the early return: the session reuses one renderer, and
+        // a turn that rendered nothing must not leave later output deferring
+        // into a boundary that will never come.
+        self.defer_turn_footer = false;
+        if !self.pending_response_footer {
+            return Ok(());
+        }
+        self.pending_response_footer = false;
+        if !self.show_message_timestamps {
+            return Ok(());
+        }
+        let indent = MessageStyle::Response.indent();
+        if let Some(sink) = self.sink.as_mut() {
+            if sink.in_transcript_batch() {
+                return Ok(());
+            }
+            let status_style = theme::active_styles().status;
+            sink.append_response_timestamp_footer(status_style, indent)?;
+        } else {
+            self.write_response_timestamp_footer(indent)?;
+        }
         self.last_line_was_empty = false;
         Ok(())
     }

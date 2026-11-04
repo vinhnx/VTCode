@@ -445,6 +445,8 @@ fn line_function_no_trailing_empty_line() {
         screen_reader_mode: false,
         show_diagnostics_in_transcript: false,
         show_message_timestamps: true,
+        pending_response_footer: false,
+        defer_turn_footer: false,
         tool_display_mode: ToolDisplayMode::default(),
         diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
         compact_command_group: None,
@@ -769,7 +771,7 @@ fn repeated_legacy_failures_keep_fresh_transcript_incidents() {
 }
 
 /// Collect kinded append lines as (kind, joined text) pairs.
-fn collect_kinded_append_lines(
+pub(super) fn collect_kinded_append_lines(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<crate::ui::InlineCommand>,
 ) -> Vec<(InlineMessageKind, String)> {
     let mut lines = Vec::new();
@@ -786,152 +788,9 @@ fn collect_kinded_append_lines(
 ///
 /// Deliberately independent of the formatting helper (which has its own unit
 /// tests) and of the wall clock, so minute rollovers cannot flake the suite.
-fn is_timestamp_footer(text: &str) -> bool {
+pub(super) fn is_timestamp_footer(text: &str) -> bool {
     text.strip_prefix("  · ")
         .is_some_and(|time| time.contains(':') && (time.ends_with("AM") || time.ends_with("PM")))
 }
 
-#[test]
-fn response_appends_timestamp_footer_after_body() {
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-    assert!(renderer.show_message_timestamps(), "timestamps default on");
-
-    renderer.line(MessageStyle::Response, "hello").unwrap();
-
-    let lines = collect_kinded_append_lines(&mut receiver);
-    assert_eq!(lines.len(), 2, "body plus exactly one footer: {lines:?}");
-    assert_eq!(lines[0].0, InlineMessageKind::Agent);
-    assert_eq!(lines[0].1, "  hello");
-    assert_eq!(lines[1].0, InlineMessageKind::Agent, "footer must glue to its message block");
-    assert!(is_timestamp_footer(&lines[1].1), "footer shape: {:?}", lines[1].1);
-}
-
-#[test]
-fn response_footer_suppressed_when_disabled() {
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-    renderer.set_show_message_timestamps(false);
-
-    renderer.line(MessageStyle::Response, "hello").unwrap();
-
-    let lines = collect_kinded_append_lines(&mut receiver);
-    assert_eq!(lines.len(), 1, "body only: {lines:?}");
-    assert!(!is_timestamp_footer(&lines[0].1));
-}
-
-#[test]
-fn response_footer_skipped_for_empty_response() {
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-
-    renderer.line(MessageStyle::Response, "   ").unwrap();
-
-    let lines = collect_kinded_append_lines(&mut receiver);
-    assert!(!lines.iter().any(|(_, text)| is_timestamp_footer(text)), "no footer on empty body: {lines:?}");
-}
-
-#[test]
-fn response_footer_skipped_during_transcript_batch() {
-    use crate::ui::InlineCommand;
-
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-
-    renderer.begin_transcript_batch();
-    renderer.line(MessageStyle::Response, "replayed answer").unwrap();
-    renderer.end_transcript_batch();
-
-    let mut batched = Vec::new();
-    while let Ok(command) = receiver.try_recv() {
-        match command {
-            InlineCommand::AppendLines { lines } => batched.extend(lines),
-            _ => panic!("replay must batch every line in one AppendLines command"),
-        }
-    }
-    let texts = batched
-        .iter()
-        .map(|line| line.segments.iter().map(|segment| segment.text.as_str()).collect::<String>())
-        .collect::<Vec<_>>();
-    assert!(texts.iter().any(|text| text.contains("replayed answer")), "body missing: {texts:?}");
-    assert!(
-        !texts.iter().any(|text| is_timestamp_footer(text)),
-        "replayed history must not gain fresh timestamps: {texts:?}"
-    );
-}
-
-#[test]
-fn response_footer_never_recorded_in_transcript_log() {
-    use crate::utils::transcript;
-
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-
-    // No global clear and no presence assert: other tests share the log, and
-    // no fixture body is footer-shaped, so absence is race-free either way.
-    renderer.line(MessageStyle::Response, "uniquely stamped body").unwrap();
-    let _ = collect_kinded_append_lines(&mut receiver);
-
-    let snapshot = transcript::snapshot();
-    assert!(
-        !snapshot.iter().any(|line| is_timestamp_footer(line)),
-        "chrome must not leak into tail-matching and hooks"
-    );
-}
-
-#[test]
-fn non_response_styles_carry_no_footer() {
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-
-    renderer.line(MessageStyle::Info, "a plain note").unwrap();
-
-    let lines = collect_kinded_append_lines(&mut receiver);
-    assert!(!lines.is_empty(), "body must render");
-    assert!(!lines.iter().any(|(_, text)| is_timestamp_footer(text)), "info must not stamp: {lines:?}");
-}
-
-#[test]
-fn streaming_defers_footer_until_finish() {
-    use crate::ui::InlineCommand;
-
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-
-    renderer.stream_markdown_response("streamed answer", 0).unwrap();
-    let mut saw_append = false;
-    while let Ok(command) = receiver.try_recv() {
-        match command {
-            InlineCommand::ReplaceLast { .. } => {}
-            InlineCommand::AppendLine { .. } => saw_append = true,
-            _ => {}
-        }
-    }
-    assert!(!saw_append, "per-delta streaming must not stamp");
-
-    renderer.finish_streamed_response().unwrap();
-    let lines = collect_kinded_append_lines(&mut receiver);
-    assert_eq!(lines.len(), 1, "exactly one footer on finish: {lines:?}");
-    assert_eq!(lines[0].0, InlineMessageKind::Agent);
-    assert!(is_timestamp_footer(&lines[0].1), "footer shape: {:?}", lines[0].1);
-}
-
-#[test]
-fn finish_streamed_response_without_sink_is_noop() {
-    let mut renderer = AnsiRenderer::stdout();
-    renderer.finish_streamed_response().expect("sinkless finish must succeed");
-}
-
-#[test]
-fn direct_response_skips_transcript_log_for_footer() {
-    use crate::utils::transcript;
-
-    // Direct mode writes real stdout (captured by the test runner); the log
-    // assertion below proves the footer guard ran on this path too. Absence
-    // only: the log is shared with parallel tests.
-    let mut renderer = AnsiRenderer::stdout();
-    renderer.line(MessageStyle::Response, "direct uniquely stamped body").unwrap();
-
-    let snapshot = transcript::snapshot();
-    assert!(!snapshot.iter().any(|line| is_timestamp_footer(line)), "direct footer must not leak into the log");
-}
+mod turn_footer;

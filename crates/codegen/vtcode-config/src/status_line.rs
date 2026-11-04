@@ -44,8 +44,8 @@ pub struct StatusLineConfig {
     pub command_timeout_ms: u64,
     /// Show the current system time (`HH:MM:SS`) on the status line (default: false).
     ///
-    /// Per-message timestamps (`ui.show_message_timestamps`) replaced the
-    /// ticking clock; this remains as an opt-in for the old behavior.
+    /// One per-turn timestamp footer (`ui.show_message_timestamps`) replaced
+    /// the ticking clock; this remains as an opt-in for the old behavior.
     #[serde(default = "default_status_line_show_clock")]
     pub show_clock: bool,
 }

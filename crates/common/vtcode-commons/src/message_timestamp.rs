@@ -1,9 +1,10 @@
-//! Wall-clock timestamps for agent message responses.
+//! Wall-clock timestamps for the final agent response of a turn.
 //!
-//! Every completed agent response carries a short local-time footer (e.g.
-//! `· 3:12 PM`) so per-message time replaces the ticking status-line clock.
-//! Formatting lives here so the TUI transcript, plain CLI output, and future
-//! desktop/export surfaces share one shape.
+//! Each completed turn carries one short local-time footer (e.g. `· 3:12 PM`)
+//! after its final agent message, so the clock marks the turn's summary point
+//! instead of repeating on every intermediate response. Formatting lives here
+//! so the TUI transcript, plain CLI output, and future desktop/export surfaces
+//! share one shape.
 
 use chrono::{DateTime, Local};
 
@@ -15,7 +16,7 @@ pub fn format_message_time(now: DateTime<Local>) -> String {
     now.format("%-I:%M %p").to_string()
 }
 
-/// Build the full footer line for a completed agent response (`· 3:12 PM`).
+/// Build the full footer line for a turn's final agent response (`· 3:12 PM`).
 ///
 /// The leading middot marks the line as chrome in no-color output where
 /// dimming is unavailable.

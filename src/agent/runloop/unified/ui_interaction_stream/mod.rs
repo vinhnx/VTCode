@@ -862,9 +862,12 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
         }
     }
 
-    // The streamed block is complete: stamp it once. Suppressed content is
-    // explicitly not the response, so it carries no footer even when deltas
-    // reached the screen before suppression was detected.
+    // The streamed block is complete. Inside a turn this only marks the footer
+    // candidate, and the clock is emitted once at the turn boundary so
+    // intermediate responses stay unstamped; outside a turn it stamps here.
+    // Suppressed content is explicitly not the response, so it is never a
+    // candidate even when deltas reached the screen before suppression was
+    // detected.
     if supports_streaming_markdown && emitted_tokens && !aggregated.trim().is_empty() && !content_suppressed {
         renderer
             .finish_streamed_response()

@@ -335,7 +335,7 @@ inline_viewport_rows = 16
 # Show elapsed time divider after each completed turn
 show_turn_timer = false
 
-# Show a wall-clock footer under each completed agent response
+# Show one wall-clock footer after the final agent message of each turn
 show_message_timestamps = true
 
 # Show warning/error/fatal diagnostic lines directly in transcript
@@ -391,7 +391,7 @@ max_identical_in_window = 1
 # Status line mode ("auto", "command", "hidden")
 mode = "auto"
 
-# Show current system time (HH:MM:SS) on the status line (opt-in; per-message timestamps replace it)
+# Show current system time (HH:MM:SS) on the status line (opt-in; per-turn timestamps replace it)
 show_clock = false
 
 # How often to refresh status line (milliseconds)
