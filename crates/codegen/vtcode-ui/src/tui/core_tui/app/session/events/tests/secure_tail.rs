@@ -284,7 +284,7 @@ fn diagnostic_click_while_streaming_expands_and_pins_the_viewport() {
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Warning,
         code: "tool.execution_failed".into(),
-        summary: "Tool 'task_tracker' failed. Expand Details for recovery steps.".into(),
+        summary: "Tool 'task_tracker' failed.".into(),
         agent_details: "Likely cause: duplicate create.\nNext action: run task_tracker.list and continue.".into(),
         correlation_id: "tool-diagnosis:streaming-click".into(),
         actions: Vec::new(),
@@ -390,7 +390,7 @@ fn diagnostic_f8_while_streaming_expands_and_pins_the_viewport() {
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Warning,
         code: "tool.execution_failed".into(),
-        summary: "Tool 'task_tracker' failed. Expand Details for recovery steps.".into(),
+        summary: "Tool 'task_tracker' failed.".into(),
         agent_details: "Likely cause: duplicate create.\nNext action: run task_tracker.list and continue.".into(),
         correlation_id: "tool-diagnosis:streaming-f8".into(),
         actions: Vec::new(),

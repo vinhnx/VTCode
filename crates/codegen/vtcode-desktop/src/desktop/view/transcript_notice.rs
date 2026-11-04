@@ -5,9 +5,12 @@ use super::*;
 
 impl DesktopView {
     /// Severity rows for runtime errors, compaction/reset notices, and run
-    /// status: a compact icon/title/body row in severity colors, with no
-    /// message bubble, Markdown, or copy action. Diagnostic notices carry a
-    /// Show/Hide details toggle over their operational evidence instead.
+    /// status: one icon/title header line in severity colors, with no message
+    /// bubble, Markdown, or copy action. Diagnostic notices carry their
+    /// Show/Hide details toggle inline at the header's trailing edge, with
+    /// the operational evidence below only while expanded. Weight is the last
+    /// resort: icon + tone already carry severity, so only errors earn
+    /// semibold.
     pub(super) fn render_notice_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let (icon, tone, role, status) = match item.notice_severity {
@@ -15,23 +18,21 @@ impl DesktopView {
             NoticeSeverity::Warning => (IconName::TriangleAlert, colors.warning, gpui_kit::Role::Status, "warning"),
             NoticeSeverity::Info => (IconName::Info, themes::muted_text(&colors), gpui_kit::Role::Status, "info"),
         };
-        let mut panel = div()
-            .id(format!("notice-{}", item.id))
+        let mut header = div()
+            .id(format!("notice-header-{}", item.id))
             .test_support()
-            .role(role)
-            .aria_label(format!("{}: {}", item.title, item.accessibility_text))
-            .w_full()
-            .max_w(px(self.content_width()))
             .flex()
-            .flex_col()
-            .gap_1()
+            .items_center()
+            .gap_2()
+            .child(Icon::new(icon).small().flex_shrink_0().text_color(tone))
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(Icon::new(icon).small().text_color(tone))
-                    .child(div().text_sm().font_semibold().text_color(tone).child(item.title.clone())),
+                    .min_w_0()
+                    .flex_1()
+                    .text_sm()
+                    .when(item.notice_severity == NoticeSeverity::Error, |title| title.font_semibold())
+                    .text_color(tone)
+                    .child(item.title.clone()),
             );
         if item.collapsible_details {
             let id = item.id.clone();
@@ -40,7 +41,7 @@ impl DesktopView {
             } else {
                 rust_i18n::t!("app.transcript.show_details").to_string()
             };
-            panel = panel.child(
+            header = header.child(
                 desktop_button(format!("notice-details-{}", item.id))
                     .accessibility_label(
                         rust_i18n::t!(
@@ -52,7 +53,8 @@ impl DesktopView {
                         .to_string(),
                     )
                     .ghost()
-                    .small()
+                    .xsmall()
+                    .flex_shrink_0()
                     .child(
                         div()
                             .flex()
@@ -73,6 +75,19 @@ impl DesktopView {
                         cx.notify();
                     })),
             );
+        }
+        let mut panel = div()
+            .id(format!("notice-{}", item.id))
+            .test_support()
+            .role(role)
+            .aria_label(format!("{}: {}", item.title, item.accessibility_text))
+            .w_full()
+            .max_w(px(self.content_width()))
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(header);
+        if item.collapsible_details {
             if item.expanded {
                 panel = panel.child(
                     div()
@@ -83,7 +98,7 @@ impl DesktopView {
                         .child(item.text.clone()),
                 );
             }
-        } else {
+        } else if !item.text.trim().is_empty() {
             panel = panel.child(div().text_sm().text_color(colors.foreground).child(item.text.clone()));
         }
         panel.into_any_element()

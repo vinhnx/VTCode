@@ -3,7 +3,7 @@ use super::*;
 use crate::desktop::inspector::InspectorTab;
 
 #[gpui_kit::test]
-fn activity_group_ctas_open_inspector_tabs_without_toggling_group(cx: &mut TestAppContext) {
+fn activity_group_cta_opens_activity_without_toggling_group(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -32,42 +32,42 @@ fn activity_group_ctas_open_inspector_tabs_without_toggling_group(cx: &mut TestA
         });
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").label(), Some("Expand 2 tool actions · 1 failed"));
-        for (id, label) in [
-            ("activity-group-open-activity-read", "Activity"),
-            ("activity-group-open-output-read", "Output"),
-            ("activity-group-open-utilities-read", "Utilities"),
-        ] {
-            assert_eq!(window.find(id).role(), Some(gpui_kit::Role::Button));
-            assert_eq!(window.find(id).label(), Some(label));
-        }
+        // One entry point per group: the per-tab triplets were collapsed, so
+        // the removed deep links must stay absent while Activity keeps its id.
+        let cta = window.find("activity-group-open-activity-read");
+        assert_eq!(cta.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(cta.label(), Some("Activity"));
+        assert!(window.try_find("activity-group-open-output-read").is_none());
+        assert!(window.try_find("activity-group-open-utilities-read").is_none());
 
-        window.click("activity-group-open-output-read", cx);
+        window.click("activity-group-open-activity-read", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open, "CTA opens a closed inspector");
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Activity);
+        assert!(window.try_find("activity-list").is_some());
+        assert_eq!(window.find("activity-group-read").checked(), Some(false), "CTA must not toggle the group");
+
+        // The dropped tabs stay one keyboard switch away through the real tab
+        // strip: Activity -> Output -> Utilities.
+        view.update(cx, |view, cx| view.inspector_focus.focus(window, cx));
+        window.press("right", cx);
+        window.render_frame(cx);
         assert_eq!(view.read(cx).inspector_tab, InspectorTab::Output);
         assert!(window.try_find("inspector-output-tab").is_some());
         assert!(
             window.find("output-body").label().unwrap().contains("read-output-marker"),
-            "unselected group CTA lands on the newest output"
+            "tab switch lands on the newest output"
         );
-        assert_eq!(window.find("activity-group-read").checked(), Some(false), "CTA must not toggle the group");
-
-        window.click("activity-group-open-activity-read", cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Activity);
-        assert!(window.try_find("activity-list").is_some());
-        assert_eq!(window.find("activity-group-read").checked(), Some(false));
-
-        window.click("activity-group-open-utilities-read", cx);
+        window.press("right", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
         assert!(window.try_find("utilities-pane").is_some());
 
-        // The toggle keeps its own behavior beside the CTAs.
+        // The toggle keeps its own behavior beside the CTA.
         window.click("activity-group-read", cx);
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").checked(), Some(true));
-        assert!(window.try_find("activity-group-open-output-read").is_some(), "CTAs persist while expanded");
+        assert!(window.try_find("activity-group-open-activity-read").is_some(), "CTA persists while expanded");
         assert!(view.read(cx).transcript.get(1).unwrap().activity_expanded);
     })
     .unwrap();
@@ -104,32 +104,30 @@ fn activity_group_cta_exits_zen_to_reveal_inspector(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         assert!(window.try_find("utilities-pane").is_none(), "zen hides the inspector");
-        assert!(window.try_find("activity-group-open-utilities-read").is_some(), "CTA stays reachable in zen");
+        assert!(window.try_find("activity-group-open-activity-read").is_some(), "CTA stays reachable in zen");
+        assert!(window.try_find("activity-group-open-output-read").is_none());
+        assert!(window.try_find("activity-group-open-utilities-read").is_none());
 
-        window.click("activity-group-open-utilities-read", cx);
+        window.click("activity-group-open-activity-read", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).zen_mode, "explicit reveal exits zen");
         assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
-        assert!(window.try_find("utilities-pane").is_some());
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Activity);
+        assert!(window.try_find("activity-list").is_some());
         assert_eq!(window.find("activity-group-read").checked(), Some(false), "CTA must not toggle the group");
 
-        // A second deeplink from a fresh zen state proves the funnel exit,
-        // not one button.
+        // Asymmetric partner: inline expansion from a fresh zen state keeps
+        // zen, since it reveals no hidden panel.
         view.update(cx, |view, _| {
             view.zen_mode = true;
             view.inspector_open = false;
         });
         window.render_frame(cx);
-        window.click("activity-group-open-output-read", cx);
+        window.click("activity-group-read", cx);
         window.render_frame(cx);
-        assert!(!view.read(cx).zen_mode);
-        assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Output);
-        assert!(
-            window.find("output-body").label().unwrap().contains("read-output-marker"),
-            "zen output CTA lands on the newest output"
-        );
+        assert!(view.read(cx).zen_mode, "inline toggle keeps zen");
+        assert!(!view.read(cx).inspector_open);
+        assert_eq!(window.find("activity-group-read").checked(), Some(true));
     })
     .unwrap();
 }

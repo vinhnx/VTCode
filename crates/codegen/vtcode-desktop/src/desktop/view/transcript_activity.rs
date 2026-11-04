@@ -90,8 +90,12 @@ impl DesktopView {
                 view.transcript.toggle_activity_group(&id);
                 cx.notify();
             }));
-        // The toggle and its CTAs are siblings, never nested buttons: the
+        // The toggle and its CTA are siblings, never nested buttons: the
         // toggle keeps the flexible width and truncates first on narrow rows.
+        // One entry point only: Output and Utilities stay one tab-switch away
+        // once the inspector is open, and expanded tool rows keep their exact
+        // Output deep links, so per-tab triplets on every group would repeat
+        // three destinations N times for no new reachability.
         div()
             .w_full()
             .flex()
@@ -102,24 +106,22 @@ impl DesktopView {
                 div()
                     .flex()
                     .items_center()
-                    .gap_1()
                     .flex_shrink_0()
-                    .child(Self::activity_group_cta("activity", InspectorTab::Activity, &head.id, cx))
-                    .child(Self::activity_group_cta("output", InspectorTab::Output, &head.id, cx))
-                    .child(Self::activity_group_cta("utilities", InspectorTab::Utilities, &head.id, cx)),
+                    .child(Self::activity_group_cta(&head.id, cx)),
             )
             .into_any_element()
     }
 
-    /// Small transcript CTA that reveals one inspector tab beside the reading
-    /// position. Labels reuse the inspector tab vocabulary so both surfaces
-    /// name the same destination.
-    fn activity_group_cta(suffix: &str, tab: InspectorTab, head_id: &str, cx: &mut Context<Self>) -> impl IntoElement {
-        desktop_button(format!("activity-group-open-{suffix}-{head_id}"))
-            .label(tab.label())
+    /// Single transcript entry point into the inspector, landing on Activity:
+    /// the tab that lists this group's rows with their per-row output actions.
+    /// The label reuses the inspector tab vocabulary so both surfaces name the
+    /// same destination.
+    fn activity_group_cta(head_id: &str, cx: &mut Context<Self>) -> impl IntoElement {
+        desktop_button(format!("activity-group-open-activity-{head_id}"))
+            .label(InspectorTab::Activity.label())
             .ghost()
             .xsmall()
-            .on_click(cx.listener(move |view, _, _, cx| view.open_inspector_tab(tab, cx)))
+            .on_click(cx.listener(move |view, _, _, cx| view.open_inspector_tab(InspectorTab::Activity, cx)))
     }
 
     /// Jump button beside an expanded tool row's copy action, opening that
@@ -151,6 +153,7 @@ impl DesktopView {
         desktop_button(format!("diff-open-changes-{item_id}"))
             .label(rust_i18n::t!("app.inspector.tab_changes").to_string())
             .ghost()
+            .xsmall()
             .on_click(cx.listener(move |view, _, _, cx| {
                 let open_path = view
                     .transcript

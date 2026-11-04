@@ -91,10 +91,13 @@ pub(crate) fn render_diagnosis(
         }
         return;
     }
+    // The summary stays a bare headline: both the TUI and desktop
+    // transcripts disclose `agent_details` behind their own visible Details
+    // control, so instructional prose would only restate the control.
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Warning,
         code: "tool.execution_failed".into(),
-        summary: format!("Tool '{}' failed. Expand Details for recovery steps.", bounded_field(tool_name)),
+        summary: format!("Tool '{}' failed.", bounded_field(tool_name)),
         agent_details: diagnosis.render_text(tool_name),
         correlation_id: diagnostic_correlation_id(turn_id, tool_call_id, tool_name, diagnosis),
         actions: Vec::new(),

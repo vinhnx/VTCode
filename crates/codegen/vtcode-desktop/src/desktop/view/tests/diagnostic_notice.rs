@@ -7,12 +7,12 @@ fn diagnostic_item(id: &str, details: &str, severity: DiagnosticSeverity) -> Thr
         id: id.into(),
         context: None,
         details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
-            text: "Tool 'task_tracker' failed. Expand Details for recovery steps.".into(),
+            text: "Tool 'task_tracker' failed.".into(),
             stage: Some("diagnosis".into()),
             diagnostic: Some(Box::new(Diagnostic {
                 severity,
                 code: "tool.execution_failed".into(),
-                summary: "Tool 'task_tracker' failed. Expand Details for recovery steps.".into(),
+                summary: "Tool 'task_tracker' failed.".into(),
                 agent_details: details.into(),
                 correlation_id: id.into(),
                 actions: Vec::new(),
@@ -40,12 +40,18 @@ fn reasoning_diagnostic_projects_to_collapsible_notice(cx: &mut TestAppContext) 
             .cloned()
             .expect("diagnostic projects a transcript row");
         assert!(row.is_notice(), "a diagnostic payload renders as a severity notice");
-        assert_eq!(row.title.as_str(), "Tool 'task_tracker' failed. Expand Details for recovery steps.");
+        assert_eq!(row.title.as_str(), "Tool 'task_tracker' failed.");
         assert!(!row.expanded, "diagnostic details start collapsed");
         assert!(row.text.contains("duplicate create"), "collapsed rows retain the details payload");
 
         let toggle = window.find("notice-details-tool-diagnosis:task-tracker");
         assert_eq!(toggle.role(), Some(gpui_kit::Role::Button));
+        let header = window.find("notice-header-tool-diagnosis:task-tracker").bounds();
+        let toggle_bounds = toggle.bounds();
+        assert!(
+            toggle_bounds.origin.y >= header.origin.y && toggle_bounds.bottom() <= header.bottom(),
+            "details toggle shares the title row: toggle={toggle_bounds:?} header={header:?}"
+        );
         assert!(
             window.try_find("notice-details-body-tool-diagnosis:task-tracker").is_none(),
             "collapsed notices hide the details body"

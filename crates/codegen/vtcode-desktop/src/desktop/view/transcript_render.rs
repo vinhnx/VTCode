@@ -438,10 +438,13 @@ impl DesktopView {
                         .bg(cx.theme().colors.accent),
                 )
             })
-            // MessageScroller owns the shared horizontal row inset.
+            // MessageScroller owns the shared horizontal row inset. The bottom
+            // tiers encode the relationship: conversation turns (user +
+            // assistant) breathe at the section tier while metadata clusters
+            // (tools tight, diffs/notices grouped) stay tucked beneath them.
             .when(item.is_tool(), |row| row.pb_1())
-            .when(item.is_user(), |row| row.pb_6())
-            .when(!item.is_tool() && !item.is_user(), |row| row.pb_3())
+            .when(item.is_user() || item.is_assistant(), |row| row.pb_6())
+            .when(!item.is_tool() && !item.is_user() && !item.is_assistant(), |row| row.pb_3())
             .when(item.is_assistant(), |row| {
                 row.on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
                     let next = hovered.then(|| message_id.clone());
@@ -756,44 +759,28 @@ impl DesktopView {
         }
 
         // Trailing actions share one shrink-proof group (see panel_header):
-        // the toggle and copy buttons must never overflow the card, so the
-        // leading title truncates instead when the conversation narrows.
-        let mut actions = div().flex().items_center().gap_2().flex_shrink_0().child(
-            desktop_button(format!("diff-{}", item.id))
-                .label(if item.expanded {
-                    rust_i18n::t!("app.transcript.hide_diff").to_string()
-                } else {
-                    rust_i18n::t!("app.transcript.show_diff").to_string()
-                })
-                .ghost()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.transcript.toggle_diff(&toggle_id);
-                    cx.notify();
-                })),
-        );
-        actions = actions.child(Self::diff_changes_cta(&item.id, cx));
-        if !diff.patch.is_empty() {
-            let copy_id = id.clone();
-            actions = actions.child(
-                desktop_button(format!("copy-patch-{}", item.id))
-                    .label(rust_i18n::t!("app.transcript.copy_patch").to_string())
+        // the toggle and Changes jump must never overflow the card, so the
+        // leading title truncates instead when the conversation narrows. Copy
+        // patch lives in the expanded body beside the patch it copies.
+        let actions = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .flex_shrink_0()
+            .child(
+                desktop_button(format!("diff-{}", item.id))
+                    .label(if item.expanded {
+                        rust_i18n::t!("app.transcript.hide_diff").to_string()
+                    } else {
+                        rust_i18n::t!("app.transcript.show_diff").to_string()
+                    })
                     .ghost()
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        let Some(patch) = view
-                            .transcript
-                            .items_newest_first()
-                            .find(|candidate| candidate.id == copy_id)
-                            .and_then(|candidate| candidate.diff.as_ref())
-                            .map(|diff| diff.patch.clone())
-                            .filter(|patch| !patch.is_empty())
-                        else {
-                            return;
-                        };
-                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch));
-                        super::super::notifications::copied_to_clipboard(window, cx);
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.transcript.toggle_diff(&toggle_id);
+                        cx.notify();
                     })),
-            );
-        }
+            )
+            .child(Self::diff_changes_cta(&item.id, cx));
 
         let header = div()
             .w_full()
@@ -861,6 +848,32 @@ impl DesktopView {
         }
 
         if item.expanded && !diff.patch.is_empty() {
+            // Export sits with its object, mirroring the tool-row actions
+            // above their output block; the header keeps only the toggle and
+            // the Changes jump.
+            let copy_id = id.clone();
+            body = body.child(
+                div().flex().justify_end().child(
+                    desktop_button(format!("copy-patch-{}", item.id))
+                        .label(rust_i18n::t!("app.transcript.copy_patch").to_string())
+                        .ghost()
+                        .xsmall()
+                        .on_click(cx.listener(move |view, _, window, cx| {
+                            let Some(patch) = view
+                                .transcript
+                                .items_newest_first()
+                                .find(|candidate| candidate.id == copy_id)
+                                .and_then(|candidate| candidate.diff.as_ref())
+                                .map(|diff| diff.patch.clone())
+                                .filter(|patch| !patch.is_empty())
+                            else {
+                                return;
+                            };
+                            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch));
+                            super::super::notifications::copied_to_clipboard(window, cx);
+                        })),
+                ),
+            );
             let mut lines = ClassifiedDiffLines::new(&diff.patch);
             let mut diff_view = div()
                 .id(format!("diff-lines-{}", item.id))
@@ -885,7 +898,9 @@ impl DesktopView {
                         themes::diff_line_background(colors.background, diff_foreground, colors.danger),
                         Some(("-", "−", colors.danger)),
                     ),
-                    DiffLineKind::Hunk => (colors.muted_foreground, colors.secondary, None),
+                    // Hunk markers orient multi-hunk patches but earn no band:
+                    // muted text on the base surface, like context lines.
+                    DiffLineKind::Hunk => (colors.muted_foreground, colors.background, None),
                     DiffLineKind::Header | DiffLineKind::Context => (colors.foreground, colors.background, None),
                 };
                 let mut row = div()

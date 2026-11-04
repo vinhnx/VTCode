@@ -392,6 +392,11 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         // Collapsing again hides the patch view but keeps the card.
         window.click("diff-change-1", cx);
         assert!(!view.read(cx).transcript.get(0).unwrap().expanded);
+        window.render_frame(cx);
+        assert!(
+            window.try_find("copy-patch-change-1").is_none(),
+            "collapsed cards hide the export with the patch it copies"
+        );
 
         // Narrow-conversation regression: the header actions stay inside the
         // card (and clickable) even at the widest inspector setting, with the
@@ -416,6 +421,8 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
 
 #[test]
 fn transcript_diff_classification_is_bounded_and_preserves_line_kinds() {
+    // Git framing is skipped (the card's file rows already name each path)
+    // while every visible kind still classifies.
     let patch = "diff --git a/file.rs b/file.rs\n--- a/file.rs\n+++ b/file.rs\n@@ -1 +1 @@\n-old\n+new\n context\n";
     let mut lines = super::super::ClassifiedDiffLines::new(patch);
     let classified = lines.by_ref().map(|line| (line.kind, line.text)).collect::<Vec<_>>();
@@ -423,9 +430,6 @@ fn transcript_diff_classification_is_bounded_and_preserves_line_kinds() {
     assert_eq!(
         classified,
         [
-            (super::super::DiffLineKind::Header, "diff --git a/file.rs b/file.rs"),
-            (super::super::DiffLineKind::Header, "--- a/file.rs"),
-            (super::super::DiffLineKind::Header, "+++ b/file.rs"),
             (super::super::DiffLineKind::Hunk, "@@ -1 +1 @@"),
             (super::super::DiffLineKind::Removed, "-old"),
             (super::super::DiffLineKind::Added, "+new"),
@@ -433,12 +437,24 @@ fn transcript_diff_classification_is_bounded_and_preserves_line_kinds() {
         ]
     );
 
+    // Framing-only patches yield nothing and never truncate.
+    let mut lines = super::super::ClassifiedDiffLines::new("diff --git a/f b/f\n--- a/f\n+++ b/f\n");
+    assert_eq!(lines.by_ref().count(), 0);
+    assert!(!lines.truncated);
+
     let at_limit = (0..super::super::MAX_DIFF_LINES)
         .map(|index| format!("+line-{index}\n"))
         .collect::<String>();
     let mut lines = super::super::ClassifiedDiffLines::new(&at_limit);
     assert_eq!(lines.by_ref().count(), super::super::MAX_DIFF_LINES);
     assert!(!lines.truncated);
+
+    // Asymmetric bounds: framing past the budget is free, one more visible
+    // line truncates.
+    let framed_at_limit = format!("{at_limit}--- a/f\n+++ b/f\n");
+    let mut lines = super::super::ClassifiedDiffLines::new(&framed_at_limit);
+    assert_eq!(lines.by_ref().count(), super::super::MAX_DIFF_LINES);
+    assert!(!lines.truncated, "trailing framing must not truncate a fully-rendered patch");
 
     let oversized = (0..super::super::MAX_DIFF_LINES + 1)
         .map(|index| format!("+line-{index}\n"))

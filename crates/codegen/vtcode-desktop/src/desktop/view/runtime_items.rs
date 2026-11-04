@@ -423,6 +423,9 @@ pub(super) struct DiffLine<'a> {
 
 pub(super) const MAX_DIFF_LINES: usize = 2_000;
 
+/// Transcript-visible lines of a unified diff: git framing (`diff --git`,
+/// `---`/`+++`) is skipped because the card's file rows already name each
+/// path, and only yielded lines count toward [`MAX_DIFF_LINES`].
 pub(super) struct ClassifiedDiffLines<'a> {
     lines: std::str::Lines<'a>,
     remaining: usize,
@@ -445,21 +448,29 @@ impl<'a> Iterator for ClassifiedDiffLines<'a> {
     type Item = DiffLine<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            if !self.checked_limit {
-                self.truncated = self.lines.next().is_some();
-                self.checked_limit = true;
+        loop {
+            if self.remaining == 0 {
+                if !self.checked_limit {
+                    // Framing past the budget must not mark a fully-rendered
+                    // patch truncated: only visible lines count.
+                    self.truncated = self.lines.clone().any(|text| classify_diff_line(text) != DiffLineKind::Header);
+                    self.checked_limit = true;
+                }
+                return None;
             }
-            return None;
-        }
 
-        let Some(text) = self.lines.next() else {
-            self.remaining = 0;
-            self.checked_limit = true;
-            return None;
-        };
-        self.remaining -= 1;
-        Some(DiffLine { kind: classify_diff_line(text), text })
+            let Some(text) = self.lines.next() else {
+                self.remaining = 0;
+                self.checked_limit = true;
+                return None;
+            };
+            let kind = classify_diff_line(text);
+            if kind == DiffLineKind::Header {
+                continue;
+            }
+            self.remaining -= 1;
+            return Some(DiffLine { kind, text });
+        }
     }
 }
 
