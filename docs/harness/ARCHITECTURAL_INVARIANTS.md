@@ -426,6 +426,13 @@ Key guarantees:
 - **Fail closed**: an unknown exec-session or PTY handle returns a typed "not found" error and is never silently
   re-created. `ExecSessionManager::insert_session` uses `entry()` so identity is never reused.
 
+**Known limit — resume across processes**: the counter is process-local, so a resumed session whose event log already
+contains `item_0..item_N` mints those handles again from zero. Today this does not corrupt restored rows because
+restore projects history items straight into the view (`historical: true`) and the client drops a restored row only
+when a *live* item supersedes it; it is not a real generation mechanism. A future change that replays restore through
+the live update path must first seed the counter from the restored maximum. The tripwire test
+`item_handles_do_not_account_for_restored_history_from_a_previous_process` pins the current behaviour.
+
 **Violation**: two live items sharing an id in one session log; an emitter that restarts its counter; a public
 `Option`-returning lookup that indexes a table directly; a stale handle that panics or silently binds to a new item.
 

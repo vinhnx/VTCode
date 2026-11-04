@@ -37,8 +37,6 @@ use vtcode_config::subagents::SUBAGENT_HARD_CONCURRENCY_LIMIT;
 )]
 use super::*;
 
-const BACKGROUND_COMPLETION_IDENTITY_CAPACITY: usize = 256;
-
 impl SubagentController {
     fn clone_for_background_completion_monitor(&self) -> Self {
         Self {

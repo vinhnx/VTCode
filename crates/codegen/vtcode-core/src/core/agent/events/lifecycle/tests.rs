@@ -694,6 +694,25 @@ fn item_handles_are_unique_across_independent_emitters() {
 }
 
 #[test]
+fn item_handles_do_not_account_for_restored_history_from_a_previous_process() {
+    // Documents the remaining boundary rather than claiming safety: the
+    // counter is process-local, so a resumed session whose event log already
+    // contains `item_0..item_N` mints the same handles again from the start.
+    // Restored rows are distinguished only by arriving through the history
+    // path (`historical: true`), never by a generation in the handle itself.
+    // If restore ever replays into the live update path, this assertion is the
+    // tripwire: it will fail as soon as the counter is made restore-aware.
+    let emitter = SharedLifecycleEmitter::default();
+    let restored_history = ["item_0", "item_1"];
+    let fresh = emitter.next_item_id();
+    assert!(
+        restored_history.contains(&fresh.as_str()),
+        "a fresh process reuses handles already present in restored history; \
+         fixing this requires seeding the counter from the restored maximum"
+    );
+}
+
+#[test]
 fn item_handles_stay_unique_when_emitted_through_different_event_paths() {
     // A tool call and a lifecycle text item must never share a handle: the
     // transcript keys rows by id, so a collision replaces a live row.

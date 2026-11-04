@@ -1,10 +1,12 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use tokio::sync::broadcast;
 use vtcode_core::exec::events::{
     HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItem, ThreadItemDetails,
 };
-use vtcode_core::subagents::{BackgroundCompletionEvent, BackgroundSubprocessStatus};
+use vtcode_core::subagents::{
+    BACKGROUND_COMPLETION_IDENTITY_CAPACITY, BackgroundCompletionEvent, BackgroundSubprocessStatus,
+};
 use vtcode_core::tools::exec_session::ExecSessionCompletionEvent;
 
 pub(crate) const MAX_PENDING_BACKGROUND_COMPLETIONS: usize = 16;
@@ -12,51 +14,22 @@ const BACKGROUND_COMPLETION_NOTE_MAX_BYTES: usize = 4_096;
 const BACKGROUND_COMPLETION_FIELD_MAX_BYTES: usize = 512;
 const BACKGROUND_COMPLETION_COMPACT_FIELD_MAX_BYTES: usize = 32;
 
-/// Upper bound on remembered delivery identities.
-///
-/// A session can outlive many background completions, so an unbounded set would
-/// grow for the whole session. Redelivery can only come from the live broadcast
-/// channel (a retained, not-yet-drained copy); once an identity is older than
-/// this window its event has long left the channel, and the set only needs to
-/// outlive that lag.
-const MAX_DELIVERED_IDENTITIES: usize = 256;
-
-/// Insertion-ordered, capacity-bounded identity memo.
-///
-/// Mirrors the `VecDeque` eviction used elsewhere in this module: the oldest
-/// identity is forgotten first so memory stays bounded while the recent
-/// deduplication window — the only window the broadcast channel can replay —
-/// is preserved.
-#[derive(Debug, Default)]
-struct DeliveredIdentities {
-    order: std::collections::VecDeque<String>,
-    members: BTreeSet<String>,
-}
-
-impl DeliveredIdentities {
-    fn contains(&self, identity: &str) -> bool {
-        self.members.contains(identity)
-    }
-
-    fn insert(&mut self, identity: String) {
-        if self.members.insert(identity.clone()) {
-            self.order.push_back(identity);
-            while self.order.len() > MAX_DELIVERED_IDENTITIES {
-                if let Some(evicted) = self.order.pop_front() {
-                    self.members.remove(&evicted);
-                }
-            }
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub(crate) struct PendingBackgroundCompletions {
     events: BTreeMap<String, BackgroundCompletionEvent>,
     non_autonomous_identities: BTreeSet<String>,
     continuation_queued: bool,
     observed_exec_sessions: BTreeSet<String>,
-    delivered_identities: DeliveredIdentities,
+    /// Recently delivered completion identities, oldest first.
+    ///
+    /// Bounded by [`vtcode_core::subagents::BACKGROUND_COMPLETION_IDENTITY_CAPACITY`],
+    /// the same window the subagent controller uses for the identical dedupe
+    /// job, and evicted oldest-first like the pending queue above. A session
+    /// outlives any one completion, so this must not grow for the whole
+    /// session: redelivery can only come from the live broadcast channel (a
+    /// retained, not-yet-drained copy), and an identity older than this window
+    /// has long left that channel.
+    delivered_identities: VecDeque<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -76,15 +49,29 @@ impl PendingBackgroundCompletions {
         // Already delivered results must not occupy the bounded pending queue
         // and displace an unobserved failure. Canonical/UI delivery is separate.
         let observed = &self.observed_exec_sessions;
-        let delivered = &mut self.delivered_identities;
-        self.events.retain(|identity, event| {
-            let consumed =
-                event.task_id == format!("exec:{}", event.exec_session_id) && observed.contains(&event.exec_session_id);
-            if consumed {
-                delivered.insert(identity.clone());
-            }
-            !consumed
-        });
+        let consumed: Vec<String> = self
+            .events
+            .iter()
+            .filter(|(_, event)| {
+                event.task_id == format!("exec:{}", event.exec_session_id) && observed.contains(&event.exec_session_id)
+            })
+            .map(|(identity, _)| identity.clone())
+            .collect();
+        for identity in consumed {
+            self.events.remove(&identity);
+            self.remember_delivered(identity);
+        }
+    }
+
+    /// Remember a delivered identity, evicting oldest-first at the shared cap.
+    fn remember_delivered(&mut self, identity: String) {
+        if self.delivered_identities.iter().any(|seen| seen == &identity) {
+            return;
+        }
+        if self.delivered_identities.len() >= BACKGROUND_COMPLETION_IDENTITY_CAPACITY {
+            self.delivered_identities.pop_front();
+        }
+        self.delivered_identities.push_back(identity);
     }
 
     fn exec_result_observed(&self, event: &BackgroundCompletionEvent) -> bool {
@@ -98,7 +85,7 @@ impl PendingBackgroundCompletions {
             return false;
         }
         if self.exec_result_observed(&event) {
-            self.delivered_identities.insert(identity);
+            self.remember_delivered(identity);
             // Return true so drain callers still emit canonical and UI events.
             return true;
         }
@@ -174,7 +161,7 @@ impl PendingBackgroundCompletions {
         }
         self.events.clear();
         for identity in consumed_identities {
-            self.delivered_identities.insert(identity.clone());
+            self.remember_delivered(identity.clone());
             self.non_autonomous_identities.remove(&identity);
         }
         Some(note)
@@ -514,21 +501,16 @@ mod tests {
         // Growth must stop at the cap while the recent window — the only span
         // the broadcast channel can still replay — keeps deduplicating.
         let mut pending = PendingBackgroundCompletions::default();
-        let total = MAX_DELIVERED_IDENTITIES + 64;
+        let total = BACKGROUND_COMPLETION_IDENTITY_CAPACITY + 64;
         for index in 0..total {
             let event = completion(&format!("task{index}"), BackgroundSubprocessStatus::Stopped);
             assert!(pending.push(event), "first delivery of task{index} must be accepted");
             let _ = pending.take_transient_note();
         }
         assert_eq!(
-            pending.delivered_identities.members.len(),
-            MAX_DELIVERED_IDENTITIES,
-            "memo must stop growing at its cap"
-        );
-        assert_eq!(
-            pending.delivered_identities.order.len(),
-            pending.delivered_identities.members.len(),
-            "eviction order and membership must stay in step"
+            pending.delivered_identities.len(),
+            BACKGROUND_COMPLETION_IDENTITY_CAPACITY,
+            "memo must stop growing at its shared cap"
         );
 
         // The most recent identity is still deduplicated.

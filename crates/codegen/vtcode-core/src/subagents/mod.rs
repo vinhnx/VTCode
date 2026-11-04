@@ -115,6 +115,16 @@ use vtcode_config::subagents::SUBAGENT_HARD_CONCURRENCY_LIMIT;
 
 const BACKGROUND_COMPLETION_CHANNEL_CAPACITY: usize = 64;
 
+/// Upper bound on remembered background-completion identities.
+///
+/// A session outlives any single completion, so the dedupe memo must not grow
+/// unboundedly. Redelivery can only arrive from the live broadcast channel (a
+/// retained, not-yet-drained copy), so remembering roughly four times that
+/// channel's capacity preserves the whole replay window while keeping memory
+/// flat. Shared by the subagent controller and the run loop's
+/// `PendingBackgroundCompletions`.
+pub const BACKGROUND_COMPLETION_IDENTITY_CAPACITY: usize = 256;
+
 struct BackgroundCompletionChannel {
     sender: broadcast::Sender<BackgroundCompletionEvent>,
     parent_sender: broadcast::Sender<BackgroundCompletionEvent>,
