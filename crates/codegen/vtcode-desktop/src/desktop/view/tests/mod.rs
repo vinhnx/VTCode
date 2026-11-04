@@ -245,6 +245,25 @@ fn focus_element_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mu
     panic!("Tab did not reach focusable element {id}");
 }
 
+/// Click one thread tab's close button, revealing it first. Folder tabs keep
+/// their natural width and the strip scrolls, so the button can sit outside
+/// the viewport (and outside hit-testing) until revealed — the same scroll a
+/// native pointer user performs. Two frames: the first binds the scroll
+/// handle, the second applies the reveal.
+pub(super) fn click_thread_tab_close(
+    window: &mut gpui_kit::Window,
+    view: &Entity<DesktopView>,
+    session_id: &str,
+    cx: &mut gpui_kit::App,
+) {
+    if let Some(index) = view.read(cx).open_tabs.iter().position(|tab| tab == session_id) {
+        view.update(cx, |view, _| view.tab_strip_scroll.scroll_to_item(index));
+        window.render_frame(cx);
+        window.render_frame(cx);
+    }
+    window.click(format!("thread-tab-close-{session_id}"), cx);
+}
+
 /// Tab until focus leaves `scope`, then keep tabbing until it cycles back in.
 /// Route panels do not trap focus, so a fixed tab count breaks whenever any
 /// window control is added, removed, or reordered. Bounded; panics naming the

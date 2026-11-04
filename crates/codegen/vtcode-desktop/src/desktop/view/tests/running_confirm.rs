@@ -71,8 +71,8 @@ fn running_thread_marks_every_surface_and_keeps_new_thread_enabled(cx: &mut Test
         assert!(window.try_find("thread-tab-running-thread-b").is_some());
         assert!(window.try_find("thread-tab-running-thread-a").is_none());
         assert!(window.try_find("thread-tab-running-thread-c").is_none());
-        assert_eq!(window.find("thread-tab-thread-b").label(), Some("Second thread (running)"));
-        assert_eq!(window.find("thread-tab-thread-a").label(), Some("Switch to thread: First thread"));
+        assert_eq!(window.within("thread-tabs").find(1usize).label(), Some("Second thread (running)"));
+        assert_eq!(window.within("thread-tabs").find(0usize).label(), Some("Switch to thread: First thread"));
         assert_ne!(window.find("thread-tab-new").disabled(), Some(true), "new thread stays enabled mid-turn");
 
         // Sidebar rows mirror the strip; the selected row is not a load target.
@@ -496,7 +496,7 @@ fn tab_close_mid_turn_confirms_then_untabs_on_drain(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_running_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("thread-tab-close-thread-b", cx);
+        click_thread_tab_close(window, &view, "thread-b", cx);
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_some(), "closing the running tab confirms");
         assert!(requests.try_recv().is_err());
@@ -519,13 +519,13 @@ fn tab_close_mid_turn_confirms_then_untabs_on_drain(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_running_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("thread-tab-close-thread-b", cx);
+        click_thread_tab_close(window, &view, "thread-b", cx);
         window.render_frame(cx);
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(requests.try_recv().is_err(), "declining sends nothing");
         view.update(cx, |view, _| assert_eq!(view.open_tabs.as_slice(), ["thread-a", "thread-b", "thread-c"]));
-        window.click("thread-tab-close-thread-a", cx);
+        click_thread_tab_close(window, &view, "thread-a", cx);
         window.render_frame(cx);
         assert!(window.try_find("running-confirm-dialog").is_none(), "idle tabs untab freely mid-turn");
         view.update(cx, |view, _| assert_eq!(view.open_tabs.as_slice(), ["thread-b", "thread-c"]));

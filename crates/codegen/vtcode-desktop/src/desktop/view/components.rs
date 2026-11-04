@@ -120,11 +120,15 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
         .into_any_element()
 }
 
-/// Shared segmented tab treatment at the ecosystem-default medium size. Dense
-/// panels chain `.small()` with a justification instead of shrinking the
-/// shared default.
-pub(super) fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
-    TabBar::new(id).segmented().w_full()
+/// Shared folder tab treatment at the ecosystem-default medium size: the
+/// selected tab joins the canvas content below it, so callers on canvas place
+/// the bar flush above that content (the picker keeps its stack gap — its
+/// popover surface never joins anyway). No width cap: Kit truncates labels
+/// only when a `max_width` is set, which this builder never does — overflow
+/// scrolls, and callers with many tabs chain `.menu(true)` for the overflow
+/// dropdown.
+pub(super) fn desktop_folder_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
+    TabBar::new(id).folder().w_full()
 }
 
 /// Sentence-case settings section heading: one rem step above body text at

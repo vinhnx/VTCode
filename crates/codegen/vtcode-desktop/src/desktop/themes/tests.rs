@@ -440,6 +440,35 @@ fn segmented_tab_states_are_distinct_and_readable(cx: &mut gpui_kit::TestAppCont
 }
 
 #[gpui_kit::test]
+fn folder_tab_states_join_canvas_content(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id));
+        for id in ids {
+            let _mode = apply_by_id(id, None, cx);
+            let kit = cx.global::<Theme>();
+            // The selected folder tab joins the canvas content below the bar.
+            assert_eq!(kit.colors.tab_active, kit.colors.background, "{id}");
+            assert_eq!(
+                kit.tokens.tab_active,
+                gpui_kit::component::theme::ThemeToken::from(kit.colors.background),
+                "{id}: the selected folder fill must reconcile into the tokens Kit reads"
+            );
+            // Transparent band: the bar never stripes a non-canvas surface.
+            assert_eq!(kit.colors.tab_bar.a, 0., "{id}");
+            // Resting labels sit on canvas (thread strip, inspector) and on
+            // popover (attachment picker).
+            for (name, surface) in [("canvas", kit.colors.background), ("popover", kit.colors.popover)] {
+                let ratio = contrast_ratio(kit.colors.tab_foreground, surface);
+                assert!(ratio >= 4.5, "{id}: resting folder label on {name} is {ratio:.2}");
+            }
+        }
+    });
+}
+
+#[gpui_kit::test]
 fn hairlines_stay_visible_on_every_fill(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);

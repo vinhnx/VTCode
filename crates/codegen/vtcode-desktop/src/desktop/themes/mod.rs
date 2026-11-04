@@ -416,15 +416,21 @@ fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.tab_bar_segmented = track;
     colors.tab_foreground = inactive_tab_foreground(colors.foreground, track, &[track, colors.background, surface]);
     colors.tab_active_foreground = colors.foreground;
+    // Folder TabBars paint their band from `tab_bar` and the selected tab
+    // from `tab_active`: a transparent band so the bar never stripes a
+    // non-canvas surface (the attachment picker sits on a popover), and a
+    // canvas tab so the selection joins the content below it. Both reconcile
+    // into the legacy `tokens` Kit reads at render time.
+    colors.tab_bar = gpui_kit::transparent_black();
+    colors.tab_active = colors.background;
 }
 
-/// Resting tab labels sit on the segmented track; the token is also shared
-/// with variants that paint on the canvas or panels, so those seats stay
-/// covered too. (No shipped bar paints labels directly on a popover: the
-/// track always sits between the text and the sheet.) Dim the palette
-/// foreground toward the track as far as every seat stays at WCAG AA. The
-/// linear scan (not a binary search) stays valid because per-seat contrast
-/// is not monotonic along the blend.
+/// Resting tab labels sit on canvas (thread strip, inspector) and directly on
+/// popover (attachment picker folder bar); the segmented track survives only
+/// as the dimming anchor. Dim the palette foreground toward the track as far
+/// as every scan seat stays at WCAG AA (the folder test pins the popover seat
+/// separately). The linear scan (not a binary search) stays valid because
+/// per-seat contrast is not monotonic along the blend.
 fn inactive_tab_foreground(foreground: Hsla, track: Hsla, seats: &[Hsla]) -> Hsla {
     const AA_RATIO: f32 = 4.5;
     let mut best = foreground;

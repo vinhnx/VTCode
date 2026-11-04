@@ -461,11 +461,11 @@ fn palette_and_attachment_picker_are_mutually_exclusive(cx: &mut TestAppContext)
         // Picker open, then a centered palette modal: only the palette survives.
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some());
+        assert!(window.try_find("attachment-picker-tabs").is_some());
         view.update(cx, |view, cx| view.open_command_palette(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).attachment_picker.is_none(), "a modal palette closes the picker");
-        assert!(window.try_find("picker-tab-workspace").is_none());
+        assert!(window.try_find("attachment-picker-tabs").is_none());
         assert!(window.try_find("command-palette").is_some());
         view.update(cx, |view, cx| view.close_palette(window, cx));
 
@@ -473,12 +473,12 @@ fn palette_and_attachment_picker_are_mutually_exclusive(cx: &mut TestAppContext)
         // opening the Models popup must drop the picker first.
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some());
+        assert!(window.try_find("attachment-picker-tabs").is_some());
         view.update(cx, |view, cx| view.open_model_palette(window, cx));
         window.render_frame(cx);
         let state = view.read(cx);
         assert!(state.attachment_picker.is_none(), "a palette popup closes the picker");
-        assert!(window.try_find("picker-tab-workspace").is_none());
+        assert!(window.try_find("attachment-picker-tabs").is_none());
         assert!(state.palette.is_some());
         assert!(state.palette_kind == super::super::PaletteKind::Models);
         assert!(window.try_find("command-palette").is_some());
@@ -492,7 +492,7 @@ fn palette_and_attachment_picker_are_mutually_exclusive(cx: &mut TestAppContext)
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_none(), "the picker closes an open palette");
         assert!(window.try_find("command-palette").is_none());
-        assert!(window.try_find("picker-tab-workspace").is_some());
+        assert!(window.try_find("attachment-picker-tabs").is_some());
     })
     .unwrap();
 }
@@ -503,14 +503,14 @@ fn second_attach_trigger_closes_the_picker(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some());
+        assert!(window.try_find("attachment-picker-tabs").is_some());
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).attachment_picker.is_none(), "second trigger closes the picker");
-        assert!(window.try_find("picker-tab-workspace").is_none());
+        assert!(window.try_find("attachment-picker-tabs").is_none());
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some(), "third trigger reopens");
+        assert!(window.try_find("attachment-picker-tabs").is_some(), "third trigger reopens");
     })
     .unwrap();
 }
@@ -522,11 +522,11 @@ fn clicking_away_closes_the_attachment_picker(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some());
+        assert!(window.try_find("attachment-picker-tabs").is_some());
         window.click("message-composer-frame", cx);
         window.render_frame(cx);
         assert!(view.read(cx).attachment_picker.is_none(), "clicking away closes the picker");
-        assert!(window.try_find("picker-tab-workspace").is_none());
+        assert!(window.try_find("attachment-picker-tabs").is_none());
         assert!(
             view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
             "click-away lands focus in the composer"
@@ -542,7 +542,7 @@ fn opening_a_route_drops_the_attachment_picker(cx: &mut TestAppContext) {
         cx.update_window(window, |_, window, cx| {
             view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
             window.render_frame(cx);
-            assert!(window.try_find("picker-tab-workspace").is_some());
+            assert!(window.try_find("attachment-picker-tabs").is_some());
             match index {
                 0 => view.update(cx, |view, cx| view.open_settings(window, cx)),
                 1 => view.update(cx, |view, cx| view.open_thread_browser(window, cx)),
@@ -550,7 +550,7 @@ fn opening_a_route_drops_the_attachment_picker(cx: &mut TestAppContext) {
             }
             window.render_frame(cx);
             assert!(view.read(cx).attachment_picker.is_none(), "route {index} drops the composer-anchored picker");
-            assert!(window.try_find("picker-tab-workspace").is_none());
+            assert!(window.try_find("attachment-picker-tabs").is_none());
             view.update(cx, |view, cx| view.close_active_route(window, cx));
             window.render_frame(cx);
             assert!(
@@ -587,7 +587,7 @@ fn attachment_picker_stays_inside_a_narrow_window(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
         let viewport = window.viewport_size();
-        for id in ["picker-tab-workspace", "picker-file-notes.md", "picker-file-shot.png"] {
+        for id in ["attachment-picker-tabs", "picker-file-notes.md", "picker-file-shot.png"] {
             let bounds = window.find(id).bounds();
             assert!(
                 bounds.origin.x >= px(0.) && bounds.origin.y >= px(0.),
@@ -690,7 +690,7 @@ fn opening_a_modal_drops_the_attachment_picker(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some());
+        assert!(window.try_find("attachment-picker-tabs").is_some());
         view.update(cx, |view, cx| view.open_about(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).attachment_picker.is_none(), "about drops the picker");

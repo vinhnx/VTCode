@@ -130,38 +130,37 @@ impl DesktopView {
         };
         let weak = cx.entity().downgrade();
 
-        let tabs = div()
-            .flex()
-            .items_center()
-            .gap_1()
-            .child(
-                desktop_button("picker-tab-workspace")
-                    .icon(IconName::FolderOpen)
-                    .label(app::NAME.to_string())
-                    .toggled(state.tab == AttachmentPickerTab::Workspace)
-                    .when(state.tab == AttachmentPickerTab::Workspace, |button| {
-                        button.bg(colors.secondary).text_color(colors.foreground)
-                    })
-                    .ghost()
-                    .small()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.set_attachment_picker_tab(AttachmentPickerTab::Workspace, cx);
-                    })),
-            )
-            .child(
-                desktop_button("picker-tab-computer")
-                    .icon(IconName::LaptopMinimal)
-                    .label(rust_i18n::t!("app.composer.picker_this_computer").to_string())
-                    .toggled(state.tab == AttachmentPickerTab::Computer)
-                    .when(state.tab == AttachmentPickerTab::Computer, |button| {
-                        button.bg(colors.secondary).text_color(colors.foreground)
-                    })
-                    .ghost()
-                    .small()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.set_attachment_picker_tab(AttachmentPickerTab::Computer, cx);
-                    })),
-            );
+        // The wrapper owns the lookup id: Kit bars scope their id into child
+        // paths but register nothing observable themselves.
+        let tabs = div().id("attachment-picker-tabs").test_support().child(
+            desktop_folder_tab_bar("attachment-picker-tabs-bar")
+                .selected_index(match state.tab {
+                    AttachmentPickerTab::Workspace => 0,
+                    AttachmentPickerTab::Computer => 1,
+                })
+                .on_click(cx.listener(|this, index: &usize, _, cx| {
+                    this.set_attachment_picker_tab(
+                        if *index == 0 {
+                            AttachmentPickerTab::Workspace
+                        } else {
+                            AttachmentPickerTab::Computer
+                        },
+                        cx,
+                    );
+                }))
+                .child(
+                    Tab::new()
+                        .label(app::NAME.to_string())
+                        .aria_label(app::NAME.to_string())
+                        .prefix(Icon::new(IconName::FolderOpen).small()),
+                )
+                .child(
+                    Tab::new()
+                        .label(rust_i18n::t!("app.composer.picker_this_computer").to_string())
+                        .aria_label(rust_i18n::t!("app.composer.picker_this_computer").to_string())
+                        .prefix(Icon::new(IconName::LaptopMinimal).small()),
+                ),
+        );
 
         let body = match state.tab {
             AttachmentPickerTab::Workspace => self.render_picker_files(cx),

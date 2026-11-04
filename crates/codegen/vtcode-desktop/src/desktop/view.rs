@@ -459,6 +459,9 @@ struct DesktopView {
     /// [`Self::keyboard_focused_session`] highlight in first-open order
     /// while this handle is focused.
     tab_strip_focus: FocusHandle,
+    /// Scroll handle for the tab strip. Folder tabs keep their natural
+    /// width, so keyboard moves reveal the highlighted tab explicitly.
+    tab_strip_scroll: ScrollHandle,
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
     message_scroller: Entity<MessageScrollerState>,

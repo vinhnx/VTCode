@@ -691,6 +691,7 @@ impl DesktopView {
             selected_session_id: None,
             open_tabs: Vec::new(),
             tab_strip_focus: cx.focus_handle().tab_stop(true),
+            tab_strip_scroll: ScrollHandle::default(),
             active_primary_agent_display: None,
             transcript: Transcript::default(),
             message_scroller,

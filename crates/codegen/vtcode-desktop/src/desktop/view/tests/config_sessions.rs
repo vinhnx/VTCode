@@ -594,7 +594,7 @@ fn command_and_add_context_palettes_follow_the_selected_language(cx: &mut TestAp
         // The attach button opens the tabbed card picker.
         window.click("attach-files", cx);
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some(), "attach opens the picker");
+        assert!(window.try_find("attachment-picker-tabs").is_some(), "attach opens the picker");
         view.update(cx, |view, cx| view.close_attachment_picker(window, cx));
         window.render_frame(cx);
         // The AddContext palette remains reachable through its action (@ / ⌘⇧A).

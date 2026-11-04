@@ -46,10 +46,15 @@ fn thread_tabs_render_and_switch_on_click(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("thread-tabs").is_some());
-        assert_eq!(window.find("thread-tab-thread-a").label(), Some("Switch to thread: First thread"));
-        assert_eq!(window.find("thread-tab-thread-b").label(), Some("Current thread: Second thread"));
-        assert_eq!(window.find("thread-tab-thread-b").checked(), Some(true), "the selected tab reads as current");
-        assert_eq!(window.find("thread-tab-thread-a").checked(), Some(false));
+        // Folder tabs take index ids; labels ride the tab role.
+        assert_eq!(window.within("thread-tabs").find(0usize).label(), Some("Switch to thread: First thread"));
+        assert_eq!(window.within("thread-tabs").find(1usize).label(), Some("Current thread: Second thread"));
+        assert_eq!(
+            window.within("thread-tabs").find(1usize).selected(),
+            Some(true),
+            "the selected tab reads as current"
+        );
+        assert_eq!(window.within("thread-tabs").find(0usize).selected(), Some(false));
         assert!(window.try_find("thread-tab-new").is_some());
 
         window.click("thread-tab-thread-a", cx);
@@ -66,13 +71,13 @@ fn closing_tabs_untabs_without_closing_sessions(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         // Closing the selected tab loads the next neighbor first.
-        window.click("thread-tab-close-thread-b", cx);
+        click_thread_tab_close(window, &view, "thread-b", cx);
         assert_eq!(load_request_for(&mut requests), "thread-c");
         assert_eq!(view.read(cx).open_tabs.as_slice(), ["thread-a", "thread-c"]);
         assert_eq!(view.read(cx).sessions.len(), 3, "untabbing keeps the session");
 
         // Non-selected tabs close without a load (the first load is still in flight).
-        window.click("thread-tab-close-thread-c", cx);
+        click_thread_tab_close(window, &view, "thread-c", cx);
         assert!(requests.try_recv().is_err(), "closing an unselected tab sends no load");
         assert_eq!(view.read(cx).open_tabs.as_slice(), ["thread-a"]);
         window.render_frame(cx);
@@ -101,13 +106,34 @@ fn refused_load_keeps_the_selected_tab(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("thread-tab-close-thread-b", cx);
+        click_thread_tab_close(window, &view, "thread-b", cx);
         assert!(requests.try_recv().is_err(), "a busy session refuses the neighbor load");
         assert_eq!(
             view.read(cx).open_tabs.as_slice(),
             ["thread-a", "thread-b", "thread-c"],
             "the selected tab stays reachable when its load is refused"
         );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_strip_overflow_menu_lists_every_tab(cx: &mut TestAppContext) {
+    let (window, _, _) = open_threaded_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Kit owns the dropdown mechanics; the strip owns enabling it. The
+        // overflow path matters most once tabs scroll past the viewport.
+        assert!(window.within("thread-tabs").try_find("more").is_some(), "multi-tab strip offers the overflow menu");
+        window.within("thread-tabs").click("more", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("popup-menu").role(), Some(gpui_kit::Role::Menu), "overflow opens the tab list");
+        window.press("escape", cx);
+        window.render_frame(cx);
     })
     .unwrap();
 }
@@ -339,14 +365,20 @@ fn tabs_left_right_rove_paint_rail_clamp_and_heal(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| view.tab_strip_focus.focus(window, cx));
         assert!(view.read(cx).tab_strip_focus.is_focused(window));
         // First-open order, independent of the selected tab (thread-b).
-        let tab = window.find("thread-tab-row-thread-b").bounds();
+        let tab = window.find("thread-tab-thread-b").bounds();
         window.press("right", cx);
         assert_eq!(view.read(cx).keyboard_focused_session.as_deref(), Some("thread-a"));
         window.press("right", cx);
         assert_eq!(view.read(cx).keyboard_focused_session.as_deref(), Some("thread-b"));
         window.render_frame(cx);
         assert!(window.try_find("thread-tab-focus-rail-thread-b").is_some(), "highlight paints a rail");
-        assert_eq!(window.find("thread-tab-row-thread-b").bounds(), tab, "highlight must not reflow the tab");
+        assert!(
+            window.find("thread-tab-focus-rail-thread-b").bounds().size.height > px(0.),
+            "the rail is visible, not a collapsed slot"
+        );
+        // Size, not origin: roving reveals the highlight, so the strip may
+        // scroll under it — the rail itself must not change the tab's size.
+        assert_eq!(window.find("thread-tab-thread-b").bounds().size, tab.size, "highlight must not reflow the tab");
         window.press("right", cx);
         assert_eq!(view.read(cx).keyboard_focused_session.as_deref(), Some("thread-c"));
         window.press("right", cx);
@@ -440,16 +472,14 @@ fn tabs_strip_is_one_tab_stop_rows_are_skipped(cx: &mut TestAppContext) {
         window.render_frame(cx);
         focus_element_by_tab(window, "thread-tabs", cx);
         assert!(view.read(cx).tab_strip_focus.is_focused(window));
-        // The select buttons sit between the strip and the close buttons in
-        // Tab order: if any were a stop, the next tabs would land on one.
+        // Folder tabs own no focus handles (Kit contract), so Tab order can
+        // only move through the strip stop and the close buttons: if any tab
+        // body were a stop, the next tabs would land on one.
         for _ in 0..6 {
             window.press("tab", cx);
             window.render_frame(cx);
-            for id in ["thread-tab-thread-a", "thread-tab-thread-b", "thread-tab-thread-c"] {
-                assert!(
-                    !window.try_find(id).is_some_and(|element| element.focused() == Some(true)),
-                    "{id} stays out of Tab order"
-                );
+            for tab in window.within("thread-tabs").find_all_by_role(gpui_kit::Role::Tab) {
+                assert_ne!(tab.focused(), Some(true), "tab bodies stay out of Tab order");
             }
         }
     })

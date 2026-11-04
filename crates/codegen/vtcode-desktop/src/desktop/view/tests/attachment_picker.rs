@@ -43,8 +43,15 @@ fn attachment_picker_opens_with_workspace_tree(cx: &mut TestAppContext) {
         window.render_frame(cx);
         // Children of the anchored popover resolve in the test tree; the
         // focus-trap wrapper consumes the root id itself.
-        assert!(window.try_find("picker-tab-workspace").is_some(), "tabs render");
-        assert!(window.try_find("picker-tab-computer").is_some());
+        assert!(window.try_find("attachment-picker-tabs").is_some(), "tabs render");
+        assert_eq!(
+            window
+                .within("attachment-picker-tabs")
+                .find_all_by_role(gpui_kit::Role::Tab)
+                .len(),
+            2,
+            "workspace and computer tabs mount"
+        );
         assert!(window.try_find("picker-file-list").is_some(), "the workspace tab shows a file tree");
         assert!(window.try_find("picker-file-notes.md").is_some(), "workspace file rows render");
         assert!(window.try_find("picker-file-shot.png").is_some());
@@ -132,7 +139,7 @@ fn attachment_picker_computer_tab_hands_off_to_native_picker(cx: &mut TestAppCon
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("picker-tab-computer", cx);
+        window.within("attachment-picker-tabs").click(1usize, cx);
         window.render_frame(cx);
         assert!(window.try_find("picker-choose-files").is_some(), "the computer tab offers the native picker");
         window.click("picker-choose-files", cx);
@@ -185,7 +192,7 @@ fn attachment_picker_shows_an_empty_state_without_files(cx: &mut TestAppContext)
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("picker-tab-workspace").is_some(), "the empty picker stays mounted");
+        assert!(window.try_find("attachment-picker-tabs").is_some(), "the empty picker stays mounted");
         assert!(window.try_find("picker-files-empty").is_some(), "the empty picker names its state");
         assert!(window.try_find("picker-file-notes.md").is_none());
     })
