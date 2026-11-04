@@ -8,6 +8,18 @@ use crate::tools::file_ops::{canonical_diff_previews, diff_preview_user_message}
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Process-wide source of `ThreadItem` handles.
+///
+/// `ThreadItem.id` is the handle every consumer keys on (transcript rows,
+/// canonical memory projections, replay), so it must be unique across all
+/// emitters in a session. A per-emitter counter is not enough: emitters are
+/// created per recorder, per runtime and per streaming step, so each one
+/// restarted at `item_0` and rebound an existing handle to a different item —
+/// a dangling handle that silently overwrote an earlier row. One monotonic
+/// counter keeps handles unique across emitters, turns and retries.
+static NEXT_ITEM_HANDLE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Default)]
 struct StreamingTextState {
@@ -157,7 +169,6 @@ pub fn file_change_completed_event(
 /// Shared lifecycle state for assistant text, reasoning, and model-emitted tool calls.
 #[derive(Debug, Default)]
 pub struct SharedLifecycleEmitter {
-    next_item_index: u64,
     assistant: StreamingTextState,
     reasoning: StreamingTextState,
     reasoning_stage: Option<String>,
@@ -167,11 +178,12 @@ pub struct SharedLifecycleEmitter {
 
 impl SharedLifecycleEmitter {
     /// Generate the next unique item ID for lifecycle events.
+    ///
+    /// Takes `&self` because the counter is process-wide: uniqueness must not
+    /// depend on which emitter instance mints the handle.
     #[must_use]
-    pub fn next_item_id(&mut self) -> String {
-        let id = self.next_item_index;
-        self.next_item_index += 1;
-        format!("item_{id}")
+    pub fn next_item_id(&self) -> String {
+        format!("item_{}", NEXT_ITEM_HANDLE.fetch_add(1, Ordering::Relaxed))
     }
 
     /// Emit a completed agent message event with the full text.
