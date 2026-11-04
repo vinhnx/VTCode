@@ -8,6 +8,8 @@ https://developers.openai.com/api/docs/guides/tools-computer-use
 
 https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool
 
+https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
+
 ---
 
 also refine the overall design system for more modern macos 27 look and feels. check apple guidelines.
@@ -62,9 +64,6 @@ for search, it should able to deeplink to specific item when click, and scroll t
 desktop and cli, implement enter to jump to latest message, but only when chat input is not-empty.
 
 ---
----
-
-check auto mode seems can't use web search tool? /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261102T044638Z_528994-20422
 
 ---
 
@@ -79,16 +78,6 @@ contribute back to OSS with learning from this project. check gotchas and decici
 https://github.com/vinhnx/VTCode/issues/803
 
 ---
-
-implement desktop app file brower with core fast logic from CLI. and implement proper and fast files brower for macos. current the brower is basic. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 7.40.37 AM.png'. check https://gpui-kit.com/component component kit. maybe use Tree component https://gpui-kit.com/component/tree/.
-
----
-
-check for all of the panels behavior and layout. when clicking away, they should close or hide properly. and make sure no overlap occurs.
-
-fix: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 7.40.37 AM.png'
-
-
 ---
 
 note integrate pele to desktop app
@@ -111,14 +100,6 @@ https://gpui-kit.com/component/toolbar/
 https://gpui-kit.com/component/title-bar/
 
 ---
-
-build and replace/revamp current desktop app components where suitable https://gpui-kit.com/component/tabs/
-
-1. revamp all current tabs layout for more unified and consistent look accross the app. Prefer using the "Folder tabs" design.
-2. size medium for better readability.
-3. max width: unlimited
-4. implement including more menu options if needed.
-
 ---
 
 improve existing desktop shimmer https://gpui-kit.com/component/shimmer/
@@ -128,9 +109,6 @@ improve existing desktop shimmer https://gpui-kit.com/component/shimmer/
 revamp existing manual build settings/config screen with https://gpui-kit.com/component/settings/ for more consistency
 
 ---
-
-fix The three pre-existing failures I flagged earlier remain untouched and unrelated: two vtcode-config loader tests (test_config_loader_phase_timing_recorded, detects_workspace_config_change — both fail on a pristine tree), one vtcode-core flake that passes in isolation, and the vtcode-auth pkce doctest referencing a private field. Worth a separate fix if you want them gone.
-
 ---
 
 check the mac icons, it seems missing the macos 27 subtle icon borders? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 3.25.21 PM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 3.25.06 PM.png'
@@ -175,12 +153,6 @@ https://gpui-kit.com/component/notification/ improve current in-app notification
 5. handle any errors gracefully.
 
 --
-
-update and change the current button design system again, currently it doesn't look as premium and good. https://gpui-kit.com/component/button/.
-
-design a modern button with macos 27 design guideline
-
----
 
 implement user's message bubble message with rich content when user's message has attachement -> '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-03 at 2.38.16 PM.png' check https://gpui-kit.com/component/bubble/
 
