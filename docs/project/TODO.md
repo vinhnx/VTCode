@@ -10,10 +10,6 @@ https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool
 
 ---
 
-convert demo mp4 to gif 
-
----
-
 also refine the overall design system for more modern macos 27 look and feels. check apple guidelines.
 
 ---
@@ -141,11 +137,6 @@ use this https://gpui-kit.com/component/plot/ and https://gpui-kit.com/component
 3. test with different data sets.
 4. check responsiveness for different screen sizes.
 5. update any outdated chart references.
-
----
-
-check and fix the alignment of the loading "Running" it seems misaligned. or it is because the chat input container itself is misaligned? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 1.33.54 PM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 1.33.21 PM.png'
-check the input container padding and margin to aligned with the whole transcript layout fit
 
 ---
 
