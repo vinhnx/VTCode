@@ -889,3 +889,28 @@ fn cancel_button_click_sends_turn_cancel(cx: &mut TestAppContext) {
         assert!(view.read(cx).cancel_request_sent);
     });
 }
+
+#[gpui_kit::test]
+fn clicking_outside_cancels_the_running_confirm(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("thread-tab-thread-a", cx);
+        window.render_frame(cx);
+        assert!(requests.try_recv().is_err(), "switching waits for the confirm answer");
+        assert!(window.try_find("running-confirm-dialog").is_some());
+
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(requests.try_recv().is_err(), "clicking away sends nothing");
+        assert!(window.try_find("running-confirm-dialog").is_none());
+        view.update(cx, |view, _| {
+            assert_eq!(view.selected_session_id.as_deref(), Some("thread-b"));
+            assert!(view.running, "clicking away never touches the turn");
+            assert!(view.armed_running_switch.is_none());
+            assert_eq!(view.open_tabs.as_slice(), ["thread-a", "thread-b", "thread-c"]);
+        });
+    })
+    .unwrap();
+}

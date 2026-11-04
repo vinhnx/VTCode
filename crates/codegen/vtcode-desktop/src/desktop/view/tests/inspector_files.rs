@@ -805,3 +805,35 @@ fn truncation_notice_names_the_snapshot_bound(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn clicking_outside_closes_the_file_preview(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temp workspace");
+    std::fs::write(workspace.path().join("README.md"), "# Notes").expect("write file");
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.refresh_files(cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_file_preview_overlay("README.md".to_string(), window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("file-preview").is_some());
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("file-preview").is_none(), "clicking away closes the preview");
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert!(view.read(cx).file_preview.is_none(), "preview state must be closed");
+    });
+}

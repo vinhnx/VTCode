@@ -189,6 +189,8 @@ impl DesktopView {
         cx: &mut Context<Self>,
     ) {
         self.disarm_double_escape();
+        // Deferred popovers paint above modal scrims: the picker cannot stay open.
+        self.close_attachment_picker(window, cx);
         // The About dialog unmounts its buttons as it closes, so it must not
         // become the restore target; fall back to the composer instead.
         let return_focus = if self.about_open { None } else { window.focused(cx) };
@@ -314,6 +316,7 @@ impl DesktopView {
     /// text surface, with Copy and a secondary external-open action.
     pub(super) fn render_license_viewer(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
+        let weak = cx.entity().downgrade();
         let colors = &theme.colors;
         let mono = theme.mono_font_family.clone();
         let mono_size = theme.mono_font_size;
@@ -394,6 +397,13 @@ impl DesktopView {
                     .id("license-viewer-panel")
                     .test_support()
                     .track_focus(&self.license_viewer_focus)
+                    // Click-away dismissal, mirroring the palette panel: a
+                    // press on the scrim closes the viewer.
+                    .on_mouse_down_out(move |_, window, cx| {
+                        let _updated = weak.update(cx, |view, cx| {
+                            view.close_license_viewer(window, cx);
+                        });
+                    })
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("license-viewer")
                     .aria_label(rust_i18n::t!(i18n::LICENSES_TITLE).to_string())

@@ -229,3 +229,30 @@ fn viewer_shows_an_error_scoped_to_the_external_open_action(cx: &mut TestAppCont
         );
     });
 }
+
+#[gpui_kit::test]
+fn clicking_outside_closes_the_license_viewer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    open_viewer(window, &view, LicenseDocument::Mit, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("license-viewer").is_some());
+        // The 980x720 viewer covers the composer, so click-away presses the
+        // toolbar above the panel; the guard keeps the oracle honest if the
+        // layout ever drifts the target inside the panel.
+        let panel = window.find("license-viewer").bounds();
+        let target = window.find("navigate-back").bounds();
+        assert!(
+            target.origin.y + target.size.height <= panel.origin.y,
+            "click target must sit above the panel: target={target:?}, panel={panel:?}"
+        );
+        window.click("navigate-back", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("license-viewer").is_none(), "clicking away closes the viewer");
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert!(view.read(cx).license_viewer.is_none(), "viewer state must be closed");
+    });
+}

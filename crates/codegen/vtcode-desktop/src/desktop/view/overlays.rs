@@ -130,6 +130,7 @@ impl DesktopView {
             self.discard_license_viewer();
             cx.notify();
         }
+        self.close_attachment_picker(window, cx);
         self.focus_composer(window, cx);
         cx.notify();
     }
@@ -237,6 +238,7 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        self.close_attachment_picker(window, cx);
         // Entries can reach Settings while the viewer is open (deeplinks, the
         // slash command); the viewer would layer over the page it came from.
         self.discard_license_viewer();
@@ -522,6 +524,7 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        self.close_attachment_picker(window, cx);
         self.route_history.open(Route::Review);
         self.focus_route(Route::Review, window, cx);
         cx.notify();
@@ -547,6 +550,7 @@ impl DesktopView {
         if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         }
+        self.close_attachment_picker(window, cx);
         self.route_history.open(Route::Browser);
         self.focus_route(Route::Browser, window, cx);
         cx.notify();

@@ -493,6 +493,10 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Composer-anchored transients are mutually exclusive: a palette
+        // opening over the picker drops it first, mirroring
+        // `open_attachment_picker` closing the palette.
+        self.close_attachment_picker(window, cx);
         if self.current_route() == Route::Review && kind != PaletteKind::ReviewFiles {
             self.close_review(window, cx);
         }

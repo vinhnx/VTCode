@@ -48,6 +48,8 @@ impl DesktopView {
             return;
         }
         self.disarm_double_escape();
+        // Deferred popovers paint above modal scrims: the picker cannot stay open.
+        self.close_attachment_picker(window, cx);
         self.running_confirm = Some(RunningSwitch { intent, workspace: self.workspace.clone() });
         self.running_confirm_focus.focus(window, cx);
         cx.notify();
@@ -163,6 +165,7 @@ impl DesktopView {
     /// prompts, which the warning line calls out while the queue is non-empty.
     pub(super) fn render_running_confirm(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
+        let weak = cx.entity().downgrade();
         let Some(switch) = self.running_confirm.as_ref() else {
             return div().into_any_element();
         };
@@ -189,6 +192,13 @@ impl DesktopView {
                     .id("running-confirm-dialog")
                     .test_support()
                     .track_focus(&self.running_confirm_focus)
+                    // Click-away cancellation, mirroring the palette panel: a
+                    // press on the scrim cancels through the Cancel path.
+                    .on_mouse_down_out(move |_, window, cx| {
+                        let _updated = weak.update(cx, |view, cx| {
+                            view.cancel_running_confirm(window, cx);
+                        });
+                    })
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("running-confirm-dialog")
                     .aria_label(rust_i18n::t!("app.session.running_switch_title").to_string())

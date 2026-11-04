@@ -17,7 +17,13 @@ pub(super) struct AttachmentPickerState {
 
 impl DesktopView {
     pub(super) fn open_attachment_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.workspace.is_none() || self.session_request.is_some() || self.attachment_picker.is_some() {
+        if self.workspace.is_none() || self.session_request.is_some() {
+            return;
+        }
+        // Same-kind openers toggle: a second trigger closes the picker
+        // instead of reopening it, mirroring `toggle_palette_kind`.
+        if self.attachment_picker.is_some() {
+            self.close_attachment_picker(window, cx);
             return;
         }
         if self.palette.is_some() {
@@ -122,6 +128,7 @@ impl DesktopView {
         let Some(state) = self.attachment_picker.as_ref() else {
             return div().into_any_element();
         };
+        let weak = cx.entity().downgrade();
 
         let tabs = div()
             .flex()
@@ -202,6 +209,16 @@ impl DesktopView {
                         .border_1()
                         .border_color(colors.border)
                         .shadow_md()
+                        // Click-away dismissal, mirroring the palette panel: a
+                        // press outside the popover closes it. The close is
+                        // idempotent and the listener unmounts with the panel,
+                        // so no staleness guard is needed.
+                        .on_mouse_down_out(move |_, window, cx| {
+                            let _updated = weak.update(cx, |view, cx| {
+                                view.close_attachment_picker(window, cx);
+                            });
+                        })
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .p_3()
                         .child(tabs)
                         .child(body),

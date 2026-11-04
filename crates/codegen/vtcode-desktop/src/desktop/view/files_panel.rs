@@ -374,6 +374,8 @@ impl DesktopView {
         if self.current_route() == Route::Browser {
             self.close_browser(window, cx);
         }
+        // Deferred popovers paint above modal scrims: the picker cannot stay open.
+        self.close_attachment_picker(window, cx);
         let Some(workspace) = self.workspace.clone() else {
             return;
         };
@@ -664,6 +666,7 @@ impl DesktopView {
 
     pub(super) fn render_file_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
+        let weak = cx.entity().downgrade();
         let colors = &theme.colors;
         let Some(preview) = self.file_preview.as_ref() else {
             return div();
@@ -685,6 +688,18 @@ impl DesktopView {
                     .id("file-preview")
                     .test_support()
                     .track_focus(&self.preview_focus)
+                    // Click-away dismissal, mirroring the palette panel: a
+                    // press on the scrim closes the preview.
+                    .on_mouse_down_out(move |_, window, cx| {
+                        let _updated = weak.update(cx, |view, cx| {
+                            // The rename dialog paints above the preview and
+                            // repoints it on commit: presses inside the rename
+                            // surface must not dismiss the preview beneath.
+                            if view.file_rename.is_none() {
+                                view.close_file_preview(window, cx);
+                            }
+                        });
+                    })
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("file-preview")
                     .aria_label(

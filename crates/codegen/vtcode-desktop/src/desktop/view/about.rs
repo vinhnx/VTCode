@@ -33,6 +33,8 @@ impl DesktopView {
         if show_native_about_panel() {
             return;
         }
+        // Deferred popovers paint above modal scrims: the picker cannot stay open.
+        self.close_attachment_picker(window, cx);
         self.about_open = true;
         self.about_focus.focus(window, cx);
         cx.notify();
@@ -62,6 +64,7 @@ impl DesktopView {
     /// version chip, then project pointers. Escape dismisses (topmost layer).
     pub(super) fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
+        let weak = cx.entity().downgrade();
         let hairline = || div().h(px(1.)).w_full().bg(themes::hairline(colors.popover, colors.foreground));
         div()
             .absolute()
@@ -76,6 +79,13 @@ impl DesktopView {
                     .id("about-dialog")
                     .test_support()
                     .track_focus(&self.about_focus)
+                    // Click-away dismissal, mirroring the palette panel: a
+                    // press on the scrim closes through the Done path.
+                    .on_mouse_down_out(move |_, window, cx| {
+                        let _updated = weak.update(cx, |view, cx| {
+                            view.close_about(window, cx);
+                        });
+                    })
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("about-dialog")
                     .aria_label(rust_i18n::t!("app.menus.about").to_string())

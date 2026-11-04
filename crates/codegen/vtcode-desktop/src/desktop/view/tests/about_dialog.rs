@@ -113,3 +113,23 @@ fn license_button_opens_the_viewer_at_the_mit_text(cx: &mut TestAppContext) {
         );
     });
 }
+
+#[gpui_kit::test]
+fn clicking_outside_closes_the_about_dialog(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    open_about(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("about-dialog").is_none(), "clicking away closes About");
+        assert!(
+            view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window),
+            "click-away restores composer focus"
+        );
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert!(!view.read(cx).about_open, "dialog state must be closed");
+    });
+}

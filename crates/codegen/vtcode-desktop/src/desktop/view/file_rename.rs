@@ -45,6 +45,8 @@ impl DesktopView {
         if !self.files.iter().any(|entry| entry.rel_path == rel_path) {
             return;
         }
+        // Deferred popovers paint above modal scrims: the picker cannot stay open.
+        self.close_attachment_picker(window, cx);
         let current = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
         self.disarm_double_escape();
         if self.file_rename.is_none() {
