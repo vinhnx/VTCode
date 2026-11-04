@@ -128,6 +128,13 @@ improve existing desktop shimmer https://gpui-kit.com/component/shimmer/
 revamp existing manual build settings/config screen with https://gpui-kit.com/component/settings/ for more consistency
 
 ---
+
+update the overall desktop icon size baseline, make sure the icon is not too small not too big, matching the font size UI settings baseline
+
+----
+
+fix app icon corner rounded is not smooth. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 2.27.39 PM.png'
+
 ---
 
 use this https://gpui-kit.com/component/plot/ and https://gpui-kit.com/component/chart/ components for all data visualization
