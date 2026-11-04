@@ -21,6 +21,7 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 gpui-kit = { version = "=0.8.1", features = ["syntect"] }
+nucleo-matcher = "0.3"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSButton", "NSControl", "NSFont", "NSFontDescriptor", "NSImage", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "objc2-core-foundation"] }
 objc2-foundation = "0.3.2"

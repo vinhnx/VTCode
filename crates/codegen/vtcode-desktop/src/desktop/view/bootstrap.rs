@@ -537,6 +537,34 @@ impl DesktopView {
             }
             cx.notify();
         });
+        // English literal: new strings stay untranslated until full
+        // native-quality coverage ships for every locale.
+        let file_filter_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(files_panel::FILTER_FILES_LABEL.to_string()));
+        let file_filter_subscription = cx.subscribe_in(&file_filter_input, window, |view, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                view.rebuild_file_tree(cx);
+            }
+        });
+        let picker_tree = cx.new(|cx| TreeState::new(cx));
+        let picker_tree_subscription = cx.subscribe(&picker_tree, |view, _, event, cx| {
+            match event {
+                TreeEvent::Expanded(path) => {
+                    let _inserted = view.expanded_picker_directories.insert(path.to_string());
+                }
+                TreeEvent::Collapsed(path) => {
+                    let _removed = view.expanded_picker_directories.remove(path.as_ref());
+                }
+            }
+            cx.notify();
+        });
+        let picker_filter_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(files_panel::FILTER_FILES_LABEL.to_string()));
+        let picker_filter_subscription = cx.subscribe_in(&picker_filter_input, window, |view, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                view.rebuild_picker_tree(cx);
+            }
+        });
         let composer = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .placeholder(rust_i18n::t!(i18n::COMPOSER_INPUT_PLACEHOLDER).to_string())
@@ -729,11 +757,15 @@ impl DesktopView {
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
+            files_truncated: false,
             file_directory_paths: Arc::new(HashSet::new()),
             file_tree,
             pending_tree_select: None,
             expanded_file_directories: HashSet::new(),
             _file_tree_subscription: file_tree_subscription,
+            file_filter_input,
+            _file_filter_subscription: file_filter_subscription,
+            file_search_hit_count: None,
             files_task: None,
             files_scan_cancel: None,
             preview_task: None,
@@ -852,7 +884,12 @@ impl DesktopView {
             attachment_picker: None,
             attachment_picker_focus: cx.focus_handle(),
             menus_show_exit_full_screen: false,
-            picker_thumbnail_task: None,
+            picker_tree,
+            expanded_picker_directories: HashSet::new(),
+            _picker_tree_subscription: picker_tree_subscription,
+            picker_filter_input,
+            _picker_filter_subscription: picker_filter_subscription,
+            picker_search_hit_count: None,
             attachments_picker_open: false,
             pending_submission: None,
             pending_first_submission: false,

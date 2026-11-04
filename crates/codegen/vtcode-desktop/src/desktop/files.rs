@@ -1,7 +1,6 @@
 //! Bounded workspace file listing and previews for the sidebar, plus the
 //! confined mutation helpers (`mutate`) behind the file context menu.
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -10,24 +9,20 @@ use std::sync::Arc;
 use super::strings::bundle;
 
 mod launch;
+mod model;
 mod mutate;
 
 pub(super) use launch::{
     CLI_FORK_SESSION_FLAG, build_handoff_script, open_in_editor, open_script_in_terminal, open_terminal_at,
     reveal_in_finder, terminal_runs_handoff_script, write_handoff_script,
 };
+pub(super) use model::{SEARCH_MAX_HITS, SNAPSHOT_MAX_ENTRIES, fuzzy_search, fuzzy_search_files, scan_snapshot};
 pub(super) use mutate::{rename_entry, trash_entry, validated_file_name};
 
-/// Bounds on retained sidebar rows and recursive traversal depth.
-const MAX_ENTRIES: usize = 400;
-const MAX_DEPTH: usize = 8;
 /// Preview read bound; a `usize` so buffer sizing never truncates.
 const MAX_PREVIEW_BYTES: usize = 64 * 1024;
 /// Image read bound for thumbnails and the preview viewer.
 const MAX_IMAGE_BYTES: usize = 16 * 1024 * 1024;
-
-/// Directories that never carry interesting source and can be enormous.
-const SKIPPED_DIR_NAMES: &[&str] = &["target", "node_modules", ".git", ".venv", "dist", "build"];
 
 /// Canonicalize a workspace candidate and confirm it is a directory.
 /// Call from a GPUI background task because both operations access the filesystem.
@@ -104,61 +99,6 @@ pub(super) fn read_image(root: &Path, rel_path: &str) -> Option<Arc<gpui_kit::Im
         return None;
     }
     Some(Arc::new(gpui_kit::Image::from_bytes(format, fs::read(&path).ok()?)))
-}
-
-/// List workspace entries breadth-first, skipping dependency and VCS
-/// directories, hidden entries, and anything past the entry or depth bounds.
-#[cfg(test)]
-pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
-    scan_workspace_cancellable(root, || false).unwrap_or_default()
-}
-
-/// Scan a workspace until the caller cancels the request. A cancelled scan
-/// returns no partial listing so obsolete results cannot replace current UI.
-pub(super) fn scan_workspace_cancellable(root: &Path, is_cancelled: impl Fn() -> bool) -> Option<Vec<FileEntry>> {
-    let mut entries = Vec::new();
-    let mut queue = std::collections::VecDeque::from(vec![(root.to_path_buf(), 0_usize)]);
-    while let Some((dir, depth)) = queue.pop_front() {
-        if is_cancelled() {
-            return None;
-        }
-        if entries.len() >= MAX_ENTRIES {
-            break;
-        }
-        let Ok(read_dir) = fs::read_dir(&dir) else {
-            continue;
-        };
-        let remaining = MAX_ENTRIES - entries.len();
-        // Keep the sorted prefix bounded; paths are allocated only for rows that survive the cap.
-        let mut children = BTreeMap::new();
-        for entry in read_dir.flatten() {
-            if is_cancelled() {
-                return None;
-            }
-            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-            let name = entry.file_name();
-            let Some(name_str) = name.to_str() else {
-                continue;
-            };
-            if name_str.starts_with('.') || (is_dir && SKIPPED_DIR_NAMES.contains(&name_str)) {
-                continue;
-            }
-            let _previous = children.insert((!is_dir, name), (entry, is_dir));
-            if children.len() > remaining {
-                let _removed = children.pop_last();
-            }
-        }
-        for (_, (entry, is_dir)) in children {
-            let Some(rel) = entry.path().strip_prefix(root).ok().map(|path| path.display().to_string()) else {
-                continue;
-            };
-            entries.push(FileEntry { rel_path: rel.replace('\\', "/"), depth, is_dir });
-            if is_dir && depth + 1 < MAX_DEPTH {
-                queue.push_back((entry.path(), depth + 1));
-            }
-        }
-    }
-    Some(entries)
 }
 
 /// Read the current git branch for a workspace, walking up to the repository
@@ -672,98 +612,6 @@ mod tests {
         assert_eq!(canonicalize_workspace_folder(&candidate), Some(expected));
         assert_eq!(canonicalize_workspace_folder(&workspace.path().join("file.txt")), None);
         assert_eq!(canonicalize_workspace_folder(&workspace.path().join("missing")), None);
-    }
-
-    #[test]
-    fn scan_skips_dependency_dirs_and_hidden_entries() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        for dir in ["src", "src/nested", "target/debug", ".git/objects", "node_modules/pkg"] {
-            fs::create_dir_all(root.join(dir)).expect("create dir");
-        }
-        fs::write(root.join("src/main.rs"), b"fn main() {}").expect("write");
-        fs::write(root.join("src/nested/mod.rs"), b"").expect("write");
-        fs::write(root.join(".hidden"), b"").expect("write");
-        fs::write(root.join("target/debug/artifact"), b"").expect("write");
-
-        let entries = scan_workspace(root);
-        let paths: Vec<&str> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
-        assert!(paths.contains(&"src"));
-        assert!(paths.contains(&"src/main.rs"));
-        assert!(paths.contains(&"src/nested/mod.rs"), "nested source files are listed");
-        assert!(!paths.iter().any(|path| path.starts_with("target") || path.starts_with(".git")));
-        assert!(!paths.contains(&".hidden"));
-        let src = entries.iter().find(|entry| entry.rel_path == "src").expect("src entry");
-        assert!(src.is_dir);
-        assert_eq!(src.depth, 0);
-    }
-
-    #[test]
-    fn scan_is_bounded_in_count() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        for index in 0..(MAX_ENTRIES + 50) {
-            fs::write(root.join(format!("file-{index:03}.txt")), b"x").expect("write");
-        }
-
-        let entries = scan_workspace(root);
-        assert_eq!(entries.len(), MAX_ENTRIES, "entry count is capped");
-        assert_eq!(entries.first().map(|entry| entry.rel_path.as_str()), Some("file-000.txt"));
-        assert_eq!(
-            entries.last().map(|entry| entry.rel_path.as_str()),
-            Some("file-399.txt"),
-            "the sorted prefix remains stable when the directory is wider than the row limit"
-        );
-    }
-
-    #[test]
-    fn cancelled_workspace_scan_discards_partial_results() {
-        let workspace = temp_workspace();
-        for index in 0..100 {
-            fs::write(workspace.path().join(format!("file-{index:03}.txt")), b"x").expect("write file");
-        }
-
-        let checks = std::cell::Cell::new(0);
-        let entries = scan_workspace_cancellable(workspace.path(), || {
-            let checked = checks.get();
-            checks.set(checked + 1);
-            checked >= 5
-        });
-
-        assert!(entries.is_none(), "cancelled scans must not publish a partial file tree");
-        assert!(checks.get() < 10, "the scanner should stop checking entries promptly");
-    }
-
-    #[test]
-    fn scan_keeps_directories_before_files_and_sorts_names() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        for name in ["z-dir", "a-dir"] {
-            fs::create_dir(root.join(name)).expect("create directory");
-        }
-        for name in ["z.txt", "a.txt"] {
-            fs::write(root.join(name), b"x").expect("write file");
-        }
-
-        let entries = scan_workspace(root);
-        let paths: Vec<_> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
-        assert_eq!(paths, ["a-dir", "z-dir", "a.txt", "z.txt"]);
-    }
-
-    #[test]
-    fn scan_includes_nested_paths_through_the_depth_bound() {
-        let workspace = temp_workspace();
-        let root = workspace.path();
-        let visible_directory = "a/b/c/d/e/f/g/h";
-        let beyond_bound = "a/b/c/d/e/f/g/h/i";
-        fs::create_dir_all(root.join(beyond_bound)).expect("create deep dirs");
-        fs::write(root.join(beyond_bound).join("buried.txt"), b"x").expect("write");
-
-        let entries = scan_workspace(root);
-        let paths: Vec<_> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
-        assert!(paths.contains(&visible_directory), "directory at the depth boundary is visible");
-        assert!(!paths.contains(&beyond_bound), "directories beyond the depth bound are omitted");
-        assert!(!paths.contains(&"a/b/c/d/e/f/g/h/i/buried.txt"), "files beyond the depth bound are omitted");
     }
 
     #[test]

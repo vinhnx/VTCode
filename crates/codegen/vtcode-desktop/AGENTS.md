@@ -1,6 +1,6 @@
 # vtcode-desktop
 
-[Root AGENTS.md](../AGENTS.md) | macOS-only (Apple silicon) GPUI Kit (`=0.8.1`) app; modules: `view/` (screens), `themes/` (tokens), `preferences/`, `transport.rs`, `localization/`, `app_icon.rs` (artwork + Dock).
+[Root AGENTS.md](../AGENTS.md) | macOS-only (Apple silicon) GPUI Kit (`=0.8.1`) app; modules: `view/` (screens), `files/` (snapshot, fuzzy search, launch/mutate), `themes/` (tokens), `preferences/`, `transport.rs`, `localization/`, `app_icon.rs` (artwork + Dock).
 
 ## Hard rules
 

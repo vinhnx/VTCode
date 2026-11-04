@@ -478,9 +478,18 @@ impl DesktopView {
         self.status = rust_i18n::t!("app.workspace.starting_service").to_string();
         if !same_workspace {
             self.files.clear();
+            self.files_truncated = false;
             self.file_directory_paths = Arc::new(HashSet::new());
             self.expanded_file_directories.clear();
+            self.expanded_picker_directories.clear();
             self.file_tree.update(cx, |tree, cx| tree.set_items(Vec::new(), cx));
+            // The rescan rebuilds both trees; until it lands, rows, queries,
+            // and counts must read empty rather than stale. Filter text
+            // survives: it needs no window to keep, and the rebuild applies
+            // it to the new workspace.
+            self.file_search_hit_count = None;
+            self.picker_tree.update(cx, |tree, cx| tree.set_items(Vec::new(), cx));
+            self.picker_search_hit_count = None;
         }
         self.git_branch = None;
         self.preview_task = None;

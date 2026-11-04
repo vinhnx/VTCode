@@ -337,6 +337,7 @@ impl DesktopView {
             .files
             .iter()
             .filter(|entry| !entry.is_dir)
+            .take(MAX_FILE_ROWS)
             .map(|entry| command(entry.rel_path.clone(), PaletteAction::AttachFile(entry.rel_path.clone())))
             .collect::<Vec<_>>();
         // Preserve section identities while asynchronous discovery fills empty groups.

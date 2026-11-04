@@ -1,4 +1,4 @@
-//! Attachment picker: a tabbed card-grid surface for attaching workspace
+//! Attachment picker: a tabbed tree surface for attaching workspace
 //! files or picking from this computer, anchored above the composer.
 use super::*;
 
@@ -9,21 +9,10 @@ pub(super) enum AttachmentPickerTab {
     Computer,
 }
 
-/// Open picker state: the active tab plus card thumbnails for image files,
-/// loaded in bounded background batches while the picker is open.
+/// Open picker state: the active tab. Tree rows, filter text, and hit counts
+/// live on the view beside the inspector's so both trees share one scan.
 pub(super) struct AttachmentPickerState {
     tab: AttachmentPickerTab,
-    thumbnails: HashMap<String, Arc<gpui_kit::Image>>,
-}
-
-/// How many image cards get thumbnails per picker opening.
-const PICKER_THUMBNAIL_LIMIT: usize = 24;
-
-impl AttachmentPickerState {
-    /// Thumbnail cached for one image card, if its bounded read finished.
-    pub(super) fn thumbnail(&self, rel_path: &str) -> Option<&Arc<gpui_kit::Image>> {
-        self.thumbnails.get(rel_path)
-    }
 }
 
 impl DesktopView {
@@ -35,12 +24,12 @@ impl DesktopView {
             self.close_palette(window, cx);
         }
         self.disarm_double_escape();
-        self.attachment_picker = Some(AttachmentPickerState {
-            tab: AttachmentPickerTab::Workspace,
-            thumbnails: HashMap::new(),
-        });
+        self.attachment_picker = Some(AttachmentPickerState { tab: AttachmentPickerTab::Workspace });
         self.attachment_picker_focus.focus(window, cx);
-        self.load_picker_thumbnails(cx);
+        // Fresh query each opening; `set_value` emits no Change, so the
+        // subscription handler runs explicitly.
+        self.picker_filter_input.update(cx, |input, cx| input.set_value("", window, cx));
+        self.rebuild_picker_tree(cx);
         cx.notify();
     }
 
@@ -62,55 +51,70 @@ impl DesktopView {
         }
     }
 
-    /// Load thumbnails for the first image files of the workspace scan, so
-    /// image cards show pictures without stalling the open.
-    fn load_picker_thumbnails(&mut self, cx: &mut Context<Self>) {
-        let Some(workspace) = self.workspace.clone() else {
-            return;
-        };
-        let images: Vec<String> = self
-            .files
-            .iter()
-            .filter(|entry| !entry.is_dir && files::is_image_path(&entry.rel_path))
-            .take(PICKER_THUMBNAIL_LIMIT)
-            .map(|entry| entry.rel_path.clone())
-            .collect();
-        if images.is_empty() {
+    /// Rebuild picker rows from the current scan and filter query. Browse
+    /// mode shows the hierarchy; a filter query shows flat file-only ranked
+    /// hits (attaching a directory is meaningless, so dirs never rank).
+    pub(super) fn rebuild_picker_tree(&mut self, cx: &mut Context<Self>) {
+        if self.attachment_picker.is_none() {
             return;
         }
-        self.picker_thumbnail_task = Some(cx.spawn(async move |view, cx| {
-            let root = workspace.clone();
-            let thumbnails = cx
-                .background_spawn(async move {
-                    images
-                        .into_iter()
-                        .filter_map(|path| files::read_image(&root, &path).map(|image| (path, image)))
-                        .collect::<Vec<_>>()
-                })
-                .await;
-            // The view can drop while thumbnails load; a failed update has no picker left to fill.
-            if view
-                .update(cx, |view, cx| {
-                    if let Some(state) = view.attachment_picker.as_mut() {
-                        for (path, image) in thumbnails {
-                            let _ = state.thumbnails.insert(path, image);
-                        }
-                        cx.notify();
-                    }
-                })
-                .is_err()
-            {}
-        }));
+        let selected_path = self.picker_tree.read(cx).selected_item().map(|item| item.id.to_string());
+        let query = self.picker_filter_input.read(cx).value().trim().to_string();
+        let tree_items = if query.is_empty() {
+            self.picker_search_hit_count = None;
+            self.expanded_picker_directories
+                .retain(|path| self.file_directory_paths.contains(path));
+            file_tree_items(&self.files, None, &self.expanded_picker_directories)
+        } else {
+            let rows: Vec<TreeItem> = files::fuzzy_search_files(&self.files, &query, files::SEARCH_MAX_HITS)
+                .iter()
+                .map(|hit| TreeItem::new(hit.rel_path.clone(), hit.rel_path.clone()))
+                .collect();
+            self.picker_search_hit_count = Some(rows.len());
+            rows
+        };
+        let selected_item = selected_path
+            .as_deref()
+            .and_then(|path| find_file_tree_item(&tree_items, path))
+            .cloned();
+        self.picker_tree.update(cx, |tree, cx| {
+            tree.set_items(tree_items, cx);
+            tree.set_selected_item(selected_item.as_ref(), cx);
+        });
+        cx.notify();
     }
 
-    /// The workspace files the picker cards show, newest scan order.
-    fn picker_files(&self) -> impl Iterator<Item = &FileEntry> {
-        self.files.iter().filter(|entry| !entry.is_dir)
+    /// Attach the picker's keyboard selection (Enter in the tree). Folders
+    /// no-op: Kit owns expand/collapse, mirroring the inspector tree.
+    pub(super) fn attach_selected_picker_file(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = self.picker_tree.read(cx).selected_item().map(|item| item.id.to_string()) else {
+            return;
+        };
+        self.toggle_picker_attachment(&path, cx);
     }
 
-    /// Tabbed card-grid picker anchored above the composer: the workspace tab
-    /// shows file cards (image thumbnails when loaded), the computer tab hands
-    /// off to the native file picker.
+    /// Attach a file, or detach it when already attached. Clicking a row and
+    /// pressing Enter share this; anything that is not a current workspace
+    /// file (folders, stale rows) no-ops instead of erroring.
+    fn toggle_picker_attachment(&mut self, rel_path: &str, cx: &mut Context<Self>) {
+        let is_file = self
+            .files
+            .iter()
+            .find(|entry| entry.rel_path == rel_path)
+            .is_some_and(|entry| !entry.is_dir);
+        if !is_file {
+            return;
+        }
+        if self.attachments.iter().any(|attachment| attachment.path == rel_path) {
+            self.remove_attachment(rel_path.to_string(), cx);
+        } else {
+            self.attach_context_file(rel_path.to_string(), cx);
+        }
+    }
+
+    /// Tabbed picker anchored above the composer: the workspace tab filters
+    /// a file tree with attach-on-toggle rows, the computer tab hands off to
+    /// the native file picker.
     pub(super) fn render_attachment_picker(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let ui_font_size = cx.theme().font_size;
@@ -118,7 +122,6 @@ impl DesktopView {
         let Some(state) = self.attachment_picker.as_ref() else {
             return div().into_any_element();
         };
-        let attached: HashSet<&str> = self.attachments.iter().map(|attachment| attachment.path.as_str()).collect();
 
         let tabs = div()
             .flex()
@@ -154,115 +157,7 @@ impl DesktopView {
             );
 
         let body = match state.tab {
-            AttachmentPickerTab::Workspace => {
-                let cards: Vec<AnyElement> = self
-                    .picker_files()
-                    .map(|entry| {
-                        let path = entry.rel_path.clone();
-                        let name = path.rsplit('/').next().unwrap_or(&path).to_string();
-                        let is_attached = attached.contains(path.as_str());
-                        let thumbnail = state.thumbnail(&path).cloned();
-                        let attach_path = path.clone();
-                        let remove_path = path.clone();
-                        div()
-                            .relative()
-                            .child(
-                                desktop_button(format!("picker-file-{path}"))
-                                    .w(px(116.))
-                                    .h(px(96.))
-                                    .flex()
-                                    .flex_col()
-                                    .items_center()
-                                    .justify_center()
-                                    .gap_1()
-                                    .min_w_0()
-                                    .ghost()
-                                    .when(is_attached, |card| {
-                                        card.bg(colors.secondary)
-                                            .border_1()
-                                            .border_color(colors.primary)
-                                            .text_color(colors.foreground)
-                                    })
-                                    .disabled(is_attached)
-                                    .when(!is_attached, |card| card.cursor_pointer())
-                                    .child(match thumbnail {
-                                        Some(image) => {
-                                            img(image).size(px(52.)).rounded_sm().overflow_hidden().into_any_element()
-                                        }
-                                        None => Icon::new(if files::is_image_path(&path) {
-                                            IconName::FileImage
-                                        } else {
-                                            IconName::FileCode
-                                        })
-                                        .text_color(colors.muted_foreground)
-                                        .into_any_element(),
-                                    })
-                                    .child(
-                                        div()
-                                            .max_w_full()
-                                            .truncate()
-                                            .text_xs()
-                                            .text_color(colors.foreground)
-                                            .child(name),
-                                    )
-                                    .when(is_attached, |card| {
-                                        card.child(Icon::new(IconName::Check).small().text_color(colors.primary))
-                                    })
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.attach_context_file(attach_path.clone(), cx);
-                                    })),
-                            )
-                            .when(is_attached, |card| {
-                                card.child(
-                                    div().absolute().top_1().right_1().child(
-                                        desktop_button(opaque_path_element_id("picker-remove", &remove_path))
-                                            .icon(IconName::X)
-                                            .accessibility_label(
-                                                rust_i18n::t!(
-                                                    "app.composer.remove_attachment",
-                                                    path = remove_path.as_str()
-                                                )
-                                                .to_string(),
-                                            )
-                                            .ghost()
-                                            .xsmall()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.remove_attachment(remove_path.clone(), cx);
-                                            })),
-                                    ),
-                                )
-                            })
-                            .into_any_element()
-                    })
-                    .collect();
-                if cards.is_empty() {
-                    div()
-                        .flex_1()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .p_4()
-                        .child(empty_state(
-                            rust_i18n::t!("app.files.empty.title").to_string(),
-                            rust_i18n::t!("app.files.empty.description").to_string(),
-                            IconName::Folder,
-                        ))
-                        .into_any_element()
-                } else {
-                    div()
-                        .id("attachment-picker-grid")
-                        .lock_scroll_axis()
-                        .test_support()
-                        .overflow_y_scrollbar()
-                        .max_h(px(340.))
-                        .w_full()
-                        .flex()
-                        .flex_wrap()
-                        .gap_2()
-                        .children(cards)
-                        .into_any_element()
-                }
-            }
+            AttachmentPickerTab::Workspace => self.render_picker_files(cx),
             AttachmentPickerTab::Computer => div()
                 .flex_1()
                 .flex()
@@ -314,5 +209,153 @@ impl DesktopView {
         )
         .priority(2)
         .into_any_element()
+    }
+
+    /// Workspace tab: filter field over a file tree. Rows toggle attachments
+    /// on click or Enter; attached rows pin a check. Rows share the
+    /// inspector's label builder, and the check icon stays decorative: the
+    /// accessible name matches the inspector's, and composer chips own the
+    /// attached/remove announcements.
+    fn render_picker_files(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.files.is_empty() {
+            return div()
+                .id("picker-files-empty")
+                .test_support()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .p_4()
+                .child(empty_state(
+                    rust_i18n::t!("app.files.empty.title").to_string(),
+                    rust_i18n::t!("app.files.empty.description").to_string(),
+                    IconName::Folder,
+                ))
+                .into_any_element();
+        }
+        let searching = self.picker_search_hit_count.is_some();
+        let filter_count = self.picker_search_hit_count.map(|shown| {
+            let file_total = self.files.iter().filter(|entry| !entry.is_dir).count();
+            rust_i18n::t!("app.inspector.filtered_count", shown = shown, total = file_total).to_string()
+        });
+        let attached_paths: HashSet<String> =
+            self.attachments.iter().map(|attachment| attachment.path.clone()).collect();
+        let directory_paths = self.file_directory_paths.clone();
+        let picker_tree = self.picker_tree.clone();
+        let weak_view = cx.entity().downgrade();
+        let check_color = cx.theme().colors.primary;
+        let mut body = div().w_full().flex().flex_col().gap_2().child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    Input::new(&self.picker_filter_input)
+                        .id("picker-file-filter")
+                        .flex_1()
+                        .min_w_0()
+                        .small()
+                        .aria_label(files_panel::FILTER_FILES_LABEL.to_string())
+                        .prefix(Icon::new(IconName::Search).size_4())
+                        .cleanable(true),
+                )
+                .when_some(filter_count, |row, count| {
+                    row.child(
+                        div()
+                            .id("picker-file-filter-count")
+                            .test_support()
+                            .role(gpui_kit::Role::Label)
+                            .aria_label(count.clone())
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(cx.theme().colors.muted_foreground)
+                            .child(count),
+                    )
+                }),
+        );
+        if searching && self.picker_search_hit_count == Some(0) {
+            body = body.child(
+                div()
+                    .id("picker-file-filter-empty")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(files_panel::NO_MATCHING_FILES_NOTE.to_string())
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p_3()
+                    .text_sm()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .child(files_panel::NO_MATCHING_FILES_NOTE),
+            );
+        } else {
+            body = body.child(
+                div()
+                    .id("picker-file-list")
+                    .test_support()
+                    .h(px(300.))
+                    .w_full()
+                    .overflow_hidden()
+                    .on_action(cx.listener(|this, _: &OpenSelectedFile, _, cx| this.attach_selected_picker_file(cx)))
+                    .child(Tree::new(&self.picker_tree, move |_index, entry, selected, _window, app| {
+                        let rel_path = entry.item().id.to_string();
+                        let is_dir = directory_paths.contains(&rel_path);
+                        let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
+                        let attached = attached_paths.contains(&rel_path);
+                        let search_parent = if searching {
+                            rel_path.rsplit_once('/').map(|(dir, _)| dir)
+                        } else {
+                            None
+                        };
+                        let icon = files_panel::file_tree_row_icon(is_dir, entry.is_expanded());
+                        let tree = picker_tree.clone();
+                        let view = weak_view.clone();
+                        let toggle_path = rel_path.clone();
+                        ListItem::new(format!("picker-file-{rel_path}"))
+                            .selected(selected)
+                            .cursor_pointer()
+                            .accessibility_label({
+                                let base = if is_dir {
+                                    rust_i18n::t!("app.files.folder_accessibility", path = rel_path.as_str())
+                                        .to_string()
+                                } else {
+                                    rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
+                                };
+                                // The check icon is decorative, so attached
+                                // state joins the spoken label instead.
+                                if attached && !is_dir {
+                                    format!("{base} (attached)")
+                                } else {
+                                    base
+                                }
+                            })
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap_2()
+                                    .child(files_panel::file_tree_row_label(display_name, search_parent, icon, app))
+                                    .when(attached, |row| {
+                                        row.child(Icon::new(IconName::Check).small().text_color(check_color))
+                                    }),
+                            )
+                            .on_click(move |_, window, app| {
+                                tree.update(app, |tree, app| tree.focus(window, app));
+                                if is_dir {
+                                    return;
+                                }
+                                if let Some(view) = view.upgrade() {
+                                    view.update(app, |view, cx| view.toggle_picker_attachment(&toggle_path, cx));
+                                }
+                            })
+                    })),
+            );
+        }
+        body.into_any_element()
     }
 }

@@ -51,6 +51,40 @@ fn command_palette_searches_all_loaded_sessions_and_workspace_files(cx: &mut Tes
 }
 
 #[gpui_kit::test]
+fn command_palette_caps_workspace_file_rows(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.files = (0..250)
+            .map(|index| FileEntry {
+                rel_path: format!("src/generated-{index:03}.rs"),
+                depth: 1,
+                is_dir: false,
+            })
+            .collect();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        let palette = view.read(cx).palette.as_ref().unwrap().clone();
+
+        window.within("command-palette").input("generated-199", cx);
+        window.render_frame(cx);
+        assert_eq!(palette.read(cx).matched_count(), 1);
+        let kept = palette_action_id(&super::super::PaletteAction::PreviewFile("src/generated-199.rs".into()));
+        assert!(window.try_find(kept).is_some(), "rows inside the cap materialize");
+
+        window.within("command-palette").press("cmd-a", cx);
+        window.within("command-palette").input("generated-249", cx);
+        window.render_frame(cx);
+        assert_eq!(palette.read(cx).matched_count(), 0, "rows past the cap never materialize");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn command_palette_keeps_dialog_accessible_with_reduced_motion(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));

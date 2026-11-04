@@ -164,6 +164,42 @@ impl DesktopView {
                 .ghost()
                 .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
         ));
+        let searching = self.file_search_hit_count.is_some();
+        let filter_count = self.file_search_hit_count.map(|shown| {
+            rust_i18n::t!("app.inspector.filtered_count", shown = shown, total = self.files.len()).to_string()
+        });
+        body = body.child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .py_1()
+                .child(
+                    Input::new(&self.file_filter_input)
+                        .id("file-list-filter")
+                        .flex_1()
+                        .min_w_0()
+                        .small()
+                        .aria_label(files_panel::FILTER_FILES_LABEL.to_string())
+                        .prefix(Icon::new(IconName::Search).size_4())
+                        .cleanable(true),
+                )
+                .when_some(filter_count, |row, count| {
+                    row.child(
+                        div()
+                            .id("file-list-filter-count")
+                            .test_support()
+                            .role(gpui_kit::Role::Label)
+                            .aria_label(count.clone())
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(cx.theme().colors.muted_foreground)
+                            .child(count),
+                    )
+                }),
+        );
         let directory_paths = self.file_directory_paths.clone();
         let menu_directory_paths = directory_paths.clone();
         let file_tree = self.file_tree.clone();
@@ -217,6 +253,25 @@ impl DesktopView {
                     .justify_center()
                     .child(empty_state(title, description, IconName::Folder)),
             );
+        } else if searching && self.file_search_hit_count == Some(0) {
+            let note = files_panel::NO_MATCHING_FILES_NOTE.to_string();
+            body = body.child(
+                div()
+                    .id("file-list-filter-empty")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(note.clone())
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p_3()
+                    .text_sm()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .child(note),
+            );
         } else {
             body = body.child(
                 div()
@@ -238,15 +293,14 @@ impl DesktopView {
                             let rel_path = entry.item().id.to_string();
                             let is_dir = directory_paths.contains(&rel_path);
                             let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
-                            let icon = if is_dir {
-                                if entry.is_expanded() {
-                                    IconName::FolderOpen
-                                } else {
-                                    IconName::FolderClosed
-                                }
+                            // Ranked hits from different directories share
+                            // names; the muted parent keeps them distinct.
+                            let search_parent = if searching {
+                                rel_path.rsplit_once('/').map(|(dir, _)| dir)
                             } else {
-                                IconName::FileText
+                                None
                             };
+                            let icon = files_panel::file_tree_row_icon(is_dir, entry.is_expanded());
                             let tree = file_tree.clone();
                             let view = weak_view.clone();
                             let open_path = rel_path.clone();
@@ -260,14 +314,7 @@ impl DesktopView {
                                 } else {
                                     rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
                                 })
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_x_2()
-                                        .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
-                                        .child(div().text_sm().child(display_name)),
-                                )
+                                .child(files_panel::file_tree_row_label(display_name, search_parent, icon, app))
                                 // Dragging a row out of the window promotes the
                                 // drag to a native session, so the file can be
                                 // dropped into Finder or an editor.
@@ -304,6 +351,24 @@ impl DesktopView {
                         }),
                     ),
             );
+            if self.files_truncated {
+                // English literal: new user-visible strings stay untranslated
+                // until full native-quality coverage ships for every locale.
+                let notice = format!("Showing the first {} files", files::SNAPSHOT_MAX_ENTRIES);
+                body = body.child(
+                    div()
+                        .id("file-list-truncated")
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(notice.clone())
+                        .w_full()
+                        .px_3()
+                        .pb_2()
+                        .text_xs()
+                        .text_color(cx.theme().colors.muted_foreground)
+                        .child(notice),
+                );
+            }
         }
         body.into_any_element()
     }

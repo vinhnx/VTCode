@@ -564,14 +564,21 @@ struct DesktopView {
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
+    /// Whether the last scan hit a snapshot bound; renders the truncation
+    /// notice under the file tree. Reset alongside `files` on every scan.
+    files_truncated: bool,
     file_directory_paths: Arc<HashSet<String>>,
     file_tree: Entity<TreeState>,
     /// One-shot selection for the next tree rebuild (rename repoints the
     /// selection at the new path, since the old one no longer exists).
-    /// Consumed by `replace_file_entries`.
+    /// Consumed by `rebuild_file_tree`.
     pending_tree_select: Option<String>,
     expanded_file_directories: HashSet<String>,
     _file_tree_subscription: Subscription,
+    file_filter_input: Entity<InputState>,
+    _file_filter_subscription: Subscription,
+    /// Ranked hit count for the current filter query (`None` in browse mode).
+    file_search_hit_count: Option<usize>,
     files_task: Option<Task<()>>,
     files_scan_cancel: Option<Arc<AtomicBool>>,
     preview_task: Option<Task<()>>,
@@ -710,7 +717,13 @@ struct DesktopView {
     attachment_picker_focus: FocusHandle,
     /// Mirrors `window.is_fullscreen()` for the native menu labels.
     menus_show_exit_full_screen: bool,
-    picker_thumbnail_task: Option<Task<()>>,
+    picker_tree: Entity<TreeState>,
+    expanded_picker_directories: HashSet<String>,
+    _picker_tree_subscription: Subscription,
+    picker_filter_input: Entity<InputState>,
+    _picker_filter_subscription: Subscription,
+    /// Ranked hit count for the current picker query (`None` in browse mode).
+    picker_search_hit_count: Option<usize>,
     pending_submission: Option<SubmissionDraft>,
     pending_first_submission: bool,
     first_submission: Option<SubmissionDraft>,

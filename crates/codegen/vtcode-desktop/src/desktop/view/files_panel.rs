@@ -34,6 +34,49 @@ pub(super) struct DeleteFilePath {
     pub path: gpui_kit::SharedString,
 }
 
+/// English-literal file UI strings, shared until full native-quality
+/// translations ship for every locale.
+pub(super) const FILTER_FILES_LABEL: &str = "Filter files";
+pub(super) const NO_MATCHING_FILES_NOTE: &str = "No files match this filter";
+
+/// Folder/file icon for a file-tree row, following the folder's expansion.
+pub(super) fn file_tree_row_icon(is_dir: bool, expanded: bool) -> IconName {
+    if is_dir {
+        if expanded {
+            IconName::FolderOpen
+        } else {
+            IconName::FolderClosed
+        }
+    } else {
+        IconName::FileText
+    }
+}
+
+/// Shared file-row label: type icon, file name, and the muted parent path in
+/// search mode. Both file trees render through this so rows stay identical.
+pub(super) fn file_tree_row_label(
+    display_name: String,
+    search_parent: Option<&str>,
+    icon: IconName,
+    app: &mut App,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap_x_2()
+        .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
+        .child(div().text_sm().child(display_name))
+        .when_some(search_parent, |row, parent| {
+            row.child(
+                div()
+                    .flex_shrink_0()
+                    .text_xs()
+                    .text_color(app.theme().muted_foreground)
+                    .child(parent.to_string()),
+            )
+        })
+}
+
 /// Right-click menu shared by every workspace-file surface (today: the
 /// inspector file tree). Primary action first, mutating entries after a
 /// separator. Mirrors `tabs::session_row_menu`.
@@ -181,12 +224,11 @@ impl DesktopView {
             let root = workspace.clone();
             let result = cx
                 .background_spawn(async move {
-                    let entries =
-                        files::scan_workspace_cancellable(&root, || worker_cancellation.load(Ordering::Relaxed))?;
+                    let snapshot = files::scan_snapshot(&root, || worker_cancellation.load(Ordering::Relaxed))?;
                     if worker_cancellation.load(Ordering::Relaxed) {
                         return None;
                     }
-                    Some((entries, files::git_branch(&root)))
+                    Some((snapshot, files::git_branch(&root)))
                 })
                 .await;
             let _updated = view.update_in(cx, |view, window, cx| {
@@ -201,10 +243,14 @@ impl DesktopView {
                 if view.workspace.as_ref() != Some(&workspace) {
                     return;
                 }
-                let Some((entries, branch)) = result else {
+                let Some((snapshot, branch)) = result else {
                     return;
                 };
-                view.replace_file_entries(entries, cx);
+                view.files_truncated = snapshot.truncated;
+                view.replace_file_entries(snapshot.entries, cx);
+                // Stale picker rows fail closed on toggle, but rebuilding
+                // keeps an open picker honest without its own scan.
+                view.rebuild_picker_tree(cx);
                 view.git_branch = branch;
                 view.update_composer_suggestions(window, cx);
                 cx.notify();
@@ -240,17 +286,37 @@ impl DesktopView {
     }
 
     fn replace_file_entries(&mut self, entries: Vec<FileEntry>, cx: &mut Context<Self>) {
-        let selected_path = self
-            .pending_tree_select
-            .take()
-            .or_else(|| self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()));
         let directory_paths: HashSet<_> = entries
             .iter()
             .filter(|entry| entry.is_dir)
             .map(|entry| entry.rel_path.clone())
             .collect();
         self.expanded_file_directories.retain(|path| directory_paths.contains(path));
-        let tree_items = file_tree_items(&entries, None, &self.expanded_file_directories);
+        self.files = entries;
+        self.file_directory_paths = Arc::new(directory_paths);
+        self.rebuild_file_tree(cx);
+    }
+
+    /// Rebuild tree rows from the current scan and filter query. Browse mode
+    /// shows the hierarchy; a filter query shows flat ranked hits. Runs on
+    /// every scan and on every filter keystroke; selection follows its path
+    /// across rebuilds while the row still exists.
+    pub(super) fn rebuild_file_tree(&mut self, cx: &mut Context<Self>) {
+        let selected_path = self
+            .pending_tree_select
+            .take()
+            .or_else(|| self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()));
+        let query = self.file_filter_input.read(cx).value().trim().to_string();
+        let tree_items = if query.is_empty() {
+            self.file_search_hit_count = None;
+            file_tree_items(&self.files, None, &self.expanded_file_directories)
+        } else {
+            let hits = files::fuzzy_search(&self.files, &query, files::SEARCH_MAX_HITS);
+            self.file_search_hit_count = Some(hits.len());
+            hits.iter()
+                .map(|hit| TreeItem::new(hit.rel_path.clone(), hit.rel_path.clone()))
+                .collect()
+        };
         let selected_item = selected_path
             .as_deref()
             .and_then(|path| find_file_tree_item(&tree_items, path))
@@ -259,8 +325,7 @@ impl DesktopView {
             tree.set_items(tree_items, cx);
             tree.set_selected_item(selected_item.as_ref(), cx);
         });
-        self.files = entries;
-        self.file_directory_paths = Arc::new(directory_paths);
+        cx.notify();
     }
 
     pub(super) fn open_selected_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {

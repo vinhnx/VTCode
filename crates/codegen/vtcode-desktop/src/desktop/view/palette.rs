@@ -24,6 +24,12 @@ pub(super) type PaletteGroups = Vec<(String, Vec<Rc<PaletteCommand>>)>;
 /// all 2,000 transcript items on every open and refresh.
 pub(super) const MAX_CONVERSATION_SEARCH_ROWS: usize = 200;
 
+/// Workspace file rows per palette section. Each row clones its path (and the
+/// Commands palette translates a label), so file sections keep the sorted
+/// prefix of the shared snapshot instead of materializing all 5,000 rows on
+/// every open.
+pub(super) const MAX_FILE_ROWS: usize = 200;
+
 pub(super) fn share_palette_commands(groups: Vec<(String, Vec<PaletteCommand>)>) -> PaletteGroups {
     groups
         .into_iter()
@@ -232,6 +238,7 @@ impl DesktopView {
             .files
             .iter()
             .filter(|entry| !entry.is_dir)
+            .take(MAX_FILE_ROWS)
             .map(|entry| {
                 command(
                     rust_i18n::t!("app.palette.command.open_file", path = entry.rel_path.as_str()).to_string(),

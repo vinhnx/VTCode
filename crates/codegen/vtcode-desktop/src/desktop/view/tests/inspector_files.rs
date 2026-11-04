@@ -727,3 +727,81 @@ fn file_tree_keyboard_offers_rename_and_gated_delete(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(workspace.path().join("keys.md").exists());
 }
+
+#[gpui_kit::test]
+fn file_tree_filter_narrows_to_ranked_hits_and_restores(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temp workspace");
+    std::fs::write(workspace.path().join("main.rs"), "fn main() {}").expect("write file");
+    std::fs::create_dir(workspace.path().join("src")).expect("create dir");
+    std::fs::write(workspace.path().join("src/main.rs"), "fn main() {}").expect("write nested file");
+    std::fs::write(workspace.path().join("src/lib.rs"), "").expect("write other file");
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.refresh_files(cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("inspector-tabs").click(1usize, cx);
+        window.render_frame(cx);
+        assert_eq!(file_tree_paths(&view, cx), vec!["src", "main.rs"]);
+        assert!(view.read(cx).file_search_hit_count.is_none(), "browse mode tracks no hit count");
+        // `set_value` emits no Change headless (Kit suppresses it), so the
+        // test drives the subscription handler directly, like the composer
+        // suggestion tests.
+        view.update(cx, |view, cx| {
+            view.file_filter_input
+                .update(cx, |input, cx| input.set_value("main", window, cx));
+            view.rebuild_file_tree(cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(file_tree_paths(&view, cx), vec!["main.rs", "src/main.rs"]);
+        assert_eq!(window.find("file-list-filter-count").label(), Some("2 of 4 shown"));
+        view.update(cx, |view, cx| {
+            view.file_filter_input
+                .update(cx, |input, cx| input.set_value("zzz-no-match", window, cx));
+            view.rebuild_file_tree(cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("file-list-filter-empty").label(), Some("No files match this filter"));
+        assert_eq!(window.find("file-list-filter-count").label(), Some("0 of 4 shown"));
+        view.update(cx, |view, cx| {
+            view.file_filter_input.update(cx, |input, cx| input.set_value("", window, cx));
+            view.rebuild_file_tree(cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(file_tree_paths(&view, cx), vec!["src", "main.rs"]);
+        assert!(view.read(cx).file_search_hit_count.is_none(), "clearing restores browse mode");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn truncation_notice_names_the_snapshot_bound(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temp workspace");
+    std::fs::write(workspace.path().join("notes.md"), "hello").expect("write file");
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.refresh_files(cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        // The bound itself is pinned by model tests; here the flag's render
+        // wiring is what matters.
+        view.update(cx, |view, _| view.files_truncated = true);
+        window.render_frame(cx);
+        window.within("inspector-tabs").click(1usize, cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("file-list-truncated").label(), Some("Showing the first 5000 files"));
+    })
+    .unwrap();
+}
