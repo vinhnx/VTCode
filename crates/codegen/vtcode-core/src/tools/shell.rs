@@ -251,13 +251,13 @@ impl<E: CommandExecutor> ShellRunner<E> {
         }
     }
 
-    /// Get current working directory relative to workspace root
+    /// Get current working directory relative to workspace root.
+    ///
+    /// Uses the shared renderer so a workspace reached through an alias
+    /// (`/var` vs macOS's `/private/var`) still yields a relative path instead
+    /// of falling back to the absolute one.
     pub fn cwd_relative(&self) -> String {
-        self.working_dir
-            .strip_prefix(&self.workspace_root)
-            .unwrap_or(&self.working_dir)
-            .to_string_lossy()
-            .into_owned()
+        vtcode_commons::workspace_relative_display(&self.workspace_root, &self.working_dir)
     }
 
     /// Change directory workspace-safely

@@ -835,12 +835,9 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
         Ok(metadata)
     }
 
+    /// Delegates to the shared contract so PTY and pipe sessions cannot drift.
     fn format_working_dir(&self, path: &Path) -> String {
-        match path.strip_prefix(&self.workspace_root) {
-            Ok(relative) if relative.as_os_str().is_empty() => ".".into(),
-            Ok(relative) => relative.to_string_lossy().replace("\\", "/"),
-            Err(_) => path.to_string_lossy().into_owned(),
-        }
+        vtcode_commons::workspace_relative_slash(&self.workspace_root, path)
     }
 
     fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {
