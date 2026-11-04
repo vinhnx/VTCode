@@ -532,3 +532,37 @@ fn jump_to_unknown_message_leaves_state_untouched(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn history_limit_boundary_renders_a_labeled_separator(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        for index in 0..MAX_TRANSCRIPT_ITEMS {
+            view.transcript.push(TranscriptItem::new(
+                index.to_string(),
+                "assistant".to_string(),
+                "VT Code".into(),
+                format!("Message {index}"),
+            ));
+        }
+        view.history_has_earlier = true;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let boundary = window.find("history-page-limit");
+        assert_eq!(boundary.role(), Some(gpui_kit::Role::Status));
+        assert!(boundary.bounds().size.height > px(0.));
+        assert!(
+            window.try_find("load-earlier-history").is_none(),
+            "the limit boundary replaces the load-earlier action"
+        );
+
+        view.update(cx, |view, _| {
+            view.history_has_earlier = false;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("history-page-limit").is_none());
+    })
+    .unwrap();
+}

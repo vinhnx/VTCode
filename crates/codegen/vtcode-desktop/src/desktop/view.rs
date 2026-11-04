@@ -33,7 +33,7 @@ use gpui_kit::component::input::{
 };
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
-use gpui_kit::component::marker::{Marker, MarkerContent};
+use gpui_kit::component::marker::{Marker, MarkerContent, MarkerIcon, MarkerLoadingStyle, MarkerVariant};
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};

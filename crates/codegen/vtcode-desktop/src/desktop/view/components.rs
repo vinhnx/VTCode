@@ -45,6 +45,48 @@ pub(super) fn shimmer_label(id: impl Into<gpui_kit::ElementId>, text: impl Into<
         .into_any_element()
 }
 
+/// Full-width loading row for an owned loading state: a shimmer marker
+/// inside the caller's test identity wrapper (`Marker` cannot carry
+/// `.test_support()` itself). The shimmer renders static text under
+/// reduced motion, same as `shimmer_label`. Only full rows come here;
+/// inline embeddings, shrink-wrapped centered labels, and one-off
+/// typography (e.g. `text_xs` rows) keep `shimmer_label`.
+pub(super) fn loading_marker_row(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+) -> AnyElement {
+    loading_marker_row_inner(id, text, None)
+}
+
+/// Full-width loading row with an explicit leading spinner, for rows
+/// that pair a spinner with shimmer text. The caller owns the spinner's
+/// exact size and color plus the row tone, so conversions preserve the
+/// current look pixel for pixel.
+pub(super) fn loading_marker_row_with_spinner(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+    spinner: Spinner,
+    tone: gpui_kit::Hsla,
+) -> AnyElement {
+    loading_marker_row_inner(id, text, Some((spinner, tone)))
+}
+
+fn loading_marker_row_inner(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+    leading: Option<(Spinner, gpui_kit::Hsla)>,
+) -> AnyElement {
+    let mut marker = Marker::new().loading(true).with_loading_style(MarkerLoadingStyle::Shimmer);
+    if let Some((spinner, tone)) = leading {
+        marker = marker.icon(MarkerIcon::new().child(spinner)).text_color(tone);
+    }
+    div()
+        .id(id)
+        .test_support()
+        .child(marker.content(MarkerContent::new().text(text)))
+        .into_any_element()
+}
+
 /// Pending assistant row pinned below the transcript scroller while a turn
 /// runs with no content yet. It lives outside the measured list on purpose:
 /// scroller geometry never churns when the row appears or clears. The label
@@ -71,7 +113,7 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
                 .py_2()
                 .text_sm()
                 .text_color(cx.theme().colors.muted_foreground)
-                .child(shimmer_label("turn-pending-label", status)),
+                .child(loading_marker_row("turn-pending-label", status)),
         )
         .into_any_element()
 }
@@ -547,6 +589,71 @@ pub(super) fn error_alert(
     status_alert(id, message, colors, colors.danger)
 }
 
+/// Severity-resolved presentation for a status marker row: icon, tone,
+/// title weight, accessibility role, and the stable status token used in
+/// the details toggle label. Single dispatch for every severity-driven
+/// choice, so callers resolve once and render from the result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct SeverityMarkerStyle {
+    pub(super) icon: IconName,
+    pub(super) tone: gpui_kit::Hsla,
+    pub(super) semibold_title: bool,
+    pub(super) role: gpui_kit::Role,
+    pub(super) status_label: &'static str,
+}
+
+/// Desktop severity mapping for status rows: errors announce as alerts in
+/// the danger tone, warnings keep their own warning tone and status role,
+/// info stays quiet muted text. Only errors earn semibold: icon + tone
+/// already carry severity.
+pub(super) fn severity_marker_style(
+    severity: NoticeSeverity,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> SeverityMarkerStyle {
+    match severity {
+        NoticeSeverity::Error => SeverityMarkerStyle {
+            icon: IconName::CircleAlert,
+            tone: colors.danger,
+            semibold_title: true,
+            role: gpui_kit::Role::Alert,
+            status_label: "error",
+        },
+        NoticeSeverity::Warning => SeverityMarkerStyle {
+            icon: IconName::TriangleAlert,
+            tone: colors.warning,
+            semibold_title: false,
+            role: gpui_kit::Role::Status,
+            status_label: "warning",
+        },
+        NoticeSeverity::Info => SeverityMarkerStyle {
+            icon: IconName::Info,
+            tone: themes::muted_text(colors),
+            semibold_title: false,
+            role: gpui_kit::Role::Status,
+            status_label: "info",
+        },
+    }
+}
+
+/// Status-marker row for transcript severity notices: one icon/title header
+/// line in severity colors, no message chrome. Callers keep test identity,
+/// roles, and aria labels on their own wrapper: `Marker` is `RenderOnce`
+/// and cannot carry `.test_support()`. Extra trailing children (e.g. the
+/// Show/Hide details toggle) compose as `Marker` siblings; the content
+/// slot holds `flex_1` so they dock at the trailing edge.
+pub(super) fn severity_marker(style: &SeverityMarkerStyle, title: impl Into<gpui_kit::SharedString>) -> Marker {
+    Marker::new()
+        .items_center()
+        .text_color(style.tone)
+        .icon(MarkerIcon::new().child(Icon::new(style.icon).small().text_color(style.tone)))
+        .content(
+            MarkerContent::new()
+                .text(title)
+                .flex_1()
+                .when(style.semibold_title, |content| content.font_semibold()),
+        )
+}
+
 fn status_alert(
     id: &'static str,
     message: impl Into<gpui_kit::SharedString>,
@@ -780,5 +887,46 @@ mod tests {
                 assert_eq!(width, Some(gpui_kit::AbsoluteLength::Pixels(px(1.))));
             }
         });
+    }
+
+    #[test]
+    fn severity_marker_style_maps_each_level_to_its_own_tone() {
+        use gpui_kit::component::theme::ThemeColor;
+
+        let sentinel = |h: f32| gpui_kit::Hsla { h, s: 0.5, l: 0.5, a: 1.0 };
+        let white = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        let black = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
+        let colors = ThemeColor {
+            danger: sentinel(0.0),
+            warning: sentinel(0.33),
+            foreground: white,
+            popover: black,
+            ..Default::default()
+        };
+        let error = severity_marker_style(NoticeSeverity::Error, &colors);
+        let warning = severity_marker_style(NoticeSeverity::Warning, &colors);
+        let info = severity_marker_style(NoticeSeverity::Info, &colors);
+
+        assert!(matches!(error.icon, IconName::CircleAlert), "errors keep the alert icon");
+        assert!(matches!(warning.icon, IconName::TriangleAlert), "warnings keep the triangle icon");
+        assert!(matches!(info.icon, IconName::Info), "info keeps the info icon");
+        assert_eq!(error.tone, colors.danger, "errors read the danger token");
+        assert_eq!(warning.tone, colors.warning, "warnings keep their own tone, not danger");
+        assert_eq!(info.tone, themes::muted_text(&colors), "info delegates to the muted text derivation");
+        assert!(
+            themes::contrast_ratio(info.tone, colors.popover) >= 4.5,
+            "info tone holds AA against its surface, unlike a raw token pick"
+        );
+        assert!(error.semibold_title, "only errors earn semibold");
+        assert!(!warning.semibold_title && !info.semibold_title, "icon + tone already carry severity");
+        assert_eq!(error.role, gpui_kit::Role::Alert, "errors announce as alerts");
+        assert_eq!(warning.role, gpui_kit::Role::Status, "warnings announce as status");
+        assert_eq!(info.role, gpui_kit::Role::Status, "info announces as status");
+        assert_eq!(error.status_label, "error");
+        assert_eq!(warning.status_label, "warning");
+        assert_eq!(info.status_label, "info");
+        assert_ne!(error.tone, warning.tone, "error and warning tones must not collapse");
+        assert_ne!(warning.tone, info.tone, "warning and info tones must not collapse");
+        assert_ne!(error.tone, info.tone, "error and info tones must not collapse");
     }
 }

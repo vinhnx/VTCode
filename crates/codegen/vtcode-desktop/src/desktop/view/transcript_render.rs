@@ -210,10 +210,19 @@ impl DesktopView {
                     history_bar = history_bar.child(
                         div()
                             .id("history-page-limit")
+                            .test_support()
                             .role(gpui_kit::Role::Status)
-                            .text_xs()
-                            .text_color(cx.theme().colors.muted_foreground)
-                            .child(rust_i18n::t!("app.transcript.history_limit_reached").to_string()),
+                            .w_full()
+                            .child(
+                                Marker::new()
+                                    .with_variant(MarkerVariant::Separator)
+                                    .text_xs()
+                                    .text_color(cx.theme().colors.muted_foreground)
+                                    .content(
+                                        MarkerContent::new()
+                                            .text(rust_i18n::t!("app.transcript.history_limit_reached").to_string()),
+                                    ),
+                            ),
                     );
                 } else if self.history_has_earlier {
                     history_bar = history_bar.child(
@@ -231,7 +240,10 @@ impl DesktopView {
                     );
                 }
                 if self.history_page_loading {
-                    history_bar = history_bar.child(shimmer_label(
+                    // The old label inherited the 16px root foreground (no
+                    // ancestor sets a size); the marker normalizes it to
+                    // text_sm muted like every sibling loading row.
+                    history_bar = history_bar.child(loading_marker_row(
                         "history-loading-label",
                         rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string(),
                     ));

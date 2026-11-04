@@ -52,6 +52,12 @@ fn reasoning_diagnostic_projects_to_collapsible_notice(cx: &mut TestAppContext) 
             toggle_bounds.origin.y >= header.origin.y && toggle_bounds.bottom() <= header.bottom(),
             "details toggle shares the title row: toggle={toggle_bounds:?} header={header:?}"
         );
+        let header_right = header.origin.x + header.size.width;
+        let toggle_right = toggle_bounds.origin.x + toggle_bounds.size.width;
+        assert!(
+            toggle_right >= header_right - px(1.) && toggle_right <= header_right + px(1.),
+            "details toggle docks at the header trailing edge: toggle={toggle_bounds:?} header={header:?}"
+        );
         assert!(
             window.try_find("notice-details-body-tool-diagnosis:task-tracker").is_none(),
             "collapsed notices hide the details body"

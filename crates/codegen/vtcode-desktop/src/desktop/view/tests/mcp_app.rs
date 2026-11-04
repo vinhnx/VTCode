@@ -211,6 +211,35 @@ fn mcp_app_error_row_retries_through_the_button(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn mcp_app_loading_row_shows_while_read_pending(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(tier_snapshot("static"));
+            view.transcript.push(preview_item());
+            view.request_mcp_app_previews("app-1", cx);
+            assert_eq!(view.mcp_app_pending.len(), 1);
+        });
+        window.render_frame(cx);
+        assert!(window.find("mcp-app-loading-label-app-1-0").bounds().size.height > px(0.));
+
+        view.update(cx, |view, _| {
+            let key = McpAppBodyKey {
+                item_id: "app-1".into(),
+                uri: "ui://demo/app.html".into(),
+            };
+            assert_eq!(view.mcp_app_bodies.insert(key, app_body()), None);
+            view.mcp_app_pending.clear();
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("mcp-app-loading-label-app-1-0").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn session_reset_clears_the_mcp_app_preview_cache(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let key = McpAppBodyKey {

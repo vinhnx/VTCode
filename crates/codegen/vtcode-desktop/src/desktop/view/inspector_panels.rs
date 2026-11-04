@@ -186,7 +186,10 @@ impl DesktopView {
                     .p_3()
                     .text_sm()
                     .text_color(cx.theme().colors.muted_foreground)
-                    .child(shimmer_label("file-scan-loading-label", rust_i18n::t!("app.files.scanning").to_string())),
+                    .child(loading_marker_row(
+                        "file-scan-loading-label",
+                        rust_i18n::t!("app.files.scanning").to_string(),
+                    )),
             );
         } else if self.files.is_empty() {
             let (title, description) = if self.workspace.is_some() {
