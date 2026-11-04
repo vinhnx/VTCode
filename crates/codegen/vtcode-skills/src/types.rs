@@ -3,6 +3,10 @@
 //! Defines core types for Agent Skills integration, including
 //! skill metadata, manifest parsing, and resource management.
 
+use crate::limits::{
+    MAX_ALLOWED_TOOLS, MAX_COMPATIBILITY_CHARS, MAX_LICENSE_CHARS, MAX_SKILL_DESCRIPTION_CHARS, MAX_SKILL_NAME_CHARS,
+    allowed_tool_count,
+};
 use hashbrown::HashMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value as JsonValue;
@@ -266,8 +270,8 @@ impl SkillManifest {
             anyhow::bail!("name is required and must not be empty");
         }
 
-        if self.name.len() > 64 {
-            anyhow::bail!("name exceeds maximum length: {} characters (max 64)", self.name.len());
+        if self.name.len() > MAX_SKILL_NAME_CHARS {
+            anyhow::bail!("name exceeds maximum length: {} characters (max {MAX_SKILL_NAME_CHARS})", self.name.len());
         }
 
         // Check for lowercase letters, numbers, and hyphens only
@@ -307,8 +311,11 @@ impl SkillManifest {
             anyhow::bail!("description is required and must not be empty");
         }
 
-        if self.description.len() > 1024 {
-            anyhow::bail!("description exceeds maximum length: {} characters (max 1024)", self.description.len());
+        if self.description.len() > MAX_SKILL_DESCRIPTION_CHARS {
+            anyhow::bail!(
+                "description exceeds maximum length: {} characters (max {MAX_SKILL_DESCRIPTION_CHARS})",
+                self.description.len()
+            );
         }
 
         Ok(())
@@ -322,30 +329,30 @@ impl SkillManifest {
 
         // Validate allowed-tools field
         if let Some(allowed_tools) = &self.allowed_tools {
-            let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
+            let tool_count = allowed_tool_count(allowed_tools);
 
-            if tools.len() > 16 {
-                anyhow::bail!("allowed-tools exceeds maximum tool count: {} tools (max 16)", tools.len());
+            if tool_count > MAX_ALLOWED_TOOLS {
+                anyhow::bail!("allowed-tools exceeds maximum tool count: {tool_count} tools (max {MAX_ALLOWED_TOOLS})");
             }
 
-            if tools.is_empty() {
+            if tool_count == 0 {
                 anyhow::bail!("allowed-tools must not be empty if specified");
             }
         }
 
         // Validate license field
         if let Some(license) = &self.license
-            && license.len() > 512
+            && license.len() > MAX_LICENSE_CHARS
         {
-            anyhow::bail!("license exceeds maximum length: {} characters (max 512)", license.len());
+            anyhow::bail!("license exceeds maximum length: {} characters (max {MAX_LICENSE_CHARS})", license.len());
         }
 
         // Validate compatibility field
         if let Some(compatibility) = &self.compatibility
-            && (compatibility.is_empty() || compatibility.len() > 500)
+            && (compatibility.is_empty() || compatibility.len() > MAX_COMPATIBILITY_CHARS)
         {
             anyhow::bail!(
-                "compatibility must be between 1-500 characters if provided, got {} characters",
+                "compatibility must be between 1-{MAX_COMPATIBILITY_CHARS} characters if provided, got {} characters",
                 compatibility.len()
             );
         }
@@ -662,6 +669,59 @@ mod tests {
         assert!(m.validate().is_err());
     }
 
+    /// The strict validator and the comprehensive validator must reject the
+    /// same inputs at every shared limit. Asserting the boundary on both sides
+    /// is what catches a limit changed in one validator but not the other —
+    /// the regression the shared `limits` constants exist to prevent.
+    #[test]
+    fn strict_and_comprehensive_validators_agree_at_every_limit() {
+        use crate::enhanced_validator::ComprehensiveSkillValidator;
+        use crate::limits::{
+            MAX_COMPATIBILITY_CHARS, MAX_LICENSE_CHARS, MAX_SKILL_DESCRIPTION_CHARS, MAX_SKILL_NAME_CHARS,
+        };
+
+        let validator = ComprehensiveSkillValidator::new();
+        // (case, manifest, expected to be valid)
+        let boundary_cases = [
+            ("name at limit", "a".repeat(MAX_SKILL_NAME_CHARS), true),
+            ("name over limit", "a".repeat(MAX_SKILL_NAME_CHARS + 1), false),
+            ("description at limit", "a".repeat(MAX_SKILL_DESCRIPTION_CHARS), true),
+            ("description over limit", "a".repeat(MAX_SKILL_DESCRIPTION_CHARS + 1), false),
+        ];
+
+        for (label, value, expect_valid) in boundary_cases {
+            let (name, description) = if label.starts_with("name") {
+                (value, "A valid description for the skill.".to_string())
+            } else {
+                ("valid-name".to_string(), value)
+            };
+            let manifest = SkillManifest { name, description, ..Default::default() };
+
+            assert_eq!(manifest.validate().is_ok(), expect_valid, "strict validator disagreed on {label}");
+            let report = validator.validate_manifest(&manifest, std::path::Path::new("/tmp/nonexistent"));
+            assert_eq!(report.is_valid, expect_valid, "comprehensive validator disagreed on {label}");
+        }
+
+        // Optional string fields: same at-limit / over-limit pairing.
+        for (label, build, expect_valid) in [
+            ("license at limit", (Some("a".repeat(MAX_LICENSE_CHARS)), None::<String>), true),
+            ("license over limit", (Some("a".repeat(MAX_LICENSE_CHARS + 1)), None::<String>), false),
+            ("compatibility at limit", (None, Some("a".repeat(MAX_COMPATIBILITY_CHARS))), true),
+            ("compatibility over limit", (None, Some("a".repeat(MAX_COMPATIBILITY_CHARS + 1))), false),
+        ] {
+            let manifest = SkillManifest {
+                name: "valid-name".to_string(),
+                description: "A valid description for the skill.".to_string(),
+                license: build.0,
+                compatibility: build.1,
+                ..Default::default()
+            };
+            assert_eq!(manifest.validate().is_ok(), expect_valid, "strict validator disagreed on {label}");
+            let report = validator.validate_manifest(&manifest, std::path::Path::new("/tmp/nonexistent"));
+            assert_eq!(report.is_valid, expect_valid, "comprehensive validator disagreed on {label}");
+        }
+    }
+
     #[test]
     fn test_allowed_tools_string_format() {
         // Valid space-delimited string
@@ -691,6 +751,35 @@ mod tests {
             ..Default::default()
         };
         assert!(m.validate().is_err());
+    }
+
+    /// `allowed_tool_count` is the single rule both validators read, so pin the
+    /// exact limit it enforces rather than just "17 fails": 16 must pass, 17
+    /// must fail, and extra whitespace must not change the count.
+    #[test]
+    fn allowed_tool_limit_is_inclusive_of_sixteen() {
+        let manifest_with = |tools: String| SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            allowed_tools: Some(tools),
+            ..Default::default()
+        };
+
+        assert_eq!(allowed_tool_count("Read Write Bash"), 3);
+        assert_eq!(allowed_tool_count("  Read   Write  "), 2);
+        assert_eq!(allowed_tool_count(""), 0);
+        assert_eq!(allowed_tool_count("   \t\n "), 0);
+
+        let at_limit = (0..MAX_ALLOWED_TOOLS).map(|i| format!("Tool{i}")).collect::<Vec<_>>().join(" ");
+        assert_eq!(allowed_tool_count(&at_limit), MAX_ALLOWED_TOOLS);
+        manifest_with(at_limit).validate().expect("16 tools is the inclusive limit");
+
+        let over_limit = (0..=MAX_ALLOWED_TOOLS)
+            .map(|i| format!("Tool{i}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(allowed_tool_count(&over_limit), MAX_ALLOWED_TOOLS + 1);
+        manifest_with(over_limit).validate().expect_err("17 tools exceeds the limit");
     }
 
     #[test]

@@ -6,7 +6,7 @@
 
 ## Key Modules
 
-`types.rs` + `manifest.rs` core types | `authoring.rs` | `bundle.rs` | `templates.rs` | `container.rs` + `container_validation.rs` | `context_manager.rs` | `validation_report.rs` + `enhanced_validator.rs` | `trust.rs` prompt-boundary helpers | `native_plugin.rs` | `system.rs` | `document_processor.rs` | `file_references.rs` | `locations.rs` | `model.rs` | `command_skills.rs` (including `/webmcp`) | `injection.rs` + `instructions.rs` + `prompt_integration.rs` + `render.rs` | `versioning.rs`
+`types.rs` + `manifest.rs` core types | `limits.rs` spec limits shared by both validators | `authoring.rs` | `bundle.rs` | `templates.rs` | `container.rs` + `container_validation.rs` | `context_manager.rs` | `validation_report.rs` + `enhanced_validator.rs` | `trust.rs` prompt-boundary helpers | `native_plugin.rs` | `system.rs` | `document_processor.rs` | `file_references.rs` | `locations.rs` | `model.rs` | `command_skills.rs` (including `/webmcp`) | `injection.rs` + `instructions.rs` + `prompt_integration.rs` + `render.rs` | `versioning.rs`
 
 ## Architecture Notes
 

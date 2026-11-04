@@ -29,6 +29,7 @@ pub mod enhanced_validator;
 pub mod file_references;
 pub mod injection;
 pub mod instructions;
+pub mod limits;
 pub mod locations;
 pub mod manifest;
 pub mod model;
