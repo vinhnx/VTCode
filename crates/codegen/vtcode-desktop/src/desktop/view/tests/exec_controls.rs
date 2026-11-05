@@ -108,3 +108,42 @@ fn exec_accepted_response_updates_status(cx: &mut TestAppContext) {
     }
     cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
 }
+
+#[gpui_kit::test]
+fn run_cluster_matches_idle_send_size_and_swaps_exclusively(cx: &mut TestAppContext) {
+    let (window, view, _) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("send-prompt").is_none(), "send hides while a turn runs");
+        let background = window.find("background-exec").bounds();
+        for id in ["force-cancel-exec", "cancel-turn"] {
+            let bounds = window.find(id).bounds();
+            // 1px tolerates subpixel rounding; a size-class drift (medium vs
+            // large) differs by an order of magnitude more, so it still fails.
+            assert!(
+                (bounds.size.width - background.size.width).abs() <= px(1.)
+                    && (bounds.size.height - background.size.height).abs() <= px(1.),
+                "{id} matches background-exec size: {bounds:?} vs {background:?}"
+            );
+            // Wrapping stays the designed narrow-viewport behavior, but the
+            // common case holds one row: a future size bump that wraps the
+            // trio at the default viewport must fail loudly here.
+            assert!(
+                (bounds.origin.y - background.origin.y).abs() <= px(1.),
+                "{id} stays on the cluster row: {bounds:?} vs {background:?}"
+            );
+        }
+        view.update(cx, |view, _| view.running = false);
+        window.render_frame(cx);
+        for id in ["background-exec", "force-cancel-exec", "cancel-turn"] {
+            assert!(window.try_find(id).is_none(), "{id} hides while idle");
+        }
+        let send = window.find("send-prompt").bounds();
+        assert!(
+            (send.size.width - background.size.width).abs() <= px(1.)
+                && (send.size.height - background.size.height).abs() <= px(1.),
+            "idle send matches running trio size: {send:?} vs {background:?}"
+        );
+    })
+    .unwrap();
+}

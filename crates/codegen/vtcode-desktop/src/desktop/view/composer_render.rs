@@ -340,7 +340,7 @@ impl DesktopView {
         if self.running {
             model_actions = model_actions
                 .child(
-                    desktop_button("background-exec")
+                    composer_run_geometry(desktop_tertiary_button("background-exec"))
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.background_operation_tooltip").to_string(),
                             &BackgroundOperation,
@@ -348,18 +348,19 @@ impl DesktopView {
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
                         .icon(IconName::ArrowDown)
-                        .ghost()
+                        .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.background_foreground_session(cx))),
                 )
                 .child(
-                    desktop_danger_button("force-cancel-exec")
+                    composer_run_geometry(desktop_danger_button("force-cancel-exec"))
                         .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
                         .icon(IconName::X)
+                        .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
                 .child(
-                    desktop_danger_button("cancel-turn")
+                    composer_run_geometry(desktop_danger_button("cancel-turn"))
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
@@ -367,16 +368,15 @@ impl DesktopView {
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                         .icon(IconName::Square)
+                        .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                 );
         } else {
             model_actions = model_actions.child(
-                desktop_primary_button("send-prompt")
+                composer_run_geometry(desktop_primary_button("send-prompt"))
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
-                    .large()
-                    .rounded(ButtonRounded::Large)
                     .when(can_submit, |button| button.desktop_elevated())
                     .desktop_disabled(!can_submit)
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
@@ -671,4 +671,12 @@ impl DesktopView {
             .desktop_disabled(!self.can_select_session_options())
             .dispatches_desktop_action(OpenPermissions, self.focus_handle.clone())
     }
+}
+
+/// Shared size and radius for the composer run cluster: the idle send and
+/// every running-state button render from this one definition, so the cluster
+/// reads as a single control across turn states. Elevation stays gated at
+/// each call site: Kit replays the instance shadow inside its disabled arm.
+fn composer_run_geometry(button: Button) -> Button {
+    button.large().rounded(ButtonRounded::Large)
 }
