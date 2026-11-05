@@ -34,4 +34,4 @@ generated output at its generator so regeneration remains lint-clean.
 | --- | --- |
 | Maintained Markdown | `python3 scripts/check_markdown.py` |
 | Selection regressions | `python3 scripts/tests/test_check_markdown.py` |
-| Core docs and AGENTS.md links (also in `check-dev.sh`) | `python3 scripts/check_docs_links.py` |
+| Links in all maintained Markdown (also in `check-dev.sh`) | `python3 scripts/check_docs_links.py` |

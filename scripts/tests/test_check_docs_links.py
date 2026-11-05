@@ -92,6 +92,35 @@ class CheckDocsLinksTests(unittest.TestCase):
         self.write("AGENTS.md", "x" * (BUDGET + 50) + "\n")
         self.assertEqual(self.run_main(), (0, ""))
 
+    def test_broken_link_in_any_maintained_doc_fails(self):
+        self.write("docs/guides/a.md", "[Gone](missing.md)\n")
+        self.track("docs/guides/a.md")
+        status, stderr = self.run_main()
+        self.assertEqual(status, 1)
+        self.assertIn("docs/guides/a.md -> missing.md", stderr)
+
+    def test_vendored_markdown_is_not_checked(self):
+        self.write("patches/lib/README.md", "[Gone](missing.md)\n")
+        self.track("patches/lib/README.md")
+        self.assertEqual(self.run_main(), (0, ""))
+
+    def test_links_inside_code_are_not_checked(self):
+        self.write(
+            "docs/a.md",
+            "Use `[x](inline.md)` syntax.\n\n```markdown\nSee [FORMS.md](FORMS.md)\n```\n\n"
+            "~~~\n[y](tilde.md)\n~~~\n",
+        )
+        self.track("docs/a.md")
+        self.assertEqual(self.run_main(), (0, ""))
+
+    def test_link_after_a_closed_fence_is_checked(self):
+        self.write("docs/a.md", "```\n[x](skipped.md)\n```\n\n[Gone](after.md)\n")
+        self.track("docs/a.md")
+        status, stderr = self.run_main()
+        self.assertEqual(status, 1)
+        self.assertIn("docs/a.md -> after.md", stderr)
+        self.assertNotIn("skipped.md", stderr)
+
     def test_missing_entrypoint_fails(self):
         (self.root / module.ENTRYPOINT_DOCS[-1]).unlink()
         status, stderr = self.run_main()

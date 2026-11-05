@@ -61,7 +61,7 @@ An optional `profile` selects `vt_code` or `advanced_vtcode`. Cases that omit it
 override.
 
 The focused advanced-profile code-search cases live in
-[`docs/development/ai-tool-surface-eval-cases.json`](../docs/development/ai-tool-surface-eval-cases.json). They cover
+[`docs/development/ai-tool-surface-eval-cases.json`](../../docs/development/ai-tool-surface-eval-cases.json). They cover
 result-type filtering, literal smart-case, the syntactic limitation of usage results, bounded truncation, and refinement
 through another call. These cases must not assert exact repository-wide match totals.
 

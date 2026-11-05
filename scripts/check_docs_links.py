@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Validate local markdown links in core docs and agent instruction files.
+"""Validate local markdown links in maintained docs and agent instruction files.
 
 Checks two things:
-1. Every relative markdown link in the core documentation entrypoints, every tracked
-   `AGENTS.md`, and the per-crate maintainer notes resolves to an existing path.
+1. Every relative markdown link outside code spans and fenced code blocks resolves to an
+   existing path, in every maintained markdown file (the same selection as
+   `check_markdown.py`) plus the per-crate maintainer notes.
 2. Per-module `AGENTS.md` files keep short lines, so the "about 30 short lines" budget
    cannot be met by packing many rules into one line.
 """
@@ -16,7 +17,12 @@ import subprocess
 import sys
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+from check_markdown import is_maintained_markdown  # noqa: E402  (shared file selection)
+
+REPO_ROOT = SCRIPTS_DIR.parent
 ENTRYPOINT_DOCS = (
     "AGENTS.md",
     "README.md",
@@ -32,6 +38,26 @@ MAX_MODULE_AGENTS_LINE_CHARS = 600
 
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+INLINE_CODE_RE = re.compile(r"(`+).*?\1")
+
+
+def prose_lines(content: str):
+    """Yield lines outside fenced code blocks with inline code spans blanked out.
+
+    Links shown as examples inside code are not navigable and must not be checked.
+    """
+    fence: str | None = None
+    for line in content.splitlines():
+        match = FENCE_RE.match(line)
+        if fence is None and match:
+            fence = match.group(1)[0] * len(match.group(1))
+            continue
+        if fence is not None:
+            if line.strip().startswith(fence):
+                fence = None
+            continue
+        yield INLINE_CODE_RE.sub("", line)
 
 
 def normalize_target(raw_target: str) -> str | None:
@@ -59,11 +85,11 @@ def resolve_target(root: Path, doc_path: Path, target: str) -> Path:
     return (doc_path.parent / target).resolve()
 
 
-def tracked_agents_files(root: Path) -> list[str]:
-    """Return tracked `AGENTS.md` paths; untracked and ignored copies are skipped."""
+def tracked_maintained_markdown(root: Path) -> list[str]:
+    """Return tracked maintained markdown; untracked, vendored, and fixture files are skipped."""
     try:
         result = subprocess.run(
-            ["git", "ls-files", "--", "AGENTS.md", "*/AGENTS.md"],
+            ["git", "ls-files", "--", "*.md"],
             cwd=root,
             capture_output=True,
             text=True,
@@ -71,7 +97,10 @@ def tracked_agents_files(root: Path) -> list[str]:
         )
     except (OSError, subprocess.CalledProcessError):
         return []
-    return [line for line in result.stdout.splitlines() if line]
+    return [
+        line for line in result.stdout.splitlines()
+        if line and is_maintained_markdown(line) and (root / line).is_file()
+    ]
 
 
 def instruction_docs(root: Path) -> list[str]:
@@ -79,7 +108,7 @@ def instruction_docs(root: Path) -> list[str]:
     notes = sorted(
         str(path.relative_to(root)) for path in notes_dir.glob("*.md")
     ) if notes_dir.is_dir() else []
-    return sorted(set(tracked_agents_files(root)) | set(notes))
+    return sorted(set(tracked_maintained_markdown(root)) | set(notes))
 
 
 def broken_links(root: Path, relative_docs: list[str]) -> list[tuple[str, str]]:
@@ -87,12 +116,13 @@ def broken_links(root: Path, relative_docs: list[str]) -> list[tuple[str, str]]:
     for relative_doc in relative_docs:
         doc_path = root / relative_doc
         content = doc_path.read_text(encoding="utf-8")
-        for match in MARKDOWN_LINK_RE.finditer(content):
-            target = normalize_target(match.group(1))
-            if target is None:
-                continue
-            if not resolve_target(root, doc_path, target).exists():
-                broken.append((relative_doc, target))
+        for line in prose_lines(content):
+            for match in MARKDOWN_LINK_RE.finditer(line):
+                target = normalize_target(match.group(1))
+                if target is None:
+                    continue
+                if not resolve_target(root, doc_path, target).exists():
+                    broken.append((relative_doc, target))
     return broken
 
 
@@ -129,7 +159,7 @@ def main(root: Path = REPO_ROOT) -> int:
     if broken:
         broken_text = "\n".join(f"- {doc} -> {target}" for doc, target in broken)
         print(
-            "Found broken local markdown links in core docs or agent instruction files:\n"
+            "Found broken local markdown links in maintained docs:\n"
             f"{broken_text}\n\n"
             "Remediation:\n"
             "1. Fix each link target, or update/remove stale links.\n"

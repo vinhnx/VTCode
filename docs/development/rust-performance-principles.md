@@ -208,7 +208,7 @@ type — a nested hierarchy can dominate a binary's code size (`uv` reclaimed ~1
 When a type's `Debug` is large or formatted on a fan-out path:
 
 - Annotate its `Debug::fmt` with `#[inline(never)]` — either by hand-writing the `impl`
-  (as [`LLMError`/`LLMErrorMetadata`](../../crates/common/vtcode-commons/src/llm.rs) already
+  (as [`LLMError`/`LLMErrorMetadata`](../../crates/common/vtcode-commons/src/llm/mod.rs) already
   do) or with the `DebugNoInline` derive from `vtcode-macros`.
 - Leave small, hot, leaf `Debug` impls derived. `#[inline(never)]` on a tiny struct whose
   `Debug` is called in a tight loop can make things slower.
