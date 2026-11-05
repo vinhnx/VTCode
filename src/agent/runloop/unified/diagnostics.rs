@@ -386,7 +386,7 @@ pub(crate) async fn run_checkup_diagnostics(
 /// Emit report-only optimization suggestions derived from the active config.
 ///
 /// These mirror the `/config checkup` spec (auto mode, slow hooks, pre-approved
-/// read-only commands, keeping skills/MCPs and CLAUDE.md lean). They are
+/// read-only commands, keeping skills/MCPs and AGENTS.md lean). They are
 /// surfaced as tips rather than pass/fail checks because `/config checkup` confirms
 /// with the user before making any change.
 fn render_checkup_optimizations(
@@ -430,7 +430,7 @@ fn render_checkup_optimizations(
     renderer.line(MessageStyle::Info, "[TIP] Run `/update` or `vtcode update` to check for the latest version.")?;
     renderer.line(
         MessageStyle::Info,
-        "[TIP] Remove unused skills/MCPs and deduplicate or split your CLAUDE.md into nested files to save context.",
+        "[TIP] Remove unused skills/MCPs and deduplicate or split your AGENTS.md (or CLAUDE.md) into nested files to save context.",
     )?;
     Ok(())
 }

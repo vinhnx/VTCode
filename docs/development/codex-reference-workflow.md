@@ -10,8 +10,8 @@ comparison. Examples include difficult cross-module runtime failures, unclear
 architecture, or conflicting local and upstream contracts. Reuse relevant prior
 research; a new user message does not by itself justify another query.
 
-This is repository development guidance, shared through the root
-[AGENTS.md](../../AGENTS.md) and imported by [CLAUDE.md](../../CLAUDE.md).
+This is repository development guidance, shared through the root [AGENTS.md](../../AGENTS.md),
+which both VT Code and Claude Code load directly.
 
 ## Inspect and research
 
