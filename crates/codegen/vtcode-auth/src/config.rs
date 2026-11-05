@@ -20,6 +20,7 @@ pub struct AuthConfig {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct CopilotAuthConfig {
+    /// Executable override; allowed only in system, user, or explicitly selected configuration.
     pub command: Option<String>,
     pub host: Option<String>,
     #[serde(default = "default_copilot_available_tools")]
