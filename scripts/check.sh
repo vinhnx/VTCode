@@ -280,18 +280,6 @@ run_zen_governance() {
     fi
 }
 
-# Hard ceiling complementing the Zen soft signal: no tracked text file may
-# exceed 1000 lines except for capped entries in file_length_allowlist.txt.
-run_file_length_gate() {
-    print_status "Running file length gate (enforce, max 1000 lines)..."
-    if python3 scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet; then
-        print_success "File lengths within budget."
-        return 0
-    else
-        print_error "File length gate failed (see findings above)."
-        return 1
-    fi
-}
 
 # Catch platform-gated `unsafe` drift that host-only clippy cannot see: every
 # `unsafe` needs a `SAFETY:` marker and an `unsafe_code` allowance, even in code
@@ -415,7 +403,8 @@ main() {
     run_release_contract_tests || ((failed_checks++))
     run_structured_logging_lint || ((failed_checks++))
     run_zen_governance || ((failed_checks++))
-    run_file_length_gate || ((failed_checks++))
+    run_repo_governance_gates || ((failed_checks++))
+    run_markdown_lint_gate || ((failed_checks++))
     run_unsafe_docs_gate || ((failed_checks++))
     run_cargo_deny || ((failed_checks++))
     run_agent_legibility_checks || ((failed_checks++))

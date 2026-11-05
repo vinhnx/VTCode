@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lint tracked, maintained Markdown with the same pinned tool locally and in CI.
+"""Lint tracked, maintained Markdown with one pinned tool (run by `check.sh` and `check-dev.sh --lints`).
 
 Exit codes: 0 = clean, 1 = lint findings, 2 = usage error or linter toolchain
 unavailable (e.g. `npx` not on PATH). Exit 2 keeps a broken environment
@@ -14,6 +14,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 EXCLUDED_FILES = {"docs/project/TODO.md"}
+# Vendored upstream content: lint fixes belong upstream, local edits would fork it.
+VENDORED_PREFIXES = ("patches/", ".agents/skills/rust-skills/")
 EXCLUDED_PARTS = {"fixtures", "snapshots", "embedded_assets_source"}
 MARKDOWNLINT_CLI2_VERSION = "0.23.3"
 MISSING_TOOLCHAIN_EXIT = 2
@@ -38,7 +40,7 @@ def is_maintained_markdown(path: str) -> bool:
     return (
         path.endswith(".md")
         and path not in EXCLUDED_FILES
-        and not path.startswith(("patches/", ".vtcode/reviews/"))
+        and not path.startswith((*VENDORED_PREFIXES, ".vtcode/reviews/"))
         and not EXCLUDED_PARTS.intersection(parts)
     )
 

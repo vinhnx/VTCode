@@ -31,7 +31,10 @@ class MarkdownSelectionTests(unittest.TestCase):
                 self.assertEqual(module.tracked_markdown(), ["README.md"])
 
     def test_maintained_sources_and_instructions_are_selected(self):
-        for path in ["README.md", "docs/development/testing.md", "src/AGENTS.md", ".vtcode/README.md"]:
+        for path in [
+            "README.md", "docs/development/testing.md", "src/AGENTS.md", ".vtcode/README.md",
+            ".agents/skills/agentic-testing/SKILL.md",
+        ]:
             with self.subTest(path=path):
                 self.assertTrue(module.is_maintained_markdown(path))
 
@@ -56,7 +59,7 @@ class MarkdownSelectionTests(unittest.TestCase):
 
     def test_protected_vendor_and_fixture_files_are_excluded(self):
         for path in [
-            "docs/project/TODO.md", "patches/crossterm/README.md",
+            "docs/project/TODO.md", "patches/crossterm/README.md", ".agents/skills/rust-skills/rules/own-borrow.md",
             "crates/core/src/fixtures/invalid.md", "tests/snapshots/table.md",
             "crates/core/embedded_assets_source/docs/map.md", ".vtcode/reviews/session.md", "Cargo.toml",
         ]:

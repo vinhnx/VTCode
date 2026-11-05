@@ -35,6 +35,12 @@ class CheckDevTests(unittest.TestCase):
                 "print('File length summary: stub')\n"
                 "sys.exit(int(os.environ.get('CHECK_DEV_FILE_LENGTH_STATUS', '0')))\n"
             )
+            for gate in (
+                "check_docs_links.py",
+                "check_markdown_location.py",
+                "check_large_files.py",
+            ):
+                (scripts / gate).write_text(f"#!{sys.executable}\nimport sys\nsys.exit(0)\n")
             if quick:
                 config = root / ".config/nextest.toml"
                 config.parent.mkdir()

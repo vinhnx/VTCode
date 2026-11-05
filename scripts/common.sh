@@ -115,6 +115,50 @@ get_current_version() {
 # this file or the caller's quiet-aware overrides.
 # Pass "required" to fail instead of skipping when cargo-deny is not installed
 # (explicit `deny` subcommand / --deny flag), mirroring run_ast_grep_scan.
+# Repository governance gates shared by check-dev.sh and check.sh, so the fast
+# gate and the release gate cannot drift apart. Each check is a sub-second
+# Python script that exits non-zero with its own remediation text.
+run_python_gate() {
+    local success_message=$1 failure_message=$2
+    shift 2
+    if python3 "$@"; then
+        print_success "$success_message"
+        return 0
+    fi
+    print_error "$failure_message"
+    return 1
+}
+
+run_file_length_gate() {
+    print_status "Running file length gate (max 1000 lines)..."
+    run_python_gate "File lengths within budget!" "File length violations found." \
+        scripts/check_file_length.py --mode enforce --max-lines 1000 --quiet
+}
+
+run_repo_governance_gates() {
+    local failed=0
+    run_file_length_gate || failed=1
+    print_status "Checking local links in docs and AGENTS.md files..."
+    run_python_gate "Docs and AGENTS.md links resolve!" \
+        "Broken docs links or overlong module AGENTS.md lines found." \
+        scripts/check_docs_links.py || failed=1
+    print_status "Checking top-level docs placement..."
+    run_python_gate "Top-level docs placement is valid!" "Unexpected top-level docs files found." \
+        scripts/check_markdown_location.py || failed=1
+    print_status "Checking tracked file sizes..."
+    run_python_gate "Tracked file sizes within budget!" "Oversized tracked files found." \
+        scripts/check_large_files.py || failed=1
+    return "$failed"
+}
+
+# Markdown lint needs Node (`npm install`), so it runs in the release gate and
+# `check-dev.sh --lints` rather than the node-free fast gate.
+run_markdown_lint_gate() {
+    print_status "Running Markdown lint..."
+    run_python_gate "Markdown lint passed!" "Markdown lint failed (exit 2 means the Node toolchain is missing)." \
+        scripts/check_markdown.py
+}
+
 run_cargo_deny() {
     local require_binary="${1:-optional}"
     if [ "$require_binary" != "required" ]; then

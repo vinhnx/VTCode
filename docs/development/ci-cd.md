@@ -357,6 +357,20 @@ Use the provided development check script to run the same checks locally:
 
 To set up the development environment manually:
 
+### Repository Governance Gates (local only)
+
+No GitHub Actions workflow runs these checks; they run only through the local gate scripts, so run
+`./scripts/check-dev.sh` before every commit and `./scripts/check.sh` before a release. Both scripts
+call the shared functions in `scripts/common.sh`, so the fast gate and the release gate cannot drift:
+
+| Function | Checks | Runs in |
+| --- | --- | --- |
+| `run_repo_governance_gates` | file length, docs/AGENTS.md links, top-level docs placement, tracked file sizes | `check-dev.sh`, `check.sh` |
+| `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Node: `npm install`) | `check-dev.sh --lints`, `check.sh` |
+
+Do not describe these checks as CI-enforced. If a CI job is added later, it should call the same
+`scripts/common.sh` functions rather than re-implementing the checks in workflow YAML.
+
 ```bash
 # Install required components
 rustup component add rustfmt clippy
