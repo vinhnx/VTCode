@@ -1,7 +1,7 @@
 ---
 name: rust-skills
 description: >
-  193 Rust coding rules across 14 categories. Use when writing, reviewing,
+  194 Rust coding rules across 14 categories. Use when writing, reviewing,
   or refactoring Rust code. Covers ownership, errors, async, API design,
   memory, performance, testing, and anti-patterns.
 license: MIT
@@ -18,7 +18,27 @@ metadata:
 
 # Rust Best Practices
 
-Comprehensive guide for writing high-quality, idiomatic, and highly optimized Rust code. Contains 193 rules across 14 categories, prioritized by impact to guide LLMs in code generation and refactoring. Quick reference below; the reasoning behind each rule family lives in the per-source digests under [`references/`](references/) (adapted from [BeautifulRust](https://github.com/morganlinton/BeautifulRust), MIT).
+Comprehensive guide for writing high-quality, idiomatic, and highly optimized Rust code. Contains 194 rules across 14 categories, prioritized by impact to guide LLMs in code generation and refactoring. Quick reference below; the reasoning behind each rule family lives in the per-source digests under [`references/`](references/) (adapted from [BeautifulRust](https://github.com/morganlinton/BeautifulRust), MIT).
+
+## VT Code First
+
+These rules are general Rust advice. In this repository, the root [`AGENTS.md`](../../../AGENTS.md) and the
+[Rust style adoption matrix](../../../docs/development/rust-style-guide.md) take precedence, because they record
+measured, deliberate choices. Where a rule below disagrees, follow the repository:
+
+| Rule here | VT Code instead | Why |
+| --- | --- | --- |
+| `cargo test` in rule examples | `cargo nextest run --locked`; doctests only via `cargo test --doc` (`check.sh docs`) | nextest is the project runner; it cannot run doctests |
+| Recommended Cargo.toml (`opt-level = 3`) | Keep the workspace profile: `opt-level = "z"`, fat LTO, `debug-assertions` and `overflow-checks` on | Measured cold-start win; violated invariants must crash loud in release |
+| `opt-target-cpu` native builds | Never for shipped binaries | Released binaries run on other CPUs |
+| `lint-deny-correctness` `#![deny]` in source | Workspace `[workspace.lints]` plus CI `-D warnings` | One lint config; see `lint-expect-over-allow` |
+| `api-serde-optional` feature gating | Only for published library crates that want it | Application crates serialize unconditionally |
+| No `unsafe` | Avoid; if unavoidable, minimal block with `// SAFETY:` | `undocumented_unsafe_blocks` is enforced |
+| `mem-compact-string` | Use the `CompactStr` alias from `vtcode_core::types` | One string type across crates |
+| `err-` rules | `anyhow::Result` with `.context()`/`.with_context()`; `unwrap`/`expect` only in tests | `clippy.toml` and workspace lints enforce it |
+
+Lessons from VT Code's own bugs carry the most weight here: start with
+[`anti-byte-slice-str`](rules/anti-byte-slice-str.md) whenever code caps, truncates, or decodes text.
 
 ## When to Apply
 
@@ -48,7 +68,7 @@ Reference these guidelines when:
 | 11 | Performance Patterns | MEDIUM | `perf-` | 11 |
 | 12 | Project Structure | LOW | `proj-` | 12 |
 | 13 | Clippy & Linting | LOW | `lint-` | 12 |
-| 14 | Anti-patterns | REFERENCE | `anti-` | 16 |
+| 14 | Anti-patterns | REFERENCE | `anti-` | 17 |
 
 ---
 
@@ -288,6 +308,7 @@ Reference these guidelines when:
 - [`anti-collect-intermediate`](rules/anti-collect-intermediate.md) - Don't `collect()` intermediate iterators
 - [`anti-stringly-typed`](rules/anti-stringly-typed.md) - Don't use strings for structured data
 - [`anti-unsound-api`](rules/anti-unsound-api.md) - A safe API that can cause UB through safe calls is unsound
+- [`anti-byte-slice-str`](rules/anti-byte-slice-str.md) - Cut text on char boundaries (`floor_char_boundary`); decode byte streams statefully, never per chunk
 
 ---
 
@@ -312,7 +333,9 @@ break your build. Configure lint levels once in `Cargo.toml`
 
 ---
 
-## Recommended Cargo.toml Settings
+## Recommended Cargo.toml Settings (greenfield crates)
+
+A starting point for a new standalone project. Not for VT Code: keep the workspace profile (see VT Code First).
 
 ```toml
 [profile.release]
@@ -357,6 +380,7 @@ This skill provides rule identifiers for quick reference. When generating or rev
 | Memory optimization | `mem-`, `own-`, `perf-` |
 | Performance tuning | `opt-`, `mem-`, `perf-` |
 | Code review | `anti-`, `lint-` |
+| Truncating, capping, or decoding text | `anti-byte-slice-str`, `own-` |
 
 ### PR Code Review
 
