@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -35,11 +36,11 @@ class CheckDevTests(unittest.TestCase):
                 "print('File length summary: stub')\n"
                 "sys.exit(int(os.environ.get('CHECK_DEV_FILE_LENGTH_STATUS', '0')))\n"
             )
-            for gate in (
-                "check_docs_links.py",
-                "check_markdown_location.py",
-                "check_large_files.py",
-            ):
+            # Stub every Python gate common.sh invokes, derived from the copied script so
+            # adding a gate there cannot silently break this fixture.
+            gates = set(re.findall(r"scripts/(check_\w+\.py)", (scripts / "common.sh").read_text()))
+            assert "check_file_length.py" in gates, "gate discovery matched nothing"
+            for gate in sorted(gates - {"check_file_length.py"}):
                 (scripts / gate).write_text(f"#!{sys.executable}\nimport sys\nsys.exit(0)\n")
             if quick:
                 config = root / ".config/nextest.toml"
