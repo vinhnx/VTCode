@@ -121,6 +121,26 @@ class CheckDocsLinksTests(unittest.TestCase):
         self.assertIn("docs/a.md -> after.md", stderr)
         self.assertNotIn("skipped.md", stderr)
 
+    def write_budget(self, expression: str) -> None:
+        self.write(module.PROMPT_BUDGET_SOURCE, f"pub const DEFAULT_MAX_BYTES: usize = {expression};\n")
+
+    def test_instruction_budget_parses_the_rust_constant(self):
+        self.write_budget("16 * 1_024")
+        self.assertEqual(module.instruction_budget(self.root), 16384)
+
+    def test_root_plus_largest_module_agents_budget_boundary(self):
+        self.write_budget("2 * 50")
+        self.write("AGENTS.md", "r" * 59 + "\n")
+        self.write("crates/a/AGENTS.md", "a" * 19 + "\n")
+        self.write("crates/b/AGENTS.md", "b" * 39 + "\n")
+        self.track("AGENTS.md", "crates/a/AGENTS.md", "crates/b/AGENTS.md")
+        self.assertEqual(self.run_main(), (0, ""))
+
+        self.write("crates/b/AGENTS.md", "b" * 40 + "\n")
+        status, stderr = self.run_main()
+        self.assertEqual(status, 1)
+        self.assertIn("plus crates/b/AGENTS.md need 101 bytes", stderr)
+
     def test_missing_entrypoint_fails(self):
         (self.root / module.ENTRYPOINT_DOCS[-1]).unlink()
         status, stderr = self.run_main()

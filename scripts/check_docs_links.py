@@ -7,6 +7,9 @@ Checks two things:
    `check_markdown.py`) plus the per-crate maintainer notes.
 2. Per-module `AGENTS.md` files keep short lines, so the "about 30 short lines" budget
    cannot be met by packing many rules into one line.
+3. Root `AGENTS.md` plus the largest module `AGENTS.md` fit VT Code's shared instruction
+   budget (`prompt_budget::DEFAULT_MAX_BYTES`). Files load root-first and the budget is
+   shared, so an oversized root silently drops every crate-level file.
 """
 
 from __future__ import annotations
@@ -35,6 +38,8 @@ ENTRYPOINT_DOCS = (
 )
 MAINTAINER_NOTES_DIR = "docs/development/maintainer-notes"
 MAX_MODULE_AGENTS_LINE_CHARS = 600
+PROMPT_BUDGET_SOURCE = "crates/codegen/vtcode-config/src/constants/prompt_budget.rs"
+PROMPT_BUDGET_RE = re.compile(r"pub const DEFAULT_MAX_BYTES: usize = ([0-9_ *]+);")
 
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
@@ -139,6 +144,32 @@ def overlong_module_agents_lines(root: Path, relative_docs: list[str]) -> list[t
     return overlong
 
 
+def instruction_budget(root: Path) -> int | None:
+    """Read VT Code's instruction byte budget from its Rust source (single source of truth)."""
+    source = root / PROMPT_BUDGET_SOURCE
+    if not source.is_file():
+        return None
+    match = PROMPT_BUDGET_RE.search(source.read_text(encoding="utf-8"))
+    if match is None:
+        raise ValueError(f"DEFAULT_MAX_BYTES not found in {PROMPT_BUDGET_SOURCE}")
+    budget = 1
+    for factor in match.group(1).replace("_", "").split("*"):
+        budget *= int(factor)
+    return budget
+
+
+def instruction_budget_overrun(root: Path, relative_docs: list[str]) -> tuple[int, int, str] | None:
+    """Return (needed, budget, largest module) when root + largest module AGENTS.md overflow."""
+    budget = instruction_budget(root)
+    root_agents = root / "AGENTS.md"
+    if budget is None or not root_agents.is_file():
+        return None
+    modules = [doc for doc in relative_docs if doc.endswith("/AGENTS.md")]
+    largest = max(modules, key=lambda doc: (root / doc).stat().st_size, default=None)
+    needed = root_agents.stat().st_size + ((root / largest).stat().st_size if largest else 0)
+    return (needed, budget, largest or "-") if needed > budget else None
+
+
 def main(root: Path = REPO_ROOT) -> int:
     missing_entrypoints = [doc for doc in ENTRYPOINT_DOCS if not (root / doc).exists()]
     if missing_entrypoints:
@@ -179,6 +210,19 @@ def main(root: Path = REPO_ROOT) -> int:
             "1. Keep the module map, rules, and gotchas as short lines.\n"
             f"2. Move long contracts and incident detail to {MAINTAINER_NOTES_DIR}/<crate>.md and link it.\n"
             "3. Re-run: python3 scripts/check_docs_links.py",
+            file=sys.stderr,
+        )
+        return 1
+
+    overrun = instruction_budget_overrun(root, instruction)
+    if overrun:
+        needed, budget, largest = overrun
+        print(
+            f"Root AGENTS.md plus {largest} need {needed} bytes, over VT Code's shared "
+            f"{budget}-byte instruction budget ({PROMPT_BUDGET_SOURCE}).\n"
+            "Files load root-first, so crate-level AGENTS.md files would be dropped.\n\n"
+            "Remediation: move detail from AGENTS.md into "
+            f"{MAINTAINER_NOTES_DIR}/root.md (or the crate's notes) and link it.",
             file=sys.stderr,
         )
         return 1

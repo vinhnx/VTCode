@@ -1688,6 +1688,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Risk-Audit Deferred Items?", "How does Report work?", "How does [S1]
     Problem work?"
 
+- **File**: `docs/development/maintainer-notes/root.md`
+  - **Content**: Root AGENTS.md maintainer notes
+  - **Topics**: Purpose, Core Workflow, Rules, Build & Verification, Testing
+  - **User Questions**: "What can you tell me about Root AGENTS.md maintainer notes?", "How does Purpose work?", "How
+    does Core Workflow work?"
+
 - **File**: `docs/compose/spec/s3-followups.md`
   - **Content**: S3 Follow-ups (session-efficiency out-of-scope)
   - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
