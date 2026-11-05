@@ -124,6 +124,16 @@ def is_allowed(path: Path, size: int, allow_rules: List[AllowRule]) -> bool:
     return False
 
 
+def stale_rules(paths: List[Path], allow_rules: List[AllowRule]) -> List[str]:
+    """Allowlist patterns that match no tracked path (same meaning as check_file_length.py)."""
+    relative = [path.relative_to(REPO_ROOT).as_posix() for path in paths]
+    return [
+        rule.pattern
+        for rule in allow_rules
+        if not any(fnmatch(rel, normalize_pattern(rule.pattern)) for rel in relative)
+    ]
+
+
 def load_allowlist(file_path: Path) -> List[AllowRule]:
     if not file_path.exists():
         return []
@@ -170,7 +180,8 @@ def main() -> int:
         return 2
 
     oversized: List[str] = []
-    for path in list_tracked_files(REPO_ROOT):
+    tracked = list_tracked_files(REPO_ROOT)
+    for path in tracked:
         try:
             size = path.stat().st_size
         except FileNotFoundError:
@@ -191,6 +202,17 @@ def main() -> int:
             "scripts/large_file_allowlist.txt using:\n"
             "   path/or/glob=MAX_BYTES\n"
             "3. Re-run: python3 scripts/check_large_files.py",
+            file=sys.stderr,
+        )
+        return 1
+
+    stale = stale_rules(tracked, allow_rules)
+    if stale:
+        joined = "\n".join(f"- {pattern}" for pattern in stale)
+        print(
+            f"Stale large-file allowlist entries (match no tracked file):\n{joined}\n\n"
+            "Remediation: remove them from scripts/large_file_allowlist.txt, then re-run "
+            "python3 scripts/check_large_files.py",
             file=sys.stderr,
         )
         return 1

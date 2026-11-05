@@ -23,7 +23,7 @@ FN_RE = re.compile(r"\b(?:async\s+)?fn\s+\w+\s*\([^)]*\)")
 RAW_STRING_PREFIX_RE = re.compile(r"(?:br|rb|r)(?P<hashes>#{0,255})\"")
 
 
-@dataclass
+@dataclass(frozen=True)
 class AllowRule:
     pattern: str
     line: int | None = None
@@ -121,13 +121,22 @@ def parse_allow_rules(path: Path) -> list[AllowRule]:
     return rules
 
 
-def is_allowlisted(rel_path: str, line_no: int, rules: list[AllowRule]) -> bool:
+def matching_rule(rel_path: str, line_no: int, rules: list[AllowRule]) -> AllowRule | None:
     for rule in rules:
         if not fnmatch(rel_path, rule.pattern):
             continue
         if rule.line is None or rule.line == line_no:
-            return True
-    return False
+            return rule
+    return None
+
+
+def is_allowlisted(rel_path: str, line_no: int, rules: list[AllowRule]) -> bool:
+    return matching_rule(rel_path, line_no, rules) is not None
+
+
+def stale_rules(rules: list[AllowRule], used: set[AllowRule]) -> list[AllowRule]:
+    """Rules that excused no finding: they silently pre-authorize future output."""
+    return [rule for rule in rules if rule not in used]
 
 
 def raw_string_prefix_length(source: str, index: int) -> int:
@@ -238,7 +247,9 @@ def strip_non_code(source: str) -> str:
     return "".join(out)
 
 
-def scan_file(path: Path, rules: list[AllowRule]) -> list[tuple[str, int, str]]:
+def scan_file(
+    path: Path, rules: list[AllowRule], used: set[AllowRule] | None = None
+) -> list[tuple[str, int, str]]:
     if not path.exists():
         return []
     rel_path = path.relative_to(REPO_ROOT).as_posix()
@@ -306,8 +317,12 @@ def scan_file(path: Path, rules: list[AllowRule]) -> list[tuple[str, int, str]]:
         if pending_cfg_test and stripped_code and not stripped_code.startswith("#["):
             pending_cfg_test = False
 
-        if PRINTLN_RE.search(code_line) and not is_allowlisted(rel_path, idx, rules):
-            findings.append((rel_path, idx, raw_line.strip()))
+        if PRINTLN_RE.search(code_line):
+            rule = matching_rule(rel_path, idx, rules)
+            if rule is None:
+                findings.append((rel_path, idx, raw_line.strip()))
+            elif used is not None:
+                used.add(rule)
 
     return findings
 
@@ -330,6 +345,7 @@ def main() -> int:
         return 1
 
     findings: list[tuple[str, int, str]] = []
+    used: set[AllowRule] = set()
     scanned = 0
     ignored = 0
 
@@ -338,13 +354,14 @@ def main() -> int:
             ignored += 1
             continue
         scanned += 1
-        findings.extend(scan_file(path, allow_rules))
+        findings.extend(scan_file(path, allow_rules, used))
 
     print(
         "structured logging scan summary: "
         f"scanned_files={scanned}, ignored_files={ignored}, "
         f"allow_rules={len(allow_rules)}, findings={len(findings)}, mode={args.mode}"
     )
+    stale = stale_rules(allow_rules, used)
 
     if findings:
         print("\nFindings (path:line | source):")
@@ -354,6 +371,21 @@ def main() -> int:
         if len(findings) > args.max_findings:
             remaining = len(findings) - args.max_findings
             print(f"- ... {remaining} additional finding(s) not shown")
+
+    if stale:
+        print("\nStale allowlist rules (excuse no current println!/eprintln!):")
+        for rule in stale:
+            suffix = f":{rule.line}" if rule.line is not None else ""
+            print(f"- {rule.pattern}{suffix}")
+
+    if args.mode == "enforce" and stale and not findings:
+        print(
+            "\nStructured logging enforcement failed: remove the stale rules above from "
+            "scripts/structured_logging_allowlist.txt (a stale file rule silently allows "
+            "future output; a stale path:line rule breaks when code moves).",
+            file=sys.stderr,
+        )
+        return 1
 
     if args.mode == "enforce" and findings:
         print(
