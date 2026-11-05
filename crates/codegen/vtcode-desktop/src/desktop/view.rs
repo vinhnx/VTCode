@@ -180,8 +180,14 @@ use typography::FontTarget;
 use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
-const CONTENT_WIDTH: f32 = 720.;
-const ZEN_CONTENT_WIDTH: f32 = 600.;
+/// Normal-mode reading column: fits ~80-column code with breathing room while
+/// keeping prose scannable. Applied as a centered `max_w`, so narrow windows
+/// are unaffected.
+const CONTENT_WIDTH: f32 = 768.;
+/// Zen reading column: the focused single-column width. Fits ~80-column code
+/// without the sideways squeeze of the old 600px cap; still clearly narrower
+/// than the normal column.
+const ZEN_CONTENT_WIDTH: f32 = 680.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const WELCOME_COPY_COUNT: usize = 3;
 

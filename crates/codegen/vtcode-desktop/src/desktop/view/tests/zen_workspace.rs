@@ -169,7 +169,12 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
             zen_frame.size.width < normal_frame.size.width,
             "zen composer narrows: {zen_frame:?} vs {normal_frame:?}"
         );
-        assert!(zen_frame.size.width <= px(600.), "zen column cap: {zen_frame:?}");
+        let zen_cap = view.read(cx).content_width();
+        assert!(
+            (600.0..=720.0).contains(&zen_cap),
+            "zen stays a narrow reading column under the 768 normal width: {zen_cap}"
+        );
+        assert!(zen_frame.size.width <= px(zen_cap), "zen column cap: {zen_frame:?}");
         assert_eq!(
             window.find("send-prompt").bounds().size.height,
             normal_send.size.height,
