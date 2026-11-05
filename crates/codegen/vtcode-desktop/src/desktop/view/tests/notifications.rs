@@ -368,3 +368,204 @@ fn update_available_notification_respects_toggles_and_quiet_status(cx: &mut Test
     })
     .unwrap();
 }
+
+fn deeplink_thread_fixture(id: &str) -> vtcode_desktop_protocol::SessionSummary {
+    vtcode_desktop_protocol::SessionSummary {
+        session_id: id.into(),
+        title: Some(format!("Thread {id}")),
+        workspace: std::env::temp_dir().display().to_string(),
+        completed: true,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    }
+}
+
+fn question_interaction_event(session_id: &str, turn_id: &str, interaction_id: &str) -> BackendEvent {
+    BackendEvent::Interaction(vtcode_desktop_protocol::InteractionRequest {
+        session_id: session_id.into(),
+        turn_id: turn_id.into(),
+        interaction_id: interaction_id.into(),
+        kind: vtcode_desktop_protocol::InteractionKind::Question,
+        wizard: false,
+        title: "private prompt detail".into(),
+        details: Vec::new(),
+        choices: Vec::new(),
+        steps: Vec::new(),
+        selected_choice_id: None,
+        selected_choice_ids: Vec::new(),
+    })
+}
+
+fn click_delivered_system_banner(cx: &mut TestAppContext) {
+    let delivered = cx.delivered_system_notifications();
+    assert_eq!(delivered.len(), 1, "one banner under test");
+    cx.simulate_system_notification_response(gpui_kit::SystemNotificationResponse {
+        tag: delivered[0].tag.clone(),
+        action_id: None,
+    });
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn system_notification_click_reselects_the_notified_thread(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.is_window_active());
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.sessions = vec![deeplink_thread_fixture("thread-a"), deeplink_thread_fixture("thread-b")];
+            view.selected_session_id = Some("thread-a".into());
+            view.active_turn_id = Some("turn-1".into());
+            view.running = true;
+            view.event_tx
+                .send(BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+                    session_id: "thread-a".into(),
+                    turn_id: Some("turn-1".into()),
+                    event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                        completed_at: None,
+                        usage: Usage {
+                            input_tokens: 0,
+                            cached_input_tokens: 0,
+                            cache_creation_tokens: 0,
+                            output_tokens: 0,
+                        },
+                        in_progress_exec_sessions: Vec::new(),
+                    })),
+                }))
+                .unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            assert!(!view.running, "completion settles the turn");
+        });
+    })
+    .unwrap();
+    assert_eq!(cx.shown_system_notifications().len(), 1, "background completion posts one banner");
+    while requests.try_recv().is_ok() {}
+
+    // The user moves on before clicking: another thread, another surface.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("thread-b".into());
+            view.open_settings(window, cx);
+        });
+    })
+    .unwrap();
+    click_delivered_system_banner(cx);
+
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("click reloads the notified thread")
+    else {
+        panic!("click must send session/load, not stop");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "thread-a" }));
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).current_route() == Route::Workspace, "click lands on the thread surface");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn system_notification_click_focuses_the_waiting_interaction(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.active_turn_id = Some("turn-3".into());
+            view.running = true;
+            view.event_tx
+                .send(question_interaction_event("session", "turn-3", "interaction-1"))
+                .unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            assert!(view.interaction.is_some());
+        });
+        window.render_frame(cx);
+        // Move to another surface without resolving the prompt.
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    click_delivered_system_banner(cx);
+
+    cx.update_window(window, |_, window, cx| {
+        let view = view.read(cx);
+        assert!(view.current_route() == Route::Workspace, "click returns to the thread");
+        assert!(view.interaction_focus.contains_focused(window, cx), "click focuses the waiting prompt");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn system_notification_click_tolerates_a_resolved_interaction(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.active_turn_id = Some("turn-3".into());
+            view.running = true;
+            view.event_tx
+                .send(question_interaction_event("session", "turn-3", "interaction-1"))
+                .unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            // Resolve before clicking: the banner now names a dead prompt.
+            view.interaction = None;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    click_delivered_system_banner(cx);
+
+    cx.update_window(window, |_, window, cx| {
+        let view = view.read(cx);
+        assert!(view.current_route() == Route::Workspace, "a stale click still lands on the thread");
+        assert!(!view.interaction_focus.contains_focused(window, cx), "a stale click must not steal focus");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn system_notification_click_opens_update_settings(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.is_window_active(), "a backgrounded window gets the system banner");
+        view.update(cx, |view, cx| {
+            view.maybe_notify_update_available(&update_status_event("0.180.5", Some("0.181.0"), true), window, cx);
+        });
+    })
+    .unwrap();
+    click_delivered_system_banner(cx);
+
+    cx.update_window(window, |_, _, cx| {
+        let view = view.read(cx);
+        assert!(view.current_route() == Route::Settings, "click opens settings");
+        assert_eq!(view.settings_tab, super::super::settings::SettingsTab::Notifications);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn system_notification_click_returns_a_disconnect_to_the_workspace(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.event_tx
+                .send(BackendEvent::Exited { status: Some(1), authentication_required: false })
+                .unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    click_delivered_system_banner(cx);
+
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).current_route() == Route::Workspace, "click lands on the service status");
+    })
+    .unwrap();
+}

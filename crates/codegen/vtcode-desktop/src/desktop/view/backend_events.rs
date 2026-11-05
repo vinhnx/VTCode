@@ -129,10 +129,15 @@ impl DesktopView {
                 {
                     return;
                 }
+                let target = deeplinks::NotificationTarget::Thread { session_id: notification.session_id.clone() };
                 match notification.event.event() {
-                    vtcode_exec_events::ThreadEvent::TurnCompleted(_) => Some(BackgroundAgentActivity::Completed),
+                    vtcode_exec_events::ThreadEvent::TurnCompleted(_) => {
+                        Some((BackgroundAgentActivity::Completed, target))
+                    }
                     vtcode_exec_events::ThreadEvent::TurnFailed(_)
-                    | vtcode_exec_events::ThreadEvent::TurnBlocked(_) => Some(BackgroundAgentActivity::NeedsAttention),
+                    | vtcode_exec_events::ThreadEvent::TurnBlocked(_) => {
+                        Some((BackgroundAgentActivity::NeedsAttention, target))
+                    }
                     _ => None,
                 }
             }
@@ -150,7 +155,13 @@ impl DesktopView {
                 {
                     return;
                 }
-                Some(super::super::notifications::activity_for_interaction_kind(interaction.kind))
+                Some((
+                    super::super::notifications::activity_for_interaction_kind(interaction.kind),
+                    deeplinks::NotificationTarget::Interaction {
+                        session_id: interaction.session_id.clone(),
+                        interaction_id: interaction.interaction_id.clone(),
+                    },
+                ))
             }
             // The transport reports its terminal state before the channel
             // drops, so these fire exactly once per disconnect. Intentional
@@ -161,14 +172,14 @@ impl DesktopView {
             BackendEvent::Exited { status, .. }
                 if self.backend.is_some() && self.pending_workspace.is_none() && *status != Some(0) =>
             {
-                Some(BackgroundAgentActivity::ServiceDisconnected)
+                Some((BackgroundAgentActivity::ServiceDisconnected, deeplinks::NotificationTarget::Workspace))
             }
             BackendEvent::LaunchFailed(_) if self.backend.is_some() && self.pending_workspace.is_none() => {
-                Some(BackgroundAgentActivity::ServiceDisconnected)
+                Some((BackgroundAgentActivity::ServiceDisconnected, deeplinks::NotificationTarget::Workspace))
             }
             _ => None,
         };
-        let Some(activity) = activity else {
+        let Some((activity, target)) = activity else {
             return;
         };
         if !super::super::notifications::activity_allowed(
@@ -178,7 +189,19 @@ impl DesktopView {
         ) {
             return;
         }
-        super::super::notifications::background_agent_activity(window, activity, cx);
+        // The banner outlives this event: carry an owned target behind a weak
+        // view so clicks land after thread switches and view teardown alike.
+        let weak = cx.entity().downgrade();
+        super::super::notifications::background_agent_activity(
+            window,
+            activity,
+            move |_, window, cx| {
+                let _updated = weak.update(cx, |view, cx| {
+                    view.open_notification_target(target.clone(), window, cx);
+                });
+            },
+            cx,
+        );
     }
 
     pub(super) fn handle_backend_event(&mut self, event: BackendEvent, cx: &mut Context<Self>) {

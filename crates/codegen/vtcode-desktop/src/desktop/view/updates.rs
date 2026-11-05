@@ -53,7 +53,18 @@ impl DesktopView {
             return;
         }
         let system = !window.is_window_active();
-        super::super::notifications::update_available(window, latest, system, cx);
+        let weak = cx.entity().downgrade();
+        super::super::notifications::update_available(
+            window,
+            latest,
+            system,
+            move |_, window, cx| {
+                let _updated = weak.update(cx, |view, cx| {
+                    view.open_notification_target(deeplinks::NotificationTarget::UpdateSettings, window, cx);
+                });
+            },
+            cx,
+        );
         self.preferences.notifications.last_notified_update = Some(latest.to_string());
         self.preferences.save();
         cx.notify();

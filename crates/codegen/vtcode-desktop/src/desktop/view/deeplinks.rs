@@ -89,6 +89,22 @@ pub(super) enum DeepLink {
     Action(PaletteAction),
 }
 
+/// Click destination for a notification banner. Owned so the banner callback
+/// (`Fn + 'static`) can carry it past the notifying event; resolved by
+/// [`DesktopView::open_notification_target`], which tolerates threads the
+/// user has since left and interactions that have since resolved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum NotificationTarget {
+    /// A thread that finished or needs attention.
+    Thread { session_id: String },
+    /// A waiting approval/question; focuses the interaction when still current.
+    Interaction { session_id: String, interaction_id: String },
+    /// Service disconnect: land on the workspace status.
+    Workspace,
+    /// New release: the Notifications settings tab (update row + Check button).
+    UpdateSettings,
+}
+
 impl DeepLink {
     /// Canonical link text, or `None` for actions no link addresses
     /// (free-text inserts, composite session options, palette openers).
@@ -415,6 +431,50 @@ impl DesktopView {
             Route::Settings => self.open_settings(window, cx),
             Route::Browser => self.open_thread_browser(window, cx),
             Route::Review => self.show_review(window, cx),
+        }
+    }
+
+    /// Open a notification click destination. Stale targets degrade to the
+    /// workspace: a resolved interaction still lands on its thread rather
+    /// than failing, and a switched thread is re-selected through the UI
+    /// entry so a running turn gets the confirm modal instead of a yank.
+    pub(super) fn open_notification_target(
+        &mut self,
+        target: NotificationTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match target {
+            NotificationTarget::Thread { session_id } => {
+                self.ensure_notification_session(&session_id, window, cx);
+                self.open_route_link(Route::Workspace, window, cx);
+            }
+            NotificationTarget::Interaction { session_id, interaction_id } => {
+                self.ensure_notification_session(&session_id, window, cx);
+                self.open_route_link(Route::Workspace, window, cx);
+                if self
+                    .interaction
+                    .as_ref()
+                    .is_some_and(|current| current.interaction_id == interaction_id)
+                {
+                    self.interaction_focus.focus(window, cx);
+                }
+            }
+            NotificationTarget::Workspace => self.open_route_link(Route::Workspace, window, cx),
+            NotificationTarget::UpdateSettings => {
+                self.run_palette_action(
+                    PaletteAction::SelectSettingsTab(settings::SettingsTab::Notifications),
+                    window,
+                    cx,
+                );
+            }
+        }
+    }
+
+    /// Re-select the notified thread when the user has since moved elsewhere.
+    fn ensure_notification_session(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_session_id.as_deref() != Some(session_id) {
+            let _loaded = self.load_session_from_ui(session_id.to_string(), window, cx);
         }
     }
 

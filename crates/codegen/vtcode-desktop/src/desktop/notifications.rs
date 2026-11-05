@@ -1,5 +1,5 @@
 use gpui_kit::component::{WindowExt as _, notification::Notification};
-use gpui_kit::{Anchor, App, Window};
+use gpui_kit::{Anchor, App, ClickEvent, Window};
 
 use super::strings::app;
 
@@ -68,7 +68,12 @@ pub(super) fn activity_for_interaction_kind(kind: vtcode_desktop_protocol::Inter
     }
 }
 
-pub(super) fn background_agent_activity(window: &mut Window, activity: BackgroundAgentActivity, cx: &mut App) {
+pub(super) fn background_agent_activity(
+    window: &mut Window,
+    activity: BackgroundAgentActivity,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &mut App,
+) {
     let message = match activity {
         BackgroundAgentActivity::Completed => rust_i18n::t!("app.notifications.agent_done").to_string(),
         BackgroundAgentActivity::NeedsAttention => rust_i18n::t!("app.notifications.agent_attention").to_string(),
@@ -78,21 +83,30 @@ pub(super) fn background_agent_activity(window: &mut Window, activity: Backgroun
             rust_i18n::t!("app.notifications.service_disconnected").to_string()
         }
     };
-    window.push_notification(
-        Notification::info(message)
-            .title(app::NAME)
-            .id::<BackgroundAgentActivityNotification>()
-            .system(),
-        cx,
-    );
+    let notification = Notification::info(message)
+        .title(app::NAME)
+        .id::<BackgroundAgentActivityNotification>()
+        .system();
+    // System-banner clicks activate the window and fire this same callback,
+    // so one handler covers both deliveries.
+    window.push_notification(notification.on_click(on_click), cx);
 }
 
 /// Announce a newer VT Code release. Focused windows get an in-app toast so
 /// the startup check is never silently dropped; backgrounded windows (or an
 /// explicit always-notify preference) get a system banner instead.
-pub(super) fn update_available(window: &mut Window, latest: &str, system: bool, cx: &mut App) {
+pub(super) fn update_available(
+    window: &mut Window,
+    latest: &str,
+    system: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &mut App,
+) {
     let message = rust_i18n::t!("app.notifications.update_available", latest = latest).to_string();
-    let notification = Notification::info(message).title(app::NAME).id::<UpdateAvailableNotification>();
+    let notification = Notification::info(message)
+        .title(app::NAME)
+        .id::<UpdateAvailableNotification>()
+        .on_click(on_click);
     if system {
         window.push_notification(notification.system(), cx);
     } else {
