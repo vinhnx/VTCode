@@ -72,7 +72,7 @@ fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx:
     if let Some(command) = shell_command_span(detail) {
         let mut fenced = String::with_capacity(command.len().saturating_add(8));
         fenced.push_str("```sh\n");
-        fenced.push_str(&command);
+        fenced.push_str(command);
         fenced.push_str("\n```");
         let prepared = prepare_markdown(&gpui_kit::SharedString::from(fenced));
         return wrapper

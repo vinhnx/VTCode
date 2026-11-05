@@ -366,6 +366,6 @@ mod tests {
     fn default_constructor_uses_bounded_budgets() {
         assert_eq!(DEFAULT_CONNECT_TIMEOUT, Duration::from_secs(5));
         assert_eq!(DEFAULT_REQUEST_TIMEOUT, Duration::from_secs(30));
-        A2aClient::new("https://example.invalid").expect("client builds");
+        let _client = A2aClient::new("https://example.invalid").expect("client builds");
     }
 }

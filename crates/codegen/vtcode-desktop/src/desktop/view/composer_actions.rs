@@ -483,7 +483,9 @@ impl DesktopView {
             None
         };
         let current = state.read(cx).selected_index().and_then(|index| {
-            (index.section < section_lens.len() && index.row < section_lens[index.section])
+            section_lens
+                .get(index.section)
+                .is_some_and(|&len| index.row < len)
                 .then(|| to_flat(index.section, index.row))
         });
         let step_from = |flat: usize| {

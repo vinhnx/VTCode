@@ -13,7 +13,7 @@ fn open_history_with_prompts(
         view.update(cx, |view, cx| {
             for (index, prompt) in prompts.iter().enumerate() {
                 view.transcript.push(TranscriptItem::new(
-                    format!("history-user-{index}").into(),
+                    format!("history-user-{index}"),
                     "user".into(),
                     "You".into(),
                     (*prompt).into(),
@@ -99,7 +99,7 @@ fn open_history_with_backend(
             view.selected_session_id = Some("history-session".into());
             for (index, prompt) in prompts.iter().enumerate() {
                 view.transcript.push(TranscriptItem::new(
-                    format!("history-user-{index}").into(),
+                    format!("history-user-{index}"),
                     "user".into(),
                     "You".into(),
                     (*prompt).into(),
