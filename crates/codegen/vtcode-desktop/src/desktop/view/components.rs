@@ -528,20 +528,31 @@ pub(super) fn navigation_label(
         )
 }
 
-/// Embed the shared artwork so packaged applications never depend on checkout paths.
+/// Brand mark for small in-app renders (welcome empty states, about page),
+/// embedded so packaged applications never depend on checkout paths. Uses
+/// the display-sized 128px art, not the 512px Dock art: the small renders
+/// would minify 8x through a mipmap-less sampler and show stair-stepped
+/// edges (see [`app_icon::preview_bytes`]).
 pub(super) fn brand_logo(size: f32) -> impl IntoElement {
     static LOGO: std::sync::OnceLock<Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
     let image = LOGO.get_or_init(|| {
         Arc::new(gpui_kit::Image::from_bytes(
             gpui_kit::ImageFormat::Png,
-            include_bytes!("../../../../../../resources/icons/vtcode-app-dynamic-512.png").to_vec(),
+            app_icon::preview_bytes(AppIconPreference::Dynamic).to_vec(),
         ))
     });
-    img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+    img(image.clone()).w(px(size)).h(px(size))
 }
 
 /// Appearance-picker preview tile for one icon variant. Images are decoded
-/// once and shared; the `Dynamic` tile shows the split tile glyph.
+/// once and shared; the `Dynamic` tile shows the split tile glyph. The art
+/// is display-sized 128px so the 64px tiles render smooth edges (see
+/// [`app_icon::preview_bytes`]).
+///
+/// No corner clip: the art already carries the macOS squircle with
+/// transparency baked in, and `rounded_md` scales with the UI font
+/// (`0.375rem`) while the tile inset is fixed — past ~17px UI fonts the
+/// circular clip would cut into the squircle and kink the corners.
 pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl IntoElement {
     static PREVIEWS: std::sync::OnceLock<[Arc<gpui_kit::Image>; 5]> = std::sync::OnceLock::new();
     let previews = PREVIEWS.get_or_init(|| {
@@ -557,7 +568,7 @@ pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl
         AppIconPreference::Clear => clear,
         AppIconPreference::Tinted => tinted,
     };
-    img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+    img(image.clone()).w(px(size)).h(px(size))
 }
 
 pub(super) fn welcome_brand_mark(size: f32, color: gpui_kit::Hsla) -> impl IntoElement {

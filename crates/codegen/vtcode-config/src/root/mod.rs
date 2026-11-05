@@ -319,7 +319,7 @@ pub struct UiConfig {
     /// - "dynamic": Follow the active light/dark mode (default)
     /// - "light": Always use the light-mode artwork
     /// - "dark": Always use the dark-mode artwork
-    /// - "clear": Always use the clear (transparent glass V) artwork
+    /// - "clear": Always use the clear (glass V on a subtle translucent tile) artwork
     /// - "tinted": Always use the tinted (monochrome slate) artwork
     #[serde(default = "default_app_icon")]
     pub app_icon: AppIconPreference,

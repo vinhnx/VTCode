@@ -399,7 +399,7 @@ pub enum AppIconPreference {
     Light,
     /// Always use the dark-mode artwork.
     Dark,
-    /// Always use the clear (transparent glass V) artwork.
+    /// Always use the clear (glass V on a subtle translucent tile) artwork.
     Clear,
     /// Always use the tinted (monochrome slate) artwork.
     Tinted,

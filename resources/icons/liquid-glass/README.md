@@ -6,6 +6,10 @@ Each folder holds square, unmasked 1024x1024 PNG layers in back-to-front order:
 - `01-background.png` — appearance background (`Clear` is fully transparent).
 - `02-V-foreground.png` — glass `V` glyph with transparency.
 
+`Clear`'s background stays transparent as the Icon Composer source (the system adds the glass at
+composition time); the flat-PNG regen script bakes Clear's subtle glass tile into the shipped
+`vtcode-app-clear-*.png` files, which get no system composition (see `../README.md`).
+
 | Appearance | Background       | Foreground      |
 | ---------- | ---------------- | --------------- |
 | `Default`  | Mountain sunset  | Glass `V`       |

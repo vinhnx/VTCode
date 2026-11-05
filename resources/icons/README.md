@@ -1,22 +1,22 @@
 # VT Code app and terminal profile icons
 
 Current artwork is the `vtcode-app-*` set: Light is a sand tile with a charcoal `V`, Dark is a
-charcoal tile with a warm-white `V`, Dynamic is a diagonal split tile, Clear is the glass `V` on
-transparency (no tile), and Tinted is a monochrome slate tile with a white `V`. Use the smallest icon
-that looks sharp; larger files are for app bundles and in-app display only.
+charcoal tile with a warm-white `V`, Dynamic is a diagonal split tile, Clear is the glass `V` on a
+subtle translucent glass tile, and Tinted is a monochrome slate tile with a white `V`. Use the
+smallest icon that looks sharp; larger files are for app bundles and in-app display only.
 
 | File | Size | Use |
 | --- | --- | --- |
-| `vtcode-app-light-128.png` | 128x128, 7.5K | iTerm2 HiDPI profile artwork (light mode). Embedded by `vtcode-core/build.rs`. |
-| `vtcode-app-dark-128.png` | 128x128, 7.1K | iTerm2 HiDPI profile artwork (dark mode). Embedded by `vtcode-core/build.rs`. |
-| `vtcode-app-clear-128.png` | 128x128, 4.8K | iTerm2 HiDPI profile artwork (clear glass V). Embedded by `vtcode-core/build.rs`. |
-| `vtcode-app-tinted-128.png` | 128x128, 6.7K | iTerm2 HiDPI profile artwork (tinted slate). Embedded by `vtcode-core/build.rs`. |
-| `vtcode-app-dynamic-128.png` | 128x128, 7.5K | Mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`). |
-| `vtcode-app-light-512.png` | 512x512, 36K | Desktop Dock artwork (light mode) and Appearance picker preview. |
-| `vtcode-app-dark-512.png` | 512x512, 34K | Desktop Dock artwork (dark mode) and Appearance picker preview. |
-| `vtcode-app-clear-512.png` | 512x512, 38K | Desktop Dock artwork (clear glass V) and Appearance picker preview. |
-| `vtcode-app-tinted-512.png` | 512x512, 36K | Desktop Dock artwork (tinted slate) and Appearance picker preview. |
-| `vtcode-app-dynamic-512.png` | 512x512, 40K | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art. |
+| `vtcode-app-light-128.png` | 128x128, 7.5K | iTerm2 HiDPI profile artwork (light mode) + desktop picker/logo art. Embedded by `vtcode-core/build.rs` and `vtcode-desktop`. |
+| `vtcode-app-dark-128.png` | 128x128, 7.1K | iTerm2 HiDPI profile artwork (dark mode) + desktop picker/logo art. Embedded by `vtcode-core/build.rs` and `vtcode-desktop`. |
+| `vtcode-app-clear-128.png` | 128x128, 7.5K | iTerm2 HiDPI profile artwork (clear glass tile) + desktop picker/logo art. Embedded by `vtcode-core/build.rs` and `vtcode-desktop`. |
+| `vtcode-app-tinted-128.png` | 128x128, 6.7K | iTerm2 HiDPI profile artwork (tinted slate) + desktop picker/logo art. Embedded by `vtcode-core/build.rs` and `vtcode-desktop`. |
+| `vtcode-app-dynamic-128.png` | 128x128, 7.5K | Desktop brand logo + `Dynamic` picker preview; mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`). |
+| `vtcode-app-light-512.png` | 512x512, 36K | Desktop Dock artwork (light mode). |
+| `vtcode-app-dark-512.png` | 512x512, 34K | Desktop Dock artwork (dark mode). |
+| `vtcode-app-clear-512.png` | 512x512, 52K | Desktop Dock artwork (clear glass tile). |
+| `vtcode-app-tinted-512.png` | 512x512, 36K | Desktop Dock artwork (tinted slate). |
+| `vtcode-app-dynamic-512.png` | 512x512, 40K | Companion plugin logo/composer icon + bundle-icon source art. |
 | `vtcode-app-dynamic.icns` | 285K | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26). |
 | `AppIcon.icon/` | 35K | Layered Liquid Glass source: `icon.json` + `Assets/Foreground.png` (1024 V glyph mask). |
 | `liquid-glass/` | 380K | Tahoe appearance sources: per-variant layer pairs (see its `README.md`). |
@@ -88,8 +88,11 @@ or a layer directory holding `01-background.png` + `02-V-foreground.png`, which 
 back-to-front. PNG inputs may be flat or already masked; the script upscales to a 1024 working size,
 scales the art into the centered 824px content box, applies an antialiased superellipse mask, and
 downscales to the shipped sizes (premultiplied resampling, so tile edges keep their color under
-partial alpha). Clear carries no tile, so its gate instead requires transparent margins with the opaque
-fraction in the 0.005-0.15 glass-V band. The desktop `embedded_artwork_carries_macos_rounded_shape`
+partial alpha). Clear's layer background stays transparent (the layered Icon Composer path gets its
+glass from the system at composition time), but flat PNGs get no system composition, so the script
+bakes a subtle glass tile — frosted fill, bright rim, edge hairline — under the V; its gate requires
+transparent margins, faint fill in the V counter, a bright-but-subtle rim at the top edge, and the
+opaque fraction in the 0.005-0.15 glass-V band. The desktop `embedded_artwork_carries_macos_rounded_shape`
 test rejects full-bleed squares. `iconutil`'s icns-write
 path is broken on some hosts (older macOS 27 builds reject even previously working iconsets while the
 read path works); generate on a host where it succeeds (verified on macOS 27.0.1).
