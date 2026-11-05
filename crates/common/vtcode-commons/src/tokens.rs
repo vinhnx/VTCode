@@ -86,11 +86,7 @@ pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
     }
     // Byte-level fallback used when BPE is unavailable or decode fails.
     let byte_truncate = || {
-        let end = (max_tokens * 4).min(text.len());
-        let mut end = end;
-        while end > 0 && !text.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = text.floor_char_boundary(max_tokens.saturating_mul(4));
         let mut result = text[..end].to_string();
         result.push_str("...");
         result

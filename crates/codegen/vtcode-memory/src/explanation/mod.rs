@@ -385,10 +385,7 @@ fn hex(bytes: &[u8]) -> String {
 fn public_text(text: &str, limit: usize) -> String {
     let clean: String = text.chars().filter(|c| !c.is_control() || *c == '\n' || *c == '\t').collect();
     let redacted = vtcode_commons::sanitizer::redact_secrets(clean);
-    let mut end = redacted.len().min(limit);
-    while !redacted.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = redacted.floor_char_boundary(limit);
     let mut result = redacted[..end].to_owned();
     if redacted.len() > limit {
         result.push_str(" [truncated; inspect evidence]");

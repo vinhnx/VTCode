@@ -180,10 +180,7 @@ pub(super) fn restore_spooled_tool_output(
     let mut truncated = spooled.truncated;
     loop {
         let visible_truncation = truncated || prefix_bytes < spooled.text.len();
-        let prefix_end = (0..=prefix_bytes)
-            .rev()
-            .find(|index| spooled.text.is_char_boundary(*index))
-            .unwrap_or(0);
+        let prefix_end = spooled.text.floor_char_boundary(prefix_bytes);
         let mut candidate = spooled.text.get(..prefix_end).unwrap_or_default().to_string();
         if visible_truncation {
             candidate.push_str(RESTORED_OUTPUT_TRUNCATION_SUFFIX);
@@ -355,11 +352,22 @@ fn bounded_text_projection(text: &str, max_bytes: usize) -> String {
     if text.len() <= max_bytes {
         return text.to_string();
     }
-    let mut end = max_bytes;
-    while !text.is_char_boundary(end) {
-        end = end.saturating_sub(1);
-    }
+    let end = text.floor_char_boundary(max_bytes);
     let mut bounded = text[..end].to_string();
     bounded.push_str("\n[Earlier content in this message was omitted.]");
     bounded
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bounded_text_projection;
+
+    #[test]
+    fn bounded_projection_cuts_multibyte_text_on_a_char_boundary() {
+        const MARKER: &str = "\n[Earlier content in this message was omitted.]";
+        // `世` is 3 bytes: a 4-byte limit falls inside the second char.
+        assert_eq!(bounded_text_projection("世界", 4), format!("世{MARKER}"));
+        assert_eq!(bounded_text_projection("世界", 6), "世界");
+        assert_eq!(bounded_text_projection("世界", 2), MARKER);
+    }
 }
