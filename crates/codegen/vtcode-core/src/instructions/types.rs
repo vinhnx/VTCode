@@ -57,6 +57,8 @@ pub struct InstructionBundle {
     pub truncated: bool,
     /// Total bytes read from disk across all segments.
     pub bytes_read: usize,
+    /// Instruction files cut partway or skipped by the byte budget, in load order.
+    pub omitted: Vec<PathBuf>,
 }
 
 impl InstructionBundle {
