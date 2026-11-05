@@ -405,6 +405,96 @@ fn activity_group_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn activity_group_leading_slot_prefers_spinner_over_cta_while_running(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "read".into(),
+                "tool".into(),
+                "Read Cargo.toml".into(),
+                "in progress\nreading".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "exec".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "completed".into(),
+            ));
+        });
+        window.render_frame(cx);
+        // Running groups show status, not the shortcut: one slot, one occupant.
+        assert!(window.try_find("activity-group-running-indicator-read").is_some());
+        assert!(window.try_find("activity-group-open-activity-read").is_none());
+        // Settling to idle restores the shortcut and drops the spinner.
+        view.update(cx, |view, _| {
+            view.transcript.upsert(TranscriptItem::new(
+                "read".into(),
+                "tool".into(),
+                "Read Cargo.toml".into(),
+                "completed\nmanifest".into(),
+            ));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("activity-group-running-indicator-read").is_none());
+        assert!(window.try_find("activity-group-open-activity-read").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn transcript_header_rows_share_one_trailing_edge(cx: &mut TestAppContext) {
+    use crate::desktop::transcript::NoticeSeverity;
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            // One row per header idiom: severity notice, tool group, single tool.
+            view.transcript.push(TranscriptItem::diagnostic_notice(
+                "notice".into(),
+                "Tool 'apply_patch' failed.".into(),
+                "context mismatch".into(),
+                NoticeSeverity::Warning,
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "read".into(),
+                "tool".into(),
+                "Read Cargo.toml".into(),
+                "completed\nmanifest".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "build".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "completed".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "comment".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Done.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "retry".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "completed".into(),
+            ));
+        });
+        window.render_frame(cx);
+        // Every header spans the full content width, so all disclosure
+        // chevrons dock on one trailing edge (a trailing CTA sibling would
+        // pull the group edge inward).
+        let notice = window.find("notice-header-notice").bounds();
+        let group = window.find("activity-group-read").bounds();
+        let single = window.find("tool-retry").bounds();
+        assert_eq!(notice.right(), group.right(), "notice and group share the trailing edge");
+        assert_eq!(single.right(), group.right(), "single tool and group share the trailing edge");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn diff_changes_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

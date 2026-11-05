@@ -10,14 +10,6 @@ impl DesktopView {
         let failed = summary.failed;
         let running = summary.running;
         let colors = cx.theme().colors;
-        let status = if failed > 0 {
-            ActivityState::Failed
-        } else if running > 0 {
-            ActivityState::Running
-        } else {
-            ActivityState::Other
-        };
-        let status_color = Self::activity_status_color(status, colors);
         let mut counts = ToolCategoryCounts::default();
         for index in range.clone() {
             if let Some(item) = self.transcript.get(index)
@@ -45,22 +37,6 @@ impl DesktopView {
                     .items_center()
                     .justify_start()
                     .gap_2()
-                    .child(Icon::new(IconName::Wrench).small().flex_shrink_0())
-                    .when(running > 0, |row| {
-                        row.child(
-                            div()
-                                .id(format!("activity-group-running-indicator-{}", head.id))
-                                .test_support()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(
-                                    Spinner::new()
-                                        .small()
-                                        .color(Self::activity_status_color(ActivityState::Running, colors)),
-                                ),
-                        )
-                    })
                     .child(
                         div()
                             .id(format!("activity-group-label-{}", head.id))
@@ -70,15 +46,7 @@ impl DesktopView {
                             .truncate()
                             .child(label.clone()),
                     )
-                    .child(
-                        Icon::new(if head.activity_expanded {
-                            IconName::ChevronDown
-                        } else {
-                            IconName::ChevronRight
-                        })
-                        .small()
-                        .flex_shrink_0(),
-                    ),
+                    .child(transcript_chevron_lane(head.activity_expanded)),
             )
             .accessibility_label(format!(
                 "{} {label}",
@@ -94,39 +62,62 @@ impl DesktopView {
             .flex_1()
             .min_w_0()
             .justify_start()
-            .text_color(status_color)
+            .text_color(themes::muted_text(&colors))
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.transcript.toggle_activity_group(&id);
                 cx.notify();
             }));
-        // The toggle and its CTA are siblings, never nested buttons: the
-        // toggle keeps the flexible width and truncates first on narrow rows.
-        // One entry point only: Output and Utilities stay one tab-switch away
-        // once the inspector is open, and expanded tool rows keep their exact
-        // Output deep links, so per-tab triplets on every group would repeat
-        // three destinations N times for no new reachability.
+        // The leading slot sits beside the toggle, never inside it: the
+        // toggle keeps the flexible width and truncates first on narrow rows,
+        // while the slot holds running status or, when idle, the single
+        // inspector entry point. Status wins over the shortcut: a running
+        // group always shows its spinner. One entry point only: Output and
+        // Utilities stay one tab-switch away once the inspector is open, and
+        // expanded tool rows keep their exact Output deep links, so per-tab
+        // triplets on every group would repeat three destinations N times
+        // for no new reachability.
+        let leading = if running > 0 {
+            transcript_icon_slot(
+                div()
+                    .id(format!("activity-group-running-indicator-{}", head.id))
+                    .test_support()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        Spinner::new()
+                            .small()
+                            .color(Self::activity_status_color(ActivityState::Running, colors)),
+                    ),
+            )
+            .into_any_element()
+        } else {
+            transcript_icon_slot(Self::activity_group_cta(&head.id, self.transcript_row_revealed(head.id.as_str()), cx))
+                .into_any_element()
+        };
         div()
             .w_full()
             .flex()
             .items_center()
-            .gap_1()
+            .gap_2()
+            .child(leading)
             .child(toggle)
-            .child(div().flex().items_center().flex_shrink_0().child(Self::activity_group_cta(
-                &head.id,
-                self.transcript_row_revealed(head.id.as_str()),
-                cx,
-            )))
             .into_any_element()
     }
 
     /// Single transcript entry point into the inspector, landing on Activity:
     /// the tab that lists this group's rows with their per-row output actions.
-    /// The label reuses the inspector tab vocabulary so both surfaces name the
+    /// An icon-only ghost button in the leading slot: the accessible name and
+    /// tooltip reuse the inspector tab vocabulary so both surfaces name the
     /// same destination. Recedes until the row is hovered or keyboard
-    /// highlighted, keeping its space so the toggle never re-truncates.
+    /// highlighted, keeping its space so the toggle never re-truncates. The
+    /// xsmall icon box centers on the narrower slot lane; the bleed stays
+    /// inside the row gaps.
     fn activity_group_cta(head_id: &str, revealed: bool, cx: &mut Context<Self>) -> impl IntoElement {
         desktop_button(format!("activity-group-open-activity-{head_id}"))
-            .label(InspectorTab::Activity.label())
+            .icon(IconName::Activity)
+            .accessibility_label(InspectorTab::Activity.label())
+            .tooltip(InspectorTab::Activity.label())
             .ghost()
             .xsmall()
             .when(!revealed, |button| button.invisible())

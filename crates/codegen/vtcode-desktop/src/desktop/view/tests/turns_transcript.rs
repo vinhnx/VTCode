@@ -504,11 +504,14 @@ fn grouped_tool_rows_nest_under_their_header(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.click("activity-group-read", cx);
         window.render_frame(cx);
-        let header_x = window.find("activity-group-read").bounds().origin.x;
-        let child_x = window.find("tool-build").bounds().origin.x;
-        let single_x = window.find("tool-retry").bounds().origin.x;
-        assert!(child_x > header_x, "grouped rows nest under their header");
-        assert_eq!(single_x, header_x, "ungrouped rows stay flush");
+        // Nesting and flush are text contracts: the toggles carry different
+        // leading chrome (the group slot sits beside its toggle), so button
+        // boxes no longer encode them. Titles share one spine instead.
+        let header_x = window.find("activity-group-label-read").bounds().origin.x;
+        let child_x = window.find("tool-title-build").bounds().origin.x;
+        let single_x = window.find("tool-title-retry").bounds().origin.x;
+        assert!(child_x > header_x, "grouped titles nest under their header label");
+        assert_eq!(single_x, header_x, "single tool titles share the header spine");
     })
     .unwrap();
 }

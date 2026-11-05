@@ -640,9 +640,16 @@ impl DesktopView {
                         .gap_2()
                         .min_w_0()
                         .w_full()
-                        .child(Self::render_activity_status_indicator("tool-indicator", &item.id, state, status_color))
+                        .child(transcript_icon_slot(Self::render_activity_status_indicator(
+                            "tool-indicator",
+                            &item.id,
+                            state,
+                            status_color,
+                        )))
                         .child(
                             div()
+                                .id(format!("tool-title-{}", item.id))
+                                .test_support()
                                 .min_w_0()
                                 .flex_1()
                                 .truncate()
@@ -667,16 +674,7 @@ impl DesktopView {
                                     .child(status.to_string()),
                             )
                         })
-                        .child(
-                            Icon::new(if item.expanded {
-                                IconName::ChevronDown
-                            } else {
-                                IconName::ChevronRight
-                            })
-                            .small()
-                            .flex_shrink_0()
-                            .text_color(themes::muted_text(&colors)),
-                        ),
+                        .child(transcript_chevron_lane(item.expanded).text_color(themes::muted_text(&colors))),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.transcript.toggle_tool(&id);

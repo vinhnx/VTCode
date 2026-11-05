@@ -36,22 +36,17 @@ impl DesktopView {
                         .to_string(),
                     )
                     .ghost()
-                    .xsmall()
+                    // Small like the group and tool toggles: one row height,
+                    // one text size, and one chevron inset across headers.
+                    .small()
                     .flex_shrink_0()
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(
-                                Icon::new(if item.expanded {
-                                    IconName::ChevronDown
-                                } else {
-                                    IconName::ChevronRight
-                                })
-                                .small(),
-                            )
-                            .child(toggle),
+                            .child(toggle)
+                            .child(transcript_chevron_lane(item.expanded)),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.transcript.toggle_notice(&id);

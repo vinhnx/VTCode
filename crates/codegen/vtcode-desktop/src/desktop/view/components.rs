@@ -646,10 +646,14 @@ pub(super) fn severity_marker_style(
 /// roles, and aria labels on their own wrapper: `Marker` is `RenderOnce`
 /// and cannot carry `.test_support()`. Extra trailing children (e.g. the
 /// Show/Hide details toggle) compose as `Marker` siblings; the content
-/// slot holds `flex_1` so they dock at the trailing edge.
+/// slot holds `flex_1` so they dock at the trailing edge. The leading
+/// inset matches a small button's `px_2`, so notice titles start on the
+/// same spine as group and tool headers (inset + [`transcript_icon_slot`]
+/// + `gap_2`).
 pub(super) fn severity_marker(style: &SeverityMarkerStyle, title: impl Into<gpui_kit::SharedString>) -> Marker {
     Marker::new()
         .items_center()
+        .pl_2()
         .text_color(style.tone)
         .icon(MarkerIcon::new().child(Icon::new(style.icon).small().text_color(style.tone)))
         .content(
@@ -658,6 +662,28 @@ pub(super) fn severity_marker(style: &SeverityMarkerStyle, title: impl Into<gpui
                 .flex_1()
                 .when(style.semibold_title, |content| content.font_semibold()),
         )
+}
+
+/// Fixed leading slot shared by transcript header rows: the same `size_4`
+/// centered box `MarkerIcon` renders, so group and tool titles start on
+/// the notice spine. Always rendered, even when empty, so optional
+/// content (the running spinner) never shifts the title.
+pub(super) fn transcript_icon_slot(child: impl IntoElement) -> gpui_kit::Div {
+    div().size_4().flex_none().flex().items_center().justify_center().child(child)
+}
+
+/// Fixed trailing lane for transcript disclosure chevrons: the same slot
+/// box as [`transcript_icon_slot`], tone-agnostic so each header keeps
+/// its own color (callers chain `.text_color(..)` when they need one).
+pub(super) fn transcript_chevron_lane(expanded: bool) -> gpui_kit::Div {
+    transcript_icon_slot(
+        Icon::new(if expanded {
+            IconName::ChevronDown
+        } else {
+            IconName::ChevronRight
+        })
+        .small(),
+    )
 }
 
 fn status_alert(
