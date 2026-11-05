@@ -303,9 +303,8 @@ like publishing a crate or auditing an API — read the per-source digests in
 - [`references/microsoft-rust-guidelines.md`](references/microsoft-rust-guidelines.md) - M-codes for teams: error struct design, panic/unsafe policy, workspace layout, agent-specific guidance
 - [`references/google-rust-style-guide.md`](references/google-rust-style-guide.md) - formatting, imports, module layout, accessor naming, and the application-vs-library distinction
 
-Note on conflicting guidance: one habit from this skill's older lint rules is
-superseded — never put `#![deny(warnings)]` in source (new toolchains add warnings that
-break your build). Configure lint levels once in `Cargo.toml`
+Never put `#![deny(warnings)]` in source: new toolchains add warnings that
+break your build. Configure lint levels once in `Cargo.toml`
 (`[lints.rust]` / `[workspace.lints]`), override narrowly with
 `#[expect(lint, reason)]`, and enforce warnings-as-errors in CI with
 `cargo clippy -- -D warnings`. See
@@ -361,9 +360,11 @@ This skill provides rule identifiers for quick reference. When generating or rev
 
 ### PR Code Review
 
-For automated PR bug review and fix loops, use the `pr-code-review` skill/agent. It ranks bugs critical/high/medium/low, eliminates false positives, applies KISS/DRY fixes (main logic only, skip tests), and re-reviews after every change. See `AGENTS.md#pr-code-review-agent` for full workflow.
+For automated PR bug review and fix loops, use the [`pr-code-review`](../pr-code-review/SKILL.md) skill/agent.
+It ranks bugs critical/high/medium/low, eliminates false positives, applies KISS/DRY fixes (main logic only, skip
+tests), and re-reviews after every change.
 
-```
+```text
 /pr-code-review                    # review current uncommitted diff
 /pr-code-review --branch main      # review branch diff against main
 /pr-code-review --last-diff        # review the last committed diff
@@ -374,6 +375,7 @@ For automated PR bug review and fix loops, use the `pr-code-review` skill/agent.
 ## Sources
 
 This skill synthesizes best practices from:
+
 - [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
 - [Rust Performance Book](https://nnethercote.github.io/perf-book/)
 - [Google Rust Style Guide](https://google.github.io/styleguide/rustguide.html)
