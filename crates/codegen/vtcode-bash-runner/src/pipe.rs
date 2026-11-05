@@ -316,12 +316,17 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
     let (exit_tx, exit_rx) = oneshot::channel::<i32>();
     let exit_status = Arc::new(AtomicBool::new(false));
     let wait_exit_status = Arc::clone(&exit_status);
+    let exit_observed = Arc::new(AtomicBool::new(false));
+    let wait_exit_observed = Arc::clone(&exit_observed);
     let exit_code = Arc::new(StdMutex::new(None));
     let wait_exit_code = Arc::clone(&exit_code);
 
     let wait_handle: JoinHandle<()> = tokio::spawn(async move {
         let code = match child.wait().await {
-            Ok(status) => status.code().unwrap_or(-1),
+            Ok(status) => {
+                wait_exit_observed.store(true, std::sync::atomic::Ordering::SeqCst);
+                status.code().unwrap_or(-1)
+            }
             Err(_) => -1,
         };
         wait_exit_status.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -346,6 +351,7 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
         writer_handle,
         wait_handle,
         exit_status,
+        exit_observed,
         exit_code,
         None,
     );
@@ -458,6 +464,7 @@ mod tests {
 
         let exit_code = spawned.exit_rx.await.unwrap_or(-1);
         assert_eq!(exit_code, 0);
+        assert!(spawned.session.has_observed_exit(), "successful wait records the direct-child exit");
 
         Ok(())
     }

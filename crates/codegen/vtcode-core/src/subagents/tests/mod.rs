@@ -81,6 +81,7 @@ fn test_child_record(
         reasoning_override: None,
         thread_handle: None,
         handle: None,
+        closing: false,
         notify: Arc::new(Notify::new()),
         worktree_path: None,
         child_controller,

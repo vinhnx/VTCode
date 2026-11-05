@@ -339,8 +339,23 @@ impl PipeSessionManager {
 
     pub(crate) async fn force_terminate_session(&self, session_id: &str) -> Result<()> {
         let record = self.session_record(session_id).await?;
-        record.handle.terminate_process();
-        Ok(())
+        record
+            .handle
+            .try_terminate_process()
+            .with_context(|| format!("failed to force terminate exec session '{session_id}'"))?;
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                if record.handle.has_observed_exit() {
+                    return Ok(());
+                }
+                if record.handle.has_exited() {
+                    bail!("exec session '{session_id}' child wait failed; exit was not confirmed");
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .map_err(|_elapsed| anyhow!("exec session '{session_id}' child exit was not confirmed before timeout"))?
     }
 
     pub(crate) async fn close_session(&self, session_id: &str) -> Result<VTCodeExecSession> {

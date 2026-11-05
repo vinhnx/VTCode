@@ -1,6 +1,278 @@
 use super::*;
 
 #[tokio::test]
+async fn close_reports_nested_child_failure() {
+    let temp = TempDir::new().expect("tempdir");
+    let parent = SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+        .await
+        .unwrap();
+    let nested = Arc::new(
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .unwrap(),
+    );
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "explorer")
+        .unwrap();
+    let handle = tokio::spawn(async { panic!("nested launch failed") });
+    while !handle.is_finished() {
+        tokio::task::yield_now().await;
+    }
+    let mut grandchild =
+        test_child_record("grandchild", "grandchild-session", "child-session", &spec, SubagentStatus::Running, 2, None);
+    grandchild.handle = Some(handle);
+    nested.state.write().await.children.insert("grandchild".into(), grandchild);
+    let mut child =
+        test_child_record("child", "child-session", "parent-session", &spec, SubagentStatus::Running, 1, None);
+    child.child_controller = Some(nested);
+    parent.state.write().await.children.insert("child".into(), child);
+    let error = parent.close("child").await.unwrap_err();
+    assert!(format!("{error:#}").contains("grandchild"));
+    assert!(parent.resume("child").await.unwrap_err().to_string().contains("closing"));
+    parent.close("child").await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn close_retains_child_handle_after_timeout() {
+    let temp = TempDir::new().expect("tempdir");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "explorer")
+        .expect("explorer");
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let handle = tokio::spawn(async move {
+        let _ = entered_tx.send(());
+        let _ = release_rx.recv();
+        std::future::pending::<()>().await;
+    });
+    entered_rx.await.expect("child entered");
+    let mut record =
+        test_child_record("child", "child-session", "parent-session", &spec, SubagentStatus::Running, 1, None);
+    record.handle = Some(handle);
+    controller.state.write().await.children.insert("child".into(), record);
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(250), controller.close("child"))
+            .await
+            .is_err()
+    );
+    assert_eq!(controller.status_for("child").await.unwrap().status, SubagentStatus::Running);
+    assert!(controller.shutdown_handles.lock().await.contains_key("child"));
+    assert!(controller.state.read().await.children["child"].closing);
+    let error = controller
+        .send_input(SendInputRequest {
+            target: "child".into(),
+            message: Some("new work".into()),
+            items: vec![],
+            interrupt: true,
+        })
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("closed"));
+    controller.state.write().await.children.get_mut("child").unwrap().status = SubagentStatus::Completed;
+    assert!(controller.resume("child").await.unwrap_err().to_string().contains("closing"));
+    release_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), controller.close("child"))
+        .await
+        .expect("retry finishes")
+        .unwrap();
+    assert_eq!(controller.status_for("child").await.unwrap().status, SubagentStatus::Closed);
+    assert!(controller.shutdown_handles.lock().await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cancelled_restart_keeps_the_previous_launch_owned() {
+    let temp = TempDir::new().expect("tempdir");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "explorer")
+        .expect("explorer");
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let handle = tokio::spawn(async move {
+        let _ = entered_tx.send(());
+        let _ = release_rx.recv();
+        std::future::pending::<()>().await;
+    });
+    entered_rx.await.expect("child entered");
+    let mut record =
+        test_child_record("child", "child-session", "parent-session", &spec, SubagentStatus::Running, 1, None);
+    record.handle = Some(handle);
+    controller.state.write().await.children.insert("child".into(), record);
+    let request = SendInputRequest {
+        target: "child".into(),
+        message: Some("new work".into()),
+        items: vec![],
+        interrupt: true,
+    };
+    assert!(
+        tokio::time::timeout(Duration::from_millis(250), controller.send_input(request))
+            .await
+            .is_err()
+    );
+    assert!(controller.shutdown_handles.lock().await.contains_key("child"));
+    assert!(controller.state.read().await.children["child"].handle.is_none());
+    release_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), controller.close("child"))
+        .await
+        .expect("close finishes")
+        .unwrap();
+    assert_eq!(controller.status_for("child").await.unwrap().status, SubagentStatus::Closed);
+    assert!(controller.shutdown_handles.lock().await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_retains_and_waits_for_an_aborted_child_after_timeout() {
+    struct DropSignal(Arc<AtomicBool>);
+    impl Drop for DropSignal {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    let temp = TempDir::new().expect("tempdir");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "explorer")
+        .expect("explorer");
+    let dropped = Arc::new(AtomicBool::new(false));
+    let child_dropped = dropped.clone();
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let handle = tokio::spawn(async move {
+        let _drop_signal = DropSignal(child_dropped);
+        let _ = entered_tx.send(());
+        let _ = release_rx.recv();
+        std::future::pending::<()>().await;
+    });
+    entered_rx.await.expect("child entered its non-yielding section");
+    let mut record =
+        test_child_record("child", "child-session", "parent-session", &spec, SubagentStatus::Running, 1, None);
+    record.handle = Some(handle);
+    controller.state.write().await.children.insert("child".into(), record);
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(250), controller.signal_shutdown())
+            .await
+            .is_err()
+    );
+    assert!(!dropped.load(Ordering::SeqCst));
+    assert_eq!(controller.shutdown_handles.lock().await.len(), 1, "the timed-out child remains owned");
+    assert_eq!(controller.status_for("child").await.unwrap().status, SubagentStatus::Running);
+    release_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), controller.signal_shutdown())
+        .await
+        .expect("retry observes child exit");
+    assert!(dropped.load(Ordering::SeqCst));
+    assert!(controller.shutdown_handles.lock().await.is_empty());
+    assert_eq!(controller.status_for("child").await.unwrap().status, SubagentStatus::Closed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn monitor_shutdown_keeps_the_handle_when_wait_is_cancelled() {
+    let temp = TempDir::new().expect("tempdir");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
+    controller.stop_background_completion_monitor().await;
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let monitor = tokio::spawn(async move {
+        let _ = entered_tx.send(());
+        let _ = release_rx.recv();
+        std::future::pending::<()>().await;
+    });
+    entered_rx.await.expect("monitor entered its non-yielding section");
+    *controller.background_completion_monitor.lock().await = Some(monitor);
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(250), controller.stop_background_completion_monitor())
+            .await
+            .is_err()
+    );
+    assert!(controller.background_completion_monitor.lock().await.is_some());
+    release_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), controller.stop_background_completion_monitor())
+        .await
+        .expect("retry joins the monitor");
+    assert!(controller.background_completion_monitor.lock().await.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_closes_a_controller_attached_before_the_child_exits() {
+    let temp = TempDir::new().expect("tempdir");
+    let parent = Arc::new(
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("parent controller"),
+    );
+    let nested = Arc::new(
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("nested controller"),
+    );
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "explorer")
+        .expect("explorer");
+    nested.state.write().await.children.insert(
+        "grandchild".into(),
+        test_child_record("grandchild", "grandchild-session", "child-session", &spec, SubagentStatus::Running, 2, None),
+    );
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let child = tokio::spawn(async move {
+        let _ = entered_tx.send(());
+        let _ = release_rx.recv();
+        std::future::pending::<()>().await;
+    });
+    entered_rx.await.unwrap();
+    let mut record =
+        test_child_record("child", "child-session", "parent-session", &spec, SubagentStatus::Running, 1, None);
+    record.handle = Some(child);
+    parent.state.write().await.children.insert("child".into(), record);
+    let shutdown_parent = parent.clone();
+    let shutdown = tokio::spawn(async move { shutdown_parent.signal_shutdown().await });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if parent
+                .state
+                .read()
+                .await
+                .children
+                .get("child")
+                .is_some_and(|record| record.handle.is_none())
+            {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("shutdown requested child abort");
+    parent.state.write().await.children.get_mut("child").unwrap().child_controller = Some(nested.clone());
+    release_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), shutdown).await.unwrap().unwrap();
+    assert_eq!(nested.status_for("grandchild").await.unwrap().status, SubagentStatus::Closed);
+    assert_eq!(parent.status_for("child").await.unwrap().status, SubagentStatus::Closed);
+}
+
+#[tokio::test]
 async fn spawn_is_rejected_after_close_begins() {
     let temp = TempDir::new().expect("tempdir");
     let mut vt_cfg = VTCodeConfig::default();
@@ -279,6 +551,7 @@ async fn wait_returns_first_terminal_child() {
                     reasoning_override: None,
                     thread_handle: None,
                     handle: None,
+                    closing: false,
                     notify: Arc::new(Notify::new()),
                     worktree_path: None,
                     child_controller: None,

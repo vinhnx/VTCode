@@ -86,6 +86,7 @@ pub struct ProcessHandle {
     writer_handle: StdMutex<Option<JoinHandle<()>>>,
     wait_handle: StdMutex<Option<JoinHandle<()>>>,
     exit_status: Arc<AtomicBool>,
+    exit_observed: Arc<AtomicBool>,
     exit_code: Arc<StdMutex<Option<i32>>>,
     // PTY handles must be preserved to prevent the process from receiving Control+C
     _pty_handles: StdMutex<Option<PtyHandles>>,
@@ -116,6 +117,7 @@ impl ProcessHandle {
         writer_handle: JoinHandle<()>,
         wait_handle: JoinHandle<()>,
         exit_status: Arc<AtomicBool>,
+        exit_observed: Arc<AtomicBool>,
         exit_code: Arc<StdMutex<Option<i32>>>,
         pty_handles: Option<PtyHandles>,
     ) -> (Self, broadcast::Receiver<Bytes>) {
@@ -129,6 +131,7 @@ impl ProcessHandle {
                 writer_handle: StdMutex::new(Some(writer_handle)),
                 wait_handle: StdMutex::new(Some(wait_handle)),
                 exit_status,
+                exit_observed,
                 exit_code,
                 _pty_handles: StdMutex::new(pty_handles),
             },
@@ -157,10 +160,18 @@ impl ProcessHandle {
         self.output_tx.subscribe()
     }
 
-    /// True if the child process has exited.
+    /// True when the wait task finished, including when waiting failed.
+    /// Use [`Self::has_observed_exit`] when successful wait evidence matters.
     #[inline]
     pub fn has_exited(&self) -> bool {
         self.exit_status.load(Ordering::SeqCst)
+    }
+
+    /// Whether waiting for the direct child returned an exit status. Unlike
+    /// `has_exited`, this remains false if the operating-system wait failed.
+    #[inline]
+    pub fn has_observed_exit(&self) -> bool {
+        self.exit_observed.load(Ordering::SeqCst)
     }
 
     /// Returns the exit code if the process has exited.
@@ -192,11 +203,24 @@ impl ProcessHandle {
     /// reap the child after termination. Call [`Self::terminate`] when the
     /// caller is abandoning the session and does not need that final drain.
     pub fn terminate_process(&self) {
-        if let Ok(mut killer_opt) = self.killer.lock()
-            && let Some(mut killer) = killer_opt.take()
-        {
-            let _ = killer.kill();
+        let _ = self.try_terminate_process();
+    }
+
+    /// Request termination without consuming the handle on failure, so a
+    /// caller that needs a confirmed shutdown can report or retry the error.
+    ///
+    /// # Errors
+    /// Returns the process-kill error or an error if the handle lock is poisoned.
+    pub fn try_terminate_process(&self) -> io::Result<()> {
+        let mut killer = self
+            .killer
+            .lock()
+            .map_err(|_error| io::Error::other("process termination lock poisoned"))?;
+        if let Some(terminator) = killer.as_mut() {
+            terminator.kill()?;
+            *killer = None;
         }
+        Ok(())
     }
 
     /// Internal termination that aborts all tasks.
@@ -436,6 +460,7 @@ mod tests {
             tokio::spawn(async {}),
             tokio::spawn(async {}),
             exit_status,
+            Arc::new(AtomicBool::new(false)),
             exit_code,
             None,
         );
@@ -462,6 +487,7 @@ mod tests {
             tokio::spawn(async {}),
             tokio::spawn(async {}),
             Arc::clone(&exit_status),
+            Arc::new(AtomicBool::new(false)),
             exit_code,
             None,
         );
@@ -469,6 +495,7 @@ mod tests {
         assert!(!handle.has_exited());
         exit_status.store(true, Ordering::SeqCst);
         assert!(handle.has_exited());
+        assert!(!handle.has_observed_exit(), "a completed wait is not necessarily a successful wait");
     }
 
     struct RecordingTerminator(Arc<AtomicBool>);
@@ -477,6 +504,42 @@ mod tests {
             self.0.store(true, Ordering::SeqCst);
             Ok(())
         }
+    }
+
+    struct FailOnceTerminator(Arc<std::sync::atomic::AtomicUsize>);
+    impl ChildTerminator for FailOnceTerminator {
+        fn kill(&mut self) -> io::Result<()> {
+            if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
+                Err(io::Error::other("simulated kill failure"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_termination_retains_the_handle_for_retry() {
+        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (writer_tx, _) = mpsc::channel(1);
+        let (output_tx, initial_rx) = broadcast::channel(1);
+        let (handle, _) = ProcessHandle::new(
+            writer_tx,
+            output_tx,
+            initial_rx,
+            Box::new(FailOnceTerminator(Arc::clone(&attempts))),
+            tokio::spawn(async {}),
+            vec![],
+            tokio::spawn(async {}),
+            tokio::spawn(async {}),
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(StdMutex::new(None)),
+            None,
+        );
+        assert!(handle.try_terminate_process().is_err());
+        assert!(handle.try_terminate_process().is_ok());
+        assert!(handle.try_terminate_process().is_ok());
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
     /// Drop must kill the child and abort helper tasks synchronously, without
@@ -502,6 +565,7 @@ mod tests {
             tokio::spawn(std::future::pending()),
             tokio::spawn(std::future::pending()),
             exit_status,
+            Arc::new(AtomicBool::new(false)),
             exit_code,
             None,
         );

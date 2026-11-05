@@ -284,6 +284,7 @@ pub struct ChildRecord {
     pub(crate) reasoning_override: Option<String>,
     pub(crate) thread_handle: Option<ThreadRuntimeHandle>,
     pub(crate) handle: Option<JoinHandle<()>>,
+    pub(crate) closing: bool,
     pub(crate) notify: Arc<Notify>,
     /// Optional worktree path for isolated subagents. When set, the child
     /// agent runs in this worktree instead of the parent workspace root.

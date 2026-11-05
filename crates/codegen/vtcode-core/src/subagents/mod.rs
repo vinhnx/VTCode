@@ -234,6 +234,8 @@ pub struct SubagentController {
     background_completion_notify: Arc<Notify>,
     background_completion_shutdown: CancellationToken,
     background_completion_monitor: Arc<Mutex<Option<JoinHandle<()>>>>,
+    /// Aborted child tasks remain owned until shutdown has observed their exit.
+    shutdown_handles: Arc<Mutex<std::collections::BTreeMap<String, JoinHandle<()>>>>,
     /// Counts controller clones that participate in monitor ownership.
     background_completion_owners: Arc<AtomicUsize>,
     /// The monitor task retains a clone for processing but must not keep the
@@ -257,6 +259,7 @@ impl Clone for SubagentController {
             background_completion_notify: Arc::clone(&self.background_completion_notify),
             background_completion_shutdown: self.background_completion_shutdown.clone(),
             background_completion_monitor: Arc::clone(&self.background_completion_monitor),
+            shutdown_handles: Arc::clone(&self.shutdown_handles),
             background_completion_owners: Arc::clone(&self.background_completion_owners),
             background_completion_monitor_owner: true,
         }
@@ -338,6 +341,7 @@ impl SubagentController {
             background_completion_notify: Arc::new(Notify::new()),
             background_completion_shutdown: CancellationToken::new(),
             background_completion_monitor: Arc::new(Mutex::new(None)),
+            shutdown_handles: Arc::new(Mutex::new(std::collections::BTreeMap::new())),
             background_completion_owners: Arc::new(AtomicUsize::new(1)),
             background_completion_monitor_owner: true,
         };

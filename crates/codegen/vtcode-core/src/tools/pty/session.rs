@@ -74,6 +74,25 @@ fn reap_child_bounded(child: &mut Box<dyn Child + Send>, child_pid: Option<u32>)
     false
 }
 
+/// Kill the PTY child and report whether its exit was actually observed.
+/// A confirmed child exit does not itself prove that every descendant exited.
+fn force_terminate_child(child: &mut Box<dyn Child + Send>, child_pid: Option<u32>) -> bool {
+    let child_running = !matches!(child.try_wait(), Ok(Some(_)));
+    if let Some(pid) = child_pid {
+        if child_running {
+            let _ = vtcode_bash_runner::kill_process_group_by_pid(pid);
+        } else {
+            let _ = vtcode_bash_runner::kill_process_group(pid);
+        }
+    }
+    if child_running {
+        let _ = child.kill();
+        reap_child_bounded(child, child_pid)
+    } else {
+        true
+    }
+}
+
 /// Join the PTY reader thread without blocking past `READER_THREAD_TIMEOUT_MS`.
 /// Shared by `close_session` and `Drop` so neither path can hang on `join`.
 pub(super) fn join_reader_thread_bounded(reader_thread: JoinHandle<()>) {
@@ -303,31 +322,9 @@ impl PtySessionHandle {
 
     /// Forcefully terminate the child process without waiting for a graceful
     /// shutdown window.
-    pub(super) fn force_terminate(&self) {
+    pub(super) fn force_terminate(&self) -> bool {
         let mut child = self.child.lock();
-
-        let child_running = match child.try_wait() {
-            Ok(Some(_)) => false,
-            Ok(None) | Err(_) => true,
-        };
-
-        if let Some(pid) = self.child_pid {
-            if child_running {
-                let _ = vtcode_bash_runner::kill_process_group_by_pid(pid);
-            } else {
-                let _ = vtcode_bash_runner::kill_process_group(pid);
-            }
-            if child_running {
-                // The process-group helpers are no-ops on unsupported
-                // platforms, so keep the direct-child fallback as well.
-                let _ = child.kill();
-            }
-        } else if child_running {
-            let _ = child.kill();
-        }
-        if child_running {
-            reap_child_bounded(&mut child, self.child_pid);
-        }
+        force_terminate_child(&mut child, self.child_pid)
     }
 }
 
@@ -495,6 +492,44 @@ fn filter_command_echo(text: String, state: &mut CommandEchoState) -> (String, b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug, Clone)]
+    struct UnreapableChild;
+
+    impl portable_pty::ChildKiller for UnreapableChild {
+        fn kill(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::other("simulated kill failure"))
+        }
+
+        fn clone_killer(&self) -> Box<dyn portable_pty::ChildKiller + Send + Sync> {
+            Box::new(self.clone())
+        }
+    }
+
+    impl Child for UnreapableChild {
+        fn try_wait(&mut self) -> std::io::Result<Option<portable_pty::ExitStatus>> {
+            Ok(None)
+        }
+
+        fn wait(&mut self) -> std::io::Result<portable_pty::ExitStatus> {
+            Err(std::io::Error::other("blocking wait must not be used"))
+        }
+
+        fn process_id(&self) -> Option<u32> {
+            None
+        }
+
+        #[cfg(windows)]
+        fn as_raw_handle(&self) -> Option<std::os::windows::io::RawHandle> {
+            None
+        }
+    }
+
+    #[test]
+    fn force_terminate_child_reports_unconfirmed_exit() {
+        let mut child: Box<dyn Child + Send> = Box::new(UnreapableChild);
+        assert!(!force_terminate_child(&mut child, None));
+    }
 
     #[test]
     fn command_echo_filter_handles_multibyte_command() {

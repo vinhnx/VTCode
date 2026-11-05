@@ -94,6 +94,62 @@ async fn force_cancel_foreground_sessions_skips_background() -> anyhow::Result<(
     manager.close_session("force-cancel-bg").await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn force_terminate_pipe_waits_for_the_child_exit() -> anyhow::Result<()> {
+    let temp_dir = tempdir()?;
+    let workspace_root = canonicalize_workspace(temp_dir.path());
+    let pty_sessions = PtySessionManager::new(workspace_root.clone(), PtyConfig::default());
+    let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
+    manager
+        .create_pipe_session(
+            "force-pipe-confirm".to_string().into(),
+            vec!["/bin/sh".to_string(), "-c".to_string(), "sleep 30".to_string()],
+            workspace_root,
+            HashMap::new(),
+        )
+        .await?;
+    manager.force_terminate_session("force-pipe-confirm").await?;
+    timeout(Duration::from_secs(1), async {
+        loop {
+            if manager.is_session_completed("force-pipe-confirm").await?.is_some() {
+                return Ok::<_, anyhow::Error>(());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await??;
+    manager.close_session("force-pipe-confirm").await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn force_cancel_closes_an_already_exited_pipe() -> anyhow::Result<()> {
+    let temp_dir = tempdir()?;
+    let workspace_root = canonicalize_workspace(temp_dir.path());
+    let pty_sessions = PtySessionManager::new(workspace_root.clone(), PtyConfig::default());
+    let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
+    manager
+        .create_pipe_session(
+            "force-pipe-exited".to_string().into(),
+            vec!["/bin/sh".to_string(), "-c".to_string(), "exit 31".to_string()],
+            workspace_root,
+            HashMap::new(),
+        )
+        .await?;
+    timeout(Duration::from_secs(2), async {
+        loop {
+            if manager.is_session_completed("force-pipe-exited").await? == Some(31) {
+                return Ok::<_, anyhow::Error>(());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await??;
+    assert_eq!(manager.force_cancel_foreground_sessions().await, (0, 1, 0));
+    assert!(manager.session_record("force-pipe-exited").await.is_err());
+    Ok(())
+}
 /// Regression: force_terminate on a live PTY child must return within the
 /// bounded reap budget and observe an exit status via try_wait (the child
 /// is reaped, not abandoned).

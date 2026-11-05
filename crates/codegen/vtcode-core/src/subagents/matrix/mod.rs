@@ -351,7 +351,6 @@ impl SubagentController {
                     // failure into the user's terminal cancellation decision.
                     driver_cancel.cancel();
                 }
-                controller.matrix.driver_active.store(false, Ordering::Release);
                 // Cleanup-uncertain state keeps the coordinator restricted.
                 let state = controller.matrix.state.lock().await;
                 if let Some(state) = state.as_ref()
@@ -362,6 +361,8 @@ impl SubagentController {
                 if let Some(state) = state.as_ref() {
                     controller.matrix.update_execution_admission(state);
                 }
+                drop(state);
+                controller.matrix.driver_active.store(false, Ordering::Release);
                 controller.background_completion_notify.notify_one();
             });
         }
