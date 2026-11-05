@@ -60,7 +60,7 @@ mod pump;
 use pump::{publish_interaction, sanitize_primary_agent_display};
 #[cfg(test)]
 use pump::{publish_primary_agent_changed, publish_thread_event};
-use pump::{respond_to_interaction, spawn_session_pump};
+use pump::{respond_to_interaction, send_runtime_notification, spawn_session_pump};
 mod turn_queue;
 use turn_queue::{EnqueueMode, dispatch_drained_turn, enqueue_turn, publish_queue_status_sync};
 mod webmcp;
@@ -84,6 +84,7 @@ const MAX_RESTORED_MESSAGE_BYTES: usize = 4 * 1024;
 const MAX_RESTORED_HISTORY_BYTES: usize = 700 * 1024;
 const MAX_RESTORED_SPOOLED_OUTPUT_BYTES: usize = protocol::MAX_SESSION_OUTPUT_PAGE_BYTES;
 const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+const INTERNAL_RUNTIME_GENERATION: &str = "_vtcodeRuntimeGeneration";
 const SESSION_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(8);
 const RUNLOOP_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -96,6 +97,8 @@ struct ServerState {
     initialized: bool,
     session_id: Option<String>,
     runtime: Option<RuntimeSession>,
+    /// Identity of the installed runtime, distinct from the durable session id.
+    runtime_generation: Option<uuid::Uuid>,
     active_turn_id: Option<String>,
     session_transitioning: bool,
     cancel_requested_turn: Option<String>,
@@ -213,7 +216,7 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
             }
             notification = notification_rx.recv() => {
                 if let Some(notification) = notification {
-                    protocol::write_frame(&mut stdout, &notification).await?;
+                    write_runtime_checked_notification(&context, &mut stdout, notification).await?;
                 }
             }
         }
@@ -266,7 +269,7 @@ where
             tokio::select! {
                 result = &mut request_future => break result,
                 Some(notification) = notifications.recv() => {
-                    protocol::write_frame(stdout, &notification).await?;
+                    write_runtime_checked_notification(context, stdout, notification).await?;
                 }
             }
         }
@@ -280,7 +283,7 @@ where
             let Ok(notification) = notifications.try_recv() else {
                 break;
             };
-            protocol::write_frame(stdout, &notification).await?;
+            write_runtime_checked_notification(context, stdout, notification).await?;
         }
     }
     match response {
@@ -301,6 +304,31 @@ where
             Ok(true)
         }
     }
+}
+
+/// Runtime-originated notifications can remain buffered across a restart.
+/// The tag is internal to this service and is removed before protocol output.
+async fn write_runtime_checked_notification<W>(
+    context: &ServiceContext,
+    stdout: &mut W,
+    mut notification: protocol::Notification,
+) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    if let Some(tag) = notification
+        .params
+        .as_object_mut()
+        .and_then(|params| params.remove(INTERNAL_RUNTIME_GENERATION))
+    {
+        let generation = tag.as_str().and_then(|value| uuid::Uuid::parse_str(value).ok());
+        let state = context.state.lock().await;
+        if generation.is_none() || generation != state.runtime_generation {
+            return Ok(());
+        }
+    }
+    protocol::write_frame(stdout, &notification).await?;
+    Ok(())
 }
 
 async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus {

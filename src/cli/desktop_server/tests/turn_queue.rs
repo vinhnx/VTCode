@@ -147,6 +147,88 @@ async fn terminal_event_drains_one_batch_and_keeps_fifo_order() {
 }
 
 #[tokio::test]
+async fn terminal_event_keeps_queued_prompts_during_session_transition() {
+    let (state, mut input_receiver, runtime_task, exit_sender) = runtime_state("session");
+    {
+        let mut state = state.lock().await;
+        state.active_turn_id = Some("old-turn".into());
+        state.session_transitioning = true;
+        state.queue = VecDeque::from([
+            QueuedInput::new("first queued".into(), None),
+            QueuedInput::new("second queued".into(), None),
+        ]);
+    }
+    let (notifications, _received) = mpsc::channel(4);
+    publish_thread_event("session", completed_turn(), &state, &notifications, &Notify::new())
+        .await
+        .expect("terminal event");
+    let mut state = state.lock().await;
+    assert!(state.active_turn_id.is_none());
+    assert_eq!(state.queue.len(), 2);
+    assert!(input_receiver.try_recv().is_err(), "the old runtime must not receive a queued prompt");
+    state.session_transitioning = false;
+    let drained = state.pop_next_queued_turn().expect("queue resumes after transition");
+    assert_eq!(drained.batch.input.text, "first queued");
+    assert_eq!(state.queue.front().unwrap().input.text, "second queued");
+    drop(state);
+    drop(exit_sender);
+    runtime_task.abort();
+}
+
+#[tokio::test]
+async fn installed_runtime_resumes_queue_only_after_readiness_and_transition() {
+    use crate::agent::runloop::unified::state::CtrlCState;
+    let workspace = hermetic_workspace();
+    let (context, _notifications) =
+        test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+    {
+        let mut state = context.state.lock().await;
+        state.session_transitioning = true;
+        state.queue = VecDeque::from([
+            QueuedInput::new("first queued".into(), None),
+            QueuedInput::new("second queued".into(), None),
+        ]);
+    }
+    let (input, mut input_receiver) = mpsc::unbounded_channel();
+    let (exit_sender, exit) = oneshot::channel();
+    let runtime_task = tokio::spawn(std::future::pending::<()>());
+    let stop = stop_requests::new_stop_handle_slot();
+    let (_commands, command_receiver) = mpsc::channel(1);
+    let (_events, event_receiver) = protocol::live_event_channel(1);
+    install_session_runtime(
+        &context,
+        RuntimeSession {
+            session_id: "session".into(),
+            input,
+            stop: stop.clone(),
+            exit,
+            abort: runtime_task.abort_handle(),
+            command_forwarder: std::thread::spawn(|| {}),
+        },
+        command_receiver,
+        event_receiver,
+    )
+    .await;
+    tokio::task::yield_now().await;
+    assert!(input_receiver.try_recv().is_err(), "startup has not made the runtime ready");
+    stop_requests::publish_stop_handles(
+        &stop,
+        &std::sync::Arc::new(CtrlCState::new()),
+        &std::sync::Arc::new(Notify::new()),
+    );
+    stop_requests::mark_host_turns_ready(&stop);
+    tokio::task::yield_now().await;
+    assert!(input_receiver.try_recv().is_err(), "the session transition is still active");
+    context.state.lock().await.session_transitioning = false;
+    context.turn_finished.notify_waiters();
+    let event = timeout(Duration::from_secs(1), input_receiver.recv()).await.unwrap();
+    assert!(matches!(event, Some(InlineEvent::Submit(input)) if input.text == "first queued"));
+    assert_eq!(context.state.lock().await.queue.front().unwrap().input.text, "second queued");
+    drop(exit_sender);
+    runtime_task.abort();
+}
+
+#[tokio::test]
 async fn take_latest_request_pops_newest_for_editing() {
     let directory = tempfile::tempdir().expect("workspace");
     let workspace = directory.path().to_path_buf();
@@ -297,7 +379,7 @@ async fn failed_drain_dispatch_restores_the_batch_at_the_front() {
     });
     let batch = QueuedInput::new("drained".into(), None);
 
-    dispatch_drained_turn(&state, &notifications, "session", "turn".into(), batch, input)
+    dispatch_drained_turn(&state, &notifications, &Notify::new(), "session", "turn".into(), batch, input)
         .await
         .expect_err("closed runtime fails delivery");
     let state = state.lock().await;
@@ -322,7 +404,7 @@ async fn failed_drain_dispatch_restores_without_touching_a_newer_turn() {
     });
     let batch = QueuedInput::new("drained".into(), None);
 
-    dispatch_drained_turn(&state, &notifications, "session", "stale-turn".into(), batch, input)
+    dispatch_drained_turn(&state, &notifications, &Notify::new(), "session", "stale-turn".into(), batch, input)
         .await
         .expect_err("closed runtime fails delivery");
     let state = state.lock().await;
@@ -331,6 +413,34 @@ async fn failed_drain_dispatch_restores_without_touching_a_newer_turn() {
     assert_eq!(state.queue.front().expect("restored batch").input.text, "drained");
     let status = received.try_recv().expect("queue status resync");
     assert_eq!(status.params["queueDepth"], 1);
+}
+
+#[tokio::test]
+async fn stale_open_runtime_cannot_receive_a_drained_prompt() {
+    let (state, mut current_input, runtime_task, exit_sender) = runtime_state("session");
+    let (old_input, mut old_receiver) = mpsc::unbounded_channel();
+    let (notifications, _received) = mpsc::channel(8);
+    let finished = Notify::new();
+    state.lock().await.active_turn_id = Some("old-turn".into());
+    dispatch_drained_turn(
+        &state,
+        &notifications,
+        &finished,
+        "session",
+        "old-turn".into(),
+        QueuedInput::new("preserved prompt".into(), None),
+        old_input,
+    )
+    .await
+    .expect_err("an open but replaced runtime is stale");
+    assert!(old_receiver.try_recv().is_err());
+    let drained = state.lock().await.pop_next_queued_turn().expect("prompt is restored");
+    dispatch_drained_turn(&state, &notifications, &finished, "session", drained.turn_id, drained.batch, drained.input)
+        .await
+        .expect("current runtime receives the restored prompt");
+    assert!(matches!(current_input.recv().await, Some(InlineEvent::Submit(input)) if input.text == "preserved prompt"));
+    drop(exit_sender);
+    runtime_task.abort();
 }
 
 #[tokio::test]

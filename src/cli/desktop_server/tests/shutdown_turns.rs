@@ -2,6 +2,62 @@ use super::*;
 use crate::agent::runloop::unified::state::CtrlCState;
 
 #[tokio::test]
+async fn protocol_writer_drops_a_buffered_old_runtime_notification() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (context, _) = test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+    let old = uuid::Uuid::new_v4();
+    let current = uuid::Uuid::new_v4();
+    {
+        let mut state = context.state.lock().await;
+        state.session_id = Some("session".into());
+        state.runtime_generation = Some(old);
+    }
+    let (sender, mut receiver) = mpsc::channel(1);
+    sender
+        .send(protocol::Notification {
+            jsonrpc: "2.0".into(),
+            method: "occupied".into(),
+            params: json!({}),
+        })
+        .await
+        .unwrap();
+    let old_sender = sender.clone();
+    let blocked = tokio::spawn(async move {
+        send_runtime_notification(
+            &old_sender,
+            protocol::method::UI_PROGRESS,
+            json!({ "sessionId": "session", "active": true }),
+            Some(old),
+        )
+        .await
+    });
+    tokio::task::yield_now().await;
+    assert!(!blocked.is_finished(), "old runtime waits on the full queue");
+    context.state.lock().await.runtime_generation = Some(current);
+    assert_eq!(receiver.recv().await.unwrap().method, "occupied");
+    blocked.await.unwrap().unwrap();
+    let stale = receiver.recv().await.unwrap();
+    let mut output = Vec::new();
+    write_runtime_checked_notification(&context, &mut output, stale).await.unwrap();
+    assert!(output.is_empty(), "a buffered notification from the replaced runtime is not written");
+
+    send_runtime_notification(
+        &sender,
+        protocol::method::UI_PROGRESS,
+        json!({ "sessionId": "session", "active": false }),
+        Some(current),
+    )
+    .await
+    .unwrap();
+    write_runtime_checked_notification(&context, &mut output, receiver.recv().await.unwrap())
+        .await
+        .unwrap();
+    let frame: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(frame["params"]["active"], false);
+    assert!(frame["params"].get(INTERNAL_RUNTIME_GENERATION).is_none(), "the internal tag is never on the wire");
+}
+
+#[tokio::test]
 async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
     let workspace = tempfile::tempdir().expect("workspace");
     let startup = test_startup_context(workspace.path());

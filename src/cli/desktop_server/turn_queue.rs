@@ -75,7 +75,7 @@ impl ServerState {
             .as_ref()
             .filter(|runtime| !runtime.input.is_closed())
             .map(|runtime| runtime.input.clone())?;
-        if self.active_turn_id.is_some() {
+        if self.session_transitioning || self.active_turn_id.is_some() {
             return None;
         }
         let batch = pop_batched_submission(&mut self.queue, &mut false)?;
@@ -207,6 +207,69 @@ pub(super) fn publish_queue_status_sync(
     }
 }
 
+/// Resume a queue preserved across a runtime restart only after startup and
+/// the session transition have both completed.
+pub(super) fn spawn_resume_queue(
+    session_id: String,
+    generation: uuid::Uuid,
+    stop: StopHandleSlot,
+    input: mpsc::UnboundedSender<InlineEvent>,
+    state: std::sync::Arc<Mutex<ServerState>>,
+    notifications: mpsc::Sender<protocol::Notification>,
+    turn_finished: std::sync::Arc<Notify>,
+) {
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = stop_requests::wait_for_host_turns_ready(&stop) => {}
+            _ = input.closed() => return,
+        }
+        loop {
+            let notified = turn_finished.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            let drained = {
+                let mut state = state.lock().await;
+                if state.session_id.as_deref() != Some(session_id.as_str())
+                    || state.runtime_generation != Some(generation)
+                {
+                    return;
+                }
+                if state.session_transitioning
+                    || state.active_turn_id.is_some()
+                    || !state.pending_interactions.is_empty()
+                {
+                    None
+                } else if state.queue.is_empty() {
+                    return;
+                } else {
+                    state.pop_next_queued_turn()
+                }
+            };
+            if let Some(drained) = drained {
+                if let Err(error) = dispatch_drained_turn(
+                    &state,
+                    &notifications,
+                    &turn_finished,
+                    &session_id,
+                    drained.turn_id,
+                    drained.batch,
+                    drained.input,
+                )
+                .await
+                {
+                    tracing::warn!(target: "vtcode.desktop", %error, "failed to resume queued turn");
+                    continue;
+                }
+                return;
+            }
+            tokio::select! {
+                _ = &mut notified => {}
+                _ = input.closed() => return,
+            }
+        }
+    });
+}
+
 /// Submit the batch drained after a terminal event. The turn id is already
 /// recorded under the state lock; this only crosses the runtime boundary and
 /// publishes the new turn plus the updated queue state. On delivery failure
@@ -214,18 +277,23 @@ pub(super) fn publish_queue_status_sync(
 pub(super) async fn dispatch_drained_turn(
     state: &Mutex<ServerState>,
     notifications: &mpsc::Sender<protocol::Notification>,
+    turn_finished: &Notify,
     session_id: &str,
     turn_id: String,
     batch: QueuedInput,
     input: mpsc::UnboundedSender<InlineEvent>,
 ) -> Result<()> {
-    // The send consumes its value, so dispatch a clone and keep the batch for
-    // the failure path. Drain runs once per turn; the copy is negligible.
-    if input.send(InlineEvent::Submit(batch.input.clone())).is_err() {
-        let mut state = state.lock().await;
-        if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
-            state.active_turn_id = None;
-            state.cancel_requested_turn = None;
+    // Recheck ownership and deliver while holding the turn lock. A session
+    // transition may have started while the terminal notification was queued.
+    let mut guard = state.lock().await;
+    let current = guard.session_id.as_deref() == Some(session_id)
+        && !guard.session_transitioning
+        && guard.active_turn_id.as_deref() == Some(turn_id.as_str())
+        && guard.runtime.as_ref().is_some_and(|runtime| runtime.input.same_channel(&input));
+    if !current || input.send(InlineEvent::Submit(batch.input.clone())).is_err() {
+        if guard.active_turn_id.as_deref() == Some(turn_id.as_str()) {
+            guard.active_turn_id = None;
+            guard.cancel_requested_turn = None;
         }
         // Restore unless the session moved on: teardown intentionally drops
         // ephemeral queue state with the session, but a changed turn slot
@@ -233,21 +301,31 @@ pub(super) async fn dispatch_drained_turn(
         // batch. The batch left from the front; restoring it there preserves
         // order. A concurrent refill can transiently overshoot the soft cap
         // by one; the next accept trims from the front with exact accounting.
-        if state.session_id.as_deref() == Some(session_id) {
-            state.queue.push_front(batch);
-            let status = state.queue_status(session_id);
-            drop(state);
+        if guard.session_id.as_deref() == Some(session_id) {
+            guard.queue.push_front(batch);
+            let status = guard.queue_status(session_id);
+            drop(guard);
             publish_queue_status_sync(notifications, &status);
         }
+        turn_finished.notify_waiters();
         bail!("selected session runtime has stopped; reload the session to continue");
     }
-    send_notification(
+    let generation = guard.runtime_generation;
+    drop(guard);
+    send_runtime_notification(
         notifications,
         protocol::method::TURN_STATUS,
         json!({ "sessionId": session_id, "turnId": turn_id, "status": "running" }),
+        generation,
     )
     .await?;
     let status = state.lock().await.queue_status(session_id);
-    send_notification(notifications, protocol::method::TURN_QUEUE_STATUS, serde_json::to_value(status)?).await?;
+    send_runtime_notification(
+        notifications,
+        protocol::method::TURN_QUEUE_STATUS,
+        serde_json::to_value(status)?,
+        generation,
+    )
+    .await?;
     Ok(())
 }

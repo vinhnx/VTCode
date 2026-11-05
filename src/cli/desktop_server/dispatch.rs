@@ -32,6 +32,7 @@ pub(super) async fn handle_request(context: &ServiceContext, request: &Request) 
     }
     let result = handle_request_inner(context, request).await;
     context.state.lock().await.session_transitioning = false;
+    context.turn_finished.notify_waiters();
     result
 }
 

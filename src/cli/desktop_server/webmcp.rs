@@ -177,18 +177,32 @@ pub(super) async fn install_session_runtime(
     events: protocol::LiveEventReceiver,
 ) {
     let session_id = runtime.session_id.clone();
+    let stop = runtime.stop.clone();
+    let input = runtime.input.clone();
+    let generation = uuid::Uuid::new_v4();
     {
         let mut state = context.state.lock().await;
         state.session_id = Some(session_id.clone());
+        state.runtime_generation = Some(generation);
         state.runtime = Some(runtime);
     }
-    spawn_session_pump(
-        session_id,
+    let _pump = spawn_session_pump(
+        session_id.clone(),
         commands,
         events,
         std::sync::Arc::clone(&context.state),
         context.notifications.clone(),
         std::sync::Arc::clone(&context.turn_finished),
+        Some(generation),
+    );
+    turn_queue::spawn_resume_queue(
+        session_id,
+        generation,
+        stop,
+        input,
+        context.state.clone(),
+        context.notifications.clone(),
+        context.turn_finished.clone(),
     );
 }
 
