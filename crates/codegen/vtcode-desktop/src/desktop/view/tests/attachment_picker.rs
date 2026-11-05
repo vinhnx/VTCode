@@ -61,6 +61,35 @@ fn attachment_picker_opens_with_workspace_tree(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn attachment_picker_indents_nested_entries(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    seed_workspace_files(&view, cx, workspace.path());
+    view.update(cx, |view, _| {
+        view.files.push(FileEntry {
+            rel_path: "src/nested.rs".into(),
+            depth: 1,
+            is_dir: false,
+        });
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("picker-file-src", cx);
+        window.render_frame(cx);
+        assert!(
+            window.find("picker-file-label-src/nested.rs").bounds().origin.x
+                > window.find("picker-file-label-src").bounds().origin.x
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn attachment_picker_rows_toggle_attachments(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     std::fs::write(workspace.path().join("notes.md"), "hello").unwrap();

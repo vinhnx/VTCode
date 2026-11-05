@@ -59,10 +59,16 @@ fn thread_tab_menu(menu: PopupMenu, session_id: &str) -> PopupMenu {
 
 impl DesktopView {
     /// Track a freshly selected session as an open tab. Order is first-open;
-    /// selection stays in [`DesktopView::selected_session_id`].
+    /// selection stays in [`DesktopView::selected_session_id`]. Every
+    /// selection path funnels through here, so this is also where the strip
+    /// reveals the tab: Kit only reveals on clicks, and `scroll_to_item`
+    /// scrolls minimally, making this a no-op for fully visible tabs.
     pub(super) fn ensure_tab(&mut self, session_id: String) {
         if !self.open_tabs.iter().any(|tab| tab == &session_id) {
-            self.open_tabs.push(session_id);
+            self.open_tabs.push(session_id.clone());
+        }
+        if let Some(position) = self.open_tabs.iter().position(|tab| tab == &session_id) {
+            self.tab_strip_scroll.scroll_to_item(position);
         }
     }
 
@@ -230,20 +236,60 @@ impl DesktopView {
         // strip scrolls with an overflow menu. Clipped close buttons stay
         // clickable through explicit reveal — keyboard moves reveal the
         // highlight, and tests scroll via click_thread_tab_close.
+        let entries = self
+            .open_tabs
+            .iter()
+            .map(|id| (id.clone(), self.tab_title(id)))
+            .collect::<Vec<_>>();
+        let current = self.selected_session_id.clone();
+        let weak_view = cx.entity().downgrade();
+        let overflow = desktop_button("thread-tabs-menu")
+            .ghost()
+            .xsmall()
+            .dropdown_caret(true)
+            .accessibility_label("Open threads")
+            .tooltip("Open threads")
+            .dropdown_menu(move |menu, _, _| {
+                let mut menu = menu.scrollable(true);
+                for (id, title) in &entries {
+                    let id = id.clone();
+                    let view = weak_view.clone();
+                    menu = menu.item(
+                        gpui_kit::component::menu::PopupMenuItem::new(title.clone())
+                            .checked(current.as_deref() == Some(id.as_str()))
+                            .on_click(move |_, window, cx| {
+                                if let Some(view) = view.upgrade() {
+                                    view.update(cx, |view, cx| {
+                                        if let Some(index) = view.open_tabs.iter().position(|tab| tab == &id) {
+                                            view.tab_strip_scroll.scroll_to_item(index);
+                                            view.keyboard_focused_session = Some(id.clone());
+                                            let _ = view.load_session_from_ui(id.clone(), window, cx);
+                                        }
+                                    });
+                                }
+                            }),
+                    );
+                }
+                menu
+            })
+            // Right-edge trigger: keep the TopRight anchor Kit's menu button
+            // used so the popup opens leftward instead of past the window.
+            .anchor(Anchor::TopRight);
         let mut bar = desktop_folder_tab_bar("thread-tabs-bar")
-            .menu(true)
             .track_scroll(&self.tab_strip_scroll)
             .suffix(
-                desktop_button("thread-tab-new")
-                    .icon(IconName::Plus)
-                    .ghost()
-                    .small()
-                    .accessibility_label("New thread")
-                    .tooltip("New thread")
-                    .desktop_disabled(!self.new_thread_available())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        let _ = this.create_session_from_ui(window, cx);
-                    })),
+                div().flex().items_center().child(overflow).child(
+                    desktop_button("thread-tab-new")
+                        .icon(IconName::Plus)
+                        .ghost()
+                        .small()
+                        .accessibility_label("New thread")
+                        .tooltip("New thread")
+                        .desktop_disabled(!self.new_thread_available())
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let _ = this.create_session_from_ui(window, cx);
+                        })),
+                ),
             )
             .on_click(cx.listener(|view, index: &usize, window, cx| {
                 let Some(session_id) = view.open_tabs.get(*index).cloned() else {

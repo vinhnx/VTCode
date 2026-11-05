@@ -170,6 +170,35 @@ impl DesktopView {
     /// tab joins the panel below it.
     fn render_inspector_tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
+        let inspector_view = cx.entity().downgrade();
+        let selected_tab = self.inspector_tab;
+        let overflow_label = rust_i18n::t!("app.inspector.inspector_tabs").to_string();
+        let overflow = desktop_button("inspector-tabs-menu")
+            .ghost()
+            .xsmall()
+            .dropdown_caret(true)
+            .accessibility_label(overflow_label.clone())
+            .tooltip(overflow_label)
+            .dropdown_menu(move |mut menu, _, _| {
+                for (index, tab) in InspectorTab::ALL.iter().enumerate() {
+                    let view = inspector_view.clone();
+                    menu = menu.item(
+                        gpui_kit::component::menu::PopupMenuItem::new(tab.label())
+                            .checked(*tab == selected_tab)
+                            .on_click(move |_, window, cx| {
+                                if let Some(view) = view.upgrade() {
+                                    view.update(cx, |view, cx| {
+                                        view.select_inspector_tab_from_keyboard(index, window, cx)
+                                    });
+                                }
+                            }),
+                    );
+                }
+                menu
+            })
+            // Right-edge trigger: keep the TopRight anchor Kit's menu button
+            // used so the popup opens leftward instead of past the panel.
+            .anchor(Anchor::TopRight);
         div()
             .id("inspector-navigation")
             .test_support()
@@ -199,20 +228,21 @@ impl DesktopView {
                     .track_focus(&self.inspector_focus)
                     .child(
                         desktop_folder_tab_bar("inspector-tabs")
-                            .menu(true)
                             .track_scroll(&self.inspector_tabs_scroll)
                             .suffix(
-                                desktop_button("close-inspector")
-                                    .icon(IconName::X)
-                                    .ghost()
-                                    .small()
-                                    .accessibility_label(rust_i18n::t!("app.navigation.hide_panel").to_string())
-                                    .tooltip_with_action(
-                                        rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
-                                        &ToggleInspector,
-                                        Some(key_context::DESKTOP),
-                                    )
-                                    .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
+                                div().flex().items_center().child(overflow).child(
+                                    desktop_button("close-inspector")
+                                        .icon(IconName::X)
+                                        .ghost()
+                                        .small()
+                                        .accessibility_label(rust_i18n::t!("app.navigation.hide_panel").to_string())
+                                        .tooltip_with_action(
+                                            rust_i18n::t!(i18n::NAVIGATION_TOGGLE_INSPECTOR).to_string(),
+                                            &ToggleInspector,
+                                            Some(key_context::DESKTOP),
+                                        )
+                                        .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
+                                ),
                             )
                             .selected_index(
                                 InspectorTab::ALL

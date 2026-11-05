@@ -52,29 +52,39 @@ pub(super) fn file_tree_row_icon(is_dir: bool, expanded: bool) -> IconName {
     }
 }
 
+/// Indentation per file-tree nesting level. Kit's tree supplies depth but no
+/// inset, so both file surfaces share this step (one spacing unit ≈ 12px).
+pub(super) const FILE_TREE_INDENT_REM: f32 = 0.75;
+
 /// Shared file-row label: type icon, file name, and the muted parent path in
 /// search mode. Both file trees render through this so rows stay identical.
 pub(super) fn file_tree_row_label(
+    id: impl Into<gpui_kit::ElementId>,
+    depth: usize,
     display_name: String,
     search_parent: Option<&str>,
     icon: IconName,
     app: &mut App,
 ) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_x_2()
-        .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
-        .child(div().text_sm().child(display_name))
-        .when_some(search_parent, |row, parent| {
-            row.child(
-                div()
-                    .flex_shrink_0()
-                    .text_xs()
-                    .text_color(app.theme().muted_foreground)
-                    .child(parent.to_string()),
-            )
-        })
+    div().pl(gpui_kit::rems(depth as f32 * FILE_TREE_INDENT_REM)).child(
+        div()
+            .id(id)
+            .test_support()
+            .flex()
+            .items_center()
+            .gap_x_2()
+            .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
+            .child(div().text_sm().child(display_name))
+            .when_some(search_parent, |row, parent| {
+                row.child(
+                    div()
+                        .flex_shrink_0()
+                        .text_xs()
+                        .text_color(app.theme().muted_foreground)
+                        .child(parent.to_string()),
+                )
+            }),
+    )
 }
 
 /// Right-click menu shared by every workspace-file surface (today: the

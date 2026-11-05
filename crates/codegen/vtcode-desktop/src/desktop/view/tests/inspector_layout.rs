@@ -179,3 +179,35 @@ fn closing_the_inspector_gives_the_workspace_the_full_row(cx: &mut TestAppContex
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn inspector_overflow_has_a_name_and_selects_a_tab(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 900.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("inspector-tabs-menu").label(), Some("Context inspector tabs"));
+        window.click("inspector-tabs-menu", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("popup-menu").role(), Some(gpui_kit::Role::Menu));
+        let trigger = window.find("inspector-tabs-menu").bounds();
+        let popup = window.find("popup-menu").bounds();
+        let trigger_right = trigger.origin.x + trigger.size.width;
+        let popup_right = popup.origin.x + popup.size.width;
+        assert!(
+            popup_right <= trigger_right + px(1.) && popup_right >= trigger_right - px(1.),
+            "right-edge trigger opens its menu leftward: popup={popup:?}, trigger={trigger:?}"
+        );
+        for _ in 0..5 {
+            window.press("down", cx);
+        }
+        window.press("enter", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
+    })
+    .unwrap();
+}

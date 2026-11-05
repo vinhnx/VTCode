@@ -314,7 +314,14 @@ impl DesktopView {
                                 } else {
                                     rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
                                 })
-                                .child(files_panel::file_tree_row_label(display_name, search_parent, icon, app))
+                                .child(files_panel::file_tree_row_label(
+                                    format!("workspace-file-label-{rel_path}"),
+                                    entry.depth(),
+                                    display_name,
+                                    search_parent,
+                                    icon,
+                                    app,
+                                ))
                                 // Dragging a row out of the window promotes the
                                 // drag to a native session, so the file can be
                                 // dropped into Finder or an editor.

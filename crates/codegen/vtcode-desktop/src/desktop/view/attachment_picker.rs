@@ -354,7 +354,14 @@ impl DesktopView {
                                     .items_center()
                                     .justify_between()
                                     .gap_2()
-                                    .child(files_panel::file_tree_row_label(display_name, search_parent, icon, app))
+                                    .child(files_panel::file_tree_row_label(
+                                        format!("picker-file-label-{rel_path}"),
+                                        entry.depth(),
+                                        display_name,
+                                        search_parent,
+                                        icon,
+                                        app,
+                                    ))
                                     .when(attached, |row| {
                                         row.child(Icon::new(IconName::Check).small().text_color(check_color))
                                     }),

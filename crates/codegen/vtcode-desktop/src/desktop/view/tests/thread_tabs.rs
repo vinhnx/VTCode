@@ -118,22 +118,61 @@ fn refused_load_keeps_the_selected_tab(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn thread_strip_overflow_menu_lists_every_tab(cx: &mut TestAppContext) {
-    let (window, _, _) = open_threaded_desktop(cx);
+fn selecting_a_wide_tab_reveals_its_close_button(cx: &mut TestAppContext) {
+    let (window, view, _) = open_threaded_desktop(cx);
+    view.update(cx, |view, _| {
+        if let Some(session) = view.sessions.iter_mut().find(|s| s.session_id == "thread-c") {
+            session.title = Some("Third thread with a deliberately overlong title for clipping".into());
+        }
+        // Mirror the loaded-session path: selection plus tab tracking.
+        view.selected_session_id = Some("thread-c".into());
+        view.ensure_tab("thread-c".into());
+    });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        // Kit owns the dropdown mechanics; the strip owns enabling it. The
-        // overflow path matters most once tabs scroll past the viewport.
-        assert!(window.within("thread-tabs").try_find("more").is_some(), "multi-tab strip offers the overflow menu");
-        window.within("thread-tabs").click("more", cx);
+        window.render_frame(cx);
+        let close = window.find("thread-tab-close-thread-c").bounds();
+        let trigger = window.find("thread-tabs-menu").bounds();
+        eprintln!("DEBUG offset={:?}", view.read(cx).tab_strip_scroll.offset());
+        assert!(
+            close.origin.x + close.size.width <= trigger.origin.x,
+            "selected wide tab keeps its close button left of the overflow: close={close:?}, trigger={trigger:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn thread_strip_overflow_menu_lists_every_tab(cx: &mut TestAppContext) {
+    let (window, _, mut requests) = open_threaded_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("thread-tabs-menu").label(), Some("Open threads"));
+        window.click("thread-tabs-menu", cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("popup-menu").role(), Some(gpui_kit::Role::Menu), "overflow opens the tab list");
-        window.press("escape", cx);
+        let trigger = window.find("thread-tabs-menu").bounds();
+        let popup = window.find("popup-menu").bounds();
+        let trigger_right = trigger.origin.x + trigger.size.width;
+        let popup_right = popup.origin.x + popup.size.width;
+        assert!(
+            popup_right <= trigger_right + px(1.) && popup_right >= trigger_right - px(1.),
+            "right-edge trigger opens its menu leftward: popup={popup:?}, trigger={trigger:?}"
+        );
+        for _ in 0..3 {
+            window.press("down", cx);
+        }
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert_eq!(load_request_for(&mut requests), "thread-c");
     })
     .unwrap();
 }

@@ -126,6 +126,18 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(file_tree_item_snapshot(window, 0).expanded(), Some(true));
         assert!(file_tree_paths(&view, cx).contains(&"src/nested".to_string()));
+        assert!(
+            window.find("workspace-file-label-src/nested").bounds().origin.x
+                > window.find("workspace-file-label-src").bounds().origin.x,
+            "nested entries must be indented relative to their parent"
+        );
+        window.click("workspace-file-src/nested", cx);
+        window.render_frame(cx);
+        assert!(
+            window.find("workspace-file-label-src/nested/mod.rs").bounds().origin.x
+                > window.find("workspace-file-label-src/nested").bounds().origin.x,
+            "each nesting level adds indentation"
+        );
         assert!(view.read(cx).file_preview.is_none(), "folder activation expands instead of previewing");
         window.click("workspace-file-src", cx);
         window.render_frame(cx);
@@ -761,6 +773,11 @@ fn file_tree_filter_narrows_to_ranked_hits_and_restores(cx: &mut TestAppContext)
         });
         window.render_frame(cx);
         assert_eq!(file_tree_paths(&view, cx), vec!["main.rs", "src/main.rs"]);
+        assert_eq!(
+            window.find("workspace-file-label-main.rs").bounds().origin.x,
+            window.find("workspace-file-label-src/main.rs").bounds().origin.x,
+            "search results stay flat regardless of their path"
+        );
         assert_eq!(window.find("file-list-filter-count").label(), Some("2 of 4 shown"));
         view.update(cx, |view, cx| {
             view.file_filter_input
