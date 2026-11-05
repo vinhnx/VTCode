@@ -12,6 +12,10 @@ https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
 
 ---
 
+layout preference (zen vs non-zen) modes should be persisted between apps launches. not override
+
+---
+
 gpui apps for other plqtforms
 
 ---
