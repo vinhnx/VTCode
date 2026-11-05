@@ -230,6 +230,7 @@ mod config_auth;
 mod config_restart;
 mod exec_commands;
 mod model_review;
+mod recent_prompts;
 mod secret_store;
 mod session_history;
 mod session_load_probe;

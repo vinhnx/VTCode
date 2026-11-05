@@ -7,6 +7,7 @@ use crate::tui::ui::search::FuzzyQuery;
 /// using nucleo fuzzy matching, similar to the slash command palette.
 use chrono::{DateTime, Duration, Utc};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use vtcode_commons::history_scope::HistoryScope;
 
 use crate::tui::core_tui::session::input_manager::InputManager;
 
@@ -16,6 +17,9 @@ pub struct ArchivedPrompt {
     pub(crate) content: String,
     pub(crate) created_at: DateTime<Utc>,
     pub(crate) session_label: String,
+    /// Whether the owning archive belongs to the current workspace, computed
+    /// once at load so the Project scope filters without path matching here.
+    pub(crate) in_workspace: bool,
 }
 
 /// A single history entry with fuzzy match score
@@ -55,6 +59,8 @@ pub struct HistoryPickerState {
     original_attachments: Vec<ContentPart>,
     /// Prompts loaded from archived sessions (injected externally)
     archived_prompts: Vec<ArchivedPrompt>,
+    /// Which sessions contribute archived matches; kept across opens.
+    pub(crate) scope: HistoryScope,
 }
 
 impl Default for HistoryPickerState {
@@ -75,6 +81,7 @@ impl HistoryPickerState {
             original_cursor: 0,
             original_attachments: Vec::new(),
             archived_prompts: Vec::new(),
+            scope: HistoryScope::default(),
         }
     }
 
@@ -172,8 +179,13 @@ impl HistoryPickerState {
             }
         }
 
-        // Merge archived prompts from previous sessions
-        for archived in &self.archived_prompts {
+        // Merge archived prompts from previous sessions. Session scope skips
+        // them entirely (the caller also strips prepended archived rows from
+        // the live history); Project keeps same-workspace archives only.
+        let scope = self.scope;
+        for archived in self.archived_prompts.iter().filter(|archived| {
+            scope != HistoryScope::Session && (scope != HistoryScope::Project || archived.in_workspace)
+        }) {
             if archived.content.trim().is_empty() {
                 continue;
             }
@@ -228,6 +240,12 @@ impl HistoryPickerState {
     /// Remove the last character from the search query
     fn backspace(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
         self.search_query.pop();
+        self.update_search(history);
+    }
+
+    /// Cycle to the next scope (Ctrl+S) and re-filter.
+    pub(crate) fn cycle_scope(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
+        self.scope = self.scope.cycle_next();
         self.update_search(history);
     }
 
@@ -319,6 +337,11 @@ pub(crate) fn handle_history_picker_key(
         KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+R while in picker - cycle through matches
             picker.move_down();
+            true
+        }
+        KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Ctrl+S while in picker - cycle the search scope
+            picker.cycle_scope(history);
             true
         }
         KeyCode::Tab => {
@@ -528,11 +551,13 @@ mod tests {
                 content: "implement auth".to_string(),
                 created_at: now - Duration::hours(3),
                 session_label: "session-1".to_string(),
+                in_workspace: true,
             },
             ArchivedPrompt {
                 content: "fix login bug".to_string(),
                 created_at: now - Duration::hours(6),
                 session_label: "session-2".to_string(),
+                in_workspace: false,
             },
         ]);
 
@@ -554,6 +579,7 @@ mod tests {
             content: "cargo build".to_string(), // same as current
             created_at: now - Duration::hours(3),
             session_label: "session-1".to_string(),
+            in_workspace: true,
         }]);
 
         picker.open(&manager);
@@ -658,5 +684,81 @@ mod tests {
         assert!(!handle_history_picker_key(&key, &mut picker, &mut manager, &history));
         assert!(picker.active);
         assert!(picker.search_query.is_empty());
+    }
+
+    fn make_scoped_archived(now: DateTime<Utc>) -> Vec<ArchivedPrompt> {
+        vec![
+            ArchivedPrompt {
+                content: "same workspace prompt".to_string(),
+                created_at: now - Duration::hours(1),
+                session_label: "project-session".to_string(),
+                in_workspace: true,
+            },
+            ArchivedPrompt {
+                content: "other workspace prompt".to_string(),
+                created_at: now - Duration::hours(2),
+                session_label: "foreign-session".to_string(),
+                in_workspace: false,
+            },
+        ]
+    }
+
+    fn match_contents(picker: &HistoryPickerState) -> Vec<String> {
+        picker.matches.iter().map(|item| item.content.clone()).collect()
+    }
+
+    #[test]
+    fn test_scope_defaults_to_everywhere() {
+        let picker = HistoryPickerState::new();
+        assert_eq!(picker.scope, HistoryScope::Everywhere);
+    }
+
+    #[test]
+    fn test_scope_filters_archived_prompts() {
+        let mut picker = HistoryPickerState::new();
+        let manager = InputManager::new();
+        let now = Utc::now();
+        let history = vec![("live session prompt".to_string(), vec![], now)];
+        picker.set_archived_prompts(make_scoped_archived(now));
+        picker.open(&manager);
+
+        picker.scope = HistoryScope::Everywhere;
+        picker.update_search(&history);
+        assert_eq!(picker.match_count(), 3);
+
+        picker.scope = HistoryScope::Project;
+        picker.update_search(&history);
+        assert_eq!(
+            match_contents(&picker),
+            vec!["same workspace prompt".to_string(), "live session prompt".to_string()]
+        );
+
+        picker.scope = HistoryScope::Session;
+        picker.update_search(&history);
+        assert_eq!(match_contents(&picker), vec!["live session prompt".to_string()]);
+    }
+
+    #[test]
+    fn test_ctrl_s_cycles_scope_and_refilters() {
+        let mut picker = HistoryPickerState::new();
+        let mut manager = InputManager::new();
+        let now = Utc::now();
+        let history = vec![("live session prompt".to_string(), vec![], now)];
+        picker.set_archived_prompts(make_scoped_archived(now));
+        picker.open(&manager);
+        picker.update_search(&history);
+        assert_eq!(picker.match_count(), 3);
+
+        for (scope, count) in [
+            (HistoryScope::Project, 2),
+            (HistoryScope::Session, 1),
+            (HistoryScope::Everywhere, 3),
+        ] {
+            let key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL);
+            assert!(handle_history_picker_key(&key, &mut picker, &mut manager, &history));
+            assert_eq!(picker.scope, scope);
+            assert_eq!(picker.match_count(), count);
+            assert!(picker.active, "cycling scope keeps the picker open");
+        }
     }
 }

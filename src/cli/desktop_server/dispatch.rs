@@ -961,6 +961,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
         method::STORAGE_SUMMARY | method::SESSION_DELETE | method::WORKTREE_LIST | method::WORKTREE_REMOVE => {
             storage::handle_storage_request(context, request).await
         }
+        method::SESSION_RECENT_PROMPTS => recent_prompts::handle_recent_prompts_request(context, request).await,
         _ => bail!("unknown desktop method"),
     }
 }

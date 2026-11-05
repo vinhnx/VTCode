@@ -160,27 +160,31 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
 
     frame.render_widget(Clear, area);
 
-    let (query, selected_idx, current_offset, matches) = {
+    let (query, selected_idx, current_offset, matches, scope_label) = {
         let picker = &session.history_picker_state;
         (
             picker.search_query.clone(),
             picker.navigator.selected(),
             picker.navigator.scroll_offset(),
             picker.matches.clone(),
+            picker.scope.label(),
         )
     };
     let default_style = default_style(session);
     let muted_style = session.core.styles.muted_text_style();
     let highlight_style = modal_list_highlight_style(session);
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled("History".to_owned(), highlight_style))],
+        header: vec![Line::from(Span::styled(
+            format!("Search prompts · {scope_label}"),
+            highlight_style,
+        ))],
         info: vec![Line::from(Span::styled(
-            "↑↓ Navigate · Enter accept · Esc cancel".to_owned(),
+            "↑/↓ to nav · Enter to use · Esc to cancel · Ctrl+S to scope".to_owned(),
             default_style,
         ))],
         search: Some(SharedSearchField {
             label: String::new(),
-            placeholder: Some("history text".to_owned()),
+            placeholder: Some("Filter history…".to_owned()),
             query,
         }),
     };

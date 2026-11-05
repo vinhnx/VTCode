@@ -1,6 +1,7 @@
 //! Session lifecycle, history paging, and idle-session option DTOs.
 
 use serde::{Deserialize, Serialize};
+use vtcode_commons::history_scope::HistoryScope;
 
 /// Session execution and command confirmation policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,6 +181,20 @@ pub struct SessionHistoryPage {
     pub has_earlier: bool,
 }
 
+/// One genuine user-typed prompt from a workspace session archive.
+///
+/// Mirrors the CLI history picker's archived entries: harness-generated
+/// follow-ups and enrichment wrappers are stripped server-side, so the client
+/// can merge these with the live thread without re-cleaning.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentPrompt {
+    /// Cleaned user-typed prompt text.
+    pub content: String,
+    /// Durable session identifier that owns the prompt.
+    pub session_id: String,
+}
+
 /// Cursor for reading more of a restored tool-output capture.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -244,8 +259,35 @@ pub struct SessionIdParams {
     pub session_id: String,
 }
 
+/// Parameters for listing recent cross-session prompts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecentPromptsParams {
+    /// Which sessions contribute; omitted scopes to the current project.
+    #[serde(default = "default_recent_prompts_scope")]
+    pub scope: HistoryScope,
+}
+
+fn default_recent_prompts_scope() -> HistoryScope {
+    HistoryScope::Project
+}
+
 /// Maximum message count accepted by one desktop archive-history page request.
 pub const MAX_SESSION_HISTORY_PAGE_MESSAGES: usize = 160;
+
+/// Recent-prompts result. Echoes the requested scope so the client can
+/// match out-of-order responses when the scope changes mid-fetch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecentPromptsResult {
+    /// Echo of the requested scope.
+    pub scope: HistoryScope,
+    /// Cleaned prompts, newest first, bounded by [`MAX_RECENT_PROMPTS`].
+    pub prompts: Vec<RecentPrompt>,
+}
+
+/// Maximum prompts returned by one recent-prompts request.
+pub const MAX_RECENT_PROMPTS: usize = 100;
 
 /// Maximum captured output returned by one on-demand desktop page.
 pub const MAX_SESSION_OUTPUT_PAGE_BYTES: usize = 32 * 1024;

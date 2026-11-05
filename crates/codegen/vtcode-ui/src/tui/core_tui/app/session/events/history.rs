@@ -5,10 +5,12 @@ use super::*;
 pub(crate) fn input_history_entries(
     session: &Session,
 ) -> Vec<(String, Vec<ContentPart>, chrono::DateTime<chrono::Utc>)> {
+    // Live entries only: archived prompts arrive through the picker's own
+    // scoped list, and the merged history would bypass scope filtering.
     session
         .core
         .input_manager
-        .history()
+        .live_history()
         .iter()
         .map(|entry| (entry.content().to_string(), entry.attachment_elements(), entry.timestamp()))
         .collect()

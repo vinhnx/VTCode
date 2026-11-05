@@ -59,6 +59,7 @@ mod session_teardown;
 use session_iteration::SessionLoopState;
 
 pub(crate) use session_bootstrap::BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX;
+pub(crate) use session_bootstrap::clean_archived_prompts;
 pub(super) use session_bootstrap::resolve_thread_completion_status;
 use session_bootstrap::{
     apply_startup_plan_agent_selection, background_completion_continuation_prompt, load_archived_prompts_for_history,

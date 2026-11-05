@@ -700,7 +700,6 @@ fn command_and_composer_palettes_are_translated_for_every_language() {
         assert_translated!(locale, "app.palette.placeholder.commands");
         assert_translated!(locale, "app.palette.placeholder.changed_files");
         assert_translated!(locale, "app.palette.placeholder.conversation");
-        assert_translated!(locale, "app.palette.placeholder.prompts");
         assert_translated!(locale, "app.palette.placeholder.modes");
         assert_translated!(locale, "app.palette.placeholder.default");
         assert_translated!(locale, "app.palette.conversation_search_header");
@@ -744,6 +743,17 @@ fn command_and_composer_palettes_are_translated_for_every_language() {
             assert!(value.contains(expected), "{key} lost its interpolation in {locale}");
         }
     }
+}
+
+#[test]
+fn history_scope_strings_resolve_in_english_until_translated() {
+    // En-only by design (thread-menu precedent): other locales fall back to
+    // English until native-quality translations ship.
+    assert_eq!(
+        rust_i18n::t!("app.palette.placeholder.filter_history", locale = "en").to_string(),
+        "Filter history…"
+    );
+    assert_eq!(rust_i18n::t!("app.palette.sections.other_threads", locale = "en").to_string(), "Other threads");
 }
 
 #[test]

@@ -596,6 +596,7 @@ impl AppSession {
                             content: e.content,
                             created_at: e.created_at,
                             session_label: e.session_label,
+                            in_workspace: e.in_workspace,
                         }
                     })
                     .collect();

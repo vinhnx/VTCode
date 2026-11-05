@@ -525,6 +525,7 @@ fn slash_history_opens_recent_thread_prompts_without_submitting(cx: &mut TestApp
     cx.update_window(window, |_, _, cx| {
         assert_eq!(view.read(cx).composer.read(cx).value(), previous_prompt);
         assert!(view.read(cx).palette.is_none());
+        expect_recent_prompts_request(&mut requests, super::super::HistoryScope::Everywhere);
         assert!(requests.try_recv().is_err(), "choosing history only restores a draft");
     })
     .unwrap();
@@ -574,6 +575,7 @@ fn ctrl_r_opens_prefiltered_prompt_history_with_toggle_and_restore(cx: &mut Test
     cx.update_window(window, |_, _, cx| {
         assert_eq!(view.read(cx).composer.read(cx).value(), "Review stale diffs");
         assert!(view.read(cx).palette.is_none());
+        expect_recent_prompts_request(&mut requests, super::super::HistoryScope::Everywhere);
         assert!(requests.try_recv().is_err(), "choosing history only restores a draft");
     })
     .unwrap();

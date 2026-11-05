@@ -1,6 +1,8 @@
 //! Session thread/archive bootstrap and exit helpers: primary-agent persistence, plan-selection
 //! failure tails, thread-completion resolution, and archived-prompt loading.
 
+use std::path::Path;
+
 use super::super::archive::{create_session_archive, workspace_archive_label};
 use super::super::support::prepare_resume_bootstrap_without_archive;
 use super::*;
@@ -11,7 +13,7 @@ mod history_cleaning;
 
 #[cfg(test)]
 use history_cleaning::archived_prompt_content;
-use history_cleaning::archived_prompt_content_with_metadata;
+pub(crate) use history_cleaning::clean_archived_prompts;
 
 pub(super) struct SessionThreadBootstrap {
     pub(super) thread_id: String,
@@ -157,7 +159,7 @@ pub(super) async fn record_plan_selection_failure_tail(
     session_stats: &SessionStats,
     loaded_skills: &std::sync::Arc<tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
     next_checkpoint_turn: usize,
-    workspace: &std::path::Path,
+    workspace: &Path,
     session_id: &str,
     vt_cfg: Option<&VTCodeConfig>,
     timeout_secs: u64,
@@ -283,35 +285,21 @@ pub(crate) fn resolve_thread_completion_status(
 /// are stripped so the picker shows what the user typed. Full (cleaned) content
 /// is stored; the picker collapses it to a single display row and restores the
 /// full text on accept.
-pub(super) async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineHandle) {
+pub(super) async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineHandle, workspace: &Path) {
     let listings = match session_archive::list_recent_sessions(50).await {
         Ok(listings) => listings,
         Err(_) => return,
     };
 
-    let mut entries = Vec::new();
-    for listing in &listings {
-        let session_label = listing.identifier();
-        for msg in &listing.snapshot.messages {
-            if msg.role != MessageRole::User {
-                continue;
-            }
-            let content = msg.content.as_text();
-            let Some(cleaned) = archived_prompt_content_with_metadata(content.trim(), msg.metadata.as_deref()) else {
-                continue;
-            };
-            // NOTE: `created_at` uses the session start time because per-message
-            // timestamps are not stored in the archive format. The time label is
-            // therefore an approximation of when the conversation happened.
-            entries.push(ArchivedPromptEntry {
-                content: cleaned,
-                created_at: listing.snapshot.started_at,
-                session_label: session_label.clone(),
-            });
-        }
-    }
-
-    entries.truncate(20);
+    let entries: Vec<ArchivedPromptEntry> = clean_archived_prompts(&listings, workspace, 20)
+        .into_iter()
+        .map(|prompt| ArchivedPromptEntry {
+            content: prompt.content,
+            created_at: prompt.created_at,
+            session_label: prompt.session_id,
+            in_workspace: prompt.in_workspace,
+        })
+        .collect();
 
     if !entries.is_empty() {
         handle.set_archived_history(entries);

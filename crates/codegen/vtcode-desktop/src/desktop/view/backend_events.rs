@@ -309,6 +309,12 @@ impl DesktopView {
                         self.fail_storage_summary(error.clone(), cx);
                         return;
                     }
+                    if method == protocol::method::SESSION_RECENT_PROMPTS {
+                        // Enhancement, not a requirement: older services lack
+                        // the method, and the live thread still searches fine.
+                        self.recent_prompts_loading = false;
+                        return;
+                    }
                     if method == protocol::method::WORKTREE_LIST || method == protocol::method::WORKTREE_REMOVE {
                         self.fail_storage_worktrees(error.clone(), cx);
                         return;
@@ -532,6 +538,7 @@ impl DesktopView {
                         }
                     },
                     protocol::method::STORAGE_SUMMARY => self.apply_storage_summary(result),
+                    protocol::method::SESSION_RECENT_PROMPTS => self.apply_recent_prompts(result),
                     protocol::method::SESSION_DELETE => self.apply_session_delete(result, cx),
                     protocol::method::WORKTREE_LIST => self.apply_worktree_list(result),
                     protocol::method::WORKTREE_REMOVE => self.apply_worktree_remove(result, cx),

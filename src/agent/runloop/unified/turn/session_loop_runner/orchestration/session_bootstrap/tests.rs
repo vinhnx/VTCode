@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use tempfile::TempDir;
@@ -9,7 +9,8 @@ use vtcode_core::utils::session_archive::{
 };
 
 use super::super::super::support::checkpoint_session_archive_start;
-use super::archived_prompt_content_with_metadata;
+use super::clean_archived_prompts;
+use super::history_cleaning::archived_prompt_content_with_metadata;
 use super::{CoreAgentConfig, ResumeSession, SessionArchiveMetadata, archived_prompt_content, prepare_session_thread};
 use crate::cli::exec::{
     EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX, EXEC_TASK_INSTRUCTIONS_PREFIX, REVIEW_TASK_INSTRUCTIONS_PREFIX,
@@ -443,4 +444,80 @@ fn archived_history_skips_messages_tagged_synthetic() {
         archived_prompt_content_with_metadata("keep going with the migration", None),
         Some("keep going with the migration".to_string())
     );
+}
+
+fn archived_listing(name: &str, workspace: &str, messages: Vec<SessionMessage>) -> SessionListing {
+    let now = Utc::now();
+    SessionListing {
+        path: PathBuf::from(format!("/archives/{name}.json")),
+        snapshot: SessionSnapshot {
+            metadata: SessionArchiveMetadata::new("workspace", workspace, "model", "provider", "theme", "medium"),
+            started_at: now,
+            ended_at: now,
+            total_messages: messages.len(),
+            distinct_tools: Vec::new(),
+            transcript: Vec::new(),
+            messages,
+            progress: None,
+            error_logs: Vec::new(),
+        },
+    }
+}
+
+#[test]
+fn clean_archived_prompts_preserves_order_flags_workspace_and_truncates() {
+    let workspace = "/work/project";
+    let listings = vec![
+        archived_listing(
+            "newer",
+            workspace,
+            vec![
+                SessionMessage::new(MessageRole::User, "newer first".to_string()),
+                SessionMessage::new(MessageRole::Assistant, "reply".to_string()),
+                SessionMessage::new(MessageRole::User, "newer second".to_string()),
+            ],
+        ),
+        archived_listing(
+            "older",
+            "/work/other",
+            vec![SessionMessage::new(MessageRole::User, "older foreign".to_string())],
+        ),
+    ];
+
+    let cleaned = clean_archived_prompts(&listings, Path::new(workspace), 10);
+    assert_eq!(
+        cleaned.iter().map(|entry| entry.content.as_str()).collect::<Vec<_>>(),
+        vec!["newer first", "newer second", "older foreign"],
+        "listing and message order preserved; assistant replies skipped"
+    );
+    assert_eq!(
+        cleaned
+            .iter()
+            .map(|entry| (entry.session_id.as_str(), entry.in_workspace))
+            .collect::<Vec<_>>(),
+        vec![("newer", true), ("newer", true), ("older", false)]
+    );
+
+    let truncated = clean_archived_prompts(&listings, Path::new(workspace), 2);
+    assert_eq!(
+        truncated.iter().map(|entry| entry.content.as_str()).collect::<Vec<_>>(),
+        vec!["newer first", "newer second"]
+    );
+    assert!(clean_archived_prompts(&listings, Path::new(workspace), 0).is_empty());
+}
+
+#[test]
+fn clean_archived_prompts_drops_harness_authored_messages() {
+    let workspace = "/work/project";
+    let listings = vec![archived_listing(
+        "mixed",
+        workspace,
+        vec![
+            SessionMessage::new(MessageRole::User, "genuine typed prompt".to_string()),
+            SessionMessage::new(MessageRole::User, "Verification failed: run the test suite".to_string()),
+        ],
+    )];
+
+    let cleaned = clean_archived_prompts(&listings, Path::new(workspace), 10);
+    assert_eq!(cleaned.iter().map(|entry| entry.content.as_str()).collect::<Vec<_>>(), vec!["genuine typed prompt"]);
 }

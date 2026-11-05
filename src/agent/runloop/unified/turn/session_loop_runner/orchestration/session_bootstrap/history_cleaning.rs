@@ -4,6 +4,8 @@
 //! separate from user-typed text recovery. History order and asymmetric
 //! wrapper handling are preserved and covered by `session_bootstrap/tests.rs`.
 
+use std::path::Path;
+
 use crate::agent::runloop::unified::turn::is_internal_harness_follow_up;
 use crate::agent::runloop::unified::webmcp::{
     TURN_HANDOFF_DIFF_OPEN, TURN_HANDOFF_DIFF_TAG_OPEN, TURN_HANDOFF_PREFIX, TURN_HANDOFF_REQUEST_HEADER,
@@ -13,6 +15,63 @@ use crate::cli::exec::{
     EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX, EXEC_TASK_INSTRUCTIONS_PREFIX, REVIEW_TASK_INSTRUCTIONS_PREFIX,
 };
 use vtcode_commons::message_metadata::MessageMetadata;
+use vtcode_core::llm::provider::MessageRole;
+use vtcode_core::utils::session_archive::{SessionListing, session_listing_matches_workspace};
+
+/// One genuine user-typed prompt recovered from a session archive.
+///
+/// Shared by the TUI history injection and the desktop
+/// `session/recent-prompts` handler so both surfaces agree on what counts as
+/// a user prompt.
+pub(crate) struct CleanedArchivedPrompt {
+    pub(crate) content: String,
+    pub(crate) created_at: chrono::DateTime<chrono::Utc>,
+    pub(crate) session_id: String,
+    pub(crate) in_workspace: bool,
+}
+
+/// Recover genuine user-typed prompts from archive listings, preserving
+/// listing and message order and truncating to `prompt_limit`.
+///
+/// Pure over listings so the TUI bootstrap and the desktop service share the
+/// exact logic; each caller chooses its own listing source. `workspace` marks
+/// same-workspace entries for the Project scope.
+pub(crate) fn clean_archived_prompts(
+    listings: &[SessionListing],
+    workspace: &Path,
+    prompt_limit: usize,
+) -> Vec<CleanedArchivedPrompt> {
+    let mut entries = Vec::new();
+    if prompt_limit == 0 {
+        return entries;
+    }
+    for listing in listings {
+        let identifier = listing.identifier();
+        // NOTE: `created_at` uses the session start time because per-message
+        // timestamps are not stored in the archive format.
+        let created_at = listing.snapshot.started_at;
+        let in_workspace = session_listing_matches_workspace(listing, workspace);
+        for msg in &listing.snapshot.messages {
+            if msg.role != MessageRole::User {
+                continue;
+            }
+            let content = msg.content.as_text();
+            let Some(cleaned) = archived_prompt_content_with_metadata(content.trim(), msg.metadata.as_deref()) else {
+                continue;
+            };
+            entries.push(CleanedArchivedPrompt {
+                content: cleaned,
+                created_at,
+                session_id: identifier.clone(),
+                in_workspace,
+            });
+            if entries.len() == prompt_limit {
+                return entries;
+            }
+        }
+    }
+    entries
+}
 
 /// Stable openings of harness-authored prompts that are stored as ordinary
 /// `User`-role turns but were never typed by the user.

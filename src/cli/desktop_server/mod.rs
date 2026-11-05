@@ -58,6 +58,7 @@ use dispatch::{
     protocol_interaction_kind, send_notification, shutdown_current_session,
 };
 mod pump;
+mod recent_prompts;
 #[cfg(test)]
 use pump::{publish_interaction, sanitize_primary_agent_display};
 #[cfg(test)]

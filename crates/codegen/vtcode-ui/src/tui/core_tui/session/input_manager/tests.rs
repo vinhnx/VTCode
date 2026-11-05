@@ -234,6 +234,24 @@ fn prepend_archived_history_skips_empty() {
 }
 
 #[test]
+fn live_history_excludes_prepended_archived_prefix() {
+    let mut manager = InputManager::new();
+    let now = Utc::now();
+    assert!(manager.live_history().is_empty());
+    manager.add_to_history(InputHistoryEntry::from_content_and_attachments("session-prompt".to_owned(), Vec::new()));
+    manager.prepend_archived_history(vec![
+        InputHistoryEntry::from_content_and_timestamp("archived-1".to_owned(), now),
+        InputHistoryEntry::from_content_and_timestamp("archived-2".to_owned(), now),
+    ]);
+    // The picker filters archived rows from its own scoped list; feeding it
+    // the merged history would bypass scope filtering.
+    let texts: Vec<_> = manager.live_history().iter().map(|entry| entry.content().to_string()).collect();
+    assert_eq!(texts, vec!["session-prompt".to_string()]);
+    // Recall still traverses the merged history.
+    assert_eq!(manager.history().len(), 3);
+}
+
+#[test]
 fn up_arrow_cycles_session_first_then_archived() {
     let mut manager = InputManager::new();
     let now = Utc::now();

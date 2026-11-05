@@ -276,6 +276,7 @@ impl Render for DesktopView {
                 }
             }))
             .on_action(cx.listener(|view, _: &OpenPromptHistory, window, cx| view.open_prompt_history(window, cx)))
+            .on_action(cx.listener(|view, _: &CycleHistoryScope, window, cx| view.cycle_history_scope(window, cx)))
             .on_action(cx.listener(|view, _: &TakeLatestQueued, window, cx| {
                 if view.composer.read(cx).focus_handle(cx).is_focused(window) {
                     view.take_latest_queued(cx);

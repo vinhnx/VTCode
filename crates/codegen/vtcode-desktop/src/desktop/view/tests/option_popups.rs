@@ -359,6 +359,7 @@ fn shift_tab_cycles_primary_agent_and_defers_to_open_suggestions(cx: &mut TestAp
         assert!(view.read(cx).palette.is_some(), "suggestion nav keeps the palette open");
         let after = view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index());
         assert_ne!(before, after, "shift-tab moved the suggestion highlight");
+        expect_recent_prompts_request(&mut requests, super::super::HistoryScope::Everywhere);
         assert!(requests.try_recv().is_err(), "suggestion nav never cycles the agent");
     })
     .unwrap();

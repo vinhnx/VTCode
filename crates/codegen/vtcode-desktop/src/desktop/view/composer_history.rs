@@ -1,6 +1,140 @@
 use super::*;
 
+/// History-palette rows across every section (CLI `HistoryPickerState` parity:
+/// merged, deduplicated, truncated to 200).
+const MAX_PROMPT_HISTORY_ROWS: usize = 200;
+
 impl DesktopView {
+    pub(super) fn open_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.toggle_palette_kind(PaletteKind::PromptHistory, window, cx) {
+            return;
+        }
+        self.show_palette(PaletteKind::PromptHistory, self.history_palette_groups(), window, cx);
+        // CLI parity: seed the filter from the draft. Cancel-restore is
+        // automatic — the palette query is separate from the composer draft.
+        let seed = self.composer.read(cx).value().trim().to_string();
+        if !seed.is_empty() {
+            if let Some(palette) = &self.palette {
+                palette.update(cx, |state, cx| state.set_query(seed, window, cx));
+            }
+        }
+        self.request_recent_prompts();
+    }
+
+    /// Palette groups for Ctrl+R: the live thread first, then cached
+    /// cross-thread recents for the current scope. Merged newest-first,
+    /// deduplicated by content with the live thread winning, capped at
+    /// [`MAX_PROMPT_HISTORY_ROWS`] like the CLI picker. Session scope shows
+    /// the live thread only; other scopes add recents so brand-new sessions
+    /// offer history search instead of an empty palette.
+    fn history_palette_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
+        let mut seen = HashSet::new();
+        let mut thread = Vec::new();
+        for prompt in self.prompt_history_entries() {
+            if thread.len() == MAX_PROMPT_HISTORY_ROWS {
+                break;
+            }
+            if seen.insert(prompt.clone()) {
+                thread.push(prompt);
+            }
+        }
+        let mut others = Vec::new();
+        if self.history_scope != HistoryScope::Session && self.recent_prompts_scope == Some(self.history_scope) {
+            for recent in &self.recent_prompts {
+                if thread.len() + others.len() == MAX_PROMPT_HISTORY_ROWS {
+                    break;
+                }
+                if recent.content.trim().is_empty() {
+                    continue;
+                }
+                if seen.insert(recent.content.clone()) {
+                    others.push(recent.content.clone());
+                }
+            }
+        }
+        let mut groups = Vec::with_capacity(2);
+        if !thread.is_empty() || others.is_empty() {
+            groups.push((rust_i18n::t!("app.palette.sections.this_thread").to_string(), history_commands(thread)));
+        }
+        if !others.is_empty() {
+            groups.push((rust_i18n::t!("app.palette.sections.other_threads").to_string(), history_commands(others)));
+        }
+        groups
+    }
+
+    /// Switch the history scope from the palette switcher or Ctrl+S: rebuild
+    /// immediately from the live thread plus any matching cache, then refresh
+    /// cross-thread scopes from the service (Session needs no fetch).
+    pub(super) fn set_history_scope(&mut self, scope: HistoryScope, cx: &mut Context<Self>) {
+        if self.history_scope == scope {
+            return;
+        }
+        self.history_scope = scope;
+        self.refresh_history_palette();
+        self.request_recent_prompts_for_scope(scope);
+        cx.notify();
+    }
+
+    /// Cycle the scope (CLI Ctrl+S parity). Opens the palette when closed.
+    pub(super) fn cycle_history_scope(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_none() || self.palette_kind != PaletteKind::PromptHistory {
+            self.open_prompt_history(window, cx);
+            return;
+        }
+        self.set_history_scope(self.history_scope.cycle_next(), cx);
+    }
+
+    fn refresh_history_palette(&mut self) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
+            // Kit preserves the query and selection-by-path across model
+            // reinstalls; the recents section only appends rows.
+            self.palette_groups = share_palette_commands(self.history_palette_groups());
+        }
+    }
+
+    /// Ask the service for cross-thread recent prompts. Fire-and-forget: the
+    /// palette already shows the live thread plus the cache, and the response
+    /// merges underneath via [`DesktopView::apply_recent_prompts`]. The open
+    /// path skips while a fetch is in flight; scope switches always refresh
+    /// (responses echo their scope, so out-of-order arrivals cannot mislabel).
+    fn request_recent_prompts(&mut self) {
+        if self.history_scope == HistoryScope::Session || self.recent_prompts_loading {
+            return;
+        }
+        self.request_recent_prompts_for_scope(self.history_scope);
+    }
+
+    fn request_recent_prompts_for_scope(&mut self, scope: HistoryScope) {
+        if scope == HistoryScope::Session {
+            return;
+        }
+        let Ok(params) = serde_json::to_value(protocol::RecentPromptsParams { scope }) else {
+            return;
+        };
+        if self.request(protocol::method::SESSION_RECENT_PROMPTS, params) {
+            self.recent_prompts_loading = true;
+        }
+    }
+
+    /// Merge a `session/recent-prompts` response. The echoed scope tags the
+    /// cache; only a matching open history palette rebuilds.
+    pub(super) fn apply_recent_prompts(&mut self, result: Value) {
+        self.recent_prompts_loading = false;
+        let Ok(result) = serde_json::from_value::<protocol::RecentPromptsResult>(result) else {
+            return;
+        };
+        self.recent_prompts = result
+            .prompts
+            .into_iter()
+            .filter(|prompt| !prompt.content.trim().is_empty())
+            .take(protocol::MAX_RECENT_PROMPTS)
+            .collect();
+        self.recent_prompts_scope = Some(result.scope);
+        if result.scope == self.history_scope {
+            self.refresh_history_palette();
+        }
+    }
+
     /// This thread's submitted prompts, newest first, deduplicated. Shared by
     /// the history picker and inline Up/Down/Ctrl+P/N recall.
     pub(super) fn prompt_history_entries(&self) -> Vec<String> {
@@ -132,4 +266,19 @@ impl DesktopView {
         }
         !input.value().contains('\n')
     }
+}
+
+/// History rows show the truncated first-line title but match against the full
+/// prompt: Kit filters label + keywords by substring, so without the keyword
+/// multi-line bodies and text past the 72-char title cut are unfindable.
+fn history_commands(prompts: Vec<String>) -> Vec<PaletteCommand> {
+    prompts
+        .into_iter()
+        .map(|prompt| {
+            let mut entry =
+                command(session_title_from_prompt(&prompt), PaletteAction::InsertHistoryPrompt(prompt.clone()));
+            entry.shared_keywords.push(prompt.into());
+            entry
+        })
+        .collect()
 }

@@ -90,7 +90,7 @@ impl DesktopView {
         } else if conversation_search {
             rust_i18n::t!("app.palette.placeholder.conversation").to_string()
         } else if prompt_history {
-            rust_i18n::t!("app.palette.placeholder.prompts").to_string()
+            rust_i18n::t!("app.palette.placeholder.filter_history").to_string()
         } else if modes {
             rust_i18n::t!("app.palette.placeholder.modes").to_string()
         } else {
@@ -134,6 +134,43 @@ impl DesktopView {
                         .text_xs()
                         .text_color(muted_foreground)
                         .child(rust_i18n::t!("app.palette.conversation_search_header").to_string())
+                })
+            })
+            .when(prompt_history, |command| {
+                let scope_weak = weak.clone();
+                let palette_id = state.entity_id();
+                let current = self.history_scope;
+                let scopes = [HistoryScope::Everywhere, HistoryScope::Project, HistoryScope::Session];
+                command.header(move |_, _, _| {
+                    let weak = scope_weak.clone();
+                    div().id("history-scope-header").px_3().py_2().child(
+                        gpui_kit::component::button::ToggleGroup::new("history-scope")
+                            .segmented()
+                            .small()
+                            .children(scopes.map(|scope| {
+                                Toggle::new(format!("history-scope-{}", scope.label()))
+                                    .label(scope.title())
+                                    .checked(scope == current)
+                            }))
+                            .on_click(move |states, _, cx| {
+                                let _updated = weak.update(cx, |view, cx| {
+                                    if view.palette_kind != PaletteKind::PromptHistory
+                                        || !view.palette_is_current(palette_id)
+                                    {
+                                        return;
+                                    }
+                                    // Segmented toggles flip independently: the
+                                    // scope whose state differs from the render
+                                    // is the click target.
+                                    let clicked = states.iter().enumerate().position(|(index, on)| {
+                                        *on != scopes.get(index).is_some_and(|scope| *scope == view.history_scope)
+                                    });
+                                    if let Some(scope) = clicked.and_then(|index| scopes.get(index).copied()) {
+                                        view.set_history_scope(scope, cx);
+                                    }
+                                });
+                            }),
+                    )
                 })
             })
             .empty(move |_, _, _| {

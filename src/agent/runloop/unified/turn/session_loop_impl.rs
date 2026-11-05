@@ -15,6 +15,7 @@ use crate::agent::runloop::ResumeSession;
 #[path = "session_loop_runner/mod.rs"]
 mod session_loop_runner;
 
+pub(crate) use session_loop_runner::clean_archived_prompts;
 pub(crate) use session_loop_runner::{
     BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, VERIFICATION_AUTO_RECOVERY_PREFIX,
 };

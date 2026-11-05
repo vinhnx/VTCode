@@ -704,3 +704,29 @@ fn queue_preview_label_truncates_at_char_boundaries() {
 
     assert_eq!(queue_preview_label("line one\nline two"), "line one\nline two", "short multiline text is preserved");
 }
+
+#[test]
+fn recent_prompts_params_default_to_project_scope_and_round_trip() {
+    let defaulted: RecentPromptsParams = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert_eq!(defaulted.scope, vtcode_commons::history_scope::HistoryScope::Project);
+
+    let params = RecentPromptsParams {
+        scope: vtcode_commons::history_scope::HistoryScope::Everywhere,
+    };
+    let encoded = serde_json::to_value(&params).unwrap();
+    assert_eq!(encoded, serde_json::json!({ "scope": "everywhere" }));
+    let decoded: RecentPromptsParams = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded, params);
+
+    assert!(serde_json::from_value::<RecentPromptsParams>(serde_json::json!({ "scope": "galaxy" })).is_err());
+    assert!(
+        serde_json::from_value::<RecentPromptsParams>(serde_json::json!({ "scope": "project", "other": 1 })).is_err()
+    );
+
+    let prompt = RecentPrompt {
+        content: "Fix the login bug".into(),
+        session_id: "session-1".into(),
+    };
+    let decoded: RecentPrompt = serde_json::from_value(serde_json::to_value(&prompt).unwrap()).unwrap();
+    assert_eq!(decoded, prompt);
+}

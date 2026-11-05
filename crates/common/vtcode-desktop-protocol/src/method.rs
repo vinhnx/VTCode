@@ -11,6 +11,8 @@ pub const SESSION_CREATE: &str = "session/create";
 pub const SESSION_LOAD: &str = "session/load";
 /// Load one bounded earlier page from the selected durable session.
 pub const SESSION_HISTORY: &str = "session/history";
+/// List recent genuine user prompts across workspace sessions for history search.
+pub const SESSION_RECENT_PROMPTS: &str = "session/recent-prompts";
 /// Read one bounded page of archived tool output on demand.
 pub const SESSION_OUTPUT_READ: &str = "session/output/read";
 /// Read one bounded MCP app-resource body for static preview.

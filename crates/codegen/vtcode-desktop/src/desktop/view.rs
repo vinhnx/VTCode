@@ -62,6 +62,7 @@ use gpui_kit::{
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
+use vtcode_commons::history_scope::HistoryScope;
 use vtcode_commons::ui_protocol::AppIconPreference;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
@@ -366,6 +367,7 @@ actions!(
         BackgroundOperation,
         QueueBatched,
         OpenPromptHistory,
+        CycleHistoryScope,
         TakeLatestQueued,
         HistoryPrevious,
         HistoryNext,
@@ -635,6 +637,18 @@ struct DesktopView {
     slash_commands: Vec<protocol::SlashCommandInfo>,
     resources_loading: bool,
     resources_loaded: bool,
+    /// History-palette search scope; kept across opens like the CLI picker.
+    history_scope: HistoryScope,
+    /// Last cross-thread recent prompts from `session/recent-prompts`, merged
+    /// under the live thread in the history palette so empty threads still
+    /// offer history search. Refreshed on every palette open (async).
+    recent_prompts: Vec<protocol::RecentPrompt>,
+    /// Scope the cache was fetched for; responses echo their scope so
+    /// out-of-order arrivals after a scope change never mislabel rows.
+    recent_prompts_scope: Option<HistoryScope>,
+    /// A recent-prompts request is in flight; guards against stacking one per
+    /// keypress while the palette stays open.
+    recent_prompts_loading: bool,
     palette_groups: PaletteGroups,
     config_page_open: bool,
     config_page_group: Option<String>,

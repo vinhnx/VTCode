@@ -426,8 +426,9 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     // Runs in the background so the TUI starts immediately.
     {
         let handle = handle.clone();
+        let workspace = config.workspace.clone();
         tokio::spawn(async move {
-            load_archived_prompts_for_history(&handle).await;
+            load_archived_prompts_for_history(&handle, &workspace).await;
         });
     }
 

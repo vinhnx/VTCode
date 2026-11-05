@@ -67,6 +67,7 @@ pub struct ArchivedPromptEntry {
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub session_label: String,
+    pub in_workspace: bool,
 }
 
 define_inline_message_commands! {

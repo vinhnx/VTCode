@@ -38,6 +38,7 @@ pub mod exclusions;
 pub mod file_input;
 pub mod formatting;
 pub mod fs;
+pub mod history_scope;
 pub mod http;
 pub mod image;
 pub mod interjection;

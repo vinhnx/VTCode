@@ -300,31 +300,6 @@ impl DesktopView {
         }
     }
 
-    pub(super) fn open_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.toggle_palette_kind(PaletteKind::PromptHistory, window, cx) {
-            return;
-        }
-        let entries = self
-            .prompt_history_entries()
-            .into_iter()
-            .map(|prompt| command(session_title_from_prompt(&prompt), PaletteAction::InsertHistoryPrompt(prompt)))
-            .collect();
-        self.show_palette(
-            PaletteKind::PromptHistory,
-            vec![(rust_i18n::t!("app.palette.sections.this_thread").to_string(), entries)],
-            window,
-            cx,
-        );
-        // CLI parity: seed the filter from the draft. Cancel-restore is
-        // automatic — the palette query is separate from the composer draft.
-        let seed = self.composer.read(cx).value().trim().to_string();
-        if !seed.is_empty() {
-            if let Some(palette) = &self.palette {
-                palette.update(cx, |state, cx| state.set_query(seed, window, cx));
-            }
-        }
-    }
-
     pub(super) fn composer_resource_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
         let mut groups = vec![(
             rust_i18n::t!("app.palette.sections.add").to_string(),
@@ -489,18 +464,35 @@ impl DesktopView {
         let Some(state) = self.palette.clone() else {
             return false;
         };
-        let item_count = self.palette_groups.first().map_or(0, |(_, entries)| entries.len());
+        // Flat row order across sections; the history palette appends a
+        // cross-thread recents section under the live thread.
+        let section_lens: Vec<usize> = self.palette_groups.iter().map(|(_, entries)| entries.len()).collect();
+        let item_count: usize = section_lens.iter().sum();
         if item_count == 0 {
             return false;
         }
-        let current = state.read(cx).selected_index().map(|index| index.row);
-        let step_from = |row: usize| {
+        let to_flat = |section: usize, row: usize| section_lens.iter().take(section).sum::<usize>() + row;
+        let from_flat = |flat: usize| {
+            let mut rest = flat;
+            for (section, len) in section_lens.iter().enumerate() {
+                if rest < *len {
+                    return Some((section, rest));
+                }
+                rest -= len;
+            }
+            None
+        };
+        let current = state.read(cx).selected_index().and_then(|index| {
+            (index.section < section_lens.len() && index.row < section_lens[index.section])
+                .then(|| to_flat(index.section, index.row))
+        });
+        let step_from = |flat: usize| {
             if down {
-                (row + 1) % item_count
-            } else if row == 0 {
+                (flat + 1) % item_count
+            } else if flat == 0 {
                 item_count - 1
             } else {
-                row - 1
+                flat - 1
             }
         };
         // Kit-side filtering (prompt-history seed) hides rows, and selecting a
@@ -509,8 +501,15 @@ impl DesktopView {
         let mut candidate = current.map_or(if down { 0 } else { item_count - 1 }, step_from);
         state.update(cx, |state, cx| {
             for _ in 0..item_count {
-                state.set_selected_index(Some(gpui_kit::component::IndexPath::new(candidate)), window, cx);
-                if state.selected_index().is_some_and(|index| index.row == candidate) {
+                let Some((section, row)) = from_flat(candidate) else {
+                    candidate = step_from(candidate);
+                    continue;
+                };
+                state.set_selected_index(Some(gpui_kit::component::IndexPath::new(row).section(section)), window, cx);
+                if state
+                    .selected_index()
+                    .is_some_and(|index| index.section == section && index.row == row)
+                {
                     break;
                 }
                 candidate = step_from(candidate);

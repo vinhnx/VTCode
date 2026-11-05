@@ -178,6 +178,24 @@ fn palette_action_id(action: &super::PaletteAction) -> String {
     super::palette_entry_element_id(action)
 }
 
+/// Opening prompt history fetches cross-thread recents exactly once (an
+/// in-flight guard dedups reopens); drain and pin that request so channel
+/// assertions observe the submit under test, not the fetch.
+pub(super) fn expect_recent_prompts_request(
+    requests: &mut tokio::sync::mpsc::Receiver<BackendCommand>,
+    scope: super::HistoryScope,
+) {
+    let BackendCommand::Request { method, params } =
+        requests.try_recv().expect("history open fetches cross-thread recents")
+    else {
+        panic!("expected a backend request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_RECENT_PROMPTS);
+    let decoded: vtcode_desktop_protocol::RecentPromptsParams =
+        serde_json::from_value(params).expect("typed scope params");
+    assert_eq!(decoded.scope, scope);
+}
+
 fn agent_message_update_event(session_id: &str, turn_id: &str, item_id: &str, text: &str) -> BackendEvent {
     use vtcode_exec_events::{AgentMessageItem, ItemUpdatedEvent, ThreadEvent, ThreadItem, ThreadItemDetails};
 
@@ -565,6 +583,7 @@ mod option_popups;
 mod options_misc;
 mod output_surfaces;
 mod overlay_toggles;
+mod prompt_history;
 mod review_changes;
 mod review_diff_mode;
 mod review_output;

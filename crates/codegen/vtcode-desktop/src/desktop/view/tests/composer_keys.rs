@@ -230,6 +230,7 @@ fn enter_with_empty_history_picker_submits_the_draft(cx: &mut TestAppContext) {
         window.render_frame(cx);
     })
     .unwrap();
+    expect_recent_prompts_request(&mut requests, super::super::HistoryScope::Everywhere);
     let BackendCommand::Request { method, params } = requests.try_recv().expect("draft submits") else {
         panic!("expected submit");
     };

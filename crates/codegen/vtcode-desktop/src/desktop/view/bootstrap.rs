@@ -28,6 +28,7 @@ pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
     "ctrl-m",
     "ctrl-p",
     "ctrl-n",
+    "ctrl-s",
 ];
 
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
@@ -72,6 +73,9 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new("ctrl-m", OpenModelPicker, Some(key_context::COMPOSER)),
         KeyBinding::new("ctrl-p", HistoryPrevious, Some(key_context::COMPOSER)),
         KeyBinding::new("ctrl-n", HistoryNext, Some(key_context::COMPOSER)),
+        // CLI scope-cycle twin: opens history when closed, cycles the search
+        // scope while open. Ctrl+R keeps the palette toggle contract.
+        KeyBinding::new("ctrl-s", CycleHistoryScope, Some(key_context::DESKTOP)),
         KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("home", TranscriptFirst, Some(key_context::TRANSCRIPT)),
@@ -813,6 +817,10 @@ impl DesktopView {
             slash_commands: Vec::new(),
             resources_loading: false,
             resources_loaded: false,
+            history_scope: HistoryScope::default(),
+            recent_prompts: Vec::new(),
+            recent_prompts_scope: None,
+            recent_prompts_loading: false,
             palette_groups: Vec::new(),
             config_page_open: false,
             config_page_group: None,

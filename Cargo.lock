@@ -12380,6 +12380,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "url",
+ "vtcode-commons",
  "vtcode-exec-events",
 ]
 
