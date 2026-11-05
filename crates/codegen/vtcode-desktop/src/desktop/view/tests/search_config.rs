@@ -536,7 +536,7 @@ fn command_palette_refreshes_recent_threads_on_demand(cx: &mut TestAppContext) {
         panic!("expected recent thread refresh request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
-    assert_eq!(params, json!({}));
+    assert_eq!(params, json!({ "limit": SESSION_LIST_PAGE_SIZE }));
 }
 
 #[gpui_kit::test]

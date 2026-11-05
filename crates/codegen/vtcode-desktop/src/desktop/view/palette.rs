@@ -628,7 +628,10 @@ impl DesktopView {
             PaletteAction::ChooseModel => self.open_model_palette(window, cx),
             PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
             PaletteAction::RefreshSessions => {
-                let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+                // Refresh keeps the expanded depth: collapsing an explicit
+                // "show more" would discard rows the user asked to see.
+                let limit = self.session_list_limit;
+                let _queued = self.request_session_list(limit);
             }
             PaletteAction::RefreshFiles => self.refresh_files(cx),
             PaletteAction::BrowseThreads => self.open_thread_browser(window, cx),

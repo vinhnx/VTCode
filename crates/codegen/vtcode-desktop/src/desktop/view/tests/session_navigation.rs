@@ -526,3 +526,194 @@ fn vim_toggle_persists_and_reset_restores_keyboard_defaults(cx: &mut TestAppCont
         "the persisted toggle survives reload"
     );
 }
+
+fn session_list_response(rows: usize) -> BackendEvent {
+    let sessions: Vec<_> = (0..rows).map(|n| session_fixture(&format!("thread-{n}"))).collect();
+    BackendEvent::Response {
+        method: vtcode_desktop_protocol::method::SESSION_LIST.into(),
+        result: Some(serde_json::to_value(sessions).unwrap()),
+        error: None,
+    }
+}
+
+#[gpui_kit::test]
+fn session_list_paging_grows_by_page_and_caps_at_max(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            assert_eq!(view.session_list_limit, SESSION_LIST_PAGE_SIZE, "fresh views start paged");
+            assert!(!view.session_list_has_older);
+            view.show_more_sessions(cx);
+            assert_eq!(view.session_list_limit, SESSION_LIST_PAGE_SIZE, "a failed send keeps the requested limit");
+
+            view.backend = Some(BackendHandle { commands });
+            // Below the page: nothing more to load.
+            view.handle_backend_event(session_list_response(7), cx);
+            assert!(!view.session_list_has_older);
+
+            // An exact-limit hit below the maximum offers the next page.
+            view.handle_backend_event(session_list_response(SESSION_LIST_PAGE_SIZE), cx);
+            assert!(view.session_list_has_older);
+            view.show_more_sessions(cx);
+            assert_eq!(view.session_list_limit, 2 * SESSION_LIST_PAGE_SIZE);
+
+            // A partial page closes the affordance again.
+            view.handle_backend_event(session_list_response(60), cx);
+            assert!(!view.session_list_has_older, "a short page reads as complete");
+
+            // At the maximum the affordance stays hidden even on a full page.
+            view.session_list_limit = vtcode_desktop_protocol::MAX_SESSION_LIST_LIMIT;
+            view.handle_backend_event(session_list_response(vtcode_desktop_protocol::MAX_SESSION_LIST_LIMIT), cx);
+            assert!(!view.session_list_has_older, "capped at the maximum");
+
+            // Over-limit answers from older servers read as complete.
+            view.session_list_limit = SESSION_LIST_PAGE_SIZE;
+            view.handle_backend_event(session_list_response(SESSION_LIST_PAGE_SIZE + 10), cx);
+            assert!(!view.session_list_has_older, "over-limit answers read as complete");
+        });
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("show more requests the next page")
+    else {
+        panic!("show more must send session/list, not stop");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
+    assert_eq!(params, json!({ "limit": 2 * SESSION_LIST_PAGE_SIZE }));
+    assert!(requests.try_recv().is_err(), "one page request queues one command");
+}
+
+#[gpui_kit::test]
+fn session_list_footer_survives_local_create_and_delete(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.session_list_limit = SESSION_LIST_PAGE_SIZE;
+            view.handle_backend_event(session_list_response(SESSION_LIST_PAGE_SIZE), cx);
+            assert!(view.session_list_has_older);
+
+            // A local create grows loaded and total together: older pages stay.
+            let created = serde_json::to_value(session_fixture("thread-new")).unwrap();
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_CREATE.into(),
+                    result: Some(created),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.sessions.len(), SESSION_LIST_PAGE_SIZE + 1);
+            assert!(view.session_list_has_older, "a create preserves the older pages");
+
+            // A local delete shrinks both together: still more below.
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_DELETE.into(),
+                    result: Some(json!({ "sessionId": "thread-new", "deleted": true })),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.sessions.len(), SESSION_LIST_PAGE_SIZE);
+            assert!(view.session_list_has_older, "a delete preserves the older pages");
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn session_list_more_footer_renders_on_both_surfaces_and_requests_next_page(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        let ids: Vec<String> = (0..SESSION_LIST_PAGE_SIZE).map(|n| format!("thread-{n}")).collect();
+        let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+        seed_threads(&view, cx, &refs);
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.session_list_limit = SESSION_LIST_PAGE_SIZE;
+            view.session_list_has_older = true;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("session-list-more").is_some(), "a full page offers more in the sidebar");
+
+        // The browser shares the affordance while the page is exactly full;
+        // clicking grows the limit, which hides both footers until the next
+        // page lands.
+        view.update(cx, |view, cx| view.open_thread_browser(window, cx));
+        window.render_frame(cx);
+        assert!(window.try_find("browser-list-more").is_some(), "the browser shares the affordance");
+        window.click("browser-list-more", cx);
+        assert_eq!(view.read(cx).session_list_limit, 2 * SESSION_LIST_PAGE_SIZE);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("footer click requests the next page")
+    else {
+        panic!("footer click must send session/list, not stop");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
+    assert_eq!(params, json!({ "limit": 2 * SESSION_LIST_PAGE_SIZE }));
+}
+
+#[gpui_kit::test]
+fn workspace_change_resets_thread_paging_while_restart_keeps_depth(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            let alpha = PathBuf::from("/work/alpha");
+            view.prepare_workspace(&alpha, cx);
+            assert_eq!(view.session_list_limit, SESSION_LIST_PAGE_SIZE, "a fresh workspace starts paged");
+            view.session_list_limit = 2 * SESSION_LIST_PAGE_SIZE;
+            view.prepare_workspace(&alpha, cx);
+            assert_eq!(
+                view.session_list_limit,
+                2 * SESSION_LIST_PAGE_SIZE,
+                "a same-workspace restart keeps the expanded depth"
+            );
+            view.prepare_workspace(&PathBuf::from("/work/beta"), cx);
+            assert_eq!(view.session_list_limit, SESSION_LIST_PAGE_SIZE, "a new workspace starts paged");
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn discovery_rerequests_the_current_thread_depth(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.session_list_limit = 2 * SESSION_LIST_PAGE_SIZE;
+            view.initialize_backend(BackendHandle { commands });
+            let _initialize = requests.try_recv().unwrap();
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::INITIALIZE.into(),
+                    result: Some(json!({
+                        "protocol": vtcode_desktop_protocol::PROTOCOL_VERSION,
+                        "workspace": "/workspace",
+                        "serverVersion": "test",
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    for expected in [
+        vtcode_desktop_protocol::method::CONFIG_DISCOVER,
+        vtcode_desktop_protocol::method::CONFIG_SETTINGS_READ,
+        vtcode_desktop_protocol::method::CONFIG_MODELS,
+    ] {
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("discovery")
+        };
+        assert_eq!(method, expected);
+    }
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("discovery lists threads") else {
+        panic!("discovery must send session/list, not stop");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
+    assert_eq!(params, json!({ "limit": 2 * SESSION_LIST_PAGE_SIZE }));
+}

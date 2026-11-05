@@ -730,3 +730,25 @@ fn recent_prompts_params_default_to_project_scope_and_round_trip() {
     let decoded: RecentPrompt = serde_json::from_value(serde_json::to_value(&prompt).unwrap()).unwrap();
     assert_eq!(decoded, prompt);
 }
+
+#[test]
+fn session_list_params_default_to_max_and_clamp() {
+    let defaulted: SessionListParams = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert_eq!(defaulted.limit, None);
+    assert_eq!(defaulted.effective_limit(), MAX_SESSION_LIST_LIMIT);
+
+    for (limit, expected) in [
+        (Some(0), 1),
+        (Some(1), 1),
+        (Some(50), 50),
+        (Some(10_000), MAX_SESSION_LIST_LIMIT),
+    ] {
+        let params = SessionListParams { limit };
+        assert_eq!(params.effective_limit(), expected, "limit {limit:?}");
+        let decoded: SessionListParams = serde_json::from_value(serde_json::to_value(&params).unwrap()).unwrap();
+        assert_eq!(decoded, params);
+    }
+
+    // Lenient shape: old clients send `{}`, future fields must not break old servers.
+    assert!(serde_json::from_value::<SessionListParams>(serde_json::json!({ "limit": 50, "other": 1 })).is_ok());
+}

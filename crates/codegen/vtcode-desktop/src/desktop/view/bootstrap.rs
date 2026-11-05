@@ -694,6 +694,8 @@ impl DesktopView {
             event_tx,
             event_drain_task: None,
             sessions: Vec::new(),
+            session_list_limit: SESSION_LIST_PAGE_SIZE,
+            session_list_has_older: false,
             selected_session_id: None,
             open_tabs: Vec::new(),
             tab_strip_focus: cx.focus_handle().tab_stop(true),

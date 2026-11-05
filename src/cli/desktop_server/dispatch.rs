@@ -572,7 +572,9 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             Ok((serde_json::to_value(snapshot)?, false))
         }
         method::SESSION_LIST => {
-            let sessions = list_recent_session_summaries_in_workspace(MAX_SESSIONS, &context.workspace).await?;
+            let params: protocol::SessionListParams = parse_params(&request.params)?;
+            let sessions =
+                list_recent_session_summaries_in_workspace(params.effective_limit(), &context.workspace).await?;
             let sessions = sessions
                 .into_iter()
                 .map(|session| SessionSummary {

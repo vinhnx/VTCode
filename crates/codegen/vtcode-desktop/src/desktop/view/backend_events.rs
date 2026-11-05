@@ -404,13 +404,20 @@ impl DesktopView {
                                     protocol::method::CONFIG_DISCOVER,
                                     protocol::method::CONFIG_SETTINGS_READ,
                                     protocol::method::CONFIG_MODELS,
-                                    protocol::method::SESSION_LIST,
                                 ] {
                                     if !self.request(method, json!({})) {
                                         self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
                                         discovery_queued = false;
                                         break;
                                     }
+                                }
+                                // The page resets on workspace change in
+                                // `prepare_workspace`; discovery re-requests the
+                                // current depth either way.
+                                let limit = self.session_list_limit;
+                                if discovery_queued && !self.request_session_list(limit) {
+                                    self.error = Some(rust_i18n::t!(i18n::REQUEST_QUEUE_UNAVAILABLE).to_string());
+                                    discovery_queued = false;
                                 }
                                 if discovery_queued {
                                     self.request_webmcp_status();
@@ -542,40 +549,7 @@ impl DesktopView {
                     protocol::method::SESSION_DELETE => self.apply_session_delete(result, cx),
                     protocol::method::WORKTREE_LIST => self.apply_worktree_list(result),
                     protocol::method::WORKTREE_REMOVE => self.apply_worktree_remove(result, cx),
-                    protocol::method::SESSION_LIST => {
-                        match serde_json::from_value::<Vec<SessionSummary>>(result) {
-                            Ok(mut refreshed) => {
-                                let mut session_ids = HashSet::with_capacity(refreshed.len());
-                                let has_invalid_session_id = refreshed.iter().any(|session| {
-                                    session.session_id.trim().is_empty()
-                                        || !session_ids.insert(session.session_id.as_str())
-                                });
-                                if has_invalid_session_id {
-                                    self.fail_pending_navigation();
-                                    self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
-                                } else {
-                                    // Keep a locally derived title when the archive has
-                                    // not persisted its own preview yet.
-                                    for session in &mut refreshed {
-                                        if session.title.as_deref().is_none_or(str::is_empty) {
-                                            session.title = self
-                                                .sessions
-                                                .iter()
-                                                .find(|existing| existing.session_id == session.session_id)
-                                                .and_then(|existing| existing.title.clone());
-                                        }
-                                    }
-                                    self.sessions = refreshed;
-                                    self.prune_tabs();
-                                    self.continue_pending_workspace_navigation(cx);
-                                }
-                            }
-                            Err(_) => {
-                                self.fail_pending_navigation();
-                                self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
-                            }
-                        }
-                    }
+                    protocol::method::SESSION_LIST => self.apply_session_list(result, cx),
                     protocol::method::SESSION_CREATE => {
                         let first_submission = self.first_submission.take();
                         if let Some(session) = serde_json::from_value::<SessionSummary>(result)

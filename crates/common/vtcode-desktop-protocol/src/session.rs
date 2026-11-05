@@ -259,6 +259,27 @@ pub struct SessionIdParams {
     pub session_id: String,
 }
 
+/// Parameters for listing recent sessions. The limit is a soft page size:
+/// omitted values keep the historical full-list behavior.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionListParams {
+    /// Maximum sessions returned, newest first.
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+impl SessionListParams {
+    /// Clamp the requested limit into `1..=MAX_SESSION_LIST_LIMIT`.
+    #[must_use]
+    pub fn effective_limit(&self) -> usize {
+        self.limit.unwrap_or(MAX_SESSION_LIST_LIMIT).clamp(1, MAX_SESSION_LIST_LIMIT)
+    }
+}
+
+/// Maximum sessions returned by one `session/list` request.
+pub const MAX_SESSION_LIST_LIMIT: usize = 200;
+
 /// Parameters for listing recent cross-session prompts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

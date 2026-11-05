@@ -454,7 +454,8 @@ impl DesktopView {
                     .track_scroll(&self.session_scroll),
                 )
                 .child(Scrollbar::vertical(&self.session_scroll)),
-        );
+            )
+            .when(self.session_list_has_older, |bar| bar.child(self.render_session_list_more("session-list-more", cx)));
 
         let status = if self.ui_progress_active && !self.running && self.interaction.is_none() {
             rust_i18n::t!("app.service.running").to_string()

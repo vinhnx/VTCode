@@ -455,6 +455,13 @@ struct DesktopView {
     event_tx: BackendEventSender,
     event_drain_task: Option<Task<()>>,
     sessions: Vec<SessionSummary>,
+    /// Limit of the last `session/list` request.
+    session_list_limit: usize,
+    /// Whether the last page filled exactly below the maximum, so older
+    /// threads may exist beyond it. Set only where a page lands
+    /// (`apply_session_list`, `prepare_workspace`); local creates/deletes
+    /// shift loaded and total counts equally, so they preserve it.
+    session_list_has_older: bool,
     selected_session_id: Option<String>,
     /// Open-thread tabs in first-open order; selection stays in
     /// `selected_session_id`. Tabs are window-local shortcuts — closing one

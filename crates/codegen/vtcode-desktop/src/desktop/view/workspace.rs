@@ -442,6 +442,7 @@ impl DesktopView {
         self.remember_workspace(workspace);
         self.pending_workspace = None;
         self.sessions.clear();
+        self.session_list_has_older = false;
         self.selected_session_id = None;
         self.reset_session_state();
         if self.pending_navigation.is_none() {
@@ -460,6 +461,9 @@ impl DesktopView {
         if !same_workspace {
             self.config_target = protocol::ConfigTarget::Workspace;
             self.config_write_notice = None;
+            // A new workspace starts paged; same-workspace restarts keep the
+            // expanded depth so refreshes never prune tabs past the first page.
+            self.session_list_limit = SESSION_LIST_PAGE_SIZE;
         }
         self.service_info = None;
         self.pending_permission_choice = None;

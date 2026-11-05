@@ -154,7 +154,8 @@ impl DesktopView {
     fn open_storage_review(&mut self, cx: &mut Context<Self>) {
         self.storage.view = StorageView::ReviewSessions;
         self.storage.error = None;
-        let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+        // Deletion review manages the full set, not the visible page.
+        let _queued = self.request_session_list(protocol::MAX_SESSION_LIST_LIMIT);
         cx.notify();
     }
 

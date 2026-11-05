@@ -81,7 +81,6 @@ use restore::{RestoredInspectorHistory, read_restored_spool_page, restored_histo
 #[cfg(test)]
 use restore::{read_restored_spool_text, restore_spooled_tool_output};
 
-const MAX_SESSIONS: usize = 200;
 const MAX_RESTORED_MESSAGES: usize = protocol::MAX_SESSION_HISTORY_PAGE_MESSAGES;
 const MAX_RESTORED_MESSAGE_BYTES: usize = 4 * 1024;
 const MAX_RESTORED_HISTORY_BYTES: usize = 700 * 1024;

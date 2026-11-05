@@ -418,7 +418,20 @@ impl DesktopView {
                                 .on_click(cx.listener(|view, _, window, cx| view.close_browser(window, cx))),
                         ),
                 ))
-                .child(div().flex_1().min_h_0().w_full().flex().flex_col().px_3().pb_3().child(content)),
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .px_3()
+                        .pb_3()
+                        .child(content)
+                        .when(self.session_list_has_older, |panel| {
+                            panel.child(self.render_session_list_more("browser-list-more", cx))
+                        }),
+                ),
         )
         .into_any_element()
     }

@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// First page of the recent-thread list; "show more" grows by the same step.
+pub(super) const SESSION_LIST_PAGE_SIZE: usize = 50;
+
 /// Retain the exact submitted content until the service accepts it.
 #[derive(Debug)]
 pub(super) struct SubmissionDraft {
@@ -789,6 +792,92 @@ impl DesktopView {
                 .try_send(BackendCommand::Request { method: method.to_string(), params })
                 .is_ok()
         })
+    }
+
+    /// Request the recent-thread list with an explicit page limit, newest
+    /// first. Records the limit only when the request queues, so a failed
+    /// send never desynchronizes the "show more" affordance.
+    pub(super) fn request_session_list(&mut self, limit: usize) -> bool {
+        if self.request(protocol::method::SESSION_LIST, json!({ keys::LIMIT: limit })) {
+            self.session_list_limit = limit;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Grow the thread list by one page. The service answers requests in
+    /// arrival order, so rapid clicks apply in limit order and never shrink
+    /// the list.
+    pub(super) fn show_more_sessions(&mut self, cx: &mut Context<Self>) {
+        let limit = self
+            .session_list_limit
+            .saturating_add(SESSION_LIST_PAGE_SIZE)
+            .min(protocol::MAX_SESSION_LIST_LIMIT);
+        let _queued = self.request_session_list(limit);
+        cx.notify();
+    }
+
+    /// Apply a `session/list` page, replacing the cached rows. Titles the
+    /// archive has not persisted yet survive from the previous page.
+    pub(super) fn apply_session_list(&mut self, result: Value, cx: &mut Context<Self>) {
+        match serde_json::from_value::<Vec<SessionSummary>>(result) {
+            Ok(mut refreshed) => {
+                let mut session_ids = HashSet::with_capacity(refreshed.len());
+                let has_invalid_session_id = refreshed.iter().any(|session| {
+                    session.session_id.trim().is_empty() || !session_ids.insert(session.session_id.as_str())
+                });
+                if has_invalid_session_id {
+                    self.fail_pending_navigation();
+                    self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
+                } else {
+                    // Keep a locally derived title when the archive has
+                    // not persisted its own preview yet.
+                    for session in &mut refreshed {
+                        if session.title.as_deref().is_none_or(str::is_empty) {
+                            session.title = self
+                                .sessions
+                                .iter()
+                                .find(|existing| existing.session_id == session.session_id)
+                                .and_then(|existing| existing.title.clone());
+                        }
+                    }
+                    self.sessions = refreshed;
+                    // An exact-limit hit below the maximum may hide older
+                    // threads. An exact multiple costs one empty refetch;
+                    // over-limit answers (older servers ignore the limit)
+                    // read as complete.
+                    self.session_list_has_older = self.sessions.len() == self.session_list_limit
+                        && self.session_list_limit < protocol::MAX_SESSION_LIST_LIMIT;
+                    self.prune_tabs();
+                    self.continue_pending_workspace_navigation(cx);
+                }
+            }
+            Err(_) => {
+                self.fail_pending_navigation();
+                self.error = Some(rust_i18n::t!("app.service.invalid_session_list").to_string());
+            }
+        }
+    }
+
+    /// Shared "show more threads" footer for the sidebar list and the thread
+    /// browser. English literal: no catalog key covers thread paging, and the
+    /// tab/session-row menus set the literal precedent for new chrome.
+    pub(super) fn render_session_list_more(&self, id: &'static str, cx: &Context<Self>) -> AnyElement {
+        div()
+            .w_full()
+            .flex()
+            .justify_center()
+            .py_1()
+            .child(
+                desktop_button(id)
+                    .label("Show more threads")
+                    .ghost()
+                    .small()
+                    .w_full()
+                    .on_click(cx.listener(|view, _, _, cx| view.show_more_sessions(cx))),
+            )
+            .into_any_element()
     }
 
     pub(super) fn clear_error(&mut self) {
