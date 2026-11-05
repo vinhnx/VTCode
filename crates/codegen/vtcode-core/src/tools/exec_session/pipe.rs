@@ -178,14 +178,15 @@ impl PipeSessionManager {
             let mut spool_hasher = Sha256::new();
             let mut spool_byte_count = 0_u64;
             let mut spool_lines = SpoolLineCounter::default();
+            // Reads can split a multibyte character; decode across chunk boundaries.
+            let mut utf8_decoder = vtcode_commons::Utf8StreamDecoder::new();
             loop {
                 match tokio::time::timeout(tokio::time::Duration::from_millis(15), output_rx.recv()).await {
                     Ok(Some(chunk)) => {
-                        // Keep the decoded text as a `Cow<str>` so that the
-                        // common case (valid UTF-8) borrows `chunk` with zero
-                        // allocation. `.into_owned()` would force a String copy
-                        // on every chunk even when the bytes are already valid.
-                        let text = String::from_utf8_lossy(&chunk);
+                        // `push_cow` borrows `chunk` with zero allocation in the
+                        // common case (nothing pending, valid UTF-8) and only
+                        // buffers a character split across reads.
+                        let text = utf8_decoder.push_cow(&chunk);
                         if let Some(file) = spool_file.as_mut() {
                             let sanitized = spool_redactor.push(&text);
                             if !sanitized.is_empty() {
@@ -209,8 +210,16 @@ impl PipeSessionManager {
                     Err(_) => continue,
                 }
             }
+            // A truncated final character becomes one U+FFFD rather than vanishing.
+            // Its bytes were already counted when they arrived, hence a raw count of 0.
+            let tail = utf8_decoder.finish();
+            if !tail.is_empty() {
+                output_clone.append(&tail, 0).await;
+                output_activity_tx.send_modify(|version| *version += 1);
+            }
             if let Some(file) = spool_file.as_mut() {
-                let sanitized = spool_redactor.finish();
+                let mut sanitized = spool_redactor.push(&tail);
+                sanitized.push_str(&spool_redactor.finish());
                 let write_failed = !sanitized.is_empty() && file.write_all(sanitized.as_bytes()).await.is_err();
                 if !write_failed && !sanitized.is_empty() {
                     spool_hasher.update(sanitized.as_bytes());

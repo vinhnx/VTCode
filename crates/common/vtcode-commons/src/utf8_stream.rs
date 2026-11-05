@@ -1,5 +1,7 @@
 //! Incremental UTF-8 decoding across chunk boundaries (network streams, pipe reads).
 
+use std::borrow::Cow;
+
 /// Incrementally decodes a byte stream into UTF-8 text.
 ///
 /// Chunks can split a multibyte code point (CJK, emoji, accented characters,
@@ -27,6 +29,18 @@ impl Utf8StreamDecoder {
         self.push_bytes(bytes, &mut out);
         // `push_bytes` only ever writes valid UTF-8, so this never allocates a lossy copy.
         String::from_utf8(out).unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned())
+    }
+
+    /// Like [`Utf8StreamDecoder::push`], but borrows `bytes` without copying when
+    /// nothing is pending and the chunk is valid UTF-8 (the common case for
+    /// process output), so hot read loops avoid a per-chunk allocation.
+    pub fn push_cow<'a>(&mut self, bytes: &'a [u8]) -> Cow<'a, str> {
+        if self.pending.is_empty()
+            && let Ok(text) = std::str::from_utf8(bytes)
+        {
+            return Cow::Borrowed(text);
+        }
+        Cow::Owned(self.push(bytes))
     }
 
     /// Appends `bytes` and writes the decodable UTF-8 prefix directly into
@@ -109,6 +123,18 @@ mod tests {
         // 0xFF is never a valid UTF-8 lead byte.
         let mut dec = Utf8StreamDecoder::new();
         assert_eq!(dec.push(&[b'a', 0xFF, b'b']), "a\u{FFFD}b");
+    }
+
+    #[test]
+    fn push_cow_borrows_valid_chunks_and_buffers_splits() {
+        let mut dec = Utf8StreamDecoder::new();
+        assert!(matches!(dec.push_cow("plain 世".as_bytes()), Cow::Borrowed("plain 世")));
+        // `界` = E7 95 8C split across chunks: nothing until complete, then owned.
+        assert_eq!(dec.push_cow(&[0xE7, 0x95]), "");
+        let completed = dec.push_cow(&[0x8C, b'!']);
+        assert!(matches!(completed, Cow::Owned(_)));
+        assert_eq!(completed, "界!");
+        assert!(dec.finish().is_empty());
     }
 
     #[test]

@@ -638,12 +638,14 @@ impl PtyManager {
             let mut spool_hasher = Sha256::new();
             let mut spool_byte_count = 0_u64;
             let mut spool_lines = SpoolLineCounter::default();
+            // Reads can split a multibyte character; decode across chunk boundaries.
+            let mut utf8_decoder = vtcode_commons::Utf8StreamDecoder::new();
 
             while let Some(chunk) = output_spool_rx.recv().await {
                 let Some(file) = spool_file.as_mut() else {
                     continue;
                 };
-                let text = String::from_utf8_lossy(&chunk);
+                let text = utf8_decoder.push_cow(&chunk);
                 let sanitized = spool_redactor.push(&text);
                 if !sanitized.is_empty() {
                     if file.write_all(sanitized.as_bytes()).await.is_err() {
@@ -658,7 +660,9 @@ impl PtyManager {
             }
 
             if let Some(file) = spool_file.as_mut() {
-                let sanitized = spool_redactor.finish();
+                // A truncated final character becomes one U+FFFD rather than vanishing.
+                let mut sanitized = spool_redactor.push(&utf8_decoder.finish());
+                sanitized.push_str(&spool_redactor.finish());
                 let write_failed = !sanitized.is_empty() && file.write_all(sanitized.as_bytes()).await.is_err();
                 if !write_failed && !sanitized.is_empty() {
                     spool_hasher.update(sanitized.as_bytes());
