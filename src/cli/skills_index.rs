@@ -80,17 +80,31 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
     Ok(())
 }
 
+/// Render a skill path for the index without machine-local prefixes: workspace
+/// skills relative to the workspace, user-scope skills under `~/`.
+fn index_display_path(path: &Path, workspace: &Path, home: Option<&Path>) -> String {
+    if let Ok(relative) = path.strip_prefix(workspace) {
+        return relative.display().to_string();
+    }
+    match home.and_then(|home| path.strip_prefix(home).ok()) {
+        Some(relative) => format!("~/{}", relative.display()),
+        None => path.display().to_string(),
+    }
+}
+
 /// Generate comprehensive skills index including all types of skills
 pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std::path::PathBuf> {
     use std::fmt::Write;
-    use vtcode_core::exec::skill_manager::SkillManager;
+    use vtcode_core::exec::skill_manager::{
+        SKILLS_INDEX_LINT_DIRECTIVE, SkillManager, finish_skills_index, push_index_table_header,
+    };
     use vtcode_core::skills::loader::EnhancedSkillLoader;
 
     let skill_manager = SkillManager::new(workspace);
     let mut loader = EnhancedSkillLoader::new(workspace.to_path_buf());
     let discovery_result = loader.discover_all_skills().await?;
 
-    let mut content = String::new();
+    let mut content = String::from(SKILLS_INDEX_LINT_DIRECTIVE);
     content.push_str("# Skills Index\n\n");
     content.push_str("This file lists all available skills for dynamic discovery.\n");
     content.push_str("Use `read_file` on individual skill directories for full documentation.\n\n");
@@ -105,8 +119,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
 
         if !discovery_result.skills.is_empty() {
             content.push_str("### Traditional Skills\n\n");
-            content.push_str("| Name | Description | Type |\n");
-            content.push_str("|------|-------------|------|\n");
+            push_index_table_header(&mut content, &["Name", "Description", "Type"]);
 
             for skill_ctx in &discovery_result.skills {
                 let manifest = skill_ctx.manifest();
@@ -126,8 +139,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
             .collect::<Vec<_>>();
         if !built_in_skills.is_empty() {
             content.push_str("### Built-In Command Skills\n\n");
-            content.push_str("| Name | Description | Slash Alias |\n");
-            content.push_str("|------|-------------|-------------|\n");
+            push_index_table_header(&mut content, &["Name", "Description", "Slash Alias"]);
 
             for skill_ctx in &built_in_skills {
                 let manifest = skill_ctx.manifest();
@@ -145,8 +157,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
 
         if !discovery_result.tools.is_empty() {
             content.push_str("### CLI Tool Skills\n\n");
-            content.push_str("| Name | Description | Executable |\n");
-            content.push_str("|------|-------------|------------|\n");
+            push_index_table_header(&mut content, &["Name", "Description", "Executable"]);
 
             for tool in &discovery_result.tools {
                 let desc = tool.description.replace('|', "\\|");
@@ -180,7 +191,8 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
                 );
             } else {
                 let skill_md = skill_ctx.path().join("SKILL.md");
-                let _ = writeln!(content, "- **Type**: Skill\n- **Path**: `{}`\n", skill_md.display());
+                let shown = index_display_path(&skill_md, workspace, dirs::home_dir().as_deref());
+                let _ = writeln!(content, "- **Type**: Skill\n- **Path**: `{shown}`\n");
             }
         }
 
@@ -191,8 +203,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
         }
     }
 
-    content.push_str("\n---\n");
-    content.push_str("*Generated automatically. Do not edit manually.*\n");
+    finish_skills_index(&mut content);
 
     let index_path = skill_manager.index_path();
     vtcode_core::utils::file_utils::write_file_with_context(&index_path, &content, "comprehensive skills index")
@@ -200,4 +211,25 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
         .with_context(|| format!("Failed to write comprehensive skills index: {}", index_path.display()))?;
 
     Ok(index_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::index_display_path;
+    use std::path::Path;
+
+    #[test]
+    fn index_paths_drop_machine_local_prefixes() {
+        let workspace = Path::new("/home/dev/repo");
+        let home = Some(Path::new("/home/dev"));
+        let cases = [
+            ("/home/dev/repo/.agents/skills/a/SKILL.md", ".agents/skills/a/SKILL.md"),
+            ("/home/dev/.agents/skills/b/SKILL.md", "~/.agents/skills/b/SKILL.md"),
+            ("/opt/skills/c/SKILL.md", "/opt/skills/c/SKILL.md"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(index_display_path(Path::new(input), workspace, home), expected);
+        }
+        assert_eq!(index_display_path(Path::new("/home/dev/x/SKILL.md"), workspace, None), "/home/dev/x/SKILL.md");
+    }
 }
