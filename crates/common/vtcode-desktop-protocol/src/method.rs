@@ -33,6 +33,10 @@ pub const TURN_SUBMIT: &str = "turn/submit";
 pub const TURN_CANCEL: &str = "turn/cancel";
 /// Pop the newest queued message back for editing.
 pub const TURN_QUEUE_TAKE_LATEST: &str = "turn/queue/take-latest";
+
+/// Reverse one completed turn's exact file changes.
+pub const TURN_UNDO: &str = "turn/undo";
+
 /// Force-terminate the selected session's foreground exec sessions.
 pub const EXEC_FORCE_CANCEL: &str = "session/exec/force-cancel";
 /// Move the selected session's foreground exec session to the background.

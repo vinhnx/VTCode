@@ -57,7 +57,11 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
                     context: None,
                     id: id.into(),
                     details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-                        changes: vec![FileUpdateChange { path: path.into(), kind: PatchChangeKind::Update }],
+                        changes: vec![FileUpdateChange {
+                            path: path.into(),
+                            kind: PatchChangeKind::Update,
+                            terminators_normalized: None,
+                        }],
                         status: PatchApplyStatus::Completed,
                         unified_diff: Some(patch.into()),
                         diff_incomplete: Some(false),
@@ -155,6 +159,7 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
             changes: vec![FileUpdateChange {
                 path: "src/app.rs".into(),
                 kind: PatchChangeKind::Update,
+                terminators_normalized: None,
             }],
             status: PatchApplyStatus::Completed,
             unified_diff: Some(patch.clone()),
@@ -233,6 +238,7 @@ fn changes_inspector_lists_structured_paths_without_diff_previews(cx: &mut TestA
                     changes: vec![vtcode_exec_events::FileUpdateChange {
                         path: "src/updated.rs".into(),
                         kind: vtcode_exec_events::PatchChangeKind::Update,
+                        terminators_normalized: None,
                     }],
                     status: vtcode_exec_events::PatchApplyStatus::Completed,
                     unified_diff: None,
@@ -264,6 +270,7 @@ fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: 
         .map(|index| FileUpdateChange {
             path: format!("src/file-{index}.rs"),
             kind: PatchChangeKind::Update,
+            terminators_normalized: None,
         })
         .collect::<Vec<_>>();
     let patch = (0..file_count)
@@ -511,6 +518,7 @@ fn restored_file_change(path: &str, patch: &str) -> vtcode_exec_events::FileChan
         changes: vec![vtcode_exec_events::FileUpdateChange {
             path: path.into(),
             kind: vtcode_exec_events::PatchChangeKind::Update,
+            terminators_normalized: None,
         }],
         status: vtcode_exec_events::PatchApplyStatus::Completed,
         unified_diff: Some(patch.into()),

@@ -113,6 +113,28 @@ impl DiffHunk {
         let new_side = self.lines.iter().filter(|line| line.kind != DiffLineKind::Deletion).count();
         old_side == old_count && new_side == new_count
     }
+
+    /// Concatenated old-side text (context plus deletions), terminators
+    /// preserved. Total: single pass over `lines`.
+    #[must_use]
+    pub fn old_side_text(&self) -> String {
+        self.lines
+            .iter()
+            .filter(|line| line.kind != DiffLineKind::Addition)
+            .map(|line| line.text.as_str())
+            .collect()
+    }
+
+    /// Concatenated new-side text (context plus additions), terminators
+    /// preserved. Total: single pass over `lines`.
+    #[must_use]
+    pub fn new_side_text(&self) -> String {
+        self.lines
+            .iter()
+            .filter(|line| line.kind != DiffLineKind::Deletion)
+            .map(|line| line.text.as_str())
+            .collect()
+    }
 }
 
 /// The semantic role of a line inside a hunk.

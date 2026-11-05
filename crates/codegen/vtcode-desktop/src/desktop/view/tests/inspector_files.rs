@@ -278,6 +278,7 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
                             changes: vec![FileUpdateChange {
                                 path: "src/app.rs".to_string(),
                                 kind: PatchChangeKind::Update,
+                                terminators_normalized: None,
                             }],
                             status: PatchApplyStatus::Completed,
                             unified_diff: Some(patch.clone()),

@@ -66,6 +66,7 @@ use pump::{publish_primary_agent_changed, publish_thread_event};
 use pump::{respond_to_interaction, send_runtime_notification, spawn_session_pump};
 mod turn_queue;
 use turn_queue::{EnqueueMode, dispatch_drained_turn, enqueue_turn, publish_queue_status_sync};
+mod turn_undo;
 mod webmcp;
 #[cfg(test)]
 use webmcp::install_session_runtime;

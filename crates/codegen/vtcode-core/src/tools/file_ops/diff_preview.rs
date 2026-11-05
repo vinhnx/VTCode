@@ -189,6 +189,10 @@ pub fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Valu
         missing_newline_hint: true,
         ..DiffOptions::default()
     };
+    // Unified formatting normalizes `\r\n` to `\n` with no marker, so the
+    // recorded bytes cannot reproduce the original exactly when a `\r` was
+    // present. Exact-reversal consumers refuse such recordings.
+    let normalized_terminators = previous.contains('\r') || after.contains('\r');
     let document = DiffDocument::between(previous, after, options.clone());
     // Tool responses carry a plain unified diff. The terminal/UI renderers
     // apply colors, gutters, and syntax highlighting after parsing the diff;
@@ -217,6 +221,7 @@ pub fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Valu
             "omitted_line_count": 0,
             "skipped": false,
             "is_empty": true,
+            "normalized_terminators": normalized_terminators,
             "additions": 0,
             "deletions": 0
         });
@@ -281,6 +286,7 @@ pub fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Valu
             "truncated": true,
             "omitted_line_count": omitted,
             "skipped": false,
+            "normalized_terminators": normalized_terminators,
             "additions": additions,
             "deletions": deletions
         })
@@ -306,6 +312,7 @@ pub fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Valu
             "truncated": false,
             "omitted_line_count": 0,
             "skipped": false,
+            "normalized_terminators": normalized_terminators,
             "additions": additions,
             "deletions": deletions
         })
@@ -490,5 +497,22 @@ mod tests {
             .find(|line| line.text.starts_with("new-519"))
             .expect("tail hunk line");
         assert_eq!(tail.new_line, Some(520));
+    }
+
+    #[test]
+    fn build_preview_flags_normalized_terminators() {
+        let clean = build_diff_preview("lf.txt", Some("a\nb\n"), "a\nB\n");
+        assert_eq!(clean["normalized_terminators"], false);
+
+        let crlf_before = build_diff_preview("crlf.txt", Some("a\r\nb\r\n"), "a\r\nB\r\n");
+        assert_eq!(crlf_before["normalized_terminators"], true);
+
+        // Converted endings still flag: the recorded old side no longer
+        // reproduces the original bytes.
+        let converted = build_diff_preview("conv.txt", Some("a\r\nb\r\n"), "a\nB\n");
+        assert_eq!(converted["normalized_terminators"], true);
+
+        let empty = build_diff_preview("empty.txt", Some(""), "");
+        assert_eq!(empty["normalized_terminators"], false);
     }
 }

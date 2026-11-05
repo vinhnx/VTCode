@@ -178,6 +178,7 @@ async fn exec_session_verification_launched_before_a_mutation_remains_stale() {
                 changes: vec![crate::exec::events::FileUpdateChange {
                     path: "parser.rs".into(),
                     kind: crate::exec::events::PatchChangeKind::Update,
+                    terminators_normalized: None,
                 }],
                 status: crate::exec::events::PatchApplyStatus::Completed,
                 unified_diff: None,

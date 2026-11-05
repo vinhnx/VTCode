@@ -20,6 +20,7 @@
 - Hidden model-only history rows retain archive indices; only system rows may be omitted from the visible transcript.
 - Shared scalar wire values (method names, sentinel ids like `SESSION_START_TURN_ID`) live as `pub const` here
   so the service and client reference one definition.
+- Bump `PROTOCOL_VERSION` minor for additive methods/fields (range-negotiated); major only for breaking changes.
 - The live event channel (`live_event_channel`) coalesces under saturation: snapshots replace per item,
   plan deltas merge, ordered events are only dropped when nothing coalescable remains. A slow consumer
   must never fail the producing turn; only a dropped consumer half is fatal.

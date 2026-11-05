@@ -308,6 +308,11 @@ pub struct FileUpdateChange {
     pub path: String,
     /// Type of change applied to the file.
     pub kind: PatchChangeKind,
+    /// Whether the recorded preview normalized line endings (a `\r` was
+    /// present, so the recorded bytes cannot reproduce the original
+    /// exactly). `None` means unknown (legacy events predating the flag).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminators_normalized: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -320,7 +325,7 @@ pub enum PatchApplyStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PatchChangeKind {

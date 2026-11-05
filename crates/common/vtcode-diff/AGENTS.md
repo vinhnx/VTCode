@@ -10,7 +10,7 @@
 
 ## Modules
 
-`types.rs` public vocabulary + inherent constructors | `compute.rs` `DiffDocument` construction | `parse.rs` unified header/metadata parsing | `format.rs` unified text + numbering | `display.rs` semantic display lines + side-by-side pairing | `intraline.rs` bounded char/word refinement | `layout.rs` semantic row layout | `adapters.rs` feature-gated ANSI/Ratatui renderers | `lib.rs` facade re-exports
+`types.rs` public vocabulary + inherent constructors | `compute.rs` `DiffDocument` construction | `parse.rs` unified header/metadata parsing | `format.rs` unified text + numbering | `display.rs` semantic display lines + side-by-side pairing | `intraline.rs` bounded char/word refinement | `layout.rs` semantic row layout | `reverse.rs` strict per-file splitting + exact reverse application (refuses lossy input) | `adapters.rs` feature-gated ANSI/Ratatui renderers | `lib.rs` facade re-exports
 
 ## Conventions
 

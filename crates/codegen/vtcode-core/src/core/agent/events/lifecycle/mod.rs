@@ -113,7 +113,11 @@ pub fn file_change_completed_event(
             Some("deleted" | "removed") => PatchChangeKind::Delete,
             _ => PatchChangeKind::Update,
         };
-        changes.push(FileUpdateChange { path: path.to_owned(), kind });
+        changes.push(FileUpdateChange {
+            path: path.to_owned(),
+            kind,
+            terminators_normalized: preview.get("normalized_terminators").and_then(Value::as_bool),
+        });
         diff_incomplete |= preview.get("truncated").and_then(Value::as_bool) == Some(true)
             || preview.get("skipped").and_then(Value::as_bool) == Some(true)
             || preview.get("content").and_then(Value::as_str).is_none();
@@ -144,6 +148,7 @@ pub fn file_change_completed_event(
             changes.push(FileUpdateChange {
                 path: path.to_owned(),
                 kind: PatchChangeKind::Update,
+                terminators_normalized: None,
             });
         }
     }

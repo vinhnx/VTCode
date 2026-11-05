@@ -514,6 +514,7 @@ fn session_transitions_clear_runtime_projections_and_model_switch_preserves_the_
                         changes: vec![vtcode_exec_events::FileUpdateChange {
                             path: "old.rs".into(),
                             kind: vtcode_exec_events::PatchChangeKind::Update,
+                            terminators_normalized: None,
                         }],
                         status: vtcode_exec_events::PatchApplyStatus::Completed,
                         unified_diff: Some("--- a/old.rs\n+++ b/old.rs\n@@ -1 +1 @@\n-before\n+after\n".into()),

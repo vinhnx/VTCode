@@ -687,3 +687,174 @@ impl SwarmRng {
         }
     }
 }
+
+fn reverse_hunks(diff: &str) -> Vec<DiffHunk> {
+    DiffDocument::from_unified(diff).expect("fixture parses").hunks
+}
+
+#[test]
+fn reverse_single_hunk_restores_pre_image() {
+    let old = "alpha\nbravo old\ncharlie\n";
+    let current = "alpha\nbravo new\ncharlie\n";
+    let hunks = reverse_hunks("@@ -1,3 +1,3 @@\n alpha\n-bravo old\n+bravo new\n charlie\n");
+    assert_eq!(reverse_apply_hunks(current, &hunks).expect("reverses"), old);
+}
+
+#[test]
+fn reverse_multi_hunk_preserves_later_edit_between_spans() {
+    // The turn changed the first and last lines; a later edit inserted
+    // `mid later` between them. Reversal restores the turn's lines and
+    // keeps the unrelated later edit (asymmetric: insertion, not edit).
+    let current = "first new\nmid later\nlast new\n";
+    let hunks = reverse_hunks("@@ -1,1 +1,1 @@\n-first old\n+first new\n@@ -3,1 +3,1 @@\n-last old\n+last new\n");
+    assert_eq!(reverse_apply_hunks(current, &hunks).expect("reverses"), "first old\nmid later\nlast old\n");
+}
+
+#[test]
+fn reverse_refuses_later_edit_inside_span() {
+    let hunks = reverse_hunks("@@ -1,3 +1,3 @@\n alpha\n-bravo old\n+bravo new\n charlie\n");
+    // Same shape as the happy path, but the recorded line was edited after
+    // the turn: exact content no longer matches.
+    let edited = "alpha\nbravo new plus more\ncharlie\n";
+    assert_eq!(reverse_apply_hunks(edited, &hunks), Err(ReverseApplyError::NoMatch { hunk: 0 }));
+}
+
+#[test]
+fn reverse_refuses_ambiguous_repeated_block() {
+    // The new-side block occurs twice; reversing would guess.
+    let hunks = reverse_hunks("@@ -1,1 +1,1 @@\n-dup old\n+dup new\n");
+    let current = "dup new\ndup new\n";
+    assert_eq!(reverse_apply_hunks(current, &hunks), Err(ReverseApplyError::Ambiguous { hunk: 0 }));
+}
+
+#[test]
+fn reverse_refuses_empty_new_side_hunk() {
+    let hunks = reverse_hunks("@@ -1,2 +1,0 @@\n-gone one\n-gone two\n");
+    assert_eq!(reverse_apply_hunks("anything\n", &hunks), Err(ReverseApplyError::EmptyNewSide { hunk: 0 }));
+}
+
+#[test]
+fn reverse_refuses_overlapping_out_of_order_spans() {
+    // Contrived hunks whose new-side blocks nest: hunk order cannot map
+    // onto the file in one left-to-right pass.
+    let hunks = reverse_hunks("@@ -1,1 +1,2 @@\n same\n+inner new\n@@ -2,1 +2,2 @@\n same\n+inner new\n");
+    let current = "same\ninner new\n";
+    // Each block matches once, but both matches start at line 0: overlap.
+    assert_eq!(reverse_apply_hunks(current, &hunks), Err(ReverseApplyError::OverlappingSpans));
+}
+
+#[test]
+fn reverse_refuses_empty_hunks_and_oversized_content() {
+    assert_eq!(reverse_apply_hunks("x\n", &[]), Err(ReverseApplyError::EmptyDiff));
+    let hunks = reverse_hunks("@@ -1,1 +1,1 @@\n-a\n+b\n");
+    let big = "b\n".repeat(MAX_REVERSE_FILE_BYTES);
+    assert_eq!(reverse_apply_hunks(&big, &hunks), Err(ReverseApplyError::TooLarge));
+}
+
+#[test]
+fn reverse_preserves_trailing_newline_fidelity() {
+    // No-newline-marker diffs are refused at split time; a clean diff
+    // keeps the terminator exactly (file without trailing newline, both
+    // sides bare on the final line).
+    let hunks = reverse_hunks("@@ -1,2 +1,2 @@\n keep\n-old tail\n+new tail\n");
+    assert_eq!(hunks[0].new_side_text(), "keep\nnew tail\n");
+    let current = "keep\nnew tail";
+    assert_eq!(reverse_apply_hunks(current, &hunks), Err(ReverseApplyError::NoMatch { hunk: 0 }));
+    assert_eq!(reverse_apply_hunks("keep\nnew tail\n", &hunks).expect("reverses"), "keep\nold tail\n");
+}
+
+#[test]
+fn split_git_style_multi_file_sections() {
+    let files = split_unified_files(
+        "diff --git a/one.rs b/one.rs\nindex 111..222 100644\n--- a/one.rs\n+++ b/one.rs\n@@ -1,1 +1,1 @@\n-old one\n+new one\ndiff --git a/two.rs b/two.rs\n--- a/two.rs\n+++ b/two.rs\n@@ -1,1 +1,1 @@\n-old two\n+new two\n",
+    )
+    .expect("splits");
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].old_path.as_deref(), Some("one.rs"));
+    assert_eq!(files[0].new_path.as_deref(), Some("one.rs"));
+    assert_eq!(files[0].hunks.len(), 1);
+    assert_eq!(files[1].old_path.as_deref(), Some("two.rs"));
+    assert_eq!(files[1].hunks.len(), 1);
+    let restored = reverse_apply_hunks("new two\n", &files[1].hunks).expect("reverses");
+    assert_eq!(restored, "old two\n");
+}
+
+#[test]
+fn split_bare_header_sections_without_git_lines() {
+    let files = split_unified_files(
+        "--- a/notes.md\n+++ b/notes.md\n@@ -1,1 +1,2 @@\n keep\n+added\n--- a/main.rs\n+++ b/main.rs\n@@ -1,1 +1,1 @@\n-was\n+now\n",
+    )
+    .expect("splits");
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].new_path.as_deref(), Some("notes.md"));
+    assert_eq!(files[1].new_path.as_deref(), Some("main.rs"));
+}
+
+#[test]
+fn split_dev_null_paths_for_add_and_delete() {
+    let files = split_unified_files(
+        "--- /dev/null\n+++ b/fresh.rs\n@@ -0,0 +1,1 @@\n+brand new\n--- a/stale.rs\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-gone\n",
+    )
+    .expect("splits");
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].old_path, None);
+    assert_eq!(files[0].new_path.as_deref(), Some("fresh.rs"));
+    assert_eq!(files[0].hunks[0].new_side_text(), "brand new\n");
+    assert_eq!(files[1].old_path.as_deref(), Some("stale.rs"));
+    assert_eq!(files[1].new_path, None);
+    assert_eq!(files[1].hunks[0].old_side_text(), "gone\n");
+}
+
+#[test]
+fn split_ignores_header_like_body_lines_inside_hunks() {
+    // Deleted `-- separator` and added `++ counts` lines render as `---`
+    // / `+++` at column zero but must not split the section.
+    let files = split_unified_files(
+        "--- a/doc.md\n+++ b/doc.md\n@@ -1,3 +1,3 @@\n title\n--- separator\n-aaa\n+++ counts\n+bbb\n tail\n",
+    );
+    // The hunk above is malformed (5 body lines for a 3/3 header): the
+    // strict section parser must reject it rather than split mid-hunk.
+    assert!(files.is_err());
+    let files = split_unified_files(
+        "--- a/doc.md\n+++ b/doc.md\n@@ -1,4 +1,4 @@\n title\n--- separator\n-aaa\n+++ counts\n+bbb\n tail\n",
+    )
+    .expect("splits");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].new_path.as_deref(), Some("doc.md"));
+    // Sanity: the header-like lines parsed as body, so reversal works.
+    let current = "title\n++ counts\nbbb\ntail\n";
+    assert_eq!(reverse_apply_hunks(current, &files[0].hunks).expect("reverses"), "title\n-- separator\naaa\ntail\n");
+}
+
+#[test]
+fn split_refuses_lossy_and_hunkless_sections() {
+    assert!(split_unified_files("--- a/f\n+++ b/f\n@@ -1,1 +1,1 @@\n-a\n+b\n\\ No newline at end of file\n").is_err());
+    assert!(split_unified_files("--- a/f\n+++ b/f\n@@ -1,5 +1,5 @@\n a\n... 3 lines omitted ...\n b\n").is_err());
+    assert!(split_unified_files("diff --git a/bin b/bin\nBinary files a/bin and b/bin differ\n").is_err());
+    assert!(split_unified_files("diff --git a/f b/f\nold mode 100644\nnew mode 100755\n").is_err());
+}
+
+#[test]
+fn split_headerless_single_file_yields_bare_section() {
+    let files = split_unified_files("@@ -1,1 +1,1 @@\n-was\n+now\n").expect("splits");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].old_path, None);
+    assert_eq!(files[0].new_path, None);
+    assert_eq!(reverse_apply_hunks("now\n", &files[0].hunks).expect("reverses"), "was\n");
+}
+
+#[test]
+fn split_tolerates_omitted_marker_like_content_lines() {
+    // A context line whose content reads like an omitted-rows marker is
+    // file content (body-prefixed), not a lossy marker.
+    let files = split_unified_files(
+        "--- a/notes.md\n+++ b/notes.md\n@@ -1,3 +1,3 @@\n ... 3 lines omitted ...\n-old\n+new\n tail\n",
+    )
+    .expect("content lines are not markers");
+    assert_eq!(files.len(), 1);
+    let current = "... 3 lines omitted ...\nnew\ntail\n";
+    assert_eq!(
+        reverse_apply_hunks(current, &files[0].hunks).expect("reverses"),
+        "... 3 lines omitted ...\nold\ntail\n"
+    );
+}

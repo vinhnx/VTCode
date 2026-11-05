@@ -829,6 +829,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             .await?;
             Ok((serde_json::to_value(accepted)?, false))
         }
+        method::TURN_UNDO => turn_undo::handle_undo_turn(context, request).await,
         method::TURN_CANCEL => {
             let params: protocol::TurnCancelParams = parse_params(&request.params)?;
             let queue_status = {

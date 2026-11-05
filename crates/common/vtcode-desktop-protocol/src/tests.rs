@@ -677,6 +677,33 @@ fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(
     assert_eq!(value["previews"], serde_json::json!(["first", "second"]));
     assert_eq!(value["droppedTotal"], 4);
     assert_eq!(serde_json::from_value::<TurnQueueStatus>(value)?, status);
+
+    let undone = TurnUndoResult {
+        session_id: "s".to_string(),
+        turn_id: "t".to_string(),
+        undone: true,
+        files: vec![TurnUndoFile {
+            path: "src/main.rs".to_string(),
+            kind: vtcode_exec_events::PatchChangeKind::Update,
+            additions: 2,
+            deletions: 1,
+        }],
+        reason: String::new(),
+    };
+    let value = serde_json::to_value(&undone)?;
+    assert_eq!(value["sessionId"], "s");
+    assert_eq!(value["undone"], true);
+    assert_eq!(value["files"][0]["kind"], "update");
+    assert_eq!(value["files"][0]["path"], "src/main.rs");
+    assert_eq!(serde_json::from_value::<TurnUndoResult>(value)?, undone);
+
+    let legacy_refusal: TurnUndoResult = serde_json::from_value(serde_json::json!({
+        "sessionId": "s",
+        "turnId": "t",
+        "undone": false,
+        "reason": "no recorded changes",
+    }))?;
+    assert!(legacy_refusal.files.is_empty());
     Ok(())
 }
 

@@ -197,6 +197,7 @@ fn review_item(id: &str, patch: &str) -> vtcode_core::exec::events::ThreadItem {
             changes: vec![FileUpdateChange {
                 path: "src/app.rs".into(),
                 kind: PatchChangeKind::Update,
+                terminators_normalized: None,
             }],
             status: PatchApplyStatus::Completed,
             unified_diff: Some(patch.into()),
@@ -241,4 +242,5 @@ mod stop_signal;
 mod storage;
 mod terminal_pump;
 mod turn_queue;
+mod turn_undo;
 mod update_status;

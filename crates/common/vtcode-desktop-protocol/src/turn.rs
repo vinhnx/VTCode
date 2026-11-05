@@ -101,6 +101,52 @@ pub struct TurnCancelParams {
     pub clear_queue: bool,
 }
 
+/// Parameters for reversing one turn's exact file changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnUndoParams {
+    /// Session that owns the turn.
+    pub session_id: String,
+    /// Canonical turn identity (event `context.turn_id`).
+    pub turn_id: String,
+}
+
+/// One reversed file change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnUndoFile {
+    /// Workspace-relative path.
+    pub path: String,
+    /// Kind of the reversed change.
+    pub kind: vtcode_exec_events::PatchChangeKind,
+    /// Reversed added-line count.
+    #[serde(default)]
+    pub additions: u64,
+    /// Reversed deleted-line count.
+    #[serde(default)]
+    pub deletions: u64,
+}
+
+/// Outcome of a turn undo request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnUndoResult {
+    /// Session that owns the turn.
+    pub session_id: String,
+    /// Canonical turn identity.
+    pub turn_id: String,
+    /// Whether every recorded change was reversed. `false` carries the
+    /// refusal reason; nothing is partially reversed without disclosure.
+    pub undone: bool,
+    /// Reversed changes in recorded order: empty on clean refusals, holding
+    /// the applied prefix when a later file aborts the flush.
+    #[serde(default)]
+    pub files: Vec<TurnUndoFile>,
+    /// Refusal or failure explanation; empty on success.
+    #[serde(default)]
+    pub reason: String,
+}
+
 /// Parameters for popping the newest queued message back for editing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

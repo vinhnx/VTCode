@@ -14,7 +14,11 @@ fn change_notification(id: &str, path: &str, patch: &str) -> BackendEvent {
                 context: None,
                 id: id.into(),
                 details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-                    changes: vec![FileUpdateChange { path: path.into(), kind: PatchChangeKind::Update }],
+                    changes: vec![FileUpdateChange {
+                        path: path.into(),
+                        kind: PatchChangeKind::Update,
+                        terminators_normalized: None,
+                    }],
                     status: PatchApplyStatus::Completed,
                     unified_diff: Some(patch.into()),
                     diff_incomplete: Some(false),

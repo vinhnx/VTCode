@@ -225,6 +225,8 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Track the active agent | The composer mode control follows primary-agent changes from live slash commands. Its picker lists the CLI-discovered primary agents and saves the workspace default for the next session. |
 | Expand tool details | The changed row is remeasured while the reading position is preserved. |
 | Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. A Changes button in the card header opens the inspector's Changes tab on that change-set's first previewable file. |
+| Follow a turn's work | Each completed turn reads as one unit: your message, a single collapsible work log with assistant/tool counts (starts collapsed, expands inline with full keyboard and screen-reader support), and the final response with its completion time beneath it. No dividers separate the messages; failed, blocked, cancelled, and interrupted turns keep their work visible with its status instead of grouping it as a success. |
+| Review a turn's files | A turn that changed files shows a file summary on its final response: the first three files with kind and +/− counts, a partial marker when the evidence is incomplete, and a Changes button that opens the inspector on that turn's first previewable file. |
 | Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts when complete. Runtime file paths remain listed when a diff preview is missing or incomplete; the app marks unavailable previews and omits untrustworthy line counts instead of reusing an older patch. Selectable previews open in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. Kind filter toggles (Added, Modified, Deleted) narrow the list when kinds differ, and file navigation follows the visible list. F7/Shift+F7 navigates changes; Option+F7/Option+Shift+F7 navigates files. These bindings are configurable. |
 | Browse files | ⌘⇧E opens the inspector's Files tab and focuses its collapsed tree (one gitignore-aware snapshot of at most 5,000 entries through depth 12, dependency/VCS/hidden directories skipped, with a fuzzy filter field and a shown/total count; a notice names it when the snapshot truncates). The first scan shows a reduced-motion-aware loading skeleton; empty results explain whether a workspace is missing or contains no browseable files. Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. F2 renames the selected entry (validated same-directory rename dialog) and Delete/Backspace moves it to the Trash behind a native warning prompt. Enter or a click opens the file in the configured destination (Settings → Appearance → Files): the read-only UTF-8 preview (64 KiB cap) by default, or directly in the chosen external editor. From the preview, Open in editor uses the macOS default text editor, and VS Code opens the file using its registered application; a missing editor or file is reported in the preview. External opening rechecks workspace containment and passes the path without a shell. Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
 | Review current Git changes | ⌘⇧G or Changes → Review working tree opens a read-only snapshot viewer. Choose an optional folder and untracked-text inclusion, then Load changes; Refresh or ⌘R updates the capture. |
@@ -901,6 +903,19 @@ reopens an approval, or marks a turn running. Unstructured archive tool text rem
 in its collapsed transcript card but is not classified as structured activity. The Output tab shows
 the selected or newest retained command/tool output and copies all recovered text; remaining spool
 content is loaded only through the explicit bounded page action.
+
+### Turn-level transcript
+
+Each completed turn renders as one unit — user message, one collapsible work
+log over that turn's assistant/tool rows (counts in the header, collapsed by
+default, keyboard and screen-reader accessible), and the final response with
+its completion time — with no dividers between messages. Grouping keys on
+canonical turn identity, so it survives restore, and search reveals collapsed
+groups before navigating. Failed, blocked, cancelled, and interrupted turns
+keep their work visible with its status instead of grouping it as a success.
+Turns that changed files add a file summary to the final response (first
+three files, kind and +/− counts, partial marker, Changes-button deeplink);
+only completed, parseable, same-turn change-sets count.
 
 ### Git working-tree review
 

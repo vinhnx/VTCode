@@ -368,6 +368,7 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
                             changes: vec![FileUpdateChange {
                                 path: "src/main.rs".to_string(),
                                 kind: PatchChangeKind::Update,
+                                terminators_normalized: None,
                             }],
                             status: PatchApplyStatus::Completed,
                             unified_diff: Some("@@ -1,2 +1,3 @@\n context\n-old line\n+new line\n".to_string()),
@@ -416,6 +417,7 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
                     changes: vec![FileUpdateChange {
                         path: "src/main.rs".into(),
                         kind: PatchChangeKind::Update,
+                        terminators_normalized: None,
                     }],
                     status: PatchApplyStatus::Completed,
                     unified_diff: Some(updated_patch.into()),
