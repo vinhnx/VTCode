@@ -6,7 +6,7 @@
 ## Modules
 
 - Paths/fs: `paths/`, `fs/`, `vtcode_paths/`, `vtcode_paths_migration.rs`, `vtcodegitignore.rs`, `walk.rs` | errors: `errors.rs`, `error_category/`, `misconfiguration.rs`, `retry.rs`.
-- Text: `formatting/`, `sanitizer.rs`, `validation.rs`, `search.rs`, `tokens.rs`, `unicode.rs` | display: `ansi.rs`, `colors.rs`, `styling.rs`, `diff_theme.rs`.
+- Text: `formatting/`, `sanitizer.rs`, `validation.rs`, `search.rs`, `tokens.rs`, `unicode.rs`, `utf8_stream.rs` | display: `ansi.rs`, `colors.rs`, `styling.rs`, `diff_theme.rs`.
 - Runtime: `http.rs`, `task_guard.rs`, `async_utils.rs`, `runtime_diagnostics.rs`, `line_framing.rs` | UI/LLM: `ui_protocol/`, `program_status/`, `llm/` | test adapters: `reference.rs`.
 
 ## Rules
@@ -18,6 +18,7 @@
 - `.vtcodegitignore` registered by `walk::apply_defaults` is the single ignore source of truth, so never fork a UI-side skip list.
 - `VtCodePaths::write_private_file_atomic` owns synced atomic private writes without pre-deleting the destination, and legacy migration copies only regular files and never follows links.
 - Canonical helpers (`formatting/`, `search/`, `validation/`, `task_guard`, `utils::env_flag_enabled`, `llm::Usage::billable_totals`) are the single homes, so downstream crates delegate rather than re-implement.
+- `Utf8StreamDecoder` (`utf8_stream`) is the single chunked UTF-8 decoder: never `from_utf8_lossy` one read chunk, since a character split across reads becomes U+FFFD; use `push_cow` in hot loops and `finish()` at EOF.
 - Keep `ui_protocol::tool_summary` and `ui_protocol::progress` out of `ThreadEvent` and independent of TUI/runtime types.
 
 ## Gotchas
