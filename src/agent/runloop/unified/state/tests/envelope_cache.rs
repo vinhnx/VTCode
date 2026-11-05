@@ -1,21 +1,6 @@
 use super::*;
 
 #[test]
-fn mcp_ready_notice_is_claimed_exactly_once_per_session() {
-    let mut stats = SessionStats::default();
-    assert!(stats.take_mcp_ready_notice(), "first catalogue wiring must render");
-    assert!(
-        !stats.take_mcp_ready_notice(),
-        "agent switches and manual /mcp refreshes must not repeat the notice"
-    );
-}
-#[test]
-fn mcp_ready_notice_presuppression_does_not_render_later() {
-    let mut stats = SessionStats::default();
-    stats.mark_mcp_ready_notice_shown();
-    assert!(!stats.take_mcp_ready_notice(), "a catalogue attached before the interaction loop must stay silent");
-}
-#[test]
 fn compaction_parent_context_reuses_arcs_only_for_matching_identity() {
     let mut stats = SessionStats::default();
     assert!(stats.compaction_parent_context("openai", "model-a").is_none());

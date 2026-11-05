@@ -703,11 +703,6 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let ctrl_c_notice_displayed = false;
     let inline_prompt_cost_notice_shown = false;
     let mcp_catalog_initialized = tool_registry.mcp_client().is_some();
-    if mcp_catalog_initialized {
-        // The catalogue is already wired before the interaction loop starts, so
-        // the readiness line would be stale; suppress it without rendering.
-        session_stats.mark_mcp_ready_notice_shown();
-    }
     let last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
     let pending_mcp_refresh = false;
     let last_mcp_refresh = Instant::now();
