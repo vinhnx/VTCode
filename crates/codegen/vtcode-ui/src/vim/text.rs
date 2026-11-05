@@ -1,25 +1,11 @@
 use super::types::{Motion, TextObjectSpec};
 
-pub fn next_char_boundary(content: &str, mut pos: usize) -> usize {
-    if pos >= content.len() {
-        return content.len();
-    }
-    pos += 1;
-    while pos < content.len() && !content.is_char_boundary(pos) {
-        pos += 1;
-    }
-    pos
+pub fn next_char_boundary(content: &str, pos: usize) -> usize {
+    content.ceil_char_boundary(pos.saturating_add(1))
 }
 
-pub fn prev_char_boundary(content: &str, mut pos: usize) -> usize {
-    if pos == 0 {
-        return 0;
-    }
-    pos -= 1;
-    while pos > 0 && !content.is_char_boundary(pos) {
-        pos -= 1;
-    }
-    pos
+pub fn prev_char_boundary(content: &str, pos: usize) -> usize {
+    content.floor_char_boundary(pos.saturating_sub(1))
 }
 
 pub(crate) fn vim_current_line_bounds(content: &str, cursor: usize) -> (usize, usize) {

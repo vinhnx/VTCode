@@ -212,9 +212,9 @@ pub fn condense_text_bytes(content: &str, head_bytes: usize, tail_bytes: usize) 
         return content.to_string();
     }
 
-    let head_end = floor_char_boundary(content, head_bytes);
+    let head_end = content.floor_char_boundary(head_bytes);
     let tail_start_raw = byte_len.saturating_sub(tail_bytes);
-    let tail_start = ceil_char_boundary(content, tail_start_raw);
+    let tail_start = content.ceil_char_boundary(tail_start_raw);
 
     let omitted = byte_len.saturating_sub(head_end).saturating_sub(byte_len - tail_start);
 
@@ -239,7 +239,7 @@ pub fn tail_preview_text(content: &str, tail_bytes: usize, max_lines: usize) -> 
         return String::new();
     }
 
-    let tail_start = ceil_char_boundary(content, content.len().saturating_sub(tail_bytes));
+    let tail_start = content.ceil_char_boundary(content.len().saturating_sub(tail_bytes));
     let tail_slice = &content[tail_start..];
 
     let mut line_start = 0usize;
@@ -263,30 +263,6 @@ pub fn tail_preview_text(content: &str, tail_bytes: usize, max_lines: usize) -> 
     }
 
     format!("{}\n{}", format_hidden_bytes_summary(omitted), preview)
-}
-
-fn floor_char_boundary(value: &str, index: usize) -> usize {
-    if index >= value.len() {
-        return value.len();
-    }
-
-    let mut i = index;
-    while i > 0 && !value.is_char_boundary(i) {
-        i -= 1;
-    }
-    i
-}
-
-fn ceil_char_boundary(value: &str, index: usize) -> usize {
-    if index >= value.len() {
-        return value.len();
-    }
-
-    let mut i = index;
-    while i < value.len() && !value.is_char_boundary(i) {
-        i += 1;
-    }
-    i
 }
 
 #[cfg(test)]

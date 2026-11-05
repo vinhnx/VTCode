@@ -285,10 +285,7 @@ impl Session {
             // Bound the expand payload so paste floods cannot grow without limit.
             let max_bytes = ui::TUI_COLLAPSED_PASTE_MAX_BYTES;
             let full_text = if text.len() > max_bytes {
-                let mut start = text.len() - max_bytes;
-                while start < text.len() && !text.is_char_boundary(start) {
-                    start += 1;
-                }
+                let start = text.ceil_char_boundary(text.len() - max_bytes);
                 text[start..].to_string()
             } else {
                 text

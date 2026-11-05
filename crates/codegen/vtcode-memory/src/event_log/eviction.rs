@@ -77,10 +77,7 @@ fn normalize_eviction_fact(value: &str) -> String {
     if normalized.len() <= MAX_EVICTION_GROUNDED_FACT_BYTES {
         return normalized;
     }
-    let mut end = MAX_EVICTION_GROUNDED_FACT_BYTES - '…'.len_utf8();
-    while !normalized.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = normalized.floor_char_boundary(MAX_EVICTION_GROUNDED_FACT_BYTES - '…'.len_utf8());
     format!("{}…", &normalized[..end])
 }
 

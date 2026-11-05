@@ -165,10 +165,7 @@ impl LocalTerminalSessionState {
         if let Some(limit) = self.output_byte_limit
             && self.output.len() > limit
         {
-            let mut drain_until = self.output.len() - limit;
-            while drain_until < self.output.len() && !self.output.is_char_boundary(drain_until) {
-                drain_until += 1;
-            }
+            let drain_until = self.output.ceil_char_boundary(self.output.len() - limit);
             if drain_until > 0 {
                 self.output.drain(..drain_until);
                 self.truncated = true;

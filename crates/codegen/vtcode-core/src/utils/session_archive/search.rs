@@ -69,8 +69,8 @@ pub async fn search_sessions(query: &str, session_limit: usize, max_results: usi
 fn search_result_snippet(content: &str, match_start: usize, match_end: usize) -> String {
     const CONTEXT_BYTES: usize = 50;
 
-    let start = floor_char_boundary(content, match_start.saturating_sub(CONTEXT_BYTES));
-    let end = ceil_char_boundary(content, (match_end + CONTEXT_BYTES).min(content.len()));
+    let start = content.floor_char_boundary(match_start.saturating_sub(CONTEXT_BYTES));
+    let end = content.ceil_char_boundary(match_end + CONTEXT_BYTES);
 
     let mut snippet = String::new();
     if start > 0 {
@@ -81,18 +81,4 @@ fn search_result_snippet(content: &str, match_start: usize, match_end: usize) ->
         snippet.push_str("...");
     }
     snippet
-}
-
-fn floor_char_boundary(content: &str, mut index: usize) -> usize {
-    while index > 0 && !content.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
-}
-
-fn ceil_char_boundary(content: &str, mut index: usize) -> usize {
-    while index < content.len() && !content.is_char_boundary(index) {
-        index += 1;
-    }
-    index
 }

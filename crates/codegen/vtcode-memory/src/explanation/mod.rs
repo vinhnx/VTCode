@@ -357,10 +357,7 @@ pub fn query_evidence(
     if offset > text.len() || !text.is_char_boundary(offset) {
         return Err(evidence_error("invalid evidence page offset"));
     }
-    let mut end = offset.saturating_add(limit.clamp(1, 32 * 1024)).min(text.len());
-    while !text.is_char_boundary(end) {
-        end = end.saturating_sub(1);
-    }
+    let mut end = text.floor_char_boundary(offset.saturating_add(limit.clamp(1, 32 * 1024)));
     // Always progress, including a page limit smaller than the next UTF-8 scalar.
     if end == offset && offset < text.len() {
         end += text[offset..].chars().next().map_or(0, char::len_utf8);

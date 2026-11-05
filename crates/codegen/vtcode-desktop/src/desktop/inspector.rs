@@ -336,10 +336,7 @@ fn output_view(item: &TranscriptItem) -> Option<OutputView> {
 
 /// Cap the rendered output tail so a chatty command stays cheap to draw.
 pub(super) fn output_tail(text: &SharedString) -> SharedString {
-    let mut start = text.len().saturating_sub(MAX_OUTPUT_BYTES);
-    while !text.is_char_boundary(start) {
-        start += 1;
-    }
+    let mut start = text.ceil_char_boundary(text.len().saturating_sub(MAX_OUTPUT_BYTES));
     let mut tail = text.get(start..).unwrap_or_default();
     let mut newlines_to_keep = MAX_OUTPUT_LINES + usize::from(tail.ends_with('\n'));
     for (index, byte) in tail.bytes().enumerate().rev() {

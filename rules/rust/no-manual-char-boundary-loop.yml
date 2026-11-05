@@ -1,0 +1,20 @@
+id: no-manual-char-boundary-loop
+language: Rust
+severity: warning
+message: Use `str::floor_char_boundary` / `str::ceil_char_boundary` instead of a hand-rolled boundary loop.
+note: |
+  Stepping an index one byte at a time until `is_char_boundary` holds duplicates
+  std (stable since Rust 1.91; both methods clamp to `len`). Round down with
+  `floor_char_boundary` when cutting a prefix to a byte budget, and round up with
+  `ceil_char_boundary` when choosing where a kept tail starts.
+rule:
+  kind: while_expression
+  has:
+    field: condition
+    any:
+      - pattern: $S.is_char_boundary($I)
+      - has:
+          pattern: $S.is_char_boundary($I)
+          stopBy: end
+files:
+  - "**/*.rs"

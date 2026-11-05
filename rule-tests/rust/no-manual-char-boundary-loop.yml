@@ -1,0 +1,23 @@
+id: no-manual-char-boundary-loop
+valid:
+  - |
+      let end = text.floor_char_boundary(max_bytes);
+  - |
+      let start = text.ceil_char_boundary(text.len() - max_bytes);
+  - |
+      if !text.is_char_boundary(offset) {
+          return Err(invalid_offset());
+      }
+invalid:
+  - |
+      while end > 0 && !text.is_char_boundary(end) {
+          end -= 1;
+      }
+  - |
+      while !output.is_char_boundary(boundary) {
+          boundary += 1;
+      }
+  - |
+      while s.is_char_boundary(i) {
+          i += 1;
+      }

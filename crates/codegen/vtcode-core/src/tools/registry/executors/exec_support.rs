@@ -82,7 +82,7 @@ pub(super) fn append_bounded_capture(target: &mut String, chunk: &str) {
     }
 
     let half = EXEC_CAPTURE_WINDOW_BYTES / 2;
-    let head_end = floor_exec_char_boundary(target, half);
+    let head_end = target.floor_char_boundary(half);
     let tail_start = target.len().saturating_sub(half);
     let tail_start = target.ceil_char_boundary(tail_start);
     let head = target[..head_end].to_owned();
@@ -279,18 +279,6 @@ pub(super) fn max_output_tokens_from_payload(payload: &serde_json::Map<String, V
         .or_else(|| payload.get("max_tokens"))
         .and_then(Value::as_u64)
         .map(|value| value as usize)
-}
-
-pub(super) fn floor_exec_char_boundary(text: &str, index: usize) -> usize {
-    if index >= text.len() {
-        return text.len();
-    }
-
-    let mut boundary = index;
-    while boundary > 0 && !text.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    boundary
 }
 
 /// Resolve a candidate path inside the workspace, rejecting paths that escape

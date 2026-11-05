@@ -509,12 +509,8 @@ impl Session {
 
         // Clamp to char boundaries so multi-byte content never panics.
         let content = self.input_manager.content();
-        while clear_start > 0 && !content.is_char_boundary(clear_start) {
-            clear_start -= 1;
-        }
-        while clear_end < content.len() && !content.is_char_boundary(clear_end) {
-            clear_end += 1;
-        }
+        clear_start = content.floor_char_boundary(clear_start);
+        clear_end = content.ceil_char_boundary(clear_end);
         if clear_start >= clear_end {
             return;
         }
