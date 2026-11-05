@@ -28,6 +28,19 @@ brew install vinhnx/tap/vtcode
 
 [Homebrew Formula](https://formulae.brew.sh/formula/vtcode)
 
+#### Homebrew Cask (macOS desktop app, Apple Silicon)
+
+```bash
+brew trust vinhnx/tap
+brew install --cask vinhnx/tap/vtcode-desktop
+```
+
+> [!WARNING]
+> The first launch needs a one-time macOS security approval: release builds are not notarized. Open the app once so
+> macOS records the block, then click **Open Anyway** in **System Settings › Privacy & Security** and open it again.
+> The button only shows for about an hour after a blocked launch. See the
+> [installation guide](./installation/README.md#desktop-app-macos-15).
+
 #### Pre-built Binaries
 
 Download from [GitHub Releases](https://github.com/vinhnx/vtcode/releases) for Linux, macOS, or Windows.

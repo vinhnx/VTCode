@@ -36,8 +36,8 @@
 
 ## Overview
 
-VT Code works on your repository from the terminal or its native macOS app. It owns context, tool calls, and
-execution policy, so long tasks stay auditable and resumable.
+VT Code is a terminal-first coding agent for your repository, available in the CLI and its native macOS app.
+It owns context, tool calls, and execution policy, so long tasks stay auditable and resumable.
 
 | At a glance      | What you get                                                                    |
 | ---------------- | ------------------------------------------------------------------------------- |
@@ -59,28 +59,31 @@ Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-Or manage it yourself with Homebrew or Cargo:
+Or install with Homebrew or Cargo:
 
 ```bash
 brew trust vinhnx/tap
 brew install vinhnx/tap/vtcode
 
+# Desktop app (macOS 15+, Apple Silicon)
+brew install --cask vinhnx/tap/vtcode-desktop
+
 # Or install from crates.io
 cargo install vtcode
 ```
 
-On Windows, install with PowerShell (artifacts are best-effort and may lag behind macOS/Linux):
+On Windows (best-effort artifacts; may lag behind macOS/Linux):
 
 ```powershell
 irm https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.ps1 | iex
 ```
 
-Run `vtcode --version` to verify the installation. The [installation guide](./docs/installation/README.md)
-covers prerequisites, other install methods, desktop flags, and optional search tools.
+Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers prerequisites,
+other install methods, desktop flags, and optional search tools.
 
 ### 2. Configure your project
 
-Scaffold the configuration and add credentials in your project directory:
+In your project directory, scaffold configuration and add credentials:
 
 ```bash
 cd path/to/your/project
@@ -89,8 +92,9 @@ vtcode secret add openai   # stores your OpenAI API key in secure storage
 ```
 
 Replace `openai` with your provider. Keys use secure storage (OS keyring or encrypted file); alternatives are
-environment variables, a workspace `.env` file, or `vtcode login` where supported. See
-[getting started](./docs/user-guide/getting-started.md) and [provider guides](./docs/providers/PROVIDER_GUIDES.md).
+environment variables, a workspace `.env` file, or `vtcode login` where supported. Start with
+[getting started](./docs/user-guide/getting-started.md), then see the
+[provider guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific setup.
 
 > **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow;
 > prefer your own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
@@ -104,12 +108,12 @@ environment variables, a workspace `.env` file, or `vtcode login` where supporte
 vtcode   # open the interactive TUI in your project
 ```
 
-Ask a focused question, review proposed changes and test results before committing; [Usage](#usage) covers
+Ask a focused question, then review proposed changes and test results before committing. [Usage](#usage) covers
 automation and session commands.
 
 ## Usage
 
-Common commands:
+Common commands (see the [command reference](./docs/user-guide/commands.md)):
 
 | Goal                    | Command                                            |
 | ----------------------- | -------------------------------------------------- |
@@ -121,39 +125,53 @@ Common commands:
 | Resume the last session | `vtcode continue`                                  |
 | Inspect a run log       | `vtcode trajectory`                                |
 
-For larger tasks, begin with [read-only planning](./docs/guides/planning-workflow.md), then review the
-[turn diff](./docs/development/diff-preview.md) before committing. Run `/explain` to summarize the outcome
-without another model call; see the [interactive guide](./docs/user-guide/interactive-mode.md).
+For larger tasks, begin with [read-only planning](./docs/guides/planning-workflow.md), review the
+[turn diff](./docs/development/diff-preview.md) before committing, and use `/explain` to summarize the
+outcome without another model call. See the [interactive guide](./docs/user-guide/interactive-mode.md).
 
 ### Modes
 
 - **`ask`** is tool-free: it prints one reply and exits.
-- **`exec`** runs the full tool loop. It requires `[automation.full_auto]` and `full_auto` workspace trust.
-  Interactive terminals prompt for trust; non-TTY runs need `VTCODE_TRUST_WORKSPACE=full-auto`. Tool allow-lists,
-  explicit denies, and execution policy still apply.
+- **`exec`** runs the full tool loop and requires explicit workspace trust: `[automation.full_auto]` plus
+  `full_auto` trust. Interactive terminals prompt for trust; non-TTY runs need
+  `VTCODE_TRUST_WORKSPACE=full-auto`. Tool allow-lists, explicit denies, and execution policy still apply.
 - **`review`** inspects uncommitted changes.
 
-Recurring work uses [scheduled tasks](./docs/user-guide/scheduled-tasks.md) on the same exec runtime. Resume or fork
-earlier work with `vtcode continue` (or `--session-id <id>`), continue a headless run with
-`vtcode exec resume --last`, and inspect logs with `vtcode trajectory`. See [exec mode](./docs/user-guide/exec-mode.md)
-and [full automation](./docs/guides/full-automation.md).
+Recurring work uses [scheduled tasks](./docs/user-guide/scheduled-tasks.md) on the same exec runtime. Resume or
+fork earlier work with `vtcode continue` (or `--session-id <id>`), continue a headless run with
+`vtcode exec resume --last`, and inspect logs with `vtcode trajectory`. Details live in
+[exec mode](./docs/user-guide/exec-mode.md) and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
-The native macOS app runs the same runloop, providers, tool policy, sandboxing, and sessions as the CLI, reusing
-your CLI configuration and credentials. Configure a provider first (see [Quick start](#quick-start)).
+The native macOS app runs the same runloop, providers, tool policy, sandboxing, and sessions as the CLI,
+reusing your CLI configuration and credentials. Configure a provider first (see [Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
-On Apple Silicon, download the app from the [latest release](https://github.com/vinhnx/VTCode/releases/latest) or
-run `vtcode desktop --install`; launch with `vtcode desktop`. Intel Macs build from source. See the
-[desktop workspace guide](./docs/development/desktop-workspace.md) for requirements, source builds, Gatekeeper
-approval, and troubleshooting.
+On Apple Silicon, install it with Homebrew (updates with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
+
+```bash
+brew install --cask vinhnx/tap/vtcode-desktop
+```
+
+Without Homebrew, download the app from the
+[latest release](https://github.com/vinhnx/VTCode/releases/latest) or run `vtcode desktop --install`. Launch it
+with `vtcode desktop` or from Finder. Intel Macs build from source.
+
+> [!WARNING]
+> **First launch needs a one-time macOS security approval.** Builds are ad hoc signed, not notarized, so macOS blocks
+> the first launch (Homebrew cask installs included). Open the app once so macOS records the block, click
+> **Open Anyway** in **System Settings › Privacy & Security**, then open it again. The button only shows for about an
+> hour after a blocked launch. You only do this once; notarized releases skip it.
+
+See the [desktop workspace guide](./docs/development/desktop-workspace.md) for requirements, source builds, and
+troubleshooting.
 
 ## Documentation
 
-Guides by task; the full catalog is in the [documentation index](./docs/INDEX.md) and
-[Wiki](https://github.com/vinhnx/VTCode/wiki). Integrations are optional.
+Start from the [documentation index](./docs/INDEX.md) or
+[Wiki](https://github.com/vinhnx/VTCode/wiki). Integrations below are optional.
 
 ### Get started
 
@@ -178,7 +196,7 @@ Guides by task; the full catalog is in the [documentation index](./docs/INDEX.md
 - [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [MCP](./docs/guides/mcp-integration.md)
 - [MCP interop](./docs/guides/mcp-interop.md) for client and server maintainers
 - [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md)
-  ([deployment](./docs/reference/webmcp.md)), [Companion](./docs/user-guide/vtcode-companion.md),
+  ([deployment](./docs/reference/webmcp.md)), [Companion](./docs/user-guide/vtcode-companion.md), and
   [Memcode](./docs/guides/memcode-mcp.md)
 
 ### Develop and evaluate
@@ -214,19 +232,19 @@ CI builds with `--locked` and `RUSTFLAGS="-D warnings"`; match locally with
 `RUSTFLAGS="-D warnings" cargo check --locked`. See the [development overview](./docs/development/README.md) and
 [testing guide](./docs/development/testing.md).
 
-Release binaries and notes: [GitHub releases](https://github.com/vinhnx/VTCode/releases).
+Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/VTCode/releases).
 
 ## Contributing
 
-Contributions welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include `vtcode trajectory`
-output). Read the [contribution guide](./docs/CONTRIBUTING.md) before a PR; MCP maintainers, see the
-[interop guide](./docs/guides/mcp-interop.md).
+Contributions are welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include
+`vtcode trajectory` output). Read the [contribution guide](./docs/CONTRIBUTING.md) before opening a PR;
+MCP maintainers should also see the [interop guide](./docs/guides/mcp-interop.md).
 
 ## Security
 
-Report vulnerabilities privately via
-[GitHub private vulnerability reporting](https://github.com/vinhnx/VTCode/security/advisories/new); see the
-[security policy](./docs/SECURITY.md).
+Report vulnerabilities privately with
+[GitHub private vulnerability reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See
+the [security policy](./docs/SECURITY.md).
 
 ## Community
 
@@ -235,8 +253,8 @@ Report vulnerabilities privately via
   [Discussions](https://github.com/vinhnx/VTCode/discussions)
 - [Good first issues](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) · [Help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted)
 
-The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
-Contact: `vinhnguyen2308 [at] gmail [dot] com`.
+The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive. Contact:
+`vinhnguyen2308 [at] gmail [dot] com`.
 
 ## Thanks to our contributors
 
