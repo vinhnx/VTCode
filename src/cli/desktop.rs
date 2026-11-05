@@ -93,23 +93,54 @@ async fn handle_desktop_install() -> Result<()> {
     Ok(())
 }
 
+/// Print the one-time macOS Gatekeeper approval steps for an ad hoc signed
+/// (not notarized) build.
+///
+/// Highlighted as a warning block: macOS 15+ removed the right-click > Open
+/// bypass for unnotarized apps, so the Privacy & Security route is the one
+/// that actually works, and users who miss it report the app as "broken".
+/// Shared by `desktop --install` and the update command's desktop step.
+pub(crate) fn print_gatekeeper_approval_notice() {
+    print!("{}", gatekeeper_approval_notice());
+}
+
+/// Render the Gatekeeper approval notice. Kept separate from printing so the
+/// wording (and its required steps) has a direct unit test.
+pub(crate) fn gatekeeper_approval_notice() -> String {
+    let mut notice = String::new();
+    notice.push('\n');
+    notice.push_str(&format!("{}\n", "  ⚠  ONE-TIME macOS SECURITY STEP REQUIRED  ".on_yellow().black().bold()));
+    notice.push_str(&format!("{}\n", "  This build is not notarized, so macOS blocks the first launch.".yellow()));
+    notice.push('\n');
+    notice.push_str("  To allow it, once:\n");
+    notice.push_str(&format!("    {} Open the app from Applications so macOS records the block\n", "1.".bold()));
+    notice.push_str(&format!("    {} Open {}\n", "2.".bold(), "System Settings › Privacy & Security".bold()));
+    notice.push_str(&format!(
+        "    {} Click {} next to the VT Code message\n",
+        "3.".bold(),
+        "Open Anyway".bold().yellow()
+    ));
+    notice.push_str(&format!("    {} Open the app again: {}\n", "4.".bold(), "vtcode desktop".bold()));
+    notice.push_str(&format!("{}\n", "  Open Anyway only appears for about an hour after a blocked launch.".dim()));
+    notice.push('\n');
+    notice
+}
+
 /// Report a desktop install/update outcome (shared by `desktop --install`
 /// and the update command's desktop step).
 pub(crate) fn print_desktop_install_outcome(outcome: DesktopInstallOutcome) {
     match outcome {
-        DesktopInstallOutcome::Installed { version, needs_gatekeeper_approval } => {
+        DesktopInstallOutcome::Installed { version, path, needs_gatekeeper_approval } => {
             println!("{} Desktop app v{} installed successfully!", "✓".green(), version.bold());
+            println!("{} Installed at: {}", "→".cyan(), path.display());
             println!("{} Open it anytime with: vtcode desktop", "→".cyan());
             if needs_gatekeeper_approval {
-                println!("{} First launch needs one manual approval (this build is not notarized).", "!".yellow());
-                println!(
-                    "{} Right-click VT Code.app in Finder > Open > Open again; or System Settings > Privacy & Security > Open Anyway.",
-                    "→".cyan()
-                );
+                print_gatekeeper_approval_notice();
             }
         }
-        DesktopInstallOutcome::UpToDate(version) => {
+        DesktopInstallOutcome::UpToDate { version, path } => {
             println!("{} Desktop app is already up to date (v{})", "✓".green(), version);
+            println!("{} Installed at: {}", "→".cyan(), path.display());
         }
     }
 }
@@ -180,5 +211,24 @@ mod tests {
     async fn install_fails_off_macos() {
         let error = handle_desktop_command(None, true).await.expect_err("must fail, not install");
         assert!(error.to_string().contains("only available on macOS"), "{error:#}");
+    }
+
+    /// The ad hoc approval notice must name every actionable step: macOS 15+
+    /// has no right-click bypass, so a vague notice leaves users stuck.
+    #[test]
+    fn gatekeeper_notice_states_every_required_step() {
+        let notice = gatekeeper_approval_notice();
+        assert!(notice.contains("ONE-TIME macOS SECURITY STEP REQUIRED"), "{notice}");
+        assert!(notice.contains("not notarized"), "{notice}");
+        // Step 1: the block must be recorded before Open Anyway exists.
+        assert!(notice.contains("Open the app from Applications"), "{notice}");
+        assert!(notice.contains("System Settings"), "{notice}");
+        assert!(notice.contains("Privacy & Security"), "{notice}");
+        assert!(notice.contains("Open Anyway"), "{notice}");
+        assert!(notice.contains("vtcode desktop"), "{notice}");
+        // The one-hour window explains "the button is missing" reports.
+        assert!(notice.contains("about an hour"), "{notice}");
+        // The removed bypass must not be presented as a working option.
+        assert!(!notice.contains("right-click"), "{notice}");
     }
 }

@@ -571,11 +571,11 @@ install_desktop_release_asset() {
     return 0
 }
 
-# First-launch Gatekeeper steps for ad hoc builds (mirrors FIRST-LAUNCH.txt).
+# One-time macOS security approval for ad hoc builds (mirrors FIRST-LAUNCH.txt).
+# macOS 15+ has no right-click > Open bypass, and Open Anyway only appears for
+# about an hour after a blocked launch; both facts belong in the steps.
 print_gatekeeper_note() {
-    echo ""
-    log_warning "First launch needs one manual approval (this build is not notarized)."
-    log_warning "Right-click VT Code.app in Finder > Open > Open again; or System Settings > Privacy & Security > Open Anyway."
+    log_warning "ONE-TIME macOS SECURITY STEP REQUIRED. This build is not notarized, so macOS blocks the first launch.\n  1. Open the app from Applications so macOS records the block\n  2. Click Open Anyway in System Settings > Privacy & Security\n  3. Open the app again: vtcode desktop\nOpen Anyway only appears for about an hour after a blocked launch."
 }
 
 # Copy a staged app bundle to the desktop location and verify it. Shared by

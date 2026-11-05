@@ -322,7 +322,20 @@ desktop app is already current, the command reports that and never prompts.
   warns that the flag has no effect in that mode.
 - When the release has no desktop asset for the host, the command errors and points at `scripts/install.sh`,
   which can still build from source.
-- Outside an update, `vtcode desktop --install` installs or updates the app on its own.
+- Outside an update, `vtcode desktop --install` installs or updates the app on its own and reports the installed
+  `VT Code.app` path.
+
+Homebrew cask installs are managed by Homebrew instead: `brew upgrade --cask vinhnx/tap/vtcode-desktop` updates the
+bundle (macOS 15+, Apple Silicon). The cask places the app in `/Applications`, which `vtcode desktop` and
+`vtcode update --with-desktop` also detect. Pick one owner per machine: updating a cask-managed bundle with the
+built-in updater leaves Homebrew's version record stale, so keep using `brew upgrade --cask` (or
+`brew reinstall --cask` to re-align it) rather than mixing both.
+
+> [!WARNING]
+> **First launch after installing needs a one-time macOS security approval.** Release builds are ad hoc signed, not
+> notarized, so Gatekeeper blocks the first launch — for cask installs too, because Homebrew quarantines the download.
+> Open the app once so macOS records the block, click **Open Anyway** in **System Settings › Privacy & Security**, then
+> open it again. The button only shows for about an hour after a blocked launch. Notarized releases skip this step.
 
 ### Backup and Rollback
 

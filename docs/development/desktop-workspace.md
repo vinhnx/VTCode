@@ -35,9 +35,9 @@ the applicable ownership/lifecycle improvements, and verification boundaries.
 To run the app:
 
 - macOS 15 or newer, on Apple Silicon or Intel.
-- One-time Gatekeeper approval on first launch: builds are ad hoc signed (no Developer ID, no notarization)
-  unless the release notes say otherwise, so right-click the app and choose Open, or allow it once in
-  System Settings > Privacy & Security.
+- **One-time macOS security approval on first launch** (details in the
+  [install callout](#download-a-release-build)): builds are ad hoc signed, so Gatekeeper blocks the first launch until
+  you click **Open Anyway** in System Settings › Privacy & Security. Notarized releases skip it.
 - Provider credentials configured for the CLI (see below); the desktop service reuses the CLI's configuration,
   credentials, workspace trust, and sandbox policy.
 
@@ -55,13 +55,35 @@ To build and install from source (only needed when a release ships no prebuilt d
 ## Download a release build
 
 Every release ships a prebuilt Apple Silicon app on
-[GitHub Releases](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**). The easiest install is
-`vtcode desktop --install`, which downloads the same prebuilt asset automatically (`scripts/install.sh` and
-`vtcode update` offer it too, asking between `~/Applications` and `/Applications` for fresh installs, while
-`--install`/`--with-desktop` use `~/Applications` without asking). To install by hand, download
+[GitHub Releases](https://github.com/vinhnx/VTCode/releases/latest) (expand **Assets**). On macOS 15+ Apple Silicon,
+install it with Homebrew:
+
+```sh
+brew trust vinhnx/tap
+brew install --cask vinhnx/tap/vtcode-desktop
+```
+
+Homebrew keeps the bundle updated (`brew upgrade --cask vinhnx/tap/vtcode-desktop`) without touching the standalone
+CLI executable. Without Homebrew, `vtcode desktop --install` downloads the same prebuilt asset automatically
+(`scripts/install.sh` and `vtcode update` offer it too, asking between `~/Applications` and `/Applications` for fresh
+installs, while `--install`/`--with-desktop` use `~/Applications` without asking). To install by hand, download
 `vtcode-desktop-<version>-aarch64-apple-darwin.zip`, unzip, and drag **VT Code.app** to `~/Applications`,
 verifying with the matching `.sha256` sidecar or `checksums.txt`. Only hosts without a published asset fall back
 to a from-source build, or package from a checkout as below.
+
+> [!WARNING]
+> **One-time macOS security step required.** Release builds are ad hoc signed, not notarized, so macOS blocks the
+> first launch (Homebrew cask installs included, because Homebrew quarantines the download). Allow it once, then open
+> the app again:
+>
+> 1. Open the app from Applications so macOS records the block
+> 2. Open **System Settings › Privacy & Security**
+> 3. Click **Open Anyway** next to the VT Code message
+> 4. Open the app again — from Finder, or run `vtcode desktop`
+>
+> **Open Anyway only appears for about an hour after a blocked launch**; if it is gone, open the app again to re-trigger
+> the block. You only do this once, macOS 15+ removed the old right-click › Open shortcut for unnotarized apps, and
+> notarized releases skip the step entirely.
 
 Launching the CLI without the app installed shows a reminder at most once per day; mute it permanently with
 `[desktop] suggest-install = false` in vtcode.toml.
@@ -100,8 +122,8 @@ default output is `dist/VT Code.app`; the script refuses to overwrite an existin
 verified. `--skip-build` reuses the binaries already in the release directory, and `--no-assets` skips the Liquid Glass
 `Assets.car` catalog (the icns fallback still ships). Ad hoc signatures support local development only. They do not
 establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
-Every package writes Gatekeeper first-launch steps next to the bundle (`FIRST-LAUNCH.txt`): right-click the app and
-choose Open, or allow it once in System Settings > Privacy & Security.
+Every package writes Gatekeeper first-launch steps next to the bundle (`FIRST-LAUNCH.txt`) and prints a highlighted
+`ACTION REQUIRED` banner: allow the app once in System Settings › Privacy & Security (Open Anyway), then open it again.
 The packaged GUI uses only its bundled `Contents/Helpers/vtcode`; if that helper is missing, it asks you to rebuild or
 reinstall instead of starting an unrelated workspace binary. Development runs prefer an adjacent `vtcode` binary, then
 check the workspace `target/release` and `target/debug` outputs.
@@ -111,7 +133,8 @@ macOS to open a new instance of that bundle; this avoids selecting a different l
 share the same display name or bundle identifier. From any terminal, `vtcode desktop [APP_PATH]` opens the GUI the same
 way on macOS: it checks the explicit path, then `VTCODE_DESKTOP_APP`, then `~/Applications` and `/Applications`.
 `vtcode desktop --install` downloads and installs the app from the prebuilt release asset instead (updates install in
-place; fresh installs go to `~/Applications`).
+place; fresh installs go to `~/Applications`) and prints the resulting `VT Code.app` path, both on a fresh install and
+when the app is already current.
 
 The GUI accepts a startup link, `--session <id> --workspace <path>` (either order; `--flag=value` also works),
 sent by CLI `/desktop` via `open --args`. It selects the workspace and loads the thread through the same
@@ -672,7 +695,8 @@ VT Code Desktop does not currently check for or install updates. Every release s
 `vtcode-desktop-<version>-<macos-target>.zip` (+ `.sha256`) on GitHub Releases, built by `release.sh` Step 4 from
 `scripts/package-desktop-macos.sh`: ad hoc signed with `FIRST-LAUNCH.txt` Gatekeeper guidance by default, or Developer ID
 signed, notarized, and stapled when `VTCODE_MACOS_SIGNING_IDENTITY`/`VTCODE_MACOS_NOTARY_PROFILE` are configured (set
-`RELEASE_REQUIRE_DESKTOP=false` to ship a CLI-only release). The asset name matches no CLI updater selector, so it rides
+`RELEASE_REQUIRE_DESKTOP=false` to ship a CLI-only release). Homebrew cask users upgrade the whole bundle explicitly
+with `brew upgrade --cask vinhnx/tap/vtcode-desktop`. The asset name matches no CLI updater selector, so it rides
 the normal upload queue without affecting `vtcode update`, which still updates a standalone CLI executable rather than the
 desktop bundle and its bundled helper as one unit. The main-branch macOS workflow additionally uploads a seven-day CI
 artifact for development builds.

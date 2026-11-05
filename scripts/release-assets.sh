@@ -192,7 +192,7 @@ append_desktop_release_notes() {
     if [[ "$mode" == "notarized" ]]; then
         first_launch="The app is Developer ID signed and notarized, so it opens normally."
     else
-        first_launch="This build is ad hoc signed (no Developer ID): on first launch, right-click VT Code.app and choose Open (or allow it in System Settings > Privacy & Security). See FIRST-LAUNCH.txt inside the zip."
+        first_launch="**One-time macOS security step:** this build is ad hoc signed (no Developer ID), so Gatekeeper blocks the first launch. Allow it once in System Settings > Privacy & Security (**Open Anyway**), then open the app again. See FIRST-LAUNCH.txt inside the zip."
     fi
     local section
     # Two leading newlines: gh strips the body's trailing newline, so the

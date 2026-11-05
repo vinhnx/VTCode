@@ -354,25 +354,34 @@ printf '%b%s%b\n' "$YELLOW" 'Ad hoc signing does not provide Developer ID trust 
 
 # Ad hoc builds trip Gatekeeper on first launch. Leave the unlock steps next
 # to the bundle (it may be handed off without this terminal output) and print
-# the short version here.
+# the short version here. macOS 15+ removed the right-click > Open bypass for
+# unnotarized apps, so Privacy & Security is the only route that works.
 cat >"${OUTPUT_PARENT}/FIRST-LAUNCH.txt" <<NOTICE
 VT Code Desktop - first launch
 ==============================
 This build is signed ad hoc for local development (no Developer ID, no
-notarization), so macOS Gatekeeper may block the first launch with "cannot
-be opened because it is from an unidentified developer".
+notarization), so macOS Gatekeeper blocks the first launch with "cannot be
+opened because it is from an unidentified developer".
 
-To open it:
-  1. In Finder, right-click VT Code.app, choose Open, then Open again in
-     the confirmation dialog, or
-  2. After a blocked launch, open System Settings > Privacy & Security and
-     click Open Anyway next to the VT Code message.
+ONE-TIME macOS SECURITY STEP REQUIRED
 
-You only need to do this once; later launches open normally. To
-distribute without this prompt, sign with a Developer ID certificate
-and notarize (see scripts/macos-release-signing.sh).
+To allow it, once:
+  1. Open the app from Applications so macOS records the block
+  2. Open System Settings > Privacy & Security
+  3. Click "Open Anyway" next to the VT Code message
+  4. Open the app again (from Finder, or run: vtcode desktop)
+
+"Open Anyway" only appears for about an hour after a blocked launch. If it is
+gone, open the app again to re-trigger the block.
+
+You only need to do this once; later launches open normally. To distribute
+without this step, sign with a Developer ID certificate and notarize (see
+scripts/macos-release-signing.sh).
 NOTICE
-printf '%b%b%s%b %s\n' "$CYAN" "$BOLD" 'First launch:' "$NC" 'right-click the app and choose Open (or allow it in System Settings > Privacy & Security).'
+printf '%b%b%s%b\n' "$YELLOW" "$BOLD" 'ACTION REQUIRED - one-time security step:' "$NC"
+printf '  %s\n' 'This build is not notarized, so macOS blocks the first launch.'
+printf '%b  %s%b\n' "$CYAN" 'Open the app once to trigger the block, then click Open Anyway in System Settings > Privacy & Security.' "$NC"
+printf '%b  %s%b\n' "$CYAN" 'It only appears for about an hour after a blocked launch.' "$NC"
 printf '%b%s%s%b\n' "$DIM" 'Details written to: ' "${OUTPUT_PARENT}/FIRST-LAUNCH.txt" "$NC"
 
 ELAPSED=$((SECONDS - START_SECONDS))

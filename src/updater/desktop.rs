@@ -31,9 +31,15 @@ const DESKTOP_FIRST_LAUNCH_NOTE: &str = "FIRST-LAUNCH.txt";
 pub(crate) enum DesktopInstallOutcome {
     Installed {
         version: String,
+        /// Absolute path of the bundle that was just written to disk.
+        path: PathBuf,
         needs_gatekeeper_approval: bool,
     },
-    UpToDate(String),
+    UpToDate {
+        version: String,
+        /// Absolute path of the existing bundle, so callers can point at it.
+        path: PathBuf,
+    },
 }
 
 /// Whether this host can install the desktop app (macOS only).
@@ -83,9 +89,11 @@ pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -
         github::fetch_latest_release_metadata(updater.config().download_timeout_secs, &updater.config().channel)
             .await?;
 
-    let installed = installed_desktop_version().await;
-    if let Some(installed) = installed.as_ref().filter(|version| **version >= release.version) {
-        return Ok(DesktopInstallOutcome::UpToDate(installed.to_string()));
+    if let Some((installed, path)) = installed_desktop_bundle()
+        .await
+        .filter(|(installed, _)| *installed >= release.version)
+    {
+        return Ok(DesktopInstallOutcome::UpToDate { version: installed.to_string(), path });
     }
 
     let (asset, matched_target) = select_desktop_asset(&release.assets, target)?;
@@ -127,8 +135,19 @@ pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -
     tracing::info!("desktop app installed to {}", installed.path.display());
     Ok(DesktopInstallOutcome::Installed {
         version: release.version.to_string(),
+        path: installed.path,
         needs_gatekeeper_approval: installed.needs_gatekeeper_approval,
     })
+}
+
+/// Resolve the installed bundle and read its version from the bundled helper,
+/// returning both so the up-to-date report can name where the app lives.
+/// `None` when no bundle resolves or its version is unreadable, which callers
+/// treat as "needs install".
+async fn installed_desktop_bundle() -> Option<(Version, PathBuf)> {
+    let bundle = crate::cli::desktop::resolve_desktop_app(None).ok()?;
+    let version = desktop_bundle_version(&bundle, Duration::from_secs(10)).await?;
+    Some((version, bundle))
 }
 
 /// Read the installed desktop app's version from its bundled CLI helper.
@@ -144,6 +163,12 @@ pub(crate) async fn installed_desktop_version() -> Option<Version> {
 
 async fn installed_desktop_version_with_timeout(timeout: Duration) -> Option<Version> {
     let bundle = crate::cli::desktop::resolve_desktop_app(None).ok()?;
+    desktop_bundle_version(&bundle, timeout).await
+}
+
+/// Run the bundle's bundled helper to read its version, time-bounded so a hung
+/// helper can never hang the update.
+async fn desktop_bundle_version(bundle: &Path, timeout: Duration) -> Option<Version> {
     let helper = bundle.join(DESKTOP_HELPER_RELATIVE_PATH);
     let child = tokio::process::Command::new(&helper)
         .arg("--version")
@@ -595,6 +620,34 @@ mod tests {
         }
 
         assert_eq!(version, Some(Version::parse("0.181.0").expect("semver")));
+    }
+
+    /// The up-to-date branch needs both the version and the bundle path so the
+    /// CLI can report where the app lives. An unreadable version still counts
+    /// as "needs install" (see `installed_version_is_none_without_helper`).
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn installed_bundle_reports_version_and_path() {
+        let temp = tempfile::tempdir().expect("temp");
+        let bundle = temp.path().join("VT Code.app");
+        let helpers = bundle.join("Contents/Helpers");
+        std::fs::create_dir_all(&helpers).expect("dirs");
+        std::fs::write(bundle.join("Contents/Info.plist"), b"plist").expect("plist");
+        let helper = helpers.join("vtcode");
+        std::fs::write(&helper, b"#!/bin/sh\necho 'vtcode-core 0.181.0'\n").expect("helper");
+        set_mode(&helper, 0o755);
+
+        let (env, previous) = with_desktop_app_env(&bundle);
+        let installed = installed_desktop_bundle().await;
+        match previous {
+            Some(value) => env.set_var("VTCODE_DESKTOP_APP", value),
+            None => env.remove_var("VTCODE_DESKTOP_APP"),
+        }
+
+        let (version, path) = installed.expect("bundle with helper");
+        assert_eq!(version, Version::parse("0.181.0").expect("semver"));
+        // The resolver canonicalizes (e.g. /var -> /private/var on macOS).
+        assert_eq!(path, vtcode_commons::canonicalize(&bundle).expect("canonical"));
     }
 
     #[cfg(unix)]
