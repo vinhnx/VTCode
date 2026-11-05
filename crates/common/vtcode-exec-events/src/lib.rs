@@ -470,6 +470,9 @@ pub const MAX_IN_PROGRESS_EXEC_SESSIONS: usize = 4;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct TurnCompletedEvent {
+    /// Identity of the final agent message, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_response_item_id: Option<Box<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<Box<String>>,
     /// Token usage summary for the completed turn.

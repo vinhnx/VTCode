@@ -101,8 +101,20 @@ fn restored_review_uses_latest_canonical_items_without_lifecycle_replay() {
     log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: review_item("first", "latest patch") }))
         .unwrap();
     log.flush().unwrap();
-    let RestoredInspectorHistory { items, incomplete, .. } = restored_inspector_history(&workspace, "review").unwrap();
+    let RestoredInspectorHistory {
+        items,
+        incomplete,
+        timeline_events,
+        timeline_incomplete,
+        ..
+    } = restored_inspector_history(&workspace, "review").unwrap();
     assert!(!incomplete);
+    assert!(!timeline_incomplete);
+    assert_eq!(timeline_events.len(), 4);
+    assert!(matches!(timeline_events[0].event(), ThreadEvent::ThreadStarted(_)));
+    assert!(matches!(timeline_events[1].event(), ThreadEvent::ItemStarted(event) if event.item.id == "first"));
+    assert!(matches!(timeline_events[2].event(), ThreadEvent::ItemCompleted(event) if event.item.id == "other"));
+    assert!(matches!(timeline_events[3].event(), ThreadEvent::ItemCompleted(event) if event.item.id == "first"));
     assert_eq!(
         items,
         vec![

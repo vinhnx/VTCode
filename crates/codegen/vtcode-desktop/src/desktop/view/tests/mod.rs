@@ -534,6 +534,7 @@ fn turn_completed_event(session_id: &str, turn_id: &str) -> BackendEvent {
         session_id: session_id.into(),
         turn_id: Some(turn_id.into()),
         event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage {
                 input_tokens: 10,
@@ -605,7 +606,9 @@ mod themes_transcript;
 mod thread_tabs;
 mod transcript_inspector_ctas;
 mod transcript_navigation;
+mod turn_group;
 mod turn_queue;
+mod turn_undo;
 mod turns_transcript;
 mod worktree_a11y;
 mod zen_options;

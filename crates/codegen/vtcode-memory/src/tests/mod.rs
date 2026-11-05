@@ -28,6 +28,7 @@ fn sample_turn() -> Vec<ThreadEvent> {
         ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread".to_string() }),
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),

@@ -16,6 +16,7 @@ fn lifecycle_kind_from_event_covers_all_variants() {
     );
     assert_eq!(
         LifecycleKind::from_event(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new()

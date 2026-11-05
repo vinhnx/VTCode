@@ -311,6 +311,7 @@ fn context_boundary_events_notice_and_reset_stale_usage(cx: &mut TestAppContext)
                 session_id: "session".into(),
                 turn_id: Some("turn-1".into()),
                 event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: None,
                     completed_at: None,
                     usage: Usage {
                         input_tokens: 5_000,
@@ -517,7 +518,7 @@ fn grouped_tool_rows_nest_under_their_header(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn turn_dividers_separate_later_user_turns(cx: &mut TestAppContext) {
+fn user_turns_render_without_dividers(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -532,7 +533,7 @@ fn turn_dividers_separate_later_user_turns(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         assert!(window.try_find("turn-divider-first-turn").is_none(), "no divider above the first turn");
-        assert!(window.try_find("turn-divider-second-turn").is_some(), "later turns get a divider");
+        assert!(window.try_find("turn-divider-second-turn").is_none(), "later turns have no divider");
     })
     .unwrap();
 }
@@ -628,6 +629,7 @@ fn context_boundary_hides_and_restores_rendered_context_usage(cx: &mut TestAppCo
                 session_id: "session".into(),
                 turn_id: Some("turn-1".into()),
                 event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: None,
                     completed_at: None,
                     usage: Usage {
                         input_tokens: 5_000,

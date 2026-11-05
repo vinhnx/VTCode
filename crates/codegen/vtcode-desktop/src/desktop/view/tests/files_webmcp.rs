@@ -44,11 +44,10 @@ fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAp
             (assistant_body.top() - assistant_column.top()).abs() <= px(1.),
             "agent prose should start directly in its row without a speaker header"
         );
-        // Later user turns open with a divider; the bubble still starts
-        // directly after it with no speaker header.
-        let divider = window.find("turn-divider-user-center").bounds();
+        // User bubbles start directly in their row without a divider or header.
+        assert!(window.try_find("turn-divider-user-center").is_none());
         assert!(
-            user_body.top() - divider.bottom() <= px(16.),
+            user_body.top() - user_column.top() <= px(16.),
             "the user bubble should not reserve space for a speaker header"
         );
         assert!(user_body.left() > assistant_body.left(), "user bubbles align to the trailing edge");

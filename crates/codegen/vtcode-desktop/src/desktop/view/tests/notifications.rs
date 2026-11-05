@@ -426,6 +426,7 @@ fn system_notification_click_reselects_the_notified_thread(cx: &mut TestAppConte
                     session_id: "thread-a".into(),
                     turn_id: Some("turn-1".into()),
                     event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                        final_response_item_id: None,
                         completed_at: None,
                         usage: Usage {
                             input_tokens: 0,

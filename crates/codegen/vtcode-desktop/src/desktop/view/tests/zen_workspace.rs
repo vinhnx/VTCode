@@ -536,12 +536,16 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
     let (window, view) = open_desktop(cx);
     let session_id = "archive-session";
     let prompt = SessionHistoryMessage {
+        event_item_id: None,
+        phase: None,
         hidden: false,
         archive_index: None,
         role: "user".into(),
         text: "Question".into(),
     };
     let answer = SessionHistoryMessage {
+        event_item_id: None,
+        phase: None,
         hidden: false,
         archive_index: None,
         role: "assistant".into(),
@@ -557,6 +561,8 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
         assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
 
         let inserted = SessionHistoryMessage {
+            event_item_id: None,
+            phase: None,
             hidden: false,
             archive_index: None,
             role: "user".into(),
@@ -569,6 +575,8 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
                 prompt,
                 answer,
                 SessionHistoryMessage {
+                    event_item_id: None,
+                    phase: None,
                     hidden: false,
                     archive_index: None,
                     role: "assistant".into(),
@@ -594,12 +602,16 @@ fn restored_history_archive_ids_remain_stable_when_an_earlier_page_is_loaded() {
         session_id,
         vec![
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(160),
                 role: "assistant".into(),
                 text: "Repeated".into(),
             },
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(161),
                 role: "assistant".into(),
@@ -614,18 +626,24 @@ fn restored_history_archive_ids_remain_stable_when_an_earlier_page_is_loaded() {
         session_id,
         vec![
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(158),
                 role: "user".into(),
                 text: "Earlier".into(),
             },
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(159),
                 role: "assistant".into(),
                 text: "Context".into(),
             },
             SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(160),
                 role: "assistant".into(),
@@ -649,6 +667,8 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
         view.history_has_earlier = true;
         let messages = (160..170)
             .map(|index| SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(index),
                 role: "assistant".into(),
@@ -687,6 +707,8 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
         start_index: 157,
         messages: (157..160)
             .map(|index| SessionHistoryMessage {
+                event_item_id: None,
+                phase: None,
                 hidden: false,
                 archive_index: Some(index),
                 role: "assistant".into(),
@@ -745,27 +767,6 @@ fn hidden_history_page_advances_without_showing_runtime_context(cx: &mut TestApp
         assert_eq!(window.find("load-earlier-history").role(), Some(gpui_kit::Role::Button));
     })
     .unwrap();
-}
-
-#[test]
-fn hidden_history_marker_does_not_suppress_user_messages() {
-    let messages = vec![
-        vtcode_desktop_protocol::SessionHistoryMessage {
-            hidden: true,
-            archive_index: Some(0),
-            role: "system".into(),
-            text: "model context".into(),
-        },
-        vtcode_desktop_protocol::SessionHistoryMessage {
-            hidden: true,
-            archive_index: Some(1),
-            role: "user".into(),
-            text: "keep my message".into(),
-        },
-    ];
-    let rows = super::super::prepare_session_history("session", messages);
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].text.as_ref(), "keep my message");
 }
 
 #[gpui_kit::test]

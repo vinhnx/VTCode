@@ -13,6 +13,8 @@ fn legacy_session_load_defaults_review_history() {
     assert!(loaded.activity_items.is_empty());
     assert!(loaded.activity_output_cursors.is_empty());
     assert!(!loaded.activity_history_incomplete);
+    assert!(loaded.timeline_events.is_empty());
+    assert!(!loaded.timeline_incomplete);
     assert_eq!(loaded.history_start_index, 0);
     assert!(!loaded.history_has_earlier);
     assert_eq!(loaded.messages[0].archive_index, None);
@@ -36,6 +38,8 @@ fn session_history_page_round_trips_archive_cursor_and_request_identity() {
         request_id: params.request_id.clone(),
         start_index: 80,
         messages: vec![SessionHistoryMessage {
+            event_item_id: None,
+            phase: None,
             hidden: false,
             archive_index: Some(80),
             role: "assistant".into(),
@@ -73,6 +77,8 @@ fn session_output_page_round_trips_bounded_cursor_and_request_identity() {
         has_more: true,
     };
     let loaded = SessionLoadResult {
+        timeline_events: Vec::new(),
+        timeline_incomplete: false,
         session: SessionSummary {
             session_id: params.session_id.clone(),
             title: None,
@@ -416,6 +422,7 @@ fn plan_delta(item_id: &str, delta: &str) -> VersionedThreadEvent {
 fn turn_completed() -> VersionedThreadEvent {
     use vtcode_exec_events::{TurnCompletedEvent, Usage};
     VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage {
             input_tokens: 0,

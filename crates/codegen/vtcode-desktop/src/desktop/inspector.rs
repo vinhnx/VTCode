@@ -515,7 +515,7 @@ fn change_kind(status: DiffFileStatus) -> DiffFileKind {
     }
 }
 
-fn preview_counts(preview: Option<&DiffFile>, incomplete: bool) -> (Option<u64>, Option<u64>) {
+pub(super) fn preview_counts(preview: Option<&DiffFile>, incomplete: bool) -> (Option<u64>, Option<u64>) {
     if incomplete {
         return (None, None);
     }

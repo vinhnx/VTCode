@@ -25,6 +25,7 @@ async fn terminal_events_release_accepted_turns_without_a_start_event() {
         (
             "dropped-start",
             ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
                 completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
@@ -195,6 +196,7 @@ async fn old_runtime_pump_cannot_change_a_replacement_turn_in_the_same_session()
         .unwrap();
     let completed = || {
         VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),

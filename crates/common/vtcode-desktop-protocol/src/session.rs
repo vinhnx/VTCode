@@ -116,6 +116,12 @@ pub struct SessionHistoryMessage {
     pub archive_index: Option<usize>,
     /// Message role such as `user`, `assistant`, or `tool`.
     pub role: String,
+    /// Recorded assistant phase, absent for older archives or non-assistant messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
+    /// Canonical event item identity, when retained in the archive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_item_id: Option<String>,
     /// Text projection of the persisted message content.
     pub text: String,
 }
@@ -149,6 +155,12 @@ pub struct SessionLoadResult {
     /// Whether bounded history projection omitted activity or output evidence.
     #[serde(default)]
     pub activity_history_incomplete: bool,
+    /// Ordered canonical event suffix for reconstructing transcript turns.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub timeline_events: Vec<vtcode_exec_events::VersionedThreadEvent>,
+    /// Whether the event suffix omits earlier events.
+    #[serde(default)]
+    pub timeline_incomplete: bool,
 }
 
 /// Request an earlier bounded page of the selected archived conversation.

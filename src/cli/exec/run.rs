@@ -392,6 +392,7 @@ async fn handle_codex_exec_command_impl(
     let completed = match codex_result {
         Ok(completed) => {
             let mut turn_completed = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
                 completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),

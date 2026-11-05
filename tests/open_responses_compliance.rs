@@ -96,6 +96,7 @@ fn test_streaming_event_sequence_compliance() {
     // 5. Response Completed
     builder.process_event(
         &ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),

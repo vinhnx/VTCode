@@ -9,6 +9,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
             session_id: "session".into(),
             turn_id: Some(turn_id.into()),
             event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
                 completed_at: None,
                 usage: Usage {
                     input_tokens: 0,
@@ -768,6 +769,7 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
                 turn_id: Some("turn-9".to_string()),
                 event: vtcode_exec_events::VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::TurnCompleted(
                     vtcode_exec_events::TurnCompletedEvent {
+                        final_response_item_id: None,
                         completed_at: None,
                         usage: vtcode_exec_events::Usage {
                             input_tokens: 0,

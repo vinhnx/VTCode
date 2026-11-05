@@ -12,6 +12,8 @@ fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
     TranscriptItem::new(id.to_string(), role.to_string(), "Activity".into(), text.to_string())
 }
 
+mod turn_tests;
+
 #[test]
 fn tool_and_diff_rows_skip_unused_markdown_projections() {
     let mut transcript = Transcript::default();

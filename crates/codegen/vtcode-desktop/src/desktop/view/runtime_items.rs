@@ -4,6 +4,106 @@
 use super::*;
 
 impl DesktopView {
+    pub(super) fn restore_review_summaries(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
+        let mut completions: HashMap<&str, usize> = HashMap::new();
+        let mut item_turns: HashMap<&str, Option<&str>> = HashMap::new();
+        for event in events {
+            match event.event() {
+                vtcode_exec_events::ThreadEvent::TurnCompleted(completed) => {
+                    if let Some(id) = completed.final_response_item_id.as_deref() {
+                        *completions.entry(id.as_str()).or_default() += 1;
+                    }
+                }
+                vtcode_exec_events::ThreadEvent::ItemCompleted(completed)
+                    if matches!(completed.item.details, vtcode_exec_events::ThreadItemDetails::AgentMessage(_)) =>
+                {
+                    use std::collections::hash_map::Entry;
+                    let turn = completed
+                        .item
+                        .context
+                        .as_deref()
+                        .map(|context| context.turn_id.as_str())
+                        .filter(|id| !id.is_empty());
+                    match item_turns.entry(&completed.item.id) {
+                        Entry::Vacant(entry) => {
+                            let _stored = entry.insert(turn);
+                        }
+                        Entry::Occupied(mut entry) => {
+                            let _previous = entry.insert(None);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut occurrences: HashMap<&str, usize> = HashMap::new();
+        for item in self.transcript.items() {
+            if let Some(id) = item.canonical_item_id.as_deref() {
+                *occurrences.entry(id).or_default() += 1;
+            }
+        }
+        let matches: Vec<_> = self
+            .transcript
+            .items()
+            .filter_map(|item| {
+                let id = item.canonical_item_id.as_deref()?;
+                let turn = (*item_turns.get(id)?)?;
+                (occurrences.get(id) == Some(&1) && completions.get(id) == Some(&1))
+                    .then(|| (item.id.clone(), id.to_owned(), turn.to_owned()))
+            })
+            .collect();
+        for (row_id, item_id, turn_id) in matches {
+            self.transcript.restore_archived_turn_files(
+                &row_id,
+                &item_id,
+                &turn_id,
+                self.restored_review_history_incomplete,
+            );
+        }
+    }
+
+    pub(super) fn restore_completion_times(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
+        let mut times: HashMap<&str, Option<String>> = HashMap::new();
+        for event in events {
+            if let vtcode_exec_events::ThreadEvent::TurnCompleted(completed) = event.event()
+                && let Some(id) = &completed.final_response_item_id
+            {
+                use std::collections::hash_map::Entry;
+                match times.entry(id.as_str()) {
+                    Entry::Vacant(entry) => {
+                        let time = completed
+                            .completed_at
+                            .as_deref()
+                            .and_then(|timestamp| chrono::DateTime::parse_from_rfc3339(timestamp).ok())
+                            .map(|timestamp| timestamp.with_timezone(&chrono::Local).format("%H:%M").to_string());
+                        let _stored = entry.insert(time);
+                    }
+                    Entry::Occupied(mut entry) => {
+                        let _previous = entry.insert(None);
+                    }
+                }
+            }
+        }
+        let mut occurrences: HashMap<&str, usize> = HashMap::new();
+        for item in self.transcript.items() {
+            if let Some(id) = item.canonical_item_id.as_deref() {
+                *occurrences.entry(id).or_default() += 1;
+            }
+        }
+        let matches: Vec<_> = self
+            .transcript
+            .items()
+            .filter_map(|item| {
+                let id = item.canonical_item_id.as_deref()?;
+                let time = times.get(id)?.as_ref()?;
+                (occurrences.get(id) == Some(&1)).then(|| (item.id.clone(), id.to_owned(), time.clone()))
+            })
+            .collect();
+        for (row_id, item_id, time) in matches {
+            self.transcript.set_archived_completion_time(&row_id, &item_id, time.into());
+        }
+    }
+
     pub(super) fn finish_unverified_turn(&mut self, message: &str) {
         self.pending_submission = None;
         self.pending_first_submission = false;
@@ -36,6 +136,29 @@ impl DesktopView {
     pub(super) fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
         self.drop_superseded_restored_item(&item.id);
         self.project_runtime_item(item, false);
+    }
+
+    pub(super) fn update_runtime_item_for_turn(
+        &mut self,
+        item: &vtcode_exec_events::ThreadItem,
+        turn_id: Option<&str>,
+    ) {
+        let context_turn = item
+            .context
+            .as_deref()
+            .map(|context| context.turn_id.as_str())
+            .filter(|id| !id.is_empty());
+        if !self.transcript.accepts_item_turn(&item.id, turn_id) {
+            // Conflicting turn identity: the stale item is dropped.
+            return;
+        }
+        self.update_runtime_item(item);
+        if let Some(turn_id) = turn_id {
+            self.transcript.set_item_turn(&item.id, turn_id);
+        }
+        if let Some(context_turn) = context_turn {
+            self.transcript.set_item_canonical_turn(&item.id, context_turn);
+        }
     }
 
     /// Drop restored projections superseded by a newer item with the same
@@ -109,8 +232,11 @@ impl DesktopView {
                     _ => Vec::new(),
                 };
                 if historical {
+                    let turn_id = item.context.as_deref().map(|context| context.turn_id.clone().into());
                     let mut item =
                         TranscriptItem::new(id, TranscriptRole::Tool.as_str().to_string(), title.into(), text);
+                    item.canonical_turn_id.clone_from(&turn_id);
+                    item.turn_id = turn_id;
                     item.output = output;
                     item.app_previews = app_previews;
                     item.activity_category = ToolCategory::from_details(details);
@@ -149,6 +275,10 @@ impl DesktopView {
             };
             self.drop_superseded_restored_item(&item.id);
             self.replace_diff_card_row(item.id.clone(), change);
+            if let Some(context) = item.context.as_deref() {
+                self.transcript.set_item_turn(&item.id, &context.turn_id);
+                self.transcript.set_item_canonical_turn(&item.id, &context.turn_id);
+            }
             projected = true;
         }
         if projected {

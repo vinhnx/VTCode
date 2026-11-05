@@ -1,5 +1,6 @@
 //! Transcript state and conversation rendering: rows, items, tool and diff cards.
 
+use super::turn_undo::{TurnUndoState, undo_turn_id};
 use super::*;
 
 /// Owned welcome-screen text shared by the default and Zen empty states.
@@ -63,6 +64,7 @@ impl DesktopView {
     pub(super) fn load_history(&mut self, history: Vec<TranscriptItem>) {
         self.reset_session_state();
         self.transcript.replace_prepared(history);
+        self.transcript.group_archived_prefix(usize::MAX);
         self.transcript.follow_latest();
     }
 
@@ -396,7 +398,36 @@ impl DesktopView {
             .then(|| self.transcript.activity_group(index))
             .flatten()
             .map(|range| self.render_activity_group(range, cx));
-        let show_item = !item.activity_grouped || item.activity_expanded;
+        let show_turn_item = !item.turn_grouped || item.turn_group_expanded;
+        let show_item = show_turn_item && (!item.activity_grouped || item.activity_expanded);
+        let turn_header = if item.turn_group_head {
+            item.turn_id.as_ref().map(|turn_id| {
+                let turn_id = turn_id.to_string();
+                let expanded = item.turn_group_expanded;
+                desktop_button(format!("turn-work-{turn_id}"))
+                    .label(InspectorTab::Activity.label())
+                    .accessibility_label(format!(
+                        "{} {}",
+                        if expanded {
+                            rust_i18n::t!("app.transcript.collapse")
+                        } else {
+                            rust_i18n::t!("app.transcript.expand")
+                        },
+                        InspectorTab::Activity.label()
+                    ))
+                    .toggled(expanded)
+                    .child(transcript_chevron_lane(expanded))
+                    .ghost()
+                    .small()
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.transcript.set_turn_group_expanded(&turn_id, !expanded);
+                        cx.notify();
+                    }))
+                    .into_any_element()
+            })
+        } else {
+            None
+        };
         let content = div()
             .id(format!("transcript-content-{}", item.id))
             .test_support()
@@ -405,16 +436,150 @@ impl DesktopView {
             .min_w_0()
             .flex()
             .flex_col()
-            .children(group_header)
-            .when(item.is_user() && index > 0, |column| {
-                column.child(
-                    div()
-                        .id(format!("turn-divider-{}", item.id))
-                        .test_support()
-                        .child(turn_divider(&cx.theme().colors)),
-                )
-            })
-            .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)));
+            .children(turn_header)
+            .when(show_turn_item, |column| column.children(group_header))
+            .when(show_item, |column| column.child(self.render_transcript_item(item, tool_tail.clone(), cx)))
+            .when(!item.turn_files.is_empty(), |column| {
+                let path = item.turn_files.first().map(|entry| entry.file.path.clone());
+                let undo_control = undo_turn_id(item).map(|turn_id| {
+                    let turn_id = turn_id.to_owned();
+                    if self.turn_undos.get(turn_id.as_str()) == Some(&TurnUndoState::Undone) {
+                        div()
+                            .text_sm()
+                            .text_color(themes::muted_text(&cx.theme().colors))
+                            .child(rust_i18n::t!("app.transcript.turn_undone").to_string())
+                            .into_any_element()
+                    } else {
+                        let pending = self.turn_undos.contains_key(turn_id.as_str());
+                        desktop_button(format!("turn-undo-{turn_id}"))
+                            .label(rust_i18n::t!("app.transcript.turn_undo").to_string())
+                            .accessibility_label(rust_i18n::t!("app.transcript.turn_undo_action").to_string())
+                            .ghost()
+                            .small()
+                            .disabled(pending)
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                let _sent = view.request_turn_undo(&turn_id);
+                                cx.notify();
+                            }))
+                            .into_any_element()
+                    }
+                });
+                let mut card = div()
+                    .w_full()
+                    .rounded_md()
+                    .bg(cx.theme().colors.secondary)
+                    .px_3()
+                    .py_2()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        rust_i18n::t!("app.inspector.files_count", count = item.turn_files.len())
+                                            .to_string(),
+                                    )
+                                    .when(item.turn_files_incomplete, |summary| {
+                                        summary.child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(themes::muted_text(&cx.theme().colors))
+                                                .child(rust_i18n::t!("app.inspector.partial_diff").to_string()),
+                                        )
+                                    })
+                                    .when_some(item.turn_file_totals, |summary, (added, deleted)| {
+                                        summary.child(
+                                            div()
+                                                .flex()
+                                                .gap_2()
+                                                .text_sm()
+                                                .child(
+                                                    div()
+                                                        .text_color(cx.theme().colors.success)
+                                                        .child(format!("+{added}")),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_color(cx.theme().colors.danger)
+                                                        .child(format!("−{deleted}")),
+                                                ),
+                                        )
+                                    }),
+                            )
+                            .child(
+                                div().flex().items_center().gap_2().children(undo_control).child(
+                                    desktop_button(format!("turn-changes-{}", item.id))
+                                        .label(InspectorTab::Changes.label())
+                                        .ghost()
+                                        .small()
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            if let Some(path) =
+                                                path.as_ref().filter(|path| view.changes.has_preview(path))
+                                            {
+                                                view.select_change(path.clone(), cx);
+                                            } else {
+                                                view.open_inspector_tab(InspectorTab::Changes, cx);
+                                            }
+                                        })),
+                                ),
+                            ),
+                    );
+                let start = item.turn_files_offset.min(item.turn_files.len());
+                let count = if start == 0 { 3 } else { 50 };
+                let end = start.saturating_add(count).min(item.turn_files.len());
+                for file in item.turn_files.iter().skip(start).take(count) {
+                    card = card.child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .min_w_0()
+                            .text_sm()
+                            .text_color(themes::muted_text(&cx.theme().colors))
+                            .child(div().min_w_0().flex_1().truncate().child(file.file.path.clone()))
+                            .when_some(file.counts, |row, (added, deleted)| {
+                                row.child(
+                                    div()
+                                        .flex()
+                                        .flex_shrink_0()
+                                        .gap_1()
+                                        .child(div().text_color(cx.theme().colors.success).child(format!("+{added}")))
+                                        .child(div().text_color(cx.theme().colors.danger).child(format!("−{deleted}"))),
+                                )
+                            }),
+                    );
+                }
+                if item.turn_files.len() > 3 {
+                    let id = item.id.clone();
+                    let label = if end == item.turn_files.len() {
+                        rust_i18n::t!("app.transcript.collapse").to_string()
+                    } else {
+                        rust_i18n::t!("app.configuration.show_more", remaining = item.turn_files.len() - end)
+                            .to_string()
+                    };
+                    card = card.child(
+                        desktop_button(format!("turn-files-toggle-{id}"))
+                            .label(label)
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.transcript.toggle_turn_files(&id);
+                                cx.notify();
+                            })),
+                    );
+                }
+                column.child(card)
+            });
         let message_id = item.id.clone();
         let clicked_id = item.id.clone();
         let keyboard_focused = self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
@@ -575,6 +740,9 @@ impl DesktopView {
                             .min_h_5()
                             .flex()
                             .items_center()
+                            .children(item.completed_at.as_ref().map(|time| {
+                                div().text_xs().text_color(themes::muted_text(&colors)).child(time.clone())
+                            }))
                             .when(revealed, |slot| {
                                 slot.child(
                                     desktop_button(format!("copy-message-{}", item.id))
@@ -756,217 +924,6 @@ impl DesktopView {
                     .child(self.render_mcp_app_previews(item, cx)),
             );
         }
-        panel.into_any_element()
-    }
-
-    fn render_diff_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        let diff_foreground =
-            themes::diff_text_foreground(colors.background, colors.foreground, colors.success, colors.danger);
-        let mono_font = cx.theme().mono_font_family.clone();
-        let Some(diff) = item.diff.as_ref() else {
-            return div().into_any_element();
-        };
-        let id = item.id.clone();
-        let status_label = if diff.failed {
-            rust_i18n::t!("app.transcript.patch_failed").to_string()
-        } else if diff.incomplete {
-            rust_i18n::t!("app.transcript.preview_incomplete").to_string()
-        } else {
-            rust_i18n::t!("app.transcript.applied").to_string()
-        };
-        let toggle_id = id.clone();
-        let mut stats = div().flex().items_center().gap_2().text_sm().flex_shrink_0();
-        if let Some(additions) = diff.additions {
-            stats = stats.child(div().text_color(colors.success).child(format!("+{additions}")));
-        }
-        if let Some(deletions) = diff.deletions {
-            stats = stats.child(div().text_color(colors.danger).child(format!("−{deletions}")));
-        }
-
-        // Trailing actions share one shrink-proof group (see panel_header):
-        // the toggle and Changes jump must never overflow the card, so the
-        // leading title truncates instead when the conversation narrows. Copy
-        // patch lives in the expanded body beside the patch it copies.
-        let actions = div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .flex_shrink_0()
-            .child(
-                desktop_button(format!("diff-{}", item.id))
-                    .label(if item.expanded {
-                        rust_i18n::t!("app.transcript.hide_diff").to_string()
-                    } else {
-                        rust_i18n::t!("app.transcript.show_diff").to_string()
-                    })
-                    .ghost()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.transcript.toggle_diff(&toggle_id);
-                        cx.notify();
-                    })),
-            )
-            .child(Self::diff_changes_cta(&item.id, self.transcript_row_revealed(item.id.as_str()), cx));
-
-        let header = div()
-            .w_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_2()
-            .px_3()
-            .py_2()
-            .bg(colors.secondary)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .min_w_0()
-                    .flex_1()
-                    .child(div().font_medium().min_w_0().truncate().child(item.title.clone()))
-                    .child(stats)
-                    .child(
-                        div()
-                            .text_sm()
-                            .flex_shrink_0()
-                            .text_color(if diff.failed {
-                                colors.danger
-                            } else {
-                                themes::muted_text(&colors)
-                            })
-                            .child(status_label),
-                    ),
-            )
-            .child(actions);
-
-        let mut panel = div()
-            .relative()
-            .w_full()
-            .max_w(px(self.content_width()))
-            .rounded_md()
-            .overflow_hidden()
-            .child(header);
-
-        let mut body = div().w_full().flex().flex_col().px_3().py_2().gap_1();
-        for file in &diff.files {
-            let (kind_label, kind_color) = match file.kind {
-                DiffFileKind::Add => ("added", colors.success),
-                DiffFileKind::Delete => ("deleted", colors.danger),
-                DiffFileKind::Update => ("modified", colors.muted_foreground),
-            };
-            body = body.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_sm().font_family(mono_font.clone()).child(file.path.clone()))
-                    .child(div().text_xs().text_color(kind_color).child(kind_label)),
-            );
-        }
-        if diff.incomplete {
-            body = body.child(
-                div()
-                    .text_xs()
-                    .text_color(colors.muted_foreground)
-                    .child(rust_i18n::t!("app.transcript.previews_unavailable").to_string()),
-            );
-        }
-
-        if item.expanded && !diff.patch.is_empty() {
-            // Export sits with its object, mirroring the tool-row actions
-            // above their output block; the header keeps only the toggle and
-            // the Changes jump.
-            let copy_id = id.clone();
-            body = body.child(
-                div().flex().justify_end().child(
-                    desktop_button(format!("copy-patch-{}", item.id))
-                        .label(rust_i18n::t!("app.transcript.copy_patch").to_string())
-                        .ghost()
-                        .xsmall()
-                        .on_click(cx.listener(move |view, _, window, cx| {
-                            let Some(patch) = view
-                                .transcript
-                                .items_newest_first()
-                                .find(|candidate| candidate.id == copy_id)
-                                .and_then(|candidate| candidate.diff.as_ref())
-                                .map(|diff| diff.patch.clone())
-                                .filter(|patch| !patch.is_empty())
-                            else {
-                                return;
-                            };
-                            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch));
-                            super::super::notifications::copied_to_clipboard(window, cx);
-                        })),
-                ),
-            );
-            let mut lines = ClassifiedDiffLines::new(&diff.patch);
-            let mut diff_view = div()
-                .id(format!("diff-lines-{}", item.id))
-                .test_support()
-                .w_full()
-                .flex()
-                .flex_col()
-                .mt_2()
-                .rounded_md()
-                .overflow_hidden()
-                .overflow_x_scroll()
-                .bg(colors.background);
-            for line in &mut lines {
-                let (line_color, line_bg, marker_color) = match line.kind {
-                    DiffLineKind::Added => (
-                        diff_foreground,
-                        themes::diff_line_background(colors.background, diff_foreground, colors.success),
-                        Some(("+", "+", colors.success)),
-                    ),
-                    DiffLineKind::Removed => (
-                        diff_foreground,
-                        themes::diff_line_background(colors.background, diff_foreground, colors.danger),
-                        Some(("-", "−", colors.danger)),
-                    ),
-                    // Hunk markers orient multi-hunk patches but earn no band:
-                    // muted text on the base surface, like context lines.
-                    DiffLineKind::Hunk => (colors.muted_foreground, colors.background, None),
-                    DiffLineKind::Header | DiffLineKind::Context => (colors.foreground, colors.background, None),
-                };
-                let mut row = div()
-                    .w_full()
-                    .px_2()
-                    .text_xs()
-                    .font_family(mono_font.clone())
-                    .whitespace_nowrap()
-                    .bg(line_bg);
-                if let Some((source_marker, marker, marker_color)) = marker_color {
-                    let content = line.text.strip_prefix(source_marker).unwrap_or_default();
-                    row = row
-                        .flex()
-                        .child(
-                            div()
-                                .w_4()
-                                .flex_shrink_0()
-                                .font_semibold()
-                                .text_color(marker_color)
-                                .child(marker),
-                        )
-                        .child(div().text_color(line_color).child(content.to_string()));
-                } else {
-                    row = row.text_color(line_color).child(line.text.to_string());
-                }
-                diff_view = diff_view.child(row);
-            }
-            if lines.truncated {
-                diff_view = diff_view.child(
-                    div()
-                        .w_full()
-                        .px_2()
-                        .text_xs()
-                        .text_color(colors.muted_foreground)
-                        .child(rust_i18n::t!("app.transcript.diff_truncated").to_string()),
-                );
-            }
-            body = body.child(diff_view);
-        }
-        panel = panel.child(body);
         panel.into_any_element()
     }
 }

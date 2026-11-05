@@ -391,6 +391,7 @@ async fn session_store_sink_preserves_order_when_queue_is_small() {
         ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread".to_string() }),
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
@@ -530,6 +531,7 @@ fn session_store_sink_saturation_fails_closed() {
     };
     let first = ThreadEvent::TurnStarted(TurnStartedEvent::default());
     let second = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),

@@ -23,7 +23,9 @@ impl DesktopView {
     /// Rows the renderer hides (collapsed activity members) are also skipped by
     /// keyboard navigation, so the highlight never lands on an invisible row.
     pub(super) fn transcript_row_visible(item: &TranscriptItem) -> bool {
-        !(item.activity_grouped && !item.activity_group_head && !item.activity_expanded)
+        item.turn_group_head
+            || (!(item.turn_grouped && !item.turn_group_expanded)
+                && !(item.activity_grouped && !item.activity_group_head && !item.activity_expanded))
     }
 
     /// Visible row indexes backing keyboard navigation, in transcript order.
@@ -106,6 +108,15 @@ impl DesktopView {
         let Some(index) = self.transcript.position_by_id(item_id) else {
             return false;
         };
+        if let Some(turn_id) = self
+            .transcript
+            .get(index)
+            .filter(|item| item.turn_grouped && !item.turn_group_expanded)
+            .and_then(|item| item.turn_id.as_ref())
+            .map(ToString::to_string)
+        {
+            self.transcript.set_turn_group_expanded(&turn_id, true);
+        }
         if self.transcript.get(index).is_some_and(|item| item.is_tool()) {
             if self.transcript.reveal_tool_item(item_id).is_none() {
                 return false;

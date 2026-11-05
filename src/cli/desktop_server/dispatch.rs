@@ -686,6 +686,8 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                 activity_incomplete: activity_history_incomplete,
                 activity_output_cursors,
                 output_spools,
+                mut timeline_events,
+                mut timeline_incomplete,
             } = inspector_history;
             {
                 let mut state = context.state.lock().await;
@@ -693,7 +695,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                 state.restored_output_spools = output_spools;
             }
             let history = restored_history_page(&listing.snapshot.messages, None, MAX_RESTORED_MESSAGES);
-            let result = protocol::SessionLoadResult {
+            let mut result = protocol::SessionLoadResult {
                 session: session_summary(&listing),
                 messages: history.messages,
                 history_start_index: history.start_index,
@@ -703,7 +705,30 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                 activity_items,
                 activity_output_cursors,
                 activity_history_incomplete,
+                timeline_events: Vec::new(),
+                timeline_incomplete,
             };
+            // Session history and inspector projections share the same frame.
+            // Keep a reserve for the response envelope and trim only the oldest
+            // timeline events when the remaining wire budget is smaller.
+            let base_bytes = serde_json::to_vec(&result)?.len();
+            let budget = protocol::MAX_FRAME_BYTES.saturating_sub(base_bytes.saturating_add(8192));
+            let mut used = 0_usize;
+            let mut retained = 0_usize;
+            for event in timeline_events.iter().rev() {
+                let size = serde_json::to_vec(event)?.len().saturating_add(1);
+                if used.saturating_add(size) > budget {
+                    timeline_incomplete = true;
+                    break;
+                }
+                used += size;
+                retained += 1;
+            }
+            if retained < timeline_events.len() {
+                drop(timeline_events.drain(..timeline_events.len() - retained));
+            }
+            result.timeline_events = timeline_events;
+            result.timeline_incomplete = timeline_incomplete;
             let payload = serde_json::to_value(result)?;
             tracing::debug!(
                 target: "vtcode.desktop",

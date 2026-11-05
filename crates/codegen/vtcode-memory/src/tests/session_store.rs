@@ -31,6 +31,7 @@ fn event_log_batches_appends_until_turn_boundary() {
     assert_eq!(fs::metadata(&events_path).expect("metadata").len(), 0);
 
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),
@@ -105,6 +106,7 @@ fn reopening_mid_turn_preserves_state_for_completion() {
     let reopened = open(dir.path(), "sess-mid-turn-resume", DEFAULT_MAX_EVENTS).expect("reopen");
     reopened
         .append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),

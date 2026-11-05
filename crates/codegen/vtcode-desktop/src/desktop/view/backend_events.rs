@@ -66,6 +66,7 @@ impl DesktopView {
                     self.interrupt_armed_running_switch();
                     self.backend = None;
                     self.clear_pending_interaction();
+                    self.clear_pending_turn_undos();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
                     self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                     self.fail_workspace_review(rust_i18n::t!("app.service.review_disconnected").to_string());
@@ -96,6 +97,7 @@ impl DesktopView {
             .then(|| self.interaction.as_ref().map(|interaction| interaction.interaction_id.clone()))
             .flatten();
         self.notify_agent_activity(&event, window, cx);
+        self.notify_turn_undo(&event, window, cx);
         self.maybe_notify_update_available(&event, window, cx);
         self.handle_backend_event(event, cx);
         if let Some(text) = self.pending_composer_restore.take() {
@@ -348,6 +350,9 @@ impl DesktopView {
                     if method == protocol::method::WORKSPACE_REVIEW {
                         self.fail_workspace_review(error);
                         return;
+                    }
+                    if method == protocol::method::TURN_UNDO {
+                        self.clear_pending_turn_undos();
                     }
                     if method == protocol::method::INITIALIZE {
                         self.backend = None;
@@ -739,6 +744,9 @@ impl DesktopView {
                     }
                     protocol::method::TURN_CANCEL => {
                         self.status = rust_i18n::t!("app.service.cancel_accepted").to_string();
+                    }
+                    protocol::method::TURN_UNDO => {
+                        self.handle_turn_undo_response(result);
                     }
                     protocol::method::EXEC_FORCE_CANCEL | protocol::method::EXEC_BACKGROUND => {
                         self.apply_exec_command_response(method.as_str());

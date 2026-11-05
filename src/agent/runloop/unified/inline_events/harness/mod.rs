@@ -483,18 +483,20 @@ impl HarnessEventEmitter {
     /// from the streaming lifecycle bridge, such as deterministic recovery.
     /// Keeping this on the normal emitter preserves the same ThreadEvent
     /// contract for interactive, headless, Open Responses, and ATIF output.
-    pub(crate) fn emit_assistant_message(&self, turn_id: &str, text: &str) -> Result<()> {
+    pub(crate) fn emit_assistant_message(&self, turn_id: &str, text: &str) -> Result<Option<String>> {
         if text.trim().is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
+        let id = format!("{turn_id}-assistant-final-{}", Uuid::new_v4());
         self.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 context: None,
-                id: format!("{turn_id}-assistant-final-{}", Uuid::new_v4()),
+                id: id.clone(),
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.to_string() }),
             },
-        }))
+        }))?;
+        Ok(Some(id))
     }
 
     /// Finish every exporter and drain canonical persistence exactly once.
@@ -674,7 +676,8 @@ pub(crate) fn turn_completed_event(usage: Usage) -> ThreadEvent {
 
 pub(crate) fn turn_completed_event_with_sessions(usage: Usage, sessions: Vec<String>) -> ThreadEvent {
     ThreadEvent::TurnCompleted(TurnCompletedEvent {
-        completed_at: None,
+        final_response_item_id: None,
+        completed_at: Some(Box::new(chrono::Utc::now().to_rfc3339())),
         usage,
         in_progress_exec_sessions: sessions
             .into_iter()

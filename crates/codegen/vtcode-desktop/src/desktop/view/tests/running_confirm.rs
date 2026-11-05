@@ -43,6 +43,7 @@ fn turn_completed(session_id: &str, turn_id: &str) -> BackendEvent {
         session_id: session_id.into(),
         turn_id: Some(turn_id.into()),
         event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage {
                 input_tokens: 0,

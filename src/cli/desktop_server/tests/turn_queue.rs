@@ -29,6 +29,7 @@ fn runtime_state(session: &str) -> RuntimeStateFixture {
 fn completed_turn() -> vtcode_core::exec::events::VersionedThreadEvent {
     use vtcode_core::exec::events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
     VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),

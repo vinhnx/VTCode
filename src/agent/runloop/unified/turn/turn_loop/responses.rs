@@ -242,7 +242,7 @@ fn publish_final_assistant_response(ctx: &mut TurnLoopContext<'_>, text: &str) -
         && let Some(emitter) = ctx.harness_emitter
     {
         match emitter.emit_assistant_message(&ctx.harness_state.turn_id.0, text) {
-            Ok(()) => ctx.harness_state.mark_final_response_event_emitted(),
+            Ok(id) => ctx.harness_state.mark_final_response_item_emitted(id),
             Err(err) => tracing::warn!(error = %err, "final assistant message harness emission failed"),
         }
     }
@@ -351,7 +351,7 @@ fn publish_refusal_notice(ctx: &mut TurnLoopContext<'_>, reason: &str) -> Result
         // When a stale final was already emitted, the canonical final item is
         // taken; the `turn.blocked` event still carries the refusal reason.
         match emitter.emit_assistant_message(&ctx.harness_state.turn_id.0, &notice) {
-            Ok(()) => ctx.harness_state.mark_final_response_event_emitted(),
+            Ok(id) => ctx.harness_state.mark_final_response_item_emitted(id),
             Err(err) => tracing::warn!(error = %err, "refusal notice harness emission failed"),
         }
     }

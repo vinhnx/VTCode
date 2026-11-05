@@ -121,6 +121,8 @@ fn notifications_copy_is_localized_for_every_language() {
             "app.notifications.input_waiting",
             "app.notifications.service_disconnected",
             "app.notifications.update_available",
+            "app.notifications.turn_undo_done",
+            "app.notifications.turn_undo_failed",
         ],
         &[],
     );

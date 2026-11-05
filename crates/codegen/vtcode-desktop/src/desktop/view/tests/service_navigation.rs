@@ -281,6 +281,7 @@ fn delayed_acknowledgement_cannot_restart_a_completed_turn(cx: &mut TestAppConte
                 turn_id: Some("finished-turn".into()),
                 event: vtcode_exec_events::VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::TurnCompleted(
                     vtcode_exec_events::TurnCompletedEvent {
+                        final_response_item_id: None,
                         completed_at: None,
                         usage: vtcode_exec_events::Usage {
                             input_tokens: 1,

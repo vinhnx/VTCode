@@ -452,10 +452,10 @@ impl<'a> TurnProcessingContext<'a> {
             msg_with_reasoning = msg_with_reasoning.with_reasoning_details(Some(payload));
         }
 
-        if !msg_with_reasoning.content.as_text().is_empty()
+        let retained_message = !msg_with_reasoning.content.as_text().is_empty()
             || msg_with_reasoning.reasoning.is_some()
-            || msg_with_reasoning.reasoning_details.is_some()
-        {
+            || msg_with_reasoning.reasoning_details.is_some();
+        if retained_message {
             push_assistant_message(self.working_history, msg_with_reasoning);
         }
 
@@ -467,9 +467,26 @@ impl<'a> TurnProcessingContext<'a> {
                 && let Some(emitter) = self.harness_emitter
             {
                 match emitter.emit_assistant_message(&self.harness_state.turn_id.0, &final_response_text) {
-                    Ok(()) => self.harness_state.mark_final_response_event_emitted(),
+                    Ok(id) => self.harness_state.mark_final_response_item_emitted(id),
                     Err(err) => tracing::warn!(error = %err, "final assistant message harness emission failed"),
                 }
+            }
+            if retained_message
+                && let Some(item_id) = self.harness_state.final_response_item_id()
+                && let Some(message) = self
+                    .working_history
+                    .last_mut()
+                    .filter(|message| message.role == uni::MessageRole::Assistant)
+            {
+                let tokens = message.estimate_tokens();
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_secs())
+                    .unwrap_or(0);
+                let metadata = message.metadata.get_or_insert_with(|| {
+                    vtcode_commons::message_metadata::MessageMetadata::llm_response(now, tokens)
+                });
+                metadata.set_event_item_id(item_id.to_owned());
             }
         }
 

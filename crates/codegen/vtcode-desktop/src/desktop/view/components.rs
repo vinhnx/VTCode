@@ -504,16 +504,6 @@ pub(super) fn consent_title_row(
         )
 }
 
-/// Quiet full-width break between conversation turns on the canvas. The
-/// single-sided rhythm keeps the row compact: preceding rows already carry
-/// bottom padding, and user bubbles must start within 16px of their column.
-pub(super) fn turn_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
-    div()
-        .w_full()
-        .py_1()
-        .child(div().h(px(1.)).bg(themes::hairline(colors.background, colors.foreground)))
-}
-
 pub(super) fn navigation_label(
     label: String,
     icon: IconName,

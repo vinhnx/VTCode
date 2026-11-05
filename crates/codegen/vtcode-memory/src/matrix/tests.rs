@@ -193,6 +193,7 @@ fn matrix_replay_cap_retains_checkpoint_and_turn_offsets() {
     for _ in 0..4 {
         log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default())).unwrap();
         log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             usage: Usage::default(),
             completed_at: None,
             in_progress_exec_sessions: vec![],
@@ -320,6 +321,7 @@ fn matrix_cap_rewrite_prefers_newer_retained_checkpoint() {
     state.start().unwrap();
     log.append(&state.event()).unwrap();
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         usage: Usage::default(),
         completed_at: None,
         in_progress_exec_sessions: vec![],
@@ -327,6 +329,7 @@ fn matrix_cap_rewrite_prefers_newer_retained_checkpoint() {
     .unwrap();
     log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default())).unwrap();
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         usage: Usage::default(),
         completed_at: None,
         in_progress_exec_sessions: vec![],
@@ -336,6 +339,7 @@ fn matrix_cap_rewrite_prefers_newer_retained_checkpoint() {
     state.pause().unwrap();
     log.append(&state.event()).unwrap();
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         usage: Usage::default(),
         completed_at: None,
         in_progress_exec_sessions: vec![],

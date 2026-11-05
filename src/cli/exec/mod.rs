@@ -375,6 +375,7 @@ mod tests {
             total_cost_usd: None,
             warnings: Vec::new(),
             thread_events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                final_response_item_id: None,
                 completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),

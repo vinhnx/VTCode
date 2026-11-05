@@ -161,6 +161,7 @@ impl ExecEventRecorder {
 
     pub fn turn_completed(&mut self, usage: Usage) {
         self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage,
             in_progress_exec_sessions: Vec::new(),

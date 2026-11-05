@@ -531,6 +531,13 @@ impl DesktopView {
                     {
                         let visible_count = history.len();
                         let inserted = view.transcript.prepend_prepared(history);
+                        if inserted > 0 {
+                            view.transcript.group_archived_prefix(inserted);
+                            view.transcript.group_archived_boundary(inserted);
+                            let timeline = Arc::clone(&view.restored_timeline);
+                            view.restore_completion_times(&timeline);
+                            view.restore_review_summaries(&timeline);
+                        }
                         if visible_count > 0 && inserted == 0 {
                             view.history_page_error = Some(rust_i18n::t!("app.session.transcript_limit").to_string());
                         } else {
@@ -587,6 +594,9 @@ impl DesktopView {
         let retained_submission = self.retained_submission.take();
         let thumbnails = std::mem::take(&mut self.attachment_thumbnails);
         self.load_history(history);
+        self.restored_timeline = Arc::new(loaded.timeline_events);
+        let timeline = Arc::clone(&self.restored_timeline);
+        self.restore_completion_times(&timeline);
         self.history_start_index = loaded.history_start_index;
         self.history_has_earlier = loaded.history_has_earlier && loaded.history_start_index > 0;
         self.restored_review_history_incomplete = loaded.review_history_incomplete;
@@ -614,6 +624,8 @@ impl DesktopView {
         self.output_page_task = None;
         self.output_page_error = None;
         self.project_restored_review(&loaded.review_items);
+        let timeline = Arc::clone(&self.restored_timeline);
+        self.restore_review_summaries(&timeline);
         for item in &loaded.activity_items {
             use vtcode_exec_events::ThreadItemDetails;
             if !matches!(
@@ -728,6 +740,7 @@ impl DesktopView {
         self.change_list_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
+        self.restored_timeline = Arc::new(Vec::new());
         self.changes = ChangesProjection::default();
         self.selected_change = None;
         self.change_kind_filter = None;
@@ -742,6 +755,7 @@ impl DesktopView {
         self.finished_turn_id = None;
         self.clear_pending_interaction();
         self.active_turn_id = None;
+        self.turn_undos.clear();
         self.cancel_requested = false;
         self.cancel_request_sent = false;
         self.attachments_task = None;
@@ -916,11 +930,15 @@ fn restored_archive_element_id(session_id: &str, archive_index: usize) -> String
 /// Prepare stable transcript rows and Markdown accessibility projections for archived messages.
 pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage>) -> Vec<TranscriptItem> {
     let mut occurrences = HashMap::<u64, usize>::new();
-    messages
+    let mut phases = Vec::new();
+    let rows: Vec<TranscriptItem> = messages
         .into_iter()
         .filter(|message| !message.hidden || message.role != TranscriptRole::System.as_str())
         .map(|message| {
-            let SessionHistoryMessage { archive_index, role, text, .. } = message;
+            let SessionHistoryMessage {
+                archive_index, role, text, phase, event_item_id, ..
+            } = message;
+            phases.push(phase.clone());
             let title = match TranscriptRole::from_str(&role) {
                 Some(TranscriptRole::User) => rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string(),
                 Some(TranscriptRole::Assistant) => app::NAME.to_string(),
@@ -941,9 +959,12 @@ pub(super) fn prepare_session_history(session_id: &str, messages: Vec<SessionHis
             );
             // Preserve collapsed archive tool text without inventing activity status.
             let mut item = TranscriptItem::new(id, role, title.into(), text);
+            item.archived_phase = phase.map(Into::into);
+            item.canonical_item_id = event_item_id.filter(|id| !id.is_empty() && id.len() <= 512).map(Into::into);
             item.has_activity_status = false;
             item.prepare_render_content();
             item
         })
-        .collect()
+        .collect();
+    Transcript::group_archive_turns(rows, phases)
 }

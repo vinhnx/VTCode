@@ -64,6 +64,7 @@ fn file_change_item_optional_diff_fields_round_trip() -> Result<(), Box<dyn Erro
 #[test]
 fn thread_event_round_trip() -> Result<(), Box<dyn Error>> {
     let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: Some(Box::new("turn-42-final".to_string())),
         completed_at: None,
         usage: Usage {
             input_tokens: 1,
@@ -183,6 +184,7 @@ fn turn_completed_in_progress_sessions_default_empty_and_omitted() -> Result<(),
 fn turn_completed_in_progress_sessions_round_trip_and_bound() -> Result<(), Box<dyn Error>> {
     assert_eq!(MAX_IN_PROGRESS_EXEC_SESSIONS, 4);
     let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: vec!["run-1".to_string(), "run-2".to_string()],

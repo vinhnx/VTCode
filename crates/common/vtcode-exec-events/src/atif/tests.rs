@@ -259,6 +259,7 @@ fn builder_tool_invocation_with_output() {
 fn builder_turn_completed_accumulates_metrics() {
     let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
     let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage {
             input_tokens: 500,
@@ -281,6 +282,7 @@ fn builder_turn_completed_accumulates_metrics() {
 fn builder_turn_completed_preserves_in_progress_sessions_for_resume() {
     let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
     let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: vec!["run-7".to_string()],
@@ -295,6 +297,7 @@ fn builder_turn_completed_preserves_in_progress_sessions_for_resume() {
     // Empty ids stay omitted so steady-state export is unchanged.
     let mut empty_builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
     let empty = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        final_response_item_id: None,
         completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),

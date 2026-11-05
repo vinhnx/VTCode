@@ -151,9 +151,11 @@ mod storage;
 mod submit;
 mod tabs;
 mod transcript_activity;
+mod transcript_diff;
 mod transcript_nav;
 mod transcript_notice;
 mod transcript_render;
+mod turn_undo;
 mod typography;
 mod updates;
 mod utilities;
@@ -510,8 +512,12 @@ struct DesktopView {
     selected_output_id: Option<String>,
     restored_review_history_incomplete: bool,
     restored_activity_history_incomplete: bool,
+    restored_timeline: Arc<Vec<vtcode_exec_events::VersionedThreadEvent>>,
     active_turn_id: Option<String>,
     finished_turn_id: Option<String>,
+    /// Per-turn file-change undo flight state, keyed by canonical turn id.
+    /// Absent means idle; cleared on session switch (see `turn_undo`).
+    turn_undos: HashMap<String, turn_undo::TurnUndoState>,
     cancel_requested: bool,
     cancel_request_sent: bool,
     /// Turn id named by the last `turn/cancel` send, so a late error cannot

@@ -1,3 +1,4 @@
+mod turn;
 use std::collections::VecDeque;
 use std::ops::Range;
 
@@ -6,6 +7,7 @@ use vtcode_exec_events::AppPreviewItem;
 
 use super::markdown::prepare_markdown;
 
+mod activity;
 mod activity_verbs;
 pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs, tool_row_gist};
 
@@ -132,6 +134,19 @@ pub(super) struct TranscriptItem {
     pub text: SharedString,
     pub markdown: SharedString,
     pub accessibility_text: SharedString,
+    pub completed_at: Option<SharedString>,
+    pub turn_id: Option<SharedString>,
+    pub canonical_turn_id: Option<SharedString>,
+    pub canonical_item_id: Option<SharedString>,
+    pub archived_final: bool,
+    pub archived_phase: Option<SharedString>,
+    pub turn_group_head: bool,
+    pub turn_grouped: bool,
+    pub turn_group_expanded: bool,
+    pub turn_files: Vec<TurnFile>,
+    pub turn_file_totals: Option<(u64, u64)>,
+    pub turn_files_incomplete: bool,
+    pub turn_files_offset: usize,
     /// Whether the prepared Markdown contains a list. Lists need a definite
     /// bubble width (see `PreparedMarkdown::has_list`); kept beside the other
     /// render projections so every prepare/clone path carries it together.
@@ -234,6 +249,12 @@ pub(super) struct DiffFile {
     pub kind: DiffFileKind,
 }
 
+#[derive(Clone, Debug)]
+pub(super) struct TurnFile {
+    pub file: DiffFile,
+    pub counts: Option<(u64, u64)>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DiffFileKind {
     Add,
@@ -316,6 +337,19 @@ impl TranscriptItem {
             text,
             markdown: SharedString::default(),
             accessibility_text: SharedString::default(),
+            completed_at: None,
+            turn_id: None,
+            canonical_turn_id: None,
+            canonical_item_id: None,
+            archived_final: false,
+            archived_phase: None,
+            turn_group_head: false,
+            turn_grouped: false,
+            turn_group_expanded: false,
+            turn_files: Vec::new(),
+            turn_file_totals: None,
+            turn_files_incomplete: false,
+            turn_files_offset: 0,
             has_list: false,
             expanded: false,
             collapsible_details: false,
@@ -506,18 +540,21 @@ impl Transcript {
         let evict_oldest = self.items.len() == MAX_TRANSCRIPT_ITEMS;
         let mut promoted_group_head = false;
         if evict_oldest {
-            if let Some(removed) = self.items.pop_front()
-                && removed.activity_group_head
-            {
-                let mut summary = removed.activity_group_summary;
-                summary.remove_status(ToolActivityStatus::from_text(&removed.text));
-                if let Some(head) = self.items.front_mut().filter(|item| item.is_tool()) {
-                    let grouped = summary.total > 1;
-                    head.activity_group_summary = summary;
-                    head.activity_grouped = grouped;
-                    head.activity_group_head = grouped;
-                    head.activity_expanded = grouped && removed.activity_expanded;
-                    promoted_group_head = true;
+            if let Some(removed) = self.items.pop_front() {
+                if removed.turn_group_head {
+                    self.promote_turn_group_head(removed.turn_id.as_deref());
+                }
+                if removed.activity_group_head {
+                    let mut summary = removed.activity_group_summary;
+                    summary.remove_status(ToolActivityStatus::from_text(&removed.text));
+                    if let Some(head) = self.items.front_mut().filter(|item| item.is_tool()) {
+                        let grouped = summary.total > 1;
+                        head.activity_group_summary = summary;
+                        head.activity_grouped = grouped;
+                        head.activity_group_head = grouped;
+                        head.activity_expanded = grouped && removed.activity_expanded;
+                        promoted_group_head = true;
+                    }
                 }
             }
             self.layout_changes
@@ -570,7 +607,11 @@ impl Transcript {
     /// Remove a local unsent echo together with its measured row.
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.position_by_id(id) {
-            let removed_was_tool = self.items.remove(index).is_some_and(|item| item.is_tool());
+            let removed = self.items.remove(index);
+            let removed_was_tool = removed.as_ref().is_some_and(|item| item.is_tool());
+            if let Some(removed) = removed.as_ref().filter(|item| item.turn_group_head) {
+                self.promote_turn_group_head(removed.turn_id.as_deref());
+            }
             self.bump_revision();
             self.rebuild_activity_group_flags();
             self.refresh_trailing_tool_group_start();
@@ -588,6 +629,18 @@ impl Transcript {
                 self.layout_changes
                     .push(TranscriptLayoutChange::RemeasureItems(group.start..group.start + 1));
             }
+        }
+    }
+
+    fn promote_turn_group_head(&mut self, turn_id: Option<&str>) {
+        let Some(turn_id) = turn_id else { return };
+        if let Some(item) = self
+            .items
+            .iter_mut()
+            .find(|item| item.turn_grouped && item.turn_id.as_deref() == Some(turn_id))
+        {
+            item.turn_group_head = true;
+            self.layout_changes.push(TranscriptLayoutChange::Reset(self.items.len()));
         }
     }
 
@@ -679,6 +732,19 @@ impl Transcript {
                 item.has_list = existing.has_list;
             }
             item.expanded = existing.expanded;
+            item.completed_at.clone_from(&existing.completed_at);
+            item.turn_id.clone_from(&existing.turn_id);
+            item.canonical_turn_id.clone_from(&existing.canonical_turn_id);
+            item.canonical_item_id.clone_from(&existing.canonical_item_id);
+            item.archived_final = existing.archived_final;
+            item.archived_phase.clone_from(&existing.archived_phase);
+            item.turn_group_head = existing.turn_group_head;
+            item.turn_grouped = existing.turn_grouped;
+            item.turn_group_expanded = existing.turn_group_expanded;
+            item.turn_files.clone_from(&existing.turn_files);
+            item.turn_file_totals = existing.turn_file_totals;
+            item.turn_files_incomplete = existing.turn_files_incomplete;
+            item.turn_files_offset = existing.turn_files_offset;
             item.activity_expanded = existing.activity_expanded;
             item.activity_grouped = existing.activity_grouped;
             item.activity_group_head = existing.activity_group_head;
@@ -844,62 +910,6 @@ impl Transcript {
             start -= 1;
         }
         self.trailing_tool_group_start = Some(start);
-    }
-
-    pub fn toggle_activity_group(&mut self, id: &str) {
-        if let Some(index) = self.position_by_id(id)
-            && let Some(range) = self.activity_group(index)
-        {
-            let expanded = !self.items.get(range.start).is_some_and(|head| head.activity_expanded);
-            for index in range.clone() {
-                if let Some(item) = self.items.get_mut(index) {
-                    item.activity_expanded = expanded;
-                }
-            }
-            self.bump_revision();
-            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
-            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
-        }
-    }
-
-    /// Expand a tool row and its containing activity group so a search result is visible.
-    ///
-    /// Queues remeasurement but deliberately no tail pause: the sole caller
-    /// navigates to the row immediately, and `scroll_to_item` disengages
-    /// tail-following itself. A pause here would write its stale anchor over
-    /// the jump in the same sync pass.
-    pub(super) fn reveal_tool_item(&mut self, id: &str) -> Option<usize> {
-        let index = self.position_by_id(id)?;
-        if !self.items.get(index).is_some_and(|item| item.is_tool()) {
-            return None;
-        }
-
-        let group = self.activity_group(index);
-        let expand_group = group
-            .as_ref()
-            .is_some_and(|range| !self.items.get(range.start).is_some_and(|item| item.activity_expanded));
-        let expand_item = self.items.get(index).is_some_and(|item| !item.expanded);
-        if !expand_group && !expand_item {
-            return Some(index);
-        }
-
-        self.bump_revision();
-        if expand_group && let Some(range) = group {
-            for group_index in range.clone() {
-                if let Some(item) = self.items.get_mut(group_index) {
-                    item.activity_expanded = true;
-                }
-            }
-            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
-        }
-        if expand_item {
-            if let Some(item) = self.items.get_mut(index) {
-                item.expanded = true;
-            }
-            self.layout_changes
-                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
-        }
-        Some(index)
     }
 
     pub fn toggle_tool(&mut self, id: &str) {

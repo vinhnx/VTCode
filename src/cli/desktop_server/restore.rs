@@ -8,6 +8,8 @@ pub(super) struct RestoredInspectorHistory {
     pub(super) activity_incomplete: bool,
     pub(super) activity_output_cursors: Vec<protocol::SessionOutputCursor>,
     pub(super) output_spools: std::collections::HashMap<String, String>,
+    pub(super) timeline_events: Vec<vtcode_core::exec::events::VersionedThreadEvent>,
+    pub(super) timeline_incomplete: bool,
 }
 
 #[derive(Default)]
@@ -236,6 +238,7 @@ pub(super) fn restored_inspector_history(workspace: &Path, session_id: &str) -> 
             return Ok(RestoredInspectorHistory {
                 incomplete: true,
                 activity_incomplete: true,
+                timeline_incomplete: true,
                 ..Default::default()
             });
         }
@@ -245,6 +248,7 @@ pub(super) fn restored_inspector_history(workspace: &Path, session_id: &str) -> 
     let mut activity = BoundedHistoryItems { incomplete: tail.truncated, ..Default::default() };
     let mut activity_output_cursors = Vec::new();
     let mut output_spools = std::collections::HashMap::new();
+    let (timeline_events, timeline_incomplete) = bounded_timeline(&tail.events, tail.truncated)?;
     for event in tail.events.into_iter().rev() {
         let mut item = match event.into_event() {
             ThreadEvent::ItemStarted(event) => event.item,
@@ -296,7 +300,29 @@ pub(super) fn restored_inspector_history(workspace: &Path, session_id: &str) -> 
         activity_incomplete: activity.incomplete,
         activity_output_cursors,
         output_spools,
+        timeline_events,
+        timeline_incomplete,
     })
+}
+
+fn bounded_timeline(
+    events: &[vtcode_core::exec::events::VersionedThreadEvent],
+    truncated: bool,
+) -> Result<(Vec<vtcode_core::exec::events::VersionedThreadEvent>, bool)> {
+    let mut retained = Vec::new();
+    let mut bytes = 0_usize;
+    let mut incomplete = truncated;
+    for event in events.iter().rev() {
+        let size = serde_json::to_vec(event)?.len();
+        if retained.len() >= 512 || bytes.saturating_add(size) > 256 * 1024 {
+            incomplete = true;
+            break;
+        }
+        bytes += size;
+        retained.push(event.clone());
+    }
+    retained.reverse();
+    Ok((retained, incomplete))
 }
 
 pub(super) struct RestoredHistoryPage {
@@ -329,6 +355,16 @@ pub(super) fn restored_history_page(
             hidden,
             archive_index: Some(archive_index),
             role: message.role.to_string(),
+            event_item_id: message
+                .metadata
+                .as_deref()
+                .and_then(|metadata| metadata.event_item_id())
+                .filter(|id| !id.is_empty() && id.len() <= 512)
+                .map(str::to_owned),
+            phase: message.phase.map(|phase| match phase {
+                vtcode_core::llm::provider::AssistantPhase::Commentary => "commentary".to_owned(),
+                vtcode_core::llm::provider::AssistantPhase::FinalAnswer => "final_answer".to_owned(),
+            }),
             text,
         };
         let encoded_size = serde_json::to_vec(&restored).map_or(MAX_RESTORED_MESSAGE_BYTES, |bytes| bytes.len());
@@ -360,7 +396,31 @@ fn bounded_text_projection(text: &str, max_bytes: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::bounded_text_projection;
+    use super::{bounded_text_projection, bounded_timeline};
+
+    #[test]
+    fn bounded_timeline_keeps_newest_contiguous_events_in_order() {
+        use vtcode_core::exec::events::{ThreadEvent, ThreadStartedEvent, VersionedThreadEvent};
+        let events: Vec<_> = (0..520)
+            .map(|index| {
+                VersionedThreadEvent::new(ThreadEvent::ThreadStarted(ThreadStartedEvent {
+                    thread_id: index.to_string(),
+                }))
+            })
+            .collect();
+        let (retained, incomplete) = bounded_timeline(&events, false).unwrap();
+        assert!(incomplete);
+        assert_eq!(retained.len(), 512);
+        assert!(
+            matches!(retained.first().unwrap().event(), ThreadEvent::ThreadStarted(event) if event.thread_id == "8")
+        );
+        assert!(
+            matches!(retained.last().unwrap().event(), ThreadEvent::ThreadStarted(event) if event.thread_id == "519")
+        );
+        let (all, incomplete) = bounded_timeline(&events[..2], true).unwrap();
+        assert_eq!(all.len(), 2);
+        assert!(incomplete);
+    }
 
     #[test]
     fn bounded_projection_cuts_multibyte_text_on_a_char_boundary() {

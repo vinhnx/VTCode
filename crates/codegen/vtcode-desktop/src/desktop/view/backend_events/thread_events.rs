@@ -3,6 +3,11 @@
 use super::*;
 
 impl DesktopView {
+    fn push_turn_notice(&mut self, mut item: TranscriptItem, turn_id: Option<&str>) {
+        item.turn_id = turn_id.map(|id| id.to_owned().into());
+        self.transcript.push(item);
+    }
+
     pub(super) fn notification_matches(&self, session_id: &str, turn_id: Option<&str>) -> bool {
         if self.selected_session_id.as_deref() != Some(session_id) {
             return false;
@@ -50,6 +55,18 @@ impl DesktopView {
                 self.status = rust_i18n::t!("app.service.running").to_string();
             }
             ThreadEvent::TurnCompleted(event) => {
+                if let (Some(turn_id), Some(final_id)) =
+                    (notification.turn_id.as_deref(), event.final_response_item_id.as_deref())
+                {
+                    self.transcript.complete_turn_group(turn_id, final_id);
+                }
+                if let (Some(turn_id), Some(id), Some(timestamp)) =
+                    (notification.turn_id.as_deref(), &event.final_response_item_id, &event.completed_at)
+                    && let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(timestamp)
+                {
+                    let local_time = timestamp.with_timezone(&chrono::Local).format("%H:%M").to_string();
+                    self.transcript.set_completion_time(turn_id, id, local_time.into());
+                }
                 self.pending_submission = None;
                 self.pending_first_submission = false;
                 self.prune_attachment_thumbnails();
@@ -68,16 +85,32 @@ impl DesktopView {
                 self.finish_unverified_turn(&event.message);
             }
             ThreadEvent::PlanDelta(delta) => {
-                self.transcript.append_text(
-                    delta.item_id.clone(),
-                    TranscriptRole::Assistant.as_str(),
-                    rust_i18n::t!(i18n::TRANSCRIPT_PLAN_TITLE).to_string().into(),
-                    &delta.delta,
-                );
+                if self
+                    .transcript
+                    .accepts_item_turn(&delta.item_id, notification.turn_id.as_deref())
+                {
+                    self.transcript.append_text(
+                        delta.item_id.clone(),
+                        TranscriptRole::Assistant.as_str(),
+                        rust_i18n::t!(i18n::TRANSCRIPT_PLAN_TITLE).to_string().into(),
+                        &delta.delta,
+                    );
+                    if let Some(turn_id) = notification.turn_id.as_deref() {
+                        self.transcript.set_item_turn(&delta.item_id, turn_id);
+                    }
+                } else {
+                    // Conflicting turn identity: the stale update is dropped.
+                }
             }
-            ThreadEvent::ItemStarted(event) => self.update_runtime_item(&event.item),
-            ThreadEvent::ItemUpdated(event) => self.update_runtime_item(&event.item),
-            ThreadEvent::ItemCompleted(event) => self.update_runtime_item(&event.item),
+            ThreadEvent::ItemStarted(event) => {
+                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref())
+            }
+            ThreadEvent::ItemUpdated(event) => {
+                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref())
+            }
+            ThreadEvent::ItemCompleted(event) => {
+                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref())
+            }
             ThreadEvent::Error(event) => {
                 self.transcript.push(TranscriptItem::notice(
                     format!("runtime-error-{}", uuid_like_id()),
@@ -90,19 +123,22 @@ impl DesktopView {
                 // Pre-boundary usage no longer describes the live context; the
                 // next completed turn reports fresh post-boundary usage.
                 self.last_usage = None;
-                self.transcript.push(TranscriptItem::notice(
-                    format!("compact-boundary-{}", uuid_like_id()),
-                    rust_i18n::t!("app.transcript.compact_boundary_title").to_string().into(),
-                    rust_i18n::t!(
-                        "app.transcript.compact_boundary_body",
-                        original = event.original_message_count,
-                        compacted = event.compacted_message_count,
-                        trigger = event.trigger.as_str(),
-                        mode = event.mode.as_str()
-                    )
-                    .to_string(),
-                    NoticeSeverity::Info,
-                ));
+                self.push_turn_notice(
+                    TranscriptItem::notice(
+                        format!("compact-boundary-{}", uuid_like_id()),
+                        rust_i18n::t!("app.transcript.compact_boundary_title").to_string().into(),
+                        rust_i18n::t!(
+                            "app.transcript.compact_boundary_body",
+                            original = event.original_message_count,
+                            compacted = event.compacted_message_count,
+                            trigger = event.trigger.as_str(),
+                            mode = event.mode.as_str()
+                        )
+                        .to_string(),
+                        NoticeSeverity::Info,
+                    ),
+                    notification.turn_id.as_deref(),
+                );
             }
             ThreadEvent::ContextReset(event) => {
                 self.last_usage = None;
@@ -110,17 +146,20 @@ impl DesktopView {
                     vtcode_exec_events::ContextResetTrigger::PlanApproval => "plan approval",
                     vtcode_exec_events::ContextResetTrigger::Unknown => "unknown",
                 };
-                self.transcript.push(TranscriptItem::notice(
-                    format!("context-reset-{}", uuid_like_id()),
-                    rust_i18n::t!("app.transcript.context_reset_title").to_string().into(),
-                    rust_i18n::t!(
-                        "app.transcript.context_reset_body",
-                        trigger = trigger,
-                        previous = event.previous_context_usage_percent
-                    )
-                    .to_string(),
-                    NoticeSeverity::Info,
-                ));
+                self.push_turn_notice(
+                    TranscriptItem::notice(
+                        format!("context-reset-{}", uuid_like_id()),
+                        rust_i18n::t!("app.transcript.context_reset_title").to_string().into(),
+                        rust_i18n::t!(
+                            "app.transcript.context_reset_body",
+                            trigger = trigger,
+                            previous = event.previous_context_usage_percent
+                        )
+                        .to_string(),
+                        NoticeSeverity::Info,
+                    ),
+                    notification.turn_id.as_deref(),
+                );
             }
             ThreadEvent::AppSandboxDenied(event) => {
                 self.transcript.push(TranscriptItem::notice(

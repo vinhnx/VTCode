@@ -848,6 +848,8 @@ fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut 
         request_id,
         start_index: 1,
         messages: vec![SessionHistoryMessage {
+            event_item_id: None,
+            phase: None,
             hidden: false,
             archive_index: Some(1),
             role: "tool".into(),

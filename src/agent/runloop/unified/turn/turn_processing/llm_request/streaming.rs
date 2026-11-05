@@ -95,8 +95,8 @@ impl HarnessStreamingBridge {
         self.inner.take_streamed_tool_call_items()
     }
 
-    pub(super) fn assistant_output_observed(&self) -> bool {
-        self.assistant_output_observed
+    pub(super) fn assistant_item_id(&self) -> Option<&str> {
+        self.assistant_output_observed.then(|| self.inner.assistant_item_id())
     }
 }
 

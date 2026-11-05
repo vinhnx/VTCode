@@ -303,6 +303,11 @@ pub struct StreamingLifecycleBridge {
 }
 
 impl StreamingLifecycleBridge {
+    /// Stable identity used for the assistant item emitted by this bridge.
+    pub fn assistant_item_id(&self) -> &str {
+        &self.assistant_item_id
+    }
+
     /// Create a new bridge that emits lifecycle events to the provided sink.
     #[must_use]
     pub fn new(event_sink: Option<EventSink>, turn_id: &str, step: usize, attempt: usize) -> Self {

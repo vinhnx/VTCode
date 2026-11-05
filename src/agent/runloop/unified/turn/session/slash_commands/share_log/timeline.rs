@@ -405,6 +405,7 @@ mod tests {
             sample_event_record(
                 3,
                 ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: None,
                     completed_at: None,
                     usage: Usage {
                         input_tokens: 10,

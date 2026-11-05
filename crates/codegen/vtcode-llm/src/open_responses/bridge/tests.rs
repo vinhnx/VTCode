@@ -24,6 +24,7 @@ fn test_response_builder_thread_lifecycle() {
     // Turn completed
     builder.process_event(
         &ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage {
                 input_tokens: 100,
@@ -623,6 +624,7 @@ fn test_failed_response_ignores_late_completion() {
     );
     builder.process_event(
         &ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),

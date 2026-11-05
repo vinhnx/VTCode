@@ -249,6 +249,7 @@ async fn matrix_reopened_sink_does_not_republish_historical_checks() {
     };
     let turn_completed = || {
         ThreadEvent::TurnCompleted(crate::exec::events::TurnCompletedEvent {
+            final_response_item_id: None,
             completed_at: None,
             usage: Default::default(),
             in_progress_exec_sessions: vec![],
