@@ -18,7 +18,8 @@
   errors carry provider labels, and `SecretStoreParams` redacts the key in `Debug`.
 - Use `vtcode-exec-events` history types; review/activity snapshots never replay live lifecycle events.
 - Hidden model-only history rows retain archive indices; only system rows may be omitted from the visible transcript.
-- Shared scalar wire values (method names, sentinel ids like `SESSION_START_TURN_ID`) live as `pub const` here so the service and client reference one definition.
+- Shared scalar wire values (method names, sentinel ids like `SESSION_START_TURN_ID`) live as `pub const` here
+  so the service and client reference one definition.
 - The live event channel (`live_event_channel`) coalesces under saturation: snapshots replace per item,
   plan deltas merge, ordered events are only dropped when nothing coalescable remains. A slow consumer
   must never fail the producing turn; only a dropped consumer half is fatal.

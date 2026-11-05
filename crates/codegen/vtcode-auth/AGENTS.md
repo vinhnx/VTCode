@@ -1,25 +1,28 @@
-<!-- Compact maintainer rules retain the repository instruction line budget. -->
-<!-- markdownlint-disable MD013 -->
 # vtcode-auth
 
 [Root AGENTS.md](../../../AGENTS.md) | OAuth PKCE flows and credential storage for LLM providers.
 
 ## Modules
 
-`openai_chatgpt_oauth/` OpenAI ChatGPT OAuth (`session.rs` model/handle/flow, `refresh.rs` token exchange + storage, `jwt.rs` claim parsing) | `openai_refresh_policy/` pure refresh classification | `openai_session_storage/` typed session persistence | `openrouter_oauth/` OpenRouter OAuth | `openrouter_token_storage/` typed token persistence | `mcp_oauth/` MCP server OAuth | `oauth_server/` local callback server | `pkce/` PKCE challenge generation | `credentials/` credential storage (keyring + file) | `auth_service/` OpenAIAccountAuthService | `config/` AuthConfig types | `storage_paths/` path resolution | `codex_auth_import.rs` Codex CLI auth.json reuse
+- OAuth flows: `openai_chatgpt_oauth/`, `openrouter_oauth/`, `mcp_oauth/`, `oauth_server/` (callback), `pkce/`.
+- Storage: `credentials/` (keyring + file), `openai_session_storage/`, `openrouter_token_storage/`,
+  `storage_paths/`.
+- Other: `auth_service/`, `config/`, `openai_refresh_policy/` (pure), `codex_auth_import.rs`.
 
 ## Rules
 
-- All OAuth flows use PKCE — `generate_pkce_challenge()` is the entry point. `credentials::CredentialStorage` supports keyring and file-based backends. `oauth_server::run_auth_code_callback_server` starts a local HTTP server for OAuth callbacks.
-- Re-exported from `vtcode-config::auth` for backward compat — canonical code is here.
+- All OAuth flows use PKCE via `generate_pkce_challenge()`.
+- Canonical code is here; `vtcode-config::auth` only re-exports it.
+- Use the `_with_mode` variants to pass the storage mode explicitly; keep writes and reads on the same mode.
+- `openai_refresh_policy` returns an action only; deletion stays in the orchestration layer.
 
 ## Gotchas
 
-- `clear_openai_chatgpt_session_with_mode()` and `clear_oauth_token_with_mode()` accept storage mode — use the `_with_mode` variants for explicit control. `AuthCredentialsStoreMode::effective_mode()` returns `ResolvedStoreMode` (crate-private, no `Auto` variant) so backend matches are exhaustive without `unreachable!`; `_exact_with_mode` methods take the resolved mode.
-- MCP OAuth is separate from provider OAuth — `mcp_oauth::McpOAuthService` binds stored tokens to the provider, OAuth configuration, and protected resource; unbound legacy tokens require reauthorization.
-- `credentials::keyring_entry` short-circuits when `keyring_disabled()` is true (`cfg!(debug_assertions)`, `cfg!(test)`, `VTCODE_DISABLE_KEYRING`, or `CI`), so debug builds, tests, and CI fall back to file storage and never trigger macOS Keychain prompts. Debug-keyring can be re-enabled with `VTCODE_DISABLE_KEYRING=0`. `is_keyring_functional()` caches its result to avoid repeated Keychain round trips.
-- API-key writes verify a secure-storage read-back; keep the configured `AuthCredentialsStoreMode` consistent between writes and runtime resolution. Encrypted auth directories are private (`0700`) and credential files are private (`0600`).
-- API-key storage is scoped by normalized `(provider, key_name)`; `key_name` is normally the resolved environment variable. Provider-only entries are legacy fallbacks and may be migrated only for the provider default key, never for an ambiguous non-default profile.
-- `read_private_file` is strict about regular files and Unix `0600`-compatible permissions; compatibility lookup uses `read_legacy_compatible_file` so canonical auth paths stay strict while true legacy rollback candidates remain readable until copied.
-- `OpenRouterToken` has a redacted `Debug` implementation, and token-exchange errors must not include response bodies that could echo secrets.
-- `openai_refresh_policy` returns a clear/preserve action only; storage deletion stays in the orchestration layer.
+- MCP OAuth tokens are bound to provider, config, and resource; unbound legacy tokens need reauthorization.
+- Keyring is disabled in debug, tests, and CI (`VTCODE_DISABLE_KEYRING=0` re-enables it).
+- API-key storage is keyed by `(provider, key_name)`; migrate provider-only entries only for the default key.
+- Auth dirs are `0700` and files `0600`; `read_private_file` stays strict.
+- Never log secrets: `OpenRouterToken` `Debug` is redacted, and errors exclude response bodies.
+
+Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-auth.md) — read before changing a
+subsystem.

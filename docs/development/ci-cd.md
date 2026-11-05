@@ -54,6 +54,12 @@ without assuming an old CI filename. Explicit nightly checks remain separate.
   correct. It must stay inline: a local `uses: ./.github/actions/...` cannot run before
   `actions/checkout`, because the action file is not in the workspace yet.
 
+**Cross-target cache keys:** `Swatinem/rust-cache` keys off the target triple only when `CARGO_BUILD_TARGET`
+is set or you pass `key:`. Builds that pass `--target` via the CLI (e.g. `cross build --target`) share ONE cache
+key across matrix jobs on the same runner OS, causing colliding/failing saves and every target restoring a
+mismatched cache. Always namespace the cache per target (`with: { key: ${{ matrix.target }} }`) in cross-target
+matrix jobs.
+
 **Compiler-cache pilot:** the dispatch/reusable-workflow input `compiler_cache_pilot` defaults to
 `false`. Set it to `true` to install sccache for native GNU Linux and Windows, with incremental
 compilation disabled and cache statistics recorded. Cross-container builds are deliberately excluded.

@@ -1,29 +1,35 @@
-<!-- Compact maintainer rules retain the repository instruction line budget. -->
-<!-- markdownlint-disable MD013 -->
 # vtcode-acp
 
 [Root AGENTS.md](../../../AGENTS.md) | Agent Client Protocol (Zed integration). Canonical ACP entrypoint.
 
 ## Modules
 
-`zed/` canonical SACP agent (upstream `agent-client-protocol` stdio) | `tooling/` tool adapters | `tooling_provider.rs` registry→provider `ToolDefinition` bridge | `workspace/` workspace helpers | `permissions/` permission flow | `reports/` reporting | `error/` AcpError | `discovery/` agent registry | legacy HTTP stack (crate-internal, not spec transport): `capabilities/` date versions, `client.rs` (deprecated), `client_v2/` HTTP `/rpc`+SSE, `session/` custom updates, `messages.rs` (deprecated), `jsonrpc/`, `transport/`
-
-`zed/agent/handlers.rs` is the canonical SACP handler wiring; `zed/connection.rs` wraps the SACP `ConnectionTo<Client>` handle.
+- `zed/` canonical SACP agent (`agent/handlers.rs` wiring, `connection.rs` wraps `ConnectionTo<Client>`).
+- `tooling/`, `tooling_provider.rs` tool adapters and registry bridge; `permissions/`, `workspace/`, `reports/`,
+  `error/`, `discovery/`.
+- Legacy HTTP stack, crate-internal and not an ACP transport: `capabilities/`, `client.rs`, `client_v2/`,
+  `session/`, `messages.rs`, `jsonrpc/`, `transport/`. Do not extend it.
 
 ## Rules
 
-- `zed/` (`StandardAcpAdapter`/`ZedAcpAdapter`, `ZedAgent`) is the canonical spec surface. `AcpClient` (deprecated 0.60.x) and `AcpClientV2` (HTTP `/rpc`+SSE, crate-internal) are legacy and not ACP stdio transports — do not extend them. `register_acp_connection()` is a global `OnceLock<Arc<ConnectionHandle>>` — call once from the host protocol after the SACP `connect_with` closure receives the `cx`. `acp` module in `vtcode-core` is the compatibility facade; canonical code lives here. ACP 1.0.1 uses SACP builder + handlers, not the old `impl acp::Agent` trait. `handlers.rs` registers SACP request/notification handlers around `ZedAgent`. `ZedAgent` is `Send + Sync` (`Arc<Mutex<_>>` + `AtomicBool`) so it can be moved into SACP `cx.spawn` tasks. Tool execution RPCs (`fs/read_text_file`, `session/request_permission`) must be called from inside a `cx.spawn(...)` task — invoking them directly from an SACP request handler deadlocks the dispatch loop.
-- `ZedAgent` carries the configured `AuthCredentialsStoreMode`; provider-key resolution must use that mode rather than the platform default.
-- Session lifecycle covers `new|load|list|resume|close|delete` + `logout` (all advertised). Single-workspace: `new|load|resume` require absolute `cwd` (`invalid_cwd` otherwise); non-workspace absolute `cwd` warns and uses workspace. `resume` is live-only (`unknown_session` after `close`); `load` attaches archive history. `close`/`delete` drop the live handle and cancel work, unknown ids fail `unknown_session`.
+- `zed/` (`ZedAgent`, `StandardAcpAdapter`) is the spec surface; `vtcode-core::acp` is only a compatibility facade.
+- ACP 1.0.1 uses the SACP builder plus handlers, not the old `impl acp::Agent` trait.
+- `register_acp_connection()` is a global `OnceLock`: call it once, after `connect_with` receives `cx`.
+- Client RPCs (`fs/read_text_file`, `session/request_permission`, any `block_task()`) run only inside a
+  `cx.spawn(...)` task; calling them from a request handler deadlocks the dispatch loop.
+- Command tools (`exec_command`, `run_pty_cmd`) always run through the local `ToolRegistry`, never the client's
+  `terminal/*` RPCs. A non-zero `exit_code` reports `failed`, never `completed`.
+- A granted permission calls `preapprove_granted_local_tool` before execution; never preapprove a configured `deny`.
+- `admit_local_tool_call` re-checks the primary agent's policy per call; provider selection honors
+  `providers_whitelist`, and key resolution uses the configured `AuthCredentialsStoreMode`.
+- Session lifecycle `new|load|list|resume|close|delete|logout`: `new|load|resume` need an absolute `cwd`;
+  `resume` is live-only; unknown ids fail `unknown_session`.
 
 ## Gotchas
 
-- Legacy `capabilities.rs` `PROTOCOL_VERSION`/`SUPPORTED_VERSIONS` date strings belong to the old HTTP stack — do not confuse with upstream `agent_client_protocol::schema::ProtocolVersion::V1`. Update both legacy constants only if touching that stack.
-- `messages.rs` types are deprecated — use `jsonrpc/` module instead (both legacy HTTP stack).
-- `ConnectionHandle` wraps `agent_client_protocol::ConnectionTo<Client>`. The `block_task()` future returned by `cx.send_request(...).block_task()` is **only safe in a `cx.spawn` task**; calling it from a request handler deadlocks.
-- The `acp` module re-exports `agent_client_protocol::schema::v1::*` plus `ProtocolVersion` from `schema::*`. `Client` and `Agent` (role structs) are at the crate root.
-- `SessionUpdateNotification` decodes through a direct wire shape for SSE performance; new update variants must update that shape and its regression tests.
-- Permission-flow tests use the duplex SACP connection harness; preserve allow, deny, cancel, unknown-option, and request-failure coverage. Stdio EOF, timeout, and cancellation paths must clear pending calls; frames and stderr remain bounded and sanitized. Line reads delegate to commons `line_framing` with `ExcludeLf` (CR is retained); keep the local `BoundedLine` adapter.
-- A granted `session/request_permission` must `mark_tool_preapproved` before local registry execution (`preapprove_granted_local_tool`): prompt policies have no async handler under ACP, so the client's approval is the only way to satisfy the gate. Never preapprove a configured `deny` — approval is not a policy override.
-- Command tools (`exec_command`, `run_pty_cmd`) always execute through the local `ToolRegistry`; never delegate them to the client's ACP `terminal/*` RPCs. A client terminal yields no output, no exit status, and a `terminal_id` `write_stdin` cannot resolve, and it bypasses command-safety/sandbox/policy preflight. Derive the ACP call status from the payload (`ToolExecutionReport::from_local_output`): a non-zero `exit_code` is `failed` with output and `exit_code` retained, never `completed`.
-- Local dispatch re-evaluates the session primary agent's policy against the concrete call (`admit_local_tool_call`: name gate + effective permissions + planning gate for read-only agents) before registry execution. `ZedAgent` carries the operator sandbox/permissions/`providers_whitelist` configs; provider selection and construction both reject non-whitelisted providers.
+- Legacy `PROTOCOL_VERSION` date strings are not upstream `ProtocolVersion::V1`.
+- `SessionUpdateNotification` has a direct wire shape: new variants update it and its regression tests.
+- Stdio EOF, timeout, and cancel must clear pending calls; keep frames and stderr bounded (`line_framing`
+  with `ExcludeLf`).
+
+Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-acp.md) — read before changing a subsystem.

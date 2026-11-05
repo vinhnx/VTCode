@@ -9,7 +9,7 @@
 
 | Area      | Modules                                                     |
 | --------- | ----------------------------------------------------------- |
-| Client    | `client.rs`, `provider.rs`, `rmcp_client.rs`                |
+| Client    | `client/`, `provider.rs`, `rmcp_client/`                    |
 | Transport | `rmcp_transport.rs`, `connection_pool.rs`                   |
 | Discovery | `tool_discovery.rs`, `tool_discovery_cache.rs`, `schema.rs` |
 | Types     | `types.rs`, `traits.rs`, `errors.rs`, `enhanced_config.rs`  |
@@ -26,5 +26,5 @@
 - `enhanced_config.rs` uses `#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]`. `rmcp-reqwest` is a renamed `reqwest` with rustls features -- not the same as the workspace `reqwest`. `DEFAULT_ENV_VARS` is platform-conditional (`#[cfg(unix)]` / `#[cfg(windows)]`). `McpSandboxContext` is optional for unsandboxed `McpClient::new`; session setup must pass it through initial, pooled, and reconnect stdio launches, whose stderr is bounded and redacted.
 - HTTP OAuth token resolution must include the actual configured endpoint so a token cannot be reused for a different MCP resource.
 - `list_changed` refreshes are burst-coalesced and token-bucket limited; throttled notifications must retain a dirty bit for one refresh after refill.
-- LLM-visible tool/resource/prompt lists must be deterministic: sorted in `provider.rs` (`filter_*_sorted`), providers iterated via `providers_sorted_by_name` in `client.rs`; on name collisions the first provider by name wins.
+- LLM-visible tool/resource/prompt lists must be deterministic: sorted in `provider.rs` (`filter_*_sorted`), providers iterated via `providers_sorted_by_name` in `client/`; on name collisions the first provider by name wins.
 - Shell-based transport tests are Unix-only. Reap dump-producing children under a timeout before reading their files; file existence does not prove complete output.

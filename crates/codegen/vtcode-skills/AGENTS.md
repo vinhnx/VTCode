@@ -6,7 +6,7 @@
 
 ## Key Modules
 
-`types.rs` + `manifest.rs` core types | `limits.rs` spec limits shared by both validators | `authoring.rs` | `bundle.rs` | `templates.rs` | `container.rs` + `container_validation.rs` | `context_manager.rs` | `validation_report.rs` + `enhanced_validator.rs` | `trust.rs` prompt-boundary helpers | `native_plugin.rs` | `system.rs` | `document_processor.rs` | `file_references.rs` | `locations.rs` | `model.rs` | `command_skills.rs` (including `/webmcp`) | `injection.rs` + `instructions.rs` + `prompt_integration.rs` + `render.rs` | `versioning.rs`
+`types.rs` + `manifest.rs` core types | `limits.rs` spec limits shared by both validators | `authoring.rs` | `bundle.rs` | `templates.rs` | `container.rs` + `container_validation.rs` | `context_manager.rs` | `validation_report.rs` + `enhanced_validator.rs` | `trust.rs` prompt-boundary helpers | `native_plugin/` | `system.rs` | `document_processor.rs` | `file_references.rs` | `locations.rs` | `model.rs` | `command_skills.rs` (including `/webmcp`) | `injection.rs` + `instructions.rs` + `prompt_integration.rs` + `render.rs` | `versioning.rs`
 
 ## Architecture Notes
 
@@ -22,6 +22,6 @@
 
 ## Gotchas
 
-- `native_plugin.rs` loads process-level code through `dlopen`; callers must establish provenance and explicit approval, and must never trust repository plugin roots. Skill instructions are bounded untrusted resource content, not policy. Registry capability metadata remains authoritative, and out-of-workspace permissions require an explicit human approval token. The type-position `unsafe extern "C" fn` ABI aliases carry a `///` contract doc (gate-enforced by `scripts/check_unsafe_docs.py`).
+- `native_plugin/` loads process-level code through `dlopen`; callers must establish provenance and explicit approval, and must never trust repository plugin roots. Skill instructions are bounded untrusted resource content, not policy. Registry capability metadata remains authoritative, and out-of-workspace permissions require an explicit human approval token. The type-position `unsafe extern "C" fn` ABI aliases carry a `///` contract doc (gate-enforced by `scripts/check_unsafe_docs.py`).
 - `trust.rs` `render_untrusted_skill_instructions_with_context` adds `Skill directory:` + capped `<skill_resources>`; use it for activation so relative refs resolve without bulk-loading. `prompt_integration.rs` `Full` adds `[compat:]`/`[tools:]`; `Lean` stays default catalog.
 - `bundle.rs` import treats zip bytes as untrusted: extraction rejects `..` and absolute entries, then caps each entry by bytes actually written (`copy_bounded`) plus a running `MAX_TOTAL_UNCOMPRESSED_SIZE` budget shared with `validate_extracted_bundle` through `within_total_budget`. Never bound untrusted input by the archive's declared `size()` alone — DEFLATE expands ~1000x.
