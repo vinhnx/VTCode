@@ -111,6 +111,48 @@ impl Drop for IsolatedSessionStore {
     }
 }
 
+/// Run a runloop-booting test body on a multi-thread runtime with
+/// production-like stacks. The desktop service runs its workers at 8 MiB
+/// (`main.rs`), and unoptimized test builds overflow the default 2 MiB test
+/// thread; 16 MiB matches `MAIN_THREAD_STACK_BYTES` and `scripts/run.sh`.
+pub(super) fn block_on_with_desktop_stack<F: Future>(future: F) -> F::Output {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(16 * 1024 * 1024)
+        .build()
+        .expect("test runtime")
+        .block_on(future)
+}
+
+pub(super) async fn seed_archive(
+    sessions: &Path,
+    session_id: &str,
+    workspace: &Path,
+    messages: Vec<vtcode_core::utils::session_archive::SessionMessage>,
+) {
+    let snapshot = vtcode_core::utils::session_archive::SessionSnapshot {
+        metadata: vtcode_core::utils::session_archive::SessionArchiveMetadata::new(
+            "workspace",
+            workspace.to_string_lossy(),
+            "model",
+            "provider",
+            "theme",
+            "medium",
+        ),
+        started_at: chrono::Utc::now(),
+        ended_at: chrono::Utc::now(),
+        total_messages: messages.len(),
+        distinct_tools: Vec::new(),
+        transcript: vec!["hello".into()],
+        messages,
+        progress: None,
+        error_logs: Vec::new(),
+    };
+    vtcode_commons::fs::write_private_json_file(&sessions.join(format!("{session_id}.json")), &snapshot)
+        .await
+        .expect("seed archive");
+}
+
 fn test_git(workspace: &Path, args: &[&str]) {
     let output = std::process::Command::new("git")
         .current_dir(workspace)
@@ -183,6 +225,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
     }
 }
 
+mod cancel_watchdog;
 mod config_auth;
 mod config_restart;
 mod exec_commands;

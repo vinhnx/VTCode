@@ -161,13 +161,7 @@ pub(super) async fn shutdown_current_session(context: &ServiceContext, cancel_ac
                 tracing::warn!(target: "vtcode.desktop", session_id = %runtime.session_id, "desktop runloop did not stop before timeout");
             }
         }
-        match tokio::task::spawn_blocking(move || runtime.command_forwarder.join()).await {
-            Ok(Ok(())) => {}
-            Ok(Err(_)) => tracing::warn!(target: "vtcode.desktop", "desktop host command bridge panicked"),
-            Err(error) => {
-                tracing::warn!(target: "vtcode.desktop", %error, "failed to join desktop host command bridge")
-            }
-        }
+        join_host_command_bridge(runtime.command_forwarder, RUNLOOP_EXIT_TIMEOUT).await;
     }
 
     if let Some(session_id) = session_id {
@@ -240,6 +234,27 @@ async fn wait_for_active_turn_to_finish(context: &ServiceContext) {
             return;
         }
         notified.await;
+    }
+}
+
+/// Join the host command bridge thread within `bound`. A wedged bridge must
+/// degrade to a warning — never hang shutdown or escalation — so both paths
+/// share this bound. Returns whether the thread is confirmed done.
+pub(super) async fn join_host_command_bridge(command_forwarder: std::thread::JoinHandle<()>, bound: Duration) -> bool {
+    match timeout(bound, tokio::task::spawn_blocking(move || command_forwarder.join())).await {
+        Ok(Ok(Ok(()))) => true,
+        Ok(Ok(Err(_))) => {
+            tracing::warn!(target: "vtcode.desktop", "desktop host command bridge panicked");
+            true
+        }
+        Ok(Err(error)) => {
+            tracing::warn!(target: "vtcode.desktop", %error, "failed to join desktop host command bridge");
+            false
+        }
+        Err(_) => {
+            tracing::warn!(target: "vtcode.desktop", "timed out joining desktop host command bridge");
+            false
+        }
     }
 }
 
@@ -860,6 +875,16 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                         state.cancel_requested_turn = None;
                         bail!("selected session runtime has stopped");
                     }
+                    // Bounded escalation: if this exact turn is still active
+                    // after the grace period, the watchdog force-stops it and
+                    // rebuilds the session from durable history. Repeat
+                    // presses reuse the first press's watchdog.
+                    spawn_cancel_watchdog(
+                        context,
+                        params.session_id.clone(),
+                        params.turn_id.clone(),
+                        escalation_waits_for(&state),
+                    );
                 } else if !input.is_closed() {
                     // A repeated press re-asserts the out-of-band signal without
                     // re-queueing: the first signal may have been consumed

@@ -65,6 +65,19 @@ impl ServerState {
         }
     }
 
+    /// Take the active turn exactly once: clears the cancel request and
+    /// resolves the turn's interactions. Whoever takes `Some` owns the single
+    /// terminal emission for the turn — the pump terminal path, pump exit, and
+    /// cancel escalation race through here.
+    pub(super) fn take_active_turn(&mut self, session_id: &str) -> Option<String> {
+        let turn_id = self.active_turn_id.take()?;
+        self.cancel_requested_turn = None;
+        self.interaction_registry.finish_turn(session_id, &turn_id);
+        self.pending_interactions
+            .retain(|_, interaction| interaction.session_id != session_id || interaction.turn_id != turn_id);
+        Some(turn_id)
+    }
+
     /// Pop the next batch for dispatch after a terminal event, recording its
     /// fresh turn id. Returns the dispatch or `None` when there is nothing to
     /// dispatch or the session is busy again. Callers send `Submit` after

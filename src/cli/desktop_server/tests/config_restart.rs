@@ -2,7 +2,7 @@ use super::*;
 use serial_test::serial;
 use std::sync::Arc;
 use vtcode_core::llm::provider::{Message, MessageRole};
-use vtcode_core::utils::session_archive::{SessionArchiveMetadata, SessionMessage, SessionSnapshot};
+use vtcode_core::utils::session_archive::{SessionMessage, SessionSnapshot};
 use vtcode_ui::tui::app::SubmittedInput;
 
 fn config_request(id: &str, method: &str, params: Value) -> Request {
@@ -12,19 +12,6 @@ fn config_request(id: &str, method: &str, params: Value) -> Request {
         method: method.into(),
         params,
     }
-}
-
-/// Run a runloop-booting test body on a multi-thread runtime with
-/// production-like stacks. The desktop service runs its workers at 8 MiB
-/// (`main.rs`), and unoptimized test builds overflow the default 2 MiB test
-/// thread; 16 MiB matches `MAIN_THREAD_STACK_BYTES` and `scripts/run.sh`.
-fn block_on_with_desktop_stack<F: Future>(future: F) -> F::Output {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(16 * 1024 * 1024)
-        .build()
-        .expect("test runtime")
-        .block_on(future)
 }
 
 /// A live fake runtime installed under `session_id`, mirroring the harness in
@@ -92,30 +79,6 @@ impl LiveSession {
             .expect("shutdown completes before the test timeout")
             .expect("shutdown succeeds");
     }
-}
-
-async fn seed_archive(sessions: &Path, session_id: &str, workspace: &Path, messages: Vec<SessionMessage>) {
-    let snapshot = SessionSnapshot {
-        metadata: SessionArchiveMetadata::new(
-            "workspace",
-            workspace.to_string_lossy(),
-            "model",
-            "provider",
-            "theme",
-            "medium",
-        ),
-        started_at: chrono::Utc::now(),
-        ended_at: chrono::Utc::now(),
-        total_messages: messages.len(),
-        distinct_tools: Vec::new(),
-        transcript: vec!["hello".into()],
-        messages,
-        progress: None,
-        error_logs: Vec::new(),
-    };
-    vtcode_commons::fs::write_private_json_file(&sessions.join(format!("{session_id}.json")), &snapshot)
-        .await
-        .expect("seed archive");
 }
 
 #[test]

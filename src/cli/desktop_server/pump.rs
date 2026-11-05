@@ -105,15 +105,7 @@ pub(super) fn spawn_session_pump(
         let completed_turn = {
             let mut state = state.lock().await;
             if runtime_is_current(&state, &session_id, generation) {
-                let turn_id = state.active_turn_id.take();
-                if let Some(turn_id) = turn_id.as_deref() {
-                    state.cancel_requested_turn = None;
-                    state.interaction_registry.finish_turn(&session_id, turn_id);
-                    state.pending_interactions.retain(|_, interaction| {
-                        interaction.session_id != session_id || interaction.turn_id != turn_id
-                    });
-                }
-                turn_id
+                state.take_active_turn(&session_id)
             } else {
                 None
             }
@@ -238,14 +230,8 @@ async fn publish_thread_event_for_runtime(
         let turn_id = state.active_turn_id.clone();
         let mut drained = None;
         if terminal_status.is_some() && turn_id.is_some() && state.session_id.as_deref() == Some(session_id) {
-            if let Some(turn_id) = turn_id.as_deref() {
-                state.interaction_registry.finish_turn(session_id, turn_id);
-                state
-                    .pending_interactions
-                    .retain(|_, interaction| interaction.session_id != session_id || interaction.turn_id != turn_id);
-            }
-            state.active_turn_id = None;
-            state.cancel_requested_turn = None;
+            let taken = state.take_active_turn(session_id);
+            debug_assert!(taken.is_some(), "terminal gate cloned a live turn id under the same lock");
             // Atomically with the release: pop the next queued batch (if any)
             // so a concurrent submit cannot slip an immediate turn ahead of it.
             drained = state.pop_next_queued_turn();

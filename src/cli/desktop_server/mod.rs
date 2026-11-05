@@ -48,12 +48,14 @@ use crate::agent::runloop::unified::turn::run_single_agent_loop_unified_with_hos
 use crate::startup::StartupContext;
 
 mod cancel;
-use cancel::{spawn_cancel_refire, spawn_late_stop_signal};
+#[cfg(test)]
+use cancel::{CANCEL_ESCALATION, EscalationWaits};
+use cancel::{escalation_waits_for, spawn_cancel_refire, spawn_cancel_watchdog, spawn_late_stop_signal};
 mod catalog;
 mod dispatch;
 use dispatch::{
-    dispatch_interaction_response, ensure_no_active_turn, handle_request, parse_params, protocol_interaction_kind,
-    send_notification, shutdown_current_session,
+    dispatch_interaction_response, ensure_no_active_turn, handle_request, join_host_command_bridge, parse_params,
+    protocol_interaction_kind, send_notification, shutdown_current_session,
 };
 mod pump;
 #[cfg(test)]
@@ -102,6 +104,10 @@ struct ServerState {
     active_turn_id: Option<String>,
     session_transitioning: bool,
     cancel_requested_turn: Option<String>,
+    /// Test-only escalation bounds so cancel-watchdog regressions run with
+    /// short deterministic waits instead of the production grace periods.
+    #[cfg(test)]
+    escalation_waits: Option<EscalationWaits>,
     /// Prompts queued behind the active turn; drained FIFO on terminal events
     /// with CLI batching semantics. Desktop agent switches require an idle
     /// session, so every entry carries `primary_agent: None`.

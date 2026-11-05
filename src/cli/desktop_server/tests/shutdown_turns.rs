@@ -58,6 +58,45 @@ async fn protocol_writer_drops_a_buffered_old_runtime_notification() {
 }
 
 #[tokio::test]
+async fn shutdown_completes_when_the_command_bridge_thread_is_wedged() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (context, _) = test_service_context(test_startup_context(workspace.path()), workspace.path().to_path_buf());
+    let (input, mut input_receiver) = mpsc::unbounded_channel();
+    let (exit_sender, exit) = oneshot::channel();
+    let runtime_task = tokio::spawn(std::future::pending::<()>());
+    // The bridge thread blocks forever: without a join bound, shutdown hangs.
+    let (gate_sender, gate_receiver) = std::sync::mpsc::channel::<()>();
+    let command_forwarder = std::thread::spawn(move || {
+        let _ = gate_receiver.recv();
+    });
+    {
+        let mut state = context.state.lock().await;
+        state.session_id = Some("session".into());
+        state.runtime = Some(RuntimeSession {
+            session_id: "session".into(),
+            input,
+            stop: stop_requests::new_stop_handle_slot(),
+            exit,
+            abort: runtime_task.abort_handle(),
+            command_forwarder,
+        });
+    }
+    let driver = tokio::spawn(async move {
+        assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Exit)));
+        exit_sender.send(Ok(())).expect("complete exit");
+    });
+    timeout(Duration::from_secs(15), shutdown_current_session(&context, true))
+        .await
+        .expect("a wedged bridge degrades to a warning, not a hang")
+        .expect("shutdown succeeds");
+    driver.await.unwrap();
+    assert!(context.state.lock().await.session_id.is_none(), "teardown still runs to completion");
+    // Release the wedged thread so the test leaves nothing behind.
+    gate_sender.send(()).unwrap();
+    runtime_task.abort();
+}
+
+#[tokio::test]
 async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
     let workspace = tempfile::tempdir().expect("workspace");
     let startup = test_startup_context(workspace.path());
