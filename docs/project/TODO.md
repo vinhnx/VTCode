@@ -20,51 +20,6 @@ gpui apps for other plqtforms
 
 ---
 
-
-warning: unresolved link to `REDACTED` ] 784/785: vtcode-core(doc)
-  --> crates/codegen/vtcode-core/src/mcp/cli/args.rs:85:62
-   |
-85 |     /// Optional environment variable containing the Bearer [REDACTED]
-   |                                                              ^^^^^^^^ no item named `REDACTED` in scope
-   |
-   = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
-   = note: `#[warn(rustdoc::broken_intra_doc_links)]` on by default
-
-warning: public documentation for `should_cache` links to private item `GrepSearchResult::matches`
-  --> crates/codegen/vtcode-core/src/tools/grep_cache.rs:99:11
-   |
-99 |     /// [`GrepSearchResult::matches`] holds raw ripgrep JSON stream events, so
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^ this item is private
-   |
-   = note: this link will resolve properly if you pass `--document-private-items`
-   = note: `#[warn(rustdoc::private_intra_doc_links)]` on by default
-
-warning: public documentation for `state` links to private item `PlanningInner`
-  --> crates/codegen/vtcode-core/src/tools/handlers/planning_workflow/state.rs:11:38
-   |
-11 | //! All mutable fields live in one [`PlanningInner`] behind a single lock, so
-   |                                      ^^^^^^^^^^^^^ this item is private
-   |
-   = note: this link will resolve properly if you pass `--document-private-items`
-
-warning: `vtcode-core` (lib doc) generated 3 warnings
-
-
-warning: profile package spec `gpui-component` in profile `dev` did not match any packages
-warning: profile package spec `gpui-kit` in profile `dev` did not match any packages
-warning: profile package spec `gpui-kit-assets` in profile `dev` did not match any packages
-warning: profile package spec `gpui-pre` in profile `dev` did not match any packages
-warning: profile package spec `gpui-pre-platform` in profile `dev` did not match any packages
-warning: profile package spec `rustybuzz` in profile `dev` did not match any packages
-warning: profile package spec `taffy` in profile `dev` did not match any packages
-
-help: a package with a similar name exists: `tiff`
-warning: profile package spec `ttf-parser` in profile `dev` did not match any packages
-
-help: a package with a similar name exists: `utf8parse`
-
----
-
 implement lazy loading for threads data and heavy listing for all places on desktop app.
 
 ---
@@ -78,6 +33,34 @@ adjust the main container width for comformtable read.
 click on a notification should deeplink and open to the related information.
 
 ---
+
+remove the icons in tool summarization '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 10.35.25 AM.png'
+
+---
+
+silent and maybe skip the warining "MCP tools are ready. Use /mcp tools to inspect the catalog."
+
+---
+
+
+implement /doctor command. https://code.claude.com/docs/en/skills#check-your-setup-with-/doctor
+
+---
+
+cli: improve line height markdown tui and spacing, currently the text and paragraphs seems too cramp and dense. can we improve to make it comfortable to read on the TUI ternimal? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 11.17.05 AM.png'
+
+---
+
+gpui-fast-linux, gpui-fast-windows, gpui-fast-web, gpui-fast-macos
+    
+---
+
+gpui-web ?
+
+---
+
+check and fix reverse history search (control+r) for desktop app should use same logic from the cli.
+
 ---
 
 implement a simple markdown preview for desktop app.
@@ -216,3 +199,34 @@ https://gpui-kit.com/component/focus-trap/
 
 check and fix splitting the two 1000+ line
   files — is large surgery in view/
+---
+
+plan: gpui cross-platform (mac-only today -> linux-first, defer windows/web)
+
+context: vtcode-desktop is macOS-gated (Cargo.toml macos-only deps, main.rs exit(1) elsewhere, objc2 NSStatusBar/NSApplication/NSFont/trash, package-desktop-macos.sh + install.sh check_desktop_os + desktop-macos.yml macos-15). upstream GPUI already ships gpui-fast-linux/windows/web/macos in Cargo.lock; desktop-protocol (serde/json/tokio/url) is portable. mac-only seams are ~6 sites: view/menu_bar.rs (NSStatusBar), app_icon.rs (dock), view/about.rs (NSApplication panel), preferences.rs (NSFont), files/mutate.rs (trashItemAtURL), view/navigation_history.rs (NSUserDefaults scroll). typography.rs + navigation_history.rs already have non-mac fallbacks.
+
+pros of porting: reach linux/windows majority, reuse portable protocol+runloop (thin client), linux packaging easy (tarball, no signing), CI cheap on ubuntu.
+cons/costs: per-OS tray/menu/dock/trash/open/fonts/IME/notifications/deeplink/updater/signing; 2-3x CI + manual QA (focus/keyboard/IME/HiDPI/Wayland-X11/GPU-less); degraded port hurts more than no port; opportunity cost vs agent loop.
+tradeoff: do not port now; buy optionality cheap. options considered: (A) stay mac-only, (B) linux-first preview, (C) linux+windows, (D) web client over same protocol, (E) protocol-as-product. pick B-gated: seam + check-green, ship preview only on real demand.
+
+phase 0 - spike (hours, no product promise):
+1. cargo check -p vtcode-desktop on ubuntu + gpui-kit hello-world on linux/windows; record text/IME/GPU breakage.
+2. list exact cfg breakage (objc2 sites above + files/launch.rs fixed-argv + fonts/scroll).
+3. stop if text/IME/GPU fails.
+verify: spike notes with breakage list.
+
+phase 1 - platform seam, zero mac behavior change:
+1. add desktop/platform/{trash,reveal,open_path,dock_tray,fonts,about,scroll_direction}.rs behind PlatformHost trait; mac impl keeps current objc2 calls; other OS compile-time stubs (still exit 1 at runtime).
+2. swap Foundation trash for `trash` crate (cross-platform) or gate behind trait.
+3. keep views calling only trait; no #[cfg(macos)] outside platform/.
+verify: cargo check --locked -p vtcode-desktop; cargo nextest run -p vtcode-desktop (mac green, no behavior diff).
+
+phase 2 - linux check-green only (no runtime enable):
+1. ungate [dev-dependencies] test-support; add ubuntu-latest CI job: cargo check + headless nextest for desktop; runtime still exits(1) off-mac.
+2. prevent re-entrenching mac-isms.
+verify: CI green on ubuntu; mac packaging unchanged.
+
+phase 3 - only on demand signal: linux preview tarball, no auto-update, documented gaps (tray/fonts/IME). defer windows MSIX/Authenticode/SmartScreen + installer/updater until paying/high-volume ask. revisit web client (gpui-fast-web or thin web over desktop-protocol) if need is view/control-from-anywhere.
+verify: manual QA checklist (WCAG AA 4.5:1, 20 locales, keyboard/focus/Escape, trash fail-closed, launch argv boundary).
+
+non-goals: no windows packaging/signing now; no auto-update for linux preview; no behavior change on mac.
