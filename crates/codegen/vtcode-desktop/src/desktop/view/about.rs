@@ -1,24 +1,52 @@
 //! About dialog: the native macOS About panel, with a themed fallback.
 //!
-//! Production opens AppKit's standard About panel (name, icon, version, and
-//! copyright all come from the bundle's Info.plist); the custom dialog below
-//! only covers tests and the off-main-thread edge, styled after the native
-//! panel (bare icon, plain version line, copyright) with the project actions.
+//! Production opens AppKit's standard About panel with the app name, marketing
+//! version, and build commit passed explicitly (an unbundled dev launch has no
+//! Info.plist to read); its credits come from `Credits.html` in the bundle. The
+//! custom dialog below only covers tests and the off-main-thread edge, styled
+//! after the native panel (bare icon, plain version line, copyright) with the
+//! project actions.
 use super::bootstrap::HELP_URL;
 use super::*;
 
 /// Present AppKit's standard About panel. Returns false off the main thread
 /// or when AppKit is unavailable; callers fall back to the custom dialog.
 #[cfg(not(test))]
+#[expect(unsafe_code, reason = "AppKit About-panel options are an unsafe Objective-C call")]
 fn show_native_about_panel() -> bool {
     use objc2::MainThreadMarker;
-    use objc2_app_kit::NSApplication;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_app_kit::{
+        NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionVersion,
+        NSApplication,
+    };
+    use objc2_foundation::{NSDictionary, NSString};
 
     let Some(mtm) = MainThreadMarker::new() else {
         return false;
     };
     let app = NSApplication::sharedApplication(mtm);
-    app.orderFrontStandardAboutPanel(None);
+    // Pass the identity explicitly: an unbundled dev launch has no Info.plist,
+    // and the build stamp must match the in-app fallback card either way.
+    let name = NSString::from_str(app::NAME);
+    let version = NSString::from_str(build_info::VERSION);
+    let build = NSString::from_str(build_info::BUILD_VERSION);
+    // SAFETY: these are immutable localized key objects published by AppKit.
+    let keys: [&NSString; 3] = unsafe {
+        [
+            NSAboutPanelOptionApplicationName,
+            NSAboutPanelOptionApplicationVersion,
+            NSAboutPanelOptionVersion,
+        ]
+    };
+    let values = NSDictionary::from_slices(&keys, &[&*name, &*version, &*build]);
+    // SAFETY: `NSDictionary` is a single Objective-C class, so only the
+    // generic value type differs between the two spellings.
+    let values: Retained<NSDictionary<NSString, AnyObject>> = unsafe { Retained::cast_unchecked(values) };
+    // SAFETY: AppKit reads the dictionary during this call and retains what it
+    // needs; every value is a live `NSString` object.
+    unsafe { app.orderFrontStandardAboutPanelWithOptions(&values) };
     true
 }
 
@@ -118,7 +146,9 @@ impl DesktopView {
                             .test_support()
                             .text_sm()
                             .text_color(colors.foreground)
-                            .child(rust_i18n::t!("app.about.version", version = env!("CARGO_PKG_VERSION")).to_string()),
+                            .child(
+                                rust_i18n::t!("app.about.version", version = build_info::display_version()).to_string(),
+                            ),
                     )
                     // HIG about windows carry the copyright line, kept small
                     // and muted below the version, with the license it is

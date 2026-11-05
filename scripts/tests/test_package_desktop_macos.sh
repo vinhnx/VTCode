@@ -22,6 +22,7 @@ mkdir -p "${STUB_BIN}" "${RELEASE_DIR}"
 cat >"${STUB_BIN}/cargo" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"${VTCODE_PACKAGE_TEST_CARGO_LOG}"
+printf 'VTCODE_DESKTOP_BUILD_VERSION=%s\n' "${VTCODE_DESKTOP_BUILD_VERSION:-}" >>"${VTCODE_PACKAGE_TEST_CARGO_LOG}"
 STUB
 
 cat >"${STUB_BIN}/codesign" <<'STUB'
@@ -77,6 +78,18 @@ if grep -Fq -- "<key>NSIsTouchNative</key>" "${SUCCESS_APP}/Contents/Info.plist"
 	exit 1
 fi
 printf 'PASS: bundle omits NSIsTouchNative, so system touch emulation stays active.\n'
+# About panel: the plist's build version must match the commit stamped into the
+# binary, and the bundled Credits.html supplies the repository and
+# acknowledgments links.
+EXPECTED_BUILD_VERSION="$(git -C "${ROOT_DIR}" rev-parse --short=12 HEAD 2>/dev/null || true)"
+if [[ -z "${EXPECTED_BUILD_VERSION}" ]]; then
+	EXPECTED_BUILD_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "${ROOT_DIR}/Cargo.toml" | head -n 1)"
+fi
+[[ "$(plutil -extract CFBundleVersion raw "${SUCCESS_APP}/Contents/Info.plist")" == "${EXPECTED_BUILD_VERSION}" ]]
+grep -Fq -- "VTCODE_DESKTOP_BUILD_VERSION=${EXPECTED_BUILD_VERSION}" "${CARGO_LOG}"
+cmp -s "${ROOT_DIR}/crates/codegen/vtcode-desktop/Credits.html" "${SUCCESS_APP}/Contents/Resources/Credits.html"
+grep -Fq -- "github.com/vinhnx/vtcode" "${SUCCESS_APP}/Contents/Resources/Credits.html"
+printf 'PASS: About panel reports the build commit and ships GitHub/acknowledgments credits.\n'
 grep -Fq -- "build --locked --release --manifest-path ${ROOT_DIR}/Cargo.toml -p vtcode -p vtcode-desktop" "${CARGO_LOG}"
 grep -Fq -- "--verify --deep --strict ${SUCCESS_APP}" "${CODESIGN_LOG}"
 printf 'PASS: custom Cargo target artifacts are packaged and the copied app is verified.\n'

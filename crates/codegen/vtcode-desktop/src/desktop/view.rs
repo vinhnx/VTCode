@@ -71,6 +71,7 @@ use vtcode_desktop_protocol::{
 };
 
 use super::app_icon;
+use super::build_info;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{

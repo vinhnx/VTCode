@@ -196,6 +196,16 @@ if [[ -z "${VERSION}" ]]; then
 	exit 1
 fi
 
+# The build stamp is the commit that produced the bundle. Export it so the
+# desktop build script bakes the same value into the binary that Info.plist
+# reports as CFBundleVersion; fall back to the marketing version when git is
+# unavailable (tarball builds).
+BUILD_VERSION="$(git -C "${ROOT_DIR}" rev-parse --short=12 HEAD 2>/dev/null || true)"
+if [[ -z "${BUILD_VERSION}" ]]; then
+	BUILD_VERSION="${VERSION}"
+fi
+export VTCODE_DESKTOP_BUILD_VERSION="${BUILD_VERSION}"
+
 DESKTOP_BIN="${RELEASE_DIR}/vtcode-desktop"
 HELPER_BIN="${RELEASE_DIR}/vtcode"
 if ((SKIP_BUILD)); then
@@ -255,6 +265,7 @@ install -m 755 "${HELPER_BIN}" "${CONTENTS}/Helpers/vtcode"
 install -m 644 "${ROOT_DIR}/LICENSE" "${CONTENTS}/Resources/LICENSE"
 install -m 644 "${ROOT_DIR}/LICENSE-MIT" "${CONTENTS}/Resources/LICENSE-MIT"
 install -m 644 "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${CONTENTS}/Resources/THIRD-PARTY-NOTICES"
+install -m 644 "${ROOT_DIR}/crates/codegen/vtcode-desktop/Credits.html" "${CONTENTS}/Resources/Credits.html"
 install -m 644 "${ICON_SOURCE}" "${CONTENTS}/Resources/VTCode.icns"
 
 if ((SKIP_ASSETS)); then
@@ -294,7 +305,7 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>${VERSION}</string>
+    <string>${BUILD_VERSION}</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright 2025 Vinh Nguyen</string>
     <key>LSMinimumSystemVersion</key>
