@@ -223,6 +223,18 @@ run_release_contract_tests() {
         print_error "Companion packaging contract tests failed."
         failed=1
     fi
+    if python3 scripts/tests/test_homebrew_formula.py; then
+        print_success "Homebrew formula contract tests passed."
+    else
+        print_error "Homebrew formula contract tests failed."
+        failed=1
+    fi
+    if python3 scripts/tests/test_homebrew_cask.py; then
+        print_success "Homebrew cask contract tests passed."
+    else
+        print_error "Homebrew cask contract tests failed."
+        failed=1
+    fi
     if [ "$failed" -eq 0 ]; then
         print_success "Release contract tests passed."
         return 0

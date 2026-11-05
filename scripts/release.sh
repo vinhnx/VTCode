@@ -7,7 +7,7 @@
 # 2. Runs cargo-release to version, tag, and push
 # 3. Hands off crates.io publishing to the staged release script
 # 4. Uploads pre-built binaries to GitHub Releases
-# 5. Updates and publishes Homebrew formula
+# 5. Updates and publishes Homebrew formula and desktop cask
 #
 # Usage: ./scripts/release.sh [version|level] [options]
 
@@ -17,9 +17,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
-# Shared four-target Homebrew formula transformation.
+# Shared four-target Homebrew formula transformation and desktop cask helper.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/homebrew-formula.sh"
+# Homebrew tap publication for the CLI formula and desktop cask.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/homebrew-tap.sh"
 # Legacy updater compatibility bridge helpers (.tar.gz.compat raw exec assets).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/release-assets.sh"
@@ -61,131 +64,6 @@ export GH_SPINNER_DISABLED=${GH_SPINNER_DISABLED:-1}
 # Temporary file to store release notes
 RELEASE_NOTES_FILE=$(mktemp)
 trap 'rm -f "$RELEASE_NOTES_FILE"' EXIT
-
-publish_homebrew_tap() {
-	local version=$1
-	local x86_64_macos_sha=${2:-}
-	local aarch64_macos_sha=${3:-}
-	local aarch64_linux_sha=${4:-}
-	local x86_64_linux_sha=${5:-}
-	local formula_path="homebrew/vtcode.rb"
-
-	# If checksums were not passed as arguments, try dist/ then GitHub release
-	if [[ -z "$x86_64_macos_sha" ]]; then
-		x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-	fi
-	if [[ -z "$aarch64_macos_sha" ]]; then
-		aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-	fi
-	if [[ -z "$aarch64_linux_sha" ]]; then
-		aarch64_linux_sha=$(cat "dist/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-	fi
-	if [[ -z "$x86_64_linux_sha" ]]; then
-		x86_64_linux_sha=$(cat "dist/vtcode-$version-x86_64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-	fi
-
-	# Last resort: download .sha256 files from the GitHub release
-	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" || -z "$aarch64_linux_sha" || -z "$x86_64_linux_sha" ]]; then
-		print_info "Fetching checksums from GitHub release $version..."
-		local sha_tmp
-		sha_tmp=$(mktemp -d)
-		if gh release download "$version" --dir "$sha_tmp" --pattern "*.sha256" 2>/dev/null; then
-			if [[ -z "$x86_64_macos_sha" ]]; then
-				x86_64_macos_sha=$(cat "$sha_tmp/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-			fi
-			if [[ -z "$aarch64_macos_sha" ]]; then
-				aarch64_macos_sha=$(cat "$sha_tmp/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-			fi
-			if [[ -z "$aarch64_linux_sha" ]]; then
-				aarch64_linux_sha=$(cat "$sha_tmp/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-			fi
-			if [[ -z "$x86_64_linux_sha" ]]; then
-				x86_64_linux_sha=$(cat "$sha_tmp/vtcode-$version-x86_64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
-			fi
-		fi
-		rm -rf "$sha_tmp"
-	fi
-
-	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" || -z "$aarch64_linux_sha" || -z "$x86_64_linux_sha" ]]; then
-		print_error "Missing Homebrew target checksums, cannot publish Homebrew tap"
-		return 1
-	fi
-
-	print_info "Updating local Homebrew formula at $formula_path..."
-	if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha" "$x86_64_linux_sha"; then
-		print_error "Failed to update local Homebrew formula"
-		return 1
-	fi
-
-	if git diff --quiet -- "$formula_path"; then
-		print_info "Local Homebrew formula is already up to date"
-	else
-		git add "$formula_path"
-		if GIT_AUTHOR_NAME="vtcode-release-bot" \
-			GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-			GIT_COMMITTER_NAME="vtcode-release-bot" \
-			GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-			git commit -m "chore: update homebrew formula to $version [skip ci]"; then
-			print_success "Local Homebrew formula updated and committed"
-			if git push origin main --no-verify; then
-				print_success "Homebrew formula commit pushed to origin"
-			else
-				print_warning "Failed to push Homebrew formula commit to origin"
-			fi
-		else
-			print_warning "Failed to commit local Homebrew formula update"
-		fi
-	fi
-
-	print_info "Publishing Homebrew formula to vinhnx/homebrew-tap..."
-
-	local temp_dir
-	temp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vtcode-homebrew')
-
-	if ! (
-		trap 'rm -rf "$temp_dir"' EXIT
-
-		local tap_token="${HOMEBREW_TAP_TOKEN:-${GITHUB_TOKEN:-}}"
-		if [[ -z "$tap_token" ]]; then
-			print_error "No token available for homebrew-tap. Set HOMEBREW_TAP_TOKEN or GITHUB_TOKEN."
-			exit 1
-		fi
-
-		local tap_repo_url="https://x-access-token:${tap_token}@github.com/vinhnx/homebrew-tap.git"
-
-		if ! git clone "$tap_repo_url" "$temp_dir" >/dev/null 2>&1; then
-			print_error "Failed to clone vinhnx/homebrew-tap"
-			exit 1
-		fi
-
-		cp "$formula_path" "$temp_dir/vtcode.rb"
-
-		if git -C "$temp_dir" diff --quiet -- vtcode.rb; then
-			print_info "Homebrew tap formula is already up to date"
-			exit 0
-		fi
-
-		git -C "$temp_dir" add vtcode.rb
-
-		if ! GIT_AUTHOR_NAME="vtcode-release-bot" \
-			GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-			GIT_COMMITTER_NAME="vtcode-release-bot" \
-			GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-			git -C "$temp_dir" commit -m "Update vtcode formula to v$version"; then
-			print_error "Failed to commit Homebrew tap update"
-			exit 1
-		fi
-
-		if ! git -C "$temp_dir" push "$tap_repo_url" HEAD:main; then
-			print_error "Failed to push Homebrew tap update"
-			exit 1
-		fi
-
-		print_success "Published vtcode formula to vinhnx/homebrew-tap"
-	); then
-		return 1
-	fi
-}
 
 main() {
 	local release_argument=''
@@ -941,6 +819,7 @@ main() {
 		local release_arm_sha=""
 		local release_arm_linux_sha=""
 		local release_x86_linux_sha=""
+		local release_desktop_sha=""
 		if [[ -f "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256" ]]; then
 			release_x86_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256")
 		fi
@@ -953,6 +832,9 @@ main() {
 		if [[ -f "$binaries_dir/vtcode-$released_version-x86_64-unknown-linux-gnu.sha256" ]]; then
 			release_x86_linux_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-x86_64-unknown-linux-gnu.sha256")
 		fi
+		if [[ -f "$binaries_dir/vtcode-desktop-$released_version-aarch64-apple-darwin.zip.sha256" ]]; then
+			release_desktop_sha=$(awk '{print $1}' "$binaries_dir/vtcode-desktop-$released_version-aarch64-apple-darwin.zip.sha256")
+		fi
 
 		# Cleanup
 		rm -rf "$binaries_dir"
@@ -960,8 +842,8 @@ main() {
 
 	# 5. Publish Homebrew tap
 	if [[ "$skip_binaries" == 'false' ]]; then
-		print_info "Step 5: Publishing Homebrew formula to vinhnx/homebrew-tap..."
-		publish_homebrew_tap "$released_version" "${release_x86_sha:-}" "${release_arm_sha:-}" "${release_arm_linux_sha:-}" "${release_x86_linux_sha:-}"
+		print_info "Step 5: Publishing Homebrew formula and desktop cask to vinhnx/homebrew-tap..."
+		publish_homebrew_tap "$released_version" "${release_x86_sha:-}" "${release_arm_sha:-}" "${release_arm_linux_sha:-}" "${release_x86_linux_sha:-}" "${release_desktop_sha:-}"
 	fi
 
 	# 6. Handle docs.rs rebuild
@@ -975,6 +857,7 @@ main() {
 	print_info "  ✓ GitHub Releases (all platforms: macOS local + Linux/Windows CI)"
 	print_info "  ✓ macOS Desktop app (vtcode-desktop-<version>-<target>.zip + .sha256)"
 	print_info "  ✓ Homebrew (vinhnx/homebrew-tap/vtcode)"
+	print_info "  ✓ Homebrew cask (vinhnx/homebrew-tap/vtcode-desktop)"
 	print_info ""
 	print_info "Cost optimization:"
 	print_info "  • macOS binaries: built locally (no CI cost)"

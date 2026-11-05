@@ -213,14 +213,14 @@ test_release_script() {
     fi
 
     # Check for Homebrew tap publishing
-    if grep -q "publish_homebrew_tap" scripts/release.sh && grep -q "vinhnx/homebrew-tap" scripts/release.sh; then
+    if grep -q "publish_homebrew_tap" scripts/release.sh scripts/homebrew-tap.sh && grep -q "vinhnx/homebrew-tap" scripts/homebrew-tap.sh; then
         print_success "release.sh publishes the Homebrew tap"
     else
         print_error "release.sh missing Homebrew tap publication"
     fi
 
     # Check for authenticated push to the tap repo
-    if grep -q "HOMEBREW_TAP_TOKEN" scripts/release.sh && grep -q "x-access-token:.*github.com/vinhnx/homebrew-tap.git" scripts/release.sh; then
+    if grep -q "HOMEBREW_TAP_TOKEN" scripts/homebrew-tap.sh && grep -q "x-access-token:.*github.com/vinhnx/homebrew-tap.git" scripts/homebrew-tap.sh; then
         print_success "release.sh pushes to the tap repo via token-authenticated HTTPS"
     else
         print_error "release.sh missing token-authenticated HTTPS push for the tap repo"

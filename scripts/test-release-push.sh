@@ -29,20 +29,28 @@ print_error() {
 
 print_info "Testing the updated release script functionality..."
 
+homebrew_tap_script="scripts/homebrew-tap.sh"
+
 print_info "1. Checking release orchestration..."
-if grep -q "publish_homebrew_tap" scripts/release.sh; then
-    print_success "✓ Found Homebrew publish helper in release.sh"
+if grep -q "publish_homebrew_tap" "$homebrew_tap_script"; then
+    print_success "✓ Found Homebrew publish helper in $homebrew_tap_script"
 else
-    print_error "✗ Missing Homebrew publish helper in release.sh"
+    print_error "✗ Missing Homebrew publish helper in $homebrew_tap_script"
 fi
 
-if grep -q "git clone.*homebrew-tap" scripts/release.sh; then
+if grep -q "git clone.*tap_repo_url" "$homebrew_tap_script" && grep -q "homebrew-tap.git" "$homebrew_tap_script"; then
     print_success "✓ Found Homebrew tap clone command"
 else
     print_error "✗ Missing Homebrew tap clone command"
 fi
 
-if grep -q "HOMEBREW_TAP_TOKEN" scripts/release.sh && grep -q "x-access-token:.*github.com/vinhnx/homebrew-tap.git" scripts/release.sh; then
+if grep -q "Casks/vtcode-desktop.rb" "$homebrew_tap_script"; then
+    print_success "✓ Found desktop cask publication"
+else
+    print_error "✗ Missing desktop cask publication"
+fi
+
+if grep -q "HOMEBREW_TAP_TOKEN" "$homebrew_tap_script" && grep -q "x-access-token:.*github.com/vinhnx/homebrew-tap.git" "$homebrew_tap_script"; then
     print_success "✓ Found token-authenticated HTTPS push to tap repo"
 else
     print_error "✗ Missing token-authenticated HTTPS push to tap repo"
@@ -54,7 +62,7 @@ else
     print_error "✗ Missing updated release summary for Homebrew"
 fi
 
-if grep -q "gh auth switch -u vinhnx" scripts/release.sh; then
+if grep -q "gh auth switch -u vinhnx" scripts/release-preflight.sh; then
     print_success "✓ Found GitHub account switch to vinhnx"
 else
     print_error "✗ Missing GitHub account switch to vinhnx"
@@ -62,8 +70,9 @@ fi
 
 print_info ""
 print_info "The updated release script changes are in place:"
-print_info "  - release.sh now owns Homebrew tap publishing"
+print_info "  - homebrew-tap.sh owns Homebrew tap publishing"
 print_info "  - Tap clone/push uses authenticated HTTPS"
+print_info "  - The tap publishes both the CLI formula and the desktop cask"
 print_info "  - Release summary reflects the new tap"
 print_info "  - GitHub CLI switches to vinhnx before publishing"
 print_info ""
