@@ -438,32 +438,6 @@ codegen-units = 16
 opt-level = 1
 debug = false
 
-# Keep GPUI rendering and text dependencies responsive in `cargo run` while
-# leaving VT Code Desktop itself in the normal, debuggable dev profile.
-[profile.dev.package."gpui-pre"]
-opt-level = 3
-
-[profile.dev.package."gpui-component"]
-opt-level = 3
-
-[profile.dev.package."gpui-kit"]
-opt-level = 3
-
-[profile.dev.package."gpui-kit-assets"]
-opt-level = 3
-
-[profile.dev.package."gpui-pre-platform"]
-opt-level = 3
-
-[profile.dev.package."rustybuzz"]
-opt-level = 3
-
-[profile.dev.package."taffy"]
-opt-level = 3
-
-[profile.dev.package."ttf-parser"]
-opt-level = 3
-
 [profile.dev-optimized]
 inherits = "dev"
 lto = "thin"

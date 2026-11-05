@@ -96,7 +96,7 @@ impl GrepSearchCache {
 
     /// Check if this search should be cached (only results with real hits).
     ///
-    /// [`GrepSearchResult::matches`] holds raw ripgrep JSON stream events, so
+    /// `GrepSearchResult::matches` holds raw ripgrep JSON stream events, so
     /// a no-hit search is still non-empty: it carries the per-file
     /// `begin`/`end` records and the final `summary`. Caching those would
     /// turn every miss into a stale silent negative — the cache has no

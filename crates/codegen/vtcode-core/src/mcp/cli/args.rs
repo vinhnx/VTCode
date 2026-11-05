@@ -82,7 +82,7 @@ pub struct AddMcpStreamableHttpArgs {
     #[arg(long)]
     pub url: String,
 
-    /// Optional environment variable containing the Bearer [REDACTED]
+    /// Optional environment variable containing the Bearer token.
     #[arg(long = "bearer-token-env-var", value_name = "ENV_VAR", requires = "url")]
     pub bearer_token_env_var: Option<String>,
 

@@ -8,7 +8,7 @@
 //!
 //! # State model
 //!
-//! All mutable fields live in one [`PlanningInner`] behind a single lock, so
+//! All mutable fields live in one `PlanningInner` behind a single lock, so
 //! compound transitions (activate with a file, allocate-if-missing, read the
 //! flag and the pointer together) are atomic. The reachable combinations are:
 //!
