@@ -663,6 +663,8 @@ impl DesktopView {
                 cx.notify();
             }
         });
+        // Read before `preferences` moves into the struct below.
+        let zen_mode = preferences.zen_mode();
         Self {
             shortcut_draft,
             shortcut_search_input,
@@ -939,7 +941,7 @@ impl DesktopView {
             sidebar_open: false,
             navigation_peek: false,
             hovered_message: None,
-            zen_mode: true,
+            zen_mode,
             zen_drag_armed: false,
             sidebar_width: 270.0,
             inspector_width: preferences::DEFAULT_INSPECTOR_WIDTH,
@@ -969,6 +971,7 @@ impl DesktopView {
     pub(super) fn save_preferences(&mut self) {
         self.preferences.theme = Some(self.theme_id.clone());
         self.preferences.inspector_open = Some(self.inspector_open);
+        self.preferences.zen_mode = Some(self.zen_mode);
         self.preferences.set_widths(self.sidebar_width, self.inspector_width);
         self.preferences.save();
     }

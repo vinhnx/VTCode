@@ -473,3 +473,41 @@ fn zen_empty_state_matches_welcome_title_size(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn zen_toggle_persists_and_relaunch_restores_both_modes(cx: &mut TestAppContext) {
+    // One shared preferences file across simulated relaunches; the fresh
+    // windows skip the normal-mode test baseline so construction restore is
+    // observed untouched.
+    let path = isolate_preferences();
+    let (window, view) = open_desktop_with_preferences_path(cx, path.clone());
+
+    cx.update_window(window, |_, window, cx| {
+        assert!(!view.read(cx).zen_mode, "suite baseline starts in normal mode");
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+    })
+    .unwrap();
+    assert_eq!(
+        crate::desktop::preferences::Preferences::load().zen_mode,
+        Some(true),
+        "the toggle persists the explicit choice"
+    );
+    let (_zen_window, zen_view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., path.clone(), false);
+    cx.update(|cx| assert!(zen_view.read(cx).zen_mode, "relaunch restores zen"));
+
+    cx.update_window(window, |_, window, cx| {
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).zen_mode);
+    })
+    .unwrap();
+    assert_eq!(
+        crate::desktop::preferences::Preferences::load().zen_mode,
+        Some(false),
+        "the toggle persists the way back too"
+    );
+    let (_normal_window, normal_view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., path, false);
+    cx.update(|cx| assert!(!normal_view.read(cx).zen_mode, "relaunch restores normal mode"));
+}

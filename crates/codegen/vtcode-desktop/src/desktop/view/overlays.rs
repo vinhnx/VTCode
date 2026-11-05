@@ -367,6 +367,7 @@ impl DesktopView {
         } else {
             self.focus_composer(window, cx);
         }
+        self.save_preferences();
         cx.notify();
     }
 

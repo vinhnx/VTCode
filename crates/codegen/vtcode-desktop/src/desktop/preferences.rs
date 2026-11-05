@@ -611,6 +611,8 @@ pub(super) struct Preferences {
     pub available_efforts: Option<Vec<String>>,
     /// Last inspector state, retained for compatibility; launch always starts collapsed.
     pub inspector_open: Option<bool>,
+    /// Last zen layout choice. Missing values keep fresh installs in zen.
+    pub zen_mode: Option<bool>,
     /// Place the project and thread navigation on the right side of the workspace.
     /// Missing values keep existing installs on the new right-side default.
     pub navigation_on_right: Option<bool>,
@@ -698,6 +700,10 @@ impl Preferences {
 
     pub(super) fn navigation_visible(&self) -> bool {
         self.navigation_visible.unwrap_or(true)
+    }
+
+    pub(super) fn zen_mode(&self) -> bool {
+        self.zen_mode.unwrap_or(true)
     }
 
     pub(super) fn typography_for(&self, mode: ThemeMode) -> TypographySettings<'_> {

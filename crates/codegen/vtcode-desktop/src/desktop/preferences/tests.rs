@@ -669,3 +669,17 @@ fn valid_preferences_file_loads_values_without_quarantine() {
     assert_eq!(loaded.contrast(), 42);
     assert!(!path.with_extension("json.corrupt").exists(), "a valid file must not quarantine");
 }
+
+#[test]
+fn zen_mode_defaults_to_zen_and_round_trips_both_choices() {
+    let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+    assert!(legacy.zen_mode(), "missing values keep fresh installs in zen");
+
+    for choice in [false, true] {
+        let preferences = Preferences { zen_mode: Some(choice), ..Preferences::default() };
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(serialized.contains(&format!("\"zenMode\":{choice}")), "saved key is stable: {serialized}");
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.zen_mode(), choice);
+    }
+}
