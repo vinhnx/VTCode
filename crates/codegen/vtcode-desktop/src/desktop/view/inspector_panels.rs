@@ -225,6 +225,8 @@ impl DesktopView {
                     .child(loading_marker_row(
                         "file-scan-loading-label",
                         rust_i18n::t!("app.files.scanning").to_string(),
+                        cx.theme().colors.muted_foreground,
+                        cx,
                     )),
             );
         } else if self.files.is_empty() {
@@ -534,6 +536,8 @@ impl DesktopView {
                         .child(shimmer_label(
                             "output-page-loading-label",
                             rust_i18n::t!("app.inspector.reading_next_page").to_string(),
+                            colors.muted_foreground,
+                            cx,
                         )),
                 );
             }

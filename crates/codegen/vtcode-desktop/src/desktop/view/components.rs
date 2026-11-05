@@ -31,59 +31,96 @@ pub(super) fn accessible_group_box(
         .into_any_element()
 }
 
-/// Animated status label for an owned loading state. The Kit shimmer inherits
-/// typography and color from the call-site parent and renders static text
-/// under reduced motion, so callers only style the row, never the motion.
-/// Loop sites pass an owned domain-derived id (never a visible index), so
-/// repeated rows keep stable animation identity across reordering.
-pub(super) fn shimmer_label(id: impl Into<gpui_kit::ElementId>, text: impl Into<gpui_kit::SharedString>) -> AnyElement {
+/// The `(resting, highlight)` pair every shimmer label uses.
+///
+/// One owner so a label cannot pick a tone in one place and let Kit default the
+/// band in another: the two policies used to disagree, which painted a sweep
+/// darker than the text it crossed on palettes where muted and foreground are
+/// close (Ciapre: 0.097 apart). Under reduced motion both halves collapse to
+/// `tone`, because the static label must stay at full readable contrast.
+fn shimmer_tones(tone: gpui_kit::Hsla, cx: &App) -> (gpui_kit::Hsla, gpui_kit::Hsla) {
+    if cx.reduce_motion() {
+        return (tone, tone);
+    }
+    let colors = cx.theme().colors;
+    (themes::shimmer_resting(colors.background, tone), colors.foreground)
+}
+
+/// Animated status label for an owned loading state. Typography comes from the
+/// call-site parent; this builder owns the color pair (see [`shimmer_tones`])
+/// AND the reduced-motion fallback, so callers pass their semantic tone and
+/// never style the motion. Loop sites pass an owned domain-derived id (never a
+/// visible index), so repeated rows keep stable animation identity across
+/// reordering.
+pub(super) fn shimmer_label(
+    id: impl Into<gpui_kit::ElementId>,
+    text: impl Into<gpui_kit::SharedString>,
+    tone: gpui_kit::Hsla,
+    cx: &App,
+) -> AnyElement {
     let id = id.into();
+    let (resting, highlight) = shimmer_tones(tone, cx);
     div()
         .id(id.clone())
         .test_support()
-        .child(ShimmerText::new(text.into()).id(id))
+        .child(
+            ShimmerText::new(text.into())
+                .id(id)
+                .text_color(resting)
+                .highlight_color(highlight),
+        )
         .into_any_element()
 }
 
 /// Full-width loading row for an owned loading state: a shimmer marker
 /// inside the caller's test identity wrapper (`Marker` cannot carry
-/// `.test_support()` itself). The shimmer renders static text under
-/// reduced motion, same as `shimmer_label`. Only full rows come here;
-/// inline embeddings, shrink-wrapped centered labels, and one-off
-/// typography (e.g. `text_xs` rows) keep `shimmer_label`.
+/// `.test_support()` itself). Same color contract as [`shimmer_label`]. Only
+/// full rows come here; inline embeddings, shrink-wrapped centered labels, and
+/// one-off typography (e.g. `text_xs` rows) keep `shimmer_label`.
 pub(super) fn loading_marker_row(
     id: impl Into<gpui_kit::ElementId>,
     text: impl Into<gpui_kit::SharedString>,
+    tone: gpui_kit::Hsla,
+    cx: &App,
 ) -> AnyElement {
-    loading_marker_row_inner(id, text, None)
+    loading_marker_row_inner(id, text, tone, None, cx)
 }
 
 /// Full-width loading row with an explicit leading spinner, for rows
 /// that pair a spinner with shimmer text. The caller owns the spinner's
-/// exact size and color plus the row tone, so conversions preserve the
-/// current look pixel for pixel.
+/// exact size and color; the text tone is the row tone.
 pub(super) fn loading_marker_row_with_spinner(
     id: impl Into<gpui_kit::ElementId>,
     text: impl Into<gpui_kit::SharedString>,
     spinner: Spinner,
     tone: gpui_kit::Hsla,
+    cx: &App,
 ) -> AnyElement {
-    loading_marker_row_inner(id, text, Some((spinner, tone)))
+    loading_marker_row_inner(id, text, tone, Some((spinner, tone)), cx)
 }
 
 fn loading_marker_row_inner(
     id: impl Into<gpui_kit::ElementId>,
     text: impl Into<gpui_kit::SharedString>,
+    tone: gpui_kit::Hsla,
     leading: Option<(Spinner, gpui_kit::Hsla)>,
+    cx: &App,
 ) -> AnyElement {
-    let mut marker = Marker::new().loading(true).with_loading_style(MarkerLoadingStyle::Shimmer);
-    if let Some((spinner, tone)) = leading {
-        marker = marker.icon(MarkerIcon::new().child(spinner)).text_color(tone);
+    let (resting, highlight) = shimmer_tones(tone, cx);
+    // `Marker` builds its own `ShimmerText`, so the band arrives through the
+    // shimmer style and the glyph tone through `MarkerContent` (which is
+    // `Styled`). Setting either on the outer marker alone would be dropped.
+    let mut marker = Marker::new()
+        .loading(true)
+        .with_loading_style(MarkerLoadingStyle::Shimmer)
+        .with_shimmer_style(ShimmerStyle::new().highlight_color(highlight));
+    if let Some((spinner, spinner_tone)) = leading {
+        marker = marker.icon(MarkerIcon::new().child(spinner)).text_color(spinner_tone);
     }
     div()
         .id(id)
         .test_support()
-        .child(marker.content(MarkerContent::new().text(text)))
+        .child(marker.content(MarkerContent::new().text(text).text_color(resting)))
         .into_any_element()
 }
 
@@ -115,7 +152,7 @@ pub(super) fn turn_pending_row(status: String, content_width: f32, cx: &App) -> 
                 .py_2()
                 .text_sm()
                 .text_color(cx.theme().colors.muted_foreground)
-                .child(loading_marker_row("turn-pending-label", status)),
+                .child(loading_marker_row("turn-pending-label", status, cx.theme().colors.muted_foreground, cx)),
         )
         .into_any_element()
 }

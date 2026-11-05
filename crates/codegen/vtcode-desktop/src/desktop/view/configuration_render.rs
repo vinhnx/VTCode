@@ -176,6 +176,8 @@ impl DesktopView {
                         .child(div().text_sm().text_color(colors.muted_foreground).child(shimmer_label(
                             "config-loading-label",
                             rust_i18n::t!("app.configuration.loading").to_string(),
+                            colors.muted_foreground,
+                            cx,
                         ))),
                 ),
                 (Some(_), None) => self.render_config_content_frame(

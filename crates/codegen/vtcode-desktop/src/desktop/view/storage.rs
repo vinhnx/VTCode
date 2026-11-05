@@ -340,6 +340,8 @@ impl DesktopView {
                 .child(div().text_sm().text_color(themes::muted_text(colors)).child(shimmer_label(
                     "storage-loading-label",
                     rust_i18n::t!("app.settings.storage.loading").to_string(),
+                    themes::muted_text(colors),
+                    cx,
                 )))
                 .into_any_element();
         }
@@ -552,6 +554,8 @@ impl DesktopView {
                     .child(div().text_sm().text_color(themes::muted_text(&colors)).child(shimmer_label(
                         "storage-worktrees-loading-label",
                         rust_i18n::t!("app.settings.storage.loading").to_string(),
+                        themes::muted_text(&colors),
+                        cx,
                     ))),
             );
         }

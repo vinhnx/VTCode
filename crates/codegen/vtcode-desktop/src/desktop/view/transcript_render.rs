@@ -128,7 +128,7 @@ impl DesktopView {
                 .items_center()
                 .justify_center()
                 .text_color(cx.theme().colors.foreground)
-                .child(shimmer_label("new-thread-pending-label", label))
+                .child(shimmer_label("new-thread-pending-label", label, cx.theme().colors.foreground, cx))
                 .into_any_element()
         } else if empty_conversation && !self.zen_mode {
             let colors = cx.theme().colors;
@@ -248,6 +248,8 @@ impl DesktopView {
                     history_bar = history_bar.child(loading_marker_row(
                         "history-loading-label",
                         rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string(),
+                        cx.theme().colors.muted_foreground,
+                        cx,
                     ));
                 }
                 transcript_content = transcript_content.child(history_bar);
@@ -380,7 +382,7 @@ impl DesktopView {
             .text_xs()
             .text_color(cx.theme().colors.muted_foreground)
             .child(Spinner::new().small().color(cx.theme().colors.muted_foreground))
-            .child(shimmer_label("navigation-loading-label", label))
+            .child(shimmer_label("navigation-loading-label", label, cx.theme().colors.muted_foreground, cx))
     }
 
     fn render_transcript_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {

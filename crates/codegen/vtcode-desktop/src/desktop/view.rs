@@ -42,7 +42,7 @@ use gpui_kit::component::radio::Radio;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle, resize_handle_appearance};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::select::{Select, SelectEvent};
-use gpui_kit::component::shimmer::ShimmerText;
+use gpui_kit::component::shimmer::{ShimmerStyle, ShimmerText};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::status_bar::StatusBar;
 use gpui_kit::component::stepper::{Stepper, StepperItem};
@@ -376,6 +376,7 @@ actions!(
         QueueBatched,
         OpenPromptHistory,
         CycleHistoryScope,
+        CancelPromptHistory,
         TakeLatestQueued,
         HistoryPrevious,
         HistoryNext,

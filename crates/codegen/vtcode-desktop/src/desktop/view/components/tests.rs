@@ -103,3 +103,28 @@ fn severity_marker_style_maps_each_level_to_its_own_tone() {
     assert_ne!(warning.tone, info.tone, "warning and info tones must not collapse");
     assert_ne!(error.tone, info.tone, "error and info tones must not collapse");
 }
+
+/// The shimmer builder owns one `(resting, highlight)` pair and the
+/// reduced-motion fallback, so a caller cannot dim a static label below AA or
+/// hand Kit a band that out-paints the text it crosses.
+#[gpui_kit::test]
+fn shimmer_tones_dim_while_animating_and_hold_the_tone_when_static(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let tone = cx.theme().colors.muted_foreground;
+
+        cx.set_reduce_motion(false);
+        let (resting, highlight) = shimmer_tones(tone, cx);
+        assert_eq!(highlight, cx.theme().colors.foreground, "the sweep pins to the palette foreground");
+        assert!(
+            themes::contrast_ratio(resting, cx.theme().colors.background)
+                < themes::contrast_ratio(tone, cx.theme().colors.background),
+            "animated resting text must read quieter than its own tone"
+        );
+
+        cx.set_reduce_motion(true);
+        let (resting, highlight) = shimmer_tones(tone, cx);
+        assert_eq!(resting, tone, "reduced motion keeps the full readable tone");
+        assert_eq!(highlight, tone, "a static label has no bright band to preserve");
+    });
+}

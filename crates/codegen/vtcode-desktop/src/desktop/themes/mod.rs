@@ -673,13 +673,35 @@ pub(super) fn aa_muted(background: Hsla, foreground: Hsla) -> Hsla {
     text_at_contrast(background, foreground, MUTED_RATIO)
 }
 
+/// The 3:1 floor for non-text marks and for text that is deliberately quiet
+/// (WCAG 2.1 SC 1.4.11). Shared so quiet chrome and shimmer resting text cannot
+/// drift apart.
+const NON_TEXT_RATIO: f32 = 3.0;
+
 /// Faintest chrome-icon tone on `background` that still meets the 3:1
 /// non-text contrast floor (WCAG 2.1 SC 1.4.11) for meaningful icons.
 /// Quiet controls (the Zen exit) tint their icon with this instead of using
 /// element opacity, so the keyboard focus ring keeps full strength.
 pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
-    const NON_TEXT_RATIO: f32 = 3.0;
     text_at_contrast(background, foreground, NON_TEXT_RATIO)
+}
+
+/// Resting tone for animated shimmer labels: `tone` blended toward the canvas
+/// until it just holds the quiet-text floor, so the moving sweep carries the
+/// emphasis instead of the static glyphs. Returns `tone` untouched when it is
+/// already at or below the floor (dim palettes), and for the static
+/// reduced-motion path callers pass `tone` directly rather than this.
+///
+/// The sweep's bright end is the palette foreground, not a pole picked here: it
+/// is the maximum-contrast text token by construction (themes are gated to AA
+/// while this is capped at the quiet floor), so the band provably outshines the
+/// text it crosses. Pinning it also avoids two Kit behaviours: it mixes the
+/// text toward a pole and flips when the text is within 0.1 lightness of it
+/// (on Ciapre, muted and foreground are 0.097 apart, so the band came out
+/// darker than the text), and on low-headroom palettes the "far pole" is the
+/// canvas itself, a background-coloured sweep.
+pub(super) fn shimmer_resting(background: Hsla, tone: Hsla) -> Hsla {
+    text_at_contrast(background, tone, NON_TEXT_RATIO)
 }
 
 /// Secondary copy (row descriptions, hints) one step brighter than

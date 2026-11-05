@@ -222,6 +222,7 @@ impl DesktopView {
                     rust_i18n::t!("app.preview.loading").to_string(),
                     Spinner::new().small().color(caption),
                     themes::muted_text(&colors),
+                    cx,
                 ));
             } else {
                 card = card.child(

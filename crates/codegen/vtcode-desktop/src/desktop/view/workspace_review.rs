@@ -395,6 +395,8 @@ impl DesktopView {
                 .child(div().font_medium().child(shimmer_label(
                     "workspace-review-loading-label",
                     rust_i18n::t!("app.workspace_review.reading_git_changes_progress").to_string(),
+                    colors.muted_foreground,
+                    cx,
                 )))
                 .child(
                     div()

@@ -464,23 +464,19 @@ impl DesktopView {
         } else {
             self.status.clone()
         };
+        let status_tone = theme.colors.muted_foreground;
         sidebar.child(
-            div()
-                .mt_auto()
-                .pt_3()
-                .text_xs()
-                .text_color(theme.colors.muted_foreground)
-                .child(
-                    div()
-                        .id("sidebar-status")
-                        .test_support()
-                        .role(gpui_kit::Role::Status)
-                        .aria_label(status.clone())
-                        .when(self.global_loading_active(), |row| {
-                            row.child(shimmer_label("sidebar-status-loading", status.clone()))
-                        })
-                        .when(!self.global_loading_active(), |row| row.child(status.clone())),
-                ),
+            div().mt_auto().pt_3().text_xs().text_color(status_tone).child(
+                div()
+                    .id("sidebar-status")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(status.clone())
+                    .when(self.global_loading_active(), |row| {
+                        row.child(shimmer_label("sidebar-status-loading", status.clone(), status_tone, cx))
+                    })
+                    .when(!self.global_loading_active(), |row| row.child(status.clone())),
+            ),
         )
     }
 
