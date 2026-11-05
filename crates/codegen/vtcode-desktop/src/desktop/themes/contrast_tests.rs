@@ -194,3 +194,68 @@ fn muted_text_holds_crispness_floor_or_palette_ceiling(cx: &mut gpui_kit::TestAp
         }
     });
 }
+
+/// The shimmer contract: the resting glyph tone is dimmer than the label tone
+/// it replaces, holds its floor on *every seat these labels use* (not just the
+/// canvas), and the sweep always paints brighter than the text it crosses.
+///
+/// The per-seat loop is the assertion that matters: anchoring the derivation to
+/// the canvas passes a canvas-only check while landing near 2.7:1 on the
+/// popover and panel seats where these labels actually sit.
+#[gpui_kit::test]
+fn shimmer_resting_text_dims_while_the_sweep_stays_bright(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let tone = colors.muted_foreground;
+            let resting = shimmer_resting(&colors, tone);
+            // The sweep's bright end is the palette foreground, pinned by the
+            // builder; assert against that contract directly.
+            let highlight = colors.foreground;
+
+            for (seat, surface) in [
+                ("canvas", colors.background),
+                ("panel", colors.secondary),
+                ("group box", colors.group_box),
+                ("popover", colors.popover),
+            ] {
+                let tone_ratio = contrast_ratio(tone, surface);
+                let resting_ratio = contrast_ratio(resting, surface);
+                let floor = 3.0_f32.min(tone_ratio);
+                assert!(
+                    resting_ratio <= tone_ratio + 0.01,
+                    "{id}: resting shimmer ({resting_ratio:.2}) outshines its tone ({tone_ratio:.2}) on {seat}"
+                );
+                assert!(
+                    resting_ratio + 0.01 >= floor,
+                    "{id}: resting shimmer ({resting_ratio:.2}) fell below the quiet floor ({floor:.2}) on {seat}"
+                );
+                // The sweep must out-pop the resting text on the seat it sits
+                // on. This is what fails when the band resolves toward the
+                // surface (the Ciapre bug); comparing the two palette poles
+                // instead is true by construction and can never fail.
+                assert!(
+                    contrast_ratio(highlight, surface) > resting_ratio,
+                    "{id}: sweep does not outshine the resting text on {seat}"
+                );
+            }
+        }
+    });
+}
+
+/// A tone already at or below the floor passes through untouched: dimming
+/// cannot buy contrast the palette does not have.
+#[test]
+fn shimmer_resting_leaves_a_sub_floor_tone_alone() {
+    let dim: Hsla = rgb(0x3A3A3A).into();
+    let colors = ThemeColor {
+        popover: rgb(0x181818).into(),
+        ..ThemeColor::default()
+    };
+    assert_eq!(shimmer_resting(&colors, dim), dim);
+}

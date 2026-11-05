@@ -686,22 +686,28 @@ pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
     text_at_contrast(background, foreground, NON_TEXT_RATIO)
 }
 
-/// Resting tone for animated shimmer labels: `tone` blended toward the canvas
+/// Resting tone for animated shimmer labels: `tone` blended toward the seat
 /// until it just holds the quiet-text floor, so the moving sweep carries the
 /// emphasis instead of the static glyphs. Returns `tone` untouched when it is
-/// already at or below the floor (dim palettes), and for the static
-/// reduced-motion path callers pass `tone` directly rather than this.
+/// already at or below the floor, and for the static reduced-motion path
+/// callers pass `tone` directly rather than this.
+///
+/// Anchored to [`ThemeColor::popover`], like [`muted_text`], because raised
+/// surfaces move toward the text color in both polarities, so the popover is
+/// the hardest seat: holding the floor there holds it on the canvas, panel, and
+/// group box too. Anchoring to the canvas instead (the obvious-looking choice)
+/// lands at ~2.7:1 on the seats these labels actually use, below the floor.
 ///
 /// The sweep's bright end is the palette foreground, not a pole picked here: it
-/// is the maximum-contrast text token by construction (themes are gated to AA
-/// while this is capped at the quiet floor), so the band provably outshines the
-/// text it crosses. Pinning it also avoids two Kit behaviours: it mixes the
-/// text toward a pole and flips when the text is within 0.1 lightness of it
-/// (on Ciapre, muted and foreground are 0.097 apart, so the band came out
+/// is the maximum-contrast text token by construction (themes are AA-gated on
+/// every surface while this is capped at the quiet floor), so the band provably
+/// outshines the text it crosses. Pinning it also avoids two Kit behaviours: it
+/// mixes the text toward a pole and flips when the text is within 0.1 lightness
+/// of it (on Ciapre, muted and foreground are 0.097 apart, so the band came out
 /// darker than the text), and on low-headroom palettes the "far pole" is the
-/// canvas itself, a background-coloured sweep.
-pub(super) fn shimmer_resting(background: Hsla, tone: Hsla) -> Hsla {
-    text_at_contrast(background, tone, NON_TEXT_RATIO)
+/// background itself, a background-coloured sweep.
+pub(super) fn shimmer_resting(colors: &ThemeColor, tone: Hsla) -> Hsla {
+    text_at_contrast(colors.popover, tone, NON_TEXT_RATIO)
 }
 
 /// Secondary copy (row descriptions, hints) one step brighter than

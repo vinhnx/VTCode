@@ -43,7 +43,7 @@ fn shimmer_tones(tone: gpui_kit::Hsla, cx: &App) -> (gpui_kit::Hsla, gpui_kit::H
         return (tone, tone);
     }
     let colors = cx.theme().colors;
-    (themes::shimmer_resting(colors.background, tone), colors.foreground)
+    (themes::shimmer_resting(&colors, tone), colors.foreground)
 }
 
 /// Animated status label for an owned loading state. Typography comes from the

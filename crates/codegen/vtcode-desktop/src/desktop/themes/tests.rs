@@ -168,54 +168,6 @@ fn faded_chrome_meets_non_text_contrast_on_canvas() {
     assert_eq!(faded_chrome(flat, flat), flat, "no-contrast surfaces keep the foreground untouched");
 }
 
-/// The shimmer contract: the resting glyph tone is dimmer than the label tone
-/// it replaces, holds its own floor instead of collapsing, and the sweep always
-/// paints brighter than the text it crosses. The sweep assertion is what catches
-/// the Ciapre failure (muted and foreground 0.097 apart made Kit's derived band
-/// resolve toward the surface) and the low-headroom trap (a "far pole" that is
-/// the canvas itself, which is why the bright end is pinned to `foreground`).
-#[test]
-fn shimmer_resting_text_dims_while_the_sweep_stays_bright() {
-    for theme in all_themes() {
-        let tone = aa_muted(theme.background, theme.foreground);
-        let resting = shimmer_resting(theme.background, tone);
-        // The sweep's bright end is the palette foreground, pinned by the
-        // builder; assert against that contract directly.
-        let highlight = theme.foreground;
-
-        let tone_ratio = contrast_ratio(tone, theme.background);
-        let resting_ratio = contrast_ratio(resting, theme.background);
-        let floor = 3.0_f32.min(tone_ratio);
-        assert!(
-            resting_ratio <= tone_ratio + 0.01,
-            "{}: resting shimmer ({resting_ratio:.2}) must not outshine its tone ({tone_ratio:.2})",
-            theme.id
-        );
-        assert!(
-            resting_ratio + 0.01 >= floor,
-            "{}: resting shimmer ({resting_ratio:.2}) fell below the quiet floor ({floor:.2})",
-            theme.id
-        );
-        // The sweep must out-pop the resting text against the surface it sits
-        // on. This is the assertion that fails when the band resolves toward the
-        // canvas (the Ciapre bug), so it is deliberately not phrased as a
-        // comparison between the two palette poles — that form is true by
-        // construction and can never fail.
-        let sweep_ratio = contrast_ratio(highlight, theme.background);
-        assert!(
-            sweep_ratio > resting_ratio,
-            "{}: sweep ({sweep_ratio:.2}) does not outshine the resting text ({resting_ratio:.2})",
-            theme.id
-        );
-    }
-
-    // A tone already at or below the floor is returned untouched: dimming
-    // cannot buy contrast the palette does not have.
-    let dim = rgb(0x3A3A3A).into();
-    let canvas = rgb(0x181818).into();
-    assert_eq!(shimmer_resting(canvas, dim), dim, "a sub-floor tone must pass through unchanged");
-}
-
 #[gpui_kit::test]
 fn focus_indicators_remain_visible_on_interactive_surfaces(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
