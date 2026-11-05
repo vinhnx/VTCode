@@ -136,7 +136,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.persistent_memory.startup_token_budget` | `integer` | no | `5000` | Startup token budget for the injected memory excerpt. `0` disables the token cap and keeps only the line/byte budgets. |
 | `agent.project_doc_fallback_filenames` | `array` | no | `[]` | Additional filenames to check when AGENTS.md is absent at a directory level. |
 | `agent.project_doc_fallback_filenames[]` | `string` | no | `-` | - |
-| `agent.project_doc_max_bytes` | `integer` | no | `16384` | Maximum bytes of AGENTS.md/CLAUDE.md content to load from project hierarchy |
+| `agent.project_doc_max_bytes` | `integer` | no | `16384` | Deprecated and ignored: kept so existing configs still parse. Instruction loading, including welcome-screen highlights, uses `instruction_max_bytes`. |
 | `agent.prompt_suggestions.enabled` | `boolean` | no | `true` | Enable inline prompt suggestions in the chat composer. |
 | `agent.prompt_suggestions.model` | `string` | no | `""` | Lightweight model to use for suggestions. Leave empty to auto-select an efficient sibling of the main model. |
 | `agent.prompt_suggestions.show_cost_notice` | `boolean` | no | `true` | Whether VT Code should remind users that LLM-backed suggestions consume tokens. |

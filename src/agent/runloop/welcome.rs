@@ -78,13 +78,10 @@ pub(crate) async fn prepare_session_bootstrap_with_mode(
         summarize_workspace_languages(&runtime_cfg.workspace)
     };
     let extra_instruction_files = vt_cfg.map(|cfg| cfg.agent.instruction_files.clone()).unwrap_or_default();
-    let instruction_budget = vt_cfg
+    // Same budget as prompt assembly, so raising it applies to highlights too.
+    let effective_budget = vt_cfg
         .map(|cfg| cfg.agent.instruction_max_bytes)
         .unwrap_or(prompt_budget_constants::DEFAULT_MAX_BYTES);
-    let project_doc_budget = vt_cfg
-        .map(|cfg| cfg.agent.project_doc_max_bytes)
-        .unwrap_or(prompt_budget_constants::DEFAULT_MAX_BYTES);
-    let effective_budget = instruction_budget.min(project_doc_budget);
 
     let guideline_highlights = if onboarding_cfg.include_guideline_highlights && !skip_workspace_scans {
         extract_guideline_highlights(

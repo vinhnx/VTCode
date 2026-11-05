@@ -169,7 +169,8 @@ pub struct AgentConfig {
     #[serde(default)]
     pub onboarding: AgentOnboardingConfig,
 
-    /// Maximum bytes of AGENTS.md/CLAUDE.md content to load from project hierarchy
+    /// Deprecated and ignored: kept so existing configs still parse. Instruction loading,
+    /// including welcome-screen highlights, uses `instruction_max_bytes`.
     #[serde(default = "default_project_doc_max_bytes")]
     pub project_doc_max_bytes: usize,
 
