@@ -16,6 +16,51 @@ gpui apps for other plqtforms
 
 ---
 
+
+warning: unresolved link to `REDACTED` ] 784/785: vtcode-core(doc)
+  --> crates/codegen/vtcode-core/src/mcp/cli/args.rs:85:62
+   |
+85 |     /// Optional environment variable containing the Bearer [REDACTED]
+   |                                                              ^^^^^^^^ no item named `REDACTED` in scope
+   |
+   = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+   = note: `#[warn(rustdoc::broken_intra_doc_links)]` on by default
+
+warning: public documentation for `should_cache` links to private item `GrepSearchResult::matches`
+  --> crates/codegen/vtcode-core/src/tools/grep_cache.rs:99:11
+   |
+99 |     /// [`GrepSearchResult::matches`] holds raw ripgrep JSON stream events, so
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+   = note: `#[warn(rustdoc::private_intra_doc_links)]` on by default
+
+warning: public documentation for `state` links to private item `PlanningInner`
+  --> crates/codegen/vtcode-core/src/tools/handlers/planning_workflow/state.rs:11:38
+   |
+11 | //! All mutable fields live in one [`PlanningInner`] behind a single lock, so
+   |                                      ^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: `vtcode-core` (lib doc) generated 3 warnings
+
+
+warning: profile package spec `gpui-component` in profile `dev` did not match any packages
+warning: profile package spec `gpui-kit` in profile `dev` did not match any packages
+warning: profile package spec `gpui-kit-assets` in profile `dev` did not match any packages
+warning: profile package spec `gpui-pre` in profile `dev` did not match any packages
+warning: profile package spec `gpui-pre-platform` in profile `dev` did not match any packages
+warning: profile package spec `rustybuzz` in profile `dev` did not match any packages
+warning: profile package spec `taffy` in profile `dev` did not match any packages
+
+help: a package with a similar name exists: `tiff`
+warning: profile package spec `ttf-parser` in profile `dev` did not match any packages
+
+help: a package with a similar name exists: `utf8parse`
+
+---
+
 implement lazy loading for threads data and heavy listing for all places on desktop app.
 
 ---
