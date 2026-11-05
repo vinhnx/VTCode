@@ -880,6 +880,10 @@ impl DesktopView {
                 if let Some(label) = status.get(keys::STATUS).and_then(Value::as_str) {
                     self.status = if label.eq_ignore_ascii_case("running") {
                         rust_i18n::t!("app.service.running").to_string()
+                    } else if label.eq_ignore_ascii_case("failed")
+                        && status.get("restarted").and_then(Value::as_bool).unwrap_or(false)
+                    {
+                        rust_i18n::t!("app.service.turn_recovered").to_string()
                     } else {
                         label.to_string()
                     };

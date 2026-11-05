@@ -602,7 +602,7 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `storage/summary`                                                                    | Measure on-disk usage with bounded walks: session archives, managed worktrees, per-workspace memory stores, and the rest of the state directory; session archives and worktrees also report entry counts.                                        |
 | `session/delete`                                                                     | Delete one archived session by ID after validating the archive path; the selected (active) session is protected and the request fails.                                                                                                           |
 | `worktree/list`, `worktree/remove`                                                   | List managed `.vtcode/worktrees/` checkouts with their HEAD and dirty flag, or remove one by name.                                                                                                                                               |
-| `turn/submit`, `turn/cancel`                                                         | Submit one user turn (queued behind a running turn when busy) or cancel its exact session/turn identity.                                                                                                                                         |
+| `turn/submit`, `turn/cancel`                                                         | Submit one user turn (queued behind a running turn when busy) or cancel its exact session/turn identity. A turn still active 5s after cancel is force-stopped and its session rebuilt from durable history (see escalation below).               |
 | `turn/queue/take-latest`                                                             | Pop the newest queued message back for editing; returns its text (empty queue returns null).                                                                                                                                                     |
 | `turn/queue-status`                                                                  | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, cumulative `droppedTotal`).                                                                                                                                     |
 | `interaction/respond`                                                                | Resolve one pending approval or question using its session, turn, and interaction IDs.                                                                                                                                                           |
@@ -646,6 +646,13 @@ notifications for another selected session or active turn, including known old t
 submission awaits acknowledgement. Session-start questions remain valid for their selected session. Full attribution
 of late events across adjacent accepted submissions remains limited because canonical terminal events do not carry
 an input-submission identity.
+
+Cancellation escalates when cooperation fails. If the exact cancelled turn is still active five seconds after
+`turn/cancel`, the service force-stops foreground execution, awaits bounded runtime shutdown, and rebuilds the
+session from durable history under the same session id. The stopped turn emits one terminal `turn/status` `failed`
+outcome carrying a `restarted` flag; queued prompts are preserved and dispatch once the replacement runtime is ready.
+Submissions stay blocked while the escalation runs, and if termination cannot be confirmed the session stays blocked
+until the service restarts instead of reporting a stop that never happened.
 
 The separation between client commands, streamed events, and interaction responses follows the public shape of the
 [pinned Codex app-server protocol](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/app-server-protocol/src/protocol/common.rs).

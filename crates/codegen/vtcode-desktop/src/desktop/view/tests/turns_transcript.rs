@@ -953,6 +953,27 @@ fn loading_shimmer_labels_render_under_reduced_motion(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn restarted_failure_status_shows_localized_recovery_copy(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("session".into());
+        view.handle_backend_event(
+            BackendEvent::TurnStatus(
+                json!({ "sessionId": "session", "turnId": "old-turn", "status": "failed", "restarted": true }),
+            ),
+            cx,
+        );
+        assert_eq!(view.status, rust_i18n::t!("app.service.turn_recovered").to_string());
+        // A plain failure without the escalation marker keeps the raw label.
+        view.handle_backend_event(
+            BackendEvent::TurnStatus(json!({ "sessionId": "session", "turnId": "old-turn", "status": "failed" })),
+            cx,
+        );
+        assert_eq!(view.status, "failed");
+    });
+}
+
+#[gpui_kit::test]
 fn loading_updates_require_the_selected_session_and_reset_on_session_change(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
