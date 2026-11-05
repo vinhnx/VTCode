@@ -5,6 +5,77 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.4 - 2026-11-05
+
+### Highlights
+
+#### Bug Fixes
+
+- Unify Zen and normal-mode control sizing (421d271e)
+- Reveal inspector exits Zen instead of flipping hidden state (d5f5304a)
+- Cut tool-call failures on simple single-file tasks (431b6ba3)
+- Stamp one wall-clock footer per turn (08d33a1d)
+- Stamp --version with the build commit SHA (b5b27ab9)
+- Align composer and pending row to transcript spine (aa776492)
+- Bound previously unbounded HTTP clients (81eb6dd6)
+- Keep built-in defaults when a config section is partial (f12ff131)
+- Stop the ignore matcher aborting on paths outside its root (ebea25b3)
+- Saturate list pagination math so an extreme page cannot abort (1823e930)
+- Keep the file-palette breadcrumb relative under a workspace alias (1eb1cbd9)
+- Give ThreadItem handles one process-wide authority (b4f78a61)
+- Dismiss panels on click-away and prevent popover overlap (39b8f2b1)
+- Clear pre-existing doctest failures and harden config tests (fc554903)
+- Recover dotted tool hallucinations and suggest similar names (bfdd20b0)
+- Clarify selected control states (9bc93faf)
+- Preserve turn cancellation during startup (70059320)
+- Confirm subagent and session termination instead of assuming it (829abba8)
+- Fence runtime events by generation and resume queues after restart (c58f0de4)
+
+#### Documentation
+
+- Record the hoist-the-loop-invariant rule with its measured numbers (6f792b1a)
+- Record the item-handle invariant and close the TD-026 follow-up (837ac741)
+- Document cancel escalation and localize the recovery status (dcd58b1a)
+
+#### Features
+
+- Use person-standing icon for accessibility settings tab (8778242b)
+- Verb-phrase tool group summaries, diffs collapsed by default (89f5d67d)
+- Recede transcript inspector CTAs until hover or focus (5014fce2)
+- Per-row outcome gists from tool arguments (05b2dcdd)
+- Adopt Kit Marker rows for severity, loading, and history boundary (74543d75)
+- Make outbound HTTP timeouts overridable (7928a88d)
+- Rebuild file browser on shared snapshot with fuzzy search (b5a28ef5)
+- Unify tab layouts on Kit Folder TabBar (8a77fb51)
+- Highlight HITL tool calls and clamp wide content (a1da3512)
+- Replace effort rail with accent radio rows (7cb50a14)
+- Use named overflow dropdown on folder tab bars (df15096f)
+- Escalate stalled turn cancellation with watchdog restart (6b60467f)
+
+### Other Changes
+
+#### Build
+
+- Deny unstable_features to enforce the stable-only pin (17e279af)
+
+#### Performance
+
+- Render entries without per-entry realpath, and fix aliased-root results (f2197040)
+- Read entry types from readdir instead of paying a stat per entry (837201c3)
+- Bound the delivered-completion identity memo (863ba42d)
+
+#### Refactors
+
+- Quiet transcript rows, cards, and notices (e11e040a)
+- Adopt stable substitutes for nightly conveniences (e1308642)
+- Share Agent Skills spec limits across both validators (785b0fe4)
+- Share one working-dir format and stop the shell session's stray crash (1b69fe5b)
+- Reuse the subagent identity cap instead of a parallel memo (b4c2ce96)
+
+#### Tests
+
+- Assert tab reveal by painted position (298811d1)
+
 ## 0.181.3 - 2026-11-03
 
 ### Highlights
