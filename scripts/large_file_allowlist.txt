@@ -17,6 +17,7 @@ patches/simdutf/cpp/simdutf.cpp=3_000_000
 
 # Project branding assets required by README/docs.
 resources/gif/vtcode.gif=2_000_000
+resources/gif/demo-desktop.gif=6_000_000
 resources/logo/vtcode_logo.png=1_200_000
 
 # Generated producer-audit diagnostics snapshot; capped, not exempt.

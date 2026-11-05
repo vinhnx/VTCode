@@ -1938,6 +1938,100 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about vtcode Development Roadmap?", "How does **Recently Completed - Major
     Breakthroughs** work?", "How does **High Priority - SWE-bench Performance Optimization** work?"
 
+- **File**: `docs/development/maintainer-notes/vtcode-acp.md`
+  - **Content**: vtcode-acp maintainer notes
+  - **Topics**: Modules, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-acp maintainer notes?", "How does Modules work?", "How does
+    Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-auth.md`
+  - **Content**: vtcode-auth maintainer notes
+  - **Topics**: Modules, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-auth maintainer notes?", "How does Modules work?", "How does
+    Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-bash-runner.md`
+  - **Content**: vtcode-bash-runner maintainer notes
+  - **Topics**: Modules, Rules, Testing, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-bash-runner maintainer notes?", "How does Modules work?",
+    "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-binary.md`
+  - **Content**: vtcode-binary maintainer notes
+  - **Topics**: Modules (active bridge: `agent/runloop/unified/webmcp.rs`), Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-binary maintainer notes?", "How does Modules (active bridge:
+    `agent/runloop/unified/webmcp.rs`) work?", "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-commons.md`
+  - **Content**: vtcode-commons maintainer notes
+  - **Topics**: Module Groups, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-commons maintainer notes?", "How does Module Groups work?",
+    "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-config.md`
+  - **Content**: vtcode-config maintainer notes
+  - **Topics**: Modules, Rules, Adding a Model — **OpenRouter** (code-generated): edit `ModelId`, `Provider::OpenRouter`
+    match, and `docs/models.json`; the build script handles the rest. **Non-OpenRouter** (manual): add the constant,
+    `ModelId` variant and match arms, defaults if needed, preset, optional resolver update, and `docs/models.json`;
+    gateway providers may intentionally accept explicit catalog-missing route IDs. See `adding-llm-providers` skill for
+    the checklist, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-config maintainer notes?", "How does Modules work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-core.md`
+  - **Content**: vtcode-core maintainer notes
+  - **Topics**: Module map, Rules, Workflows, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-core maintainer notes?", "How does Module map work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-desktop.md`
+  - **Content**: vtcode-desktop maintainer notes
+  - **Topics**: Hard rules, Best practice, Typography & accessibility, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-desktop maintainer notes?", "How does Hard rules work?", "How
+    does Best practice work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-eval.md`
+  - **Content**: vtcode-eval maintainer notes
+  - **Topics**: Module Groups, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-eval maintainer notes?", "How does Module Groups work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-exec-events.md`
+  - **Content**: vtcode-exec-events maintainer notes
+  - **Topics**: Key Types, ThreadEvent Variants, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-exec-events maintainer notes?", "How does Key Types work?",
+    "How does ThreadEvent Variants work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-indexer.md`
+  - **Content**: vtcode-indexer maintainer notes
+  - **Topics**: Key Types, Rules, Testing, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-indexer maintainer notes?", "How does Key Types work?", "How
+    does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-llm.md`
+  - **Content**: vtcode-llm maintainer notes
+  - **Topics**: Key Modules, Architecture Notes, Dependencies, Coding Conventions, OpenAI-Compatible Providers
+  - **User Questions**: "What can you tell me about vtcode-llm maintainer notes?", "How does Key Modules work?", "How
+    does Architecture Notes work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-memory.md`
+  - **Content**: vtcode-memory maintainer notes
+  - **Topics**: Conventions, Dependencies, Testing
+  - **User Questions**: "What can you tell me about vtcode-memory maintainer notes?", "How does Conventions work?", "How
+    does Dependencies work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-safety.md`
+  - **Content**: vtcode-safety maintainer notes
+  - **Topics**: Module Groups, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-safety maintainer notes?", "How does Module Groups work?",
+    "How does Rules work?"
+
+- **File**: `docs/development/maintainer-notes/vtcode-ui.md`
+  - **Content**: vtcode-ui maintainer notes
+  - **Topics**: Modules, Rules, Gotchas
+  - **User Questions**: "What can you tell me about vtcode-ui maintainer notes?", "How does Modules work?", "How does
+    Rules work?"
+
 ### Performance & Optimization
 
 - **File**: `docs/benchmarks/CHART_GUIDE.md`
