@@ -45,12 +45,12 @@ WezTerm, and others).
 Graphical tab icons depend on each terminal's own profile system — no escape sequence can set profile artwork. Coverage
 today:
 
-| Terminal                                                                  | Graphical icon path                       | Status                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iTerm2                                                                    | `VT Code` dynamic profile (custom icon)   | Automatic: installed on first iTerm2 TUI run and reinstalled whenever missing or stale (repair via `/terminal-setup install-iterm2-icon` from any macOS terminal); the session switches to it at TUI startup and reverts to its original profile on exit. No config opt-out — deleting the profile file lasts only until the next launch |
-| Windows Terminal                                                          | `settings.json` profile `"icon"` (`.png`) | Guided fragment in `/terminal-setup` output; assets in `resources/icons/`                                                                                                                                                                                                                                        |
-| VS Code integrated terminal                                               | Terminal profile `icon` (codicon)         | Manual: add a `VT Code` profile with `"icon": "code"` under `terminal.integrated.profiles.*` in settings.json (the companion extension was removed; CLI-only now). The runtime `OSC 1`/`OSC 2` label applies to every tab                                                                                                                                                                                                                                                                   |
-| Kitty, Ghostty, WezTerm, Alacritty, Terminal.app, Warp, Zed, Hyper, Tabby | None per-session (app/window level only)  | `OSC 1`/`OSC 2` text label                                                                                                                                                                                                                                                                                       |
+| Terminal | Graphical icon path | Status |
+| --- | --- | --- |
+| iTerm2 | `VT Code` dynamic profile (custom icon) | Automatic: installed on first iTerm2 TUI run and reinstalled whenever missing or stale (repair via `/terminal-setup install-iterm2-icon` from any macOS terminal); the session switches to it at TUI startup and reverts to its original profile on exit. No config opt-out — deleting the profile file lasts only until the next launch |
+| Windows Terminal | `settings.json` profile `"icon"` (`.png`) | Guided fragment in `/terminal-setup` output; assets in `resources/icons/` |
+| VS Code integrated terminal | Terminal profile `icon` (codicon) | Manual: add a `VT Code` profile with `"icon": "code"` under `terminal.integrated.profiles.*` in settings.json (the companion extension was removed; CLI-only now). The runtime `OSC 1`/`OSC 2` label applies to every tab |
+| Kitty, Ghostty, WezTerm, Alacritty, Terminal.app, Warp, Zed, Hyper, Tabby | None per-session (app/window level only) | `OSC 1`/`OSC 2` text label |
 
 Bundled assets live in `resources/icons/` (see its `README.md`): `vtcode-app-light-128.png`,
 `vtcode-app-dark-128.png`, `vtcode-app-clear-128.png`, and `vtcode-app-tinted-128.png` for iTerm2 HiDPI
@@ -73,7 +73,8 @@ VT Code reports live working, permission/question/authentication wait, and compl
 on by default and applies only to interactive sessions with terminal-connected stdin, stdout, and stderr; terminals
 that do not know the sequence ignore it, and pre-0.54 VTE parsers are skipped. Rex renders the records as tab/pane
 status (working spinner, blocked badges, completion marks); Ghostty implements the same protocol. Other terminals
-and multiplexer/SSH combinations need their own compatibility checks. VT Code sends generic labels without prompts, commands, paths,
+and multiplexer/SSH combinations need their own compatibility checks.
+VT Code sends generic labels without prompts, commands, paths,
 or credentials. Set `enabled = false` to disable reporting and clear the current session's owned records; valid
 live reloads apply both changes:
 

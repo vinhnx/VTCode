@@ -24,7 +24,8 @@ rejected the first invalid draft again with the identical error: an unrecoverabl
 - `cargo nextest run -p vtcode -E 'test(plan) or test(repair) or test(reject) or test(tracker) or test(planning) or test(recovery) or test(turn_prep) or test(approval)'` — 898 passed (incl. new `terminal_planning_rejection_retains_draft_and_rearms_explicit_retry`, extended `plan_only_execution_rejection_still_publishes_final_response`, new `rejected_plan_events_publish_draft_without_approval_request`)
 - `cargo nextest run -p vtcode-core -E 'test(planning) or test(artifact) or test(verify)'` — 242 passed
 - `cargo nextest run -p vtcode-desktop -E 'test(turns_transcript)'` — 29 passed (incl. new `rejected_plan_draft_events_render_a_visible_transcript_row`)
-- `./scripts/check-dev.sh` — fmt/clippy/compile/shell PASS; file-length gate fails only on pre-existing `files.rs` 1001-line violation at HEAD (untouched by this change)
+- `./scripts/check-dev.sh` — fmt/clippy/compile/shell PASS; file-length gate fails only on pre-existing
+  `files.rs` 1001-line violation at HEAD (untouched by this change)
 
 ## 2026-10-11 | Semantic operation identity bounds repeated preflight rejections across turns
 

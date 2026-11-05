@@ -1,3 +1,4 @@
+<!-- markdownlint-disable-next-line MD041 -->
 <div align="center">
 
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />

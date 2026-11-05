@@ -628,7 +628,7 @@ deleting syscalls the loop did not need, because the iterator had already answer
 Two shapes recur, and both are invisible in a single-call code review:
 
 1. **A helper re-resolves the root on every call.** `workspace_relative_display(root, path)` canonicalizes
-   `root` *and* `path` per invocation. That is correct but redundant for callers rendering one path, and
+   `root` _and_ `path` per invocation. That is correct but redundant for callers rendering one path, and
    quadratic-ish for callers rendering a directory: the root's answer cannot change mid-loop.
 
    ```rust
@@ -659,7 +659,7 @@ Two shapes recur, and both are invisible in a single-call code review:
 
 The safety rule that makes this non-negotiable: **only skip a resolution when you can prove it cannot
 change the answer.** A walker with `follow_links(false)` cannot produce symlinked ancestors, so the
-lexical strip equals the resolved strip. A symlink's *own* type proves nothing about its target, so
+lexical strip equals the resolved strip. A symlink's _own_ type proves nothing about its target, so
 symlinks and unknown types must keep the resolving path — `WorkspacePathDisplay::render_entry` and
 `VTCodeGitignore::should_exclude_with_file_type` both fall back for exactly that case, and
 `path_display_entry_fast_path_defers_for_symlinks` pins it.

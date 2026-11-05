@@ -5,26 +5,26 @@ charcoal tile with a warm-white `V`, Dynamic is a diagonal split tile, Clear is 
 transparency (no tile), and Tinted is a monochrome slate tile with a white `V`. Use the smallest icon
 that looks sharp; larger files are for app bundles and in-app display only.
 
-| File                          | Size          | Use                                                                                      |
-| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
-| `vtcode-app-light-128.png`    | 128x128, 7.5K | iTerm2 HiDPI profile artwork (light mode). Embedded by `vtcode-core/build.rs`.           |
-| `vtcode-app-dark-128.png`     | 128x128, 7.1K | iTerm2 HiDPI profile artwork (dark mode). Embedded by `vtcode-core/build.rs`.            |
-| `vtcode-app-clear-128.png`    | 128x128, 4.8K | iTerm2 HiDPI profile artwork (clear glass V). Embedded by `vtcode-core/build.rs`.        |
-| `vtcode-app-tinted-128.png`   | 128x128, 6.7K | iTerm2 HiDPI profile artwork (tinted slate). Embedded by `vtcode-core/build.rs`.         |
-| `vtcode-app-dynamic-128.png`  | 128x128, 7.5K | Mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`).  |
-| `vtcode-app-light-512.png`    | 512x512, 36K  | Desktop Dock artwork (light mode) and Appearance picker preview.                         |
-| `vtcode-app-dark-512.png`     | 512x512, 34K  | Desktop Dock artwork (dark mode) and Appearance picker preview.                          |
-| `vtcode-app-clear-512.png`    | 512x512, 38K  | Desktop Dock artwork (clear glass V) and Appearance picker preview.                      |
-| `vtcode-app-tinted-512.png`   | 512x512, 36K  | Desktop Dock artwork (tinted slate) and Appearance picker preview.                       |
-| `vtcode-app-dynamic-512.png`  | 512x512, 40K  | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art.               |
-| `vtcode-app-dynamic.icns`     | 285K          | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26).    |
-| `AppIcon.icon/`               | 35K           | Layered Liquid Glass source: `icon.json` + `Assets/Foreground.png` (1024 V glyph mask).  |
-| `liquid-glass/`               | 380K          | Tahoe appearance sources: per-variant layer pairs (see its `README.md`).                 |
-| `vtcode.svg`                  | vector, 245B  | Scalable source for docs.                                                                |
-| `vtcode-mark.svg`             | vector, 195B  | Outline `V` mark; the desktop welcome view draws it in the active theme.                 |
-| `vtcode-mono.svg`             | vector, 195B  | Monochrome V mark (white on transparent) for program registries.                         |
-| `vtcode-mono-32.png`          | 32x32, 308B   | Mono raster handoff for small icon tiles.                                                |
-| `vtcode-mono-120.png`         | 120x120, 827B | Desktop menu-bar status icon (AppKit template) + HiDPI tile handoff.                     |
+| File | Size | Use |
+| --- | --- | --- |
+| `vtcode-app-light-128.png` | 128x128, 7.5K | iTerm2 HiDPI profile artwork (light mode). Embedded by `vtcode-core/build.rs`. |
+| `vtcode-app-dark-128.png` | 128x128, 7.1K | iTerm2 HiDPI profile artwork (dark mode). Embedded by `vtcode-core/build.rs`. |
+| `vtcode-app-clear-128.png` | 128x128, 4.8K | iTerm2 HiDPI profile artwork (clear glass V). Embedded by `vtcode-core/build.rs`. |
+| `vtcode-app-tinted-128.png` | 128x128, 6.7K | iTerm2 HiDPI profile artwork (tinted slate). Embedded by `vtcode-core/build.rs`. |
+| `vtcode-app-dynamic-128.png` | 128x128, 7.5K | Mode-neutral split tile for manual setups (Windows Terminal `settings.json` `"icon"`). |
+| `vtcode-app-light-512.png` | 512x512, 36K | Desktop Dock artwork (light mode) and Appearance picker preview. |
+| `vtcode-app-dark-512.png` | 512x512, 34K | Desktop Dock artwork (dark mode) and Appearance picker preview. |
+| `vtcode-app-clear-512.png` | 512x512, 38K | Desktop Dock artwork (clear glass V) and Appearance picker preview. |
+| `vtcode-app-tinted-512.png` | 512x512, 36K | Desktop Dock artwork (tinted slate) and Appearance picker preview. |
+| `vtcode-app-dynamic-512.png` | 512x512, 40K | Desktop in-app logo, `Dynamic` picker preview, and bundle-icon source art. |
+| `vtcode-app-dynamic.icns` | 285K | Prebuilt macOS bundle icon fallback, installed as `VTCode.icns` (used on macOS < 26). |
+| `AppIcon.icon/` | 35K | Layered Liquid Glass source: `icon.json` + `Assets/Foreground.png` (1024 V glyph mask). |
+| `liquid-glass/` | 380K | Tahoe appearance sources: per-variant layer pairs (see its `README.md`). |
+| `vtcode.svg` | vector, 245B | Scalable source for docs. |
+| `vtcode-mark.svg` | vector, 195B | Outline `V` mark; the desktop welcome view draws it in the active theme. |
+| `vtcode-mono.svg` | vector, 195B | Monochrome V mark (white on transparent) for program registries. |
+| `vtcode-mono-32.png` | 32x32, 308B | Mono raster handoff for small icon tiles. |
+| `vtcode-mono-120.png` | 120x120, 827B | Desktop menu-bar status icon (AppKit template) + HiDPI tile handoff. |
 
 The legacy `vtcode-profile-*.png` set (yellow `V` mark from `vtchat_resources/v2_1`) was removed; the
 companion plugin now vendors `vtcode-app-dynamic-512.png` as its logo/composer icon, and new manual terminal

@@ -5,19 +5,19 @@ VT Code ecosystem.
 
 ## Quick Reference
 
-| Feature               | Linux | macOS   | Windows  | WASM    | Notes                                                                                                                                                 |
-| --------------------- | ----- | -----   | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core CLI              | Yes   | Yes     | Yes      | No      | Full terminal agent support                                                                                                                           |
-| TUI Interface         | Yes   | Yes     | Yes      | No      | Requires crossterm                                                                                                                                    |
-| Desktop Workspace     | No    | Partial | No       | No      | Local GPUI app for macOS 15+ (Apple Silicon or Intel); ad hoc signed only, no Developer ID trust or notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
-| Keyring Auth          | Yes   | Yes     | Yes      | No      | OS-specific backends                                                                                                                                  |
-| MCP Protocol          | Yes   | Yes     | Yes      | No      | Model Context Protocol                                                                                                                                |
-| ACP Client            | Yes   | Yes     | Yes      | Partial | Agent Client Protocol                                                                                                                                 |
-| WebMCP browser bridge | Yes   | Yes     | No       | No      | First-class authenticated bridge; filesystem access requires Unix directory-handle support and the browser client is a separate supported WebMCP page |
-| File Watching         | Yes   | Yes     | Yes      | No      | notify crate                                                                                                                                          |
-| Desktop Notifications | Yes   | Yes     | Yes      | No      | Optional feature                                                                                                                                      |
-| Bash Runner           | Yes   | Yes     | Improved | No      | Windows uses PowerShell with cross-platform process groups                                                                                            |
-| PTY Sessions          | Yes   | Yes     | Partial  | No      | Limited on Windows                                                                                                                                    |
+| Feature | Linux | macOS | Windows | WASM | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Core CLI | Yes | Yes | Yes | No | Full terminal agent support |
+| TUI Interface | Yes | Yes | Yes | No | Requires crossterm |
+| Desktop Workspace | No | Partial | No | No | Local GPUI app for macOS 15+ (Apple Silicon or Intel); ad hoc signed only, no Developer ID trust or notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
+| Keyring Auth | Yes | Yes | Yes | No | OS-specific backends |
+| MCP Protocol | Yes | Yes | Yes | No | Model Context Protocol |
+| ACP Client | Yes | Yes | Yes | Partial | Agent Client Protocol |
+| WebMCP browser bridge | Yes | Yes | No | No | First-class authenticated bridge; filesystem access requires Unix directory-handle support and the browser client is a separate supported WebMCP page |
+| File Watching | Yes | Yes | Yes | No | notify crate |
+| Desktop Notifications | Yes | Yes | Yes | No | Optional feature |
+| Bash Runner | Yes | Yes | Improved | No | Windows uses PowerShell with cross-platform process groups |
+| PTY Sessions | Yes | Yes | Partial | No | Limited on Windows |
 
 **Legend:** Yes = Fully Supported | Partial = Partial Support | No = Not Supported
 
@@ -77,15 +77,15 @@ it.
 
 ### macOS
 
-| Feature               | Status  | Dependencies           | Notes                                                                                                                             |
-| --------------------- | ------  | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Keychain (Keyring)    | Yes     | Security Framework     | Native macOS keychain                                                                                                             |
-| Desktop Notifications | Yes     | `mac-notification-sys` | Native NSUserNotification; sent via the Finder bundle (`com.apple.finder`) to avoid the Apple Events automation permission prompt |
-| PTY Sessions          | Yes     | `libc`                 | Full Unix PTY support                                                                                                             |
-| File Permissions      | Yes     | `libc`                 | Unix permission model                                                                                                             |
-| Signal Handling       | Yes     | `signal-hook`          | POSIX signals                                                                                                                     |
-| Touch ID Auth         | No      | -                      | Not yet implemented                                                                                                               |
-| Desktop Workspace     | Partial | GPUI Kit               | Local app build on macOS 15+; ad hoc signing, no notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
+| Feature | Status | Dependencies | Notes |
+| --- | --- | --- | --- |
+| Keychain (Keyring) | Yes | Security Framework | Native macOS keychain |
+| Desktop Notifications | Yes | `mac-notification-sys` | Native NSUserNotification; sent via the Finder bundle (`com.apple.finder`) to avoid the Apple Events automation permission prompt |
+| PTY Sessions | Yes | `libc` | Full Unix PTY support |
+| File Permissions | Yes | `libc` | Unix permission model |
+| Signal Handling | Yes | `signal-hook` | POSIX signals |
+| Touch ID Auth | No | - | Not yet implemented |
+| Desktop Workspace | Partial | GPUI Kit | Local app build on macOS 15+; ad hoc signing, no notarization; [requirements](./development/desktop-workspace.md#system-requirements) |
 
 ### Windows
 

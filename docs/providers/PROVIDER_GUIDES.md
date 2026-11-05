@@ -403,7 +403,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Curated picker models:** `openai/gpt-5.5`, `anthropic/claude-opus-5`, `anthropic/claude-opus-5-5`,
   `anthropic/claude-sonnet-5`, `anthropic/claude-sonnet-5-5`, `google/gemini-3.6-flash`, `google/gemini-3.7-flash`,
   `google/gemini-4-argon`, `deepseek/deepseek-v4-pro-0813`, `deepseek/deepseek-v4-flash-0731`, `xai/grok-4.6`, `qwen/qwen3.8-max`,
-  `minimax/minimax-h3`, `minimax/minimax-m3.1-flash`, `moonshot/kimi-k3`, `moonshot/kimi-k3.1-pro`, `thinkingmachines/inkling`, `zai/glm-5.3-flash`,
+  `minimax/minimax-h3`, `minimax/minimax-m3.1-flash`, `moonshot/kimi-k3`, `moonshot/kimi-k3.1-pro`,
+  `thinkingmachines/inkling`, `zai/glm-5.3-flash`,
   `zai/glm-5.3-flashx`, `openai/gpt-5.6-luna`, `openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, `openai/gpt-6-astra`,
   `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `openai/gpt-6.1-terra`, `openai/gpt-6-luna`, `mistral/mistral-large-4-0`,
   and `meta/muse-spark-open`

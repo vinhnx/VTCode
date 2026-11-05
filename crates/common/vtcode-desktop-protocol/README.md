@@ -19,4 +19,3 @@ correlated responses. VT Code does not depend on or assume Codex's desktop UI im
 
 See the [desktop workspace guide](../../../docs/development/desktop-workspace.md) for the method list, local launch, and
 packaging instructions.
-

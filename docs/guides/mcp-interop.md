@@ -8,11 +8,11 @@ contribute interoperability fixes. For user-facing configuration walk-throughs, 
 
 ## What VT Code implements
 
-| Surface                            | Direction        | Transports                                                       | Source                                                       |
-| ---------------------------------- | ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ |
-| MCP client (`[mcp.providers]`)     | VT Code → server | `stdio`, HTTP with server-sent events (Streamable HTTP)          | `crates/codegen/vtcode-mcp` (rmcp-based client)              |
-| Embedded MCP server (`[mcp.server]`) | client → VT Code | SSE or HTTP on loopback, with an explicit tool allowlist        | `crates/codegen/vtcode-config/src/mcp.rs` (`McpServerConfig`) |
-| Read-only remote MCP (`webmcp`)    | client → VT Code | Streamable HTTP at `/mcp`, legacy HTTP+SSE at `/sse/`            | `crates/codegen/vtcode-webmcp/src/remote_mcp.rs`             |
+| Surface | Direction | Transports | Source |
+| --- | --- | --- | --- |
+| MCP client (`[mcp.providers]`) | VT Code → server | `stdio`, HTTP with server-sent events (Streamable HTTP) | `crates/codegen/vtcode-mcp` (rmcp-based client) |
+| Embedded MCP server (`[mcp.server]`) | client → VT Code | SSE or HTTP on loopback, with an explicit tool allowlist | `crates/codegen/vtcode-config/src/mcp.rs` (`McpServerConfig`) |
+| Read-only remote MCP (`webmcp`) | client → VT Code | Streamable HTTP at `/mcp`, legacy HTTP+SSE at `/sse/` | `crates/codegen/vtcode-webmcp/src/remote_mcp.rs` |
 
 ## Server maintainers: register your MCP server in VT Code
 
