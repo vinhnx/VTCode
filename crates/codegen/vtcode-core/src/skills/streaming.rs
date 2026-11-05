@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 use tokio::time::{interval, timeout};
+use vtcode_commons::Utf8StreamDecoder;
 
 /// Streaming execution configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -381,11 +382,24 @@ impl StreamingSkillExecutor {
             let mut reader = BufReader::new(reader);
             let mut buffer = vec![0u8; config.buffer_size];
             let mut line_buffer = String::new();
+            // Reads can split a multibyte character; decode across boundaries.
+            let mut decoder = Utf8StreamDecoder::new();
 
             loop {
                 match reader.read(&mut buffer).await {
                     Ok(0) => {
-                        // EOF reached
+                        // EOF reached: a truncated final sequence becomes one U+FFFD.
+                        let tail = decoder.finish();
+                        if config.line_based_streaming {
+                            line_buffer.push_str(&tail);
+                        } else if !tail.is_empty() {
+                            progress_tracker.update_with_output(&tail);
+                            yield Ok(StreamEvent::Output {
+                                data: tail,
+                                output_type: output_type.clone(),
+                                is_partial: true,
+                            });
+                        }
                         if !line_buffer.is_empty() && config.line_based_streaming {
                             progress_tracker.update_with_output(&line_buffer);
                             yield Ok(StreamEvent::Output {
@@ -397,7 +411,7 @@ impl StreamingSkillExecutor {
                         break;
                     }
                     Ok(n) => {
-                        let data = String::from_utf8_lossy(&buffer[..n]);
+                        let data = decoder.push(buffer.get(..n).unwrap_or_default());
 
                         if config.line_based_streaming {
                             line_buffer.push_str(&data);
@@ -707,6 +721,41 @@ mod tests {
         match &events[1] {
             StreamEvent::JsonObject { value, .. } => assert_eq!(value["emoji"], "🚀"),
             _ => panic!("Expected JsonObject event"),
+        }
+    }
+
+    async fn streamed_text(input: &'static [u8], line_based_streaming: bool) -> String {
+        let config = StreamingConfig {
+            buffer_size: 2,
+            line_based_streaming,
+            ..StreamingConfig::default()
+        };
+        let events: Vec<_> =
+            StreamingSkillExecutor::stream_output(input, OutputType::Stdout, config, ProgressTracker::new())
+                .collect()
+                .await;
+        events
+            .into_iter()
+            .filter_map(|event| match event {
+                Ok(StreamEvent::Output { data, .. }) => Some(data),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn multibyte_output_survives_read_boundaries() {
+        let text = "xin chào 世界\n";
+        for line_based in [true, false] {
+            assert_eq!(streamed_text(text.as_bytes(), line_based).await, text, "line_based={line_based}");
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_final_sequence_becomes_one_replacement_character() {
+        // `—` is 0xE2 0x80 0x94; the stream ends after its first two bytes.
+        for line_based in [true, false] {
+            assert_eq!(streamed_text(b"ok\n\xE2\x80", line_based).await, "ok\n\u{FFFD}", "line_based={line_based}");
         }
     }
 }

@@ -80,6 +80,7 @@ pub mod tool_types;
 pub mod trace_flush;
 pub mod ui_protocol;
 pub mod unicode;
+pub mod utf8_stream;
 pub mod utils;
 pub mod validation;
 pub mod vtcode_paths;
@@ -122,6 +123,7 @@ pub use task_guard::TaskGuard;
 pub use telemetry::{NoopTelemetry, TelemetrySink};
 pub use tokens::{estimate_tokens, format_token_count, truncate_to_tokens};
 pub use unicode::{UNICODE_MONITOR, UnicodeMonitor, UnicodeValidationContext};
+pub use utf8_stream::Utf8StreamDecoder;
 pub use validation::{EmptyCollectionError, NonEmptySlice, NonEmptyString, NonEmptyVec};
 pub use vtcode_paths::{
     MigrationEntry, MigrationFailure, MigrationReport, MigrationSkip, MigrationSkipReason, VtCodePaths,
