@@ -7,12 +7,14 @@
 //! such as `impl chg` finds `Implement current changes`; a plain substring
 //! test cannot express that.
 
-pub use crate::search::FuzzyQuery;
+use crate::search::FuzzyQuery;
 
 /// Maximum prompt-history rows any surface shows for one query.
 ///
-/// One merged cap (not per section) keeps a long live thread from consuming
-/// the whole budget and hiding cross-session recents.
+/// The budget covers the **merged** result, not each section: callers that
+/// split rows into sections must size the later ones from what the earlier
+/// ones consumed, or a long live thread plus cross-session recents could
+/// render twice this many rows.
 pub const MAX_PROMPT_HISTORY_ROWS: usize = 200;
 
 /// Indices of `candidates` matching `query`, best match first.

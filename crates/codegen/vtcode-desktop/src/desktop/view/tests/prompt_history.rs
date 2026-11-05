@@ -458,3 +458,53 @@ fn history_rows_report_hidden_lines(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn history_rows_stay_within_one_merged_cap(cx: &mut TestAppContext) {
+    // Both sources exceed the budget on their own; the merged result must not.
+    let live: Vec<String> = (0..250).map(|index| format!("live prompt {index:03}")).collect();
+    let refs: Vec<&str> = live.iter().map(String::as_str).collect();
+    let (window, view, mut requests) = open_history_with_backend(&refs, cx);
+    expect_recent_prompts_request(&mut requests, super::super::HistoryScope::Everywhere);
+    let recents: Vec<(String, String)> = (0..250)
+        .map(|index| (format!("recent prompt {index:03}"), "other".to_string()))
+        .collect();
+    let borrowed: Vec<(&str, &str)> = recents
+        .iter()
+        .map(|(content, session)| (content.as_str(), session.as_str()))
+        .collect();
+    deliver_recent_prompts(&window, &view, "everywhere", &borrowed, cx);
+    cx.update_window(window, |_, _, cx| {
+        let sections = section_contents(&view.read(cx).palette_groups);
+        let rows: usize = sections.iter().map(|(_, entries)| entries.len()).sum();
+        assert_eq!(rows, 200, "the merged result caps at the CLI budget, not per section");
+        assert_eq!(sections[0].1.len(), 200, "live rows fill the budget first");
+        assert!(sections.iter().all(|(label, entries)| !label.is_empty() && !entries.is_empty()));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn unmatched_query_is_not_reported_as_empty_history(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["alpha prompt"], cx);
+    set_history_query(&window, &view, "zzzznomatch", cx);
+    cx.update_window(window, |_, _, cx| {
+        let state = view.read(cx);
+        let rows: usize = state.palette_groups.iter().map(|(_, entries)| entries.len()).sum();
+        assert_eq!(rows, 0, "the query matches nothing");
+        assert!(!state.prompt_history_is_empty(), "history exists; only the filter missed");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn empty_catalog_is_reported_as_empty_history(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // No backend recents and no live prompts: the palette genuinely has none.
+    open_history_with_prompts(&window, &view, &[], cx);
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).prompt_history_is_empty());
+    })
+    .unwrap();
+}

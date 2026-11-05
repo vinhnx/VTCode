@@ -72,7 +72,15 @@ impl DesktopView {
             PaletteKind::GoTo => rust_i18n::t!(i18n::PALETTE_TITLE_GO_TO).to_string(),
         };
         let quick_model = self.palette_kind == PaletteKind::ModelOptions;
-        let catalog_empty = confirm_groups.is_empty();
+        // Prompt history filters host-side, so its rows are empty whenever the
+        // query misses. "No history yet" must then come from the unfiltered
+        // catalog, never from an empty filtered list — otherwise a typo reads
+        // as a wiped history.
+        let catalog_empty = if prompt_history {
+            self.prompt_history_is_empty()
+        } else {
+            confirm_groups.is_empty()
+        };
         let placeholder = if self.palette_kind == PaletteKind::SettingsSearch {
             rust_i18n::t!("app.settings.search.placeholder").to_string()
         } else if self.palette_kind == PaletteKind::ConfigSettings {

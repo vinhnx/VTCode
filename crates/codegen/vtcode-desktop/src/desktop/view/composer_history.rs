@@ -53,6 +53,18 @@ impl DesktopView {
         }
     }
 
+    /// Whether the history palette has no prompts at all, ignoring the query.
+    ///
+    /// The palette filters host-side, so an empty row list cannot tell "no
+    /// history yet" from "nothing matched this query"; the empty-state copy
+    /// needs the unfiltered answer.
+    pub(super) fn prompt_history_is_empty(&self) -> bool {
+        self.prompt_history_entries().is_empty()
+            && (self.history_scope == HistoryScope::Session
+                || self.recent_prompts_scope != Some(self.history_scope)
+                || self.recent_prompts.is_empty())
+    }
+
     /// Re-rank the history palette for `query`, driven from the palette's
     /// `on_query` callback. The palette runs with Kit filtering disabled, so
     /// these rows are exactly what the user sees; matching, ranking, dedup,
@@ -93,7 +105,12 @@ impl DesktopView {
                 .map(|recent| recent.content.as_str())
                 .filter(|content| !content.trim().is_empty() && !in_thread.contains(content))
                 .collect();
+            // One merged cap across both sections, like the CLI's single
+            // ranked list: ranking each section to the full limit would let a
+            // long live thread plus recents render up to twice the budget.
+            let remaining = MAX_PROMPT_HISTORY_ROWS.saturating_sub(thread.len());
             others = ranked_prompt_rows(query, &recent_candidates);
+            others.truncate(remaining);
         }
 
         let mut groups = Vec::with_capacity(2);
