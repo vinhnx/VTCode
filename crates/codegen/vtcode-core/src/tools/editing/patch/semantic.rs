@@ -7,7 +7,7 @@ use regex::Regex;
 use serde::Deserialize;
 use tokio::process::Command;
 
-use super::matcher::{PatchContextMatcher, normalise_text, seek_segment};
+use super::matcher::{PatchContextMatcher, normalise_text, redacted_context_matches, seek_segment};
 use super::{PatchChunk, PatchError};
 use crate::tools::ast_grep_binary::{
     AST_GREP_INSTALL_COMMAND, AST_GREP_OVERRIDE, AstGrepBinaryOverride, missing_ast_grep_message,
@@ -117,6 +117,7 @@ pub(crate) async fn resolve_semantic_match(
     }
 
     let mut resolved = BTreeMap::new();
+    let mut redacted_match = false;
 
     for candidate in candidates {
         let end_exclusive = candidate.end_exclusive(original_lines.len());
@@ -137,10 +138,13 @@ pub(crate) async fn resolve_semantic_match(
                 old_segment: candidate_old,
                 new_segment: candidate_new,
             });
+        } else {
+            redacted_match |= redacted_context_matches(candidate_lines, &candidate_old, 0, chunk.is_end_of_file());
         }
     }
 
     match resolved.len() {
+        0 if redacted_match => Err(PatchError::RedactedContext { path: display_path.to_string() }),
         0 => Err(PatchError::SemanticResolutionFailed {
             path: display_path.to_string(),
             anchor: anchor.to_string(),

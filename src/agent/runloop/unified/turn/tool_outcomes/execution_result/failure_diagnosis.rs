@@ -190,7 +190,7 @@ pub(super) async fn diagnose_error(
     failure_kind: &str,
 ) -> ToolFailureDiagnosis {
     let fallback = deterministic_error_diagnosis(error, failure_kind);
-    if classification::is_deterministic_only_error(error) {
+    if error.is_redacted_patch_context() || classification::is_deterministic_only_error(error) {
         return fallback;
     }
     let evidence = evidence::build_error_evidence(tool_name, args, error, failure_kind);
@@ -694,6 +694,17 @@ mod tests {
         assert!(is_policy_sensitive(ErrorCategory::PolicyViolation));
         assert!(is_policy_sensitive(ErrorCategory::Authentication));
         assert!(!is_policy_sensitive(ErrorCategory::InvalidParameters));
+    }
+
+    #[test]
+    fn redacted_patch_diagnosis_does_not_recommend_another_read() {
+        let source =
+            anyhow::Error::new(vtcode_core::tools::editing::PatchError::RedactedContext { path: "sample.txt".into() });
+        let error = ToolExecutionError::from_anyhow("apply_patch", &source, 0, false, false, None);
+        let diagnosis = deterministic_error_diagnosis(&error, "execution");
+        assert!(diagnosis.next_action.contains("Repeated reads"));
+        assert!(diagnosis.next_action.contains("Split the edit"));
+        assert!(!diagnosis.next_action.contains("fresh file read"));
     }
 
     #[test]

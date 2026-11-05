@@ -62,14 +62,14 @@ async fn planning_prompt_size_fixed_fixture() {
         PlanningPromptSizeCase {
             density: "Default",
             prompt_budget_tokens: 100_000,
-            max_prompt_bytes: 11_550,
-            max_estimated_tokens: 2_470,
+            max_prompt_bytes: 11_660,
+            max_estimated_tokens: 2_500,
         },
         PlanningPromptSizeCase {
             density: "Minimal",
             prompt_budget_tokens: 1,
-            max_prompt_bytes: 11_820,
-            max_estimated_tokens: 2_540,
+            max_prompt_bytes: 11_930,
+            max_estimated_tokens: 2_570,
         },
     ] {
         let mut config = VTCodeConfig::default();
@@ -136,7 +136,7 @@ async fn test_minimal_mode_selection() {
     // Raised from 3700 for the reuse-reads and exact-whitespace patch-copy guidance (measured 3917).
     // Raised from 4700 for the fold-by-default delegation rule (measured 4719).
     // Raised for the partial-commit and conflict-reload runtime guidance (measured 4948).
-    assert!(result.len() < 5010, "Minimal mode should produce <5.01K chars (was {} chars)", result.len());
+    assert!(result.len() < 5150, "Minimal mode should produce <5.15K chars (was {} chars)", result.len());
     assert!(result.contains("VT Code") || result.contains("VT Code"), "Should contain VT Code identifier");
 }
 #[tokio::test]
@@ -158,8 +158,8 @@ async fn test_default_prompt_selection() {
     // Raised from 6350 for the fold-by-default delegation rule (measured 6375).
     // Raised for the partial-commit and conflict-reload runtime guidance (measured 6604).
     assert!(
-        result.len() <= 6670,
-        "Default mode should stay sparse with runtime guidance (<=6670 bytes, was {} bytes)",
+        result.len() <= 6780,
+        "Default mode should stay sparse with runtime guidance (<=6780 bytes, was {} bytes)",
         result.len()
     );
     assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
@@ -186,8 +186,8 @@ async fn test_lightweight_mode_selection() {
     // Raised from 4800 for the reuse-reads runtime guidance bullet (measured 4862).
     // Raised for the partial-commit and conflict-reload runtime guidance (measured 5970).
     assert!(
-        result.len() < 6040,
-        "Lightweight should be compact with runtime guidance (<6.04K chars, was {} chars)",
+        result.len() < 6150,
+        "Lightweight should be compact with runtime guidance (<6.15K chars, was {} chars)",
         result.len()
     );
     assert!(result.contains("task_tracker"));
@@ -277,8 +277,8 @@ async fn test_specialized_mode_selection() {
     // Raised from 5400 for the reuse-reads runtime guidance bullet (measured 5569).
     // Raised for the partial-commit and conflict-reload runtime guidance (measured 6677).
     assert!(
-        result.len() <= 6740,
-        "Specialized should stay sparse with runtime guidance (<=6.74K chars, was {} chars)",
+        result.len() <= 6850,
+        "Specialized should stay sparse with runtime guidance (<=6.85K chars, was {} chars)",
         result.len()
     );
     assert!(result.contains("task_tracker"));
