@@ -69,29 +69,27 @@ pub(crate) async fn handle_mcp_updates(
             McpInitStatus::Ready { client } => {
                 tool_registry.set_mcp_client(Arc::clone(&client)).await;
                 match tool_registry.refresh_mcp_tools().await {
-                    Ok(()) => {
-                        match tool_registry.list_mcp_tools().await {
-                            Ok(mcp_tools) => {
-                                McpToolManager::enumerate_mcp_tools_after_initial_setup(
-                                    tool_registry,
-                                    tools,
-                                    tool_catalog,
-                                    config,
-                                    vt_cfg,
-                                    tool_documentation_mode,
-                                    &deferred_tool_policy,
-                                    mcp_tools,
-                                    last_known_mcp_tools,
-                                )
-                                .await?;
-                                *pending_mcp_refresh = false;
-                            }
-                            Err(err) => {
-                                tracing::warn!("Failed to enumerate MCP tools after refresh: {err}");
-                                renderer.diagnostic(&mcp_diagnostic("initial_enumeration", &err.to_string()))?;
-                            }
+                    Ok(()) => match tool_registry.list_mcp_tools().await {
+                        Ok(mcp_tools) => {
+                            McpToolManager::enumerate_mcp_tools_after_initial_setup(
+                                tool_registry,
+                                tools,
+                                tool_catalog,
+                                config,
+                                vt_cfg,
+                                tool_documentation_mode,
+                                &deferred_tool_policy,
+                                mcp_tools,
+                                last_known_mcp_tools,
+                            )
+                            .await?;
+                            *pending_mcp_refresh = false;
                         }
-                    }
+                        Err(err) => {
+                            tracing::warn!("Failed to enumerate MCP tools after refresh: {err}");
+                            renderer.diagnostic(&mcp_diagnostic("initial_enumeration", &err.to_string()))?;
+                        }
+                    },
                     Err(err) => {
                         tracing::warn!("Failed to refresh MCP tools after initialization: {err}");
                         renderer.diagnostic(&mcp_diagnostic("initial_catalog", &err.to_string()))?;
@@ -170,10 +168,7 @@ mod tests {
         assert_eq!(failed.code, "mcp.catalog_failed");
         assert!(!failed.agent_details.contains("mcp-private-secret"));
         assert!(failed.summary.contains("/mcp"));
-        assert_eq!(
-            failed.severity,
-            vtcode_commons::diagnostics::DiagnosticSeverity::Warning
-        );
+        assert_eq!(failed.severity, vtcode_commons::diagnostics::DiagnosticSeverity::Warning);
     }
 
     #[test]
