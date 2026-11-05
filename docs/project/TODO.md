@@ -1,3 +1,7 @@
+routine: .vtcode/memory/issues.md
+
+---
+
 benchmark VT Code https://chatgpt.com/c/6ae5d291-8374-83ec-a83d-e075e1804da5
 
 ---
@@ -18,12 +22,26 @@ layout preference (zen vs non-zen) modes should be persisted between apps launch
 
 gpui apps for other plqtforms
 
+
+---
+
+fix the alignments '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 12.31.15 PM.png'
+
+
+----
+
+CRITICAL: check apply_patch tool. it seems the tool having a lot of error and trouble for vtcode to work fast/reliable/and smooth. a normal patch seems having a lot of errors and round trip before the patch can be apply. Help me reason through this problem step by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the simplest practical approach before implementation.
+
+session: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261105T052554Z_128122-45584
+
 ---
 
 implement lazy loading for threads data and heavy listing for all places on desktop app.
 
 ---
----
+
+fix and match the force stop run and background processs to match the idle run button on the chat input design. also update all the primary/secondary/iterary/ghost design to follow macos 27 modern design guideline and make it more premium. current design are too bland. build and update the app componnets again
+
 --
 
 adjust the main container width for comformtable read.
@@ -37,9 +55,6 @@ click on a notification should deeplink and open to the related information.
 remove the icons in tool summarization '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 10.35.25 AM.png'
 
 ---
-
-silent and maybe skip the warining "MCP tools are ready. Use /mcp tools to inspect the catalog."
-
 ---
 
 
@@ -230,3 +245,8 @@ phase 3 - only on demand signal: linux preview tarball, no auto-update, document
 verify: manual QA checklist (WCAG AA 4.5:1, 20 locales, keyboard/focus/Escape, trash fail-closed, launch argv boundary).
 
 non-goals: no windows packaging/signing now; no auto-update for linux preview; no behavior change on mac.
+
+
+---
+
+gpui-web
