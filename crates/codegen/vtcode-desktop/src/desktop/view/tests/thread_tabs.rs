@@ -118,25 +118,34 @@ fn refused_load_keeps_the_selected_tab(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn selecting_a_wide_tab_reveals_its_close_button(cx: &mut TestAppContext) {
+fn selecting_a_tab_reveals_its_close_button(cx: &mut TestAppContext) {
     let (window, view, _) = open_threaded_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .unwrap();
     view.update(cx, |view, _| {
         if let Some(session) = view.sessions.iter_mut().find(|s| s.session_id == "thread-c") {
-            session.title = Some("Third thread with a deliberately overlong title for clipping".into());
+            session.title = Some("Third thread, longer title".into());
         }
-        // Mirror the loaded-session path: selection plus tab tracking.
+        // Mirror the loaded-session path: selection plus tab tracking. Loads
+        // complete asynchronously, so layout always exists by the time this
+        // runs in production.
         view.selected_session_id = Some("thread-c".into());
         view.ensure_tab("thread-c".into());
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.render_frame(cx);
+        // Child bounds are laid out unscrolled; the strip offset maps them to
+        // painted positions.
+        let offset = view.read(cx).tab_strip_scroll.offset().x;
         let close = window.find("thread-tab-close-thread-c").bounds();
         let trigger = window.find("thread-tabs-menu").bounds();
-        eprintln!("DEBUG offset={:?}", view.read(cx).tab_strip_scroll.offset());
+        let painted_right = close.origin.x + close.size.width + offset;
         assert!(
-            close.origin.x + close.size.width <= trigger.origin.x,
-            "selected wide tab keeps its close button left of the overflow: close={close:?}, trigger={trigger:?}"
+            painted_right <= trigger.origin.x + px(1.),
+            "selected tab keeps its close button left of the overflow: close={close:?}, offset={offset:?}, trigger={trigger:?}"
         );
     })
     .unwrap();

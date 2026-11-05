@@ -261,6 +261,7 @@ impl DesktopView {
                                 if let Some(view) = view.upgrade() {
                                     view.update(cx, |view, cx| {
                                         if let Some(index) = view.open_tabs.iter().position(|tab| tab == &id) {
+                                            // Immediate feedback; ensure_tab re-reveals once the load lands.
                                             view.tab_strip_scroll.scroll_to_item(index);
                                             view.keyboard_focused_session = Some(id.clone());
                                             let _ = view.load_session_from_ui(id.clone(), window, cx);
