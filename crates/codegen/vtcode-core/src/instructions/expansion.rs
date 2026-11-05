@@ -80,8 +80,9 @@ pub async fn read_instruction_bundle(
                 truncated = true;
             }
 
-            let slice_len = contents.len().min(remaining);
-            let visible = String::from_utf8_lossy(&contents.as_bytes()[..slice_len]).to_string();
+            // Cut on a char boundary so truncation never injects U+FFFD into the prompt.
+            let slice_len = contents.floor_char_boundary(contents.len().min(remaining));
+            let visible = contents.get(..slice_len).unwrap_or_default().to_string();
             if visible.trim().is_empty() {
                 remaining = remaining.saturating_sub(slice_len);
                 continue;

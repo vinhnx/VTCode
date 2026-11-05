@@ -392,3 +392,23 @@ fn highlight_fallback_uses_non_bullet_content() {
     let highlights = extract_instruction_highlights(&segments, 1);
     assert_eq!(highlights, vec!["Root summary".to_owned()]);
 }
+
+#[tokio::test]
+async fn truncation_never_splits_a_utf8_character() -> Result<()> {
+    let workspace = tempdir()?;
+    let project_root = workspace.path();
+    // `—` is three bytes at offsets 2..5.
+    write_doc(project_root, "ab—cd\n")?;
+    let options = default_options(project_root, project_root, None, &[]);
+
+    let mid_char = read_instruction_bundle(&options, 3).await?.expect("instruction bundle");
+    assert_eq!(mid_char.combined_text(), "ab");
+    assert!(mid_char.truncated);
+    assert!(mid_char.bytes_read <= 3);
+
+    let on_boundary = read_instruction_bundle(&options, 5).await?.expect("instruction bundle");
+    assert_eq!(on_boundary.combined_text(), "ab—");
+    assert_eq!(on_boundary.bytes_read, 5);
+
+    Ok(())
+}
