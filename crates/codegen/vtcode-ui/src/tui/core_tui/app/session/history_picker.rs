@@ -8,6 +8,7 @@ use crate::tui::ui::search::FuzzyQuery;
 use chrono::{DateTime, Duration, Utc};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use vtcode_commons::history_scope::HistoryScope;
+use vtcode_commons::prompt_history::{MAX_PROMPT_HISTORY_ROWS, rank_prompt_history};
 
 use crate::tui::core_tui::session::input_manager::InputManager;
 
@@ -22,22 +23,23 @@ pub struct ArchivedPrompt {
     pub(crate) in_workspace: bool,
 }
 
-/// A single history entry with fuzzy match score
+/// A single history entry, already ranked by [`rank_prompt_history`].
 #[derive(Debug, Clone)]
 pub struct HistoryMatch {
-    /// Index in the original in-memory history. `None` for archived entries
-    /// that come from a previous session rather than the current one.
-    history_index: Option<usize>,
     /// The command text
     pub(crate) content: String,
-    /// Fuzzy match score (higher is better)
-    score: u32,
     /// Associated attachments
     attachments: Vec<ContentPart>,
-    /// When this prompt was submitted (None for legacy entries without timestamps)
-    created_at: Option<DateTime<Utc>>,
     /// Short relative time label (e.g. "3h ago", "just now")
     pub(crate) time_label: String,
+}
+
+/// One unranked candidate: borrowed so ranking does not clone prompt text
+/// twice before the top [`MAX_PROMPT_HISTORY_ROWS`] matches are known.
+struct HistoryRow<'a> {
+    content: &'a str,
+    attachments: &'a [ContentPart],
+    created_at: DateTime<Utc>,
 }
 
 /// State for the history picker overlay
@@ -145,83 +147,43 @@ impl HistoryPickerState {
     /// Update the search query and filter matches.
     ///
     /// Merges in-memory session history with archived prompts from previous
-    /// sessions.  Archived entries are included so the user can search across
-    /// all recent prompts, not just the current conversation.
+    /// sessions, then delegates ranking to the shared
+    /// [`rank_prompt_history`] so the CLI and desktop find the same prompts.
+    /// Both sources are fed newest-first: live entries, then scoped archives.
     pub(crate) fn update_search(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
-        self.matches.clear();
         let now = Utc::now();
-
-        // Score and collect in-memory history entries
-        let query = self.search_query.to_lowercase();
-        let query_empty = query.is_empty();
-        let mut fuzzy = FuzzyQuery::new(&query);
-        for (idx, (content, attachments, created_at)) in history.iter().enumerate().rev() {
-            if content.trim().is_empty() {
-                continue;
-            }
-
-            let score = if query_empty {
-                Some(history.len().saturating_sub(idx) as u32)
-            } else {
-                fuzzy.score(content)
-            };
-
-            if let Some(score) = score {
-                let time_label = format_time_ago(now - *created_at);
-                self.matches.push(HistoryMatch {
-                    history_index: Some(idx),
-                    content: content.clone(),
-                    score,
-                    attachments: attachments.clone(),
-                    created_at: Some(*created_at),
-                    time_label,
-                });
-            }
-        }
-
-        // Merge archived prompts from previous sessions. Session scope skips
-        // them entirely (the caller also strips prepended archived rows from
-        // the live history); Project keeps same-workspace archives only.
+        // Session scope skips archives entirely (the caller also strips
+        // prepended archived rows from the live history); Project keeps
+        // same-workspace archives only.
         let scope = self.scope;
-        for archived in self.archived_prompts.iter().filter(|archived| {
-            scope != HistoryScope::Session && (scope != HistoryScope::Project || archived.in_workspace)
-        }) {
-            if archived.content.trim().is_empty() {
-                continue;
-            }
+        let rows: Vec<HistoryRow<'_>> = history
+            .iter()
+            .rev()
+            .map(|(content, attachments, created_at)| HistoryRow { content, attachments, created_at: *created_at })
+            .chain(
+                self.archived_prompts
+                    .iter()
+                    .filter(|archived| {
+                        scope != HistoryScope::Session && (scope != HistoryScope::Project || archived.in_workspace)
+                    })
+                    .map(|archived| HistoryRow {
+                        content: &archived.content,
+                        attachments: &[],
+                        created_at: archived.created_at,
+                    }),
+            )
+            .collect();
+        let candidates: Vec<&str> = rows.iter().map(|row| row.content).collect();
 
-            let score = if query_empty {
-                // Recency-based score: archived prompts get lower base score
-                // than current-session entries so they sort below them.
-                let age_hours = (now - archived.created_at).num_hours().max(0) as u32;
-                1000u32.saturating_sub(age_hours)
-            } else {
-                match fuzzy.score(&archived.content) {
-                    Some(s) => s,
-                    None => continue,
-                }
-            };
-
-            let time_label = format_time_ago(now - archived.created_at);
-            self.matches.push(HistoryMatch {
-                history_index: None,
-                content: archived.content.clone(),
-                score,
-                attachments: Vec::new(),
-                created_at: Some(archived.created_at),
-                time_label,
-            });
-        }
-
-        // Sort by score (descending) - higher scores first
-        self.matches.sort_by_key(|history_match| std::cmp::Reverse(history_match.score));
-
-        // Deduplicate by content (keep highest scored entry)
-        let mut seen = hashbrown::HashSet::new();
-        self.matches.retain(|m| seen.insert(m.content.clone()));
-
-        // Limit to reasonable number
-        self.matches.truncate(200);
+        self.matches = rank_prompt_history(&self.search_query, &candidates, MAX_PROMPT_HISTORY_ROWS)
+            .into_iter()
+            .filter_map(|index| rows.get(index))
+            .map(|row| HistoryMatch {
+                content: row.content.to_owned(),
+                attachments: row.attachments.to_vec(),
+                time_label: format_time_ago(now - row.created_at),
+            })
+            .collect();
 
         self.navigator.set_item_count(self.matches.len());
         if self.matches.is_empty() {
@@ -728,14 +690,52 @@ mod tests {
 
         picker.scope = HistoryScope::Project;
         picker.update_search(&history);
+        // Live prompts outrank archived ones: the shared ranker keeps the
+        // caller's newest-first source order for an empty query.
         assert_eq!(
             match_contents(&picker),
-            vec!["same workspace prompt".to_string(), "live session prompt".to_string()]
+            vec!["live session prompt".to_string(), "same workspace prompt".to_string()]
         );
 
         picker.scope = HistoryScope::Session;
         picker.update_search(&history);
         assert_eq!(match_contents(&picker), vec!["live session prompt".to_string()]);
+    }
+
+    #[test]
+    fn test_multi_token_query_matches_across_words() {
+        let mut picker = HistoryPickerState::new();
+        let manager = InputManager::new();
+        let now = Utc::now();
+        let history = vec![
+            ("Review stale diffs".to_string(), vec![], now - Duration::minutes(2)),
+            ("Implement current changes".to_string(), vec![], now - Duration::minutes(1)),
+            ("cargo test".to_string(), vec![], now),
+        ];
+        picker.open(&manager);
+        picker.update_search(&history);
+        assert_eq!(picker.match_count(), 3);
+
+        // Neither token is contiguous in the target; substring matching fails.
+        picker.search_query = "impl chg".to_string();
+        picker.update_search(&history);
+        assert_eq!(match_contents(&picker), vec!["Implement current changes".to_string()]);
+    }
+
+    #[test]
+    fn test_empty_query_lists_newest_first() {
+        let mut picker = HistoryPickerState::new();
+        let manager = InputManager::new();
+        let now = Utc::now();
+        // Ascending timestamps: the newest entry is last.
+        let history = vec![
+            ("oldest".to_string(), vec![], now - Duration::minutes(2)),
+            ("middle".to_string(), vec![], now - Duration::minutes(1)),
+            ("newest".to_string(), vec![], now),
+        ];
+        picker.open(&manager);
+        picker.update_search(&history);
+        assert_eq!(match_contents(&picker), vec!["newest".to_string(), "middle".to_string(), "oldest".to_string()]);
     }
 
     #[test]

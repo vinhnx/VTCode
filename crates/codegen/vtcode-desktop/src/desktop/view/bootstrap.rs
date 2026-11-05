@@ -29,6 +29,7 @@ pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
     "ctrl-p",
     "ctrl-n",
     "ctrl-s",
+    "ctrl-g",
 ];
 
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
@@ -76,6 +77,10 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         // CLI scope-cycle twin: opens history when closed, cycles the search
         // scope while open. Ctrl+R keeps the palette toggle contract.
         KeyBinding::new("ctrl-s", CycleHistoryScope, Some(key_context::DESKTOP)),
+        // CLI picker parity: Ctrl+G cancels the history search and restores the
+        // draft (Ctrl+C stays Kit's Copy in the input context, so it cannot be
+        // claimed here without also hijacking Cmd+C).
+        KeyBinding::new("ctrl-g", CancelPromptHistory, Some(key_context::DESKTOP)),
         KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("home", TranscriptFirst, Some(key_context::TRANSCRIPT)),

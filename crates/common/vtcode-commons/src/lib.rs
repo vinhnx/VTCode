@@ -57,6 +57,7 @@ pub mod paths;
 pub mod preview;
 pub mod program_status;
 pub mod project;
+pub mod prompt_history;
 pub mod provider;
 pub mod reasoning;
 pub mod reference;

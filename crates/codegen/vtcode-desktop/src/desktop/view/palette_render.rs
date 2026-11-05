@@ -183,6 +183,12 @@ impl DesktopView {
         if inline_completion {
             command = command.searchable(false);
         }
+        if prompt_history {
+            // The prompt-history rows are already matched, ranked, deduped and
+            // capped by the shared CLI ranker, so Kit must not re-filter them:
+            // its substring test is exactly the divergence this replaced.
+            command = command.filterable(false);
+        }
         let show_history_control =
             conversation_search && (older_history_available || history_page_loading || history_page_failed);
         if show_history_control {
@@ -441,6 +447,10 @@ impl DesktopView {
             .on_query(move |query, _, cx| {
                 let _updated = query_weak.update(cx, |view, cx| {
                     if !view.palette_is_current(palette_id) {
+                        return;
+                    }
+                    if view.palette_kind == PaletteKind::PromptHistory {
+                        view.refresh_prompt_history(query, cx);
                         return;
                     }
                     view.palette_query = query.into();

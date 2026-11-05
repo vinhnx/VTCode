@@ -490,7 +490,12 @@ impl DesktopView {
                         }
                     }))
                     .capture_action(cx.listener(|view, _: &IndentInline, window, cx| {
-                        if !view.accept_composer_suggestion(window, cx) {
+                        // The history palette cycles matches on Tab (CLI
+                        // parity). File-mention and slash suggestions keep the
+                        // accept-on-Tab convention.
+                        if view.palette_kind == PaletteKind::PromptHistory && view.palette.is_some() {
+                            let _cycled = view.move_composer_suggestion(true, window, cx);
+                        } else if !view.accept_composer_suggestion(window, cx) {
                             window.focus_next(cx);
                         }
                         cx.stop_propagation();

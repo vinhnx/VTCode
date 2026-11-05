@@ -66,10 +66,10 @@ difference; **oos** = out of scope (terminal-only).
 | --- | --- | --- |
 | `Up/Down` single-line composer → history prev/next (live draft stashed) | `recall_history` via `MoveUp/Down` capture (single-visual-row gate, clamps, stash restore) | done (`history_recall_traverses…` test) |
 | `Ctrl+P/N` always traverse | `HistoryPrevious/Next` composer-context bindings | done (`ctrl_p_recalls_from_multiline…` test) |
-| `Ctrl+R` history picker | `ctrl-r` → `OpenPromptHistory` (toggle, draft-prefilter, `Enter` accept, `Esc` close, first-match preselect) | done (`ctrl_r_opens_prefiltered…` test) |
+| `Ctrl+R` history picker | `ctrl-r` → `OpenPromptHistory` (draft-prefilter, `Enter` accept, `Esc` close, first-match preselect); rows matched/ranked by the shared `vtcode_commons::prompt_history` nucleo ranker, so multi-token queries like `impl chg` span the phrase | done (`ctrl_r_opens_prefiltered…`, `history_search_matches_non_contiguous…` tests) |
 | History scope (Everywhere/Project/Session) + `Ctrl+S` cycle | fixed `ctrl-s` → `CycleHistoryScope` (opens when closed) + segmented switcher in the palette header; scope kept across opens | done (`ctrl_s_cycles_scope…`, `scope_switcher_click…` tests) |
-| Picker cycle (`Tab`/`Shift+Tab`), `Ctrl+P/N` nav | Kit `Command` `Up/Down/Enter/Esc` + `HistoryPrevious/Next` capture; `Tab` falls to suggestion accept; second `Ctrl+R` toggles (desktop convention, CLI cycles) | partial |
-| Picker cross-thread prompts (full-text, 200 cap) | `session/recent-prompts` merged under the live thread ("Other threads" section); full-prompt keywords; silent on older services | done (`prompt_history` tests) |
+| Picker cycle (`Tab`/`Shift+Tab`), `Ctrl+R`, `Ctrl+P/N` nav | Kit `Command` `Up/Down/Enter/Esc` + `HistoryPrevious/Next` capture; `Tab`/`Shift+Tab` and a repeat `Ctrl+R` cycle matches; `Ctrl+G` cancels and restores the draft | done (`ctrl_r_cycles…`, `tab_cycles_history…`, `ctrl_g_cancels…` tests) |
+| Picker cross-thread prompts (`Everyone/Project/Session` scopes, 200 cap) | `session/recent-prompts` merged under the live thread ("Other threads" section); each section ranked by the shared ranker and deduped against the live thread; one merged cap so recents cannot be starved; silent on older services | done (`prompt_history` tests) |
 | Picker attachment restore | text-only | gap (needs protocol surface) |
 
 ### Line editing / readline

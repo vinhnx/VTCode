@@ -346,3 +346,115 @@ fn scope_switcher_click_changes_scope_and_fetches(cx: &mut TestAppContext) {
     .unwrap();
     expect_recent_prompts_request(&mut requests, HistoryScope::Project);
 }
+
+#[gpui_kit::test]
+fn history_search_matches_non_contiguous_multi_word_query(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let target = "Implement current changes";
+    open_history_with_prompts(&window, &view, &["Review stale diffs", target, "cargo test"], cx);
+    // Neither token is contiguous in the target: Kit's substring matcher
+    // returned zero rows here, which is the divergence from the CLI fixed by
+    // the shared nucleo ranker.
+    set_history_query(&window, &view, "impl chg", cx);
+    cx.update_window(window, |_, _, cx| {
+        let matched = view.read(cx).palette.as_ref().expect("palette open").read(cx).matched_count();
+        assert_eq!(matched, 1, "fuzzy multi-token search must span the phrase");
+        let groups = section_contents(&view.read(cx).palette_groups);
+        assert_eq!(groups[0].1, vec![target.to_string()]);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_empty_query_lists_prompts_newest_first(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["oldest prompt", "middle prompt", "newest prompt"], cx);
+    cx.update_window(window, |_, _, cx| {
+        let groups = section_contents(&view.read(cx).palette_groups);
+        assert_eq!(
+            groups[0].1,
+            vec![
+                "newest prompt".to_string(),
+                "middle prompt".to_string(),
+                "oldest prompt".to_string()
+            ],
+            "an empty query keeps the newest-first source order"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn ctrl_r_cycles_through_matches_without_closing(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt", "gamma prompt"], cx);
+    let selected = |view: &Entity<DesktopView>, cx: &gpui_kit::App| {
+        view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index())
+    };
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        let first = selected(&view, cx);
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "ctrl-r cycles instead of closing");
+        let second = selected(&view, cx);
+        assert_ne!(first, second, "ctrl-r advances the highlight");
+        window.press("ctrl-r", cx);
+        window.render_frame(cx);
+        let third = selected(&view, cx);
+        assert_ne!(second, third, "ctrl-r keeps advancing");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn ctrl_g_cancels_prompt_history_and_keeps_the_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt"], cx);
+    cx.update_window(window, |_, window, cx| {
+        window.press("ctrl-g", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "ctrl-g dismisses the history palette");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn tab_cycles_history_matches_instead_of_accepting(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt", "gamma prompt"], cx);
+    let selected = |view: &Entity<DesktopView>, cx: &gpui_kit::App| {
+        view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index())
+    };
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        let first = selected(&view, cx);
+        window.press("tab", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "tab must not accept the row");
+        assert_ne!(first, selected(&view, cx), "tab cycles to the next match");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_rows_report_hidden_lines(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["single line", "first line\nsecond line\nthird line"], cx);
+    cx.update_window(window, |_, _, cx| {
+        let labels: Vec<String> = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .flat_map(|(_, entries)| entries.iter().map(|entry| entry.label.clone()))
+            .collect();
+        assert!(
+            labels.iter().any(|label| label.contains("+2 lines")),
+            "multi-line prompts advertise hidden lines: {labels:?}"
+        );
+        assert!(labels.iter().any(|label| label == "single line"), "single-line prompts stay bare");
+    })
+    .unwrap();
+}

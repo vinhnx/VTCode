@@ -556,14 +556,12 @@ fn ctrl_r_opens_prefiltered_prompt_history_with_toggle_and_restore(cx: &mut Test
         window.render_frame(cx);
         assert!(matches!(view.read(cx).palette_kind, super::super::PaletteKind::PromptHistory));
         assert!(view.read(cx).palette.is_some());
-        // Second press toggles closed; the draft is untouched.
+        // Second press keeps the palette open (CLI parity: Ctrl+R cycles); the
+        // seed matches one row, so the highlight stays on it.
         window.press("ctrl-r", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).palette.is_none());
-        assert_eq!(view.read(cx).composer.read(cx).value(), "stale");
-        // Reopen and accept: the draft-prefiltered match wins over recency order.
-        window.press("ctrl-r", cx);
-        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "ctrl-r must not dismiss the palette");
+        assert_eq!(view.read(cx).composer.read(cx).value(), "stale", "draft stays untouched");
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
         window.press("enter", cx);

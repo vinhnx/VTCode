@@ -275,8 +275,11 @@ impl Render for DesktopView {
                     view.open_conversation_search(session_id, window, cx);
                 }
             }))
-            .on_action(cx.listener(|view, _: &OpenPromptHistory, window, cx| view.open_prompt_history(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenPromptHistory, window, cx| {
+                view.on_prompt_history_shortcut(window, cx);
+            }))
             .on_action(cx.listener(|view, _: &CycleHistoryScope, window, cx| view.cycle_history_scope(window, cx)))
+            .on_action(cx.listener(|view, _: &CancelPromptHistory, window, cx| view.cancel_prompt_history(window, cx)))
             .on_action(cx.listener(|view, _: &TakeLatestQueued, window, cx| {
                 if view.composer.read(cx).focus_handle(cx).is_focused(window) {
                     view.take_latest_queued(cx);

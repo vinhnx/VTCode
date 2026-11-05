@@ -1,18 +1,27 @@
 use super::*;
-
-/// History-palette rows across every section (CLI `HistoryPickerState` parity:
-/// merged, deduplicated, truncated to 200).
-const MAX_PROMPT_HISTORY_ROWS: usize = 200;
+use vtcode_commons::prompt_history::{MAX_PROMPT_HISTORY_ROWS, prompt_history_row_label, rank_prompt_history};
 
 impl DesktopView {
+    /// Open the history palette for Ctrl+R.
+    ///
+    /// Pressing Ctrl+R again must *not* toggle the palette closed: the CLI
+    /// cycles to the next match on the same chord, so an already-open history
+    /// palette cycles here too (`on_prompt_history_shortcut`). Only the
+    /// trigger buttons use the toggle-close convention.
     pub(super) fn open_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.toggle_palette_kind(PaletteKind::PromptHistory, window, cx) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
             return;
         }
-        self.show_palette(PaletteKind::PromptHistory, self.history_palette_groups(), window, cx);
-        // CLI parity: seed the filter from the draft. Cancel-restore is
-        // automatic — the palette query is separate from the composer draft.
+        // CLI parity: seed the filter from the draft. The palette is built
+        // from the seed up front because `set_query` runs before the first
+        // render installs the model, so its `on_query` callback never fires
+        // and (with Kit filtering disabled) would leave the rows unfiltered.
+        // Cancel-restore is automatic — the palette query is separate from the
+        // composer draft.
         let seed = self.composer.read(cx).value().trim().to_string();
+        self.show_palette(PaletteKind::PromptHistory, self.history_palette_groups(&seed), window, cx);
+        // `show_palette` clears the query, so record the seed after it.
+        self.palette_query = seed.as_str().into();
         if !seed.is_empty() {
             if let Some(palette) = &self.palette {
                 palette.update(cx, |state, cx| state.set_query(seed, window, cx));
@@ -21,37 +30,72 @@ impl DesktopView {
         self.request_recent_prompts();
     }
 
-    /// Palette groups for Ctrl+R: the live thread first, then cached
-    /// cross-thread recents for the current scope. Merged newest-first,
-    /// deduplicated by content with the live thread winning, capped at
-    /// [`MAX_PROMPT_HISTORY_ROWS`] like the CLI picker. Session scope shows
-    /// the live thread only; other scopes add recents so brand-new sessions
-    /// offer history search instead of an empty palette.
-    fn history_palette_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
-        let mut seen = HashSet::new();
-        let mut thread = Vec::new();
-        for prompt in self.prompt_history_entries() {
-            if thread.len() == MAX_PROMPT_HISTORY_ROWS {
-                break;
+    /// Ctrl+R while the history palette is open: open it first, otherwise
+    /// cycle to the next match (CLI `KeyCode::Char('r') if CONTROL` parity).
+    pub(super) fn on_prompt_history_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
+            if !self.move_composer_suggestion(true, window, cx) {
+                // A query matching no rows has nothing to cycle: stay open so
+                // the user can edit the filter instead of losing the palette.
+                cx.notify();
             }
-            if seen.insert(prompt.clone()) {
-                thread.push(prompt);
-            }
+            return;
         }
+        self.open_prompt_history(window, cx);
+    }
+
+    /// Ctrl+G while the history palette is open: cancel and restore the draft
+    /// (CLI parity). Finished elsewhere by the palette `on_cancel` path so
+    /// focus returns through the same code as Escape.
+    pub(super) fn cancel_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
+            self.close_palette(window, cx);
+        }
+    }
+
+    /// Re-rank the history palette for `query`, driven from the palette's
+    /// `on_query` callback. The palette runs with Kit filtering disabled, so
+    /// these rows are exactly what the user sees; matching, ranking, dedup,
+    /// and capping all come from the shared CLI ranker.
+    pub(super) fn refresh_prompt_history(&mut self, query: &str, cx: &mut Context<Self>) {
+        if self.palette_kind != PaletteKind::PromptHistory || self.palette.is_none() {
+            return;
+        }
+        self.palette_query = query.into();
+        self.palette_groups = share_palette_commands(self.history_palette_groups(query));
+        cx.notify();
+    }
+
+    /// Palette groups for Ctrl+R: the live thread first, then cached
+    /// cross-thread recents for the current scope.
+    ///
+    /// Each source is ranked by the shared CLI ranker (nucleo fuzzy, scored,
+    /// deduplicated, capped at [`MAX_PROMPT_HISTORY_ROWS`]); duplicates keep
+    /// the live entry because it is ranked first. The two sections are kept
+    /// because they name the prompt's origin — the recents section would be
+    /// indistinguishable from this thread otherwise. Session scope shows the
+    /// live thread only; other scopes add recents so brand-new sessions offer
+    /// history search instead of an empty palette.
+    fn history_palette_groups(&self, query: &str) -> Vec<(String, Vec<PaletteCommand>)> {
+        let thread_prompts = self.prompt_history_entries();
+        let thread_candidates: Vec<&str> = thread_prompts.iter().map(String::as_str).collect();
+        let thread = ranked_prompt_rows(query, &thread_candidates);
+
         let mut others = Vec::new();
         if self.history_scope != HistoryScope::Session && self.recent_prompts_scope == Some(self.history_scope) {
-            for recent in &self.recent_prompts {
-                if thread.len() + others.len() == MAX_PROMPT_HISTORY_ROWS {
-                    break;
-                }
-                if recent.content.trim().is_empty() {
-                    continue;
-                }
-                if seen.insert(recent.content.clone()) {
-                    others.push(recent.content.clone());
-                }
-            }
+            // Dedup against every live prompt rather than only the ranked
+            // survivors: a prompt this thread already owns must not reappear
+            // as a recents row just because the query hid it above.
+            let in_thread: HashSet<&str> = thread_candidates.iter().copied().collect();
+            let recent_candidates: Vec<&str> = self
+                .recent_prompts
+                .iter()
+                .map(|recent| recent.content.as_str())
+                .filter(|content| !content.trim().is_empty() && !in_thread.contains(content))
+                .collect();
+            others = ranked_prompt_rows(query, &recent_candidates);
         }
+
         let mut groups = Vec::with_capacity(2);
         if !thread.is_empty() || others.is_empty() {
             groups.push((rust_i18n::t!("app.palette.sections.this_thread").to_string(), history_commands(thread)));
@@ -86,9 +130,10 @@ impl DesktopView {
 
     fn refresh_history_palette(&mut self) {
         if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
-            // Kit preserves the query and selection-by-path across model
-            // reinstalls; the recents section only appends rows.
-            self.palette_groups = share_palette_commands(self.history_palette_groups());
+            // Re-rank with the live query so a scope switch or a late recents
+            // response keeps the current filter instead of resetting it.
+            let query = self.palette_query.to_string();
+            self.palette_groups = share_palette_commands(self.history_palette_groups(&query));
         }
     }
 
@@ -268,17 +313,31 @@ impl DesktopView {
     }
 }
 
-/// History rows show the truncated first-line title but match against the full
-/// prompt: Kit filters label + keywords by substring, so without the keyword
-/// multi-line bodies and text past the 72-char title cut are unfindable.
-fn history_commands(prompts: Vec<String>) -> Vec<PaletteCommand> {
-    prompts
+/// One ranked prompt row: the prompt text plus its `· +N lines` display label.
+struct RankedPromptRow {
+    prompt: String,
+    label: String,
+}
+
+/// Rank `candidates` with the shared CLI ranker and build display rows.
+///
+/// The palette runs with Kit filtering disabled, so no keyword mirroring is
+/// needed here: matching already happened before the rows were built.
+fn ranked_prompt_rows(query: &str, candidates: &[&str]) -> Vec<RankedPromptRow> {
+    rank_prompt_history(query, candidates, MAX_PROMPT_HISTORY_ROWS)
         .into_iter()
-        .map(|prompt| {
-            let mut entry =
-                command(session_title_from_prompt(&prompt), PaletteAction::InsertHistoryPrompt(prompt.clone()));
-            entry.shared_keywords.push(prompt.into());
-            entry
+        .filter_map(|index| candidates.get(index).copied())
+        .map(|prompt| RankedPromptRow {
+            prompt: prompt.to_owned(),
+            label: prompt_history_row_label(prompt, ""),
         })
+        .collect()
+}
+
+/// History rows render the collapsed first-line label; accepting the row
+/// restores the full prompt.
+fn history_commands(rows: Vec<RankedPromptRow>) -> Vec<PaletteCommand> {
+    rows.into_iter()
+        .map(|row| command(row.label, PaletteAction::InsertHistoryPrompt(row.prompt)))
         .collect()
 }
