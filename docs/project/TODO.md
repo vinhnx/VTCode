@@ -16,54 +16,15 @@ https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
 
 ---
 
-layout preference (zen vs non-zen) modes should be persisted between apps launches. not override
-
----
-
 gpui apps for other plqtforms
 
 
----
-
-fix the alignments '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 12.31.15 PM.png'
-
-
-----
-
-CRITICAL: check apply_patch tool. it seems the tool having a lot of error and trouble for vtcode to work fast/reliable/and smooth. a normal patch seems having a lot of errors and round trip before the patch can be apply. Help me reason through this problem step by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the simplest practical approach before implementation.
-
-session: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261105T052554Z_128122-45584
-
----
-
-implement lazy loading for threads data and heavy listing for all places on desktop app.
-
----
-
-fix and match the force stop run and background processs to match the idle run button on the chat input design. also update all the primary/secondary/iterary/ghost design to follow macos 27 modern design guideline and make it more premium. current design are too bland. build and update the app componnets again
-
---
-
-adjust the main container width for comformtable read.
-
----
-
-click on a notification should deeplink and open to the related information.
-
----
-
-remove the icons in tool summarization '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 10.35.25 AM.png'
-
----
 ---
 
 
 implement /doctor command. https://code.claude.com/docs/en/skills#check-your-setup-with-/doctor
 
 ---
-
-cli: improve line height markdown tui and spacing, currently the text and paragraphs seems too cramp and dense. can we improve to make it comfortable to read on the TUI ternimal? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 11.17.05 AM.png'
-
 ---
 
 gpui-fast-linux, gpui-fast-windows, gpui-fast-web, gpui-fast-macos
@@ -98,8 +59,6 @@ desktop and cli, implement enter to jump to latest message, but only when chat i
 
 ---
 
----
-
 https://github.com/longbridge/gpui-kit/releases/tag/v0.9.0
 
 ---
@@ -111,15 +70,49 @@ contribute back to OSS with learning from this project. check gotchas and decici
 https://github.com/vinhnx/VTCode/issues/803
 
 ---
+
+improve the transcript UI
+
+1. remove the marker deviders for the messages '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.46.19 PM.png'
+2. Implement auto grouped summarization when turn end and finialized. Idea: when the agent complete the turn with a a final summarization message. show it only as one agent message per user's message in the transcript. then group all the work log, tool call thinking and trace under a collapsible group UI. reference: Codex OpenAI.
+a. collapsed  '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.46.42 PM.png'. b. expanded: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.49.06 PM.png'.
+3. add a files changes summirzation component and show in the bottom of agent's message. idea: move the existing component for Utils pane and move here, CTA should just deep link to the Utils pane/tab. with files changes, views changes, and an Undo changes mechanism if possible -> think and design this logic with a confirm.
+4. Under that show a current clock like cli.
+
+the goal is a clean focused and simplified minified transcript log only.
+
+KISS and DRY.
+
+Help me reason through this problem step by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the simplest practical approach before implementation. 
+
 ---
 
 note integrate pele to desktop app
 
+https://pele.run/
+
 ---
----
+
+advanced: implement live PTY Shell readonly viewer component for live stdio/error events with short and condensed view in the desktop app. check VT Code's component and try to port to desktop app.
+
+reference this design component from Codex. 
+
+'/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.40.47 PM.png'
+
+replace the current JSON tool transcript display in the app with new component
+
 ---
 
 build and replace/revamp current desktop app components where suitable https://gpui-kit.com/component/dropdown_button/
+
+---
+
+improve the design of the current HITL container component. maybe remove the yello warning background tone and refine and revamp each of the element and design. reference Codex OpenAI design: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 4.07.32 PM.png'
+
+---
+
+implement message queue/steer behavior and configuable in settings. this behavior shapes how message enter the queue when user press enter when a transcript loop is running. default to queue.
+
 
 ---
 
@@ -212,8 +205,12 @@ https://gpui-kit.com/component/focus-trap/
 
 ---
 
-check and fix splitting the two 1000+ line
-  files — is large surgery in view/
+check and fix splitting the two 1000+ line files — is large surgery in view/
+
+---
+
+improve the desktop app message queue UI. check and reference '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.34.09 PM.png'
+
 ---
 
 plan: gpui cross-platform (mac-only today -> linux-first, defer windows/web)
@@ -245,8 +242,3 @@ phase 3 - only on demand signal: linux preview tarball, no auto-update, document
 verify: manual QA checklist (WCAG AA 4.5:1, 20 locales, keyboard/focus/Escape, trash fail-closed, launch argv boundary).
 
 non-goals: no windows packaging/signing now; no auto-update for linux preview; no behavior change on mac.
-
-
----
-
-gpui-web
