@@ -12,29 +12,15 @@ https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
 
 ---
 
-also refine the overall design system for more modern macos 27 look and feels. check apple guidelines.
+gpui apps for other plqtforms
 
 ---
 
 implement lazy loading for threads data and heavy listing for all places on desktop app.
 
 ---
-
-fix tool call display being raw on the HITL popup on desktop. can we syntax highlight it? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 9.50.38 AM.png'
-
 ---
-
-check and improve the model reasoning effort UI. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 10.23.13 AM.png' it doesn't look good. find another UI component for more modern and premium. also use theme's accent. make it easy to use
-
 --
-
-check stop and cancel active run on desktop doesn't work and doesn't end the session. the element and loading global state still showing as active running. find and fix and improve the force stop active loop
-
----
-
-check content overflow on HITL popup if content is too wide '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 9.46.09 AM.png'
-
----
 
 adjust the main container width for comformtable read.
 
@@ -83,9 +69,6 @@ https://github.com/vinhnx/VTCode/issues/803
 note integrate pele to desktop app
 
 ---
-
-update readme and docs show badges and bullet list all vtcode platforms
-
 ---
 ---
 
