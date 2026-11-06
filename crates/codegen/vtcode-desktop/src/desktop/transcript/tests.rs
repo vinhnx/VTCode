@@ -810,6 +810,19 @@ fn tool_row_gist_renders_commands_and_queries_bare() {
 }
 
 #[test]
+fn tool_row_gist_renders_all_launch_tools_like_exec_command() {
+    use serde_json::json;
+    // Mirrors `tool_intent::is_command_run_tool_call`: every launch tool shows its
+    // command bare and classifies Run so its output merges into its row.
+    for name in ["run_pty_cmd", "create_pty_session", "shell", "bash"] {
+        assert_eq!(gist(name, json!({"command": "cargo check"})), "cargo check");
+        let details =
+            ThreadItemDetails::ToolInvocation(Box::new(invocation_item(name, Some(json!({"command": "cargo check"})))));
+        assert_eq!(ToolCategory::from_details(&details), Some(ToolCategory::Run), "{name}");
+    }
+}
+
+#[test]
 fn tool_row_gist_falls_back_to_raw_tool_name() {
     use serde_json::json;
     assert_eq!(tool_row_gist(&invocation_item("read_file", None)), "read_file");
@@ -829,7 +842,6 @@ fn tool_row_gist_falls_back_to_raw_tool_name() {
     // Other-category tools keep raw names even with file-shaped args.
     assert_eq!(gist("task_tracker", json!({"path": "plan.md"})), "task_tracker");
     assert_eq!(gist("request_user_input", json!({"query": "color?"})), "request_user_input");
-    assert_eq!(gist("read_pty_session", json!({"session_id": "run-1"})), "read_pty_session");
 }
 
 #[test]
@@ -840,9 +852,42 @@ fn tool_row_gist_covers_unified_and_mcp_names() {
     assert_eq!(gist("command_session_internal", json!({"action": "run", "cmd": "ls"})), "ls");
     assert_eq!(
         gist("command_session_internal", json!({"action": "poll", "session_id": "run-1"})),
-        "command_session_internal"
+        "Read command session"
     );
     assert_eq!(gist("mcp__github__read_file", json!({"path": "issues.md"})), "Read issues.md");
+}
+
+#[test]
+fn tool_row_gist_titles_session_followups_like_cli() {
+    use serde_json::json;
+    // Fixed follow-up labels.
+    assert_eq!(gist("send_pty_input", json!({"session_id": "s"})), "Send command input");
+    assert_eq!(gist("read_pty_session", json!({"session_id": "run-1"})), "Read command session");
+    // write_stdin: explicit actions win; otherwise input sniffing decides.
+    assert_eq!(gist("write_stdin", json!({"action": "wait", "session_id": "s"})), "Wait for command session");
+    assert_eq!(gist("write_stdin", json!({"session_id": "s", "input": "ls"})), "Send command input");
+    assert_eq!(gist("write_stdin", json!({"session_id": "s"})), "Read command session");
+    // Asymmetric: explicit write with empty input polls instead of sending.
+    assert_eq!(
+        gist("write_stdin", json!({"action": "write", "session_id": "s", "input": ""})),
+        "Read command session"
+    );
+    assert_eq!(
+        gist("write_stdin", json!({"action": "write", "session_id": "s", "input": "ls"})),
+        "Send command input"
+    );
+    // Unified action labels; launches keep the bare-command gist.
+    assert_eq!(
+        gist("command_session_internal", json!({"action": "wait", "session_id": "s"})),
+        "Wait for command session"
+    );
+    assert_eq!(gist("command_session_internal", json!({"code": "print(1)"})), "Run code");
+    assert_eq!(gist("command_session_internal", json!({"action": "frobnicate"})), "Exec action");
+    // MCP-wrapped session tools strip to the same titles.
+    assert_eq!(
+        gist("mcp__tmux__write_stdin", json!({"action": "wait", "session_id": "s"})),
+        "Wait for command session"
+    );
 }
 
 #[test]

@@ -361,6 +361,40 @@ fn expanded_tool_rows_show_argument_gists_not_registry_names(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
+fn expanded_tool_rows_show_summaries_not_json_dumps(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem};
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let item = ThreadItem {
+            context: None,
+            id: "read-1".into(),
+            details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+                tool_name: "read_file".into(),
+                arguments: Some(serde_json::json!({"path": "src/Cargo.toml", "limit": 50})),
+                tool_call_id: None,
+                status: ToolCallStatus::Completed,
+                outcome: None,
+            })),
+        };
+        view.update(cx, |view, _| {
+            view.update_runtime_item(&item);
+        });
+        window.render_frame(cx);
+        window.click("tool-read-1", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("tool-read-1").label(), Some("Hide details for Read Cargo.toml, status: completed"));
+        let tool_body = window.find("tool-output-read-1");
+        let body = tool_body.label().unwrap();
+        assert!(body.contains("Limit: 50"), "relevant parameter survives: {body}");
+        for marker in ["\"tool_name\"", "\"arguments\"", "{\n"] {
+            assert!(!body.contains(marker), "no JSON dump marker {marker:?} in {body:?}");
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn activity_group_cta_recedes_until_hover_or_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

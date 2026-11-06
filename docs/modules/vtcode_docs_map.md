@@ -499,10 +499,10 @@ below based on the topic area.
 
 - **File**: `docs/development/tool-summary-display.md`
   - **Content**: Tool Summary Display
-  - **Topics**: Exec-session calls (`write_stdin` and the session readers), Model-visible tool output budget, Guardrails
-    quick reference
-  - **User Questions**: "What can you tell me about Tool Summary Display?", "How does Exec-session calls (`write_stdin`
-    and the session readers) work?", "How does Model-visible tool output budget work?"
+  - **Topics**: Desktop parity, Exec-session calls (`write_stdin` and the session readers), Model-visible tool output
+    budget, Guardrails quick reference
+  - **User Questions**: "What can you tell me about Tool Summary Display?", "How does Desktop parity work?", "How does
+    Exec-session calls (`write_stdin` and the session readers) work?"
 
 - **File**: `docs/development/tool-execution-pipeline.md`
   - **Content**: Tool execution pipeline ownership

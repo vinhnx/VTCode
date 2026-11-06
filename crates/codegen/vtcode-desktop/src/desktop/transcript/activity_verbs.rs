@@ -49,12 +49,15 @@ impl ToolCategory {
         Some(category)
     }
 
-    fn from_tool_name(tool_name: &str, args: Option<&serde_json::Value>) -> Self {
+    pub(super) fn from_tool_name(tool_name: &str, args: Option<&serde_json::Value>) -> Self {
         match strip_mcp_prefix(tool_name) {
             "read_file" | "read_pty_session" | "web_fetch" | "fetch_url" | "defuddle_fetch" | "fetch"
             | "get_errors" | "list_files" => Self::Read,
             "edit_file" | "write_file" | "create_file" | "delete_file" | "apply_patch" | "search_replace" => Self::Edit,
-            "exec_command" => Self::Run,
+            // Command launches render and merge like `exec_command`, mirroring
+            // `tool_intent::is_command_run_tool_call` (its `EXEC_COMMAND` arm needs a
+            // command field; these four are launches unconditionally).
+            "exec_command" | "run_pty_cmd" | "create_pty_session" | "shell" | "bash" => Self::Run,
             "code_search" | "grep" | "grep_file" => Self::Search,
             // Internal unified tools dispatch on their action arg; a missing
             // action reads (file) or runs (exec), matching `tool_action_label`.
@@ -157,16 +160,138 @@ fn verb_part(count: usize, verb: &str, singular: &str, plural: &str) -> String {
     format!("{verb} {count} {}", if count == 1 { singular } else { plural })
 }
 
+/// Action-aware title for exec-session follow-up calls ("Wait for command session").
+///
+/// Mirrors the service-side session labels (`write_stdin_action_label` and
+/// `unified_exec_action_label` in `vtcode-core/src/tools/registry/labels.rs`) plus the
+/// fixed follow-up labels. Returns `None` for launches and non-session tools so the
+/// caller falls through to the argument gist, which is more specific than a generic
+/// label. `Some` also doubles as the session predicate for detail lines: a titled call
+/// renders the one-line session row. English literals, same rule as the group verbs.
+pub(super) fn session_tool_title(tool_name: &str, args: Option<&serde_json::Value>) -> Option<String> {
+    match strip_mcp_prefix(tool_name) {
+        "send_pty_input" => Some("Send command input".to_string()),
+        "read_pty_session" => Some("Read command session".to_string()),
+        "write_stdin" => Some(write_stdin_title(args)),
+        "command_session_internal" => unified_exec_title(args),
+        _ => None,
+    }
+}
+
+/// Mirror of `write_stdin_action_label`: explicit actions win, otherwise input
+/// sniffing decides send vs read so pure waits never misrender as sends.
+fn write_stdin_title(args: Option<&serde_json::Value>) -> String {
+    if let Some(action) = args.and_then(|args| unified_action(Some(args))) {
+        if action.eq_ignore_ascii_case("wait") {
+            return "Wait for command session".to_string();
+        }
+        if action.eq_ignore_ascii_case("poll") {
+            return "Read command session".to_string();
+        }
+        if action.eq_ignore_ascii_case("inspect") {
+            return "Inspect command output".to_string();
+        }
+        if action.eq_ignore_ascii_case("close") {
+            return "Close command session".to_string();
+        }
+        if action.eq_ignore_ascii_case("terminate") {
+            return "Terminate command session".to_string();
+        }
+        if action.eq_ignore_ascii_case("write") {
+            // Explicit write with empty/missing input polls instead of sending.
+            return if has_session_input(args) {
+                "Send command input".to_string()
+            } else {
+                "Read command session".to_string()
+            };
+        }
+    }
+    if has_session_input(args) {
+        "Send command input".to_string()
+    } else {
+        "Read command session".to_string()
+    }
+}
+
+/// Mirror of `unified_exec_action_label`, except launches return `None` so the gist
+/// keeps rendering the bare command.
+fn unified_exec_title(args: Option<&serde_json::Value>) -> Option<String> {
+    let action = session_action(args).unwrap_or("run");
+    if action.eq_ignore_ascii_case("run") {
+        None
+    } else if action.eq_ignore_ascii_case("write") {
+        Some("Send command input".to_string())
+    } else if action.eq_ignore_ascii_case("poll") {
+        Some("Read command session".to_string())
+    } else if action.eq_ignore_ascii_case("wait") {
+        Some("Wait for command session".to_string())
+    } else if action.eq_ignore_ascii_case("continue") {
+        Some("Continue command session".to_string())
+    } else if action.eq_ignore_ascii_case("inspect") {
+        Some("Inspect command output".to_string())
+    } else if action.eq_ignore_ascii_case("list") {
+        Some("List command sessions".to_string())
+    } else if action.eq_ignore_ascii_case("close") {
+        Some("Close command session".to_string())
+    } else if action.eq_ignore_ascii_case("code") {
+        Some("Run code".to_string())
+    } else {
+        Some("Exec action".to_string())
+    }
+}
+
+/// Mirror of `tool_intent::command_session_action` for display routing. Omits the
+/// indexed-command-parts probe (`command_args` lives in vtcode-core, which the desktop
+/// app must not depend on): indexed launches without an explicit action or a standard
+/// command field fall through to the raw-name gist.
+fn session_action(args: Option<&serde_json::Value>) -> Option<&str> {
+    let args = args?;
+    if let Some(action) = unified_action(Some(args)) {
+        return Some(action);
+    }
+    if args.get("command").is_some() || args.get("cmd").is_some() || args.get("raw_command").is_some() {
+        return Some("run");
+    }
+    if args.get("code").is_some() {
+        return Some("code");
+    }
+    if args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some() {
+        return Some("write");
+    }
+    if args.get("spool_path").is_some()
+        || args.get("query").is_some()
+        || args.get("head_lines").is_some()
+        || args.get("tail_lines").is_some()
+        || args.get("max_matches").is_some()
+        || args.get("literal").is_some()
+    {
+        return Some("inspect");
+    }
+    None
+}
+
+/// Mirror of the service `has_session_input`: non-empty payload under the input keys.
+fn has_session_input(args: Option<&serde_json::Value>) -> bool {
+    ["chars", "input", "text"].iter().any(|key| {
+        args.and_then(|args| args.get(key))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|s| !s.is_empty())
+    })
+}
+
 /// One-line outcome gist for a tool row ("Read Cargo.toml", "cargo check").
 ///
-/// Read/Edit rows take the shared header verbs plus the argument's basename —
-/// a bare filename cannot tell read from write, so only these two categories
-/// take a verb. Run/Search rows render the command or query bare, matching
-/// their `CommandExecution`/`WebSearch` siblings. Anything without a usable
-/// object (missing, empty, or mistyped args, `Other` tools) keeps the raw
-/// tool name, never worse than today.
+/// Session follow-ups take their action-aware title first. Read/Edit rows take the
+/// shared header verbs plus the argument's basename — a bare filename cannot tell
+/// read from write, so only these two categories take a verb. Run/Search rows render
+/// the command or query bare, matching their `CommandExecution`/`WebSearch` siblings.
+/// Anything without a usable object (missing, empty, or mistyped args, `Other` tools)
+/// keeps the raw tool name, never worse than today.
 pub(crate) fn tool_row_gist(tool: &ToolInvocationItem) -> String {
     let args = tool.arguments.as_ref();
+    if let Some(title) = session_tool_title(&tool.tool_name, args) {
+        return title;
+    }
     let category = ToolCategory::from_tool_name(&tool.tool_name, args);
     let gist = match category {
         ToolCategory::Read => args.and_then(read_object).map(|object| format!("Read {object}")),

@@ -302,8 +302,8 @@ impl DesktopView {
                 let Some(row) = self.restored_activity.get_mut(index) else {
                     return;
                 };
-                let rest = row.text.split_once('\n').map_or("", |(_, rest)| rest);
-                row.text = format!("{status}\n{rest}").into();
+                let payload = activity_payload(&row.text);
+                row.text = activity_text(&status, payload).into();
                 row.output = Some(output.output.as_str().into());
                 row.output_item_id = Some(item.id.clone());
                 row.app_previews.clone_from(&output.app_previews);
@@ -320,9 +320,9 @@ impl DesktopView {
                     .and_then(|index| self.transcript.get(index))
             {
                 let title = row.title.to_string();
-                let details = row.text.split_once('\n').map_or("", |(_, rest)| rest);
+                let payload = activity_payload(&row.text);
                 let status = describe_activity(&item.details).1;
-                let text = format!("{status}\n{details}");
+                let text = activity_text(&status, payload);
                 self.append_or_update_item(row_id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
                 self.transcript.set_output(&row_id, Some(output.output.as_str().into()));
                 self.transcript.set_output_identity(&row_id, &item.id);
@@ -369,15 +369,11 @@ impl DesktopView {
                 if historical && ActivityState::from_status(&status) == ActivityState::Running {
                     status = tool_status::INTERRUPTED.to_string();
                 }
-                let payload = activity_details_payload(details);
-                let text = format!("{status}\n\n{payload}");
+                let payload = activity_details_summary(details, self.workspace.as_deref());
+                let text = activity_text(&status, &payload);
                 // Keep the raw aggregated output for the inspector's Output
                 // tab; it updates in place as streaming events arrive.
-                let output = match details {
-                    ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.as_str().into()),
-                    ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.as_str().into()),
-                    _ => None,
-                };
+                let output = activity_output_text(details).map(gpui_kit::SharedString::from);
                 let app_previews = match details {
                     ThreadItemDetails::ToolOutput(tool_output) => tool_output.app_previews.clone(),
                     _ => Vec::new(),
@@ -645,54 +641,6 @@ fn status_with_exit_code(status: String, exit_code: Option<i32>) -> String {
     } else {
         status
     }
-}
-
-#[derive(serde::Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum ActivityDetailsMetadata<'a> {
-    CommandExecution {
-        command: &'a str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        arguments: Option<&'a Value>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        exit_code: Option<&'a i32>,
-        status: &'a vtcode_exec_events::CommandExecutionStatus,
-    },
-    ToolOutput {
-        call_id: &'a str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        tool_call_id: Option<&'a str>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        spool_path: Option<&'a str>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        exit_code: Option<&'a i32>,
-        status: &'a vtcode_exec_events::ToolCallStatus,
-    },
-}
-
-/// Keep large tool output out of the metadata serialization path.
-pub(super) fn activity_details_payload(details: &vtcode_exec_events::ThreadItemDetails) -> String {
-    use vtcode_exec_events::ThreadItemDetails;
-
-    let serialized = match details {
-        ThreadItemDetails::CommandExecution(command) => {
-            serde_json::to_string_pretty(&ActivityDetailsMetadata::CommandExecution {
-                command: &command.command,
-                arguments: command.arguments.as_ref(),
-                exit_code: command.exit_code.as_ref(),
-                status: &command.status,
-            })
-        }
-        ThreadItemDetails::ToolOutput(output) => serde_json::to_string_pretty(&ActivityDetailsMetadata::ToolOutput {
-            call_id: &output.call_id,
-            tool_call_id: output.tool_call_id.as_deref(),
-            spool_path: output.spool_path.as_deref(),
-            exit_code: output.exit_code.as_ref(),
-            status: &output.status,
-        }),
-        _ => serde_json::to_string_pretty(details),
-    };
-    serialized.unwrap_or_else(|_| "{}".to_string())
 }
 
 fn tool_status_label(status: &vtcode_exec_events::ToolCallStatus) -> String {

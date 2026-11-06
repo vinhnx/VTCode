@@ -10,7 +10,9 @@ use super::markdown::prepare_markdown;
 mod activity;
 mod activity_verbs;
 mod output;
+mod tool_summary;
 pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs, tool_row_gist};
+pub(super) use tool_summary::{activity_details_summary, activity_output_text, activity_payload, activity_text};
 
 pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
 

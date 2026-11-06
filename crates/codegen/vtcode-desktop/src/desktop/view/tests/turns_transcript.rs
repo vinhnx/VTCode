@@ -763,55 +763,37 @@ fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
 }
 
 #[test]
-fn activity_details_omit_tool_output_from_the_metadata_copy() {
+fn tool_summaries_keep_captured_output_out_of_details() {
     use vtcode_exec_events::{
         CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem,
     };
 
+    // Details stay empty: call identities and exit codes are not user content, and
+    // the captured text belongs to the output body alone.
+    let body = "large captured result".repeat(32);
     let details = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
         is_delta: None,
         call_id: "call-1".into(),
         tool_call_id: Some("provider-call-1".into()),
         spool_path: Some(".vtcode/tool-outputs/call-1".into()),
-        output: "large captured result".repeat(32),
+        output: body.clone(),
         exit_code: Some(0),
         status: ToolCallStatus::Completed,
         app_previews: Vec::new(),
     }));
-    let payload = super::super::activity_details_payload(&details);
+    assert_eq!(super::super::activity_details_summary(&details, None), "");
+    assert_eq!(super::super::activity_output_text(&details).as_deref(), Some(body.as_str()));
 
-    assert!(payload.contains("call-1"), "tool identity remains available in metadata");
-    assert!(!payload.contains("large captured result"), "the separate output field owns captured text");
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
-        json!({
-            "type": "tool_output",
-            "call_id": "call-1",
-            "tool_call_id": "provider-call-1",
-            "spool_path": ".vtcode/tool-outputs/call-1",
-            "exit_code": 0,
-            "status": "completed"
-        })
-    );
-
+    let aggregated = "discarded command output".repeat(64);
     let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
         command: "cargo check".into(),
         arguments: Some(json!({ "cwd": "/workspace" })),
-        aggregated_output: "discarded command output".repeat(64),
+        aggregated_output: aggregated.clone(),
         exit_code: None,
         status: CommandExecutionStatus::InProgress,
     }));
-    let payload = super::super::activity_details_payload(&command);
-    assert!(!payload.contains("discarded command output"));
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
-        json!({
-            "type": "command_execution",
-            "command": "cargo check",
-            "arguments": { "cwd": "/workspace" },
-            "status": "in_progress"
-        })
-    );
+    assert_eq!(super::super::activity_details_summary(&command, None), "");
+    assert_eq!(super::super::activity_output_text(&command).as_deref(), Some(aggregated.as_str()));
 }
 
 #[test]
