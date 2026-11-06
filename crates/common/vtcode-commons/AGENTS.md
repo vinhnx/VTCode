@@ -7,7 +7,7 @@
 
 - Paths/fs: `paths/`, `fs/`, `vtcode_paths/`, `vtcode_paths_migration.rs`, `vtcodegitignore.rs`, `walk.rs` | errors: `errors.rs`, `error_category/`, `misconfiguration.rs`, `retry.rs`.
 - Text: `formatting/`, `sanitizer.rs`, `validation.rs`, `search.rs`, `tokens.rs`, `unicode.rs`, `utf8_stream.rs` | display: `ansi.rs`, `colors.rs`, `styling.rs`, `diff_theme.rs`.
-- Runtime: `http.rs`, `task_guard.rs`, `async_utils.rs`, `runtime_diagnostics.rs`, `line_framing.rs` | UI/LLM: `ui_protocol/`, `program_status/`, `llm/` | test adapters: `reference.rs`.
+- Runtime: `http.rs`, `task_guard.rs`, `async_utils.rs`, `runtime_diagnostics.rs`, `line_framing.rs` | UI/LLM: `ui_protocol/`, `program_status/`, `llm/`, `history_scope.rs` | test adapters: `reference.rs`.
 
 ## Rules
 
@@ -20,6 +20,7 @@
 - Canonical helpers (`formatting/`, `search/`, `validation/`, `task_guard`, `utils::env_flag_enabled`, `llm::Usage::billable_totals`) are the single homes, so downstream crates delegate rather than re-implement.
 - `Utf8StreamDecoder` (`utf8_stream`) is the single chunked UTF-8 decoder: never `from_utf8_lossy` one read chunk, since a character split across reads becomes U+FFFD; use `push_cow` in hot loops and `finish()` at EOF.
 - Keep `ui_protocol::tool_summary` and `ui_protocol::progress` out of `ThreadEvent` and independent of TUI/runtime types.
+- `HistoryScope` (`history_scope`) is the single prompt-history scope model (labels, Ctrl+S cycle order, wire values) for the CLI picker, desktop palette, and desktop service; never fork per-surface copies.
 
 ## Gotchas
 
