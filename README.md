@@ -5,7 +5,7 @@
 
 <p>
   <sub>Terminal-first. Desktop-ready.</sub><br />
-  <sub>Explore, plan, edit, and verify; all with the model you choose.</sub>
+  <sub>Explore, plan, edit, and verify with your model of choice.</sub>
 </p>
 
 [![Rust](https://img.shields.io/badge/rust-1.99.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
@@ -37,7 +37,7 @@
 ## Overview
 
 VT Code is a terminal-first coding agent for your repository, available in the CLI and its native macOS app.
-It owns context, tool calls, and execution policy, so long tasks stay auditable and resumable.
+It owns context, tool calls, and execution policy so long tasks stay auditable and resumable.
 
 | At a glance      | What you get                                                                    |
 | ---------------- | ------------------------------------------------------------------------------- |
@@ -62,8 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.
 Or install with Homebrew or Cargo:
 
 ```bash
-brew trust vinhnx/tap
-brew install vinhnx/tap/vtcode
+brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
 
 # Desktop app (macOS 15+, Apple Silicon)
 brew install --cask vinhnx/tap/vtcode-desktop
@@ -93,8 +92,8 @@ vtcode secret add openai   # stores your OpenAI API key in secure storage
 
 Replace `openai` with your provider. Keys use secure storage (OS keyring or encrypted file); alternatives are
 environment variables, a workspace `.env` file, or `vtcode login` where supported. Start with
-[getting started](./docs/user-guide/getting-started.md), then see the
-[provider guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific setup.
+[getting started](./docs/user-guide/getting-started.md), then see the [provider
+guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific setup.
 
 > **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow;
 > prefer your own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
@@ -132,8 +131,8 @@ outcome without another model call. See the [interactive guide](./docs/user-guid
 ### Modes
 
 - **`ask`** is tool-free: it prints one reply and exits.
-- **`exec`** runs the full tool loop and requires explicit workspace trust: `[automation.full_auto]` plus
-  `full_auto` trust. Interactive terminals prompt for trust; non-TTY runs need
+- **`exec`** runs the full tool loop and requires explicit workspace trust: persisted `full_auto` trust plus an
+  enabled `[automation.full_auto]` section. Interactive terminals prompt for trust; non-TTY runs need
   `VTCODE_TRUST_WORKSPACE=full-auto`. Tool allow-lists, explicit denies, and execution policy still apply.
 - **`review`** inspects uncommitted changes.
 
@@ -155,9 +154,9 @@ On Apple Silicon, install it with Homebrew (updates with `brew upgrade --cask vi
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
-Without Homebrew, download the app from the
-[latest release](https://github.com/vinhnx/VTCode/releases/latest) or run `vtcode desktop --install`. Launch it
-with `vtcode desktop` or from Finder. Intel Macs build from source.
+Without Homebrew, download the app from the [latest
+release](https://github.com/vinhnx/VTCode/releases/latest) or run `vtcode desktop --install`. Launch it with
+`vtcode desktop` or from Finder. Intel Macs build from source.
 
 > [!WARNING]
 > **First launch needs a one-time macOS security approval.** Builds are ad hoc signed, not notarized, so macOS blocks
@@ -195,9 +194,8 @@ Start from the [documentation index](./docs/INDEX.md) or
 
 - [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), [MCP](./docs/guides/mcp-integration.md)
 - [MCP interop](./docs/guides/mcp-interop.md) for client and server maintainers
-- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md)
-  ([deployment](./docs/reference/webmcp.md)), [Companion](./docs/user-guide/vtcode-companion.md), and
-  [Memcode](./docs/guides/memcode-mcp.md)
+- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md) ([deployment](./docs/reference/webmcp.md)),
+  [Companion](./docs/user-guide/vtcode-companion.md), and [Memcode](./docs/guides/memcode-mcp.md)
 
 ### Develop and evaluate
 

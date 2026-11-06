@@ -380,9 +380,15 @@ pub(super) fn navigation_evidence(
     let ToolExecutionStatus::Success { output, command_success: true, .. } = &outcome.status else {
         return None;
     };
-    if ["truncated", "output_truncated"]
-        .iter()
-        .any(|key| output.get(key).and_then(serde_json::Value::as_bool) == Some(true))
+    // Spool output may be a head/tail preview, and the model-facing response
+    // can replace it with a reference. Neither establishes positioned rows.
+    if output
+        .get("spool_path")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|path| !path.trim().is_empty())
+        || ["truncated", "output_truncated", "is_truncated", "result_ref_only"]
+            .iter()
+            .any(|key| output.get(key).and_then(serde_json::Value::as_bool) == Some(true))
         || output_has_error_signal(output)
     {
         return None;
@@ -417,6 +423,13 @@ pub(super) fn navigation_evidence(
         // never be fingerprinted as positioned evidence. Loop guards still
         // count such reads via path/slice; only evidence needs verbatim.
         if !target.verbatim {
+            return None;
+        }
+        // This tracker runs before model-facing reduction. Reject the entire
+        // result when that reducer would truncate it, rather than crediting
+        // rows that the provider never receives.
+        let reduced = vtcode_core::core::agent::result_reducers::reduce_tool_result(canonical_name, output.clone());
+        if reduced.get("is_truncated").and_then(serde_json::Value::as_bool) == Some(true) {
             return None;
         }
         output.get("output")?.as_str()?.lines().enumerate().map(|(offset, text)| {

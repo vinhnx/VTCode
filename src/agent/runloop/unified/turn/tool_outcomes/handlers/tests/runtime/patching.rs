@@ -1,6 +1,46 @@
 use super::*;
 
 #[tokio::test]
+async fn redundant_inspection_coaching_preserves_authorized_patch() {
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::update_repetition_tracker;
+
+    let mut backing = TestContextBacking::new(4).await;
+    backing.select_build_primary_agent();
+    let sample_file = backing.sample_file.clone();
+    std::fs::write(&sample_file, "first\nsecond\n").expect("write fixture");
+    let patch_args = json!({
+        "input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-first\n+updated\n*** End Patch\n"
+    });
+    cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &patch_args, PermissionGrant::Permanent).await;
+    let mut tracker = LoopTracker::new();
+    let args = json!({"cmd":"sed -n '1,2p' sample.txt"});
+    let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+        output: json!({"output":"first\nsecond\n", "exit_code":0}),
+        stdout: None,
+        modified_files: vec![],
+        command_success: true,
+    });
+    for _ in 0..2 {
+        update_repetition_tracker(&mut tracker, &outcome, tool_names::EXEC_COMMAND, &args);
+    }
+    let notice = tracker
+        .take_redundant_navigation_guidance()
+        .expect("repeated evidence guidance");
+    let mut ctx = backing.turn_processing_context();
+    ctx.push_system_message(notice);
+    let mut modified_files = BTreeSet::new();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut tracker,
+        turn_modified_files: &mut modified_files,
+    };
+    handle_single_tool_call(&mut outcome_ctx, "patch_after_notice", tool_names::APPLY_PATCH, patch_args)
+        .await
+        .expect("authorized patch should execute");
+    assert_eq!(std::fs::read_to_string(sample_file).unwrap(), "updated\nsecond\n");
+}
+
+#[tokio::test]
 async fn read_after_write_guard_blocks_bare_full_read_of_written_file() {
     let mut backing = TestContextBacking::new(4).await;
     let sample_path = backing.sample_file.to_string_lossy().to_string();

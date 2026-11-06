@@ -441,6 +441,42 @@ fn thread_started(id: &str) -> VersionedThreadEvent {
     }))
 }
 
+fn tool_output_update(
+    id: &str,
+    output: &str,
+    is_delta: Option<bool>,
+    status: vtcode_exec_events::ToolCallStatus,
+    exit_code: Option<i32>,
+) -> VersionedThreadEvent {
+    use vtcode_exec_events::{ItemUpdatedEvent, ThreadItem, ThreadItemDetails, ToolOutputItem};
+    VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+        item: ThreadItem {
+            context: None,
+            id: id.to_string(),
+            details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                call_id: format!("{id}-call"),
+                tool_call_id: None,
+                spool_path: None,
+                output: output.to_string(),
+                is_delta,
+                exit_code,
+                status,
+                app_previews: Vec::new(),
+            })),
+        },
+    }))
+}
+
+fn tool_output_details(event: &VersionedThreadEvent) -> vtcode_exec_events::ToolOutputItem {
+    match event.event() {
+        vtcode_exec_events::ThreadEvent::ItemUpdated(update) => match &update.item.details {
+            vtcode_exec_events::ThreadItemDetails::ToolOutput(output) => output.as_ref().clone(),
+            other => panic!("expected tool output, got {other:?}"),
+        },
+        other => panic!("expected item update, got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn saturated_queue_never_fails_the_producer_and_keeps_lifecycle_events() {
     let (sender, receiver) = live_event_channel(8);
@@ -509,6 +545,104 @@ async fn publish_fails_only_after_the_consumer_half_drops() {
         sender.publish(item_update("item", "more")).is_err(),
         "publishing after the consumer dropped must fail"
     );
+}
+
+#[tokio::test]
+async fn tool_output_deltas_for_one_item_merge_without_losing_bytes() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    // Asymmetric chunks: differing lengths, unicode split across chunks, and a
+    // status transition with an exit code on the final chunk.
+    sender
+        .publish(tool_output_update("capture", "alpha\n", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "βeta\n", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "gamma", Some(true), ToolCallStatus::Failed, Some(3)))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 1, "pending deltas for one item merge into one event");
+    let merged = tool_output_details(&drained[0]);
+    assert_eq!(merged.output, "alpha\nβeta\ngamma");
+    assert_eq!(merged.is_delta, Some(true));
+    assert_eq!(merged.status, ToolCallStatus::Failed, "newest status wins");
+    assert_eq!(merged.exit_code, Some(3), "newest exit code wins");
+    assert_eq!(merged.call_id, "capture-call");
+}
+
+#[tokio::test]
+async fn tool_output_snapshots_still_replace_pending_updates() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    // Both spellings of "snapshot": absent flag and explicit false.
+    sender
+        .publish(tool_output_update("capture", "first", None, ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "second", Some(false), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 1, "snapshots keep latest-wins replacement");
+    let latest = tool_output_details(&drained[0]);
+    assert_eq!(latest.output, "second");
+    assert_eq!(latest.is_delta, Some(false));
+}
+
+#[tokio::test]
+async fn tool_output_delta_and_snapshot_for_one_item_do_not_coalesce() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    sender
+        .publish(tool_output_update("capture", "chunk-", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture", "snapshot", Some(false), ToolCallStatus::Completed, None))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 2, "delta and snapshot slots coexist without merging");
+    assert_eq!(tool_output_details(&drained[0]).output, "chunk-");
+    assert_eq!(tool_output_details(&drained[1]).output, "snapshot");
+}
+
+#[tokio::test]
+async fn interleaved_tool_output_deltas_merge_per_item_in_queue_order() {
+    use vtcode_exec_events::ToolCallStatus;
+    let (sender, receiver) = live_event_channel(4);
+    sender
+        .publish(tool_output_update("capture-a", "a1-", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture-b", "b1", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    sender
+        .publish(tool_output_update("capture-a", "a2", Some(true), ToolCallStatus::InProgress, None))
+        .expect("publish");
+    drop(sender);
+
+    let mut drained = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        drained.push(event);
+    }
+    assert_eq!(drained.len(), 2, "each stream merges independently");
+    assert_eq!(tool_output_details(&drained[0]).output, "a1-a2");
+    assert_eq!(tool_output_details(&drained[1]).output, "b1");
 }
 
 #[test]

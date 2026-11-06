@@ -780,6 +780,7 @@ fn path_glob_inspections_preserve_debt_without_weakening_admission() {
         "fgrep x --exclude=*.md src",
         "cat ./docs/*.md",
         "ls docs/*.md",
+        "ls -1 .markdownlint* .mdl* 2>/dev/null",
     ] {
         assert!(!exec_mutation_should_incur_debt(command, &clean), "{command}");
         assert_eq!(classify_shell_activity(tools::EXEC_COMMAND, &exec_command(command)), ShellActivity::Mutation);
@@ -806,6 +807,10 @@ fn path_glob_inspections_preserve_debt_without_weakening_admission() {
         "rg x docs/*.md; touch marker",
         "rg x docs/*.md; if",
         "rg x docs*/*.md",
+        "ls *",
+        "ls .$directory*",
+        "ls .$(touch marker)*",
+        "ls .md* > marker",
     ] {
         assert!(exec_mutation_should_incur_debt(command, &clean), "{command}");
     }
@@ -909,4 +914,25 @@ fn dynamic_readonly_inspections_do_not_incur_mutation_debt() {
     assert!(exec_mutation_should_incur_debt("git checkout $x", &clean_output));
     // Dynamic chains of inspections with exit-echo tails stay debt-free.
     assert!(!exec_mutation_should_incur_debt("grep -n 'x' README.md; echo \"exit:$?\"", &clean_output,));
+}
+
+#[test]
+fn quoted_file_tests_preserve_evidence_without_admitting_effects() {
+    let command = "for f in docs/a.md docs/b.md; do [ -f \"$f\" ] || echo \"MISSING: $f\"; done";
+    assert!(!exec_mutation_should_incur_debt(command, &json!({"exit_code":0})));
+    assert_eq!(classify_shell_activity(tools::EXEC_COMMAND, &exec_command(command)), ShellActivity::Mutation);
+    for command in [
+        "[ -f \"$(touch marker)\" ]",
+        "[ -f \"${f:=value}\" ]",
+        "[ -f \"$f\" ] && touch marker",
+        "[ -f \"$f\" ] > marker",
+        "[ -f $f ]",
+        "[ -f \"$f\" -o -f \"$g\" ]",
+    ] {
+        assert!(exec_mutation_should_incur_debt(command, &json!({"exit_code":0})), "{command}");
+    }
+    assert!(exec_mutation_should_incur_debt(
+        "[ -f \"$f\" ]",
+        &json!({"exit_code":0,"modified_files":["README.md"]})
+    ));
 }

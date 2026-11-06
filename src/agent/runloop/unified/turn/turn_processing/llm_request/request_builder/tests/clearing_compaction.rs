@@ -1,6 +1,77 @@
 use super::*;
 
 #[tokio::test]
+async fn interactive_cli_reuses_overlapping_inspections_then_applies_authorized_patch() {
+    struct ScriptedProvider(Arc<std::sync::atomic::AtomicUsize>);
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for ScriptedProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+        fn supports_streaming(&self) -> bool {
+            false
+        }
+        fn supported_models(&self) -> Vec<String> {
+            vec!["noop-model".into()]
+        }
+        fn validate_request(&self, _: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+            Ok(())
+        }
+        async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+            let step = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut response = uni::LLMResponse::new(request.model.clone(), "Updated the document.");
+            let call = match step {
+                0 => Some(("read-first", "exec_command", json!({"cmd":"sed -n '1,2p' sample.md"}))),
+                1 => Some(("read-second", "exec_command", json!({"cmd":"sed -n '3,4p' sample.md"}))),
+                2 => Some(("read-overlap", "exec_command", json!({"cmd":"sed -n '2,3p' sample.md"}))),
+                3 => {
+                    assert!(
+                        request
+                            .messages
+                            .iter()
+                            .any(|m| m.content.as_text().contains("only text evidence already gathered")),
+                        "next CLI request must include the notice"
+                    );
+                    assert!(request_tool_names(&request).contains(&"apply_patch".to_string()));
+                    Some((
+                        "edit",
+                        "apply_patch",
+                        json!({"input":"*** Begin Patch\n*** Update File: sample.md\n@@\n-second\n+updated\n*** End Patch\n"}),
+                    ))
+                }
+                4 => None,
+                _ => panic!("unexpected additional provider request"),
+            };
+            if let Some((id, name, args)) = call {
+                response.content = None;
+                response.tool_calls = Some(vec![uni::ToolCall::function(id.into(), name.into(), args.to_string())]);
+            }
+            Ok(response)
+        }
+    }
+
+    let mut backing = TestTurnProcessingBacking::new(12).await;
+    let path = backing.workspace_path().join("sample.md");
+    std::fs::write(&path, "first\nsecond\nthird\nfourth\n").unwrap();
+    backing.add_tool_definition(named_tool("exec_command")).await;
+    backing.add_tool_definition(named_tool("apply_patch")).await;
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    backing.set_provider(Box::new(ScriptedProvider(calls.clone())));
+    let mut history = vec![uni::Message::user("Update the document".into())];
+    let outcome =
+        crate::agent::runloop::unified::turn::turn_loop::run_turn_loop(&mut history, backing.turn_loop_context())
+            .await
+            .unwrap();
+    assert!(matches!(
+        outcome.result,
+        crate::agent::runloop::unified::turn::context::TurnLoopResult::Completed { .. }
+    ));
+    assert!(!outcome.final_response_was_fallback);
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 5);
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "first\nupdated\nthird\nfourth\n");
+}
+
+#[tokio::test]
 async fn session_232419_read_evidence_survives_request_clearing() {
     struct EvidencePatchProvider(Arc<std::sync::atomic::AtomicUsize>);
     #[async_trait::async_trait]

@@ -347,8 +347,9 @@ async fn test_coordinator_role_presence_and_budget_in_default_and_minimal() {
         assert_eq!(result.matches("## Coordinator Role").count(), 1);
         // Raised for the partial-commit and conflict-reload runtime guidance
         // (measured 1182 minimal).
+        // Raised for the name-the-missing-fact inspection guidance (measured 1223 minimal).
         let max_tokens = match mode {
-            SystemPromptMode::Minimal => 1220,
+            SystemPromptMode::Minimal => 1260,
             _ => 2000,
         };
         assert!(estimate_tokens(&result) <= max_tokens, "{mode:?}: {} tokens", estimate_tokens(&result));
@@ -387,6 +388,7 @@ fn test_estimate_token_count() {
     // keep-conditions (measured 878 minimal).
     // Raised for the partial-commit and conflict-reload runtime guidance
     // (measured 920 minimal, 1257 default).
-    assert!(minimal_tokens <= 955, "Minimal prompt tokens: {minimal_tokens}");
-    assert!(default_tokens <= 1290, "Default prompt tokens: {default_tokens}");
+    // Raised for the name-the-missing-fact inspection guidance (measured 961 minimal, 1298 default).
+    assert!(minimal_tokens <= 1000, "Minimal prompt tokens: {minimal_tokens}");
+    assert!(default_tokens <= 1330, "Default prompt tokens: {default_tokens}");
 }

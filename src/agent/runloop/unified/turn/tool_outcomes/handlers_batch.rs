@@ -749,6 +749,42 @@ mod tests {
         PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult,
     };
 
+    #[tokio::test]
+    async fn retained_navigation_notice_follows_tool_result_and_leaves_tools_available() {
+        use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+        use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{LoopTracker, update_repetition_tracker};
+
+        let mut backing = super::super::tests::TestContextBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        let mut tracker = LoopTracker::new();
+        let args = serde_json::json!({"cmd":"sed -n '2,3p' README.md"});
+        let result = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({"output":"second\nthird\n", "exit_code":0}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+        for _ in 0..2 {
+            update_repetition_tracker(&mut tracker, &result, tools::EXEC_COMMAND, &args);
+        }
+        ctx.working_history.push(vtcode_core::llm::provider::Message::tool_response(
+            "call-read".to_string(),
+            "completed output".to_string(),
+        ));
+        super::flush_loop_notices(&mut ctx, &mut tracker);
+        let last = ctx.working_history.last().expect("coaching after result");
+        assert!(last.content.as_text().contains("only text evidence already gathered"));
+        assert!(last.content.as_text().contains("Tools remain available"));
+        super::flush_loop_notices(&mut ctx, &mut tracker);
+        assert_eq!(
+            ctx.working_history
+                .iter()
+                .filter(|m| m.content.as_text().contains("only text evidence already gathered"))
+                .count(),
+            1
+        );
+    }
+
     fn validated_call<'a>(
         call_id: &'a str,
         tool_name: &str,

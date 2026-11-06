@@ -133,6 +133,7 @@ fn running_sed_chunks_do_not_establish_positioned_evidence() {
 fn incomplete_failed_or_unpositioned_results_cannot_establish_redundant_evidence() {
     for output in [
         json!({"results":[search_row(10,"Overview")], "truncated":true}),
+        json!({"results":[search_row(10,"Overview")], "spool_path":".vtcode/context/tool_outputs/search.txt"}),
         json!({"results":[search_row(10,"Overview")], "error":"failed"}),
         json!({"results":[{"path":"README.md","snippet":"Overview"}]}),
         json!({"results":[search_row(10,"Overview"), {"result_type":"definition"}]}),
@@ -166,6 +167,42 @@ fn incomplete_failed_or_unpositioned_results_cannot_establish_redundant_evidence
 }
 
 #[test]
+fn spooled_preview_and_model_reduction_cannot_establish_positioned_evidence() {
+    use crate::agent::runloop::unified::turn::tool_outcomes::response_content::maybe_inline_spooled;
+    use vtcode_core::core::agent::result_reducers::reduce_tool_result;
+
+    let args = json!({"cmd":"sed -n '1,2100p' README.md"});
+    let spooled = json!({
+        "output":"row-1\nrow-2\n", "exit_code":0,
+        "spool_path":".vtcode/context/tool_outputs/inspection.txt"
+    });
+    let model_payload: serde_json::Value =
+        serde_json::from_str(&maybe_inline_spooled(tools::EXEC_COMMAND, &spooled)).unwrap();
+    assert!(model_payload.get("output").is_none());
+
+    let long = json!({"output":(1..=2100).map(|line| format!("row-{line}\n")).collect::<String>(), "exit_code":0});
+    let reduced = reduce_tool_result(tools::EXEC_COMMAND, long.clone());
+    assert_eq!(reduced["is_truncated"], true);
+    let wide = json!({"output":format!("{}\nrow-2\n", "x".repeat(33_000)), "exit_code":0});
+    assert_eq!(reduce_tool_result(tools::EXEC_COMMAND, wide.clone())["is_truncated"], true);
+    for (input, fresh_args, fresh_output) in [
+        (spooled, "sed -n '1,2p' README.md", "row-1\nrow-2\n"),
+        (long, "sed -n '2001,2002p' README.md", "row-2001\nrow-2002\n"),
+        (wide, "sed -n '2p' README.md", "row-2\n"),
+        (json!({"output":"row-1\n", "exit_code":0, "is_truncated":true}), "sed -n '1p' README.md", "row-1\n"),
+    ] {
+        let mut tracker = LoopTracker::new();
+        update_repetition_tracker(&mut tracker, &success(input), tools::EXEC_COMMAND, &args);
+        let fresh = success(json!({"output":fresh_output, "exit_code":0}));
+        let fresh_args = json!({"cmd":fresh_args});
+        update_repetition_tracker(&mut tracker, &fresh, tools::EXEC_COMMAND, &fresh_args);
+        assert!(!tracker.take_redundant_navigation_notice());
+        update_repetition_tracker(&mut tracker, &fresh, tools::EXEC_COMMAND, &fresh_args);
+        assert!(tracker.take_redundant_navigation_notice());
+    }
+}
+
+#[test]
 fn successful_docs_edit_invalidates_retained_search_evidence() {
     let mut tracker = LoopTracker::new();
     let hit = success(json!({"results":[search_row(10,"## Overview")]}));
@@ -183,6 +220,45 @@ fn successful_docs_edit_invalidates_retained_search_evidence() {
 }
 
 #[test]
+fn spool_page_is_distinct_from_source_without_provenance() {
+    let mut tracker = LoopTracker::new();
+    let result = success(json!({"output":"alpha\nbeta\n", "exit_code":0}));
+    for command in [
+        "sed -n '1,2p' README.md",
+        "sed -n '1,2p' .vtcode/context/tool_outputs/output.txt",
+    ] {
+        update_repetition_tracker(&mut tracker, &result, tools::EXEC_COMMAND, &json!({"cmd":command}));
+        assert!(!tracker.take_redundant_navigation_notice());
+    }
+    update_repetition_tracker(
+        &mut tracker,
+        &result,
+        tools::EXEC_COMMAND,
+        &json!({"cmd":"sed -n '1,2p' .vtcode/context/tool_outputs/output.txt"}),
+    );
+    assert!(tracker.take_redundant_navigation_notice());
+}
+
+#[test]
+fn failed_patch_preserves_evidence_and_changed_fresh_read_is_usable() {
+    let mut tracker = LoopTracker::new();
+    let args = json!({"cmd":"sed -n '4,5p' README.md"});
+    let original = success(json!({"output":"old\ncontext\n", "exit_code":0}));
+    update_repetition_tracker(&mut tracker, &original, tools::EXEC_COMMAND, &args);
+    update_repetition_tracker(
+        &mut tracker,
+        &success(json!({"success":false,"conflict":true})),
+        tools::APPLY_PATCH,
+        &json!({"input":"*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+new\n*** End Patch\n"}),
+    );
+    let changed = success(json!({"output":"new disk content\ncontext\n", "exit_code":0}));
+    update_repetition_tracker(&mut tracker, &changed, tools::EXEC_COMMAND, &args);
+    assert!(!tracker.take_redundant_navigation_notice());
+    update_repetition_tracker(&mut tracker, &changed, tools::EXEC_COMMAND, &args);
+    assert!(tracker.take_redundant_navigation_notice());
+}
+
+#[test]
 fn context_compaction_discards_evidence_without_replenishing_notices_or_verifier_state() {
     let mut tracker = LoopTracker::with_verification_snapshot((true, 1));
     let signatures = vec!["retained line".to_string()];
@@ -195,6 +271,24 @@ fn context_compaction_discards_evidence_without_replenishing_notices_or_verifier
     assert!(!tracker.record_navigation_evidence(&signatures), "cleared context needs fresh evidence");
     assert!(tracker.record_navigation_evidence(&signatures));
     assert!(!tracker.take_redundant_navigation_notice(), "compaction cannot replenish coaching");
+}
+
+#[test]
+fn completed_verification_invalidates_positioned_evidence() {
+    let mut tracker = LoopTracker::new();
+    let read_args = json!({"cmd":"sed -n '7,8p' README.md"});
+    let read = success(json!({"output":"seventh\neighth\n", "exit_code":0}));
+    update_repetition_tracker(&mut tracker, &read, tools::EXEC_COMMAND, &read_args);
+    update_repetition_tracker(
+        &mut tracker,
+        &success(json!({"output":"ok", "exit_code":0})),
+        tools::EXEC_COMMAND,
+        &json!({"cmd":"cargo check --locked"}),
+    );
+    update_repetition_tracker(&mut tracker, &read, tools::EXEC_COMMAND, &read_args);
+    assert!(!tracker.take_redundant_navigation_notice());
+    update_repetition_tracker(&mut tracker, &read, tools::EXEC_COMMAND, &read_args);
+    assert!(tracker.take_redundant_navigation_notice());
 }
 
 #[test]
@@ -216,4 +310,46 @@ fn balancer_recovery_preserves_retained_evidence_but_resets_churn() {
     assert!(tracker.record_navigation_evidence(&signatures));
     tracker.reset_after_balancer_recovery();
     assert!(tracker.record_navigation_evidence(&signatures), "post-recovery resume must remember retained rows");
+}
+
+#[test]
+fn readme_session_inspection_replay() {
+    // Model-facing range lines are replaced by stable anonymous row IDs.
+    // Other outputs retain status and truncation metadata, not their content.
+    let fixture: Vec<serde_json::Value> = serde_json::from_str(include_str!("readme_inspection_fixture.json")).unwrap();
+    let mut tracker = LoopTracker::new();
+    let mut notices = Vec::new();
+    let mut observed = Vec::new();
+    for step in fixture {
+        let index = step["index"].as_u64().unwrap();
+        update_repetition_tracker(
+            &mut tracker,
+            &success(step["output"].clone()),
+            step["name"].as_str().unwrap(),
+            &step["args"],
+        );
+        if [45, 47, 49, 57, 63, 65, 70, 101, 124, 126, 132].contains(&index) {
+            observed.push((index, tracker.evidence_count_for_test()));
+        }
+        if tracker.take_redundant_navigation_notice() {
+            notices.push(index);
+        }
+    }
+    assert_eq!(
+        observed,
+        vec![
+            (45, 120),
+            (47, 260),
+            (49, 260),
+            (57, 350),
+            (63, 350),
+            (65, 0),
+            (70, 111),
+            (101, 0),
+            (124, 120),
+            (126, 180),
+            (132, 0)
+        ]
+    );
+    assert!(notices.is_empty());
 }

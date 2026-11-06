@@ -482,10 +482,7 @@ fn only_final_turn_response_offers_message_copy(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.hover("transcript-row-final", cx);
         window.render_frame(cx);
-        assert!(
-            window.try_find("copy-message-final").is_some(),
-            "final turn response keeps message copy"
-        );
+        assert!(window.try_find("copy-message-final").is_some(), "final turn response keeps message copy");
     })
     .unwrap();
 }

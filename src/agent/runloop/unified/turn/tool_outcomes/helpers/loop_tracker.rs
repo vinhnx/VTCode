@@ -143,6 +143,10 @@ pub(crate) struct LoopTracker {
 }
 
 impl LoopTracker {
+    #[cfg(test)]
+    pub(super) fn evidence_count_for_test(&self) -> usize {
+        self.navigation_evidence_signatures.len()
+    }
     pub(crate) fn new() -> Self {
         Self {
             attempts: FxHashMap::with_capacity_and_hasher(16, Default::default()),
