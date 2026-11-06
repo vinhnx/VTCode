@@ -378,6 +378,15 @@ impl DesktopView {
                     .unwrap_or_else(|| label.clone());
                 let permission_icon = permission_palette_mode(self.palette_kind, &entry.action)
                     .map(|mode| composer_controls::permission_indicator(Some(mode), colors));
+                // Commands rows always reserve the leading slot (even when a
+                // future action maps to no icon) so labels share one spine.
+                // Hoisted: the row closure below is `'static` and cannot borrow `self`.
+                let is_commands = self.palette_kind == PaletteKind::Commands;
+                let commands_icon = if is_commands {
+                    palette_action_icon(&entry.action)
+                } else {
+                    None
+                };
                 group = group.item(
                     CommandItem::new()
                         .disabled(!enabled)
@@ -398,6 +407,19 @@ impl DesktopView {
                                 .py_1()
                                 .role(gpui_kit::Role::Label)
                                 .aria_label(accessible_label.clone())
+                                .when(is_commands, |row| {
+                                    row.child(
+                                        transcript_icon_slot(match commands_icon {
+                                            Some(icon) => Icon::new(icon)
+                                                .small()
+                                                .text_color(colors.muted_foreground)
+                                                .into_any_element(),
+                                            None => div().into_any_element(),
+                                        })
+                                        .id(format!("{id}-icon"))
+                                        .test_support(),
+                                    )
+                                })
                                 .when_some(permission_icon, |row, (icon, color)| {
                                     row.child(Icon::new(icon).small().text_color(color))
                                 })

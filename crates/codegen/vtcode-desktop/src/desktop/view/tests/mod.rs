@@ -584,6 +584,7 @@ mod option_popups;
 mod options_misc;
 mod output_surfaces;
 mod overlay_toggles;
+mod palette_icons;
 mod prompt_history;
 mod review_changes;
 mod review_diff_mode;

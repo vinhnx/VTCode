@@ -5,6 +5,8 @@ use vtcode_commons::provider::Provider;
 
 mod provider_identity;
 use provider_identity::{model_route_matches, provider_display_label, provider_group_key, provider_picker_rank};
+mod icons;
+pub(super) use icons::palette_action_icon;
 
 /// One executable entry in the command palette.
 #[derive(Debug)]
@@ -826,7 +828,7 @@ pub(super) fn command(label: impl Into<String>, action: PaletteAction) -> Palett
     }
 }
 
-/// Shield mode for permission-picker rows; every other palette and action stays text-only.
+/// Shield mode for permission-picker rows (Commands rows use icons instead).
 pub(super) fn permission_palette_mode(kind: PaletteKind, action: &PaletteAction) -> Option<protocol::PermissionMode> {
     if kind != PaletteKind::Permissions {
         return None;
