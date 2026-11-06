@@ -307,14 +307,15 @@ pub(super) fn click_thread_tab_close(
 /// Tab until focus leaves `scope`, then keep tabbing until it cycles back in.
 /// Route panels do not trap focus, so a fixed tab count breaks whenever any
 /// window control is added, removed, or reordered. Bounded; panics naming the
-/// scope when the cycle never leaves or never returns.
+/// scope when the cycle never leaves or never returns. The bound is headroom
+/// over the stop count, not a contract: raise it when controls are added.
 fn tab_out_and_back_into_scope(
     window: &mut gpui_kit::Window,
     cx: &mut gpui_kit::App,
     scope: &'static str,
     mut in_scope: impl FnMut(&mut gpui_kit::Window, &mut gpui_kit::App) -> bool,
 ) {
-    for _ in 0..128 {
+    for _ in 0..256 {
         if !in_scope(window, cx) {
             break;
         }
@@ -322,7 +323,7 @@ fn tab_out_and_back_into_scope(
         window.render_frame(cx);
     }
     assert!(!in_scope(window, cx), "tab never left {scope}");
-    for _ in 0..128 {
+    for _ in 0..256 {
         if in_scope(window, cx) {
             return;
         }
@@ -585,6 +586,7 @@ mod config_sessions;
 mod curated_config;
 mod deeplinks;
 mod diagnostic_notice;
+mod diff_settings;
 mod effort_rail;
 mod exec_controls;
 mod file_drop;

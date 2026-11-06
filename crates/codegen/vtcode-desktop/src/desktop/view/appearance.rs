@@ -910,6 +910,7 @@ impl DesktopView {
                 colors,
             )),
         ));
+        content = content.child(self.render_diff_settings(cx));
         content = content.child(self.render_app_icon_settings(cx));
         content.child(self.render_contrast_settings(cx)).into_any_element()
     }

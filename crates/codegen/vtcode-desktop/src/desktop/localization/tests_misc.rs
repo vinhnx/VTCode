@@ -481,3 +481,51 @@ fn workspace_review_stats_copy_is_localized_for_every_language() {
         assert!(stats.contains('3'), "{locale}: {stats}");
     }
 }
+
+#[test]
+fn diff_copy_is_localized_for_every_language() {
+    assert_localized(
+        &[
+            "app.settings.diff.group",
+            "app.settings.diff.wrap.label",
+            "app.settings.diff.numbers.label",
+            "app.settings.diff.syntax.label",
+            "app.settings.diff.headers.label",
+            "app.settings.diff.tint.label",
+            "app.settings.diff.indicator.label",
+            "app.settings.diff.indicator.description",
+            "app.settings.diff.indicator.signs",
+            "app.settings.diff.indicator.bars",
+            "app.settings.diff.indicator.none",
+            "app.settings.diff.separator.label",
+            "app.settings.diff.separator.description",
+            "app.settings.diff.separator.metadata",
+            "app.settings.diff.separator.line_info",
+            "app.settings.diff.separator.simple",
+            "app.settings.diff.hover.label",
+            "app.settings.diff.hover.description",
+            "app.settings.diff.hover.none",
+            "app.settings.diff.hover.line",
+            "app.settings.diff.hover.line_number",
+            "app.settings.diff.hover.both",
+            "app.settings.diff.context.label",
+            "app.settings.diff.context.description",
+            "app.settings.diff.context.depth_3",
+            "app.settings.diff.context.depth_5",
+            "app.settings.diff.context.depth_10",
+            "app.settings.diff.context.unfolded",
+            "app.settings.diff.inline.label",
+            "app.settings.diff.inline.description",
+            "app.settings.diff.inline.words",
+            "app.settings.diff.inline.characters",
+            "app.settings.diff.inline.lines",
+        ],
+        &[
+            ("es", "app.settings.diff.group"),
+            ("fr", "app.settings.diff.group"),
+            ("de", "app.settings.diff.group"),
+            ("pt-BR", "app.settings.diff.group"),
+            ("nl", "app.settings.diff.group"),
+        ],
+    );
+}

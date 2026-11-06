@@ -19,6 +19,7 @@ use gpui_kit::component::theme::ThemeMode;
 use gpui_kit::{App, Global};
 use serde::{Deserialize, Serialize};
 
+use super::diff_preferences;
 use super::files::ExternalEditor;
 use super::localization::UiLanguage;
 
@@ -576,8 +577,11 @@ pub(super) struct Preferences {
     pub file_open_destination: Option<String>,
     /// Terminal for CLI handoff id. Unknown values fall back to Terminal.
     pub cli_terminal: Option<String>,
-    /// Diff viewer layout id (`unified`/`split`). Unknown values fall back to Unified.
+    /// Legacy diff viewer layout id (`unified`/`split`): only a read fallback
+    /// for installs that never saved the new `diff` struct below.
     pub diff_mode: Option<String>,
+    /// Diff viewer presentation choices; owns every diff option going forward.
+    pub diff: diff_preferences::DiffPreferences,
     /// The optional diagnostics footer is hidden on a fresh installation.
     pub show_status_bar: bool,
     pub reduced_motion: ReducedMotionPreference,
@@ -672,22 +676,16 @@ impl Preferences {
     }
 
     pub(super) fn diff_mode(&self) -> DiffMode {
-        if self
-            .diff_mode
-            .as_deref()
-            .is_some_and(|id| id.trim().eq_ignore_ascii_case("split"))
-        {
-            DiffMode::Split
-        } else {
-            DiffMode::Unified
+        // New installs write `diff.mode`; the legacy top-level key still
+        // applies for installs that never saved the new struct.
+        if self.diff.mode.is_none() {
+            return diff_preferences::mode_from_saved(self.diff_mode.as_deref());
         }
+        self.diff.mode()
     }
 
     pub(super) fn set_diff_mode(&mut self, mode: DiffMode) {
-        // `DiffMode` is non-exhaustive: compare instead of matching so a
-        // future kit variant degrades to the default layout.
-        let id = if mode == DiffMode::Split { "split" } else { "unified" };
-        self.diff_mode = Some(id.to_owned());
+        self.diff.set_mode(mode);
     }
 
     pub(super) fn code_font_size(&self) -> u8 {

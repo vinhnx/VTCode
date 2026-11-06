@@ -34,7 +34,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [date-picker](https://gpui-kit.com/component/date-picker) | Not needed for the current coding-workspace workflows or available data. |
 | [description-list](https://gpui-kit.com/component/description-list) | Reviewed presentation options; keep essential metadata visible and avoid extra decoration/state. |
 | [dialog](https://gpui-kit.com/component/dialog) | Applied: larger Appearance overlay, heading parts, contained focus, and focus restoration. |
-| [diff](https://gpui-kit.com/component/diff) | Applied: retained session and scoped Git snapshot review, unified/split modes, soft wrapping, bounded raw fallback, and explicit unavailable/partial states from runtime file metadata. |
+| [diff](https://gpui-kit.com/component/diff) | Applied: retained session and scoped Git snapshot review, unified/split modes, soft wrapping, bounded raw fallback, and explicit unavailable/partial states from runtime file metadata. Appearance and context options are user-configurable (Settings → Appearance → Diffs, persisted in the `preferences.json` `diff` struct; layout stays toolbar-owned per surface). |
 | [dock](https://gpui-kit.com/component/dock) | Retain tested three-pane resizing and persistence; avoid unnecessary docking migration. |
 | [dropdown_button](https://gpui-kit.com/component/dropdown_button) | A standard thread menu is sufficient; no split-button behavior needed. |
 | [editor](https://gpui-kit.com/component/editor) | Deferred: richer navigation/editing is a separate functional increment. |

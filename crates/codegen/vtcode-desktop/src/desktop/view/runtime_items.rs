@@ -528,7 +528,8 @@ impl DesktopView {
             .unwrap_or_else(|| self.preferences.diff_mode());
         self.selected_change = Some(path);
         self.change_viewer_dirty = false;
-        self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx).with_mode(mode)));
+        self.change_viewer =
+            Some(cx.new(|cx| diff_preferences::new_diff_state(vec![file], mode, &self.preferences.diff, cx)));
         self.open_inspector_tab(InspectorTab::Changes, cx);
     }
 

@@ -73,6 +73,7 @@ use vtcode_desktop_protocol::{
 
 use super::app_icon;
 use super::build_info;
+use super::diff_preferences;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{
@@ -144,6 +145,7 @@ mod sessions;
 mod settings;
 mod settings_accessibility;
 mod settings_connections;
+mod settings_diff;
 mod settings_notifications;
 mod settings_vtcode;
 mod shared_preferences;

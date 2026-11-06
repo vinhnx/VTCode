@@ -123,7 +123,11 @@ impl DesktopView {
                 .filter(|patch| !patch.is_empty())
                 .and_then(|patch| DiffFile::parse(patch).ok())
                 .filter(|files| !files.is_empty())
-                .map(|files| cx.new(|cx| DiffState::new(files, cx).with_mode(review.mode)))
+                .map(|files| {
+                    cx.new(|cx| {
+                        super::super::diff_preferences::new_diff_state(files, review.mode, &self.preferences.diff, cx)
+                    })
+                })
         };
         if let Some(viewer) = &review.viewer {
             let files = viewer.read(cx).files();
@@ -604,7 +608,14 @@ impl DesktopView {
                             .flex_1()
                             .min_h_0()
                             .w_full()
-                            .child(Diff::new(viewer).line_number(true).soft_wrap(true).text_color(diff_foreground)),
+                            .child(
+                                super::super::diff_preferences::apply_diff_appearance(
+                                    Diff::new(viewer),
+                                    &self.preferences.diff,
+                                    self.preferences.diff.soft_wrap(),
+                                )
+                                .text_color(diff_foreground),
+                            ),
                     )
                     .into_any_element()
                 } else {

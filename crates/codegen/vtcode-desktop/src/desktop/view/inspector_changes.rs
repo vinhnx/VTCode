@@ -771,10 +771,12 @@ impl DesktopView {
                     .min_h_0()
                     .overflow_hidden()
                     .child(
-                        Diff::new(&viewer)
-                            .line_number(true)
-                            .soft_wrap(expanded)
-                            .text_color(diff_foreground),
+                        diff_preferences::apply_diff_appearance(
+                            Diff::new(&viewer),
+                            &self.preferences.diff,
+                            expanded || self.preferences.diff.soft_wrap(),
+                        )
+                        .text_color(diff_foreground),
                     ),
             );
             body = body

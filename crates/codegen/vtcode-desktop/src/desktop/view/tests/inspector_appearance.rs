@@ -598,8 +598,18 @@ fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppConte
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
+        // Center each target before interacting: fixed offsets break whenever
+        // settings content above the target grows or shrinks.
+        let content = window.find("settings-content").bounds();
+        let content_center = content.origin.y + content.size.height / 2.;
         // The picker sits below reset-appearance; scroll it into view.
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1600.))), cx);
+        let picker = window.find("appearance-app-icon-group").bounds();
+        let picker_center = picker.origin.y + picker.size.height / 2.;
+        window.scroll(
+            "settings-content",
+            gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - picker_center)),
+            cx,
+        );
         window.render_frame(cx);
         assert_eq!(window.find("appearance-app-icon-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("app-icon-dynamic").label(), Some("Dynamic (selected)"));
@@ -610,10 +620,15 @@ fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppConte
         assert_eq!(window.find("app-icon-dynamic").label(), Some("Dynamic"));
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!(saved.app_icon(), AppIconPreference::Dark);
-        // Scroll back to the top, then to the reset row above the picker.
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(1600.))), cx);
+        // Scroll to the reset row above the picker.
+        let reset = window.find("reset-appearance").bounds();
+        let reset_center = reset.origin.y + reset.size.height / 2.;
+        window.scroll(
+            "settings-content",
+            gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - reset_center)),
+            cx,
+        );
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-880.))), cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).preferences.app_icon(), AppIconPreference::Dynamic);

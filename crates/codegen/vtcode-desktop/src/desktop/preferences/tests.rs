@@ -613,6 +613,19 @@ fn diff_mode_round_trips_and_invalid_values_fall_back_to_unified() {
 }
 
 #[test]
+fn new_diff_struct_wins_over_legacy_layout_key() {
+    let both: Preferences = serde_json::from_str(r#"{"diffMode":"split","diff":{"mode":"unified"}}"#).unwrap();
+    assert_eq!(both.diff_mode(), DiffMode::Unified);
+    let legacy: Preferences = serde_json::from_str(r#"{"diffMode":"split"}"#).unwrap();
+    assert_eq!(legacy.diff_mode(), DiffMode::Split);
+
+    let mut upgraded = legacy;
+    upgraded.set_diff_mode(DiffMode::Unified);
+    assert_eq!(upgraded.diff.mode.as_deref(), Some("unified"));
+    assert_eq!(upgraded.diff_mode.as_deref(), Some("split"), "the legacy key stays inert, never rewritten");
+}
+
+#[test]
 fn try_save_reports_an_unwritable_preferences_path() {
     use std::os::unix::fs::PermissionsExt as _;
 
