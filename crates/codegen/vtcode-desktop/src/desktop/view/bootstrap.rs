@@ -311,8 +311,10 @@ pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
 }
 
 pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
+    let prefs_phase = vtcode_commons::startup_trace::phase_started();
     let preferences = preferences::Preferences::load();
     super::super::localization::initialize(preferences.ui_language());
+    vtcode_commons::startup_trace::record_phase("desktop_preferences_and_localization", prefs_phase);
     let inbox: SharedUrlInbox = Rc::new(RefCell::new(UrlInbox::default()));
     let inbox_events = inbox.clone();
     let application = gpui_kit::application().with_assets(super::super::assets::DesktopAssets);
@@ -332,14 +334,19 @@ pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
         }
     });
     application.run(move |cx: &mut App| {
+        let kit_phase = vtcode_commons::startup_trace::phase_started();
         gpui_kit::init(cx);
+        vtcode_commons::startup_trace::record_phase("desktop_kit_init", kit_phase);
+        let chrome_phase = vtcode_commons::startup_trace::phase_started();
         super::super::notifications::initialize(cx);
         init_keybindings(cx, &preferences);
         init_native_menus(cx);
         if preferences.show_in_menu_bar && !menu_bar::set_enabled(true, cx) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
         }
+        vtcode_commons::startup_trace::record_phase("desktop_chrome", chrome_phase);
         inbox.borrow_mut().set_app(cx.to_async());
+        let window_phase = vtcode_commons::startup_trace::phase_started();
         if let Err(error) = open_or_activate_main_window(cx, Some(preferences), startup_link) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
         } else {
@@ -350,6 +357,9 @@ pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
                 dispatch_handoff_links(cx, links);
             }
         }
+        vtcode_commons::startup_trace::record_phase("desktop_window_open", window_phase);
+        // Async milestones print individually; welcome launches may never reach session-ready.
+        vtcode_commons::startup_trace::emit_summary();
     });
 }
 

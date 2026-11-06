@@ -444,6 +444,7 @@ impl DesktopView {
         self.session_load_generation = self.session_load_generation.wrapping_add(1);
         let generation = self.session_load_generation;
         self.status = rust_i18n::t!("app.session.restoring").to_string();
+        let decode_phase = vtcode_commons::startup_trace::phase_started();
         self.session_load_task = Some(cx.spawn(async move |view, cx| {
             let loaded = cx
                 .background_spawn(async move {
@@ -454,6 +455,7 @@ impl DesktopView {
                     })
                 })
                 .await;
+            vtcode_commons::startup_trace::record_phase("desktop_session_decode", decode_phase);
             let _updated = view.update(cx, |view, cx| {
                 if view.session_load_generation != generation
                     || view.session_request != Some(protocol::method::SESSION_LOAD)
@@ -657,6 +659,7 @@ impl DesktopView {
         } else {
             rust_i18n::t!("app.session.loaded_prompt").to_string()
         };
+        vtcode_commons::startup_trace::record_milestone("desktop_session_ready");
         cx.notify();
     }
 

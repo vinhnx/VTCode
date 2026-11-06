@@ -435,6 +435,7 @@ impl DesktopView {
                                 self.localize_slash_catalog();
                                 self.service_info = Some(info);
                                 self.status = rust_i18n::t!("app.service.connected_service").to_string();
+                                vtcode_commons::startup_trace::record_milestone("desktop_backend_ready");
                                 let mut discovery_queued = true;
                                 for method in [
                                     protocol::method::CONFIG_DISCOVER,

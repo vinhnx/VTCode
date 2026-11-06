@@ -8,6 +8,7 @@ mod desktop;
 
 #[cfg(target_os = "macos")]
 fn main() {
+    vtcode_commons::startup_trace::initialize();
     // `args_os`: the CLI passes its workspace as an OS string, and `args()`
     // would panic on non-UTF8 paths instead of showing invalid-folder.
     let argv: Vec<String> = std::env::args_os()

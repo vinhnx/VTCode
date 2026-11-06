@@ -470,6 +470,15 @@ The trace is silent when unset and reports only duration records for bootstrap, 
 validation, authentication, session setup, and first UI render. It is initialized before tracing is configured so early
 startup work is observable without adding work to normal launches.
 
+The desktop app reports the same way: launch phases (`desktop_preferences_and_localization`, `desktop_kit_init`,
+`desktop_chrome`, `desktop_window_open`) plus a one-line summary at window open, with backend/session readiness as
+later individual signals (`desktop_backend_ready` and `desktop_session_ready` milestones, `desktop_session_decode`
+phase) since welcome-screen launches may never reach them:
+
+```bash
+VTCODE_STARTUP_TRACE=1 ./target/release/vtcode-desktop
+```
+
 ### Patterns that pay off on the startup path
 
 - **Join independent disk I/O.** `initialize_dot_folder`, `init_global_guardian`, `determine_theme`, and
