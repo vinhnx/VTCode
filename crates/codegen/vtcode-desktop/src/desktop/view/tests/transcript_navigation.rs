@@ -27,8 +27,8 @@ fn transcript_arrows_navigate_messages_reveal_actions_and_escape_returns_to_comp
         assert_eq!(view.read(cx).keyboard_focused_message.as_deref(), Some("nav-assistant-1"));
         window.render_frame(cx);
         assert!(
-            window.try_find("copy-message-nav-assistant-1").is_some(),
-            "highlight reveals row actions like hover"
+            window.try_find("copy-message-nav-assistant-1").is_none(),
+            "non-final rows offer no copy even when highlighted"
         );
         assert!(
             window.try_find("transcript-focus-rail-nav-assistant-1").is_some(),
@@ -37,6 +37,11 @@ fn transcript_arrows_navigate_messages_reveal_actions_and_escape_returns_to_comp
         assert_eq!(window.find("transcript-row-nav-assistant-1").bounds(), row, "highlight must not reflow the row");
         window.press("down", cx);
         assert_eq!(view.read(cx).keyboard_focused_message.as_deref(), Some("nav-assistant-2"));
+        window.render_frame(cx);
+        assert!(
+            window.try_find("copy-message-nav-assistant-2").is_some(),
+            "highlight reveals the final row actions like hover"
+        );
         window.press("down", cx);
         assert_eq!(
             view.read(cx).keyboard_focused_message.as_deref(),

@@ -191,6 +191,48 @@ impl Transcript {
         !matches!((existing, turn_id), (Some(previous), Some(incoming)) if previous != incoming)
     }
 
+    /// Whether this row is the copyable final answer of its turn: the only
+    /// assistant row that offers the inline message-copy action. Intermediate
+    /// commentary stays copyable through the palette command.
+    ///
+    /// Signals, in order: explicit archived finals; grouped live turns (the
+    /// ungrouped row); single-message completed turns (the timestamped tail);
+    /// legacy rows without a turn identity (the newest assistant overall).
+    /// Incomplete turns fail closed to no inline copy.
+    pub(in crate::desktop) fn is_final_turn_response(&self, id: &str) -> bool {
+        let Some(index) = self.position_by_id(id) else {
+            return false;
+        };
+        let Some(item) = self.items.get(index) else {
+            return false;
+        };
+        if !item.is_assistant() {
+            return false;
+        }
+        if item.archived_final {
+            return true;
+        }
+        let Some(turn_id) = item.turn_id.as_deref() else {
+            return self
+                .items()
+                .rev()
+                .find(|row| row.is_assistant())
+                .is_some_and(|row| row.id == id);
+        };
+        if self
+            .items()
+            .any(|row| row.turn_grouped && row.turn_id.as_deref() == Some(turn_id))
+        {
+            return !item.turn_grouped;
+        }
+        item.completed_at.is_some()
+            && self
+                .items()
+                .rev()
+                .find(|row| row.is_assistant() && row.turn_id.as_deref() == Some(turn_id))
+                .is_some_and(|row| row.id == id)
+    }
+
     pub(in crate::desktop) fn complete_turn_group(&mut self, turn_id: &str, final_id: &str) {
         let Some(final_index) = self.position_by_id(final_id) else {
             return;

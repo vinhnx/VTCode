@@ -683,6 +683,11 @@ impl DesktopView {
             .w_full()
             .max_w(px(self.content_width()))
             .gap_1()
+            // Assistant prose insets to the header title spine: leading
+            // slot + gap + small-button padding (32px). Symmetric so the
+            // column centering contracts keep holding. User pills stay
+            // trailing and keep their own shape.
+            .when(!user, |message| message.px_8())
             .content(
                 MessageContent::new().bubble(
                     Bubble::new()
@@ -731,9 +736,12 @@ impl DesktopView {
             .when(!user, |message| {
                 // Message actions reveal on hover or keyboard highlight; the
                 // slot keeps the xsmall button height so rows never reflow.
-                // Keyboard and screen-reader users can also copy through the
-                // palette command.
+                // Only the final turn response offers inline copy; intermediate
+                // commentary stays copyable through the palette command.
+                // The copy action docks at the trailing edge so timestamps
+                // keep the leading spine.
                 let revealed = self.transcript_row_revealed(item.id.as_str());
+                let copyable = revealed && self.transcript.is_final_turn_response(item.id.as_str());
                 message.footer(
                     MessageFooter::new().child(
                         div()
@@ -745,9 +753,10 @@ impl DesktopView {
                             .children(item.completed_at.as_ref().map(|time| {
                                 div().text_xs().text_color(themes::muted_text(&colors)).child(time.clone())
                             }))
-                            .when(revealed, |slot| {
+                            .when(copyable, |slot| {
                                 slot.child(
                                     desktop_button(format!("copy-message-{}", item.id))
+                                        .ml_auto()
                                         .icon(IconName::Copy)
                                         .accessibility_label(rust_i18n::t!("app.transcript.copy_message").to_string())
                                         .tooltip(rust_i18n::t!("app.transcript.copy_message").to_string())

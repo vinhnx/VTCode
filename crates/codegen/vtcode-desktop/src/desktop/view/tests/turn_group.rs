@@ -434,6 +434,92 @@ fn completed_turn_shows_time_only_on_identified_message(cx: &mut TestAppContext)
     .unwrap();
 }
 
+#[gpui_kit::test]
+fn only_final_turn_response_offers_message_copy(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent};
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            // Asymmetric turn: intermediate commentary outside the turn id,
+            // final answer inside it. Copy must follow the final only.
+            view.transcript.push(TranscriptItem::new(
+                "progress".into(),
+                "assistant".into(),
+                "Agent".into(),
+                "Working".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "final".into(),
+                "assistant".into(),
+                "Agent".into(),
+                "Done".into(),
+            ));
+            view.transcript.set_item_turn("final", "turn");
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: Some("turn".into()),
+                event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    final_response_item_id: Some(Box::new("final".into())),
+                    completed_at: Some(Box::new("2026-11-05T08:30:00Z".into())),
+                    usage: Usage::default(),
+                    in_progress_exec_sessions: Vec::new(),
+                })),
+            });
+        });
+        window.render_frame(cx);
+        window.hover("transcript-row-progress", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("message-actions-progress").is_some(), "footer slot stays for layout");
+        assert!(
+            window.try_find("copy-message-progress").is_none(),
+            "intermediate commentary must not offer message copy"
+        );
+        // Leave to a neutral element before the next hover: back-to-back
+        // row hovers lose the second enter in headless tests.
+        window.hover("transcript-scroll", cx);
+        window.render_frame(cx);
+        window.hover("transcript-row-final", cx);
+        window.render_frame(cx);
+        assert!(
+            window.try_find("copy-message-final").is_some(),
+            "final turn response keeps message copy"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn assistant_bodies_share_the_header_title_spine(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            for (id, role, title, text) in [
+                ("intro", "assistant", "VT Code", "I will inspect the build."),
+                ("read", "tool", "Read Cargo.toml", "completed\nmanifest"),
+                ("build", "tool", "cargo check", "failed (exit 1)\nstructured details"),
+                ("comment", "assistant", "VT Code", "The build needs a fix."),
+                ("retry", "tool", "cargo check", "in progress\nretrying"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), role.into(), title.into(), text.into()));
+            }
+        });
+        window.render_frame(cx);
+        // Assistant prose starts on the same left spine as group and tool
+        // titles; the message insets to meet the header chrome.
+        let first_body_x = window.find("message-body-intro").bounds().origin.x;
+        let second_body_x = window.find("message-body-comment").bounds().origin.x;
+        let header_x = window.find("activity-group-label-read").bounds().origin.x;
+        let single_x = window.find("tool-title-retry").bounds().origin.x;
+        assert_eq!(first_body_x, header_x, "first assistant body shares the header spine");
+        assert_eq!(second_body_x, header_x, "second assistant body shares the header spine");
+        assert_eq!(single_x, header_x, "single tool titles share the header spine");
+    })
+    .unwrap();
+}
+
 #[test]
 fn hidden_history_marker_does_not_suppress_user_messages() {
     let messages = vec![

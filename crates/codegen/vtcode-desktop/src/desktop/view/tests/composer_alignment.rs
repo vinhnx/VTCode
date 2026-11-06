@@ -87,7 +87,7 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
 /// reference; ghost button labels intentionally stay inset by button
 /// padding (matching transcript tool rows), only frames join the spine.
 #[gpui_kit::test]
-fn transcript_pending_composer_share_one_leading_spine(cx: &mut TestAppContext) {
+fn transcript_text_and_chrome_hold_their_spines(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     running_turn_without_content(cx, &view);
     view.update(cx, |view, _| {
@@ -96,6 +96,12 @@ fn transcript_pending_composer_share_one_leading_spine(cx: &mut TestAppContext) 
             "assistant".into(),
             "VT Code".into(),
             "Sharing the spine.".into(),
+        ));
+        view.transcript.push(TranscriptItem::new(
+            "spine-tool".into(),
+            "tool".into(),
+            "Read Cargo.toml".into(),
+            "completed\nmanifest".into(),
         ));
     });
 
@@ -123,26 +129,27 @@ fn transcript_pending_composer_share_one_leading_spine(cx: &mut TestAppContext) 
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
             let body = window.find("message-body-spine-answer").bounds();
+            let tool_title = window.find("tool-title-spine-tool").bounds();
             let pending = window.find("turn-pending-label").bounds();
             let running_mark = window.find("thread-header-running").bounds();
             let frame = window.find("message-composer-frame").bounds();
             let attach = window.find("attach-files").bounds();
             let policy = window.find("composer-policy").bounds();
             let policy_label = window.find("composer-policy-label").bounds();
-            // Only the row-leading button joins the spine; siblings
-            // follow after it with row gaps (center line pinned below
-            // by the button-row test).
-            for (name, other) in [
-                ("pending", pending),
-                ("running", running_mark),
-                ("frame", frame),
-                ("attach", attach),
-            ] {
+            // Chrome shares one leading edge; transcript text insets to the
+            // header title spine. Only the row-leading button joins the
+            // chrome spine; siblings follow after it with row gaps (center
+            // line pinned below by the button-row test).
+            for (name, other) in [("pending", pending), ("running", running_mark), ("attach", attach)] {
                 assert!(
-                    (other.origin.x - body.origin.x).abs() <= px(1.),
-                    "{name} starts on the transcript spine at {base_size}px: body={body:?} other={other:?}"
+                    (other.origin.x - frame.origin.x).abs() <= px(1.),
+                    "{name} starts on the chrome spine at {base_size}px: frame={frame:?} other={other:?}"
                 );
             }
+            assert!(
+                (body.origin.x - tool_title.origin.x).abs() <= px(1.),
+                "assistant text starts on the header title spine at {base_size}px: body={body:?} title={tool_title:?}"
+            );
             assert!(
                 (frame.center().x - body.center().x).abs() <= px(1.),
                 "composer stays centered on the transcript column at {base_size}px: frame={frame:?} body={body:?}"
@@ -159,11 +166,11 @@ fn transcript_pending_composer_share_one_leading_spine(cx: &mut TestAppContext) 
             window.render_frame(cx);
             assert!(window.try_find("turn-pending").is_none());
             assert!(window.try_find("thread-header-running").is_none());
-            let idle_body = window.find("message-body-spine-answer").bounds();
+            let idle_frame = window.find("message-composer-frame").bounds();
             let idle_title = window.find("thread-title").bounds();
             assert!(
-                (idle_title.origin.x - idle_body.origin.x).abs() <= px(1.),
-                "idle title starts on the transcript spine at {base_size}px: body={idle_body:?} title={idle_title:?}"
+                (idle_title.origin.x - idle_frame.origin.x).abs() <= px(1.),
+                "idle title starts on the chrome spine at {base_size}px: frame={idle_frame:?} title={idle_title:?}"
             );
         })
         .unwrap();
@@ -179,14 +186,17 @@ fn transcript_pending_composer_share_one_leading_spine(cx: &mut TestAppContext) 
             window.render_frame(cx);
             assert!(window.try_find("thread-header").is_none());
             let body = window.find("message-body-spine-answer").bounds();
+            let tool_title = window.find("tool-title-spine-tool").bounds();
             let pending = window.find("turn-pending-label").bounds();
             let frame = window.find("message-composer-frame").bounds();
-            for (name, other) in [("pending", pending), ("frame", frame)] {
-                assert!(
-                    (other.origin.x - body.origin.x).abs() <= px(1.),
-                    "zen {name} starts on the transcript spine at {base_size}px: body={body:?} other={other:?}"
-                );
-            }
+            assert!(
+                (pending.origin.x - frame.origin.x).abs() <= px(1.),
+                "zen pending starts on the chrome spine at {base_size}px: frame={frame:?} pending={pending:?}"
+            );
+            assert!(
+                (body.origin.x - tool_title.origin.x).abs() <= px(1.),
+                "zen assistant text starts on the header title spine at {base_size}px: body={body:?} title={tool_title:?}"
+            );
             assert!(
                 (frame.center().x - body.center().x).abs() <= px(1.),
                 "zen composer stays centered on the transcript column at {base_size}px: frame={frame:?} body={body:?}"

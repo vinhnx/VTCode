@@ -59,10 +59,10 @@ fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAp
         window.render_frame(cx);
         assert!(window.try_find("copy-message-user-center").is_none());
         assert!(window.try_find("copy-message-assistant-center").is_some());
-        assert!(
-            (assistant_body.origin.x - assistant_column.origin.x).abs() <= px(1.),
-            "assistant text should begin at the centered transcript column inset: body={assistant_body:?}, column={assistant_column:?}"
-        );
+        // Assistant text insets to the header title spine; the column
+        // itself stays centered (pinned above).
+        let tool_title = window.find("tool-title-tool-center").bounds();
+        assert_eq!(assistant_body.origin.x, tool_title.origin.x, "assistant text begins on the header spine");
     })
     .unwrap();
 
