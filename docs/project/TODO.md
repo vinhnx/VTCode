@@ -25,6 +25,12 @@ gpui apps for other plqtforms
 implement /doctor command. https://code.claude.com/docs/en/skills#check-your-setup-with-/doctor
 
 ---
+
+update the HITL confirmation layout again. reference current design '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-06 at 2.25.32 PM.png'
+
+1. no close button at the right top.
+2. allow to explan and show the full plan proposal view as markdown view -> extract as a share component for later use. can open and add the markdown view as a side accessory view -> design this. Help me reason through this problem step by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the simplest practical approach before implementation. 
+
 ---
 
 gpui-fast-linux, gpui-fast-windows, gpui-fast-web, gpui-fast-macos
@@ -34,8 +40,13 @@ gpui-fast-linux, gpui-fast-windows, gpui-fast-web, gpui-fast-macos
 gpui-web ?
 
 ---
+---
 
-check and fix reverse history search (control+r) for desktop app should use same logic from the cli.
+desktop: change the main start/cancel button in the chat input with a shimmer effect button.
+
+---
+
+desktop: change the main start/cancel button in the chat input with a shimmer effect button.
 
 ---
 
@@ -46,10 +57,6 @@ implement a simple markdown preview for desktop app.
 implement terminal for desktop app.
 
 --
-
-improve desktop shimmer text by lowering the text opacity, keep on the shimmer bright
-
----
 
 for search, it should able to deeplink to specific item when click, and scroll to and then highlight it for a brief moment.
 
@@ -71,45 +78,16 @@ https://github.com/vinhnx/VTCode/issues/803
 
 ---
 
-improve the transcript UI
-
-1. remove the marker deviders for the messages '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.46.19 PM.png'
-2. Implement auto grouped summarization when turn end and finialized. Idea: when the agent complete the turn with a a final summarization message. show it only as one agent message per user's message in the transcript. then group all the work log, tool call thinking and trace under a collapsible group UI. reference: Codex OpenAI.
-a. collapsed  '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.46.42 PM.png'. b. expanded: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.49.06 PM.png'.
-3. add a files changes summirzation component and show in the bottom of agent's message. idea: move the existing component for Utils pane and move here, CTA should just deep link to the Utils pane/tab. with files changes, views changes, and an Undo changes mechanism if possible -> think and design this logic with a confirm.
-4. Under that show a current clock like cli.
-
-the goal is a clean focused and simplified minified transcript log only.
-
-KISS and DRY.
-
-Help me reason through this problem step by step. Review the context, challenge assumptions, explore solutions and trade-offs, and think bigger about the overall design. Recommend the simplest practical approach before implementation. 
-
----
-
 note integrate pele to desktop app
 
 https://pele.run/
 
 ---
-
-advanced: implement live PTY Shell readonly viewer component for live stdio/error events with short and condensed view in the desktop app. check VT Code's component and try to port to desktop app.
-
-reference this design component from Codex. 
-
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 3.40.47 PM.png'
-
-replace the current JSON tool transcript display in the app with new component
-
 ---
 
 build and replace/revamp current desktop app components where suitable https://gpui-kit.com/component/dropdown_button/
 
----
-
-improve the design of the current HITL container component. maybe remove the yello warning background tone and refine and revamp each of the element and design. reference Codex OpenAI design: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-05 at 4.07.32 PM.png'
-
----
+------
 
 implement message queue/steer behavior and configuable in settings. this behavior shapes how message enter the queue when user press enter when a transcript loop is running. default to queue.
 
@@ -123,7 +101,6 @@ https://gpui-kit.com/component/toolbar/
 https://gpui-kit.com/component/title-bar/
 
 ---
----
 
 improve existing desktop shimmer https://gpui-kit.com/component/shimmer/
 
@@ -133,18 +110,8 @@ revamp existing manual build settings/config screen with https://gpui-kit.com/co
 
 ---
 ---
-
-check the mac icons, it seems missing the macos 27 subtle icon borders? '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 3.25.21 PM.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 3.25.06 PM.png'
-
-
 ---
-
-update the overall desktop icon size baseline, make sure the icon is not too small not too big, matching the font size UI settings baseline
-
 ----
-
-fix app icon corner rounded is not smooth. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-11-04 at 2.27.39 PM.png'
-
 ---
 
 use this https://gpui-kit.com/component/plot/ and https://gpui-kit.com/component/chart/ components for all data visualization
@@ -184,10 +151,6 @@ implement user's message bubble message with rich content when user's message ha
 implement custom theme https://gpui-kit.com/component/color-picker/ with color picker configuration for desktop app. allow user to create their own preferred theme. allow to save theme with name and add or delete it. have a new custom theme group from current theme selection in the settings
 
 ---
-
-add icons to quick command (command+k) https://gpui-kit.com/component/command
-
-----
 
 https://gpui-kit.com/component/editor/
 
@@ -242,3 +205,12 @@ phase 3 - only on demand signal: linux preview tarball, no auto-update, document
 verify: manual QA checklist (WCAG AA 4.5:1, 20 locales, keyboard/focus/Escape, trash fail-closed, launch argv boundary).
 
 non-goals: no windows packaging/signing now; no auto-update for linux preview; no behavior change on mac.
+
+## Plan (2026-11-06): centralize prompt budget caps / move goldens to disk files
+- Context: one guidance sentence pins assertions in 4 test files
+  (budget_cache_measure, content_and_dynamic, context_and_identity,
+  prompt_shape); every prompt tweak pays this tax.
+- Proposal: centralize caps or move goldens to disk files (DRYer).
+- Status: deferred deliberately -- bigger refactor with its own review cost.
+  Commit b8dd0e50d followed the existing raise-with-measured-value
+  convention instead (simplest correct move).
