@@ -165,6 +165,197 @@ fn handoff_link_in_other_workspace_arms_pending_navigation(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn handoff_waits_out_transient_gate_contention_then_loads(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().unwrap();
+    let canonical = vtcode_commons::paths::canonicalize(workspace.path()).expect("canonicalize");
+    let target = vtcode_desktop_protocol::SessionSummary {
+        session_id: "linked-session".into(),
+        title: Some("Linked".into()),
+        workspace: canonical.display().to_string(),
+        completed: true,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    };
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.arm_session_link(canonical.clone(), "linked-session".into(), cx);
+        // Bypass the async workspace switch; simulate an in-flight
+        // permission restore holding the transition gate.
+        view.workspace_selection_pending = false;
+        view.workspace = Some(canonical);
+        view.backend = Some(BackendHandle { commands });
+        view.session_request = Some(vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LIST.into(),
+                result: Some(json!([target])),
+                error: None,
+            },
+            cx,
+        );
+        assert!(requests.try_recv().is_err(), "contended gate must not send the load yet");
+        assert!(view.pending_navigation.is_some(), "transient refusal must keep pending navigation");
+        // The restore lands: the freed gate retries and fires the load.
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
+                result: Some(json!({
+                    "provider": "probe",
+                    "model": "probe",
+                    "authenticated": true,
+                    "credentialSetupCommand": "vtcode login",
+                })),
+                error: None,
+            },
+            cx,
+        );
+        assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+    });
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("freed gate should retry the linked load");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "linked-session" }));
+}
+
+#[gpui_kit::test]
+fn handoff_survives_a_failed_restore_without_a_stale_banner(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().unwrap();
+    let canonical = vtcode_commons::paths::canonicalize(workspace.path()).expect("canonicalize");
+    let target = vtcode_desktop_protocol::SessionSummary {
+        session_id: "linked-session".into(),
+        title: Some("Linked".into()),
+        workspace: canonical.display().to_string(),
+        completed: true,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    };
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.arm_session_link(canonical.clone(), "linked-session".into(), cx);
+        view.workspace_selection_pending = false;
+        view.workspace = Some(canonical);
+        view.backend = Some(BackendHandle { commands });
+        view.session_request = Some(vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LIST.into(),
+                result: Some(json!([target])),
+                error: None,
+            },
+            cx,
+        );
+        assert!(view.pending_navigation.is_some(), "contended handoff stays armed");
+        // The restore fails: the freed gate still retries the load, and the
+        // load send clears the failure banner instead of leaving it stale.
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
+                result: None,
+                error: Some("restore failed".to_string()),
+            },
+            cx,
+        );
+        assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+        assert!(view.error.is_none(), "retried load must clear the restore failure banner");
+    });
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("failed restore should still retry the linked load");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "linked-session" }));
+}
+
+#[gpui_kit::test]
+fn handoff_fails_fast_on_durable_blocks(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().unwrap();
+    let canonical = vtcode_commons::paths::canonicalize(workspace.path()).expect("canonicalize");
+    let target = vtcode_desktop_protocol::SessionSummary {
+        session_id: "linked-session".into(),
+        title: Some("Linked".into()),
+        workspace: canonical.display().to_string(),
+        completed: true,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    };
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.arm_session_link(canonical.clone(), "linked-session".into(), cx);
+        view.workspace_selection_pending = false;
+        view.workspace = Some(canonical);
+        view.backend = Some(BackendHandle { commands });
+        // A running turn blocks the gate with no response coming to free
+        // it: the handoff must fail fast, not wait forever.
+        view.running = true;
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LIST.into(),
+                result: Some(json!([target])),
+                error: None,
+            },
+            cx,
+        );
+        assert!(view.pending_navigation.is_none(), "durable block must fail the handoff fast");
+        assert!(requests.try_recv().is_err(), "failed handoff must not send the load");
+    });
+}
+
+#[gpui_kit::test]
+fn handoff_waits_for_the_switch_and_the_list(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().unwrap();
+    let canonical = vtcode_commons::paths::canonicalize(workspace.path()).expect("canonicalize");
+    let target = vtcode_desktop_protocol::SessionSummary {
+        session_id: "linked-session".into(),
+        title: Some("Linked".into()),
+        workspace: canonical.display().to_string(),
+        completed: true,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    };
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.arm_session_link(canonical.clone(), "linked-session".into(), cx);
+        // Mid-switch retry (e.g. a stale gated response): wait silently
+        // instead of failing on the stale pre-switch workspace.
+        view.workspace_selection_pending = true;
+        view.continue_pending_workspace_navigation(cx);
+        assert!(view.pending_navigation.is_some(), "in-flight switch must keep pending navigation");
+        assert!(view.error.is_none(), "waiting must not raise a spurious error");
+        // Switch done, list still in flight: wait rather than judge
+        // membership against an empty cache.
+        view.workspace_selection_pending = false;
+        view.workspace = Some(canonical);
+        view.continue_pending_workspace_navigation(cx);
+        assert!(view.pending_navigation.is_some(), "missing list must keep pending navigation");
+        assert!(view.error.is_none(), "waiting must not raise a spurious error");
+        // The list lands and completes the handoff.
+        view.backend = Some(BackendHandle { commands });
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LIST.into(),
+                result: Some(json!([target])),
+                error: None,
+            },
+            cx,
+        );
+        assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+    });
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("landed list should complete the waiting handoff");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "linked-session" }));
+}
+
+#[gpui_kit::test]
 fn handoff_link_with_missing_workspace_reports_invalid_folder(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::handoff_url::HandoffLink;
 

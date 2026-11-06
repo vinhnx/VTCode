@@ -842,6 +842,7 @@ impl DesktopView {
     pub(super) fn apply_session_list(&mut self, result: Value, cx: &mut Context<Self>) {
         match serde_json::from_value::<Vec<SessionSummary>>(result) {
             Ok(mut refreshed) => {
+                self.session_list_received = true;
                 let mut session_ids = HashSet::with_capacity(refreshed.len());
                 let has_invalid_session_id = refreshed.iter().any(|session| {
                     session.session_id.trim().is_empty() || !session_ids.insert(session.session_id.as_str())

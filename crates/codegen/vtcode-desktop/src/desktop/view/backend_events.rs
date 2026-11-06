@@ -295,7 +295,9 @@ impl DesktopView {
                 }
             }
             BackendEvent::Response { method, result, error } => {
-                if self.session_request == Some(method.as_str()) && method != protocol::method::SESSION_LOAD {
+                let gate_freed =
+                    self.session_request == Some(method.as_str()) && method != protocol::method::SESSION_LOAD;
+                if gate_freed {
                     self.session_request = None;
                 }
                 if let Some(error) = error {
@@ -410,6 +412,13 @@ impl DesktopView {
                         self.take_latest_pending = false;
                     }
                     self.status = rust_i18n::t!("app.service.request_failed").to_string();
+                    if gate_freed {
+                        // A failed request still frees the transition gate:
+                        // retry a waiting handoff now that error state is
+                        // settled. Fatal errors already cleared pending, so
+                        // this only proceeds for survivable ones.
+                        self.continue_pending_workspace_navigation(cx);
+                    }
                     return;
                 }
                 let result = result.unwrap_or(Value::Null);
@@ -761,6 +770,13 @@ impl DesktopView {
                         self.apply_exec_command_response(method.as_str());
                     }
                     _ => {}
+                }
+                if gate_freed {
+                    // The freed gate may unblock a waiting workspace
+                    // handoff; a no-op unless one is armed and the list
+                    // landed. Runs after handling so status and error
+                    // settle before the retried load overwrites them.
+                    self.continue_pending_workspace_navigation(cx);
                 }
             }
             BackendEvent::WorkspaceReviewResponse { request_id, result, error } => {

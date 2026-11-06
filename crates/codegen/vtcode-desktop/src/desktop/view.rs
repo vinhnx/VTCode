@@ -473,6 +473,10 @@ struct DesktopView {
     /// (`apply_session_list`, `prepare_workspace`); local creates/deletes
     /// shift loaded and total counts equally, so they preserve it.
     session_list_has_older: bool,
+    /// Whether any `session/list` page has landed for the current backend.
+    /// Pending navigation must not judge session membership before this is
+    /// set; reset beside `sessions` in `prepare_workspace`.
+    session_list_received: bool,
     selected_session_id: Option<String>,
     /// Open-thread tabs in first-open order; selection stays in
     /// `selected_session_id`. Tabs are window-local shortcuts — closing one

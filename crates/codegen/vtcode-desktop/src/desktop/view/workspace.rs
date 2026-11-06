@@ -303,8 +303,19 @@ impl DesktopView {
             self.fail_pending_navigation();
             return;
         };
+        if self.workspace_selection_pending || self.pending_workspace.is_some() {
+            // The switch itself is still in flight; its completion
+            // retries. Judging the workspace now would fail a handoff
+            // on a stale pre-switch value.
+            return;
+        }
         if self.workspace.as_ref() != Some(&target.workspace) {
             self.fail_pending_navigation();
+            return;
+        };
+        if !self.session_list_received {
+            // The list is still in flight; its arrival retries. Judging
+            // membership now would fail a handoff the list would satisfy.
             return;
         }
         let Some(session_id) = target.session_id else {
@@ -318,7 +329,12 @@ impl DesktopView {
             self.fail_pending_navigation();
             return;
         }
-        if !self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx) {
+        let load_sent =
+            self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx);
+        if !load_sent && self.session_request.is_none() {
+            // Durable block (running turn, retained draft, open
+            // interaction): fail fast like before. A held gate means a
+            // response is coming that will retry the load.
             self.fail_pending_navigation();
         }
     }
@@ -442,6 +458,7 @@ impl DesktopView {
         self.remember_workspace(workspace);
         self.pending_workspace = None;
         self.sessions.clear();
+        self.session_list_received = false;
         self.session_list_has_older = false;
         self.selected_session_id = None;
         self.reset_session_state();
