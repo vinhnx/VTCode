@@ -290,6 +290,11 @@ fn output_only_updates_preserve_transcript_geometry_and_existing_capture() {
     assert!(transcript.take_layout_changes().is_empty());
     let output = transcript.get(0).and_then(|row| row.output.as_ref()).map(ToString::to_string);
     assert_eq!(output.as_deref(), Some("updated output"));
+
+    transcript.toggle_tool("1");
+    let _expanded_layout = transcript.take_layout_changes();
+    transcript.set_output("1", Some("a longer\noutput".into()));
+    assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::RemeasureItems(0..1)]);
 }
 
 #[test]
@@ -685,6 +690,7 @@ fn tool_category_covers_every_event_variant() {
     // Follow-up output keeps its invocation's category; non-tool rows carry none.
     for details in [
         ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
             call_id: "call".into(),
             tool_call_id: None,
             spool_path: None,

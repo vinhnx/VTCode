@@ -3,7 +3,94 @@
 
 use super::*;
 
+/// Retain a bounded, UTF-8-safe tail of live deltas. Completion replaces this
+/// preview with the runtime's final snapshot, which can include a spool path.
+pub(super) const LIVE_OUTPUT_LIMIT: usize = 64 * 1024;
+
+pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
+    let chunk_start = chunk.ceil_char_boundary(chunk.len().saturating_sub(LIVE_OUTPUT_LIMIT));
+    let chunk = chunk.get(chunk_start..).unwrap_or_default();
+    let previous_start = previous.ceil_char_boundary(previous.len().saturating_sub(LIVE_OUTPUT_LIMIT - chunk.len()));
+    let mut output = String::with_capacity(previous.len() - previous_start + chunk.len());
+    output.push_str(previous.get(previous_start..).unwrap_or_default());
+    output.push_str(chunk);
+    output
+}
+
+#[cfg(test)]
+mod live_output_tests {
+    use super::{bounded_output_chunk, describe_activity};
+    use vtcode_exec_events::{
+        CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem,
+    };
+
+    #[test]
+    fn live_output_chunks_keep_order_and_bound_utf8() {
+        let first = bounded_output_chunk("", "first\n");
+        assert_eq!(bounded_output_chunk(&first, "second"), "first\nsecond");
+        assert_eq!(bounded_output_chunk("other", ""), "other");
+        let large = format!("prefix{}end", "界".repeat(30_000));
+        let tail = bounded_output_chunk("old", &large);
+        assert!(tail.len() <= 64 * 1024);
+        assert!(tail.ends_with("界end"));
+        assert!(!tail.contains("prefix"));
+    }
+
+    #[test]
+    fn failed_tool_output_and_command_report_exit_code_consistently() {
+        let output = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            call_id: "call".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: String::new(),
+            is_delta: None,
+            exit_code: Some(17),
+            status: ToolCallStatus::Failed,
+            app_previews: Vec::new(),
+        }));
+        let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: "false".into(),
+            arguments: None,
+            aggregated_output: String::new(),
+            exit_code: Some(17),
+            status: CommandExecutionStatus::Failed,
+        }));
+        assert_eq!(describe_activity(&output).1, "failed (exit 17)");
+        assert_eq!(describe_activity(&command).1, "failed (exit 17)");
+        let ThreadItemDetails::ToolOutput(mut output) = output else {
+            panic!("expected tool output")
+        };
+        output.status = ToolCallStatus::Completed;
+        output.exit_code = Some(0);
+        assert_eq!(describe_activity(&ThreadItemDetails::ToolOutput(output)).1, "completed");
+    }
+}
+
 impl DesktopView {
+    /// Resolve a live shell output to its invocation only when identities are unambiguous.
+    pub(super) fn runtime_output_row_id<'a>(&self, item: &'a vtcode_exec_events::ThreadItem) -> &'a str {
+        let vtcode_exec_events::ThreadItemDetails::ToolOutput(output) = &item.details else {
+            return &item.id;
+        };
+        if self.transcript.position_by_id(&item.id).is_some() {
+            return &item.id;
+        }
+        let Some(row) = self
+            .transcript
+            .position_by_id(&output.call_id)
+            .and_then(|index| self.transcript.get(index))
+        else {
+            return &item.id;
+        };
+        if row.activity_category == Some(ToolCategory::Run)
+            && row.output_item_id.as_deref().is_none_or(|id| id == item.id)
+        {
+            &output.call_id
+        } else {
+            &item.id
+        }
+    }
+
     pub(super) fn restore_review_summaries(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
         let mut completions: HashMap<&str, usize> = HashMap::new();
         let mut item_turns: HashMap<&str, Option<&str>> = HashMap::new();
@@ -148,16 +235,18 @@ impl DesktopView {
             .as_deref()
             .map(|context| context.turn_id.as_str())
             .filter(|id| !id.is_empty());
-        if !self.transcript.accepts_item_turn(&item.id, turn_id) {
+        let row_id = self.runtime_output_row_id(item).to_owned();
+        if !self.transcript.accepts_item_turn(&item.id, turn_id) || !self.transcript.accepts_item_turn(&row_id, turn_id)
+        {
             // Conflicting turn identity: the stale item is dropped.
             return;
         }
         self.update_runtime_item(item);
         if let Some(turn_id) = turn_id {
-            self.transcript.set_item_turn(&item.id, turn_id);
+            self.transcript.set_item_turn(&row_id, turn_id);
         }
         if let Some(context_turn) = context_turn {
-            self.transcript.set_item_canonical_turn(&item.id, context_turn);
+            self.transcript.set_item_canonical_turn(&row_id, context_turn);
         }
     }
 
@@ -165,13 +254,25 @@ impl DesktopView {
     /// identity: its historical activity row, output cursors/pages, and any
     /// pending output page. Shared by live updates and session-load batches.
     fn drop_superseded_restored_item(&mut self, item_id: &str) {
-        self.retain_restored_activity(|restored| restored.id.as_str() != item_id);
+        let capture_ids: Vec<String> = self
+            .restored_activity
+            .iter()
+            .filter(|row| row.id == item_id || row.output_item_id.as_deref() == Some(item_id))
+            .filter_map(|row| row.output_item_id.clone())
+            .collect();
+        self.retain_restored_activity(|restored| {
+            restored.id.as_str() != item_id && restored.output_item_id.as_deref() != Some(item_id)
+        });
         let _cursor = self.restored_output_cursors.remove(item_id);
         let _pages = self.restored_output_pages.remove(item_id);
+        for capture_id in &capture_ids {
+            let _cursor = self.restored_output_cursors.remove(capture_id);
+            let _pages = self.restored_output_pages.remove(capture_id);
+        }
         if self
             .output_page_pending
             .as_ref()
-            .is_some_and(|pending| pending.item_id == item_id)
+            .is_some_and(|pending| pending.item_id == item_id || capture_ids.contains(&pending.item_id))
         {
             self.output_page_pending = None;
             self.output_page_task = None;
@@ -181,6 +282,56 @@ impl DesktopView {
 
     pub(super) fn project_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem, historical: bool) {
         use vtcode_exec_events::ThreadItemDetails;
+        if historical && let ThreadItemDetails::ToolOutput(output) = &item.details {
+            let incoming_turn = item
+                .context
+                .as_deref()
+                .map(|context| context.turn_id.as_str())
+                .filter(|id| !id.is_empty());
+            let index = self.restored_activity.iter().position(|row| {
+                row.id == output.call_id
+                    && row.activity_category == Some(ToolCategory::Run)
+                    && row.output_item_id.as_deref().is_none_or(|id| id == item.id)
+                    && !matches!((row.canonical_turn_id.as_deref(), incoming_turn), (Some(a), Some(b)) if a != b)
+            });
+            if let Some(index) = index {
+                let (_, mut status) = describe_activity(&item.details);
+                if ActivityState::from_status(&status) == ActivityState::Running {
+                    status = tool_status::INTERRUPTED.to_string();
+                }
+                let Some(row) = self.restored_activity.get_mut(index) else {
+                    return;
+                };
+                let rest = row.text.split_once('\n').map_or("", |(_, rest)| rest);
+                row.text = format!("{status}\n{rest}").into();
+                row.output = Some(output.output.as_str().into());
+                row.output_item_id = Some(item.id.clone());
+                row.app_previews.clone_from(&output.app_previews);
+                self.bump_restored_activity_revision();
+                return;
+            }
+        }
+        if !historical && let ThreadItemDetails::ToolOutput(output) = &item.details {
+            let row_id = self.runtime_output_row_id(item).to_owned();
+            if row_id != item.id
+                && let Some(row) = self
+                    .transcript
+                    .position_by_id(&row_id)
+                    .and_then(|index| self.transcript.get(index))
+            {
+                let title = row.title.to_string();
+                let details = row.text.split_once('\n').map_or("", |(_, rest)| rest);
+                let status = describe_activity(&item.details).1;
+                let text = format!("{status}\n{details}");
+                self.append_or_update_item(row_id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
+                self.transcript.set_output(&row_id, Some(output.output.as_str().into()));
+                self.transcript.set_output_identity(&row_id, &item.id);
+                if !output.app_previews.is_empty() {
+                    self.transcript.set_app_previews(&row_id, output.app_previews.clone());
+                }
+                return;
+            }
+        }
         let id = item.id.clone();
         match &item.details {
             ThreadItemDetails::AgentMessage(message) => {
@@ -397,7 +548,14 @@ impl DesktopView {
     }
 
     pub(super) fn select_activity_output(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
-        self.selected_output_id = Some(id);
+        let capture_id = self
+            .restored_activity
+            .iter()
+            .chain(self.transcript.items())
+            .find(|row| row.id == id)
+            .and_then(|row| row.output_item_id.clone())
+            .unwrap_or(id);
+        self.selected_output_id = Some(capture_id);
         self.open_inspector_tab(InspectorTab::Output, cx);
         self.inspector_focus.focus(window, cx);
     }
@@ -435,15 +593,11 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
     match details {
         ThreadItemDetails::ToolInvocation(tool) => (tool_row_gist(tool), tool_status_label(&tool.status)),
         ThreadItemDetails::ToolOutput(output) => {
-            (rust_i18n::t!("app.transcript.tool_output_title").to_string(), tool_status_label(&output.status))
+            let label = status_with_exit_code(tool_status_label(&output.status), output.exit_code);
+            (rust_i18n::t!("app.transcript.tool_output_title").to_string(), label)
         }
         ThreadItemDetails::CommandExecution(command) => {
-            let mut label = command_status_label(&command.status);
-            if let Some(code) = command.exit_code
-                && matches!(command.status, vtcode_exec_events::CommandExecutionStatus::Failed)
-            {
-                label = format!("{}{code})", tool_status::FAILED_EXIT_PREFIX);
-            }
+            let label = status_with_exit_code(command_status_label(&command.status), command.exit_code);
             (command.command.clone(), label)
         }
         ThreadItemDetails::McpToolCall(call) => {
@@ -480,6 +634,16 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
         | ThreadItemDetails::Reasoning(_)
         | ThreadItemDetails::Decision(_)
         | ThreadItemDetails::FileChange(_) => ("Activity".to_string(), tool_status::ACTIVITY.to_string()),
+    }
+}
+
+fn status_with_exit_code(status: String, exit_code: Option<i32>) -> String {
+    if status == tool_status::FAILED
+        && let Some(code) = exit_code
+    {
+        format!("{}{code})", tool_status::FAILED_EXIT_PREFIX)
+    } else {
+        status
     }
 }
 

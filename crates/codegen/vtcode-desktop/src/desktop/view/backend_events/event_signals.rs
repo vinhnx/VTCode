@@ -41,6 +41,13 @@ pub(super) fn is_item_update_event(event: &BackendEvent) -> bool {
 }
 
 pub(in super::super) fn can_coalesce_item_updates(previous: &BackendEvent, next: &BackendEvent) -> bool {
+    // Tool output updates may carry deltas, unlike the other item snapshots.
+    if matches!(next, BackendEvent::ThreadEvent(notification)
+        if matches!(notification.event.event(), vtcode_exec_events::ThreadEvent::ItemUpdated(update)
+            if matches!(update.item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_))))
+    {
+        return false;
+    }
     matches!(
         (item_update_identity(previous), item_update_identity(next)),
         (Some((previous_session, previous_turn, previous_item)), Some((next_session, next_turn, next_item)))

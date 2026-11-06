@@ -227,6 +227,7 @@ fn builder_tool_invocation_with_output() {
             context: None,
             id: "tool_1:output".to_string(),
             details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "tool_1".to_string(),
                 tool_call_id: Some("tc_0".to_string()),
                 spool_path: None,

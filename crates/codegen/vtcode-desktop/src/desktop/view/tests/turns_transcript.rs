@@ -769,6 +769,7 @@ fn activity_details_omit_tool_output_from_the_metadata_copy() {
     };
 
     let details = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+        is_delta: None,
         call_id: "call-1".into(),
         tool_call_id: Some("provider-call-1".into()),
         spool_path: Some(".vtcode/tool-outputs/call-1".into()),

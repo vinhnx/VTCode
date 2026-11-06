@@ -215,6 +215,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
         id: id.into(),
         context: None,
         details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
             call_id: format!("{id}-call"),
             tool_call_id: None,
             spool_path: spool_path.map(str::to_owned),

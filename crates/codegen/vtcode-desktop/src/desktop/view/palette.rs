@@ -322,7 +322,7 @@ impl DesktopView {
             .take(MAX_CONVERSATION_SEARCH_ROWS)
             .filter_map(|item| {
                 let output = item.output.as_ref()?;
-                let searchable_output = inspector::output_tail(output);
+                let searchable_output = inspector::display_output_tail(output);
                 let mut entry = command(
                     format!(
                         "{} · {} · {}",

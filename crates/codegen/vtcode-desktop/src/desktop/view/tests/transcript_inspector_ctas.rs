@@ -181,14 +181,13 @@ fn tool_output_cta_selects_that_tool_output_and_hides_without_output(cx: &mut Te
 
         window.click("tool-second", cx);
         window.render_frame(cx);
-        // The row click focuses and hovers, so clear both to observe the
-        // rest state: the jump recedes but the copy action stays (it has no
-        // palette path).
+        // The output and copy actions remain visible even after hover and
+        // keyboard highlighting leave the row.
         view.update(cx, |view, _| view.keyboard_focused_message = None);
         window.hover("transcript-scroll", cx);
         window.render_frame(cx);
         assert!(window.try_find("tool-open-output-second").is_some(), "jump keeps its space");
-        assert!(!window.find("tool-open-output-second").visible(), "jump hides at rest");
+        assert!(window.find("tool-open-output-second").visible(), "full output remains available at rest");
         assert!(window.find("copy-tool-output-second").visible(), "copy stays visible");
         let row = window.find("transcript-row-second").bounds();
         window.hover("transcript-row-second", cx);

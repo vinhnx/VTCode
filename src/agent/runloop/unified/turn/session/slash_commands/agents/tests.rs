@@ -146,6 +146,7 @@ fn summarize_thread_event_preview_uses_latest_live_updates() {
                 context: None,
                 id: "tool-output-1".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: None,
                     call_id: "call-1".to_string(),
                     tool_call_id: None,
                     spool_path: None,

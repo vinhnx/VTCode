@@ -57,6 +57,7 @@ fn cancelled_calls_are_distinct_from_errors_and_do_not_verify() {
             &format!("{id}:output"),
             activity,
             ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: id.into(),
                 tool_call_id: None,
                 output: "retained evidence".into(),
@@ -634,6 +635,7 @@ fn incomplete_or_failed_tool_output_cannot_verify_a_completed_invocation() {
     );
     let output = |status| {
         ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
             call_id: "tool".into(),
             tool_call_id: None,
             spool_path: None,
@@ -773,6 +775,7 @@ fn async_verifier_aliases_complete_once_and_use_launch_time_for_freshness() {
         );
         let output = |status, exit_code| {
             ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "launch".into(),
                 tool_call_id: None,
                 spool_path: None,
@@ -959,6 +962,7 @@ fn verifier_freshness_uses_execution_start_instead_of_streamed_argument_start() 
             id: "output".into(),
             context: Some(Box::new(context.clone())),
             details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "call".into(),
                 tool_call_id: None,
                 spool_path: None,

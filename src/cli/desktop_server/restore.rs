@@ -249,6 +249,28 @@ pub(super) fn restored_inspector_history(workspace: &Path, session_id: &str) -> 
     let mut activity_output_cursors = Vec::new();
     let mut output_spools = std::collections::HashMap::new();
     let (timeline_events, timeline_incomplete) = bounded_timeline(&tail.events, tail.truncated)?;
+    // Reconstruct interrupted streams before selecting the latest item. The
+    // event tail is itself bounded; each retained preview has its own cap.
+    let mut live_outputs = std::collections::HashMap::<String, (String, bool)>::new();
+    for event in &tail.events {
+        let (item, started, completed) = match event.event() {
+            ThreadEvent::ItemStarted(event) => (&event.item, true, false),
+            ThreadEvent::ItemUpdated(event) => (&event.item, false, false),
+            ThreadEvent::ItemCompleted(event) => (&event.item, false, true),
+            _ => continue,
+        };
+        let ThreadItemDetails::ToolOutput(output) = &item.details else {
+            continue;
+        };
+        if completed {
+            live_outputs.remove(&item.id);
+        } else if started || output.is_delta != Some(true) {
+            live_outputs.insert(item.id.clone(), (output.output.clone(), false));
+        } else {
+            let (text, incomplete) = live_outputs.entry(item.id.clone()).or_insert_with(|| (String::new(), true));
+            append_restored_output(text, incomplete, &output.output);
+        }
+    }
     for event in tail.events.into_iter().rev() {
         let mut item = match event.into_event() {
             ThreadEvent::ItemStarted(event) => event.item,
@@ -265,6 +287,18 @@ pub(super) fn restored_inspector_history(workspace: &Path, session_id: &str) -> 
             let mut restored_output = RestoredOutputProjection { incomplete: false, cursor: None, spool_path: None };
             if !activity.full && !activity.seen.contains(&item.id) {
                 let remaining = MAX_ACTIVITY_BYTES.saturating_sub(activity.encoded_bytes);
+                if let ThreadItemDetails::ToolOutput(output) = &mut item.details
+                    && output.is_delta == Some(true)
+                    && let Some((text, incomplete)) = live_outputs.remove(&item.id)
+                {
+                    output.output = text;
+                    output.is_delta = None;
+                    if incomplete {
+                        output.output.push_str(RESTORED_OUTPUT_TRUNCATION_SUFFIX);
+                        activity.incomplete = true;
+                    }
+                    activity.incomplete |= fit_restored_output(&mut item, remaining, incomplete)?;
+                }
                 restored_output = restore_spooled_tool_output(workspace, &mut item, remaining)?;
                 activity.incomplete |= restored_output.incomplete;
             }
@@ -303,6 +337,90 @@ pub(super) fn restored_inspector_history(workspace: &Path, session_id: &str) -> 
         timeline_events,
         timeline_incomplete,
     })
+}
+
+fn fit_restored_output(
+    item: &mut vtcode_core::exec::events::ThreadItem,
+    budget: usize,
+    mut marked: bool,
+) -> Result<bool> {
+    use vtcode_core::exec::events::ThreadItemDetails;
+    let mut truncated = false;
+    while serde_json::to_vec(&*item)?.len() > budget {
+        let ThreadItemDetails::ToolOutput(output) = &mut item.details else {
+            break;
+        };
+        let text = if marked {
+            output
+                .output
+                .strip_suffix(RESTORED_OUTPUT_TRUNCATION_SUFFIX)
+                .unwrap_or(&output.output)
+        } else {
+            &output.output
+        };
+        if text.is_empty() {
+            output.output.clear();
+            break;
+        }
+        let start = text.ceil_char_boundary((text.len() / 2).max(1));
+        output.output = format!("{}{RESTORED_OUTPUT_TRUNCATION_SUFFIX}", text.get(start..).unwrap_or_default());
+        marked = true;
+        truncated = true;
+    }
+    Ok(truncated)
+}
+
+fn append_restored_output(text: &mut String, incomplete: &mut bool, chunk: &str) {
+    const LIMIT: usize = 32 * 1024;
+    let chunk_start = chunk.ceil_char_boundary(chunk.len().saturating_sub(LIMIT));
+    let chunk = chunk.get(chunk_start..).unwrap_or_default();
+    let start = text.ceil_char_boundary(text.len().saturating_sub(LIMIT - chunk.len()));
+    *incomplete |= chunk_start > 0 || start > 0;
+    if start > 0 {
+        *text = text.get(start..).unwrap_or_default().to_string();
+    }
+    text.push_str(chunk);
+}
+
+#[cfg(test)]
+mod output_budget_tests {
+    use super::*;
+    use vtcode_core::core::agent::events::tool_output_delta_event;
+    use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails};
+
+    #[test]
+    fn restored_output_fits_budget_even_when_notice_does_not_fit() {
+        let ThreadEvent::ItemUpdated(event) = tool_output_delta_event("a".into(), None, "content") else {
+            panic!("expected output update");
+        };
+        let mut item = event.item;
+        let mut empty = item.clone();
+        let ThreadItemDetails::ToolOutput(output) = &mut empty.details else {
+            panic!("expected output")
+        };
+        output.output.clear();
+        let budget = serde_json::to_vec(&empty).unwrap().len() + 1;
+        assert!(fit_restored_output(&mut item, budget, false).unwrap());
+        assert!(serde_json::to_vec(&item).unwrap().len() <= budget);
+    }
+
+    #[test]
+    fn restored_output_does_not_confuse_literal_notice_with_a_marker() {
+        let ThreadEvent::ItemUpdated(event) =
+            tool_output_delta_event("a".into(), None, RESTORED_OUTPUT_TRUNCATION_SUFFIX)
+        else {
+            panic!("expected output update");
+        };
+        let mut item = event.item;
+        let mut empty = item.clone();
+        let ThreadItemDetails::ToolOutput(output) = &mut empty.details else {
+            panic!("expected output")
+        };
+        output.output.clear();
+        let budget = serde_json::to_vec(&empty).unwrap().len() + 1;
+        assert!(fit_restored_output(&mut item, budget, false).unwrap());
+        assert!(serde_json::to_vec(&item).unwrap().len() <= budget);
+    }
 }
 
 fn bounded_timeline(

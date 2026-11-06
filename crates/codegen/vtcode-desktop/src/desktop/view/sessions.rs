@@ -56,7 +56,7 @@ pub(super) fn append_restored_output_page(
         .strip_suffix(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX)
         .unwrap_or(current_output.as_ref());
     let pages = pages_by_item
-        .entry(item.id.clone())
+        .entry(item.output_item_id.clone().unwrap_or_else(|| item.id.clone()))
         .or_insert_with(|| vec![current_preview.into()]);
 
     let mut next_preview = String::with_capacity(
@@ -386,7 +386,9 @@ impl DesktopView {
                     return;
                 }
 
-                let Some(item) = view.restored_activity.iter_mut().find(|item| item.id == pending.item_id) else {
+                let Some(item) = view.restored_activity.iter_mut().find(|item| {
+                    item.id == pending.item_id || item.output_item_id.as_deref() == Some(pending.item_id.as_str())
+                }) else {
                     view.fail_output_page(cx);
                     return;
                 };

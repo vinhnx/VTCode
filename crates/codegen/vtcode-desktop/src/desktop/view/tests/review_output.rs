@@ -1,4 +1,308 @@
 use super::*;
+use crate::desktop::inspector as output_inspector;
+
+fn shell_call(id: &str, command: &str) -> vtcode_exec_events::ThreadItem {
+    use vtcode_exec_events::*;
+    ThreadItem {
+        id: id.into(),
+        context: None,
+        details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+            tool_name: "exec_command".into(),
+            arguments: Some(json!({"command": command})),
+            tool_call_id: None,
+            status: ToolCallStatus::InProgress,
+            outcome: None,
+        })),
+    }
+}
+
+fn shell_output(
+    id: &str,
+    call: &str,
+    output: &str,
+    status: vtcode_exec_events::ToolCallStatus,
+    delta: bool,
+) -> vtcode_exec_events::ThreadItem {
+    use vtcode_exec_events::*;
+    ThreadItem {
+        id: id.into(),
+        context: None,
+        details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            call_id: call.into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: output.into(),
+            is_delta: delta.then_some(true),
+            exit_code: None,
+            status,
+            app_previews: Vec::new(),
+        })),
+    }
+}
+
+#[gpui_kit::test]
+fn shell_invocations_share_rows_with_interleaved_output(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some("session".into());
+            let notification = |event| ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: Some("turn".into()),
+                event: VersionedThreadEvent::new(event),
+            };
+            for (id, command) in [("call-a", "echo alpha"), ("call-b", "echo beta")] {
+                view.handle_thread_event(notification(ThreadEvent::ItemStarted(ItemStartedEvent {
+                    item: shell_call(id, command),
+                })));
+            }
+            for (id, call, text) in [
+                ("out-a", "call-a", "alpha "),
+                ("out-b", "call-b", "beta"),
+                ("out-a", "call-a", "tail"),
+            ] {
+                view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                    item: shell_output(id, call, text, ToolCallStatus::InProgress, true),
+                })));
+            }
+            assert_eq!(view.transcript.items().filter(|row| row.role == "tool").count(), 2);
+            let row = view.transcript.items().find(|row| row.id == "call-a").unwrap();
+            assert_eq!(row.title, "echo alpha");
+            assert_eq!(row.output.as_deref(), Some("alpha tail"));
+            assert_eq!(row.output_item_id.as_deref(), Some("out-a"));
+            assert_eq!(output_inspector::output_for(&view.transcript, &[], Some("out-b")).unwrap().text, "beta");
+            view.handle_thread_event(notification(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: shell_output("out-a", "call-a", "final", ToolCallStatus::Failed, false),
+            })));
+            let row = view.transcript.items().find(|row| row.id == "call-a").unwrap();
+            assert_eq!(row.output.as_deref(), Some("final"));
+            assert!(row.text.starts_with("failed"));
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn restored_shell_activity_preserves_capture_identity(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.project_runtime_item(&shell_call("call", "cargo check"), true);
+        view.project_runtime_item(&shell_output("capture", "call", "output", ToolCallStatus::Completed, false), true);
+        assert_eq!(view.restored_activity.len(), 1);
+        assert_eq!(view.restored_activity[0].id, "call");
+        assert_eq!(view.restored_activity[0].output_item_id.as_deref(), Some("capture"));
+        let output = output_inspector::output_for(&view.transcript, &view.restored_activity, Some("capture")).unwrap();
+        assert_eq!(output.id, "capture");
+        assert_eq!(output.text, "output");
+        let mut item = view.restored_activity[0].clone();
+        let mut pages = std::collections::HashMap::new();
+        let mut page = vtcode_desktop_protocol::SessionOutputPage {
+            session_id: "session".into(),
+            request_id: "request".into(),
+            item_id: "capture".into(),
+            offset: 0,
+            next_offset: 5,
+            total_bytes: 5,
+            text: " tail".into(),
+            has_more: false,
+        };
+        assert!(append_restored_output_page(&mut item, &mut pages, &mut page));
+        assert_eq!(restored_output_for_copy("capture", item.output.as_ref().unwrap(), &pages, false), "output tail");
+    });
+}
+
+#[gpui_kit::test]
+fn merged_shell_row_opens_its_canonical_capture(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.project_runtime_item(&shell_call("call", "cargo check"), false);
+            view.project_runtime_item(
+                &shell_output("capture", "call", "compiler output", ToolCallStatus::Completed, false),
+                false,
+            );
+        });
+        window.render_frame(cx);
+        window.click("tool-call", cx);
+        window.render_frame(cx);
+        window.click("tool-open-output-call", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).selected_output_id.as_deref(), Some("capture"));
+        assert_eq!(window.find("output-body").label(), Some("compiler output"));
+        assert!(window.try_find("tool-capture").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn shell_output_does_not_merge_across_turns_or_into_non_shell_calls(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::*;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let notification = |turn: &str, event| ThreadEventNotification {
+            session_id: "session".into(),
+            turn_id: Some(turn.into()),
+            event: VersionedThreadEvent::new(event),
+        };
+        view.handle_thread_event(notification(
+            "turn-a",
+            ThreadEvent::ItemStarted(ItemStartedEvent { item: shell_call("call", "echo safe") }),
+        ));
+        view.handle_thread_event(notification(
+            "turn-b",
+            ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                item: shell_output("capture", "call", "foreign", ToolCallStatus::InProgress, true),
+            }),
+        ));
+        let call = view.transcript.items().find(|row| row.id == "call").unwrap();
+        assert!(call.output.is_none());
+        assert!(view.transcript.items().all(|row| row.id != "capture"));
+        let mut read = shell_call("read", "file");
+        if let ThreadItemDetails::ToolInvocation(invocation) = &mut read.details {
+            invocation.tool_name = "read_file".into();
+        }
+        view.project_runtime_item(&read, false);
+        view.project_runtime_item(
+            &shell_output("read-output", "read", "data", ToolCallStatus::Completed, false),
+            false,
+        );
+        assert!(view.transcript.items().any(|row| row.id == "read-output"));
+        assert!(view.transcript.items().find(|row| row.id == "read").unwrap().output.is_none());
+    });
+}
+
+#[gpui_kit::test]
+fn merged_restored_row_pages_by_its_capture_identity(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let prefix = "merged prefix";
+    let tail = " tail";
+    let total_bytes = u64::try_from(prefix.len() + tail.len()).expect("test page length fits in u64");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.project_runtime_item(&shell_call("merged-call", "cargo check"), true);
+            view.project_runtime_item(
+                &shell_output("merged-capture", "merged-call", prefix, ToolCallStatus::Completed, false),
+                true,
+            );
+            assert_eq!(view.restored_activity.len(), 1);
+            assert_eq!(view.restored_activity[0].id, "merged-call");
+            // Both the row id and the capture id resolve to the same capture.
+            for selected in ["merged-call", "merged-capture"] {
+                let output =
+                    output_inspector::output_for(&view.transcript, &view.restored_activity, Some(selected)).unwrap();
+                assert_eq!(output.id, "merged-capture");
+            }
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("archive-session".into());
+            view.selected_output_id = Some("merged-capture".into());
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+            let _previous = view.restored_output_cursors.insert(
+                "merged-capture".into(),
+                vtcode_desktop_protocol::SessionOutputCursor {
+                    item_id: "merged-capture".into(),
+                    next_offset: prefix.len() as u64,
+                    total_bytes,
+                },
+            );
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("load-more-output", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("merged capture page request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_OUTPUT_READ);
+    assert_eq!(params["sessionId"], "archive-session");
+    assert_eq!(params["itemId"], "merged-capture");
+    assert_eq!(params["offset"], prefix.len());
+    let request_id = params["requestId"].as_str().unwrap().to_string();
+    let page = vtcode_desktop_protocol::SessionOutputPage {
+        session_id: "archive-session".into(),
+        request_id: request_id.clone(),
+        item_id: "merged-capture".into(),
+        offset: prefix.len() as u64,
+        next_offset: total_bytes,
+        total_bytes,
+        text: tail.into(),
+        has_more: false,
+    };
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::SessionOutputResponse { request_id, result: Some(json!(page)), error: None },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, _| {
+            assert_eq!(view.restored_activity[0].id, "merged-call");
+            assert_eq!(view.restored_activity[0].output.as_deref(), Some("merged prefix tail"));
+            assert!(!view.restored_output_cursors.contains_key("merged-capture"));
+            assert!(view.output_page_pending.is_none());
+            assert!(view.output_page_error.is_none());
+        });
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("merged prefix tail"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn live_output_supersedes_a_restored_merged_row(cx: &mut TestAppContext) {
+    use vtcode_exec_events::ToolCallStatus;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.project_runtime_item(&shell_call("resume-call", "cargo check"), true);
+        view.project_runtime_item(
+            &shell_output("resume-capture", "resume-call", "stale output", ToolCallStatus::InProgress, true),
+            true,
+        );
+        assert_eq!(view.restored_activity.len(), 1);
+        let _previous = view.restored_output_cursors.insert(
+            "resume-capture".into(),
+            vtcode_desktop_protocol::SessionOutputCursor {
+                item_id: "resume-capture".into(),
+                next_offset: 12,
+                total_bytes: 24,
+            },
+        );
+        view.output_page_pending = Some(super::super::PendingOutputPage {
+            request_id: "stale-page".into(),
+            session_id: "archive-session".into(),
+            item_id: "resume-capture".into(),
+            offset: 12,
+        });
+        view.update_runtime_item(&shell_output(
+            "resume-capture",
+            "resume-call",
+            "live output",
+            ToolCallStatus::InProgress,
+            true,
+        ));
+        // The restored merged row, its cursor, and its pending page are gone.
+        assert!(view.restored_activity.is_empty());
+        assert!(view.restored_output_cursors.is_empty());
+        assert!(view.output_page_pending.is_none());
+        // The invocation never went live, so the output keeps a standalone row.
+        let rows: Vec<_> = view.transcript.items().filter(|row| row.role == "tool").collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "resume-capture");
+        assert_eq!(rows[0].output.as_deref(), Some("live output"));
+    });
+}
 
 #[gpui_kit::test]
 fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut TestAppContext) {
@@ -405,6 +709,29 @@ fn restored_output_pages_keep_a_bounded_preview_and_copy_complete_text() {
     assert!(!copied.ends_with(truncation_suffix));
 }
 
+#[test]
+fn restored_output_pages_keep_split_terminal_sequences_in_capture() {
+    let suffix = vtcode_desktop_protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+    let mut item = TranscriptItem::new("output".into(), "tool".into(), "Command".into(), "completed".into());
+    item.output = Some(format!("before\u{1b}[3{suffix}").into());
+    let mut pages = std::collections::HashMap::new();
+    let mut page = vtcode_desktop_protocol::SessionOutputPage {
+        session_id: "session".into(),
+        request_id: "request".into(),
+        item_id: "output".into(),
+        offset: 0,
+        next_offset: 6,
+        total_bytes: 6,
+        text: "1mred!".into(),
+        has_more: false,
+    };
+    assert!(append_restored_output_page(&mut item, &mut pages, &mut page));
+    let captured = item.output.as_ref().unwrap();
+    assert_eq!(captured.as_ref(), "before\u{1b}[31mred!");
+    assert_eq!(restored_output_for_copy("output", captured, &pages, false), "before\u{1b}[31mred!");
+    assert_eq!(output_inspector::display_output_tail(captured), "beforered!");
+}
+
 #[gpui_kit::test]
 fn stale_output_page_error_does_not_clear_the_current_request(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
@@ -479,6 +806,88 @@ fn failed_historical_output_page_keeps_the_incomplete_marker_and_retry_control(c
         assert!(state.restored_output_cursors.contains_key("historical-output"));
         assert!(state.output_page_pending.is_none());
         assert!(state.output_page_error.is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn live_tool_output_keeps_interleaved_chunks_and_replaces_them_on_completion(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some("session".into());
+            let item = |id: &str, text: &str, status| ThreadItem {
+                id: id.into(),
+                context: None,
+                details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: Some(true),
+                    call_id: id.into(),
+                    tool_call_id: None,
+                    spool_path: None,
+                    output: text.into(),
+                    exit_code: None,
+                    status,
+                    app_previews: Vec::new(),
+                })),
+            };
+            let notification = |event| ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: None,
+                event: VersionedThreadEvent::new(event),
+            };
+            let first = item("a", "alpha ", ToolCallStatus::InProgress);
+            let next = item("a", "omega", ToolCallStatus::InProgress);
+            let wrap =
+                |item| BackendEvent::ThreadEvent(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item })));
+            assert!(!super::super::can_coalesce_item_updates(&wrap(first.clone()), &wrap(next.clone())));
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: first })));
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                item: item("b", "other", ToolCallStatus::InProgress),
+            })));
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: next })));
+            let output = |view: &DesktopView, id: &str| {
+                view.transcript
+                    .items()
+                    .find(|row| row.id == id)
+                    .and_then(|row| row.output.as_deref())
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            assert_eq!(output(view, "a"), "alpha omega");
+            assert_eq!(output(view, "b"), "other");
+            for chunk in ["\u{1b}[3", "1m warning\u{1b}[0m"] {
+                view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                    item: item("a", chunk, ToolCallStatus::InProgress),
+                })));
+            }
+            let preview: gpui_kit::SharedString = output(view, "a").into();
+            assert_eq!(output_inspector::display_output_tail(&preview), "alpha omega warning");
+            let mut snapshot = item("b", "other extended", ToolCallStatus::InProgress);
+            if let ThreadItemDetails::ToolOutput(value) = &mut snapshot.details {
+                value.is_delta = None;
+            }
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: snapshot })));
+            assert_eq!(output(view, "b"), "other extended");
+            view.handle_thread_event(notification(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+                item: item("a", &"x".repeat(65_537), ToolCallStatus::InProgress),
+            })));
+            let preview = crate::desktop::inspector::output_for(&view.transcript, &[], Some("a")).unwrap();
+            assert!(preview.truncated);
+            assert!(preview.text.contains("Earlier output truncated"));
+            assert_eq!(output(view, "a").len(), 65_536);
+            view.handle_thread_event(notification(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: item("a", "final result", ToolCallStatus::Failed),
+            })));
+            assert_eq!(output(view, "a"), "final result");
+            assert!(
+                !crate::desktop::inspector::output_for(&view.transcript, &[], Some("a"))
+                    .unwrap()
+                    .truncated
+            );
+            assert_eq!(output(view, "b"), "other extended");
+        });
     })
     .unwrap();
 }

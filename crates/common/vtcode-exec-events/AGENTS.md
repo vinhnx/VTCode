@@ -14,6 +14,7 @@
 - Do not invent parallel event types; extend `ThreadEvent` and `ThreadItemDetails` instead.
 - Bump `EVENT_SCHEMA_VERSION` whenever the serialized contract changes, including `HarnessEventKind` additions.
 - New fields stay optional and omitted when unset so legacy payloads keep decoding, and ATIF output stays stable.
+- `ToolOutputItem.is_delta == Some(true)` marks a chunk; unmarked updates and completion items are snapshots.
 - Keep `ThreadEvent` at or under 80 bytes by boxing large sparse payloads (guarded by `thread_event_stays_compact`).
 - Redact diagnostics before persistence using the canonical severity/code/summary/details/identity/actions payload.
 - Bounded failures use `ReasoningItem` stage `"diagnosis"`, never a parallel variant.

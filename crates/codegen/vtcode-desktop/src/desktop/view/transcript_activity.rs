@@ -128,17 +128,14 @@ impl DesktopView {
     /// Jump button beside an expanded tool row's copy action, opening that
     /// exact capture in Output. Same affordance as the Activity tab's per-row
     /// output action; callers gate on [`TranscriptItem::has_output`] so the
-    /// CTA never lands on an unrelated fallback. Recedes until the row is
-    /// hovered or keyboard highlighted, keeping its space.
-    pub(super) fn tool_output_cta(item: &TranscriptItem, revealed: bool, cx: &mut Context<Self>) -> impl IntoElement {
+    /// CTA never lands on an unrelated fallback.
+    pub(super) fn tool_output_cta(item: &TranscriptItem, cx: &mut Context<Self>) -> impl IntoElement {
         let output_id = item.id.clone();
         let output_title = item.title.to_string();
         desktop_button(format!("tool-open-output-{}", item.id))
             .icon(IconName::Terminal)
             .ghost()
             .xsmall()
-            .when(!revealed, |button| button.invisible())
-            .tab_stop(false)
             .accessibility_label(
                 rust_i18n::t!("app.inspector.view_output_for", title = output_title.as_str()).to_string(),
             )

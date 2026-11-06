@@ -857,16 +857,14 @@ impl DesktopView {
         // Grouped rows nest under their shared header; single tool rows stay flush.
         panel = panel.when(item.activity_grouped, |panel| panel.pl_6());
         if item.expanded {
-            let output = item
-                .output
-                .as_ref()
-                .filter(|output| !output.is_empty())
-                .cloned()
-                .unwrap_or_else(|| item.text.clone());
-            let full_output = output.clone();
+            let output = item.output.as_ref().cloned().unwrap_or_else(|| item.text.clone());
+            let full_output = inspector::output_with_truncation_notice(&output, item.output_truncated);
             // Pre-resolved by the row through the revision-keyed tail cache;
             // the direct computation only runs if a future caller passes `None`.
-            let output_excerpt = tool_tail.unwrap_or_else(|| inspector::output_tail(&output));
+            let output_excerpt = inspector::output_with_truncation_notice(
+                &tool_tail.unwrap_or_else(|| inspector::compact_output_tail(&output)),
+                item.output_truncated,
+            );
             panel = panel.child(
                 div()
                     .flex()
@@ -884,7 +882,11 @@ impl DesktopView {
                                         rust_i18n::t!("app.transcript.copy_output_for", title = item.title.to_string())
                                             .to_string(),
                                     )
-                                    .tooltip(rust_i18n::t!("app.transcript.copy_full_output").to_string())
+                                    .tooltip(if item.output_truncated {
+                                        rust_i18n::t!("app.inspector.copy_loaded_notice").to_string()
+                                    } else {
+                                        rust_i18n::t!("app.transcript.copy_full_output").to_string()
+                                    })
                                     .ghost()
                                     .xsmall()
                                     .on_click(move |_, window, app| {
@@ -894,13 +896,7 @@ impl DesktopView {
                                         super::super::notifications::copied_to_clipboard(window, app);
                                     }),
                             )
-                            .when(item.has_output(), |row| {
-                                row.child(Self::tool_output_cta(
-                                    item,
-                                    self.transcript_row_revealed(item.id.as_str()),
-                                    cx,
-                                ))
-                            }),
+                            .when(item.has_output(), |row| row.child(Self::tool_output_cta(item, cx))),
                     )
                     .child(
                         div()

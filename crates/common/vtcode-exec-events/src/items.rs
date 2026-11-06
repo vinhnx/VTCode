@@ -215,9 +215,13 @@ pub struct ToolOutputItem {
     /// Canonical spool file path when the full output was written to disk.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spool_path: Option<String>,
-    /// Aggregated output emitted by the tool.
+    /// Output snapshot, or a chunk when `is_delta` is true.
     #[serde(default)]
     pub output: String,
+    /// Whether an updated item appends to the prior output. Absent means a
+    /// snapshot for compatibility with older event producers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_delta: Option<bool>,
     /// Exit code reported by the tool, when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,

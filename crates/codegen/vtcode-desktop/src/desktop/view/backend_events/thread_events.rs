@@ -103,13 +103,53 @@ impl DesktopView {
                 }
             }
             ThreadEvent::ItemStarted(event) => {
-                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref())
+                let row_id = self.runtime_output_row_id(&event.item).to_owned();
+                let accepted = self
+                    .transcript
+                    .accepts_item_turn(&event.item.id, notification.turn_id.as_deref())
+                    && self.transcript.accepts_item_turn(&row_id, notification.turn_id.as_deref());
+                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref());
+                if accepted && matches!(event.item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_)) {
+                    self.transcript.set_output_truncated(&row_id, false);
+                }
             }
             ThreadEvent::ItemUpdated(event) => {
-                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref())
+                let mut item = event.item.clone();
+                let row_id = self.runtime_output_row_id(&item).to_owned();
+                let accepted = self.transcript.accepts_item_turn(&item.id, notification.turn_id.as_deref())
+                    && self.transcript.accepts_item_turn(&row_id, notification.turn_id.as_deref());
+                let mut truncated = None;
+                if let vtcode_exec_events::ThreadItemDetails::ToolOutput(output) = &mut item.details
+                    && output.is_delta == Some(true)
+                {
+                    let row = self
+                        .transcript
+                        .position_by_id(&row_id)
+                        .and_then(|index| self.transcript.get(index));
+                    let previous = row.and_then(|row| row.output.as_deref()).unwrap_or_default();
+                    truncated = Some(
+                        row.is_some_and(|row| row.output_truncated)
+                            || previous.len().saturating_add(output.output.len()) > LIVE_OUTPUT_LIMIT,
+                    );
+                    output.output = bounded_output_chunk(previous, &output.output);
+                } else if matches!(item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_)) {
+                    truncated = Some(false);
+                }
+                self.update_runtime_item_for_turn(&item, notification.turn_id.as_deref());
+                if accepted && let Some(truncated) = truncated {
+                    self.transcript.set_output_truncated(&row_id, truncated);
+                }
             }
             ThreadEvent::ItemCompleted(event) => {
-                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref())
+                let row_id = self.runtime_output_row_id(&event.item).to_owned();
+                let accepted = self
+                    .transcript
+                    .accepts_item_turn(&event.item.id, notification.turn_id.as_deref())
+                    && self.transcript.accepts_item_turn(&row_id, notification.turn_id.as_deref());
+                self.update_runtime_item_for_turn(&event.item, notification.turn_id.as_deref());
+                if accepted && matches!(event.item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_)) {
+                    self.transcript.set_output_truncated(&row_id, false);
+                }
             }
             ThreadEvent::Error(event) => {
                 self.transcript.push(TranscriptItem::notice(

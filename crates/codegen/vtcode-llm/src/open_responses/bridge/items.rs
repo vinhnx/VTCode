@@ -197,13 +197,17 @@ impl ResponseBuilder {
             ThreadItemDetails::AgentMessage(msg) => msg.text.clone(),
             ThreadItemDetails::Plan(plan) => plan.text.clone(),
             ThreadItemDetails::Reasoning(r) => r.text.clone(),
-            ThreadItemDetails::ToolOutput(output) => tool_output_text(output),
             _ => String::new(),
+        };
+        let tool_output_prefix = match &item.details {
+            ThreadItemDetails::ToolOutput(output) => Some(ToolOutputPrefix::new(&tool_output_text(output))),
+            _ => None,
         };
         let active_state = ActiveItemState {
             output_index,
             content_index: 0,
             prev_text: initial_text,
+            tool_output_prefix,
         };
         self.active_items.insert(item.id.clone(), active_state);
 
@@ -239,7 +243,17 @@ impl ResponseBuilder {
             state
         } else {
             // Implicit start: create item and emit Added event
-            self.handle_item_started(item, emitter);
+            if let ThreadItemDetails::ToolOutput(output) = &item.details
+                && output.is_delta == Some(true)
+            {
+                let mut initial = item.clone();
+                if let ThreadItemDetails::ToolOutput(output) = &mut initial.details {
+                    output.output.clear();
+                }
+                self.handle_item_started(&initial, emitter);
+            } else {
+                self.handle_item_started(item, emitter);
+            }
             match self.active_items.get_mut(&item.id) {
                 Some(s) => s,
                 None => return,
@@ -285,7 +299,21 @@ impl ResponseBuilder {
 
             ThreadItemDetails::ToolOutput(output) => {
                 let current_text = tool_output_text(output);
-                let delta = if let Some(suffix) = current_text.strip_prefix(&state.prev_text) {
+                let prefix = state.tool_output_prefix.get_or_insert_with(|| ToolOutputPrefix::new(""));
+                if output.is_delta == Some(true) {
+                    if !current_text.is_empty() {
+                        emitter.output_text_delta(
+                            &self.response.id,
+                            &item.id,
+                            state.output_index,
+                            state.content_index,
+                            &current_text,
+                        );
+                        prefix.append(&current_text);
+                    }
+                    return;
+                }
+                let delta = if let Some(suffix) = prefix.suffix(&current_text) {
                     suffix
                 } else {
                     current_text.as_str()
@@ -299,8 +327,8 @@ impl ResponseBuilder {
                         state.content_index,
                         delta,
                     );
-                    state.prev_text = current_text;
                 }
+                *prefix = ToolOutputPrefix::new(&current_text);
             }
 
             _ => {

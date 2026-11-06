@@ -7,6 +7,7 @@ mod localization;
 mod markdown;
 mod notifications;
 mod output_sections;
+mod output_tail;
 mod preferences;
 mod startup;
 mod strings;

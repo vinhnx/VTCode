@@ -368,6 +368,7 @@ fn test_tool_output_updates_stream_as_function_call_output() {
                 context: None,
                 id: "tool_1:output".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: None,
                     call_id: "tool_1".to_string(),
                     tool_call_id: Some("tool_call_0".to_string()),
                     spool_path: None,
@@ -386,6 +387,7 @@ fn test_tool_output_updates_stream_as_function_call_output() {
                 context: None,
                 id: "tool_1:output".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: None,
                     call_id: "tool_1".to_string(),
                     tool_call_id: Some("tool_call_0".to_string()),
                     spool_path: None,
@@ -404,6 +406,7 @@ fn test_tool_output_updates_stream_as_function_call_output() {
                 context: None,
                 id: "tool_1:output".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: None,
                     call_id: "tool_1".to_string(),
                     tool_call_id: Some("tool_call_0".to_string()),
                     spool_path: None,
@@ -441,6 +444,188 @@ fn test_tool_output_updates_stream_as_function_call_output() {
 }
 
 #[test]
+fn tool_output_delta_events_keep_repeated_chunks() {
+    let mut builder = ResponseBuilder::new("gpt-5");
+    let mut emitter = VecStreamEmitter::new();
+    let item = |output: &str, is_delta| ThreadItem {
+        context: None,
+        id: "tool:output".into(),
+        details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta,
+            call_id: "tool".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: output.into(),
+            exit_code: None,
+            status: ToolCallStatus::InProgress,
+            app_previews: Vec::new(),
+        })),
+    };
+    builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item("", None) }), &mut emitter);
+    for chunk in ["ab", "ab", "c"] {
+        builder.process_event(
+            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item(chunk, Some(true)) }),
+            &mut emitter,
+        );
+    }
+    let deltas: Vec<_> = emitter
+        .into_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            ResponseStreamEvent::OutputTextDelta { delta, .. } => Some(delta),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(deltas, ["ab", "ab", "c"]);
+}
+
+#[test]
+fn tool_output_delta_without_start_is_emitted_once() {
+    let mut builder = ResponseBuilder::new("gpt-5");
+    let mut emitter = VecStreamEmitter::new();
+    let item = ThreadItem {
+        context: None,
+        id: "implicit:output".into(),
+        details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: Some(true),
+            call_id: "implicit".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: "first".into(),
+            exit_code: None,
+            status: ToolCallStatus::InProgress,
+            app_previews: Vec::new(),
+        })),
+    };
+    builder.process_event(&ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item }), &mut emitter);
+    let events = emitter.into_events();
+    assert!(events.iter().any(|event| matches!(event,
+        ResponseStreamEvent::OutputItemAdded { item: OutputItem::FunctionCallOutput(output), .. } if output.output.is_empty()
+    )));
+    let deltas: Vec<_> = events
+        .into_iter()
+        .filter_map(|event| match event {
+            ResponseStreamEvent::OutputTextDelta { delta, .. } => Some(delta),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(deltas, ["first"]);
+}
+
+#[test]
+fn tool_output_reconciles_chunk_and_snapshot_transitions_without_retaining_stream() {
+    let mut builder = ResponseBuilder::new("gpt-5");
+    let mut emitter = VecStreamEmitter::new();
+    let item = |output: &str, is_delta| ThreadItem {
+        context: None,
+        id: "mixed:output".into(),
+        details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta,
+            call_id: "mixed".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: output.into(),
+            exit_code: None,
+            status: ToolCallStatus::InProgress,
+            app_previews: Vec::new(),
+        })),
+    };
+    builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item("start:", None) }), &mut emitter);
+    for (text, is_delta) in [
+        ("é", Some(true)),
+        ("ab", Some(true)),
+        ("é", Some(true)),
+        ("start:éabé plus", None),
+        ("replacement", None),
+        ("REPLACEMENT", None),
+        ("!", Some(true)),
+        ("REPLACEMENT! end", None),
+        ("", None),
+        ("界", Some(true)),
+        ("界終", None),
+        ("aaaaa界", None),
+    ] {
+        builder.process_event(
+            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item(text, is_delta) }),
+            &mut emitter,
+        );
+    }
+    let deltas: Vec<_> = emitter
+        .into_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            ResponseStreamEvent::OutputTextDelta { delta, .. } => Some(delta),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        deltas,
+        [
+            "é",
+            "ab",
+            "é",
+            " plus",
+            "replacement",
+            "REPLACEMENT",
+            "!",
+            " end",
+            "界",
+            "終",
+            "aaaaa界"
+        ]
+    );
+    let state = builder.active_items.get("mixed:output").unwrap();
+    assert!(state.prev_text.is_empty());
+    assert_eq!(state.tool_output_prefix.as_ref().unwrap().byte_len, Some("aaaaa界".len()));
+}
+
+#[test]
+fn tool_output_stream_state_stays_constant_size_for_large_output() {
+    let mut builder = ResponseBuilder::new("gpt-5");
+    let mut emitter = VecStreamEmitter::new();
+    let item = |output: &str, is_delta| ThreadItem {
+        context: None,
+        id: "large:output".into(),
+        details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta,
+            call_id: "large".into(),
+            tool_call_id: None,
+            spool_path: None,
+            output: output.into(),
+            exit_code: None,
+            status: ToolCallStatus::InProgress,
+            app_previews: Vec::new(),
+        })),
+    };
+    builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item("", None) }), &mut emitter);
+    let chunk = "a界".repeat(4096);
+    for _ in 0..128 {
+        builder.process_event(
+            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item(&chunk, Some(true)) }),
+            &mut emitter,
+        );
+    }
+    let state = builder.active_items.get("large:output").unwrap();
+    assert_eq!(state.prev_text.capacity(), 0);
+    assert_eq!(state.tool_output_prefix.as_ref().unwrap().byte_len, Some(chunk.len() * 128));
+    let snapshot = format!("{}final", chunk.repeat(128));
+    builder.process_event(
+        &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item(&snapshot, None) }),
+        &mut emitter,
+    );
+    let last_delta = emitter
+        .into_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            ResponseStreamEvent::OutputTextDelta { delta, .. } => Some(delta),
+            _ => None,
+        })
+        .next_back();
+    assert_eq!(last_delta.as_deref(), Some("final"));
+    assert_eq!(builder.active_items["large:output"].prev_text.capacity(), 0);
+}
+
+#[test]
 fn test_tool_output_falls_back_to_harness_call_id_without_raw_tool_call_id() {
     let mut builder = ResponseBuilder::new("gpt-5");
     let mut emitter = VecStreamEmitter::new();
@@ -451,6 +636,7 @@ fn test_tool_output_falls_back_to_harness_call_id_without_raw_tool_call_id() {
                 context: None,
                 id: "tool_1:output".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: None,
                     call_id: "tool_1".to_string(),
                     tool_call_id: None,
                     spool_path: None,
@@ -484,6 +670,7 @@ fn test_tool_output_uses_spool_reference_when_inline_output_is_empty() {
                 context: None,
                 id: "tool_1:output".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                    is_delta: None,
                     call_id: "tool_1".to_string(),
                     tool_call_id: Some("tool_call_0".to_string()),
                     spool_path: Some(".vtcode/context/tool_outputs/run-1.txt".to_string()),
@@ -537,6 +724,7 @@ fn test_reused_raw_tool_call_id_falls_back_to_harness_id_for_later_pair() {
             context: None,
             id: "tool_2:output".to_string(),
             details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "tool_2".to_string(),
                 tool_call_id: Some("tool_call_0".to_string()),
                 spool_path: None,

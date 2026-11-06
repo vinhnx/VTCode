@@ -680,6 +680,7 @@ fn tool_output_item(
         context: None,
         id: tool_output_item_id(call_item_id),
         details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+            is_delta: None,
             call_id: call_item_id.to_string(),
             tool_call_id: tool_call_id.map(str::to_string),
             spool_path: spool_path.map(str::to_string),
@@ -754,6 +755,22 @@ pub fn tool_output_updated_event(
     ThreadEvent::ItemUpdated(ItemUpdatedEvent {
         item: tool_output_item(&call_item_id, tool_call_id, ToolCallStatus::InProgress, None, None, output, Vec::new()),
     })
+}
+
+/// Emit an incremental output chunk instead of an output snapshot.
+#[must_use]
+pub fn tool_output_delta_event(
+    call_item_id: String,
+    tool_call_id: Option<&str>,
+    output: impl Into<String>,
+) -> ThreadEvent {
+    let mut event = tool_output_updated_event(call_item_id, tool_call_id, output);
+    if let ThreadEvent::ItemUpdated(update) = &mut event
+        && let ThreadItemDetails::ToolOutput(output) = &mut update.item.details
+    {
+        output.is_delta = Some(true);
+    }
+    event
 }
 
 #[must_use]

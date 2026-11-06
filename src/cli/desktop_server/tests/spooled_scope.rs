@@ -1,5 +1,46 @@
 use super::*;
 
+#[test]
+fn restored_activity_reconstructs_interleaved_interrupted_output_chunks() {
+    use vtcode_core::core::agent::events::{tool_output_delta_event, tool_output_started_event};
+    use vtcode_core::exec::events::ThreadItemDetails;
+    let dir = tempfile::tempdir().unwrap();
+    let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+    let log = vtcode_memory::open(&workspace, "interrupted-output", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+    for event in [
+        tool_output_started_event("a".into(), None),
+        tool_output_delta_event("a".into(), None, "first "),
+        tool_output_delta_event("orphan".into(), None, "tail"),
+        tool_output_delta_event("a".into(), None, "second"),
+        tool_output_started_event("controls".into(), None),
+        tool_output_delta_event("controls".into(), None, "\0".repeat(12_000)),
+    ] {
+        log.append(&event).unwrap();
+    }
+    log.flush().unwrap();
+    let history = restored_inspector_history(&workspace, "interrupted-output").unwrap();
+    let output = |id: &str| {
+        history
+            .activity_items
+            .iter()
+            .find_map(|item| {
+                if item.id == id
+                    && let ThreadItemDetails::ToolOutput(output) = &item.details
+                {
+                    Some(output.output.as_str())
+                } else {
+                    None
+                }
+            })
+            .unwrap()
+    };
+    assert_eq!(output("a:output"), "first second");
+    assert_eq!(output("orphan:output"), format!("tail{RESTORED_OUTPUT_TRUNCATION_SUFFIX}"));
+    assert!(output("controls:output").ends_with(RESTORED_OUTPUT_TRUNCATION_SUFFIX));
+    assert!(output("controls:output").starts_with('\0'));
+    assert!(history.activity_incomplete);
+}
+
 #[cfg(unix)]
 #[test]
 fn restored_activity_recovers_bounded_spooled_tool_output() {

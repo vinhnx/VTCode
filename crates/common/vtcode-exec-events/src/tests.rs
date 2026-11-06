@@ -507,6 +507,7 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
             context: None,
             id: "tool_1:output".to_string(),
             details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "tool_1".to_string(),
                 tool_call_id: Some("tool_call_0".to_string()),
                 spool_path: None,
@@ -528,6 +529,7 @@ fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Err
 #[test]
 fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<dyn Error>> {
     let item = ToolOutputItem {
+        is_delta: None,
         call_id: "tool_1".to_string(),
         tool_call_id: None,
         spool_path: None,
@@ -556,6 +558,7 @@ fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<d
     assert_eq!(restored, item);
 
     let bare = ToolOutputItem {
+        is_delta: None,
         call_id: "tool_1".to_string(),
         tool_call_id: None,
         spool_path: None,
@@ -575,6 +578,12 @@ fn tool_output_app_previews_round_trip_and_omit_when_empty() -> Result<(), Box<d
     });
     let restored: ToolOutputItem = serde_json::from_value(legacy)?;
     assert!(restored.app_previews.is_empty());
+    assert_eq!(restored.is_delta, None);
+    let mut delta = restored;
+    delta.is_delta = Some(true);
+    let encoded = serde_json::to_value(&delta)?;
+    assert_eq!(encoded["is_delta"], true);
+    assert_eq!(serde_json::from_value::<ToolOutputItem>(encoded)?.is_delta, Some(true));
     Ok(())
 }
 

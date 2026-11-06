@@ -787,6 +787,7 @@ mod payload_tests {
         let mut reducer = Reducer::new("session".into(), ExplanationScope::Session);
         let details = [
             ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                is_delta: None,
                 call_id: "call".into(),
                 tool_call_id: None,
                 spool_path: None,

@@ -9,6 +9,7 @@ use super::markdown::prepare_markdown;
 
 mod activity;
 mod activity_verbs;
+mod output;
 pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs, tool_row_gist};
 
 pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
@@ -172,6 +173,10 @@ pub(super) struct TranscriptItem {
     pub diff: Option<DiffCard>,
     /// Raw aggregated command/tool output for the Output inspector tab.
     pub output: Option<SharedString>,
+    /// Canonical output item identity when capture is attached to an invocation.
+    pub output_item_id: Option<String>,
+    /// Earlier live output was discarded from the bounded preview.
+    pub output_truncated: bool,
     /// MCP Apps referenced by this output, for preview cards. Empty for non-app results.
     pub app_previews: Vec<AppPreviewItem>,
 }
@@ -360,6 +365,8 @@ impl TranscriptItem {
             activity_category: None,
             diff: None,
             output: None,
+            output_item_id: None,
+            output_truncated: false,
             app_previews: Vec::new(),
         }
     }
@@ -749,6 +756,8 @@ impl Transcript {
             item.activity_grouped = existing.activity_grouped;
             item.activity_group_head = existing.activity_group_head;
             item.activity_group_summary = existing.activity_group_summary;
+            item.output_truncated = existing.output_truncated;
+            item.output_item_id.clone_from(&existing.output_item_id);
             if item.output.is_none() {
                 item.output.clone_from(&existing.output);
             }
@@ -794,18 +803,6 @@ impl Transcript {
             }
         } else {
             self.push(item);
-        }
-    }
-
-    /// Attach or replace raw command output, which is presented outside the transcript row.
-    pub fn set_output(&mut self, id: &str, output: Option<SharedString>) {
-        if let Some(index) = self.position_by_id(id) {
-            if let Some(item) = self.items.get_mut(index) {
-                if item.output != output {
-                    item.output = output;
-                    self.bump_revision();
-                }
-            }
         }
     }
 

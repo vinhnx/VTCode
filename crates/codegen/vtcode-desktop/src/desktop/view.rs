@@ -681,9 +681,8 @@ struct DesktopView {
     output_scroll: ScrollHandle,
     output_filter_input: Entity<InputState>,
     _output_filter_subscription: Subscription,
-    /// Byte length of the Output tab tail at the last render; growth while
-    /// running and pinned drives tail-following (see `render_output_tab`).
-    output_tail_len: usize,
+    /// Last rendered Output tail; bounded tails can change without growing.
+    output_tail_seen: Option<gpui_kit::SharedString>,
     /// Selected output id at the last Output tab render; a change resets the
     /// scroll offset to the top because a new capture is a new document.
     output_follow_selection: Option<String>,

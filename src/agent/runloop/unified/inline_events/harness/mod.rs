@@ -10,6 +10,7 @@ use vtcode_config::OpenResponsesConfig;
 use vtcode_core::core::agent::events::{
     tool_invocation_completed_event as shared_tool_invocation_completed_event,
     tool_output_completed_event as shared_tool_output_completed_event,
+    tool_output_delta_event as shared_tool_output_delta_event,
     tool_output_started_event as shared_tool_output_started_event,
     tool_output_updated_event as shared_tool_output_updated_event, tool_started_event as shared_tool_started_event,
 };
@@ -664,6 +665,14 @@ pub(crate) fn tool_updated_event(
     output: impl Into<String>,
 ) -> ThreadEvent {
     shared_tool_output_updated_event(call_item_id, tool_call_id, output)
+}
+
+pub(crate) fn tool_delta_event(
+    call_item_id: String,
+    tool_call_id: Option<&str>,
+    output: impl Into<String>,
+) -> ThreadEvent {
+    shared_tool_output_delta_event(call_item_id, tool_call_id, output)
 }
 
 pub(crate) fn turn_started_event() -> ThreadEvent {

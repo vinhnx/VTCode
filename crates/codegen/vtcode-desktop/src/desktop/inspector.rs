@@ -15,8 +15,9 @@ use super::transcript::{DiffFileKind, Transcript, TranscriptItem};
 
 /// Cap so a long-running session cannot grow the projection without bound.
 pub(super) const MAX_ACTIVITY_ROWS: usize = 300;
-const MAX_OUTPUT_LINES: usize = 1_000;
-const MAX_OUTPUT_BYTES: usize = 128 * 1024;
+#[cfg(test)]
+use super::output_tail::{MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES};
+pub(super) use super::output_tail::{compact_output_tail, display_output_tail, output_tail};
 
 /// Selected inspector view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -303,6 +304,7 @@ pub(super) struct OutputView {
     pub title: SharedString,
     pub text: SharedString,
     pub running: bool,
+    pub truncated: bool,
 }
 
 pub(super) fn output_for(
@@ -314,8 +316,12 @@ pub(super) fn output_for(
         .and_then(|id| {
             restored
                 .iter()
-                .find(|item| item.id == id)
-                .or_else(|| transcript.items().find(|item| item.id == id))
+                .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
+                .or_else(|| {
+                    transcript
+                        .items()
+                        .find(|item| item.id == id || item.output_item_id.as_deref() == Some(id))
+                })
         })
         .and_then(output_view)
         .or_else(|| restored.iter().chain(transcript.items()).rev().find_map(output_view))
@@ -323,9 +329,10 @@ pub(super) fn output_for(
 
 fn output_view(item: &TranscriptItem) -> Option<OutputView> {
     Some(OutputView {
-        id: item.id.clone(),
+        id: item.output_item_id.clone().unwrap_or_else(|| item.id.clone()),
         title: item.title.clone(),
-        text: item.output.clone()?,
+        text: output_with_truncation_notice(item.output.as_ref()?, item.output_truncated),
+        truncated: item.output_truncated,
         running: item
             .text
             .lines()
@@ -334,36 +341,13 @@ fn output_view(item: &TranscriptItem) -> Option<OutputView> {
     })
 }
 
-/// Cap the rendered output tail so a chatty command stays cheap to draw.
-pub(super) fn output_tail(text: &SharedString) -> SharedString {
-    let mut start = text.ceil_char_boundary(text.len().saturating_sub(MAX_OUTPUT_BYTES));
-    let mut tail = text.get(start..).unwrap_or_default();
-    let mut newlines_to_keep = MAX_OUTPUT_LINES + usize::from(tail.ends_with('\n'));
-    for (index, byte) in tail.bytes().enumerate().rev() {
-        if byte == b'\n' {
-            newlines_to_keep -= 1;
-            if newlines_to_keep == 0 {
-                start += index + 1;
-                tail = text.get(start..).unwrap_or_default();
-                break;
-            }
-        }
+pub(super) fn output_with_truncation_notice(text: &SharedString, truncated: bool) -> SharedString {
+    let notice = rust_i18n::t!("app.inspector.truncation_notice");
+    if truncated && !text.starts_with(notice.as_ref()) {
+        format!("{notice}{text}").into()
+    } else {
+        text.clone()
     }
-
-    if start == 0 {
-        return text.clone();
-    }
-
-    // `str::lines()` omits one final line terminator; match the previous
-    // projection's join behavior when building a truncated tail.
-    if let Some(without_terminator) = tail.strip_suffix('\n') {
-        tail = without_terminator;
-    }
-    let notice = rust_i18n::t!("app.inspector.truncation_notice").to_string();
-    let mut rendered = String::with_capacity(notice.len().saturating_add(tail.len()));
-    rendered.push_str(&notice);
-    rendered.push_str(tail);
-    rendered.into()
 }
 
 /// Narrow output text to lines matching a case-insensitive substring query.
@@ -445,7 +429,9 @@ impl OutputViewCache {
         selected_id: Option<String>,
         view: Option<OutputView>,
     ) -> Self {
-        let tail = view.as_ref().map_or_else(SharedString::default, |view| output_tail(&view.text));
+        let tail = view
+            .as_ref()
+            .map_or_else(SharedString::default, |view| display_output_tail(&view.text));
         Self {
             transcript_revision,
             restored_revision,
@@ -500,7 +486,7 @@ pub(super) fn resolve_tool_tail(
     {
         return entry.tail.clone();
     }
-    let tail = output_tail(output);
+    let tail = compact_output_tail(output);
     cache.retain(|_, entry| entry.transcript_revision == revision);
     let _previous =
         cache.insert(id.to_string(), ToolTailCacheEntry { transcript_revision: revision, tail: tail.clone() });
@@ -962,7 +948,7 @@ mod tests {
 
         // First resolve computes; the repeat at the same revision hits.
         let first = resolve_tool_tail("tool-1", &long_output, 5, &mut cache);
-        assert_eq!(first, output_tail(&long_output));
+        assert_eq!(first, compact_output_tail(&long_output));
         let second = resolve_tool_tail("tool-1", &long_output, 5, &mut cache);
         assert_eq!(second, first);
         assert_eq!(cache.len(), 1, "hits must not duplicate entries");

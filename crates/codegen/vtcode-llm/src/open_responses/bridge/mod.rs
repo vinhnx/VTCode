@@ -5,6 +5,7 @@
 //! backwards compatibility during migration.
 
 use serde_json::json;
+use sha2::{Digest, Sha256};
 
 use super::{
     ContentPart, CustomItem, FunctionCallItem, ItemStatus, MessageItem, MessageRole, OpenResponseError, OpenUsage,
@@ -40,6 +41,35 @@ struct ActiveItemState {
     content_index: usize,
     /// Previous text content for safe delta computation (avoids UTF-8 slicing issues)
     prev_text: String,
+    tool_output_prefix: Option<ToolOutputPrefix>,
+}
+
+/// Constant-size evidence used to reconcile streamed chunks with a later snapshot.
+#[derive(Debug, Clone)]
+struct ToolOutputPrefix {
+    digest: Sha256,
+    byte_len: Option<usize>,
+}
+
+impl ToolOutputPrefix {
+    fn new(text: &str) -> Self {
+        let mut prefix = Self { digest: Sha256::new(), byte_len: Some(0) };
+        prefix.append(text);
+        prefix
+    }
+
+    fn append(&mut self, text: &str) {
+        self.digest.update(text.as_bytes());
+        self.byte_len = self.byte_len.and_then(|len| len.checked_add(text.len()));
+    }
+
+    fn suffix<'a>(&self, snapshot: &'a str) -> Option<&'a str> {
+        let len = self.byte_len?;
+        let prefix = snapshot.get(..len)?;
+        (Sha256::digest(prefix.as_bytes()) == self.digest.clone().finalize())
+            .then(|| snapshot.get(len..))
+            .flatten()
+    }
 }
 
 #[derive(Debug, Clone)]

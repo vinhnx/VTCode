@@ -129,12 +129,7 @@ impl DesktopView {
         if !(item.is_tool() && item.expanded) {
             return None;
         }
-        let output = item
-            .output
-            .as_ref()
-            .filter(|output| !output.is_empty())
-            .cloned()
-            .unwrap_or_else(|| item.text.clone());
+        let output = item.output.as_ref().cloned().unwrap_or_else(|| item.text.clone());
         let id = item.id.clone();
         let revision = self.transcript.revision();
         Some(inspector::resolve_tool_tail(&id, &output, revision, &mut self.tool_tail_cache))
@@ -397,7 +392,7 @@ impl DesktopView {
         }
         let (output, tail) = self.cached_output_view();
         let Some(output) = output else {
-            self.output_tail_len = 0;
+            self.output_tail_seen = None;
             return pane
                 .child(empty_state(
                     rust_i18n::t!("app.inspector.empty_output_title").to_string(),
@@ -407,16 +402,16 @@ impl DesktopView {
                 .into_any_element();
         };
         // Follow the live edge while the reader stays pinned: streaming
-        // output only grows, so a longer tail plus a bottom-pinned viewport
-        // means new content arrived below. A reader who scrolled up keeps
+        // the bounded tail can change even when its length stays constant.
+        // A reader who scrolled up keeps
         // their offset; the jump button below resumes following.
         if self.output_follow_selection != self.selected_output_id {
             self.output_scroll.set_offset(point(px(0.), px(0.)));
             self.output_follow_selection = self.selected_output_id.clone();
         }
-        let grown = tail.len() > self.output_tail_len;
-        self.output_tail_len = tail.len();
-        if output.running && grown && output_pinned_to_bottom(&self.output_scroll) {
+        let changed = self.output_tail_seen.as_ref() != Some(&tail);
+        self.output_tail_seen = Some(tail.clone());
+        if output.running && changed && output_pinned_to_bottom(&self.output_scroll) {
             self.output_scroll.scroll_to_bottom();
         }
         let pinned = output_pinned_to_bottom(&self.output_scroll);
@@ -478,12 +473,12 @@ impl DesktopView {
             .child(
                 desktop_button("copy-output")
                     .icon(IconName::Copy)
-                    .accessibility_label(if has_more_output {
+                    .accessibility_label(if has_more_output || output.truncated {
                         rust_i18n::t!("app.inspector.copy_loaded").to_string()
                     } else {
                         rust_i18n::t!("app.inspector.copy_output").to_string()
                     })
-                    .tooltip(if has_more_output {
+                    .tooltip(if has_more_output || output.truncated {
                         rust_i18n::t!("app.inspector.copy_loaded_notice").to_string()
                     } else {
                         rust_i18n::t!("app.inspector.copy_captured").to_string()

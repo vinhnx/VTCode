@@ -844,7 +844,7 @@ impl DesktopView {
             output_scroll: ScrollHandle::default(),
             output_filter_input,
             _output_filter_subscription: output_filter_subscription,
-            output_tail_len: 0,
+            output_tail_seen: None,
             output_follow_selection: None,
             review_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),

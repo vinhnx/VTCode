@@ -38,9 +38,9 @@ impl DesktopView {
                         .as_ref()
                         .is_some_and(|pending| can_coalesce_item_updates(pending, &event))
                     {
-                        // ItemUpdated carries a full snapshot, so intermediate
-                        // snapshots for this item need not be rendered in one
-                        // UI tick. The service persists every event separately.
+                        // Snapshot updates can skip intermediate renders.
+                        // Delta-bearing output updates are excluded by the
+                        // coalescing predicate.
                         pending_item_update = Some(event);
                         continue;
                     }
