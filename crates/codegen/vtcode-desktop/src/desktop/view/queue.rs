@@ -411,7 +411,6 @@ fn queue_wait_label(secs: u64) -> String {
 }
 
 /// Shared wait-time formatter (published for tests).
-#[cfg(test)]
 pub(crate) fn queue_wait_time_label(secs: u64) -> String {
     if secs < 60 {
         return rust_i18n::t!("app.composer.queue_wait_time", time = format!("{secs}s")).to_string();
