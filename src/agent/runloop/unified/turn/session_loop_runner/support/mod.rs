@@ -954,6 +954,7 @@ pub(super) async fn prompt_startup_planning_workflow(
         selected: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string())),
         search: None,
         status: None,
+        plan_markdown: None,
         hotkeys: Vec::new(),
     });
 

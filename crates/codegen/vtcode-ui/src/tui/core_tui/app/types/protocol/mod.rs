@@ -660,6 +660,7 @@ impl InlineHandle {
             footer_hint,
             hotkeys: Vec::new(),
             status,
+            plan_markdown: None,
         }));
     }
 

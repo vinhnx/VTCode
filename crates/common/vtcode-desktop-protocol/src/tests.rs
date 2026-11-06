@@ -218,6 +218,7 @@ fn interaction_responses_are_session_turn_scoped_and_single_use() {
         steps: Vec::new(),
         selected_choice_id: None,
         selected_choice_ids: Vec::new(),
+        plan_markdown: None,
     };
     registry.insert(&interaction).expect("register request");
     let stale = InteractionResponse {
@@ -238,6 +239,38 @@ fn interaction_responses_are_session_turn_scoped_and_single_use() {
     assert_eq!(registry.resolve(&valid), Ok(()));
     assert_eq!(registry.validate(&valid), Err(ProtocolError::UnknownInteraction));
     assert_eq!(registry.resolve(&valid), Err(ProtocolError::UnknownInteraction));
+}
+
+#[test]
+fn interaction_plan_markdown_round_trips_and_defaults_to_none_for_legacy_payloads() {
+    let with_plan: InteractionRequest = serde_json::from_value(serde_json::json!({
+        "sessionId": "session-a",
+        "turnId": "turn-9",
+        "interactionId": "interaction-x",
+        "kind": "plan_approval",
+        "title": "Ready to code?",
+        "details": ["Summary: do the thing"],
+        "choices": [],
+        "selectedChoiceId": null,
+        "planMarkdown": "# Plan\n\nDo the thing."
+    }))
+    .expect("plan payload");
+    assert_eq!(with_plan.plan_markdown.as_deref(), Some("# Plan\n\nDo the thing."));
+    let round_trip: InteractionRequest = serde_json::from_value(serde_json::to_value(&with_plan).unwrap()).unwrap();
+    assert_eq!(round_trip, with_plan);
+
+    let legacy: InteractionRequest = serde_json::from_value(serde_json::json!({
+        "sessionId": "session-a",
+        "turnId": "turn-9",
+        "interactionId": "interaction-x",
+        "kind": "plan_approval",
+        "title": "Ready to code?",
+        "details": ["Summary: do the thing"],
+        "choices": [],
+        "selectedChoiceId": null
+    }))
+    .expect("legacy payload");
+    assert_eq!(legacy.plan_markdown, None);
 }
 
 #[tokio::test]

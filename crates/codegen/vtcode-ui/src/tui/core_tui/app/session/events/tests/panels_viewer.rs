@@ -266,6 +266,7 @@ fn transcript_wheel_scrolls_through_floating_plan_overlay() {
         search: None,
         hotkeys: Vec::new(),
         status: None,
+        plan_markdown: None,
     }));
 
     let backend = ratatui::backend::TestBackend::new(80, 24);
@@ -314,6 +315,7 @@ fn control_g_from_plan_approval_overlay_emits_launch_editor_hotkey() {
             action: TransientHotkeyAction::LaunchEditor,
         }],
         status: None,
+        plan_markdown: None,
     }));
     assert!(session.has_active_overlay(), "plan approval overlay should be open");
     assert!(

@@ -134,6 +134,7 @@ impl UrlGuardPrompt {
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         })
     }
 }

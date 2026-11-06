@@ -606,6 +606,7 @@ fn armed_switch_fails_loud_when_blocked_at_drain(cx: &mut TestAppContext) {
                 steps: Vec::new(),
                 selected_choice_id: None,
                 selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             });
         });
         view.update(cx, |view, cx| {

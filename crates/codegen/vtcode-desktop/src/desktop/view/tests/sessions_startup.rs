@@ -78,6 +78,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
                     steps: Vec::new(),
                     selected_choice_id: None,
                     selected_choice_ids: Vec::new(),
+                    plan_markdown: None,
                 }))
                 .unwrap();
             let _batch_full = view.drain_events(window, cx);

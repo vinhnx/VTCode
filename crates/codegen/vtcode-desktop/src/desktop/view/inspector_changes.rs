@@ -80,8 +80,36 @@ impl DesktopView {
         self.update_inspector_tab(index, true, Some(window), cx);
     }
 
+    /// Tabs on the inspector rail. Plan joins only while a plan approval
+    /// carries viewable markdown, so the five persistent tabs keep their
+    /// no-scroll fit at default width.
+    pub(super) fn visible_inspector_tabs(&self) -> Vec<InspectorTab> {
+        InspectorTab::ALL
+            .into_iter()
+            .filter(|tab| *tab != InspectorTab::Plan || self.has_pending_plan_proposal())
+            .collect()
+    }
+
+    /// Whether a plan approval with viewable markdown currently waits. The
+    /// Plan tab's rail membership and selection fallback both key off this.
+    fn has_pending_plan_proposal(&self) -> bool {
+        has_viewable_plan_markdown(
+            self.interaction
+                .as_ref()
+                .and_then(|interaction| interaction.plan_markdown.as_deref()),
+        )
+    }
+
+    /// Drop a stranded Plan selection when its approval leaves. Call after
+    /// every interaction replacement or clear.
+    pub(super) fn reset_plan_inspector_tab_if_hidden(&mut self) {
+        if self.inspector_tab == InspectorTab::Plan && !self.has_pending_plan_proposal() {
+            self.inspector_tab = InspectorTab::Changes;
+        }
+    }
+
     pub(super) fn set_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
-        if let Some(index) = InspectorTab::ALL.iter().position(|candidate| *candidate == tab) {
+        if let Some(index) = self.visible_inspector_tabs().iter().position(|candidate| *candidate == tab) {
             self.update_inspector_tab(index, true, None, cx);
         }
     }
@@ -98,7 +126,8 @@ impl DesktopView {
     }
 
     fn update_inspector_tab(&mut self, index: usize, reveal: bool, focus: Option<&mut Window>, cx: &mut Context<Self>) {
-        if let Some(tab) = InspectorTab::ALL.get(index) {
+        let visible = self.visible_inspector_tabs();
+        if let Some(tab) = visible.get(index) {
             self.inspector_tab = *tab;
             if reveal {
                 self.inspector_tabs_scroll.scroll_to_item(index);
@@ -111,11 +140,9 @@ impl DesktopView {
     }
 
     fn cycle_inspector_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let count = InspectorTab::ALL.len();
-        let current = InspectorTab::ALL
-            .iter()
-            .position(|tab| *tab == self.inspector_tab)
-            .unwrap_or_default();
+        let visible = self.visible_inspector_tabs();
+        let count = visible.len();
+        let current = visible.iter().position(|tab| *tab == self.inspector_tab).unwrap_or_default();
         let index = if forward {
             (current + 1) % count
         } else {
@@ -125,8 +152,9 @@ impl DesktopView {
     }
 
     /// Right-hand context inspector: derived Changes, Files, Activity,
-    /// Output, and Utilities views over the same transcript the conversation
-    /// renders. The panel is a separated card beside the workspace surface,
+    /// Output, Utilities, and Plan views over the same transcript the
+    /// conversation renders. The panel is a separated card beside the
+    /// workspace surface,
     /// so it carries the main-container canvas fill at the side-panel radius
     /// tier while every tab body shares [`inspector_tab_body`].
     pub(super) fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -150,6 +178,7 @@ impl DesktopView {
             InspectorTab::Activity => self.render_activity_tab(&colors, cx),
             InspectorTab::Output => self.render_output_tab(cx),
             InspectorTab::Utilities => self.render_utilities(cx),
+            InspectorTab::Plan => self.render_plan_tab(cx),
         };
         panel
             .child(content)
@@ -163,6 +192,46 @@ impl DesktopView {
             .into_any_element()
     }
 
+    /// Plan-approval proposal: the shared viewer over the pending
+    /// interaction's markdown. The tab only joins the rail while a plan
+    /// waits; the empty branch below is unreachable-by-construction
+    /// insurance so a stranded selection degrades gracefully, never blank.
+    fn render_plan_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let pane = inspector_tab_body().id("inspector-plan-tab").test_support();
+        let markdown = self
+            .interaction
+            .as_ref()
+            .and_then(|interaction| interaction.plan_markdown.as_deref())
+            .unwrap_or_default();
+        if !has_viewable_plan_markdown(Some(markdown)) {
+            return pane
+                .child(
+                    div()
+                        .id("inspector-plan-empty")
+                        .test_support()
+                        .w_full()
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(empty_state(
+                            rust_i18n::t!("app.inspector.empty_plan_title").to_string(),
+                            rust_i18n::t!("app.inspector.empty_plan_description").to_string(),
+                            IconName::ListChecks,
+                        )),
+                )
+                .into_any_element();
+        }
+        pane.child(render_plan_proposal_view(
+            "inspector-plan-proposal".to_string(),
+            markdown.into(),
+            PlanProposalHeight::Fill,
+            cx,
+        ))
+        .into_any_element()
+    }
+
     /// Tab rail header: folder tabs at the shared medium size with tracked
     /// reveal for keyboard and programmatic selection, an overflow menu for
     /// narrowed rails, and the close control in the bar suffix. The rail
@@ -172,6 +241,7 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let inspector_view = cx.entity().downgrade();
         let selected_tab = self.inspector_tab;
+        let visible_tabs = self.visible_inspector_tabs();
         let overflow_label = rust_i18n::t!("app.inspector.inspector_tabs").to_string();
         let overflow = desktop_button("inspector-tabs-menu")
             .ghost()
@@ -180,7 +250,7 @@ impl DesktopView {
             .accessibility_label(overflow_label.clone())
             .tooltip(overflow_label)
             .dropdown_menu(move |mut menu, _, _| {
-                for (index, tab) in InspectorTab::ALL.iter().enumerate() {
+                for (index, tab) in visible_tabs.iter().enumerate() {
                     let view = inspector_view.clone();
                     menu = menu.item(
                         gpui_kit::component::menu::PopupMenuItem::new(tab.label())
@@ -219,7 +289,8 @@ impl DesktopView {
                 view.select_inspector_tab_from_keyboard(0, window, cx)
             }))
             .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
-                view.select_inspector_tab_from_keyboard(InspectorTab::ALL.len().saturating_sub(1), window, cx)
+                let last = view.visible_inspector_tabs().len().saturating_sub(1);
+                view.select_inspector_tab_from_keyboard(last, window, cx)
             }))
             .child(
                 div()
@@ -245,7 +316,7 @@ impl DesktopView {
                                 ),
                             )
                             .selected_index(
-                                InspectorTab::ALL
+                                self.visible_inspector_tabs()
                                     .iter()
                                     .position(|tab| *tab == self.inspector_tab)
                                     .unwrap_or_default(),
@@ -253,7 +324,11 @@ impl DesktopView {
                             .on_click(cx.listener(|view, index: &usize, window, cx| {
                                 view.select_inspector_tab(*index, window, cx)
                             }))
-                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                            .children(
+                                self.visible_inspector_tabs()
+                                    .into_iter()
+                                    .map(|tab| Tab::new().label(tab.label())),
+                            ),
                     ),
             )
     }

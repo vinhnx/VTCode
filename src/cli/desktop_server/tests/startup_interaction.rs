@@ -18,6 +18,7 @@ async fn session_install_delivers_a_queued_startup_interaction() {
                 search: None,
                 hotkeys: Vec::new(),
                 status: None,
+                plan_markdown: Some("# Startup plan\n\nFirst boot.".to_string()),
             })),
         })
         .await
@@ -48,6 +49,7 @@ async fn session_install_delivers_a_queued_startup_interaction() {
     let interaction: InteractionRequest = serde_json::from_value(notification.params).expect("interaction");
     assert_eq!(interaction.session_id, "new-session");
     assert_eq!(interaction.turn_id, "session-start");
+    assert_eq!(interaction.plan_markdown.as_deref(), Some("# Startup plan\n\nFirst boot."));
     assert_eq!(context.state.lock().await.pending_interactions.len(), 1);
     drop(commands);
     drop(exit_sender);
@@ -99,6 +101,7 @@ async fn restored_queue_waits_for_the_startup_interaction_response() {
                 search: None,
                 hotkeys: Vec::new(),
                 status: None,
+                plan_markdown: None,
             })),
         })
         .await
@@ -172,6 +175,7 @@ async fn startup_interaction_blocks_turns_and_session_changes_until_answered() {
             details: Vec::new(),
             steps: Vec::new(),
             selected_choice_ids: Vec::new(),
+            plan_markdown: None,
         },
         &context.state,
         &context.notifications,

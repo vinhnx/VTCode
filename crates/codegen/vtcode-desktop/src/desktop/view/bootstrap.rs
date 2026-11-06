@@ -760,6 +760,7 @@ impl DesktopView {
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,
             interaction_immediate_choice_id: None,
+            interaction_plan_expanded: false,
             composer,
             _composer_subscription: composer_subscription,
             ui_language_select,

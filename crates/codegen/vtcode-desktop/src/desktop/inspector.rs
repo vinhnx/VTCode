@@ -28,15 +28,17 @@ pub(super) enum InspectorTab {
     Activity,
     Output,
     Utilities,
+    Plan,
 }
 
 impl InspectorTab {
-    pub(super) const ALL: [Self; 5] = [
+    pub(super) const ALL: [Self; 6] = [
         Self::Changes,
         Self::Files,
         Self::Activity,
         Self::Output,
         Self::Utilities,
+        Self::Plan,
     ];
 
     pub(super) fn label(self) -> String {
@@ -46,6 +48,7 @@ impl InspectorTab {
             Self::Activity => rust_i18n::t!("app.inspector.tab_activity").to_string(),
             Self::Output => rust_i18n::t!("app.inspector.tab_output").to_string(),
             Self::Utilities => rust_i18n::t!("app.inspector.tab_utilities").to_string(),
+            Self::Plan => rust_i18n::t!("app.inspector.tab_plan").to_string(),
         }
     }
 }

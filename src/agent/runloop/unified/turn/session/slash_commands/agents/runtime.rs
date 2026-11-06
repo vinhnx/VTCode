@@ -119,6 +119,7 @@ pub(super) async fn show_threads_modal(mut ctx: SlashCommandContext<'_>) -> Resu
                 },
             ],
             status: None,
+            plan_markdown: None,
         }));
 
         let Some(action) =
@@ -318,6 +319,7 @@ pub(super) async fn show_active_agent_inspector(
                     },
                 ],
     status: None,
+    plan_markdown: None,
 }));
 
         let Some(action) = wait_for_inspector_action(
@@ -448,6 +450,7 @@ pub(super) async fn show_background_subprocess_inspector(
                     },
                 ],
     status: None,
+    plan_markdown: None,
 }));
 
         let Some(action) = wait_for_inspector_action(

@@ -339,6 +339,7 @@ async fn publish_interaction_for_runtime(
         steps,
         selected_choice_id: view.selected_choice_ids.first().cloned(),
         selected_choice_ids: view.selected_choice_ids.clone(),
+        plan_markdown: view.plan_markdown.clone(),
     };
     state.interaction_registry.insert(&request)?;
     state

@@ -394,6 +394,7 @@ fn question_interaction_event(session_id: &str, turn_id: &str, interaction_id: &
         steps: Vec::new(),
         selected_choice_id: None,
         selected_choice_ids: Vec::new(),
+        plan_markdown: None,
     })
 }
 

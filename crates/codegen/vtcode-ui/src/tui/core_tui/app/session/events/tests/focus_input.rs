@@ -18,6 +18,7 @@ fn show_list_modal(session: &mut Session) {
         search: None,
         hotkeys: Vec::new(),
         status: None,
+        plan_markdown: None,
     }));
 }
 

@@ -15,6 +15,7 @@ fn session_load_defers_startup_interaction_until_history_is_ready(cx: &mut TestA
                 session_id: "restored".into(), turn_id: "session-start".into(), interaction_id: "startup".into(),
                 kind: InteractionKind::Question, wizard: false, title: "Question".into(), details: Vec::new(),
                 choices: Vec::new(), steps: Vec::new(), selected_choice_id: None, selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             })).unwrap();
             assert!(!view.drain_events(window, cx));
             assert!(view.session_load_task.is_some());

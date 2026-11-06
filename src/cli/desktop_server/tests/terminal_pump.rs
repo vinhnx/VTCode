@@ -190,6 +190,7 @@ async fn old_runtime_pump_cannot_change_a_replacement_turn_in_the_same_session()
                 search: None,
                 hotkeys: Vec::new(),
                 status: None,
+                plan_markdown: None,
             })),
         })
         .await

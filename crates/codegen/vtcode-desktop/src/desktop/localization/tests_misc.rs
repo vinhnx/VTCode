@@ -62,6 +62,9 @@ fn interaction_copy_is_localized_for_every_language() {
             "app.interaction.recommended",
             "app.interaction.recommended_badge",
             "app.interaction.choice_hint",
+            "app.interaction.show_full_plan",
+            "app.interaction.hide_full_plan",
+            "app.interaction.open_in_inspector",
         ],
         &[],
     );

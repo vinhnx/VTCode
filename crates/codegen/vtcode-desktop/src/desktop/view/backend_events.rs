@@ -862,8 +862,10 @@ impl DesktopView {
                 self.interaction_answer_texts = vec![None; interaction.steps.len()];
                 self.interaction_step_index = 0;
                 self.interaction_immediate_choice_id = None;
+                self.interaction_plan_expanded = false;
                 self.pending_interaction_response = None;
                 self.interaction = Some(interaction);
+                self.reset_plan_inspector_tab_if_hidden();
                 self.invalidate_webmcp_status();
                 self.status = rust_i18n::t!("app.service.awaiting_decision").to_string();
             }

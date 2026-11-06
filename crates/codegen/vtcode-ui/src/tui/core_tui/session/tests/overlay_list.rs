@@ -28,6 +28,7 @@ fn show_list_modal(session: &mut AppSession, title: &str, lines: Vec<&str>, item
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         })),
     });
 }
@@ -95,6 +96,7 @@ fn show_list_modal_with_hint(
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         })),
     });
 }
@@ -299,6 +301,7 @@ fn selected_modal_row_uses_primary_foreground() {
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         })),
     });
 
@@ -421,6 +424,7 @@ fn floating_modal_renders_approval_text_without_dim_modifier() {
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         })),
     });
 

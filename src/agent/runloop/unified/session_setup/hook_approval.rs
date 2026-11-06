@@ -94,6 +94,7 @@ pub(crate) async fn prompt_workspace_hook_approval<S: UiSession + ?Sized>(
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         }),
         ctrl_c_state,
         ctrl_c_notify,

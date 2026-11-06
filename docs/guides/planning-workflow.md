@@ -256,7 +256,9 @@ explicitly selected. Auto does not receive broader authority, larger blocked- ca
 path, verification, budget, or recovery safeguards.
 
 The approval overlay shows a compact synopsis so its choices remain visible, while the complete plan markdown is
-appended to the scrollable TUI transcript and remains available from the persisted plan file. The queued implementation
+appended to the scrollable TUI transcript and remains available from the persisted plan file. On desktop the same
+markdown travels with the approval request: the panel offers Show full plan inline plus an Open in inspector shortcut
+to a transient Plan tab that leaves the rail when the approval resolves. The queued implementation
 turn revalidates the handoff, exits any stale planning gate, and refreshes the selected agent's permission snapshot
 before tools are exposed. Mouse-wheel events outside the floating overlay are passed through to the transcript, so the
 full plan can be reviewed without dismissing the approval gate. Approval also distills the plan's numbered and checkbox

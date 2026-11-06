@@ -56,6 +56,12 @@ pub struct InteractionRequest {
     /// Optional selected choice identities, one per wizard step.
     #[serde(default)]
     pub selected_choice_ids: Vec<String>,
+    /// Full plan markdown for `PlanApproval` prompts, normalized the same
+    /// way as the transcript copy. `None` for other kinds and for payloads
+    /// from older services; clients hide plan-expansion UI rather than
+    /// guessing.
+    #[serde(default)]
+    pub plan_markdown: Option<String>,
 }
 
 /// One ordered step in a question or approval wizard.

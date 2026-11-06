@@ -4,7 +4,16 @@ use super::UiLanguage;
 fn inspector_copy_is_localized_for_every_language() {
     // Correct translations that are byte-identical to English. Each entry is
     // asserted equal (not skipped) so a stale entry fails instead of hiding.
-    const IDENTICAL_TO_ENGLISH: &[(&str, &str)] = &[("it", "app.inspector.tab_output")];
+    const IDENTICAL_TO_ENGLISH: &[(&str, &str)] = &[
+        ("it", "app.inspector.tab_output"),
+        ("es", "app.inspector.tab_plan"),
+        ("fr", "app.inspector.tab_plan"),
+        ("de", "app.inspector.tab_plan"),
+        ("nl", "app.inspector.tab_plan"),
+        ("sv", "app.inspector.tab_plan"),
+        ("pl", "app.inspector.tab_plan"),
+        ("tr", "app.inspector.tab_plan"),
+    ];
     for language in UiLanguage::ALL {
         let locale = language.locale();
         for key in [
@@ -13,6 +22,9 @@ fn inspector_copy_is_localized_for_every_language() {
             "app.inspector.tab_activity",
             "app.inspector.tab_output",
             "app.inspector.tab_utilities",
+            "app.inspector.tab_plan",
+            "app.inspector.empty_plan_title",
+            "app.inspector.empty_plan_description",
             "app.inspector.empty_output_title",
             "app.inspector.empty_output_description",
             "app.inspector.history_tag",

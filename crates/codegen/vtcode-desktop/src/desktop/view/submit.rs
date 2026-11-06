@@ -256,6 +256,8 @@ impl DesktopView {
         self.interaction_answer_texts.clear();
         self.interaction_step_index = 0;
         self.interaction_immediate_choice_id = None;
+        self.interaction_plan_expanded = false;
+        self.reset_plan_inspector_tab_if_hidden();
     }
 
     pub(super) fn submit_interaction(

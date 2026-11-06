@@ -199,6 +199,68 @@ pub(super) fn render_html(id: String, source: SharedString, cx: &gpui_kit::App) 
     harden_transcript_text_view(TextView::html(id, source).style(markdown_style(cx)))
 }
 
+/// Fixed height of the expanded plan-proposal viewer. Kit's scrollable
+/// TextView virtualizes through `gpui::list` and requires a fixed-height
+/// parent; 16rem shows roughly ten lines while the transcript scroller
+/// above yields the space.
+const PLAN_PROPOSAL_VIEW_HEIGHT_REMS: f32 = 16.0;
+
+/// Whether an interaction carries plan markdown worth showing. `None` and
+/// blank share one hiding rule so the panel toggle and the inspector tab
+/// cannot disagree.
+pub(super) fn has_viewable_plan_markdown(plan_markdown: Option<&str>) -> bool {
+    plan_markdown.is_some_and(|markdown| !markdown.trim().is_empty())
+}
+
+/// Geometry for [`render_plan_proposal_view`]: the approval panel owns a
+/// fixed inset scrollport, while the inspector tab fills its pane.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PlanProposalHeight {
+    /// Fixed-height inset box for the approval panel.
+    Panel,
+    /// Fill the host pane; the host must supply a definite height.
+    Fill,
+}
+
+/// Full plan-proposal viewer: the shared hardened Kit TextView. Used by the
+/// approval-panel expander and the inspector tab; both gate on
+/// [`has_viewable_plan_markdown`]. Parsing runs per render over one plan
+/// document (sub-millisecond for plan sizes); memoize at the call site if
+/// profiling ever implicates this.
+pub(super) fn render_plan_proposal_view(
+    id: String,
+    source: SharedString,
+    height: PlanProposalHeight,
+    cx: &gpui_kit::App,
+) -> AnyElement {
+    let colors = cx.theme().colors;
+    let prepared = prepare_markdown(&source);
+    let frame = div()
+        .id(id.clone())
+        .test_support()
+        .role(gpui_kit::Role::Label)
+        .aria_label(prepared.accessible_text.to_string())
+        .w_full()
+        .min_w_0();
+    let frame = match height {
+        PlanProposalHeight::Panel => frame
+            .h(gpui_kit::rems(PLAN_PROPOSAL_VIEW_HEIGHT_REMS))
+            .rounded_md()
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.background)
+            .overflow_hidden()
+            .p_3(),
+        PlanProposalHeight::Fill => frame.flex_1().min_h_0().px_3().py_2(),
+    };
+    frame
+        .child(
+            render_markdown_with_style(format!("{id}-md"), prepared.markdown, false, markdown_style(cx))
+                .scrollable(true),
+        )
+        .into_any_element()
+}
+
 /// Tool-output body: literal prose plus an optional highlighted
 /// `Structured output:` JSON block.
 ///
@@ -569,5 +631,13 @@ mod tests {
         ] {
             assert!(!prepare_markdown(&source.into()).has_list, "list misdetected in {source:?}");
         }
+    }
+
+    #[test]
+    fn viewable_plan_markdown_needs_nonblank_content() {
+        assert!(!super::has_viewable_plan_markdown(None));
+        assert!(!super::has_viewable_plan_markdown(Some("")));
+        assert!(!super::has_viewable_plan_markdown(Some("  \n ")));
+        assert!(super::has_viewable_plan_markdown(Some("# Plan")));
     }
 }

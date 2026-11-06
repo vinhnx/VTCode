@@ -182,6 +182,8 @@ impl DesktopView {
                     .child(counter),
             );
         }
+        // No title-row dismiss: Cancel request and Esc own cancellation,
+        // matching the consent modals (full-access, running-switch).
         panel = panel.child(
             div()
                 .id("interaction-title-row")
@@ -206,20 +208,65 @@ impl DesktopView {
                         .font_semibold()
                         .text_color(colors.foreground)
                         .child(interaction.title.clone()),
-                )
-                .child(
-                    desktop_dismiss_button("dismiss-interaction", rust_i18n::t!("app.browser.close").to_string())
-                        .small()
-                        .desktop_disabled(submitting)
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
-                        ),
                 ),
         );
         // The first detail line carries the decision facts; the rest recede as
         // supporting metadata.
         for (detail_index, detail) in interaction.details.iter().enumerate() {
             panel = panel.child(render_interaction_detail(detail, detail_index, detail_index == 0, cx));
+        }
+        // The details are the collapsed preview; the toggle below reveals the
+        // full proposal in the shared viewer before the choice rows, and the
+        // icon button opens the same viewer in the inspector side panel.
+        if has_viewable_plan_markdown(interaction.plan_markdown.as_deref()) {
+            let expanded = self.interaction_plan_expanded;
+            let toggle_label = if expanded {
+                rust_i18n::t!("app.interaction.hide_full_plan").to_string()
+            } else {
+                rust_i18n::t!("app.interaction.show_full_plan").to_string()
+            };
+            let open_label = rust_i18n::t!("app.interaction.open_in_inspector").to_string();
+            panel = panel.child(
+                div()
+                    .id("interaction-plan-row")
+                    .test_support()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .w_full()
+                    .child(
+                        desktop_button("interaction-plan-toggle")
+                            .label(toggle_label.clone())
+                            .accessibility_label(toggle_label)
+                            .toggled(expanded)
+                            .child(transcript_chevron_lane(expanded))
+                            .ghost()
+                            .small()
+                            .desktop_disabled(submitting)
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.interaction_plan_expanded = !view.interaction_plan_expanded;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        desktop_button("interaction-plan-open-inspector")
+                            .icon(IconName::PanelRight)
+                            .accessibility_label(open_label.clone())
+                            .tooltip(open_label)
+                            .ghost()
+                            .small()
+                            .desktop_disabled(submitting)
+                            .on_click(cx.listener(|view, _, _, cx| view.open_inspector_tab(InspectorTab::Plan, cx))),
+                    ),
+            );
+            if expanded && let Some(markdown) = interaction.plan_markdown.as_deref() {
+                panel = panel.child(render_plan_proposal_view(
+                    "interaction-plan-proposal".to_string(),
+                    markdown.into(),
+                    PlanProposalHeight::Panel,
+                    cx,
+                ));
+            }
         }
         if submitting {
             panel = panel.child(

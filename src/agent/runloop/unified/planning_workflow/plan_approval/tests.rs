@@ -242,6 +242,28 @@ fn plan_confirmation_request_has_build_auto_and_revision_choices() {
     assert_eq!(request.items[1].subtitle.as_deref(), Some("Fresh thread. Context: 7% used."));
 }
 
+#[test]
+fn plan_confirmation_request_carries_normalized_plan_markdown_for_hosts() {
+    let mut plan = sample_plan();
+    plan.raw_content = "<proposed_plan>\n# Retry plan\n\nWrap generate in retry.\n</proposed_plan>".to_string();
+    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&plan, false, 7) else {
+        panic!("expected list request");
+    };
+    let markdown = request.plan_markdown.expect("hosts receive the full plan");
+    assert!(markdown.contains("Wrap generate in retry."), "plan body survives: {markdown:?}");
+    assert!(
+        !markdown.contains("<proposed_plan>"),
+        "wrappers are stripped like the transcript copy: {markdown:?}"
+    );
+
+    // Empty-after-cleanup yields None so clients hide expansion UI.
+    plan.raw_content = "   ".to_string();
+    let TransientRequest::List(request) = build_plan_confirmation_request_with_context(&plan, false, 7) else {
+        panic!("expected list request");
+    };
+    assert_eq!(request.plan_markdown, None);
+}
+
 #[tokio::test]
 async fn execute_plan_confirmation_emits_confirmation_overlay() {
     let (command_tx, mut command_rx) = mpsc::unbounded_channel();

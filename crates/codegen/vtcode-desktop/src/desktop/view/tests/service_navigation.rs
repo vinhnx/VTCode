@@ -121,6 +121,7 @@ fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut Test
                 steps: Vec::new(),
                 selected_choice_id: None,
                 selected_choice_ids: Vec::new(),
+                plan_markdown: None,
             });
             view.interaction_choice_ids = vec![Some("approve".into())];
             view.pending_interaction_response = Some("approval".into());

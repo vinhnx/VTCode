@@ -287,6 +287,7 @@ mod tests {
                 search: None,
                 hotkeys: Vec::new(),
                 status: None,
+                plan_markdown: None,
             }),
             &Arc::new(CtrlCState::new()),
             &Arc::new(Notify::new()),
@@ -351,6 +352,7 @@ mod tests {
                 search: None,
                 hotkeys: vec![],
                 status: None,
+                plan_markdown: None,
             });
             let result = show_permission_and_wait(
                 &handle,

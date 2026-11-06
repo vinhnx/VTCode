@@ -183,6 +183,7 @@ pub(crate) async fn handle_open_donate_links(ctx: SlashCommandContext<'_>) -> Re
         search: None,
         hotkeys: Vec::new(),
         status: None,
+        plan_markdown: None,
     });
 
     let outcome =

@@ -136,6 +136,7 @@ fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest
         selected: Some(InlineListSelection::ConfigAction(UPDATE_AND_RESTART_ACTION.to_string())),
         search: None,
         status: None,
+        plan_markdown: None,
         hotkeys: Vec::new(),
     })
 }

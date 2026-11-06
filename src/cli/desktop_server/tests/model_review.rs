@@ -38,6 +38,7 @@ fn failed_interaction_delivery_keeps_response_retryable() {
         steps: Vec::new(),
         selected_choice_id: None,
         selected_choice_ids: Vec::new(),
+        plan_markdown: None,
     };
     let response = protocol::InteractionResponse {
         session_id: interaction.session_id.clone(),
@@ -56,6 +57,7 @@ fn failed_interaction_delivery_keeps_response_retryable() {
         details: Vec::new(),
         steps: Vec::new(),
         selected_choice_ids: Vec::new(),
+        plan_markdown: None,
     };
     let mut state = ServerState::default();
     state.interaction_registry.insert(&interaction).expect("register interaction");

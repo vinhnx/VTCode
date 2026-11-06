@@ -161,6 +161,7 @@ fn permission_choices(active: bool, confirm: bool) -> TransientRequest {
             search: None,
             hotkeys: Vec::new(),
             status: None,
+            plan_markdown: None,
         });
     }
     let current_badge = |is_current: bool| is_current.then_some("Current".to_string());
@@ -202,6 +203,7 @@ fn permission_choices(active: bool, confirm: bool) -> TransientRequest {
         search: None,
         hotkeys: Vec::new(),
         status: None,
+        plan_markdown: None,
     })
 }
 
