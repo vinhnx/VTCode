@@ -338,9 +338,10 @@ impl DesktopView {
                         |el, delta| el.opacity(delta),
                     ))
                 });
-        // Running trio tiers: the frequent stop keeps the danger fill,
-        // background stays a quiet outline, and force-cancel steps down to
-        // a danger-tinted ghost, so one focal action owns the emphasis.
+        // Running trio tiers: the frequent stop takes the primary fill (no
+        // red anywhere in the cluster), background stays a quiet outline,
+        // and force-cancel steps down to a neutral ghost, so one focal
+        // action owns the emphasis.
         if self.running {
             model_actions = model_actions
                 .child(
@@ -351,7 +352,7 @@ impl DesktopView {
                             Some(key_context::DESKTOP),
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
-                        .icon(IconName::ChevronsDown)
+                        .icon(IconName::PanelBottomClose)
                         .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.background_foreground_session(cx))),
                 )
@@ -359,19 +360,19 @@ impl DesktopView {
                     composer_run_geometry(desktop_button("force-cancel-exec").ghost())
                         .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
-                        .icon(Icon::new(IconName::X).text_color(cx.theme().colors.danger))
+                        .icon(IconName::OctagonX)
                         .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
                 .child(
-                    composer_run_geometry(desktop_danger_button("cancel-turn"))
+                    composer_run_geometry(desktop_primary_button("cancel-turn"))
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
                             Some(key_context::DESKTOP),
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
-                        .icon(IconName::CircleStop)
+                        .icon(IconName::SquareStop)
                         .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                 );
