@@ -319,11 +319,7 @@ impl DesktopView {
             }))
             .into_any_element();
         let clear = rust_i18n::t!("app.transcript.filter_clear").to_string();
-        let dismiss = desktop_button("transcript-filter-clear")
-            .icon(IconName::X)
-            .accessibility_label(clear.clone())
-            .tooltip(clear)
-            .ghost()
+        let dismiss = desktop_dismiss_button("transcript-filter-clear", clear)
             .small()
             .on_click(cx.listener(|view, _, _, cx| {
                 view.clear_filter_matches();

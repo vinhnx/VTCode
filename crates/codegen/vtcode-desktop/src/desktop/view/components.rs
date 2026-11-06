@@ -870,6 +870,22 @@ pub(super) fn desktop_danger_button(id: impl Into<gpui_kit::ElementId>) -> Butto
     desktop_button(id).danger()
 }
 
+/// Quiet header dismiss control: ghost X icon with an accessible name and a
+/// matching tooltip. Callers add sizing (usually `.small()`), disabled
+/// state, and the click handler. Icon-only X buttons without a tooltip
+/// (tab/attachment closers) and action-bound tooltips stay manual.
+pub(super) fn desktop_dismiss_button(
+    id: impl Into<gpui_kit::ElementId>,
+    label: impl Into<gpui_kit::SharedString>,
+) -> Button {
+    let label = label.into();
+    desktop_button(id)
+        .icon(IconName::X)
+        .accessibility_label(label.clone())
+        .tooltip(label)
+        .ghost()
+}
+
 /// Running-turn marker shared by every thread surface (tab strip, sidebar,
 /// browser, compact header): a muted spinner under a caller-owned stable id.
 /// The owning button already names the running state for assistive tech, so

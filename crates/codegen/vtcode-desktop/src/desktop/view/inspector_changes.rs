@@ -762,12 +762,11 @@ impl DesktopView {
                                 .child(div().text_xs().text_color(colors.muted_foreground).child(description)),
                         )
                         .child(
-                            desktop_button("close-diff-review")
-                                .icon(IconName::X)
-                                .accessibility_label(rust_i18n::t!("app.workspace_review.close_review").to_string())
-                                .tooltip(rust_i18n::t!("app.workspace_review.close_review").to_string())
-                                .ghost()
-                                .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
+                            desktop_dismiss_button(
+                                "close-diff-review",
+                                rust_i18n::t!("app.workspace_review.close_review").to_string(),
+                            )
+                            .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
                         ),
                 )
                 .child(content),

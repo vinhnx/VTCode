@@ -188,6 +188,58 @@ fn digit_shortcut_commits_the_numbered_choice(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn recommended_pill_marks_only_the_recommended_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Asymmetric pair: the first row is recommended, the second is not, so
+    // the pill must appear exactly once.
+    let mut interaction = question_interaction(false);
+    interaction.choices[0].recommended = true;
+    interaction.steps[0].choices[0].recommended = true;
+    deliver(&view, interaction, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let pill = window.find("choice-recommended-first");
+        assert!(pill.visible(), "the recommended row carries the pill");
+        // Headless snapshots expose no rendered text, so layout is the
+        // oracle: the pill must occupy space, not just exist.
+        assert!(pill.bounds().size.height > px(0.), "the pill lays out with nonzero height");
+        assert!(window.try_find("choice-recommended-second").is_none(), "a plain row carries no pill");
+        // The visual pill splits off the label, but screen readers still hear
+        // the recommendation on the row itself.
+        let first_row = window.find("interaction-question-choice-0");
+        let first = first_row.label().unwrap_or_default();
+        assert!(first.contains("Recommended"), "recommended row announces it: {first}");
+        let second_row = window.find("interaction-question-choice-1");
+        let second = second_row.label().unwrap_or_default();
+        assert!(!second.contains("Recommended"), "plain row stays quiet: {second}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn dismiss_button_cancels_choice_interaction(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _cx| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    deliver(&view, tool_loop_interaction(Some("grant-40")), cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("dismiss-interaction", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("dismiss cancels the prompt") else {
+        panic!("expected interaction response");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::INTERACTION_RESPOND);
+    assert!(params["choiceId"].is_null(), "cancellation names no choice");
+    assert_eq!(params["choiceIds"], json!([]));
+    assert_eq!(params["cancelled"], json!(true));
+    assert!(requests.try_recv().is_err(), "dismiss sends exactly one response");
+}
+
+#[gpui_kit::test]
 fn escape_cancels_choice_interaction(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
@@ -323,6 +375,7 @@ fn confirming_choice_row_disables_panel_while_response_pending(cx: &mut TestAppC
             "choice-stop",
             "cancel-interaction",
             "confirm-interaction",
+            "dismiss-interaction",
         ] {
             assert_eq!(window.find(id).disabled(), Some(true), "{id} disables while pending");
         }

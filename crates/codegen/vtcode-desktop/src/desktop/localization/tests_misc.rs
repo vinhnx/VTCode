@@ -60,6 +60,7 @@ fn interaction_copy_is_localized_for_every_language() {
             "app.interaction.next_question",
             "app.interaction.your_answer",
             "app.interaction.recommended",
+            "app.interaction.recommended_badge",
             "app.interaction.choice_hint",
         ],
         &[],

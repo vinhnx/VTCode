@@ -259,3 +259,41 @@ fn shimmer_resting_leaves_a_sub_floor_tone_alone() {
     };
     assert_eq!(shimmer_resting(&colors, dim), dim);
 }
+
+/// sRGB-channel composite of `fg` at `alpha` over an opaque `bg`, mirroring
+/// `translucent_sidebar_surface`'s convention.
+fn composite_over(fg: Hsla, alpha: f32, bg: Hsla) -> Hsla {
+    let top = gpui_kit::Rgba::from(fg);
+    let bottom = gpui_kit::Rgba::from(bg);
+    Hsla::from(gpui_kit::Rgba {
+        r: top.r * alpha + bottom.r * (1.0 - alpha),
+        g: top.g * alpha + bottom.g * (1.0 - alpha),
+        b: top.b * alpha + bottom.b * (1.0 - alpha),
+        a: 1.0,
+    })
+}
+
+/// The Recommended pill paints `muted_text` over the choice-row washes
+/// (checked 8%, hover 4% primary on popover): the small pill text must
+/// hold AA on both seats. The Tag outline default (`muted_foreground`)
+/// drops below the floor there, which is why the row overrides it.
+#[gpui_kit::test]
+fn recommended_pill_holds_contrast_on_washed_rows(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            for amount in [0, 40, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                for (seat, alpha) in [("checked", 0.08), ("hover", 0.04)] {
+                    let surface = composite_over(colors.primary, alpha, colors.popover);
+                    let ratio = contrast_ratio(muted_text(&colors), surface);
+                    assert!(ratio >= 4.5, "{id} at {amount}: pill on {seat} wash is {ratio:.2}");
+                }
+            }
+        }
+    });
+}

@@ -139,8 +139,8 @@ impl DesktopView {
         // A visible freeform answer owns every keystroke: typing digits must
         // never commit a row, so panel shortcuts stay off while it renders.
         let freeform_visible = is_question && interaction.steps.get(step_index).is_some_and(|step| step.allow_freeform);
-        // Approvals carry the warning treatment; plain choices stay neutral so
-        // the tone keeps meaning "review carefully".
+        // Approvals keep the marker icon; plain choices stay neutral so the
+        // marker keeps meaning "review carefully".
         let is_approval =
             matches!(interaction.kind, protocol::InteractionKind::Approval | protocol::InteractionKind::PlanApproval);
         let mut panel = div()
@@ -154,14 +154,19 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_2()
-            .rounded_md()
-            .p_4()
-            .when(is_approval, |panel| panel.bg(colors.warning.opacity(0.08)));
+            .rounded_lg()
+            .bg(colors.popover)
+            .border_1()
+            .border_color(colors.border)
+            .p_4();
         // Questionnaire order: progress eyebrow, title, description. The
-        // panel is deliberately unframed; approvals keep the warning tint
-        // plus an explicit icon so the tone never rests on color alone.
-        // A one-item counter restates the title without aiding navigation,
-        // so the eyebrow renders only for genuine multi-step flows.
+        // panel is one framed card; approvals keep the marker icon so the
+        // severity never rests on color alone, but no longer wash the
+        // whole surface in warning tint. Choice rows stay borderless
+        // inside the frame (no nested cards): selection reads through
+        // the checked wash. A one-item counter restates the title
+        // without aiding navigation, so the eyebrow renders only for
+        // genuine multi-step flows.
         if is_wizard && interaction.steps.len() > 1 {
             let counter =
                 rust_i18n::t!("app.interaction.step_counter", n = step_index + 1, total = interaction.steps.len())
@@ -201,6 +206,14 @@ impl DesktopView {
                         .font_semibold()
                         .text_color(colors.foreground)
                         .child(interaction.title.clone()),
+                )
+                .child(
+                    desktop_dismiss_button("dismiss-interaction", rust_i18n::t!("app.browser.close").to_string())
+                        .small()
+                        .desktop_disabled(submitting)
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
+                        ),
                 ),
         );
         // The first detail line carries the decision facts; the rest recede as
@@ -451,14 +464,18 @@ impl DesktopView {
             content = content.child(options);
         }
         if step.allow_freeform {
+            // The panel owns the popover surface, so the answer box drops to
+            // the base background to stay distinct. The wrapper stays
+            // borderless: the Textarea already paints its own input border,
+            // and disabling that would also drop its focus ring.
             content = content.child(
-                div().w_full().rounded_sm().bg(colors.popover).p_2().child(
+                div().w_full().rounded_md().bg(colors.background).p_2().child(
                     Textarea::new(&self.question_answer)
                         .accessibility_id("question-answer")
                         .aria_label(rust_i18n::t!("app.interaction.your_answer").to_string())
                         .cursor_text()
                         .disabled(self.pending_interaction_response.is_some())
-                        .bg(colors.popover)
+                        .bg(colors.background)
                         .h(gpui_kit::rems(4.5)),
                 ),
             );
@@ -466,42 +483,36 @@ impl DesktopView {
         content.into_any_element()
     }
 
-    /// One selectable option card shared by question steps and immediate
-    /// choices: bordered card, inline description, trailing digit chip.
+    /// One selectable option row shared by question steps and immediate
+    /// choices: plain label, Recommended pill, inline description,
+    /// trailing digit chip.
     fn render_choice_card(&self, card: ChoiceCard<'_>, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        let label = if card.choice.recommended {
+        // The visual label stays plain: the recommendation becomes a pill
+        // below it, while screen readers keep hearing the combined
+        // announcement on the row itself.
+        let accessible_label = if card.choice.recommended {
             rust_i18n::t!("app.interaction.recommended", label = card.choice.label.as_str()).to_string()
         } else {
             card.choice.label.clone()
         };
         let disabled = self.pending_interaction_response.is_some();
         let mut radio = Radio::new(card.element_id)
-            .label(label.clone())
-            .accessibility_label(label)
+            .label(card.choice.label.clone())
+            .accessibility_label(accessible_label)
             .checked(card.checked)
             .disabled(disabled)
             .w_full()
             .p_3()
             .rounded_md()
-            .border_1()
-            .border_color(if card.checked {
-                colors.primary.opacity(0.6)
-            } else {
-                colors.border
-            })
-            .bg(if card.checked {
-                colors.primary.opacity(0.08)
-            } else {
-                colors.popover
-            })
-            // Kit Radio owns no hover state, so unchecked cards borrow a
-            // lighter cut of the checked border: rest, hover, and checked
-            // still read as three distinct rungs. Disabled and checked
-            // cards stay put — selection and submission already speak.
-            .when(!disabled && !card.checked, |radio| {
-                radio.hover(|hover| hover.border_color(colors.primary.opacity(0.35)))
-            });
+            // Borderless rows inside the framed panel: rest is transparent
+            // and checked keeps the primary wash. Kit Radio owns no hover
+            // state, so unchecked rows borrow a lighter cut of that wash:
+            // rest, hover, and checked still read as three distinct rungs.
+            // Disabled and checked rows stay put — selection and
+            // submission already speak.
+            .when(card.checked, |radio| radio.bg(colors.primary.opacity(0.08)))
+            .when(!disabled && !card.checked, |radio| radio.hover(|hover| hover.bg(colors.primary.opacity(0.04))));
         let choice_id = card.choice.id.clone();
         let step_index = card.step_index;
         radio = radio
@@ -512,6 +523,29 @@ impl DesktopView {
                     this.choose_interaction_option(step_index, choice_id.clone(), window, cx);
                 }
             }));
+        if card.choice.recommended {
+            // Tag is RenderOnce and cannot carry `.test_support()`, so the
+            // wrapper owns the test identity (domain-derived choice id).
+            // The pill sits on the checked/hover wash seats, where the
+            // outline default (`muted_foreground`) drops below AA — like
+            // every other row copy, it uses `muted_text` instead (pinned
+            // by recommended_pill_holds_contrast_on_washed_rows).
+            radio = radio.child(
+                div()
+                    .id(format!("choice-recommended-{}", card.choice.id))
+                    .test_support()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .child(
+                        Tag::secondary()
+                            .outline()
+                            .small()
+                            .text_color(themes::muted_text(&colors))
+                            .child(rust_i18n::t!("app.interaction.recommended_badge").to_string()),
+                    ),
+            );
+        }
         // Decision-critical descriptions stay fully visible (never truncated,
         // never tooltip-only); the digit chip trails in its own lane. The row
         // breaks the flex min-content chain (`min_w_0`) so a long command in

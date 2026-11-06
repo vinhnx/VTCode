@@ -220,11 +220,7 @@ impl DesktopView {
                         .pl_1()
                         .child(div().id("settings-title").test_support().child(title)),
                     // Generic "Close" word shared across panels (owned by the browser surface).
-                    desktop_button("settings-dismiss")
-                        .icon(IconName::X)
-                        .accessibility_label(rust_i18n::t!("app.browser.close").to_string())
-                        .tooltip(rust_i18n::t!("app.browser.close").to_string())
-                        .ghost()
+                    desktop_dismiss_button("settings-dismiss", rust_i18n::t!("app.browser.close").to_string())
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| {
                             view.close_settings(window, cx);

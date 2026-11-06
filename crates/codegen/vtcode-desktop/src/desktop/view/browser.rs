@@ -409,11 +409,7 @@ impl DesktopView {
                                 .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
                         )
                         .child(
-                            desktop_button("browser-dismiss")
-                                .icon(IconName::X)
-                                .accessibility_label(rust_i18n::t!("app.browser.close").to_string())
-                                .tooltip(rust_i18n::t!("app.browser.close").to_string())
-                                .ghost()
+                            desktop_dismiss_button("browser-dismiss", rust_i18n::t!("app.browser.close").to_string())
                                 .small()
                                 .on_click(cx.listener(|view, _, window, cx| view.close_browser(window, cx))),
                         ),
