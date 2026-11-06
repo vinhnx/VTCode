@@ -252,6 +252,7 @@ impl DesktopView {
     pub(super) fn clear_pending_interaction(&mut self) {
         self.interaction = None;
         self.pending_interaction_response = None;
+        self.interaction_edit_pending = false;
         self.interaction_choice_ids.clear();
         self.interaction_answer_texts.clear();
         self.interaction_step_index = 0;
@@ -289,7 +290,39 @@ impl DesktopView {
             text: answer_texts.iter().flatten().next().cloned(),
             answer_texts,
             cancelled,
+            hotkey: None,
         };
+        self.send_interaction_response(response, false, cx);
+    }
+
+    /// Signal a plan-edit hotkey for the pending approval. The service opens
+    /// its configured editor and re-shows the approval; the panel stays
+    /// locked until that follow-up request arrives.
+    pub(super) fn submit_interaction_hotkey(&mut self, cx: &mut Context<Self>) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
+        let Some(interaction) = self.interaction.clone() else {
+            return;
+        };
+        if !has_viewable_plan_markdown(interaction.plan_markdown.as_deref()) {
+            return;
+        }
+        let response = InteractionResponse {
+            session_id: interaction.session_id,
+            turn_id: interaction.turn_id,
+            interaction_id: interaction.interaction_id,
+            choice_id: None,
+            choice_ids: Vec::new(),
+            text: None,
+            answer_texts: Vec::new(),
+            cancelled: false,
+            hotkey: Some(protocol::InteractionHotkey::LaunchEditor),
+        };
+        self.send_interaction_response(response, true, cx);
+    }
+
+    fn send_interaction_response(&mut self, response: InteractionResponse, editing: bool, cx: &mut Context<Self>) {
         let params = json!(response);
         if !request_fits_frame(protocol::method::INTERACTION_RESPOND, &params) {
             self.error = Some(rust_i18n::t!("app.composer.answers_too_long").to_string());
@@ -298,8 +331,13 @@ impl DesktopView {
         }
         if self.request(protocol::method::INTERACTION_RESPOND, params) {
             self.pending_interaction_response = Some(response.interaction_id);
+            self.interaction_edit_pending = editing;
             self.clear_error();
-            self.status = rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string();
+            self.status = if editing {
+                rust_i18n::t!("app.interaction.editing_plan").to_string()
+            } else {
+                rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string()
+            };
         } else {
             self.error = Some(rust_i18n::t!("app.composer.decision_not_sent").to_string());
         }

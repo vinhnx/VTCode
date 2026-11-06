@@ -32,5 +32,6 @@
 - Kit `Badge` is an overlay count, not a text pill — use `Tag::secondary().outline().small()` for pills, wrapped in an identified `div` since `RenderOnce` cannot carry `.test_support()`.
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.
 - `InspectorTab::Plan` is conditional: it joins the rail only while a plan approval carries viewable markdown, so rail/keyboard/menu code must use `visible_inspector_tabs()` (never `ALL`), and every interaction replacement or clear must call `reset_plan_inspector_tab_if_hidden()`.
+- Plan-edit holds the panel through the service ack (`interaction_edit_pending`): every `pending_interaction_response` mutation must maintain the flag, and a terminal `TurnStatus` for the same turn releases a stranded lock when no re-show follows (blocked/recovered turns keep it).
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.

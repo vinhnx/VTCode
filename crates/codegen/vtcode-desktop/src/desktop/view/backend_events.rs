@@ -258,11 +258,19 @@ impl DesktopView {
                 {
                     return;
                 }
-                self.pending_interaction_response = None;
                 if let Some(error) = error {
+                    self.pending_interaction_response = None;
+                    self.interaction_edit_pending = false;
                     self.error = Some(error);
                     self.status = rust_i18n::t!("app.service.decision_rejected").to_string();
+                } else if self.interaction_edit_pending {
+                    // The service accepted the edit signal and will re-show
+                    // the approval after the editor closes. Keep the pending
+                    // lock so the panel stays on the editing copy instead of
+                    // flashing away mid-edit.
+                    self.status = rust_i18n::t!("app.interaction.editing_plan").to_string();
                 } else {
+                    self.pending_interaction_response = None;
                     self.clear_pending_interaction();
                     self.invalidate_webmcp_status();
                     self.clear_error();
@@ -864,6 +872,7 @@ impl DesktopView {
                 self.interaction_immediate_choice_id = None;
                 self.interaction_plan_expanded = false;
                 self.pending_interaction_response = None;
+                self.interaction_edit_pending = false;
                 self.interaction = Some(interaction);
                 self.reset_plan_inspector_tab_if_hidden();
                 self.invalidate_webmcp_status();
@@ -885,25 +894,7 @@ impl DesktopView {
                 };
                 self.apply_queue_status(snapshot);
             }
-            BackendEvent::TurnStatus(status) => {
-                if !status.get(keys::SESSION_ID).and_then(Value::as_str).is_some_and(|session_id| {
-                    self.notification_matches(session_id, status.get(keys::TURN_ID).and_then(Value::as_str))
-                }) {
-                    return;
-                }
-                if let Some(label) = status.get(keys::STATUS).and_then(Value::as_str) {
-                    self.status = if label.eq_ignore_ascii_case("running") {
-                        rust_i18n::t!("app.service.running").to_string()
-                    } else if label.eq_ignore_ascii_case("failed")
-                        && status.get("restarted").and_then(Value::as_bool).unwrap_or(false)
-                    {
-                        rust_i18n::t!("app.service.turn_recovered").to_string()
-                    } else {
-                        label.to_string()
-                    };
-                    self.invalidate_webmcp_status();
-                }
-            }
+            BackendEvent::TurnStatus(status) => self.handle_turn_status(status),
             BackendEvent::Exited { status, authentication_required } => {
                 self.cancel_session_load_task();
                 self.interrupt_cli_config_write();

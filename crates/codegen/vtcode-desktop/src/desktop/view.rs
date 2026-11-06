@@ -574,6 +574,10 @@ struct DesktopView {
     interaction: Option<InteractionRequest>,
     interaction_focus: FocusHandle,
     pending_interaction_response: Option<String>,
+    /// A plan-edit hotkey is in flight: the service owns the editor and will
+    /// re-show the approval, so the panel stays locked on the editing copy
+    /// until the follow-up request arrives.
+    interaction_edit_pending: bool,
     interaction_choice_ids: Vec<Option<String>>,
     interaction_answer_texts: Vec<Option<String>>,
     interaction_step_index: usize,

@@ -216,8 +216,9 @@ impl DesktopView {
             panel = panel.child(render_interaction_detail(detail, detail_index, detail_index == 0, cx));
         }
         // The details are the collapsed preview; the toggle below reveals the
-        // full proposal in the shared viewer before the choice rows, and the
-        // icon button opens the same viewer in the inspector side panel.
+        // full proposal in the shared viewer before the choice rows, Edit plan
+        // signals the service to open its editor, and the icon button opens
+        // the same viewer in the inspector side panel.
         if has_viewable_plan_markdown(interaction.plan_markdown.as_deref()) {
             let expanded = self.interaction_plan_expanded;
             let toggle_label = if expanded {
@@ -226,6 +227,7 @@ impl DesktopView {
                 rust_i18n::t!("app.interaction.show_full_plan").to_string()
             };
             let open_label = rust_i18n::t!("app.interaction.open_in_inspector").to_string();
+            let edit_label = rust_i18n::t!("app.interaction.edit_plan").to_string();
             panel = panel.child(
                 div()
                     .id("interaction-plan-row")
@@ -249,6 +251,16 @@ impl DesktopView {
                             })),
                     )
                     .child(
+                        desktop_button("interaction-plan-edit")
+                            .label(edit_label.clone())
+                            .accessibility_label(edit_label)
+                            .icon(IconName::Pencil)
+                            .ghost()
+                            .small()
+                            .desktop_disabled(submitting)
+                            .on_click(cx.listener(|view, _, _, cx| view.submit_interaction_hotkey(cx))),
+                    )
+                    .child(
                         desktop_button("interaction-plan-open-inspector")
                             .icon(IconName::PanelRight)
                             .accessibility_label(open_label.clone())
@@ -269,14 +281,25 @@ impl DesktopView {
             }
         }
         if submitting {
+            let (status_aria, status_text) = if self.interaction_edit_pending {
+                (
+                    rust_i18n::t!("app.interaction.editing_plan_aria").to_string(),
+                    rust_i18n::t!("app.interaction.editing_plan").to_string(),
+                )
+            } else {
+                (
+                    rust_i18n::t!("app.interaction.sending_aria").to_string(),
+                    rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string(),
+                )
+            };
             panel = panel.child(
                 div()
                     .id("interaction-response-status")
                     .test_support()
                     .role(gpui_kit::Role::Status)
-                    .aria_label(rust_i18n::t!("app.interaction.sending_aria").to_string())
+                    .aria_label(status_aria)
                     .text_sm()
-                    .child(rust_i18n::t!(i18n::COMPOSER_SENDING_DECISION).to_string()),
+                    .child(status_text),
             );
         }
         if !freeform_visible {

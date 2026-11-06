@@ -96,6 +96,28 @@ fn live_chord_bindings(cx: &gpui_kit::App, chord: &str, context: &str) -> Vec<gp
     resolved.into_iter().collect()
 }
 
+/// Deliver an interaction event as the selected session, the shared arrange
+/// step for interaction panel tests.
+fn deliver(
+    view: &Entity<DesktopView>,
+    interaction: vtcode_desktop_protocol::InteractionRequest,
+    cx: &mut TestAppContext,
+) {
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some(interaction.session_id.clone());
+        view.handle_backend_event(BackendEvent::Interaction(interaction), cx);
+    });
+}
+
+fn focus_panel(view: &Entity<DesktopView>, window: AnyWindowHandle, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.interaction_focus.focus(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
 fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
     open_desktop_sized(cx, 1280., 900.)
 }
@@ -586,6 +608,7 @@ mod options_misc;
 mod output_surfaces;
 mod overlay_toggles;
 mod palette_icons;
+mod plan_proposal;
 mod prompt_history;
 mod review_changes;
 mod review_diff_mode;

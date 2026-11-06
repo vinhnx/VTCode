@@ -230,6 +230,7 @@ fn interaction_responses_are_session_turn_scoped_and_single_use() {
         text: None,
         answer_texts: Vec::new(),
         cancelled: false,
+        hotkey: None,
     };
     assert_eq!(registry.validate(&stale), Err(ProtocolError::StaleInteraction));
     assert_eq!(registry.resolve(&stale), Err(ProtocolError::StaleInteraction));
@@ -303,6 +304,7 @@ fn protocol_methods_and_wire_structs_use_camel_case() -> Result<(), Box<dyn Erro
         text: None,
         answer_texts: Vec::new(),
         cancelled: false,
+        hotkey: None,
     };
     let theme = ThemePreferenceSelectParams { theme: "ciapre-blue".into() };
     let theme_json = serde_json::to_value(theme)?;
@@ -952,4 +954,36 @@ fn session_list_params_default_to_max_and_clamp() {
 
     // Lenient shape: old clients send `{}`, future fields must not break old servers.
     assert!(serde_json::from_value::<SessionListParams>(serde_json::json!({ "limit": 50, "other": 1 })).is_ok());
+}
+
+#[test]
+fn interaction_hotkey_signal_round_trips_and_defaults_to_none() -> Result<(), Box<dyn Error>> {
+    let with_hotkey = InteractionResponse {
+        session_id: "s".to_string(),
+        turn_id: "t".to_string(),
+        interaction_id: "i".to_string(),
+        choice_id: None,
+        choice_ids: Vec::new(),
+        text: None,
+        answer_texts: Vec::new(),
+        cancelled: false,
+        hotkey: Some(InteractionHotkey::LaunchEditor),
+    };
+    let value = serde_json::to_value(&with_hotkey)?;
+    assert_eq!(value["hotkey"], "launch_editor");
+    assert_eq!(serde_json::from_value::<InteractionResponse>(value)?, with_hotkey);
+
+    // Legacy shape: old clients omit the field entirely.
+    let legacy: InteractionResponse = serde_json::from_value(serde_json::json!({
+        "sessionId": "s",
+        "turnId": "t",
+        "interactionId": "i",
+        "choiceId": "choice-opaque",
+        "choiceIds": [],
+        "text": null,
+        "answerTexts": [],
+        "cancelled": false,
+    }))?;
+    assert_eq!(legacy.hotkey, None);
+    Ok(())
 }

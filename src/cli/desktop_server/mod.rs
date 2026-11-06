@@ -33,8 +33,8 @@ use vtcode_desktop_protocol::{
     ThreadEventNotification,
 };
 use vtcode_ui::tui::app::{
-    ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, host_interaction_from_command,
-    host_interaction_response, new_host_session,
+    ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, TransientHotkeyAction,
+    host_interaction_from_command, host_interaction_hotkey_response, host_interaction_response, new_host_session,
 };
 use vtcode_webmcp::runtime::{
     AppliedChange, CheckResult, FileSnapshot, PatchProposal, RuntimeAdapter, RuntimeStatus, TurnResult, WorkspaceFile,
@@ -54,9 +54,11 @@ use cancel::{escalation_waits_for, spawn_cancel_refire, spawn_cancel_watchdog, s
 mod catalog;
 mod dispatch;
 use dispatch::{
-    dispatch_interaction_response, ensure_no_active_turn, handle_request, join_host_command_bridge, parse_params,
-    protocol_interaction_kind, send_notification, shutdown_current_session,
+    ensure_no_active_turn, handle_request, join_host_command_bridge, parse_params, protocol_interaction_kind,
+    send_notification, shutdown_current_session,
 };
+mod interaction_respond;
+use interaction_respond::dispatch_interaction_response;
 mod pump;
 mod recent_prompts;
 #[cfg(test)]

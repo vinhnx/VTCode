@@ -756,6 +756,7 @@ impl DesktopView {
             interaction: None,
             interaction_focus: cx.focus_handle(),
             pending_interaction_response: None,
+            interaction_edit_pending: false,
             interaction_choice_ids: Vec::new(),
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,

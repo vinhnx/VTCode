@@ -10,7 +10,7 @@ use crate::tui::core_tui::app::session::AppSession;
 use crate::tui::core_tui::app::types::{
     FocusChangeCallback, InlineCommand, InlineCommandSender, InlineEvent, InlineEventCallback, InlineHandle,
     InlineListSelection, InlineSession, InlineTheme, PreviewCallback, SlashCommandItem, TransientActivitySignal,
-    TransientEvent, TransientRequest, TransientSubmission,
+    TransientEvent, TransientHotkeyAction, TransientRequest, TransientSubmission,
 };
 use crate::tui::core_tui::log;
 use crate::tui::core_tui::runner::{TuiOptions, run_tui};
@@ -250,6 +250,20 @@ pub fn host_interaction_response(
         TransientSubmission::Selection(selections[0].clone())
     };
     Some(InlineEvent::Transient(TransientEvent::Submitted(submission)))
+}
+
+/// Turn a host hotkey signal back into the transient hotkey event shape.
+///
+/// Only plan approvals advertise hotkeys to hosts; any other kind or action
+/// fails closed to `None` so the service rejects the response.
+pub fn host_interaction_hotkey_response(
+    interaction: &HostInteraction,
+    action: TransientHotkeyAction,
+) -> Option<InlineEvent> {
+    if interaction.kind != HostInteractionKind::PlanApproval || !matches!(action, TransientHotkeyAction::LaunchEditor) {
+        return None;
+    }
+    Some(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(action))))
 }
 
 fn host_choices(
@@ -513,6 +527,68 @@ mod tests {
         };
         let interaction = host_interaction_from_command(&command).expect("interaction view");
         assert_eq!(interaction.plan_markdown.as_deref(), Some("# Plan\n\nDo the thing."));
+    }
+
+    #[test]
+    fn host_interaction_hotkey_only_maps_launch_editor_for_plan_approvals() {
+        fn plan_command(
+            title: &str,
+            item: &str,
+            selection: InlineListSelection,
+            plan_markdown: Option<String>,
+        ) -> InlineCommand {
+            InlineCommand::ShowTransient {
+                request: Box::new(TransientRequest::List(crate::tui::core_tui::app::types::ListOverlayRequest {
+                    title: title.to_string(),
+                    lines: vec!["A plan is ready to execute.".to_string()],
+                    footer_hint: None,
+                    items: vec![crate::tui::core_tui::app::types::InlineListItem::new(
+                        item,
+                        Some(selection.clone()),
+                    )],
+                    selected: Some(selection),
+                    search: None,
+                    hotkeys: Vec::new(),
+                    status: None,
+                    plan_markdown,
+                })),
+            }
+        }
+
+        let plan = host_interaction_from_command(&plan_command(
+            "Ready to code?",
+            "Edit plan",
+            InlineListSelection::PlanApprovalEditPlan,
+            Some("# Plan\n\nDo the thing.".to_string()),
+        ))
+        .expect("interaction view");
+        assert_eq!(plan.kind, HostInteractionKind::PlanApproval);
+
+        let event =
+            host_interaction_hotkey_response(&plan, TransientHotkeyAction::LaunchEditor).expect("plan hotkey maps");
+        assert!(matches!(
+            event,
+            InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(
+                TransientHotkeyAction::LaunchEditor
+            )))
+        ));
+        assert!(
+            host_interaction_hotkey_response(&plan, TransientHotkeyAction::OpenSourceThread).is_none(),
+            "non-editor actions fail closed"
+        );
+
+        let approval = host_interaction_from_command(&plan_command(
+            "Approve command",
+            "Do not run (Recommended)",
+            InlineListSelection::ToolApproval(false),
+            None,
+        ))
+        .expect("interaction view");
+        assert_eq!(approval.kind, HostInteractionKind::Approval);
+        assert!(
+            host_interaction_hotkey_response(&approval, TransientHotkeyAction::LaunchEditor).is_none(),
+            "hotkeys outside plan approvals fail closed"
+        );
     }
 
     #[test]

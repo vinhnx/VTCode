@@ -127,6 +127,7 @@ async fn restored_queue_waits_for_the_startup_interaction_response() {
             text: None,
             answer_texts: Vec::new(),
             cancelled: true,
+            hotkey: None,
         },
     )
     .await
@@ -237,6 +238,7 @@ async fn startup_interaction_blocks_turns_and_session_changes_until_answered() {
             text: None,
             answer_texts: Vec::new(),
             cancelled: true,
+            hotkey: None,
         },
     )
     .await

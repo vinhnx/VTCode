@@ -8,6 +8,41 @@ impl DesktopView {
         self.transcript.push(item);
     }
 
+    pub(super) fn handle_turn_status(&mut self, status: Value) {
+        if !status.get(keys::SESSION_ID).and_then(Value::as_str).is_some_and(|session_id| {
+            self.notification_matches(session_id, status.get(keys::TURN_ID).and_then(Value::as_str))
+        }) {
+            return;
+        }
+        if let Some(label) = status.get(keys::STATUS).and_then(Value::as_str) {
+            self.status = if label.eq_ignore_ascii_case("running") {
+                rust_i18n::t!("app.service.running").to_string()
+            } else if label.eq_ignore_ascii_case("failed")
+                && status.get("restarted").and_then(Value::as_bool).unwrap_or(false)
+            {
+                rust_i18n::t!("app.service.turn_recovered").to_string()
+            } else {
+                label.to_string()
+            };
+            self.invalidate_webmcp_status();
+            // A terminal turn end releases a stranded edit lock: the
+            // runloop left the approval wait (stop, error) without a
+            // re-show. Blocked turns still hold the wait, and a
+            // recovered turn may still re-show, so both keep the lock.
+            let terminal = label.eq_ignore_ascii_case("completed")
+                || (label.eq_ignore_ascii_case("failed")
+                    && !status.get("restarted").and_then(Value::as_bool).unwrap_or(false));
+            let turn_matches = status.get(keys::TURN_ID).and_then(Value::as_str).is_some_and(|turn_id| {
+                self.interaction
+                    .as_ref()
+                    .is_some_and(|interaction| interaction.turn_id == turn_id)
+            });
+            if terminal && self.interaction_edit_pending && turn_matches {
+                self.clear_pending_interaction();
+            }
+        }
+    }
+
     pub(super) fn notification_matches(&self, session_id: &str, turn_id: Option<&str>) -> bool {
         if self.selected_session_id.as_deref() != Some(session_id) {
             return false;

@@ -65,6 +65,9 @@ fn interaction_copy_is_localized_for_every_language() {
             "app.interaction.show_full_plan",
             "app.interaction.hide_full_plan",
             "app.interaction.open_in_inspector",
+            "app.interaction.edit_plan",
+            "app.interaction.editing_plan",
+            "app.interaction.editing_plan_aria",
         ],
         &[],
     );

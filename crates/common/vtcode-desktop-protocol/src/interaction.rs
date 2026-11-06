@@ -2,6 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Host hotkey signalled back to the service mid-interaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InteractionHotkey {
+    /// Open the pending plan draft in the service-configured external editor.
+    LaunchEditor,
+}
+
 /// User response to a pending runtime interaction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +33,11 @@ pub struct InteractionResponse {
     /// Whether the interaction was explicitly cancelled by the user.
     #[serde(default)]
     pub cancelled: bool,
+    /// Host hotkey signal for a mid-interaction action. `None` for ordinary
+    /// choice/cancel responses; `Some` asks the service to act mid-interaction
+    /// (e.g. open the plan editor) and follow up with a new request.
+    #[serde(default)]
+    pub hotkey: Option<InteractionHotkey>,
 }
 
 /// Interaction request sent from the service to the desktop client.
