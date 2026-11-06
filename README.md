@@ -317,7 +317,7 @@ Want to see your avatar here? Every bit counts: a one-line fix, a bug report, or
 to begin? Say hello on a [good first issue](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) and we will
 figure it out together.
 
-### Resources
+## Resources
 
 - [Building VT Code, a year in](https://huggingface.co/blog/vinhnx90/building-vtcode-a-year-in) ·
   [Podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [Video](https://www.youtube.com/watch?v=PvL_kPjgU6o)

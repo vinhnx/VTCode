@@ -2,7 +2,7 @@
 
 Repository-wide entrypoint for VT Code documentation.
 
-Last reviewed: 2026-08-28
+Last reviewed: 2026-11-06
 
 ## Start Here
 
@@ -52,7 +52,6 @@ Last reviewed: 2026-08-28
   manifest seams.
 - [Language Support Matrix](protocols/LANGUAGE_SUPPORT.md) - Tree-sitter and language support status.
 - [Signal Handling](signal_handling.md) - Ctrl+C / SIGINT priority guarantees and emergency exit.
-- [Indexer Notes](modules/vtcode_indexer.md) - Indexer behavior and usage.
 - [Development Guide](development/README.md) - Local dev workflows.
 - [Diff Preview Architecture](development/diff-preview.md) - Shared diff computation, bounded layout, and renderer
   boundaries.
