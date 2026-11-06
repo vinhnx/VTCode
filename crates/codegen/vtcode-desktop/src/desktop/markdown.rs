@@ -199,11 +199,11 @@ pub(super) fn render_html(id: String, source: SharedString, cx: &gpui_kit::App) 
     harden_transcript_text_view(TextView::html(id, source).style(markdown_style(cx)))
 }
 
-/// Fixed height of the expanded plan-proposal viewer. Kit's scrollable
-/// TextView virtualizes through `gpui::list` and requires a fixed-height
-/// parent; 16rem shows roughly ten lines while the transcript scroller
-/// above yields the space.
-const PLAN_PROPOSAL_VIEW_HEIGHT_REMS: f32 = 16.0;
+/// Fixed height of the inset markdown viewer. Kit's scrollable TextView
+/// virtualizes through `gpui::list` and requires a fixed-height parent;
+/// 16rem shows roughly ten lines while the surrounding scroller yields
+/// the space.
+const MARKDOWN_VIEW_PANEL_HEIGHT_REMS: f32 = 16.0;
 
 /// Whether an interaction carries plan markdown worth showing. `None` and
 /// blank share one hiding rule so the panel toggle and the inspector tab
@@ -212,25 +212,25 @@ pub(super) fn has_viewable_plan_markdown(plan_markdown: Option<&str>) -> bool {
     plan_markdown.is_some_and(|markdown| !markdown.trim().is_empty())
 }
 
-/// Geometry for [`render_plan_proposal_view`]: the approval panel owns a
-/// fixed inset scrollport, while the inspector tab fills its pane.
+/// Geometry for [`render_markdown_view`]: inset panels own a fixed
+/// scrollport, while pane-filling hosts supply a definite height.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PlanProposalHeight {
-    /// Fixed-height inset box for the approval panel.
+pub(super) enum MarkdownViewHeight {
+    /// Fixed-height inset box.
     Panel,
     /// Fill the host pane; the host must supply a definite height.
     Fill,
 }
 
-/// Full plan-proposal viewer: the shared hardened Kit TextView. Used by the
-/// approval-panel expander and the inspector tab; both gate on
-/// [`has_viewable_plan_markdown`]. Parsing runs per render over one plan
-/// document (sub-millisecond for plan sizes); memoize at the call site if
-/// profiling ever implicates this.
-pub(super) fn render_plan_proposal_view(
+/// Framed scrollable markdown viewer: the shared hardened Kit TextView.
+/// Used by the plan-proposal expander, the inspector tab, and markdown file
+/// previews. Parsing runs per render over one document (sub-millisecond for
+/// plan sizes, milliseconds for bounded file previews); memoize at the call
+/// site if profiling ever implicates this.
+pub(super) fn render_markdown_view(
     id: String,
     source: SharedString,
-    height: PlanProposalHeight,
+    height: MarkdownViewHeight,
     cx: &gpui_kit::App,
 ) -> AnyElement {
     let colors = cx.theme().colors;
@@ -243,15 +243,15 @@ pub(super) fn render_plan_proposal_view(
         .w_full()
         .min_w_0();
     let frame = match height {
-        PlanProposalHeight::Panel => frame
-            .h(gpui_kit::rems(PLAN_PROPOSAL_VIEW_HEIGHT_REMS))
+        MarkdownViewHeight::Panel => frame
+            .h(gpui_kit::rems(MARKDOWN_VIEW_PANEL_HEIGHT_REMS))
             .rounded_md()
             .border_1()
             .border_color(colors.border)
             .bg(colors.background)
             .overflow_hidden()
             .p_3(),
-        PlanProposalHeight::Fill => frame.flex_1().min_h_0().px_3().py_2(),
+        MarkdownViewHeight::Fill => frame.flex_1().min_h_0().px_3().py_2(),
     };
     frame
         .child(

@@ -62,6 +62,16 @@ pub(super) fn is_image_path(rel_path: &str) -> bool {
     vtcode_commons::image::has_supported_image_extension(Path::new(rel_path))
 }
 
+/// Whether a workspace-relative path points at a markdown document the file
+/// preview renders through the shared markdown viewer. Mirrors the
+/// `md | markdown` pair `ast_grep` uses for language detection.
+pub(super) fn is_markdown_path(rel_path: &str) -> bool {
+    rel_path
+        .rsplit('.')
+        .next()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown"))
+}
+
 /// Map a provider-supported image extension to the renderer's decoders.
 fn image_format(rel_path: &str) -> Option<gpui_kit::ImageFormat> {
     if !is_image_path(rel_path) {
@@ -444,6 +454,16 @@ mod tests {
             "noext",
         ] {
             assert!(!is_image_path(path), "{path} must not be an image");
+        }
+    }
+
+    #[test]
+    fn markdown_paths_route_to_the_shared_viewer() {
+        for path in ["notes.md", "README.MD", "guide.markdown", "docs/plan.Markdown"] {
+            assert!(is_markdown_path(path), "{path} must be markdown");
+        }
+        for path in ["main.rs", "notes.mdx", "archive.zip", "noext", "shot.png", "mddoc"] {
+            assert!(!is_markdown_path(path), "{path} must not be markdown");
         }
     }
 

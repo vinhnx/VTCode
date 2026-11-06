@@ -589,6 +589,7 @@ mod effort_rail;
 mod exec_controls;
 mod file_drop;
 mod files_destination;
+mod files_preview;
 mod files_webmcp;
 mod full_access_confirm;
 mod heading_tiers;

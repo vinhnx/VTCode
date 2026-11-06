@@ -272,10 +272,10 @@ impl DesktopView {
                     ),
             );
             if expanded && let Some(markdown) = interaction.plan_markdown.as_deref() {
-                panel = panel.child(render_plan_proposal_view(
+                panel = panel.child(render_markdown_view(
                     "interaction-plan-proposal".to_string(),
                     markdown.into(),
-                    PlanProposalHeight::Panel,
+                    MarkdownViewHeight::Panel,
                     cx,
                 ));
             }

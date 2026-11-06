@@ -788,8 +788,9 @@ impl DesktopView {
                         panel.child(warning_alert("preview-editor-error", error.clone(), colors))
                     })
                     .child(match preview.image.clone() {
-                        // Image previews render the picture itself; everything
-                        // else keeps the bounded mono text surface.
+                        // Image previews render the picture itself; markdown
+                        // previews reuse the shared viewer; everything else
+                        // keeps the bounded mono text surface.
                         Some(image) => div()
                             .id("file-preview-body")
                             .flex_1()
@@ -806,6 +807,18 @@ impl DesktopView {
                                     .object_fit(gpui_kit::ObjectFit::Contain)
                                     .rounded_md(),
                             )
+                            .into_any_element(),
+                        None if files::is_markdown_path(&preview.rel_path) => div()
+                            .id("file-preview-body")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_hidden()
+                            .child(render_markdown_view(
+                                "file-preview-markdown".to_string(),
+                                preview.text.clone().into(),
+                                MarkdownViewHeight::Fill,
+                                cx,
+                            ))
                             .into_any_element(),
                         None => div()
                             .id("file-preview-body")

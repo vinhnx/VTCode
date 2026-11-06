@@ -223,10 +223,10 @@ impl DesktopView {
                 )
                 .into_any_element();
         }
-        pane.child(render_plan_proposal_view(
+        pane.child(render_markdown_view(
             "inspector-plan-proposal".to_string(),
             markdown.into(),
-            PlanProposalHeight::Fill,
+            MarkdownViewHeight::Fill,
             cx,
         ))
         .into_any_element()

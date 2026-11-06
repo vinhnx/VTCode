@@ -76,8 +76,8 @@ use super::build_info;
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{
-    PlanProposalHeight, has_viewable_plan_markdown, markdown_style, prepare_markdown, render_markdown,
-    render_markdown_with_style, render_output_sections, render_plan_proposal_view,
+    MarkdownViewHeight, has_viewable_plan_markdown, markdown_style, prepare_markdown, render_markdown,
+    render_markdown_view, render_markdown_with_style, render_output_sections,
 };
 use super::preferences;
 use super::strings::{app, bundle, display, i18n, key_context, keys};
