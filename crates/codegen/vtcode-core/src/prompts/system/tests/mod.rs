@@ -31,4 +31,7 @@ fn assert_no_removed_model_facing_tool_names(prompt: &str) {
 mod budget_cache_measure;
 mod content_and_dynamic;
 mod context_and_identity;
+mod prompt_budgets;
 mod prompt_shape;
+
+use prompt_budgets::*;

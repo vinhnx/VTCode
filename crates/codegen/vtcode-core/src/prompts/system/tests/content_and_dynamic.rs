@@ -3,13 +3,11 @@ use super::*;
 #[test]
 fn test_default_prompt_token_count() {
     let approx_tokens = estimate_token_count(default_system_prompt());
-    // Includes direct patch calls and one bounded context-mismatch recovery read.
-    // Raised from 1210: the delegation rule now names the three keep-conditions
-    // (parallel, discardable fresh-context, tool-choice conflicts) so subagents
-    // fold into skills and tool search by default.
-    // Raised for the partial-commit and conflict-reload runtime guidance (measured 1257).
-    // Raised for the name-the-missing-fact inspection guidance (measured 1298).
-    assert!(approx_tokens <= 1330, "Default prompt should stay compact, got ~{approx_tokens}");
+    // Budget and its raise history live on the constant; see `prompt_budgets.rs`.
+    assert!(
+        approx_tokens <= DEFAULT_STATIC_PROMPT_MAX_TOKENS_U64,
+        "Default prompt should stay compact, got ~{approx_tokens}"
+    );
 }
 #[tokio::test]
 async fn test_default_live_prompt_budget_with_instruction_inline() {
@@ -51,12 +49,8 @@ async fn test_default_live_prompt_budget_with_instruction_inline() {
     assert!(prompt.contains("# Rust"));
     assert!(prompt.contains("- keep changes surgical"));
     assert!(!prompt.contains("### On-demand loading"));
-    // Raised from 1250 for the reuse-reads runtime guidance bullet (measured 1284).
-    // Raised to 1320 for the hypothesis-loop runtime bullet (measured 1306).
-    // Named HOVER guidance measures 1321 tokens.
-    // Raised for the partial-commit and conflict-reload runtime guidance (measured 1516).
-    // Raised for the name-the-missing-fact inspection guidance (measured 1557).
-    assert!(approx_tokens <= 1590, "got ~{approx_tokens} tokens");
+    // Budget and its raise history live on the constant; see `prompt_budgets.rs`.
+    assert!(approx_tokens <= DEFAULT_LIVE_PROMPT_WITH_INSTRUCTIONS_MAX_TOKENS_U64, "got ~{approx_tokens} tokens");
 }
 #[tokio::test]
 async fn test_generated_prompts_do_not_use_deprecated_update_plan() {

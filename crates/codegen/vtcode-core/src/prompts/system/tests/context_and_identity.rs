@@ -345,12 +345,10 @@ async fn test_coordinator_role_presence_and_budget_in_default_and_minimal() {
         assert!(result.contains("while the matrix is idle"));
         assert!(!result.contains("Prefer skills and tool search"));
         assert_eq!(result.matches("## Coordinator Role").count(), 1);
-        // Raised for the partial-commit and conflict-reload runtime guidance
-        // (measured 1182 minimal).
-        // Raised for the name-the-missing-fact inspection guidance (measured 1223 minimal).
+        // Budgets and their raise histories live on the constants; see `prompt_budgets.rs`.
         let max_tokens = match mode {
-            SystemPromptMode::Minimal => 1260,
-            _ => 2000,
+            SystemPromptMode::Minimal => COORDINATOR_MINIMAL_MAX_TOKENS_USIZE,
+            _ => COORDINATOR_OTHER_MODES_MAX_TOKENS_USIZE,
         };
         assert!(estimate_tokens(&result) <= max_tokens, "{mode:?}: {} tokens", estimate_tokens(&result));
     }
@@ -381,14 +379,8 @@ fn test_estimate_token_count() {
     // Realistic prompt size check — these are estimates, not exact token counts
     let minimal_tokens = estimate_token_count(minimal_system_prompt());
     let default_tokens = estimate_token_count(default_system_prompt());
-    // Same budgets as the dedicated token-count tests above.
-    // Minimal raised from 665 for the reuse-reads runtime guidance bullet (measured 688).
-    // Raised to 725 for the hypothesis-loop runtime bullet (measured 710).
-    // Raised to 890/1220 for the fold-by-default delegation rule naming the three
-    // keep-conditions (measured 878 minimal).
-    // Raised for the partial-commit and conflict-reload runtime guidance
-    // (measured 920 minimal, 1257 default).
-    // Raised for the name-the-missing-fact inspection guidance (measured 961 minimal, 1298 default).
-    assert!(minimal_tokens <= 1000, "Minimal prompt tokens: {minimal_tokens}");
-    assert!(default_tokens <= 1330, "Default prompt tokens: {default_tokens}");
+    // Same budgets as the dedicated token-count tests; histories live on the
+    // constants in `prompt_budgets.rs`.
+    assert!(minimal_tokens <= MINIMAL_STATIC_PROMPT_MAX_TOKENS_U64, "Minimal prompt tokens: {minimal_tokens}");
+    assert!(default_tokens <= DEFAULT_STATIC_PROMPT_MAX_TOKENS_U64, "Default prompt tokens: {default_tokens}");
 }

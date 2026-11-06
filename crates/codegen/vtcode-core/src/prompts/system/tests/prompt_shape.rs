@@ -43,35 +43,19 @@ async fn planning_prompt_size_fixed_fixture() {
         )),
         false,
     );
-    // Source inspection adds one shared runtime sentence (about 60 tokens).
-    // Retain the canonical output contract and HOVER guidance. Before the tracker
-    // examples, Default/Minimal measured 9847/10180 bytes and 2107/2205 tokens.
-    // Fresh completion guidance adds 248 bytes and about 45 estimated tokens.
-    // Zero-on-success planning/runtime guidance adds 253 bytes and about 51 tokens.
-    // Action-specific tracker examples measure 9997 bytes/2146 tokens for Default
-    // and 10269 bytes/2216 tokens for Minimal; keep tight caps and presence checks.
-    // Cancelled planning resumes on fresh input; retain a 50-byte allowance for this policy.
-    // Terminal planning guidance adds 128 bytes and about 30 estimated tokens.
-    // Partial-commit and conflict-reload runtime guidance adds 229 bytes and
-    // about 45 estimated tokens (Default measures 11328 bytes/2398 tokens,
-    // Minimal measures 11600 bytes/2468 tokens).
-    // Scoped-verify planning guidance adds 149 bytes and about 35 estimated
-    // tokens (Default measures 11477 bytes/2433 tokens, Minimal measures
-    // 11749 bytes/2503 tokens).
-    // Raised for the name-the-missing-fact inspection guidance (measured 11685
-    // bytes/2474 tokens Default, 11957 bytes/2544 tokens Minimal).
+    // Budgets and their raise histories live on the constants; see `prompt_budgets.rs`.
     for case in [
         PlanningPromptSizeCase {
             density: "Default",
             prompt_budget_tokens: 100_000,
-            max_prompt_bytes: 11_870,
-            max_estimated_tokens: 2_550,
+            max_prompt_bytes: PLANNING_FIXTURE_DEFAULT_MAX_BYTES,
+            max_estimated_tokens: PLANNING_FIXTURE_DEFAULT_MAX_TOKENS_USIZE,
         },
         PlanningPromptSizeCase {
             density: "Minimal",
             prompt_budget_tokens: 1,
-            max_prompt_bytes: 12_140,
-            max_estimated_tokens: 2_620,
+            max_prompt_bytes: PLANNING_FIXTURE_MINIMAL_MAX_BYTES,
+            max_estimated_tokens: PLANNING_FIXTURE_MINIMAL_MAX_TOKENS_USIZE,
         },
     ] {
         let mut config = VTCodeConfig::default();
@@ -134,13 +118,13 @@ async fn test_minimal_mode_selection() {
 
     // Minimal prompt should remain compact and deterministic without AGENTS.md injection.
     // Char bound is a smoke check only; tokens are authoritative.
-    // Includes direct patch calls and bounded context-mismatch recovery.
-    // Raised from 3700 for the reuse-reads and exact-whitespace patch-copy guidance (measured 3917).
-    // Raised from 4700 for the fold-by-default delegation rule (measured 4719).
-    // Raised for the partial-commit and conflict-reload runtime guidance (measured 4948).
-    // Raised for the name-the-missing-fact inspection guidance (measured 5156).
-    assert!(result.len() < 5360, "Minimal mode should produce <5.36K chars (was {} chars)", result.len());
-    assert!(result.contains("VT Code") || result.contains("VT Code"), "Should contain VT Code identifier");
+    // Budget and its raise history live on the constant; see `prompt_budgets.rs`.
+    assert!(
+        result.len() < MINIMAL_COMPOSED_MAX_BYTES,
+        "Minimal mode should produce <{MINIMAL_COMPOSED_MAX_BYTES} chars (was {} chars)",
+        result.len()
+    );
+    assert!(result.contains("VT Code"), "Should contain VT Code identifier");
 }
 #[tokio::test]
 async fn test_default_prompt_selection() {
@@ -153,17 +137,10 @@ async fn test_default_prompt_selection() {
 
     let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-    // Includes fresh completion evidence guidance (+248 bytes, about 45 tokens).
-    // Generated verifier success guidance adds 114 bytes (about 25 tokens).
-    // Includes patch recovery guidance; token tests stay authoritative.
-    // Raised from 5400 for the reuse-reads runtime guidance bullet (measured 5496).
-    // Named HOVER guidance measures 5616 bytes; retain a narrow byte allowance.
-    // Raised from 6350 for the fold-by-default delegation rule (measured 6375).
-    // Raised for the partial-commit and conflict-reload runtime guidance (measured 6604).
-    // Raised for the name-the-missing-fact inspection guidance (measured 6812).
+    // Budget and its raise history live on the constant; see `prompt_budgets.rs`.
     assert!(
-        result.len() <= 6990,
-        "Default mode should stay sparse with runtime guidance (<=6990 bytes, was {} bytes)",
+        result.len() <= DEFAULT_COMPOSED_MAX_BYTES,
+        "Default mode should stay sparse with runtime guidance (<={DEFAULT_COMPOSED_MAX_BYTES} bytes, was {} bytes)",
         result.len()
     );
     assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
@@ -184,15 +161,10 @@ async fn test_lightweight_mode_selection() {
     let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
     assert!(result.len() > 100, "Lightweight should be >100 chars");
-    // Includes fresh completion evidence guidance (+248 bytes, about 45 tokens).
-    // Generated verifier success guidance adds 114 bytes (about 25 tokens).
-    // Includes patch recovery guidance; token tests stay authoritative.
-    // Raised from 4800 for the reuse-reads runtime guidance bullet (measured 4862).
-    // Raised for the partial-commit and conflict-reload runtime guidance (measured 5970).
-    // Raised for the name-the-missing-fact inspection guidance (measured 6178).
+    // Budget and its raise history live on the constant; see `prompt_budgets.rs`.
     assert!(
-        result.len() < 6360,
-        "Lightweight should be compact with runtime guidance (<6.36K chars, was {} chars)",
+        result.len() < LIGHTWEIGHT_COMPOSED_MAX_BYTES,
+        "Lightweight should be compact with runtime guidance (<{LIGHTWEIGHT_COMPOSED_MAX_BYTES} chars, was {} chars)",
         result.len()
     );
     assert!(result.contains("task_tracker"));
@@ -276,15 +248,10 @@ async fn test_specialized_mode_selection() {
 
     let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-    // Includes fresh completion evidence guidance (+248 bytes, about 45 tokens).
-    // Generated verifier success guidance adds 114 bytes (about 25 tokens).
-    // Includes patch recovery guidance; token tests stay authoritative.
-    // Raised from 5400 for the reuse-reads runtime guidance bullet (measured 5569).
-    // Raised for the partial-commit and conflict-reload runtime guidance (measured 6677).
-    // Raised for the name-the-missing-fact inspection guidance (measured 6885).
+    // Budget and its raise history live on the constant; see `prompt_budgets.rs`.
     assert!(
-        result.len() <= 7060,
-        "Specialized should stay sparse with runtime guidance (<=7.06K chars, was {} chars)",
+        result.len() <= SPECIALIZED_COMPOSED_MAX_BYTES,
+        "Specialized should stay sparse with runtime guidance (<={SPECIALIZED_COMPOSED_MAX_BYTES} chars, was {} chars)",
         result.len()
     );
     assert!(result.contains("task_tracker"));
@@ -404,12 +371,9 @@ fn planning_workflow_persistence_policy_assigns_plan_lifecycle_to_runtime() {
 #[test]
 fn test_minimal_prompt_token_count() {
     let approx_tokens = estimate_token_count(minimal_system_prompt());
-    // Raised from 400: the shared runtime guidance is now full sentences with reasons.
-    // Includes direct patch calls and one bounded context-mismatch recovery read.
-    // Raised from 665 for the reuse-reads runtime guidance bullet (measured 688).
-    // Raised to 725 for the hypothesis-loop runtime bullet (measured 710).
-    // Raised to 890 for the fold-by-default delegation rule (measured 878).
-    // Raised for the partial-commit and conflict-reload runtime guidance (measured 920).
-    // Raised for the name-the-missing-fact inspection guidance (measured 961).
-    assert!(approx_tokens <= 1000, "Minimal prompt should stay compact, got ~{approx_tokens}");
+    // Budget and its raise history live on the constant; see `prompt_budgets.rs`.
+    assert!(
+        approx_tokens <= MINIMAL_STATIC_PROMPT_MAX_TOKENS_U64,
+        "Minimal prompt should stay compact, got ~{approx_tokens}"
+    );
 }
