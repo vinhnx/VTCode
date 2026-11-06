@@ -193,6 +193,19 @@ pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
 pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 33;
 /// Shimmer sweep duration in milliseconds
 pub const TUI_SHIMMER_SWEEP_DURATION_MS: u64 = 2000;
+/// Thinking-spinner frame interval in milliseconds: 10 Braille frames at
+/// 80ms give an 800ms revolution — brisk but still readable. Each
+/// advance requests a redraw through the shared animation tick.
+pub const TUI_THINKING_SPINNER_FRAME_INTERVAL_MS: u64 = 80;
+// Animation-cadence ratchet: frame intervals must be positive, and the
+// shimmer interval must sit below its sweep so the phase step is nonzero
+// (a zero step freezes the shimmer; see `ShimmerState`).
+const _: () = assert!(TUI_THINKING_SPINNER_FRAME_INTERVAL_MS > 0);
+const _: () = assert!(TUI_SHIMMER_FRAME_INTERVAL_MS > 0);
+const _: () = assert!(
+    TUI_SHIMMER_FRAME_INTERVAL_MS < TUI_SHIMMER_SWEEP_DURATION_MS,
+    "shimmer phase step must be a proper fraction of the sweep"
+);
 /// Keep cursor steady for this duration after scroll events
 pub const TUI_SCROLL_CURSOR_STEADY_MS: u64 = 250;
 

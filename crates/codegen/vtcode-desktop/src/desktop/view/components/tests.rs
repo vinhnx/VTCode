@@ -1,3 +1,7 @@
+use std::time::Duration;
+
+use gpui_kit::component::theme::MotionTokens;
+
 use super::*;
 
 /// Transparent brand mark: exactly the stroke-only V path, no tile rect.
@@ -127,4 +131,24 @@ fn shimmer_tones_dim_while_animating_and_hold_the_tone_when_static(cx: &mut gpui
         assert_eq!(resting, tone, "reduced motion keeps the full readable tone");
         assert_eq!(highlight, tone, "a static label has no bright band to preserve");
     });
+}
+
+/// Motion-policy ratchet: every duration token our fades consume must stay
+/// under the 300ms UI-animation ceiling, and the shared enter curve must
+/// stay ease-out-shaped (front-loaded progress). Pins the upstream contract
+/// `zen_fade_animation` (normal) and the palette fade (fast) depend on;
+/// `duration_slow` is intentionally unpinned (nothing consumes it).
+#[test]
+fn shared_motion_tokens_stay_within_ui_animation_policy() {
+    let motion = MotionTokens::default();
+    for (name, duration) in [
+        ("duration_fast", motion.duration_fast),
+        ("duration_normal", motion.duration_normal),
+    ] {
+        assert!(duration <= Duration::from_millis(300), "{name} must stay under the 300ms UI-animation ceiling");
+    }
+    assert!(
+        motion.easing_enter.sample(0.25) > 0.25 && motion.easing_enter.sample(0.5) > 0.5,
+        "enter curve must stay ease-out-shaped for instant feedback"
+    );
 }

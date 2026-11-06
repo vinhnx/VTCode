@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use gpui_kit::Styled;
-use gpui_kit::base::{TextView, TextViewMotion, TextViewStyle};
+use gpui_kit::base::{Easing, TextView, TextViewMotion, TextViewStyle};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::theme::{ActiveTheme, ThemeColor};
 use gpui_kit::prelude::*;
@@ -354,8 +354,16 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
         })
 }
 
+/// Fade-in length for streamed transcript chunks. Matches Kit's own
+/// streaming preset (280ms) and stays under the 300ms UI-animation
+/// ceiling; chunks fade as one (zero stagger) for calm streaming text.
+const STREAMING_FADE_MS: u64 = 280;
+const _: () = assert!(STREAMING_FADE_MS <= 300, "stream fade must stay under the 300ms UI-animation ceiling");
+
 fn streaming_motion() -> TextViewMotion {
-    TextViewMotion::default().with_stream_fade(Duration::from_millis(350))
+    TextViewMotion::default()
+        .with_stream_fade(Duration::from_millis(STREAMING_FADE_MS))
+        .with_stream_fade_easing(Easing::EaseOut)
 }
 
 fn blocked_image_source() -> ImageSource {
@@ -408,8 +416,15 @@ mod tests {
     #[test]
     fn streaming_markdown_fades_chunks_without_word_stagger() {
         let motion = super::streaming_motion();
-        assert_eq!(motion.stream_fade(), Duration::from_millis(350));
+        assert_eq!(motion.stream_fade(), Duration::from_millis(super::STREAMING_FADE_MS));
         assert_eq!(motion.stream_fade_stagger(), Duration::ZERO);
+        assert!(
+            motion.stream_fade() <= Duration::from_millis(300),
+            "stream fade must stay under the 300ms UI-animation ceiling"
+        );
+        // Ease-out shape: front-loaded progress reads as instant feedback,
+        // while an ease-in curve would lag below linear at the midpoint.
+        assert!(motion.stream_fade_easing().sample(0.5) > 0.5, "stream fade must ride an ease-out-shaped curve");
     }
 
     struct LeadingFixture;
