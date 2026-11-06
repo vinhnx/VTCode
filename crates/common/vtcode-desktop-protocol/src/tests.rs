@@ -804,6 +804,7 @@ async fn cloned_senders_keep_the_stream_alive_until_the_last_one_drops() {
 fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(), Box<dyn Error>> {
     assert_eq!(method::TURN_QUEUE_TAKE_LATEST, "turn/queue/take-latest");
     assert_eq!(method::TURN_QUEUE_STATUS, "turn/queue-status");
+    assert_eq!(method::TURN_QUEUE_REMOVE, "turn/queue/remove");
 
     let legacy_accepted: TurnAccepted = serde_json::from_value(serde_json::json!({
         "sessionId": "s",
@@ -834,26 +835,35 @@ fn turn_queue_types_round_trip_with_camel_case_and_legacy_defaults() -> Result<(
     let value = serde_json::to_value(&empty_take)?;
     assert_eq!(value["text"], Value::Null);
     assert_eq!(serde_json::from_value::<TurnQueueTakeLatestResult>(value)?, empty_take);
-
     let legacy_status: TurnQueueStatus = serde_json::from_value(serde_json::json!({
-        "sessionId": "s",
-        "queueDepth": 3,
+        "sessionId": "s", "queueDepth": 3,
     }))?;
-    assert!(legacy_status.previews.is_empty());
-    assert_eq!(legacy_status.dropped_total, 0);
+    assert!(
+        legacy_status.previews.is_empty()
+            && legacy_status.entry_ids.is_empty()
+            && legacy_status.queued_for_secs.is_empty()
+            && legacy_status.dropped_total == 0,
+        "optional queue fields default for legacy services"
+    );
 
     let status = TurnQueueStatus {
         session_id: "s".to_string(),
         queue_depth: 3,
         previews: vec!["first".to_string(), "second".to_string()],
+        entry_ids: vec!["qe-1".to_string(), "qe-2".to_string()],
+        queued_for_secs: vec![5, 90],
         dropped_total: 4,
     };
     let value = serde_json::to_value(&status)?;
     assert_eq!(value["queueDepth"], 3);
     assert_eq!(value["previews"], serde_json::json!(["first", "second"]));
+    assert_eq!(value["entryIds"], serde_json::json!(["qe-1", "qe-2"]));
+    assert_eq!(value["queuedForSecs"], serde_json::json!([5, 90]));
     assert_eq!(value["droppedTotal"], 4);
     assert_eq!(serde_json::from_value::<TurnQueueStatus>(value)?, status);
-
+    let remove_json = serde_json::json!({ "sessionId": "s", "removed": true, "queueDepth": 2 });
+    let remove = serde_json::from_value::<TurnQueueRemoveResult>(remove_json)?;
+    assert_eq!((remove.session_id.as_str(), remove.removed, remove.queue_depth), ("s", true, 2));
     let undone = TurnUndoResult {
         session_id: "s".to_string(),
         turn_id: "t".to_string(),

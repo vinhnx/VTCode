@@ -172,6 +172,7 @@ fn running_confirm_warns_about_queued_prompts_only_when_queued(cx: &mut TestAppC
     view.update(cx, |view, _| {
         view.queued_submissions.push(QueuedSubmission {
             echo_id: "echo-queued".into(),
+            entry_id: None,
             prompt: "queued behind the turn".into(),
             acknowledged: false,
         });

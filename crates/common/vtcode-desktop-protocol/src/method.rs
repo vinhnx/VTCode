@@ -33,6 +33,8 @@ pub const TURN_SUBMIT: &str = "turn/submit";
 pub const TURN_CANCEL: &str = "turn/cancel";
 /// Pop the newest queued message back for editing.
 pub const TURN_QUEUE_TAKE_LATEST: &str = "turn/queue/take-latest";
+/// Remove one queued message by entry id.
+pub const TURN_QUEUE_REMOVE: &str = "turn/queue/remove";
 
 /// Reverse one completed turn's exact file changes.
 pub const TURN_UNDO: &str = "turn/undo";

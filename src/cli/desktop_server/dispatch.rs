@@ -941,6 +941,35 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             }
             Ok((serde_json::to_value(result)?, false))
         }
+        method::TURN_QUEUE_REMOVE => {
+            let params: protocol::TurnQueueRemoveParams = parse_params(&request.params)?;
+            let (result, status) = {
+                let mut state = context.state.lock().await;
+                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
+                    bail!("session is not selected");
+                }
+                // Accepting removes never dispatch, so an empty queue stays a
+                // clean `removed: false` instead of an error: a stale id (a
+                // concurrent drain won the race) is a normal outcome the
+                // client reconciles from the published snapshot.
+                let position = state.queue.iter().position(|queued| queued.entry_id() == params.entry_id);
+                let removed = position.is_some();
+                if let Some(position) = position {
+                    state.queue.remove(position);
+                }
+                let status = removed.then(|| state.queue_status(&params.session_id));
+                let result = protocol::TurnQueueRemoveResult {
+                    session_id: params.session_id,
+                    removed,
+                    queue_depth: state.queue.len(),
+                };
+                (result, status)
+            };
+            if let Some(status) = status {
+                publish_queue_status_sync(&context.notifications, &status);
+            }
+            Ok((serde_json::to_value(result)?, false))
+        }
         method::INTERACTION_RESPOND => {
             let response: protocol::InteractionResponse = parse_params(&request.params)?;
             respond_to_interaction(context, response).await?;

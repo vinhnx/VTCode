@@ -930,6 +930,7 @@ impl DesktopView {
             queued_submissions: Vec::new(),
             queue_depth: 0,
             queue_previews: Vec::new(),
+            queue_ages_secs: Vec::new(),
             queue_dropped_total: 0,
             take_latest_pending: false,
             pending_composer_restore: None,

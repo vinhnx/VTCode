@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
 use vtcode_ui::tui::app::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, SubmittedInput};
 
@@ -10,6 +11,12 @@ pub(crate) struct QueuedInput {
     /// Only Ctrl+Enter submissions are batchable; plain-Enter submissions
     /// queued while busy must dispatch as their own turn.
     pub(crate) batchable: bool,
+    /// Service-minted bounded token addressing this entry on the wire.
+    /// Generated lazily by the desktop service (via [`Self::entry_id`]) so the
+    /// TUI's shared queue stays wire-agnostic.
+    entry_id: Option<String>,
+    /// When this input was queued; powers the desktop queue UI's wait time.
+    pub(crate) queued_at: Option<Instant>,
 }
 
 impl QueuedInput {
@@ -18,7 +25,28 @@ impl QueuedInput {
             batchable: input.batchable,
             input,
             primary_agent: primary_agent.filter(|name| !name.trim().is_empty()),
+            entry_id: None,
+            queued_at: None,
         }
+    }
+
+    /// Stamp this entry with its wire identity and enqueue instant. Idempotent:
+    /// a re-stamp (restore paths) keeps the original id so clients referencing
+    /// it across a dispatch failure keep addressing one message.
+    pub(crate) fn stamped(mut self, entry_id: String, queued_at: Instant) -> Self {
+        self.entry_id = self.entry_id.or(Some(entry_id));
+        self.queued_at = self.queued_at.or(Some(queued_at));
+        self
+    }
+
+    /// The wire identity, minted on first use when never stamped.
+    pub(crate) fn entry_id(&self) -> String {
+        self.entry_id.clone().unwrap_or_else(|| format!("qe-{}", uuid::Uuid::new_v4()))
+    }
+
+    /// Seconds since the enqueue instant, floored at zero when never stamped.
+    pub(crate) fn wait_secs(&self) -> u64 {
+        self.queued_at.map(|at| at.elapsed().as_secs()).unwrap_or(0)
     }
 
     pub(crate) fn display_label(&self) -> String {

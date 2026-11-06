@@ -30,6 +30,7 @@ pub(super) mod keys {
     pub const PROMPT: &str = "prompt";
     pub const ATTACHMENTS: &str = "attachments";
     pub const BATCHABLE: &str = "batchable";
+    pub const ENTRY_ID: &str = "entryId";
     pub const CLEAR_QUEUE: &str = "clearQueue";
     pub const BEFORE_INDEX: &str = "beforeIndex";
     pub const LIMIT: &str = "limit";

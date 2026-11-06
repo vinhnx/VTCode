@@ -52,17 +52,23 @@ pub(super) struct DrainedTurn {
 impl ServerState {
     /// Snapshot the authoritative queue state for `turn/queue-status`.
     pub(super) fn queue_status(&self, session_id: &str) -> protocol::TurnQueueStatus {
+        let bounded = self.queue.iter().take(protocol::MAX_QUEUE_STATUS_PREVIEWS);
         protocol::TurnQueueStatus {
             session_id: session_id.to_string(),
             queue_depth: self.queue.len(),
-            previews: self
-                .queue
-                .iter()
-                .take(protocol::MAX_QUEUE_STATUS_PREVIEWS)
+            previews: bounded
+                .clone()
                 .map(|queued| protocol::queue_preview_label(&queued.input.text))
                 .collect(),
+            entry_ids: bounded.clone().map(|queued| queued.entry_id()).collect(),
+            queued_for_secs: bounded.map(|queued| queued.wait_secs()).collect(),
             dropped_total: self.queue_dropped_total,
         }
+    }
+
+    /// Mint a fresh bounded entry id for a queue entry stamp.
+    pub(super) fn mint_entry_id() -> String {
+        format!("qe-{}", uuid::Uuid::new_v4())
     }
 
     /// Take the active turn exactly once: clears the cancel request and
@@ -160,7 +166,10 @@ pub(super) async fn enqueue_turn(
             if runtime.is_none() {
                 bail!("selected session runtime has stopped; reload the session to continue");
             }
-            let dropped = push_capped(&mut state.queue, QueuedInput::new(submission, None));
+            let dropped = push_capped(
+                &mut state.queue,
+                QueuedInput::new(submission, None).stamped(ServerState::mint_entry_id(), Instant::now()),
+            );
             state.queue_dropped_total += dropped;
             EnqueuePlan::Queued { status: state.queue_status(session_id), dropped }
         } else {

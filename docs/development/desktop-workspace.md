@@ -633,7 +633,8 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `worktree/list`, `worktree/remove` | List managed `.vtcode/worktrees/` checkouts with their HEAD and dirty flag, or remove one by name. |
 | `turn/submit`, `turn/cancel` | Submit one user turn (queued behind a running turn when busy) or cancel its exact session/turn identity. A turn still active 5s after cancel is force-stopped and its session rebuilt from durable history (see escalation below). |
 | `turn/queue/take-latest` | Pop the newest queued message back for editing; returns its text (empty queue returns null). |
-| `turn/queue-status` | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, cumulative `droppedTotal`). |
+| `turn/queue/remove` | Remove one queued message by its `entryId` (a `qe-…` token from the latest snapshot). A stale or unknown id answers `removed: false` without an error; a foreign session id fails. |
+| `turn/queue-status` | Publish the authoritative queue snapshot (`queueDepth`, oldest-first `previews`, matching `entryIds` and `queuedForSecs`, cumulative `droppedTotal`). |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `composer/resources` | List bounded CLI-safe resource tokens for composer file and mention autocomplete. |
 | `mcp/app/read` | Read one bounded MCP app resource body for static previews. |
@@ -653,9 +654,11 @@ batch dispatches, so `turnId` is empty). Batches drain FIFO on terminal events t
 attachment-carrying submits dispatch alone; cancellation preserves the queue. The soft cap keeps 256 prompts, drops the
 oldest first, and reports every gap (`dropped` per acceptance, cumulative `droppedTotal` per snapshot) so a discard is
 never silent. `turn/queue/take-latest` restores the newest queued text into the composer (text-only, like the CLI
-queue edit); the client reconciles its optimistic entries against each `turn/queue-status` snapshot and falls back to
-the service previews when local entries are missing. Ephemeral queue state dies with the session. WebMCP turns keep the
-old contract and are rejected while busy because the browser tracks them by runtime turn id.
+queue edit); `turn/queue/remove` removes one addressed message (stale ids answer `removed: false`). Every prompt
+carries a service-minted `entryId` and enqueue instant; the snapshot publishes ids plus elapsed seconds
+oldest-first so the desktop panel binds rows and offers per-entry wait times and removal. Optimistic entries
+stay unaddressed until the next snapshot; the client reconciles against snapshots, drops queue state with the
+session, and WebMCP keeps its old busy rejection.
 
 Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-events` along with interaction requests,
 turn status, and session-scoped primary-agent display changes. A client must reject stale or duplicate interaction
@@ -991,8 +994,7 @@ The 2026-10-28 revision keeps that catalog but rebuilds the page as a
 master-detail surface: an inline search field filters every group, the
 groups rail carries match counts, rows lead with the live value,
 booleans toggle with a switch, and writer/omission/reset notes trail
-the list. `/config <group or path>` deep-links into the page;
-the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`,
+the list. `/config <group or path>` deep-links into the page; the
+runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`,
 `memory`, `tasks`, `jobs`, `log`, `subprocess`, `notify`) stay with the
-CLI runtime. On wide viewports the groups rail sits beside the rows as
-a side rail; on narrow viewports it stacks above them.
+CLI runtime. On wide viewports the groups rail sits beside the rows; on narrow viewports it stacks above them.

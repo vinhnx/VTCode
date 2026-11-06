@@ -696,6 +696,7 @@ impl DesktopView {
                                     self.pending_first_submission = false;
                                     self.queued_submissions.push(QueuedSubmission {
                                         echo_id: draft.echo_id,
+                                        entry_id: None,
                                         prompt: draft.prompt,
                                         acknowledged: true,
                                     });

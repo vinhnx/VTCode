@@ -17,6 +17,11 @@ pub const MAX_QUEUE_STATUS_PREVIEWS: usize = 5;
 /// Mirrors the CLI sidebar preview width.
 pub const MAX_QUEUE_PREVIEW_CHARS: usize = 50;
 
+/// Bounded identity token for one queue entry, minted by the service so the
+/// client can address one message for take-latest and remove without relying
+/// on positional order (which races against concurrent submits).
+pub const MAX_QUEUE_ENTRY_ID_LEN: usize = 64;
+
 /// Build the display preview for one queued message: the full text when it
 /// fits, otherwise the first [`MAX_QUEUE_PREVIEW_CHARS`] characters plus an
 /// ellipsis. Truncation is char-boundary safe; newlines are preserved for the
@@ -181,7 +186,38 @@ pub struct TurnQueueStatus {
     /// [`MAX_QUEUE_STATUS_PREVIEWS`].
     #[serde(default)]
     pub previews: Vec<String>,
+    /// Entry identity tokens matching `previews` one-to-one (when the service
+    /// supplies them). Absent or shorter (legacy services) means the client
+    /// falls back to newest-first take-latest and hides per-row actions.
+    #[serde(default)]
+    pub entry_ids: Vec<String>,
+    /// Seconds since each entry was queued, oldest first, matching `previews`
+    /// one-to-one. Absent (legacy services) hides the elapsed-time column.
+    #[serde(default)]
+    pub queued_for_secs: Vec<u64>,
     /// Total oldest messages discarded by the queue cap so far.
     #[serde(default)]
     pub dropped_total: usize,
+}
+
+/// Parameters for removing one queued message by entry id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnQueueRemoveParams {
+    /// Session that owns the queue.
+    pub session_id: String,
+    /// Entry identity token from the latest `turn/queue-status` snapshot.
+    pub entry_id: String,
+}
+
+/// Outcome of a remove-one-queued-message request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnQueueRemoveResult {
+    /// Session that owns the queue.
+    pub session_id: String,
+    /// Whether the entry id matched a queued message and it was removed.
+    pub removed: bool,
+    /// Queue depth after the removal.
+    pub queue_depth: usize,
 }

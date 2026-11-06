@@ -11,7 +11,7 @@ pub mod handoff_url;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 28 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 29 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -294,9 +294,10 @@ pub use session::{
 
 pub mod turn;
 pub use turn::{
-    MAX_QUEUE_PREVIEW_CHARS, MAX_QUEUE_STATUS_PREVIEWS, SESSION_START_TURN_ID, STARTUP_INTERACTION_PENDING_ERROR,
-    TurnAccepted, TurnAttachment, TurnCancelParams, TurnQueueStatus, TurnQueueTakeLatestParams,
-    TurnQueueTakeLatestResult, TurnSubmitParams, TurnUndoFile, TurnUndoParams, TurnUndoResult, queue_preview_label,
+    MAX_QUEUE_ENTRY_ID_LEN, MAX_QUEUE_PREVIEW_CHARS, MAX_QUEUE_STATUS_PREVIEWS, SESSION_START_TURN_ID,
+    STARTUP_INTERACTION_PENDING_ERROR, TurnAccepted, TurnAttachment, TurnCancelParams, TurnQueueRemoveParams,
+    TurnQueueRemoveResult, TurnQueueStatus, TurnQueueTakeLatestParams, TurnQueueTakeLatestResult, TurnSubmitParams,
+    TurnUndoFile, TurnUndoParams, TurnUndoResult, queue_preview_label,
 };
 
 pub mod update;
