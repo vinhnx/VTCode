@@ -364,7 +364,8 @@ impl DesktopView {
                         .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
-                .child(
+                .child(shimmer_run_button(
+                    "cancel-turn",
                     composer_run_geometry(desktop_primary_button("cancel-turn"))
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
@@ -373,19 +374,22 @@ impl DesktopView {
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                         .icon(IconName::SquareStop)
-                        .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
-                );
+                    true,
+                    cx,
+                ));
         } else {
-            model_actions = model_actions.child(
+            model_actions = model_actions.child(shimmer_run_button(
+                "send-prompt",
                 composer_run_geometry(desktop_primary_button("send-prompt"))
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
-                    .when(can_submit, |button| button.desktop_elevated())
                     .desktop_disabled(!can_submit)
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
-            );
+                can_submit,
+                cx,
+            ));
         }
         let buttons = buttons.child(model_actions);
         if self.palette_kind.is_composer_popup()
@@ -689,4 +693,89 @@ impl DesktopView {
 /// each call site: Kit replays the instance shadow inside its disabled arm.
 fn composer_run_geometry(button: Button) -> Button {
     button.large().rounded(ButtonRounded::Large)
+}
+
+/// Sweep period for the run-button sheen: one left-to-right pass per period,
+/// matching Kit's default text-shimmer period so button and label shimmer
+/// read as one system.
+const RUN_SHIMMER_PERIOD: Duration = Duration::from_secs(2);
+/// Sheen band width on the run frame: wide enough to read as a sweep, narrow
+/// enough to travel across the 32px control.
+const RUN_SHIMMER_BAND_PX: f32 = 12.0;
+/// Run frame edge: Kit sizes icon-only Medium/Large buttons to `size_8`
+/// (32px). Pinned with Kit =0.8.1; recheck on upgrade, like the composer
+/// input-inset formula above.
+const RUN_SHIMMER_FRAME_PX: f32 = 32.0;
+/// Sheen veil strength over the primary fill: a quiet pass in the icon tone,
+/// never a second focal surface.
+const RUN_SHIMMER_OPACITY: f32 = 0.25;
+
+/// Left edge of the run-button sheen band at sweep progress `delta` (0.0 to
+/// 1.0). The band starts fully left of the frame and ends fully right of it,
+/// so both loop endpoints render empty and the wrap never jumps.
+fn run_shimmer_left(delta: f32) -> Pixels {
+    px(-RUN_SHIMMER_BAND_PX + delta * (RUN_SHIMMER_FRAME_PX + RUN_SHIMMER_BAND_PX))
+}
+
+/// Shimmer-effect wrapper for the composer run control: the button stays the
+/// single interactive node (same id, icon, labels, handlers, and icon-only
+/// frame), while a translucent sheen band sweeps across it inside a clipped
+/// wrapper.
+///
+/// The band is a sibling overlay, never a `Button` child: any child flips
+/// Kit's icon-only frame to the padded normal-button geometry and breaks the
+/// send/cancel size parity. The wrapper shrink-wraps the button exactly, so
+/// its bounds never move. `animated` is true exactly when the control is
+/// actionable; a static button renders unwrapped. Reduced motion needs no
+/// branch: `with_animation` pins repeating sweeps to their static start
+/// state (band parked off-frame, invisible) and schedules no frames.
+///
+/// The wrapper also owns the run control's elevation: its own clip would
+/// cut off a shadow painted by the button, so the `shadow_xs` instance
+/// layer lives here instead — same frame and rounding, same pixels.
+fn shimmer_run_button(id: &'static str, button: Button, animated: bool, cx: &App) -> AnyElement {
+    if !animated {
+        return button.into_any_element();
+    }
+    let theme = cx.theme();
+    div()
+        .relative()
+        .flex_shrink_0()
+        .overflow_hidden()
+        .shadow_xs()
+        // The wrapper clips the band to the button silhouette, so it repeats
+        // Kit's `ButtonRounded::Large` mapping (`radius * 2`) exactly.
+        .rounded(theme.radius * 2.0)
+        .child(button)
+        .child(
+            div()
+                .id(format!("{id}-shimmer"))
+                .test_support()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .w(px(RUN_SHIMMER_BAND_PX))
+                .bg(theme.colors.button_primary_foreground)
+                .opacity(RUN_SHIMMER_OPACITY)
+                .with_animation(
+                    format!("{id}-shimmer-sweep"),
+                    Animation::new(RUN_SHIMMER_PERIOD).repeat_synced(),
+                    |band, delta| band.left(run_shimmer_left(delta)),
+                ),
+        )
+        .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Both sweep endpoints park the band fully outside the frame (empty
+    /// render, no wrap jump) and the midpoint centers the sweep.
+    #[test]
+    fn run_shimmer_left_parks_fully_outside_both_ends() {
+        assert_eq!(run_shimmer_left(0.0), px(-RUN_SHIMMER_BAND_PX));
+        assert_eq!(run_shimmer_left(1.0), px(RUN_SHIMMER_FRAME_PX));
+        assert_eq!(run_shimmer_left(0.5), px((RUN_SHIMMER_FRAME_PX - RUN_SHIMMER_BAND_PX) / 2.0));
+    }
 }

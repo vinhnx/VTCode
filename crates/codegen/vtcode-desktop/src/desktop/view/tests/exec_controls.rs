@@ -147,3 +147,82 @@ fn run_cluster_matches_idle_send_size_and_swaps_exclusively(cx: &mut TestAppCont
     })
     .unwrap();
 }
+
+/// The run control shimmers exactly when it is actionable: an empty draft
+/// renders a static disabled send, a submittable draft adds the sheen band,
+/// and submitting (which clears the draft and ends the turn here) removes it
+/// again. The button node itself stays clickable in both states.
+#[gpui_kit::test]
+fn run_shimmer_band_tracks_send_actionable_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session-shimmer".to_string());
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("send-prompt").disabled(), Some(true));
+        assert!(window.try_find("send-prompt-shimmer").is_none(), "empty draft renders no sheen");
+
+        view.update(cx, |view, cx| {
+            view.composer
+                .update(cx, |state, cx| state.set_value("Shimmer this draft", window, cx));
+        });
+        window.render_frame(cx);
+        assert_ne!(window.find("send-prompt").disabled(), Some(true));
+        assert!(window.try_find("send-prompt-shimmer").is_some(), "submittable draft adds the sheen");
+        window.click("send-prompt", cx);
+        assert!(view.read(cx).running, "clicking through the sheen still submits");
+
+        view.update(cx, |view, _| view.running = false);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+        assert!(window.try_find("send-prompt-shimmer").is_none(), "cleared draft removes the sheen");
+    })
+    .unwrap();
+}
+
+/// While a turn runs, the cancel control carries the sheen and the send
+/// control (with its sheen) is fully unmounted; the sheen never blocks the
+/// stop action. Ending the turn swaps the pair back.
+#[gpui_kit::test]
+fn run_shimmer_band_covers_cancel_while_running(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("send-prompt").is_none());
+        assert!(window.try_find("send-prompt-shimmer").is_none());
+        assert!(window.try_find("cancel-turn-shimmer").is_some(), "running cancel carries the sheen");
+        window.click("cancel-turn", cx);
+    })
+    .unwrap();
+    let (method, _) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.running = false);
+        window.render_frame(cx);
+        assert!(window.try_find("cancel-turn-shimmer").is_none(), "idle unmounts the cancel sheen");
+        assert!(window.try_find("send-prompt").is_some());
+        assert!(window.try_find("send-prompt-shimmer").is_none(), "empty draft adds no send sheen");
+    })
+    .unwrap();
+}
+
+/// Under reduced motion the run control stays fully operable: the framework
+/// pins repeating animations to their static start state, so the button must
+/// remain present, sized, and clickable however the sheen node mounts.
+#[gpui_kit::test]
+fn run_control_stays_operable_under_reduced_motion(cx: &mut TestAppContext) {
+    let (window, _, mut requests) = open_running_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let stop = window.find("cancel-turn").bounds();
+        assert!(stop.size.width > px(0.) && stop.size.height > px(0.));
+        window.click("cancel-turn", cx);
+    })
+    .unwrap();
+    let (method, _) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_CANCEL);
+}
