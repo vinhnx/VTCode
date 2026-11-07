@@ -56,6 +56,16 @@ pub(super) fn file_tree_row_icon(is_dir: bool, expanded: bool) -> IconName {
 /// inset, so both file surfaces share this step (one spacing unit ≈ 12px).
 pub(super) const FILE_TREE_INDENT_REM: f32 = 0.75;
 
+/// Visible source-editor rows, clamped. The kit editor has a fixed intrinsic
+/// height (textarea-style `auto_grow` is not offered on `EditorState`), so
+/// the preview sizes it from the document's line count: short documents keep
+/// a compact panel, long ones get a tall viewport and scroll within it.
+const PREVIEW_SOURCE_MIN_ROWS: usize = 3;
+const PREVIEW_SOURCE_MAX_ROWS: usize = 24;
+/// Mirrors kit's private `EDITOR_LINE_HEIGHT`: the editor scales code rows
+/// from the mono font size, so the preview derives the same row height.
+const PREVIEW_SOURCE_LINE_HEIGHT: f32 = 1.5;
+
 /// Shared file-row label: type icon, file name, and the muted parent path in
 /// search mode. Both file trees render through this so rows stay identical.
 pub(super) fn file_tree_row_label(
@@ -414,6 +424,7 @@ impl DesktopView {
                                 text: String::new(),
                                 truncated: false,
                                 image: Some(image),
+                                show_source: false,
                             });
                             view.preview_focus.focus(window, cx);
                             view.clear_error();
@@ -443,6 +454,14 @@ impl DesktopView {
                 match preview {
                     Some(preview) => {
                         view.preview_editor_error = None;
+                        // Markdown previews keep a highlighted source copy in
+                        // the persistent read-only editor; other text never
+                        // renders it, so only markdown pays the highlight.
+                        if files::is_markdown_path(&preview.rel_path) {
+                            view.file_preview_source.update(cx, |state, cx| {
+                                state.set_value(preview.text.clone(), window, cx);
+                            });
+                        }
                         view.file_preview = Some(preview);
                         view.preview_focus.focus(window, cx);
                         view.clear_error();
@@ -689,6 +708,60 @@ impl DesktopView {
         };
         let text = preview.text.clone();
         let mono = theme.mono_font_family.clone();
+        // File commands ride a Kit toolbar: roving arrow keys across the
+        // actions plus one accessible group label. Membership matches the
+        // old button row exactly (toggle only for markdown, copy for text).
+        let mut actions = ToolbarGroup::new("file-preview-actions").label("File preview actions");
+        actions = actions.child(
+            desktop_button("open-preview-editor")
+                .label(rust_i18n::t!("app.file_preview.open_in_editor").to_string())
+                .ghost()
+                .small()
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.open_preview_in_editor(files::ExternalEditor::System, window, cx)
+                })),
+        );
+        actions = actions.child(desktop_button("open-preview-vscode").label("VS Code").ghost().small().on_click(
+            cx.listener(|view, _, window, cx| view.open_preview_in_editor(files::ExternalEditor::VsCode, window, cx)),
+        ));
+        if preview.image.is_none() && files::is_markdown_path(&preview.rel_path) {
+            actions = actions.child(
+                desktop_button("preview-source-toggle")
+                    .label(if preview.show_source { "Preview" } else { "Source" })
+                    .ghost()
+                    .small()
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        if let Some(preview) = view.file_preview.as_mut() {
+                            preview.show_source = !preview.show_source;
+                            cx.notify();
+                        }
+                    })),
+            );
+        }
+        if preview.image.is_none() {
+            actions = actions.child(
+                desktop_button("copy-preview")
+                    .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
+                    .ghost()
+                    .small()
+                    .on_click(move |_, window, app| {
+                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
+                        super::super::notifications::copied_to_clipboard(window, app);
+                    }),
+            );
+        }
+        actions = actions.child(
+            desktop_button("close-preview")
+                .tooltip_with_action(
+                    rust_i18n::t!("app.file_preview.close_tooltip").to_string(),
+                    &DismissOverlay,
+                    Some(key_context::DESKTOP),
+                )
+                .label(rust_i18n::t!("app.file_preview.close").to_string())
+                .ghost()
+                .small()
+                .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
+        );
         div()
             .absolute()
             .inset_0()
@@ -750,46 +823,7 @@ impl DesktopView {
                                     .font_family(mono.clone())
                                     .child(preview.rel_path.clone()),
                             )
-                            .child(
-                                desktop_button("open-preview-editor")
-                                    .label(rust_i18n::t!("app.file_preview.open_in_editor").to_string())
-                                    .ghost()
-                                    .small()
-                                    .on_click(cx.listener(|view, _, window, cx| {
-                                        view.open_preview_in_editor(files::ExternalEditor::System, window, cx)
-                                    })),
-                            )
-                            .child(desktop_button("open-preview-vscode").label("VS Code").ghost().small().on_click(
-                                cx.listener(|view, _, window, cx| {
-                                    view.open_preview_in_editor(files::ExternalEditor::VsCode, window, cx)
-                                }),
-                            ))
-                            .when(preview.image.is_none(), |header| {
-                                header.child(
-                                    desktop_button("copy-preview")
-                                        .label(rust_i18n::t!(i18n::FILE_PREVIEW_COPY).to_string())
-                                        .ghost()
-                                        .small()
-                                        .on_click(move |_, window, app| {
-                                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
-                                                text.to_string(),
-                                            ));
-                                            super::super::notifications::copied_to_clipboard(window, app);
-                                        }),
-                                )
-                            })
-                            .child(
-                                desktop_button("close-preview")
-                                    .tooltip_with_action(
-                                        rust_i18n::t!("app.file_preview.close_tooltip").to_string(),
-                                        &DismissOverlay,
-                                        Some(key_context::DESKTOP),
-                                    )
-                                    .label(rust_i18n::t!("app.file_preview.close").to_string())
-                                    .ghost()
-                                    .small()
-                                    .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
-                            ),
+                            .child(Toolbar::new("file-preview-toolbar").small().flex_wrap().child(actions)),
                     )
                     .when_some(self.preview_editor_error.as_ref(), |panel, error| {
                         panel.child(warning_alert("preview-editor-error", error.clone(), colors))
@@ -815,7 +849,7 @@ impl DesktopView {
                                     .rounded_md(),
                             )
                             .into_any_element(),
-                        None if files::is_markdown_path(&preview.rel_path) => div()
+                        None if files::is_markdown_path(&preview.rel_path) && !preview.show_source => div()
                             .id("file-preview-body")
                             .flex_1()
                             .min_h_0()
@@ -827,6 +861,36 @@ impl DesktopView {
                                 cx,
                             ))
                             .into_any_element(),
+                        // Markdown source renders in the persistent read-only
+                        // editor: syntect highlighting follows the app theme
+                        // and the text stays focusable and copyable.
+                        // `appearance(false)` keeps the borderless body look;
+                        // the height fits the document up to the row cap.
+                        None if files::is_markdown_path(&preview.rel_path) && preview.show_source => {
+                            let rows = preview
+                                .text
+                                .lines()
+                                .count()
+                                .clamp(PREVIEW_SOURCE_MIN_ROWS, PREVIEW_SOURCE_MAX_ROWS);
+                            let source_height = theme.mono_font_size * PREVIEW_SOURCE_LINE_HEIGHT * rows as f32;
+                            div()
+                                .id("file-preview-body")
+                                .test_support()
+                                .flex_1()
+                                .min_h_0()
+                                .overflow_hidden()
+                                .p_3()
+                                .child(
+                                    div().id("file-preview-source").test_support().child(
+                                        Editor::new(&self.file_preview_source)
+                                            .readonly(true)
+                                            .appearance(false)
+                                            .aria_label("Markdown source".to_string())
+                                            .h(source_height),
+                                    ),
+                                )
+                                .into_any_element()
+                        }
                         None => div()
                             .id("file-preview-body")
                             .flex_1()

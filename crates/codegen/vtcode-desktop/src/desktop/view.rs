@@ -31,9 +31,9 @@ use gpui_kit::component::empty::{
 };
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{
-    Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Enter,
-    IndentInline, Input, InputEvent, InputState, MoveDown, MoveLeft, MoveRight, MoveToEnd, MoveUp, OutdentInline,
-    Paste, Position, Redo, SelectAll, Textarea, TextareaState, Undo,
+    Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Editor,
+    EditorState, Enter, IndentInline, Input, InputEvent, InputState, MoveDown, MoveLeft, MoveRight, MoveToEnd, MoveUp,
+    OutdentInline, Paste, Position, Redo, SelectAll, Textarea, TextareaState, Undo,
 };
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
@@ -671,6 +671,9 @@ struct DesktopView {
     attachments_task: Option<Task<()>>,
     external_launch_task: Option<Task<()>>,
     file_preview: Option<FilePreview>,
+    /// Read-only highlighted markdown source for the preview toggle; the
+    /// toggle swaps arms, never this state, so scroll and caret survive.
+    file_preview_source: Entity<EditorState>,
     preview_editor_error: Option<String>,
     #[cfg(test)]
     test_launch_intercept: Option<TestLaunchIntercept>,

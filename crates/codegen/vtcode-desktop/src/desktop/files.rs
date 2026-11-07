@@ -55,6 +55,9 @@ pub(super) struct FilePreview {
     pub truncated: bool,
     /// Decoded-ready image bytes for image files; `None` for text previews.
     pub image: Option<Arc<gpui_kit::Image>>,
+    /// Markdown previews start rendered; the header toggle flips to the raw
+    /// source surface. Owned per preview so every open starts rendered.
+    pub show_source: bool,
 }
 
 /// Whether a workspace-relative path points at an image the app can render
@@ -180,6 +183,7 @@ pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
         text: text.to_string(),
         truncated,
         image: None,
+        show_source: false,
     })
 }
 

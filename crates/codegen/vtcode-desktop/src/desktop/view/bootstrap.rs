@@ -728,6 +728,7 @@ impl DesktopView {
             attachments_task: None,
             external_launch_task: None,
             file_preview: None,
+            file_preview_source: cx.new(|cx| EditorState::new(window, cx).language("markdown")),
             preview_editor_error: None,
             #[cfg(test)]
             test_launch_intercept: None,
