@@ -244,6 +244,7 @@ pub fn exec_command_parameters() -> Value {
             "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms). If the command is still running, the response includes a session_id for write_stdin. Values above 10000 turn this into a single-call long run: no outer timeout applies and the response returns after the yield window or command exit, whichever is first.", "default": 10000},
             "background": {"type": "boolean", "description": "Start a retained background process and return after a bounded initial output window. At most three live background processes are allowed per VT Code runtime; use the returned session_id with `write_stdin` for the session lifecycle.", "default": false},
             "stdin": {"type": "boolean", "description": "Keep pipe stdin open for later write_stdin input. Defaults to false (EOF); enable only for commands that need input. PTY input is always available.", "default": false},
+            "monitor_filter": {"type": "string", "description": "Optional case-sensitive substring filter for pipe runs; rejected for tty runs. Matching output lines accumulate into a bounded monitor_digest on run/wait/poll responses so long quiet commands cost no full-output polls. At most 256 characters."},
             "max_output_tokens": {"type": "integer", "minimum": MIN_MAX_OUTPUT_TOKENS, "maximum": MAX_MAX_OUTPUT_TOKENS, "default": DEFAULT_MAX_OUTPUT_TOKENS, "description": "Output token cap. Large or truncated output can return a spool_path; an active session may set spool_complete=false for a readable partial snapshot, while an exited pending spool is withheld until a later wait."},
             "workdir": {"type": "string", "description": "Working directory."},
             "tty": {"type": "boolean", "description": "Run the command in PTY mode for interactive or terminal-sensitive commands.", "default": false},
@@ -511,6 +512,13 @@ mod tests {
         assert_eq!(exec_params["properties"]["tty"]["default"], false);
         assert_eq!(exec_params["properties"]["background"]["type"], "boolean");
         assert_eq!(exec_params["properties"]["background"]["default"], false);
+        assert_eq!(exec_params["properties"]["monitor_filter"]["type"], "string");
+        assert!(
+            exec_params["properties"]["monitor_filter"]["description"]
+                .as_str()
+                .expect("monitor_filter description")
+                .contains("monitor_digest")
+        );
         assert_eq!(exec_params["properties"]["yield_time_ms"]["default"], 10000);
         assert_eq!(
             exec_params["properties"]["sandbox_permissions"]["enum"],
