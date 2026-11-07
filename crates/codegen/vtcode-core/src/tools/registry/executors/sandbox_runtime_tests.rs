@@ -798,6 +798,20 @@ async fn additional_permissions_reject_symlink_escape() {
     assert!(err.to_string().contains("symlink resolution"), "unexpected error: {err:#}");
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn additional_permissions_reject_dangling_symlink() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let outside = tempfile::tempdir().expect("outside");
+    let link = workspace.path().join("link");
+    std::os::unix::fs::symlink(outside.path().join("missing"), &link).expect("symlink fixture");
+    let payload = json!({ "additional_permissions": { "fs_write": [link] } });
+    let error = parse_permissions(&payload, workspace.path(), workspace.path(), &Default::default())
+        .await
+        .expect_err("a dangling symlink must not be granted as a missing path");
+    assert!(format!("{error:#}").contains("Failed to resolve canonical path"));
+}
+
 #[tokio::test]
 async fn additional_permissions_reject_sensitive_paths() {
     let sensitive_root = tempfile::tempdir().expect("sensitive root");
@@ -814,6 +828,31 @@ async fn additional_permissions_reject_sensitive_paths() {
         .await
         .expect_err("sensitive roots should fail");
     assert!(err.to_string().contains("sensitive or protected location"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn additional_permissions_fail_closed_on_unresolvable_sensitive_root() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let protected_target = workspace.path().join("future-secret");
+    let protected_link = workspace.path().join("protected");
+    std::os::unix::fs::symlink(&protected_target, &protected_link).expect("symlink fixture");
+    let payload = json!({ "additional_permissions": { "fs_write": [protected_target] } });
+    let mut config = vtcode_config::SandboxConfig::default();
+    config.sensitive_paths.use_defaults = false;
+    config.sensitive_paths.additional = vec![protected_link.display().to_string()];
+
+    let error = parse_permissions(&payload, workspace.path(), workspace.path(), &config)
+        .await
+        .expect_err("an unresolved protected root must prevent a grant");
+    assert!(format!("{error:#}").contains("failed to resolve additional-permission root"));
+
+    config.sensitive_paths.additional = vec![workspace.path().join("other-missing").display().to_string()];
+    assert!(
+        parse_permissions(&payload, workspace.path(), workspace.path(), &config)
+            .await
+            .is_ok()
+    );
 }
 
 #[tokio::test]

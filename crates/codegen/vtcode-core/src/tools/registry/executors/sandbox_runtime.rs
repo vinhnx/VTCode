@@ -388,20 +388,20 @@ fn build_additional_permission_allowed_roots(workspace_root: &Path) -> Vec<PathB
     roots
 }
 
-async fn canonicalize_allowed_roots(allowed_roots: &[PathBuf]) -> Vec<PathBuf> {
-    let mut canonical_roots = Vec::with_capacity(allowed_roots.len());
+async fn canonicalize_permission_roots(roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    let mut canonical_roots = Vec::with_capacity(roots.len());
 
-    for root in allowed_roots {
+    for root in roots {
         let canonical = crate::utils::path::canonicalize_allow_missing(root)
             .await
-            .unwrap_or_else(|_| crate::utils::path::normalize_path(root));
+            .with_context(|| format!("failed to resolve additional-permission root '{}'", root.display()))?;
         // Preserve positional correspondence with `allowed_roots`: permission
         // validation must compare a path against the canonical form of the
         // lexical root that admitted it, not some other broader allowed root.
         canonical_roots.push(canonical);
     }
 
-    canonical_roots
+    Ok(canonical_roots)
 }
 
 fn most_specific_containing_root_index(path: &Path, roots: &[PathBuf]) -> Option<usize> {
@@ -508,10 +508,11 @@ async fn normalize_additional_permissions(
     sandbox_config: &vtcode_config::SandboxConfig,
 ) -> Result<AdditionalPermissions> {
     let allowed_roots = build_additional_permission_allowed_roots(workspace_root);
-    let canonical_allowed_roots = canonicalize_allowed_roots(&allowed_roots).await;
+    let canonical_allowed_roots = canonicalize_permission_roots(&allowed_roots).await?;
     let sensitive_paths = sensitive_paths_from_runtime_config(&sandbox_config.sensitive_paths);
     let canonical_sensitive_roots =
-        canonicalize_allowed_roots(&sensitive_paths.iter().map(SensitivePath::expand_path).collect::<Vec<_>>()).await;
+        canonicalize_permission_roots(&sensitive_paths.iter().map(SensitivePath::expand_path).collect::<Vec<_>>())
+            .await?;
     // Validation runs on canonical candidate paths, so its writable roots must
     // use the same representation (notably `/private/var` versus `/var` on
     // macOS) or valid temporary-directory grants are rejected.
