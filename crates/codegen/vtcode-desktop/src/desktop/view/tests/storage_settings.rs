@@ -131,6 +131,24 @@ fn drain_summary_request(requests: &mut tokio::sync::mpsc::Receiver<BackendComma
     drain_request(requests, vtcode_desktop_protocol::method::STORAGE_SUMMARY);
 }
 
+fn apply_summary(
+    view: &Entity<DesktopView>,
+    cx: &mut TestAppContext,
+    summary: vtcode_desktop_protocol::StorageSummary,
+) {
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
+                result: Some(serde_json::to_value(summary).unwrap()),
+                error: None,
+            },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+}
+
 #[gpui_kit::test]
 fn storage_tab_requests_summary_and_renders_usage(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
@@ -141,17 +159,7 @@ fn storage_tab_requests_summary_and_renders_usage(cx: &mut TestAppContext) {
         assert!(view.storage.summary.is_none());
     });
 
-    view.update(cx, |view, cx| {
-        view.handle_backend_event(
-            BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
-                result: Some(serde_json::to_value(storage_summary_fixture()).unwrap()),
-                error: None,
-            },
-            cx,
-        );
-    });
-    cx.run_until_parked();
+    apply_summary(&view, cx, storage_summary_fixture());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("storage-refresh").label(), Some("Refresh"));
@@ -171,17 +179,7 @@ fn storage_tab_requests_summary_and_renders_usage(cx: &mut TestAppContext) {
 fn storage_refresh_resends_the_summary_request(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
     drain_summary_request(&mut requests);
-    view.update(cx, |view, cx| {
-        view.handle_backend_event(
-            BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
-                result: Some(serde_json::to_value(storage_summary_fixture()).unwrap()),
-                error: None,
-            },
-            cx,
-        );
-    });
-    cx.run_until_parked();
+    apply_summary(&view, cx, storage_summary_fixture());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("storage-refresh").label(), Some("Refresh"));
@@ -360,20 +358,106 @@ fn storage_error_shows_retry_and_recovers_on_demand(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn storage_zero_usage_renders_an_empty_state(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_storage_tab(cx);
+    drain_summary_request(&mut requests);
+    apply_summary(
+        &view,
+        cx,
+        vtcode_desktop_protocol::StorageSummary {
+            sessions_bytes: 0,
+            sessions_count: 0,
+            worktrees_bytes: 0,
+            worktrees_count: 0,
+            memory_bytes: 0,
+            other_bytes: 0,
+            total_bytes: 0,
+            ..storage_summary_fixture()
+        },
+    );
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let empty = window.find("storage-usage-empty").bounds();
+        assert!(empty.size.height > px(0.), "zero usage explains itself instead of collapsing: {empty:?}");
+        let bar_snapshot = window.find("storage-usage-bar");
+        let bar = bar_snapshot.label().expect("usage bar label");
+        assert!(bar.contains("Sessions 0 bytes"), "{bar}");
+        assert!(bar.contains("Other 0 bytes"), "{bar}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn storage_skewed_usage_lists_every_category_with_scaled_units(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_storage_tab(cx);
+    drain_summary_request(&mut requests);
+    // Dominant-first, zeros interleaved, mixed units: exercises bar scaling,
+    // zero-length bars, and each byte-format branch. Expected strings are
+    // hardcoded, not derived from format_bytes, so the oracle stays independent.
+    let sessions_bytes = 3 * 1024 * 1024 * 1024;
+    apply_summary(
+        &view,
+        cx,
+        vtcode_desktop_protocol::StorageSummary {
+            sessions_bytes,
+            worktrees_bytes: 0,
+            memory_bytes: 5,
+            other_bytes: 1536,
+            total_bytes: sessions_bytes + 5 + 1536,
+            ..storage_summary_fixture()
+        },
+    );
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            window.try_find("storage-usage-empty").is_none(),
+            "nonzero usage renders the chart, not the empty state"
+        );
+        let bar_snapshot = window.find("storage-usage-bar");
+        let bar = bar_snapshot.label().expect("usage bar label");
+        assert!(bar.contains("Sessions 3 GB"), "{bar}");
+        assert!(bar.contains("Worktrees 0 bytes"), "{bar}");
+        assert!(bar.contains("Session memory 5 bytes"), "{bar}");
+        assert!(bar.contains("Other 1.5 KB"), "{bar}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn storage_usage_bar_stays_on_screen_at_wide_and_narrow_widths(cx: &mut TestAppContext) {
+    let (window, view, mut requests) = open_storage_tab(cx);
+    drain_summary_request(&mut requests);
+    apply_summary(&view, cx, storage_summary_fixture());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let bar = window.find("storage-usage-bar").bounds();
+        assert!(
+            bar.origin.x + bar.size.width <= viewport.width,
+            "wide viewport keeps the usage chart on-screen: {bar:?} in {viewport:?}"
+        );
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(600.), px(700.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let bar = window.find("storage-usage-bar").bounds();
+        assert!(
+            bar.origin.x + bar.size.width <= viewport.width,
+            "narrow viewport keeps the usage chart on-screen: {bar:?} in {viewport:?}"
+        );
+        assert!(bar.size.height > px(0.), "chart keeps its frame when narrow: {bar:?}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn storage_back_returns_to_the_summary(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
     drain_summary_request(&mut requests);
-    view.update(cx, |view, cx| {
-        view.handle_backend_event(
-            BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::STORAGE_SUMMARY.into(),
-                result: Some(serde_json::to_value(storage_summary_fixture()).unwrap()),
-                error: None,
-            },
-            cx,
-        );
-    });
-    cx.run_until_parked();
+    apply_summary(&view, cx, storage_summary_fixture());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("storage-usage-bar").is_some());

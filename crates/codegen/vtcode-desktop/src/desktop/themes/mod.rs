@@ -394,7 +394,12 @@ fn apply_palette(seeds: PaletteSeeds, window: Option<&mut Window>, cx: &mut App)
         colors.foreground = seeds.foreground;
         apply_filled_surfaces(colors);
         apply_surface_borders(colors);
-        colors.chart_2 = seeds.secondary;
+        colors.chart_2 = distinct_chart_secondary(
+            colors.background,
+            colors.foreground,
+            [colors.chart_1, colors.chart_3, colors.chart_4],
+            seeds.secondary,
+        );
         colors.sidebar_primary = seeds.accent;
         colors.sidebar_primary_foreground = filled_button_foreground(seeds.accent);
         colors.list = seeds.background;
@@ -656,6 +661,24 @@ pub(super) fn readable_indicator_color(background: Hsla, foreground: Hsla, color
     const AA_RATIO: f32 = 4.5;
     adjust_color_until_readable(background, foreground, color, |candidate| {
         contrast_ratio(candidate, background) >= AA_RATIO
+    })
+}
+
+/// Minimum contrast between chart data colors (and against the canvas).
+/// Data colors carry redundant labels, so they hold the vanish floor rather
+/// than the text floor. Shared by [`distinct_chart_secondary`] and its test
+/// so the derivation and the guarantee cannot drift apart.
+pub(super) const CHART_DISTINGUISH_FLOOR: f32 = 1.04;
+
+/// Nudge the secondary seed until the chart's second series stands clear of
+/// the canvas and its kit-default siblings, the same self-correction the
+/// semantic seeds get. Pass the sibling slots it must clear.
+pub(super) fn distinct_chart_secondary(canvas: Hsla, foreground: Hsla, siblings: [Hsla; 3], seed: Hsla) -> Hsla {
+    adjust_color_until_readable(canvas, foreground, seed, |candidate| {
+        contrast_ratio(candidate, canvas) >= CHART_DISTINGUISH_FLOOR
+            && siblings
+                .iter()
+                .all(|sibling| contrast_ratio(candidate, *sibling) >= CHART_DISTINGUISH_FLOOR)
     })
 }
 

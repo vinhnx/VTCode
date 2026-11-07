@@ -127,6 +127,44 @@ fn every_theme_keeps_wcag_aa_foreground_contrast() {
     }
 }
 
+#[gpui_kit::test]
+fn every_theme_keeps_chart_series_distinguishable(cx: &mut gpui_kit::TestAppContext) {
+    // Data colors are not held to the 4.5 text floor (labels and the legend
+    // carry the same information), only to the shared vanish floor: a series
+    // must neither sink into the canvas nor collapse into another series
+    // the way an invisible border would.
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let mut collisions = Vec::new();
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            let _mode = apply_by_id(id, None, cx);
+            let colors = cx.theme().colors;
+            let series = [colors.chart_1, colors.chart_2, colors.chart_3, colors.chart_4];
+            for (index, color) in series.iter().enumerate() {
+                let on_canvas = contrast_ratio(*color, colors.background);
+                if on_canvas < CHART_DISTINGUISH_FLOOR {
+                    collisions
+                        .push(format!("{id}: chart series {} vanishes on the canvas ({on_canvas:.2})", index + 1));
+                }
+                for (other_index, other) in series.iter().enumerate().skip(index + 1) {
+                    let pair = contrast_ratio(*color, *other);
+                    if pair < CHART_DISTINGUISH_FLOOR {
+                        collisions.push(format!(
+                            "{id}: chart series {} and {} collide ({pair:.2})",
+                            index + 1,
+                            other_index + 1
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(collisions.is_empty(), "chart series collisions:\n{}", collisions.join("\n"));
+    });
+}
+
 #[test]
 fn every_theme_stays_within_srgb_gamut() {
     for theme in all_themes() {

@@ -58,7 +58,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [number-input](https://gpui-kit.com/component/number-input) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [otp-input](https://gpui-kit.com/component/otp-input) | Not needed for the current coding-workspace workflows or available data. |
 | [pagination](https://gpui-kit.com/component/pagination) | Not needed for the current coding-workspace workflows or available data. |
-| [plot](https://gpui-kit.com/component/plot) | Not needed for the current coding-workspace workflows or available data. |
+| [plot](https://gpui-kit.com/component/plot) | Low-level scales/shapes powering Chart; `plot::shape::BarAlignment` orients the storage chart — no custom plot surface needed. |
 | [popover](https://gpui-kit.com/component/popover) | Replace crowded Appearance popover with a larger modal surface. |
 | [progress](https://gpui-kit.com/component/progress) | Do not invent execution percentages or phases beyond existing runtime events. |
 | [questionnaire](https://gpui-kit.com/component/questionnaire) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. Visual language adapted (2026-11-03): borderless panel, counter eyebrow above title above choices, approval marker icon plus tint; digits stay (immediate-commit contract), auto-advance not adopted. Restyled (2026-11-06): framed popover card, borderless rows with checked wash, neutral Recommended Tag pill, header dismiss; approval tint removed, marker icon kept. |

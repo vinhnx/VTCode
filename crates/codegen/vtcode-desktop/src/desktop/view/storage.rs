@@ -4,6 +4,12 @@ use super::*;
 use gpui_kit::component::chart::BarChart;
 use gpui_kit::component::plot::shape::BarAlignment;
 
+/// Fixed-pixel frame for the usage chart. The kit chart paints its own
+/// geometry (labels, bands) at constant pixel sizes, so a rem-based frame
+/// would drift against its content under interface zoom; matching pixels
+/// keeps the frame:content ratio stable at any zoom.
+const STORAGE_CHART_HEIGHT_PX: f32 = 144.;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum StorageView {
     #[default]
@@ -389,7 +395,7 @@ impl DesktopView {
                     .aria_label(rust_i18n::t!("app.settings.storage.usage", breakdown = breakdown).to_string())
                     .w_full()
                     .when(summary.total_bytes > 0, |chart| {
-                        chart.h(px(144.)).child(
+                        chart.h(px(STORAGE_CHART_HEIGHT_PX)).child(
                             BarChart::new(chart_data.to_vec())
                                 .band(|datum| datum.0.clone())
                                 .value(|datum| datum.1 as f64)
@@ -399,6 +405,16 @@ impl DesktopView {
                                 .interactive(false)
                                 .appear(false)
                                 .fill(|datum, _, _, _| datum.2),
+                        )
+                    })
+                    .when(summary.total_bytes == 0, |chart| {
+                        chart.child(
+                            div()
+                                .id("storage-usage-empty")
+                                .test_support()
+                                .text_sm()
+                                .text_color(themes::muted_text(colors))
+                                .child(rust_i18n::t!("app.settings.storage.no_usage").to_string()),
                         )
                     }),
             )
