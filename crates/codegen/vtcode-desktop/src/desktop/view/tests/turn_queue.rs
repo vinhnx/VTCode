@@ -479,7 +479,7 @@ fn remove_button_sends_remove_request_and_drops_the_row(cx: &mut TestAppContext)
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
+        view.update(cx, |view, _cx| {
             view.backend = Some(BackendHandle { commands });
             view.selected_session_id = Some("session".to_string());
             view.running = true;

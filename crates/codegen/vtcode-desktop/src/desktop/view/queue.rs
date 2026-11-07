@@ -341,7 +341,7 @@ impl DesktopView {
                 // Trailing action lane: one quiet icon button per row. Every
                 // service-addressed entry removes by id; the newest local
                 // entry without an id keeps the header-level pop affordance.
-                let row = match (&echo_id, &entry_id) {
+                match (&echo_id, &entry_id) {
                     (_, Some(_)) => row.child(
                         desktop_button(queued_remove_element_id(row_index, echo_id.as_deref()))
                             .icon(IconName::Trash)
@@ -368,8 +368,7 @@ impl DesktopView {
                             .on_click(cx.listener(|view, _, _, cx| view.take_latest_queued(cx))),
                     ),
                     _ => row,
-                };
-                row
+                }
             }))
     }
 
@@ -438,6 +437,10 @@ fn queued_remove_element_id(row_index: usize, echo_id: Option<&str>) -> gpui_kit
 
 /// Hash the row's stable identity (echo id when bound, slot index fallback)
 /// into a bounded usize discriminator, matching `opaque_path_element_id`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "all supported targets are 64-bit, so the u64 hash never truncates"
+)]
 fn queued_row_discriminator(row_index: usize, echo_id: Option<&str>) -> usize {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     echo_id.map_or(row_index, |echo_id| {
