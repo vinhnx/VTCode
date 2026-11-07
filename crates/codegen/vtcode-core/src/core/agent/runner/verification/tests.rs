@@ -120,7 +120,11 @@ async fn headless_verification_cancellation_and_execution_limit_remain_unverifie
         let temp = tempfile::tempdir().unwrap();
         let mut cfg = VTCodeConfig::default();
         cfg.commands.allow_list.push("./rustc".into());
-        cfg.timeouts.long_running_command_ceiling_seconds = 15;
+        // The branch under test is "the ceiling elapsed", not "15 seconds
+        // elapsed"; the script sleeps 30s so any ceiling below that wins the
+        // race. Keeping the fixture at the smallest honest value holds the
+        // test inside the quick profile's 10s slow-timeout.
+        cfg.timeouts.long_running_command_ceiling_seconds = 2;
         let script = temp.path().join("rustc");
         std::fs::write(&script, "#!/bin/sh\nsleep 30\nprintf unexpected\n").unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
