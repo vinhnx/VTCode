@@ -23,6 +23,8 @@ mod append;
 mod eviction;
 mod manifest;
 mod scan;
+#[cfg(test)]
+mod sync_tests;
 
 use eviction::default_eviction_summary_hook;
 pub use manifest::{SessionManifest, TurnIndex, TurnIndexEntry};
@@ -136,6 +138,12 @@ struct LogState {
     /// Buffered pending writes to batch syscalls. Events are appended here
     /// and flushed to disk at turn boundaries or before read operations.
     write_buf: Vec<u8>,
+    /// Written event bytes still require a successful sync before metadata.
+    needs_sync: bool,
+    /// A partial write could not be rolled back; state must be rebuilt on reopen.
+    write_failed: bool,
+    /// An existing final record lacks its newline delimiter.
+    needs_separator: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -153,6 +161,9 @@ impl LogState {
             in_turn: false,
             next_offset: 0,
             write_buf: Vec::with_capacity(65536),
+            needs_sync: false,
+            write_failed: false,
+            needs_separator: false,
         }
     }
 
@@ -531,6 +542,18 @@ impl SessionEventLog {
             let manifest_opt = log.manifest_store.load_manifest()?;
             let index_opt = log.manifest_store.load_turn_index()?;
             let file_len = log.event_file_metadata_len()?;
+            let needs_separator = if file_len == 0 {
+                false
+            } else {
+                let mut slot = log.shared.file.lock().map_err(poison)?;
+                let file = slot.as_mut().ok_or_else(|| log.event_file_unavailable())?;
+                file.seek(SeekFrom::End(-1))
+                    .map_err(|error| SessionStoreError::io(&events_path, error))?;
+                let mut last = [0];
+                file.read_exact(&mut last)
+                    .map_err(|error| SessionStoreError::io(&events_path, error))?;
+                last[0] != b'\n'
+            };
             let pending_rewrite_matches_file = pending_rewrite.as_ref().is_some_and(|pending| {
                 pending.new_file_len == file_len && pending.new_file_len < pending.previous_file_len
             });
@@ -574,6 +597,10 @@ impl SessionEventLog {
                     log.scan()?;
                     let mut st = log.shared.state.lock().map_err(poison)?;
                     st.next_offset = file_len;
+                    // A prior writer may have stopped after writing bytes but
+                    // before syncing them. Sync the scanned file before its
+                    // rebuilt metadata can claim those bytes are durable.
+                    st.needs_sync = file_len != 0;
                     log.persist_meta_locked(&mut st)?;
                 }
             }
@@ -585,6 +612,7 @@ impl SessionEventLog {
                 // authoritative state.
                 log.manifest_store.clear_pending_cap_rewrite()?;
             }
+            log.shared.state.lock().map_err(poison)?.needs_separator = needs_separator;
             log.shared.initialized.store(true, Ordering::Release);
         }
         drop(_eviction_guard);
@@ -818,23 +846,52 @@ impl SessionEventLog {
 
     /// Flush the in-memory write buffer to the underlying file.
     fn flush_write_buf_locked(&self, st: &mut LogState) -> Result<(), SessionStoreError> {
-        if st.write_buf.is_empty() {
+        self.flush_write_buf_with_sync_locked(st, File::sync_data)
+    }
+
+    fn flush_write_buf_with_sync_locked(
+        &self,
+        st: &mut LogState,
+        sync: impl FnOnce(&File) -> std::io::Result<()>,
+    ) -> Result<(), SessionStoreError> {
+        self.flush_write_buf_with_ops_locked(st, |file, bytes| file.write_all(bytes), File::set_len, sync)
+    }
+
+    fn flush_write_buf_with_ops_locked(
+        &self,
+        st: &mut LogState,
+        write: impl FnOnce(&mut File, &[u8]) -> std::io::Result<()>,
+        rollback: impl FnOnce(&File, u64) -> std::io::Result<()>,
+        sync: impl FnOnce(&File) -> std::io::Result<()>,
+    ) -> Result<(), SessionStoreError> {
+        if st.write_failed {
+            return Err(self.event_write_failed());
+        }
+        if st.write_buf.is_empty() && !st.needs_sync {
             return Ok(());
         }
         let mut file_slot = self.shared.file.lock().map_err(poison)?;
         let file = file_slot.as_mut().ok_or_else(|| self.event_file_unavailable())?;
-        let previous_len = file.metadata().map_err(|e| SessionStoreError::io(&self.events_path, e))?.len();
-        if let Err(error) = file.write_all(&st.write_buf) {
-            if file.set_len(previous_len).is_err() {
-                st.write_buf.clear();
+        if !st.write_buf.is_empty() {
+            let previous_len = file.metadata().map_err(|e| SessionStoreError::io(&self.events_path, e))?.len();
+            if let Err(error) = write(file, &st.write_buf) {
+                if let Err(rollback_error) = rollback(file, previous_len) {
+                    st.write_buf.clear();
+                    st.write_failed = true;
+                    return Err(SessionStoreError::io(
+                        &self.events_path,
+                        std::io::Error::other(format!(
+                            "event write failed: {error}; rollback failed: {rollback_error}"
+                        )),
+                    ));
+                }
+                return Err(SessionStoreError::io(&self.events_path, error));
             }
-            return Err(SessionStoreError::io(&self.events_path, error));
-        }
-        if let Err(error) = file.sync_data() {
             st.write_buf.clear();
-            return Err(SessionStoreError::io(&self.events_path, error));
+            st.needs_sync = true;
         }
-        st.write_buf.clear();
+        sync(file).map_err(|error| SessionStoreError::io(&self.events_path, error))?;
+        st.needs_sync = false;
         Ok(())
     }
 
@@ -887,6 +944,13 @@ impl SessionEventLog {
 
     fn event_file_unavailable(&self) -> SessionStoreError {
         SessionStoreError::io(&self.events_path, std::io::Error::other("event log file is unavailable"))
+    }
+
+    fn event_write_failed(&self) -> SessionStoreError {
+        SessionStoreError::io(
+            &self.events_path,
+            std::io::Error::other("event log write rollback failed; reopen required"),
+        )
     }
 }
 

@@ -11,6 +11,16 @@ impl SessionEventLog {
         let _eviction_guard = self.shared.eviction_lock.lock().map_err(poison)?;
         let mut st = self.shared.state.lock().map_err(poison)?;
 
+        if st.write_failed {
+            return Err(self.event_write_failed());
+        }
+
+        if st.needs_separator {
+            st.write_buf.push(b'\n');
+            st.next_offset += 1;
+            st.needs_separator = false;
+        }
+
         // Serialize into the write buffer with rollback on failure — the
         // invariant that `write_buf` never contains partial JSON is
         // encapsulated in `serialize_event`.
