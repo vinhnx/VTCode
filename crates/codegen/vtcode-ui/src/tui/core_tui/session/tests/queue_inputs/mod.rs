@@ -29,5 +29,6 @@ mod app_editing;
 mod busy_queue;
 mod paste;
 mod queue_edit;
+mod steer_mode;
 mod submit;
 mod suggest;

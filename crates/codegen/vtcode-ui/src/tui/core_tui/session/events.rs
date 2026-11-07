@@ -4,6 +4,7 @@ use ratatui_cheese::input::InputState;
 
 use super::super::types::{InlineSegment, OverlayEvent, OverlaySubmission, SubmittedInput};
 use crate::tui::core_tui::runner::TuiSessionDriver;
+use crate::tui::core_tui::session::config::BusyEnterBehavior;
 use crate::tui::core_tui::session::mode_switch_guard::{self};
 use crate::tui::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
@@ -583,8 +584,14 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // steering-channel lifetime: the MPSC FIFO plus the runloop's
             // drain-then-flush_sync keeps UI-optimistic and authoritative
             // queue snapshots in order. Each plain-Enter stays its own
-            // non-batchable turn.
+            // non-batchable turn. In steer mode, plain-text input instead
+            // injects into the live turn via `Steer`.
             if session.is_running_activity() {
+                if matches!(session.appearance.busy_enter_behavior, BusyEnterBehavior::Steer)
+                    && submitted.is_steerable_text()
+                {
+                    return Some(InlineEvent::Steer(submitted));
+                }
                 session.push_queued_input(submitted.text.clone());
                 return Some(InlineEvent::QueueSubmit(submitted));
             }

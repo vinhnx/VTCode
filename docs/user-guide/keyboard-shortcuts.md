@@ -21,16 +21,19 @@ running to open the in-app shortcut overlay (mirrors this guide).
 
 ## Composer submit and queue
 
-| Shortcut                                             | Idle                                                       | Active turn / busy                                                                                                                    |
-| :--------------------------------------------------- | :--------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| `Enter`                                              | Submit draft.                                              | Queue draft for the next turn (`QueueSubmit`); each Enter stays its own non-batchable turn, slash keeps queue routing.                |
-| `Ctrl+Enter` or `Tab`                                | Submit draft; empty draft processes newest queued message. | Queue draft (`QueueSubmit`); plain text is batchable, slash stays one-per-turn. App handles `/stop`, `/pause`, `/resume` immediately. |
-| `Tab` (first)                                        | Accept visible ghost suggestion.                           | Same accept-first priority.                                                                                                           |
-| `Shift+Enter` / `Alt+Enter` / `\`+`Enter` / `Ctrl+J` | Insert newline.                                            | Same.                                                                                                                                 |
-| `Enter` on empty draft with active jobs              | Submit `/config jobs`.                                     | Same.                                                                                                                                 |
+| Shortcut                                             | Idle                                                       | Active turn / busy                                                                                                                                |
+| :--------------------------------------------------- | :--------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Enter`                                              | Submit draft.                                              | Queue draft for the next turn (`QueueSubmit`); each Enter stays its own non-batchable turn, slash keeps queue routing (but see steer mode below). |
+| `Ctrl+Enter` or `Tab`                                | Submit draft; empty draft processes newest queued message. | Queue draft (`QueueSubmit`); plain text is batchable, slash stays one-per-turn. App handles `/stop`, `/pause`, `/resume` immediately.             |
+| `Tab` (first)                                        | Accept visible ghost suggestion.                           | Same accept-first priority.                                                                                                                       |
+| `Shift+Enter` / `Alt+Enter` / `\`+`Enter` / `Ctrl+J` | Insert newline.                                            | Same.                                                                                                                                             |
+| `Enter` on empty draft with active jobs              | Submit `/config jobs`.                                     | Same.                                                                                                                                             |
 
 Palettes consume `Tab`/`Enter`/`Esc` first: agent/file palettes select best match on `Tab`, slash navigation
 autocompletes on `Tab`, history picker consumes navigation keys.
+
+With `ui.busy_enter_behavior = "steer"`, busy plain-text `Enter` steers the live turn (`Steer`) instead of
+queueing; slash commands and attachments still queue, and `Ctrl+Enter`/`Tab` keep their queue role.
 
 ## Composer line editing
 

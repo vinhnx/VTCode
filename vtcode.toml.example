@@ -70,6 +70,10 @@ bottleneck_tracing = false
 # OS accessibility preference (Windows, macOS, GNOME/KDE/XFCE on Linux).
 # Explicit true or false always wins.
 # reduce_motion_mode = true
+# How plain Enter submits while a turn is running: "queue" (default) holds
+# each message for the next turn; "steer" injects plain-text input into the
+# live turn. Slash commands and attachments always queue.
+# busy_enter_behavior = "queue"
 
 [ui.terminal_title]
 items = ["project", "spinner", "app-name", "git-branch"]

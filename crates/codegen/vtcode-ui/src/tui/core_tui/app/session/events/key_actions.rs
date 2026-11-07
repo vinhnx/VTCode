@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::core_tui::session::config::BusyEnterBehavior;
 
 pub(super) fn handle_escape_key(session: &mut Session) -> Option<InlineEvent> {
     // A visible text selection is the innermost dismissible state, so a
@@ -192,8 +193,14 @@ pub(super) fn handle_enter_key(
     // queue snapshots in order. Each plain-Enter stays its own
     // non-batchable turn (only Ctrl+Enter merges). Unblocked slash
     // keeps the existing queue path (blockable slash is rejected
-    // earlier); Ctrl+Enter keeps the queue role.
+    // earlier); Ctrl+Enter keeps the queue role. In steer mode,
+    // plain-text input instead injects into the live turn via `Steer`.
     if session.is_running_activity() {
+        if matches!(session.core.appearance.busy_enter_behavior, BusyEnterBehavior::Steer)
+            && submitted.is_steerable_text()
+        {
+            return Some(InlineEvent::Steer(submitted));
+        }
         session.push_queued_input(submitted.text.clone());
         return Some(InlineEvent::QueueSubmit(submitted));
     }

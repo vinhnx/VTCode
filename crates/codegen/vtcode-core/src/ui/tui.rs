@@ -9,7 +9,7 @@
 // ── Shared data types (always available from vtcode-commons) ────────────────
 
 pub use vtcode_commons::ui_protocol::{
-    CompactActivityMetadata, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
+    BusyEnterBehavior, CompactActivityMetadata, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
     InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig,
     InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, InlineTranscriptLine,
     LayoutModeOverride, PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig,
@@ -370,6 +370,7 @@ mod headless {
         pub reasoning_visible_default: bool,
         pub thinking_display: super::ThinkingBlockState,
         pub vim_mode: bool,
+        pub busy_enter_behavior: super::BusyEnterBehavior,
         pub screen_reader_mode: bool,
         pub reduce_motion_mode: bool,
         pub reduce_motion_keep_progress_animation: bool,

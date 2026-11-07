@@ -23,6 +23,11 @@
 
 OpenRouter: edit `ModelId`, the `Provider::OpenRouter` match, and `docs/models.json` (build script does the rest); others are manual, see the `adding-llm-providers` skill.
 
+## Adding a Setting
+
+New `UiConfig` field: serde default fn + `Default` impl entry, then `python3 scripts/generate_config_field_reference.py`.
+Enum values `/config` cycles come from quoted `"..."` strings after `Options:` in the field doc; add the path to its curated group in `src/agent/runloop/unified/settings_interactive/items.rs`.
+
 ## Gotchas
 
 - Changing token-efficiency or timeout defaults requires updating `docs/config/CONFIG_FIELD_REFERENCE.md` and the guard-rail tests.

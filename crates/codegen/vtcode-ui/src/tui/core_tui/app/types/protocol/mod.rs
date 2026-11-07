@@ -227,8 +227,8 @@ pub enum InlineEvent {
     /// Submit text from the WebMCP bridge without interpreting slash commands.
     WebmcpSubmit(SubmittedInput),
     QueueSubmit(SubmittedInput),
-    /// Mid-turn steer from external embedders (mirrors the core protocol's
-    /// reserved steering path).
+    /// Mid-turn steer (mirrors the core protocol: external embedders plus
+    /// busy plain-Enter text when `ui.busy_enter_behavior` is `steer`).
     Steer(SubmittedInput),
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)

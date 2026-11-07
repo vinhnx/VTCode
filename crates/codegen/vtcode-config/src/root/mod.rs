@@ -6,6 +6,7 @@ use crate::accessibility::reduce_motion_preference;
 use crate::status_line::StatusLineConfig;
 use crate::terminal_title::TerminalTitleConfig;
 use vtcode_commons::ui_protocol::AppIconPreference;
+use vtcode_commons::ui_protocol::BusyEnterBehavior;
 use vtcode_commons::ui_protocol::DiffPreviewMode;
 
 mod modes;
@@ -232,6 +233,13 @@ pub struct UiConfig {
     #[serde(default = "default_vim_mode")]
     pub vim_mode: bool,
 
+    /// How plain Enter submits while a turn is running ("queue" or "steer").
+    /// "queue" (default) holds each message for the next turn; "steer" injects
+    /// plain-text input into the live turn via the steering channel. Slash
+    /// commands and attachments always queue. Options: "queue", "steer".
+    #[serde(default = "default_busy_enter_behavior")]
+    pub busy_enter_behavior: BusyEnterBehavior,
+
     /// Status line configuration settings
     #[serde(default)]
     pub status_line: StatusLineConfig,
@@ -437,6 +445,10 @@ fn default_vim_mode() -> bool {
     false
 }
 
+fn default_busy_enter_behavior() -> BusyEnterBehavior {
+    BusyEnterBehavior::Queue
+}
+
 fn default_notifications_enabled() -> bool {
     true
 }
@@ -568,6 +580,7 @@ impl Default for UiConfig {
             reasoning_visible_default: default_reasoning_visible_default(),
             thinking_display: default_thinking_display(),
             vim_mode: default_vim_mode(),
+            busy_enter_behavior: default_busy_enter_behavior(),
             status_line: StatusLineConfig::default(),
             terminal_title: TerminalTitleConfig::default(),
             keyboard_protocol: KeyboardProtocolConfig::default(),

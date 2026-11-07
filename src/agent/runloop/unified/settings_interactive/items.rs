@@ -132,6 +132,7 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
             "ui.show_task_panel",
             "ui.show_message_timestamps",
             "ui.vim_mode",
+            "ui.busy_enter_behavior",
             "ui.color_scheme_mode",
             "ui.fullscreen.mouse_capture",
             "ui.fullscreen.copy_on_select",

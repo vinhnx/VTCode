@@ -117,6 +117,18 @@ pub enum ReasoningDisplayMode {
     Hidden,
 }
 
+/// How a busy plain-Enter submission enters the runloop while a turn runs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum BusyEnterBehavior {
+    /// Queue the message for the next turn (default; each Enter stays its own turn).
+    #[default]
+    Queue,
+    /// Steer plain-text input into the live turn via the steering channel.
+    Steer,
+}
+
 /// Default collapse state of agent thinking/reasoning blocks in the transcript.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
