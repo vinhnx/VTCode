@@ -13,7 +13,7 @@ use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::inline_events::harness::harness_event;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 
-fn display_plan_path(plan_state: &PlanningWorkflowState, path: &Path) -> String {
+pub(super) fn display_plan_path(plan_state: &PlanningWorkflowState, path: &Path) -> String {
     plan_state
         .workspace_root()
         .map(|workspace| workspace_relative_display(&workspace, path))

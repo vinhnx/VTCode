@@ -23,7 +23,7 @@ use super::{
     },
 };
 use crate::tui::config::constants::ui;
-use crate::tui::core_tui::types::LocalAgentEntry;
+use crate::tui::core_tui::types::{ActivePlanEntry, LocalAgentEntry};
 use crate::tui::options::FullscreenInteractionSettings;
 use crate::tui::ui::tui::widgets::SessionWidget;
 
@@ -323,6 +323,7 @@ pub struct Session {
     visible_lines_cache: Option<(usize, u16, usize, Arc<Vec<TranscriptLine>>)>,
     pub(crate) queued_inputs: Vec<String>,
     pub(crate) local_agents: Vec<LocalAgentEntry>,
+    pub(crate) active_plan: Option<ActivePlanEntry>,
     local_agents_drawer_visible: bool,
     subprocess_entries: Vec<String>,
     subagent_preview: Option<String>,

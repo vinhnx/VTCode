@@ -11,6 +11,7 @@
 //! widening the public surface means editing the re-exports here, which makes
 //! accidental cross-module coupling visible at review time.
 
+pub(crate) mod active_plan;
 pub(crate) mod confirmation;
 pub(crate) mod events;
 pub(crate) mod execution;
@@ -422,6 +423,9 @@ pub(crate) async fn complete_approved_plan_handoff(
     let tracker = finish_planning_workflow(tool_registry, plan_session, handle, PlanningFinishReason::Approved)
         .await?
         .context("approved-plan handoff completed without a task tracker")?;
+    let plan_state = tool_registry.planning_workflow_state();
+    let sidebar_plan = active_plan::active_plan_entry(&plan, &plan_state, target);
+    handle.set_active_plan(Some(sidebar_plan));
     handle.set_skip_confirmations(target.skip_confirmations);
     let handoff = ApprovedPlanHandoff { plan, tracker, target };
     tracing::info!(

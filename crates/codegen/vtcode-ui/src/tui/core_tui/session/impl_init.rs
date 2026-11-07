@@ -152,6 +152,7 @@ impl Session {
             visible_lines_cache: None,
             queued_inputs: Vec::with_capacity(4),
             local_agents: Vec::new(),
+            active_plan: None,
             local_agents_drawer_visible: false,
             subprocess_entries: Vec::new(),
             subagent_preview: None,

@@ -12,6 +12,7 @@ pub(super) use crate::tui::core_tui::widgets::{LayoutMode, SessionWidget};
 pub(super) use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 pub(super) use unicode_width::UnicodeWidthStr;
 
+mod active_plan;
 mod backspace;
 mod info_activity;
 mod preview_editor;

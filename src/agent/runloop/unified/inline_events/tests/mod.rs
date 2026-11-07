@@ -152,6 +152,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetSubprocessEntries { .. } => "SetSubprocessEntries",
         InlineCommand::SetSubagentPreview { .. } => "SetSubagentPreview",
         InlineCommand::SetLocalAgents { .. } => "SetLocalAgents",
+        InlineCommand::SetActivePlan { .. } => "SetActivePlan",
         InlineCommand::SetPrimaryAgent { .. } => "SetPrimaryAgent",
         InlineCommand::SetArchivedHistory { .. } => "SetArchivedHistory",
         InlineCommand::SetCursorVisible(_) => "SetCursorVisible",

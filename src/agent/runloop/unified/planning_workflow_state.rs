@@ -524,6 +524,7 @@ pub(crate) async fn transition_to_planning_workflow(
     // planning turn; mid-turn entry (`start_planning`) promotes explicitly
     // because its turn is already running.
     handle.set_activity_state(ActivityState::Idle);
+    handle.set_active_plan(None);
     handle.force_redraw();
 }
 
@@ -550,6 +551,7 @@ pub(crate) async fn finish_planning_workflow(
     plan_state.disable();
     if reason == PlanningFinishReason::Cancelled {
         plan_state.set_plan_file(None);
+        handle.set_active_plan(None);
     }
 
     if reason == PlanningFinishReason::Approved {

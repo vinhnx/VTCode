@@ -25,8 +25,9 @@ use super::overlay::{
 use crate::tui::core_tui::session::config::AppearanceConfig;
 pub use crate::tui::core_tui::types::SubmittedInput;
 use crate::tui::core_tui::types::{
-    ActivityState, ExecSessionAction, InlineHeaderContext, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry, SecurePromptConfig,
+    ActivePlanEntry, ActivityState, ExecSessionAction, InlineHeaderContext, InlineListItem, InlineListSearchConfig,
+    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry,
+    SecurePromptConfig,
 };
 use crate::tui::options::FullscreenInteractionSettings;
 
@@ -171,6 +172,12 @@ define_inline_message_commands! {
         },
         SetLocalAgents {
             entries: Vec<LocalAgentEntry>,
+        },
+        /// Sidebar snapshot of the session's approved plan (`None` clears it).
+        /// Pushed once at the approval boundary; cleared on the next planning
+        /// entry. Handled at the app layer like `SetLocalAgents`.
+        SetActivePlan {
+            entry: Option<ActivePlanEntry>,
         },
         /// Inject archived prompts from previous sessions into the history picker.
         SetArchivedHistory {
@@ -586,6 +593,10 @@ impl InlineHandle {
 
     pub fn set_local_agents(&self, entries: Vec<LocalAgentEntry>) {
         self.send_command(InlineCommand::SetLocalAgents { entries });
+    }
+
+    pub fn set_active_plan(&self, entry: Option<ActivePlanEntry>) {
+        self.send_command(InlineCommand::SetActivePlan { entry });
     }
 
     pub fn set_archived_history(&self, entries: Vec<ArchivedPromptEntry>) {

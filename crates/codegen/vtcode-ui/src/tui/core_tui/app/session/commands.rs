@@ -67,6 +67,7 @@ pub(super) fn to_core_command(command: &InlineCommand) -> Option<crate::tui::cor
         }
         InlineCommand::SetSubagentPreview { text } => CoreCommand::SetSubagentPreview { text: text.clone() },
         InlineCommand::SetLocalAgents { .. } => return None,
+        InlineCommand::SetActivePlan { .. } => return None,
         InlineCommand::SetArchivedHistory { .. } => return None,
         InlineCommand::UpdateFilePaletteSearch { .. } => return None,
         InlineCommand::SetSlashCommands { .. } => return None,

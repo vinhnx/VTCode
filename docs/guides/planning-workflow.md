@@ -37,6 +37,9 @@ full-auto or command auto-approval is enabled. Without an interactive approval s
 Resumed active plans also require approval because their original entry source may not be available.
 Submitting `/plan <task>` while planning is active starts a new planning request, retaining the old plan file on disk
 but clearing its active approval and recovery state. Use ordinary input to clarify or retry the current request.
+After approval, the plan stays visible in the TUI sidebar Plan section (wide terminals only) for the rest of the plan
+session: approval target, plan file path, and step titles. The viewer is read-only and session-scoped — a new `/plan`
+entry or session end clears it, while the plan file on disk is retained.
 
 The built-in `plan` agent's permission rules allow `read`, `request_user_input`, and `bash` so its wire catalog keeps
 `exec_command`, `code_search`, `grep_file`, and the interview tool visible. Read-only enforcement is not delegated to

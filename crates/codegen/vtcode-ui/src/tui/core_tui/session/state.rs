@@ -15,8 +15,8 @@ use ratatui::layout::{Position, Rect};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
-    ActivityState, InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry, LocalAgentKind,
-    ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
+    ActivePlanEntry, ActivityState, InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry,
+    LocalAgentKind, ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
 };
 use super::mouse_selection::MouseSelectionState;
 use super::reflow::is_info_box_line;
@@ -206,6 +206,13 @@ impl Session {
         if self.local_agents != entries {
             self.program_status.children(&entries);
             self.local_agents = entries;
+            self.invalidate_sidebar_cache();
+        }
+    }
+
+    pub(crate) fn set_active_plan(&mut self, entry: Option<ActivePlanEntry>) {
+        if self.active_plan != entry {
+            self.active_plan = entry;
             self.invalidate_sidebar_cache();
         }
     }

@@ -581,6 +581,9 @@ impl AppSession {
                     self.local_agents_auto_opened = false;
                 }
             }
+            InlineCommand::SetActivePlan { entry } => {
+                self.core.set_active_plan(entry);
+            }
             InlineCommand::SetArchivedHistory { entries } => {
                 let mut input_entries = Vec::new();
                 let archived = entries
