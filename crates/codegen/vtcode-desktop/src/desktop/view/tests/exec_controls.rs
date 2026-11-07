@@ -75,13 +75,42 @@ fn force_cancel_button_sends_session_exec_force_cancel(cx: &mut TestAppContext) 
     cx.update(|cx| assert_eq!(view.read(cx).error, None));
 }
 
+/// The background action leaves the composer's run cluster: it lives in the
+/// thread header instead, beside the marker naming the running state.
+#[gpui_kit::test]
+fn background_exec_lives_in_thread_header(cx: &mut TestAppContext) {
+    let (window, _, mut requests) = open_running_desktop(cx);
+    let (row, composer) = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            (
+                window.try_find("background-exec").map(|handle| handle.bounds()),
+                window.try_find("thread-header").map(|handle| handle.bounds()),
+            )
+        })
+        .unwrap();
+    let row = row.expect("background button renders in the thread header");
+    let composer = composer.expect("thread header renders");
+    let composer_top = composer.origin.y + composer.size.height;
+    assert!(
+        row.origin.y < composer_top,
+        "background button sits in the header ({row:?}), not the composer run cluster (top {composer_top:?})"
+    );
+    cx.update_window(window, |_, window, cx| {
+        window.click("background-exec", cx);
+    })
+    .unwrap();
+    let (method, params) = take_request(&mut requests);
+    assert_eq!(method, vtcode_desktop_protocol::method::EXEC_BACKGROUND);
+    assert_eq!(params["sessionId"], "thread-a");
+}
+
 #[gpui_kit::test]
 fn exec_buttons_hide_while_idle(cx: &mut TestAppContext) {
     let (window, view, _) = open_running_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.running = false);
         window.render_frame(cx);
-        assert!(window.try_find("background-exec").is_none());
         assert!(window.try_find("force-cancel-exec").is_none());
     })
     .unwrap();
@@ -115,34 +144,32 @@ fn run_cluster_matches_idle_send_size_and_swaps_exclusively(cx: &mut TestAppCont
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("send-prompt").is_none(), "send hides while a turn runs");
-        let background = window.find("background-exec").bounds();
-        for id in ["force-cancel-exec", "cancel-turn"] {
-            let bounds = window.find(id).bounds();
-            // 1px tolerates subpixel rounding; a size-class drift (medium vs
-            // large) differs by an order of magnitude more, so it still fails.
-            assert!(
-                (bounds.size.width - background.size.width).abs() <= px(1.)
-                    && (bounds.size.height - background.size.height).abs() <= px(1.),
-                "{id} matches background-exec size: {bounds:?} vs {background:?}"
-            );
-            // Wrapping stays the designed narrow-viewport behavior, but the
-            // common case holds one row: a future size bump that wraps the
-            // trio at the default viewport must fail loudly here.
-            assert!(
-                (bounds.origin.y - background.origin.y).abs() <= px(1.),
-                "{id} stays on the cluster row: {bounds:?} vs {background:?}"
-            );
-        }
+        let stop = window.find("cancel-turn").bounds();
+        let bounds = window.find("force-cancel-exec").bounds();
+        // 1px tolerates subpixel rounding; a size-class drift (medium vs
+        // large) differs by an order of magnitude more, so it still fails.
+        assert!(
+            (bounds.size.width - stop.size.width).abs() <= px(1.)
+                && (bounds.size.height - stop.size.height).abs() <= px(1.),
+            "force-cancel-exec matches cancel-turn size: {bounds:?} vs {stop:?}"
+        );
+        // Wrapping stays the designed narrow-viewport behavior, but the
+        // common case holds one row: a future size bump that wraps the
+        // pair at the default viewport must fail loudly here.
+        assert!(
+            (bounds.origin.y - stop.origin.y).abs() <= px(1.),
+            "force-cancel-exec stays on the cluster row: {bounds:?} vs {stop:?}"
+        );
         view.update(cx, |view, _| view.running = false);
         window.render_frame(cx);
-        for id in ["background-exec", "force-cancel-exec", "cancel-turn"] {
+        for id in ["force-cancel-exec", "cancel-turn"] {
             assert!(window.try_find(id).is_none(), "{id} hides while idle");
         }
         let send = window.find("send-prompt").bounds();
         assert!(
-            (send.size.width - background.size.width).abs() <= px(1.)
-                && (send.size.height - background.size.height).abs() <= px(1.),
-            "idle send matches running trio size: {send:?} vs {background:?}"
+            (send.size.width - stop.size.width).abs() <= px(1.)
+                && (send.size.height - stop.size.height).abs() <= px(1.),
+            "idle send matches running pair size: {send:?} vs {stop:?}"
         );
     })
     .unwrap();

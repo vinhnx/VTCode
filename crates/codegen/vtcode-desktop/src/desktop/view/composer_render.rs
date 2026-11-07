@@ -312,29 +312,26 @@ impl DesktopView {
                         |el, delta| el.opacity(delta),
                     ))
                 });
-        // Running trio tiers: the frequent stop takes the primary fill (no
-        // red anywhere in the cluster), background stays a quiet outline,
-        // and force-cancel steps down to a neutral ghost, so one focal
-        // action owns the emphasis.
+        // Running pair: the frequent stop takes the primary fill (no red
+        // anywhere in the cluster) and force-cancel steps down to a
+        // neutral ghost, so one focal action owns the emphasis. The
+        // background action stays reachable from the running-session
+        // surfaces (sidebar/tab strip) rather than the composer, which
+        // keeps the run cluster to its moment-relevant choices. Glyphs
+        // stay minimal bare strokes (no enclosing container shapes): the
+        // filled cancel button uses a plain square — the universal stop
+        // mark — while the ghost neighbor uses an X. The buttons stay on
+        // the Medium tier for their icon: Kit derives an icon-only
+        // button's glyph from its own size tier (Large paints a 24px
+        // icon, Medium 16px, same 32px frame) and its `ButtonIcon`
+        // wrapper overwrites any size set on the inner `Icon`.
         if self.running {
             model_actions = model_actions
-                .child(
-                    composer_run_geometry(desktop_tertiary_button("background-exec"))
-                        .tooltip_with_action(
-                            rust_i18n::t!("app.composer.background_operation_tooltip").to_string(),
-                            &BackgroundOperation,
-                            Some(key_context::DESKTOP),
-                        )
-                        .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
-                        .icon(IconName::PanelBottomClose)
-                        .desktop_elevated()
-                        .on_click(cx.listener(|this, _, _, cx| this.background_foreground_session(cx))),
-                )
                 .child(
                     composer_run_geometry(desktop_button("force-cancel-exec").ghost())
                         .tooltip(rust_i18n::t!("app.composer.force_cancel_tooltip").to_string())
                         .accessibility_label(rust_i18n::t!("app.composer.force_cancel").to_string())
-                        .icon(IconName::OctagonX)
+                        .icon(IconName::X)
                         .desktop_elevated()
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
@@ -347,7 +344,7 @@ impl DesktopView {
                             Some(key_context::DESKTOP),
                         )
                         .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
-                        .icon(IconName::SquareStop)
+                        .icon(IconName::Square)
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
                     true,
                     cx,
@@ -661,12 +658,15 @@ impl DesktopView {
     }
 }
 
-/// Shared size and radius for the composer run cluster: the idle send and
-/// every running-state button render from this one definition, so the cluster
-/// reads as a single control across turn states. Elevation stays gated at
-/// each call site: Kit replays the instance shadow inside its disabled arm.
+/// Shared radius for the composer run cluster: the idle send and every
+/// running-state button render from this one definition, so the cluster
+/// reads as a single control across turn states. Size stays on Kit's
+/// Medium default: its icon-only frame is the same 32px as Large while the
+/// glyph runs 16px instead of 24px (see the running-trio comment). Kit
+/// replays the instance shadow inside its disabled arm, so elevation
+/// stays gated at each call site.
 fn composer_run_geometry(button: Button) -> Button {
-    button.large().rounded(ButtonRounded::Large)
+    button.rounded(ButtonRounded::Large)
 }
 
 /// Sweep period for the run-button sheen: one left-to-right pass per period,

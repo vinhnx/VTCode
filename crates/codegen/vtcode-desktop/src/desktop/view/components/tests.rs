@@ -27,7 +27,6 @@ fn vtcode_nav_mark_is_the_stroke_only_v_on_transparency() {
 fn button_tiers_keep_the_pointing_hand_cursor() {
     for mut button in [
         desktop_default_button("tier-cursor-default"),
-        desktop_tertiary_button("tier-cursor-tertiary"),
         desktop_primary_button("tier-cursor-primary"),
         desktop_danger_button("tier-cursor-danger"),
     ] {

@@ -517,6 +517,18 @@ impl DesktopView {
                         .role(gpui_kit::Role::Group)
                         .aria_label(rust_i18n::t!(i18n::SESSION_RUNNING_THREAD_LABEL, thread = title).to_string())
                         .child(running_indicator("thread-header-running", &theme.colors))
+                        // The background action left the composer run
+                        // cluster; the thread header is its pointer home —
+                        // beside the marker naming the running state.
+                        .child(
+                            desktop_button("background-exec")
+                                .icon(IconName::ChevronsDown)
+                                .ghost()
+                                .small()
+                                .accessibility_label(rust_i18n::t!("app.composer.background_operation").to_string())
+                                .tooltip(rust_i18n::t!("app.composer.background_operation_tooltip").to_string())
+                                .dispatches_desktop_action(BackgroundOperation, self.focus_handle.clone()),
+                        )
                 })
                 .child(
                     div()

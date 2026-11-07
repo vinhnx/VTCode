@@ -848,15 +848,6 @@ pub(super) fn desktop_default_button(id: impl Into<gpui_kit::ElementId>) -> Butt
     desktop_button(id)
 }
 
-/// Quiet framed action: an ordinary command that needs a clear boundary with
-/// less emphasis than a filled tier (the guide's outline level). Kit paints
-/// the input-background fill with the Codex input hairline; rails, nav rows,
-/// and quiet toolbar actions stay on
-/// [`desktop_button`] + `.ghost()` instead.
-pub(super) fn desktop_tertiary_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    desktop_button(id).outline()
-}
-
 /// Decision-area default commit: the one emphasized action per view, normally
 /// the Enter action. Paints the brand accent fill; never use for destructive
 /// actions even when destruction is the most likely choice.

@@ -173,6 +173,8 @@ fn desktop_slash_actions_route_native_equivalents_and_config_deep_links() {
         "/config checkup --quick",
         "/config CHECKUP",
         "/config doctor",
+        "/doctor",
+        "/doctor prompt-audit",
         "/config memory",
         "/config Memory",
         "/config agent.persistent_memory",
