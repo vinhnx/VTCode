@@ -24,6 +24,10 @@ gpui-fast-linux, gpui-fast-windows, gpui-fast-web, gpui-fast-macos
 
 ---
 
+find every invariant my app relies on but doesn't explicitly enforce
+
+---
+
 gpui-web ?
 
 ---
