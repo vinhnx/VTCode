@@ -610,6 +610,19 @@ impl DesktopView {
             .and_then(|path| path.file_name())
             .and_then(|name| name.to_str())
             .map_or_else(|| rust_i18n::t!("app.navigation.workspace_fallback").to_string(), str::to_string);
+        // Title-bar budgets follow the main column, not the viewport: the bar
+        // lives beside the navigation, so a wide sidebar starves it first.
+        // Mirrors the root layout's expanded predicate exactly.
+        let expanded = navigation_visible && (self.sidebar_open || self.navigation_peek) && !compact_viewport(window);
+        let sidebar_footprint = if !navigation_visible {
+            0.
+        } else if expanded {
+            self.sidebar_width + NAVIGATION_RAIL_WIDTH + SIDEBAR_RESIZE_SLOP
+        } else {
+            NAVIGATION_RAIL_WIDTH
+        };
+        let main_width = window.viewport_size().width - px(sidebar_footprint);
+        let show_details = main_width >= px(MAIN_COLUMN_DETAILS_BREAKPOINT);
         // The leading cluster shares the trailing toolbar's compact size, so the
         // whole title bar is one band: same frame, same center line.
         leading_inset(
@@ -687,7 +700,7 @@ impl DesktopView {
                                 .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                         )
                         .child(div().text_sm().font_semibold().child(app::NAME))
-                        .when(window.viewport_size().width >= px(TITLE_BAR_LABEL_BREAKPOINT), |row| {
+                        .when(show_details, |row| {
                             row.child(
                                 div()
                                     .id("title-bar-workspace")
@@ -701,7 +714,7 @@ impl DesktopView {
                             )
                         }),
                 )
-                .child(self.render_header_actions(cx)),
+                .child(self.render_header_actions(show_details, cx)),
         )
         .with_animation("title-bar-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
         .into_any_element()
@@ -785,7 +798,7 @@ impl DesktopView {
     /// always last, so it keeps one trailing slot. The toolbar forces the
     /// compact size on `.child()` controls, while `.content()` items carry
     /// their own size.
-    fn render_header_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_header_actions(&self, show_details: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let mut group = ToolbarGroup::new("header-actions-group")
             .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
@@ -861,12 +874,16 @@ impl DesktopView {
                     .ghost()
                     .on_click(cx.listener(|view, _, window, cx| view.toggle_settings(window, cx))),
             );
-        if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
-            group = group.content(
-                Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                    .small()
-                    .child(speed.clone()),
-            );
+        // Redundant with the composer model pill: first to go when the main
+        // column narrows, together with the workspace suffix.
+        if show_details {
+            if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
+                group = group.content(
+                    Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                        .small()
+                        .child(speed.clone()),
+                );
+            }
         }
         group = group.content(
             self.render_chrome_menu("header-overflow", rust_i18n::t!("app.navigation.window_actions").to_string()),

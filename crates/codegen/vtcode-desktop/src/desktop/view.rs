@@ -334,23 +334,32 @@ const TRAFFIC_LIGHT_Y: f32 = 17.;
 /// Fullscreen hides the lights and cannot move, so no strip renders there.
 const ZEN_DRAG_STRIP_HEIGHT: f32 = 40.;
 
-/// Compact layout breakpoint: below this viewport width, open panels collapse
-/// the sidebar to its rail and settings stacks its navigation above the
-/// content. The embedded slot cannot hold full chrome plus side-by-side
-/// panels below ~900px (sidebar ~320 + settings nav 240 + readable rows).
+/// Compact layout breakpoint: below this viewport width the sidebar yields
+/// to its rail on every route, workspace included: at 600px a full sidebar
+/// would starve the main column to ~274px and hide bar buttons underneath
+/// it. The preference is untouched, so the sidebar returns on widen.
 const NARROW_PANEL_BREAKPOINT: f32 = 900.;
-/// Title-bar workspace suffix breakpoint: below this viewport width the
-/// "/ workspace" label hides (identity stays in the sidebar/composer) and
-/// above it the label caps at `WORKSPACE_LABEL_MAX_WIDTH`. Measured worst
-/// case: lights 80 + leading fixed ~168 + trailing max ~278 (rail-hidden
-/// set plus speed tag) + trailing pad 12 = ~538, so hidden always fits the
-/// 600px minimum and capped always fits above the breakpoint. Explicit
-/// bounds, not flex shrink: the leading cluster carries
-/// flex_1/min_w_0/truncate yet measures identical widths with and without
-/// trailing pressure, so the bar cannot rely on it to absorb overflow.
-const TITLE_BAR_LABEL_BREAKPOINT: f32 = 760.;
+/// Main-column width that keeps the title-bar details (workspace suffix and
+/// speed tag): below it both collapse. Measured worst cases against the
+/// main column (not the viewport): hidden needs ~448px and settles at 552
+/// on a 600px window with the rail; shown needs ~684px (capped label plus
+/// widest trailing set). The flex layout is correct end to end; these
+/// bounds exist because the bar's fixed controls cannot shrink below that.
+const MAIN_COLUMN_DETAILS_BREAKPOINT: f32 = 760.;
 const WORKSPACE_LABEL_MAX_WIDTH: f32 = 160.;
+/// Navigation rail width, shared with render_navigation.
+const NAVIGATION_RAIL_WIDTH: f32 = 48.;
+/// Upper bound for the sidebar resize handle beside expanded navigation.
+/// Generous on purpose; the breakpoint margins absorb the slack.
+const SIDEBAR_RESIZE_SLOP: f32 = 12.;
 const TOOLBAR_HEIGHT: f32 = 48.;
+
+/// Whether panels collapse for a narrow viewport. Shared by root layout
+/// (sidebar rail) and chrome (title-bar budgets) so both agree on the
+/// sidebar footprint for a given window.
+fn compact_viewport(window: &Window) -> bool {
+    window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT)
+}
 
 actions!(
     desktop,

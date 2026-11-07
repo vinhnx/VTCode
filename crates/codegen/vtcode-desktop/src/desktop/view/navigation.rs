@@ -13,7 +13,7 @@ impl DesktopView {
         let rail = div()
             .id("navigation-rail")
             .test_support()
-            .w(px(48.))
+            .w(px(NAVIGATION_RAIL_WIDTH))
             .flex_shrink_0()
             .h_full()
             .flex()

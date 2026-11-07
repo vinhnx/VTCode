@@ -136,15 +136,22 @@ fn narrow_panels_collapse_the_sidebar_to_its_rail(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("project-thread-sidebar").is_some(), "sidebar starts expanded");
+        assert!(window.try_find("navigation-rail").is_some(), "narrow workspace keeps the rail");
+        assert!(
+            window.try_find("project-thread-sidebar").is_none(),
+            "narrow workspace yields the sidebar so main keeps its width"
+        );
+        assert!(view.read(cx).sidebar_open, "collapse keeps the preference");
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         assert!(window.try_find("navigation-rail").is_some(), "rail persists under the panel");
         assert!(window.try_find("project-thread-sidebar").is_none(), "panel collapses the sidebar");
-        assert!(view.read(cx).sidebar_open, "collapse keeps the preference");
-        view.update(cx, |view, cx| view.close_settings(window, cx));
-        window.render_frame(cx);
-        assert!(window.try_find("project-thread-sidebar").is_some(), "sidebar returns after close");
+    })
+    .unwrap();
+    let (wide_window, _wide_view) = open_desktop_sized(cx, 1200., 700.);
+    cx.update_window(wide_window, |_, wide_window, wide_cx| {
+        wide_window.render_frame(wide_cx);
+        assert!(wide_window.try_find("project-thread-sidebar").is_some(), "a wide window keeps the sidebar expanded");
     })
     .unwrap();
 }
@@ -568,16 +575,19 @@ fn title_bar_actions_fit_the_minimum_window(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 560.);
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
-        // The fixture carries a speed, so the header renders its speed tag:
-        // this plus the hidden rail is the widest trailing set the bar owns.
+        // The fixture carries a speed, but the narrowed main column hides
+        // the tag alongside the workspace suffix (both need 760px of main).
         view.configuration = Some(runtime_options_config());
     });
-    let assert_inside = |window: &mut gpui_kit::Window, id: &'static str| {
-        let viewport = window.viewport_size();
+    // Bounds follow the main column (pane-root), not the viewport: the bar
+    // lives beside the navigation, so viewport fit alone would let buttons
+    // hide underneath the sidebar.
+    let assert_inside_main = |window: &mut gpui_kit::Window, id: &'static str| {
+        let pane = window.find("pane-root").bounds();
         let bounds = window.find(id).bounds();
         assert!(
-            bounds.origin.x >= px(0.) && bounds.origin.x + bounds.size.width <= viewport.width,
-            "{id} escapes the title bar horizontally: bounds={bounds:?}, viewport={viewport:?}"
+            bounds.origin.x >= pane.origin.x && bounds.origin.x + bounds.size.width <= pane.origin.x + pane.size.width,
+            "{id} escapes the main column horizontally: bounds={bounds:?}, pane={pane:?}"
         );
     };
     let chrome_ids = [
@@ -592,19 +602,21 @@ fn title_bar_actions_fit_the_minimum_window(cx: &mut TestAppContext) {
     ];
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert!(window.try_find("project-thread-sidebar").is_none(), "a 600px window yields the sidebar to its rail");
+        assert!(window.try_find("navigation-rail").is_some());
         assert!(
             window.find_all("title-bar-workspace").is_empty(),
             "the workspace suffix collapses below the breakpoint"
         );
         for id in chrome_ids {
-            assert_inside(window, id);
+            assert_inside_main(window, id);
         }
-        // Hiding the rail adds the workspace actions; every id is rechecked
-        // because the leading cluster re-lays-out around the wider bar.
+        // Hiding navigation hands the whole window to main; every id is
+        // rechecked because the bar re-lays-out around the wider column.
         view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
         window.render_frame(cx);
         for id in chrome_ids.into_iter().chain(["top-new-thread", "top-utilities"]) {
-            assert_inside(window, id);
+            assert_inside_main(window, id);
         }
     })
     .unwrap();
@@ -612,7 +624,9 @@ fn title_bar_actions_fit_the_minimum_window(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn title_bar_workspace_label_returns_above_the_breakpoint_capped(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 800., 560.);
+    // 1200px leaves main at ~874 with the full sidebar: past the 760px
+    // main-column breakpoint, so the details return.
+    let (window, view) = open_desktop_sized(cx, 1200., 700.);
     view.update(cx, |view, _| {
         view.workspace = Some(PathBuf::from(format!("/projects/{}", "w".repeat(40))));
         view.configuration = Some(runtime_options_config());
@@ -629,7 +643,7 @@ fn title_bar_workspace_label_returns_above_the_breakpoint_capped(cx: &mut TestAp
         );
         view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
         window.render_frame(cx);
-        let viewport = window.viewport_size();
+        let pane = window.find("pane-root").bounds();
         for id in [
             "navigate-back",
             "toggle-sidebar",
@@ -640,8 +654,9 @@ fn title_bar_workspace_label_returns_above_the_breakpoint_capped(cx: &mut TestAp
         ] {
             let bounds = window.find(id).bounds();
             assert!(
-                bounds.origin.x >= px(0.) && bounds.origin.x + bounds.size.width <= viewport.width,
-                "{id} escapes the title bar horizontally: bounds={bounds:?}, viewport={viewport:?}"
+                bounds.origin.x >= pane.origin.x
+                    && bounds.origin.x + bounds.size.width <= pane.origin.x + pane.size.width,
+                "{id} escapes the main column horizontally: bounds={bounds:?}, pane={pane:?}"
             );
         }
     })

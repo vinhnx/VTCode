@@ -21,11 +21,11 @@ impl Render for DesktopView {
         let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
         let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;
         let navigation_on_right = self.preferences.navigation_on_right();
-        // Compact layout: an open panel yields the sidebar to its rail so the
-        // embedded slot stays usable. The preference is untouched, so the
-        // sidebar returns when the panel closes or the window widens.
-        let narrow_panel =
-            window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT) && self.current_route() != Route::Workspace;
+        // Compact layout: a narrow viewport yields the sidebar to its rail
+        // on every route so the main column (and its title bar) stays
+        // usable. The preference is untouched, so the sidebar returns when
+        // the panel closes or the window widens.
+        let narrow_panel = compact_viewport(window);
         // One identity row: several tabs get the switch strip, while zero or one
         // tab gets the compact header for a thread with content or a selection
         // (a lone tab would only repeat the window title). The header carries
