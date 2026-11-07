@@ -36,21 +36,22 @@
 
 ## Overview
 
-VT Code is a terminal-first coding agent for your repository, available in the CLI and its native macOS app.
+VT Code is a terminal-first coding agent for your repository, in the CLI and its native macOS app.
 It owns context, tool calls, and execution policy so long tasks stay auditable and resumable.
 
-| At a glance      | What you get                                                                    |
-| ---------------- | ------------------------------------------------------------------------------- |
-| **Planning**     | [Plan read-only](./docs/guides/planning-workflow.md), then review turn diffs.   |
-| **Safety**       | [Auditable command policy](./docs/security/SECURITY_MODEL.md) and sandboxing.   |
-| **Self-correct** | [HOVER loop](./docs/development/hypothesis-revision-validation.md) on mismatch. |
-| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction.     |
-| **Integrations** | [MCP](./docs/guides/mcp-integration.md), Skills, plugins, editor bridges.       |
-| **Models**       | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.      |
+| At a glance      | What you get                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Planning**     | [Plan read-only](./docs/guides/planning-workflow.md), then review [turn diffs](./docs/development/diff-preview.md). |
+| **Safety**       | [Auditable command policy](./docs/security/SECURITY_MODEL.md) with sandboxing.                                      |
+| **Self-correct** | [HOVER loop](./docs/development/hypothesis-revision-validation.md) on mismatch.                                     |
+| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with resume and compaction.                                         |
+| **Integrations** | [MCP](./docs/guides/mcp-integration.md), [skills](./docs/skills/SKILLS_GUIDE.md), plugins, and editor bridges.      |
+| **Models**       | [Hosted or local providers](./docs/providers/PROVIDER_GUIDES.md) per task.                                          |
 
 ## Quick start
 
-Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99.1+ (edition 2024).
+Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99.1+ (edition 2024); the
+[installation guide](./docs/installation/README.md) covers prerequisites and optional search tools.
 
 ### 1. Install
 
@@ -59,13 +60,10 @@ Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-Or install with Homebrew or Cargo:
+Or install the CLI with Homebrew or Cargo (the desktop cask lives in [Desktop app](#desktop-app)):
 
 ```bash
 brew trust vinhnx/tap && brew install vinhnx/tap/vtcode
-
-# Desktop app (macOS 15+, Apple Silicon)
-brew install --cask vinhnx/tap/vtcode-desktop
 
 # Or install from crates.io
 cargo install vtcode
@@ -77,8 +75,8 @@ On Windows (best-effort artifacts; may lag behind macOS/Linux):
 irm https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.ps1 | iex
 ```
 
-Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers prerequisites,
-other install methods, desktop flags, and optional search tools.
+Verify with `vtcode --version`. The [installation guide](./docs/installation/README.md) covers other install
+methods, desktop flags, and optional search tools.
 
 ### 2. Configure your project
 
@@ -91,9 +89,9 @@ vtcode secret add openai   # stores your OpenAI API key in secure storage
 ```
 
 Replace `openai` with your provider. Keys use secure storage (OS keyring or encrypted file); alternatives are
-environment variables, a workspace `.env` file, or `vtcode login` where supported. Start with
-[getting started](./docs/user-guide/getting-started.md), then see the [provider
-guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific setup.
+environment variables, a workspace `.env` file, or `vtcode login` where supported. See
+[getting started](./docs/user-guide/getting-started.md) and the
+[provider guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific setup.
 
 > **Note:** ChatGPT OAuth reuses the Codex CLI's public client identity via an unofficial compatibility flow;
 > prefer your own OpenAI API key. GitHub Copilot uses the official `copilot` CLI. See
@@ -107,8 +105,8 @@ guides](./docs/providers/PROVIDER_GUIDES.md) for provider-specific setup.
 vtcode   # open the interactive TUI in your project
 ```
 
-Ask a focused question, then review proposed changes and test results before committing. [Usage](#usage) covers
-automation and session commands.
+Ask a focused question, then review proposed changes and test results before committing. See [Usage](#usage)
+for automation and session commands.
 
 ## Usage
 
@@ -124,9 +122,9 @@ Common commands (see the [command reference](./docs/user-guide/commands.md)):
 | Resume the last session | `vtcode continue`                                  |
 | Inspect a run log       | `vtcode trajectory`                                |
 
-For larger tasks, begin with [read-only planning](./docs/guides/planning-workflow.md), review the
-[turn diff](./docs/development/diff-preview.md) before committing, and use `/explain` to summarize the
-outcome without another model call. See the [interactive guide](./docs/user-guide/interactive-mode.md).
+For larger tasks, begin with [read-only planning](./docs/guides/planning-workflow.md), review the [turn
+diff](./docs/development/diff-preview.md) before committing, and use `/explain` to summarize the outcome
+without another model call. See the [interactive guide](./docs/user-guide/interactive-mode.md).
 
 ### Modes
 
@@ -148,15 +146,14 @@ reusing your CLI configuration and credentials. Configure a provider first (see 
 
 ### Install (macOS 15+)
 
-On Apple Silicon, install it with Homebrew (updates with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
+On Apple Silicon, install it with Homebrew (update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`):
 
 ```bash
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
-Without Homebrew, download the app from the [latest
-release](https://github.com/vinhnx/VTCode/releases/latest) or run `vtcode desktop --install`. Launch it with
-`vtcode desktop` or from Finder. Intel Macs build from source.
+Without Homebrew, download it from the [latest release](https://github.com/vinhnx/VTCode/releases/latest) or run
+`vtcode desktop --install`. Launch it with `vtcode desktop` or from Finder. Intel Macs build from source.
 
 > [!WARNING]
 > **First launch needs a one-time macOS security approval.** Builds are ad hoc signed, not notarized, so macOS blocks
@@ -169,8 +166,8 @@ troubleshooting.
 
 ## Documentation
 
-Start from the [documentation index](./docs/INDEX.md) or
-[Wiki](https://github.com/vinhnx/VTCode/wiki). Integrations below are optional.
+Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/VTCode/wiki).
+Integrations below are optional.
 
 ### Get started
 
@@ -215,8 +212,8 @@ graph LR
     CORE --> UI[vtcode-ui]
 ```
 
-Build with Rust 1.99.1+ (edition 2024) and install `cargo-nextest` to run tests. The
-[architecture guide](./docs/ARCHITECTURE.md) maps all 25 crates, including the context and compaction design.
+Build with Rust 1.99.1+ (edition 2024) and install `cargo-nextest` to run tests. The [architecture
+guide](./docs/ARCHITECTURE.md) maps all 25 crates, including the context and compaction design.
 
 ```bash
 git clone https://github.com/vinhnx/VTCode.git
@@ -234,15 +231,15 @@ Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/V
 
 ## Contributing
 
-Contributions are welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include
-`vtcode trajectory` output). Read the [contribution guide](./docs/CONTRIBUTING.md) before opening a PR;
-MCP maintainers should also see the [interop guide](./docs/guides/mcp-interop.md).
+Contributions are welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include `vtcode trajectory`
+output). Read the [contribution guide](./docs/CONTRIBUTING.md) before opening a PR; MCP maintainers should also see
+the [interop guide](./docs/guides/mcp-interop.md).
 
 ## Security
 
-Report vulnerabilities privately with
-[GitHub private vulnerability reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See
-the [security policy](./docs/SECURITY.md).
+Report vulnerabilities privately with [GitHub private vulnerability
+reporting](https://github.com/vinhnx/VTCode/security/advisories/new). See the [security
+policy](./docs/SECURITY.md).
 
 ## Community
 
