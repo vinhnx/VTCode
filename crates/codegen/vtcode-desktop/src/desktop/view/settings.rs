@@ -290,7 +290,12 @@ impl DesktopView {
             desktop_entries.push(
                 desktop_button(format!("settings-nav-{tab:?}").to_lowercase())
                     .accessibility_label(tab.label())
-                    .child(nav_entry_content(format!("settings-nav-label-{tab:?}").to_lowercase(), icon, tab.label()))
+                    .child(nav_entry_content(
+                        format!("settings-nav-label-{tab:?}").to_lowercase(),
+                        icon,
+                        format!("settings-nav-icon-{tab:?}").to_lowercase(),
+                        tab.label(),
+                    ))
                     .desktop_selected(active, &colors)
                     .w_full()
                     .justify_start()
@@ -302,7 +307,12 @@ impl DesktopView {
         let config_label = rust_i18n::t!("app.configuration.page_title").to_string();
         let config_entry = desktop_button("settings-nav-configuration")
             .accessibility_label(config_label.clone())
-            .child(nav_entry_content("settings-nav-label-configuration", IconName::Settings2, config_label))
+            .child(nav_entry_content(
+                "settings-nav-label-configuration",
+                IconName::Settings2,
+                "settings-nav-icon-configuration",
+                config_label,
+            ))
             .desktop_selected(config_active, &colors)
             .w_full()
             .justify_start()

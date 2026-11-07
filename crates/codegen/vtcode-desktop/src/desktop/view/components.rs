@@ -415,15 +415,28 @@ pub(super) fn nav_group_header(
         .into_any_element()
 }
 
-/// Navigation entry content: a small icon pinned to a truncating label on
-/// one spine. Shared by the settings navigation and the configuration group
+/// Rail glyph size shared by Lucide catalog icons and the brand mark.
+///
+/// One font-relative square (`0.875rem`, 14px at the default 16px UI font)
+/// that grows with the UI font size setting, unlike Lucide's fixed `small`
+/// tier. Both the Lucide names and the brand SVG render through it, so the
+/// settings navigation and the configuration rail keep one glyph box per
+/// row and the rows never drift apart as the font size changes.
+pub(super) fn nav_entry_icon_size() -> gpui_kit::AbsoluteLength {
+    gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(0.875))
+}
+
+/// Navigation entry content: an icon pinned to a truncating label on one
+/// spine. Shared by the settings navigation and the configuration group
 /// rail (Kit `Button` centers its built-in icon/label pair, so rails use
 /// this custom child instead). The icon is decorative; the owning button
 /// carries the accessible name. The leading mark is any `Icon`, so a Lucide
-/// `IconName` and brand SVG bytes share one size/color path and align.
+/// `IconName` and brand SVG bytes share one size/color path and align; both
+/// render through [`nav_entry_icon_size`] so a row never mixes glyph sizes.
 pub(super) fn nav_entry_content(
     label_id: impl Into<gpui_kit::ElementId>,
     icon: impl Into<Icon>,
+    icon_id: impl Into<gpui_kit::ElementId>,
     label: String,
 ) -> AnyElement {
     div()
@@ -432,7 +445,16 @@ pub(super) fn nav_entry_content(
         .flex()
         .items_center()
         .gap_2()
-        .child(Icon::new(icon).small())
+        .child(
+            // `Icon` is `RenderOnce` with no stable id, so the sized glyph sits
+            // in an identified wrapper: rail alignment tests measure one box
+            // for the brand V and every Lucide entry.
+            div()
+                .id(icon_id)
+                .test_support()
+                .flex_shrink_0()
+                .child(Icon::new(icon).size(nav_entry_icon_size())),
+        )
         .child(div().id(label_id).test_support().flex_1().min_w_0().truncate().child(label))
         .into_any_element()
 }
@@ -443,7 +465,7 @@ pub(super) fn nav_entry_content(
 const VTCODE_NAV_MARK_SVG: &[u8] = include_bytes!("../../../../../../resources/icons/vtcode-mark.svg");
 
 /// Settings-nav leading mark for the VT Code entry: the brand V at the same
-/// small size and inherited color as the Lucide sibling rows.
+/// [`nav_entry_icon_size`] and inherited color as the Lucide sibling rows.
 pub(super) fn vtcode_nav_mark() -> Icon {
     Icon::default().data(VTCODE_NAV_MARK_SVG)
 }

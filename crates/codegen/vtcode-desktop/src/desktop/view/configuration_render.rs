@@ -342,6 +342,7 @@ impl DesktopView {
                     .child(nav_entry_content(
                         "config-category-label-curated",
                         config_group_icon(curated::CURATED_GROUP_NAME),
+                        "config-category-icon-curated",
                         label,
                     ))
                     .small()
@@ -369,7 +370,12 @@ impl DesktopView {
             rail = rail.child(
                 desktop_button(format!("config-category-{name}"))
                     .accessibility_label(label.clone())
-                    .child(nav_entry_content(format!("config-category-label-{name}"), config_group_icon(&name), label))
+                    .child(nav_entry_content(
+                        format!("config-category-label-{name}"),
+                        config_group_icon(&name),
+                        format!("config-category-icon-{name}"),
+                        label,
+                    ))
                     .small()
                     .flex_shrink_0()
                     .when(wide, |button| button.w_full().justify_start())

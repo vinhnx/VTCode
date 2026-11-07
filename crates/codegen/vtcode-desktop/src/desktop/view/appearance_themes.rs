@@ -59,17 +59,22 @@ impl CustomColorSlot {
         }
     }
 
+    /// Locale key per slot, so the error-field list and the seed pickers share
+    /// one source of truth.
+    fn label_key(self) -> &'static str {
+        match self {
+            Self::Background => "app.appearance.custom_color_background",
+            Self::Foreground => "app.appearance.custom_color_foreground",
+            Self::Accent => "app.appearance.custom_color_accent",
+            Self::Secondary => "app.appearance.custom_color_secondary",
+            Self::Success => "app.appearance.custom_color_success",
+            Self::Danger => "app.appearance.custom_color_danger",
+            Self::Warning => "app.appearance.custom_color_warning",
+        }
+    }
+
     fn label(self) -> String {
-        rust_i18n::t!(match self {
-            Self::Background => "app.settings.appearance.custom_color_background",
-            Self::Foreground => "app.settings.appearance.custom_color_foreground",
-            Self::Accent => "app.settings.appearance.custom_color_accent",
-            Self::Secondary => "app.settings.appearance.custom_color_secondary",
-            Self::Success => "app.settings.appearance.custom_color_success",
-            Self::Danger => "app.settings.appearance.custom_color_danger",
-            Self::Warning => "app.settings.appearance.custom_color_warning",
-        })
-        .to_string()
+        rust_i18n::t!(self.label_key()).to_string()
     }
 }
 
@@ -100,7 +105,7 @@ impl CustomThemeState {
     pub(super) fn new(window: &mut Window, cx: &mut Context<DesktopView>) -> Self {
         let name_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("app.settings.appearance.custom_theme_name_placeholder").to_string())
+                .placeholder(rust_i18n::t!("app.appearance.custom_theme_name_placeholder").to_string())
         });
         let seeds = current_seed_colors(cx);
         let mut pickers = Vec::with_capacity(CustomColorSlot::ALL.len());
@@ -262,7 +267,7 @@ impl DesktopView {
             return;
         };
         let title = rust_i18n::t!("app.settings.storage.delete_title", name = name).to_string();
-        let detail = rust_i18n::t!("app.settings.appearance.custom_theme_delete_detail").to_string();
+        let detail = rust_i18n::t!("app.appearance.custom_theme_delete_detail").to_string();
         let delete = rust_i18n::t!("app.settings.storage.delete").to_string();
         let cancel = rust_i18n::t!("app.settings.storage.cancel").to_string();
         let answer = window.prompt(
@@ -308,20 +313,16 @@ impl DesktopView {
 
     pub(super) fn render_custom_themes_group(&self, cx: &Context<Self>) -> AnyElement {
         let colors = &cx.theme().colors;
-        let title = rust_i18n::t!("app.settings.appearance.custom_themes").to_string();
-        let mut group = settings_group_box(title.clone(), colors).child(row_description(
-            rust_i18n::t!("app.settings.appearance.custom_themes_description").to_string(),
-            colors,
-        ));
+        let title = rust_i18n::t!("app.appearance.custom_themes").to_string();
+        let mut group = settings_group_box(title.clone(), colors)
+            .child(row_description(rust_i18n::t!("app.appearance.custom_themes_description").to_string(), colors));
         if let Some(draft) = self.theme_editor.draft.as_ref() {
             group = group.child(self.render_custom_theme_editor(draft, colors, cx));
         }
         if self.preferences.custom_themes.is_empty() {
             if self.theme_editor.draft.is_none() {
-                group = group.child(row_description(
-                    rust_i18n::t!("app.settings.appearance.custom_themes_empty").to_string(),
-                    colors,
-                ));
+                group = group
+                    .child(row_description(rust_i18n::t!("app.appearance.custom_themes_empty").to_string(), colors));
             }
         } else {
             group = group.child(
@@ -345,7 +346,7 @@ impl DesktopView {
         group = group.child(
             desktop_button("custom-theme-new")
                 .icon(IconName::Plus)
-                .label(rust_i18n::t!("app.settings.appearance.custom_theme_new").to_string())
+                .label(rust_i18n::t!("app.appearance.custom_theme_new").to_string())
                 .on_click(cx.listener(|view, _, window, cx| view.open_custom_theme_editor(window, cx))),
         );
         accessible_group_box("appearance-custom-themes-group", title, group)
@@ -367,8 +368,8 @@ impl DesktopView {
         let edit_id = format!("custom-theme-edit-{}", theme.id);
         let delete_id = format!("custom-theme-delete-{}", theme.id);
         let apply_label = format!("{} · {mode_label}", theme.name);
-        let edit_label = format!("{} {apply_label}", rust_i18n::t!("app.settings.appearance.custom_theme_edit"));
-        let delete_label = format!("{} {apply_label}", rust_i18n::t!("app.settings.appearance.custom_theme_delete"));
+        let edit_label = format!("{} {apply_label}", rust_i18n::t!("app.appearance.custom_theme_edit"));
+        let delete_label = format!("{} {apply_label}", rust_i18n::t!("app.appearance.custom_theme_delete"));
         let apply_target = theme.id.clone();
         let edit_target = theme.id.clone();
         let delete_target = theme.id.clone();
@@ -457,22 +458,21 @@ impl DesktopView {
         let readable = ratio >= 4.5;
         let typed_name = self.theme_editor.name_input.read(cx).value().trim().to_string();
         let preview_label = if typed_name.is_empty() {
-            rust_i18n::t!("app.settings.appearance.custom_theme_preview").to_string()
+            rust_i18n::t!("app.appearance.custom_theme_preview").to_string()
         } else {
             typed_name
         };
         let contrast = if readable {
-            rust_i18n::t!("app.settings.appearance.custom_theme_contrast", ratio = format!("{ratio:.1}")).to_string()
+            rust_i18n::t!("app.appearance.custom_theme_contrast", ratio = format!("{ratio:.1}")).to_string()
         } else {
-            rust_i18n::t!("app.settings.appearance.custom_theme_contrast_low", ratio = format!("{ratio:.1}"))
-                .to_string()
+            rust_i18n::t!("app.appearance.custom_theme_contrast_low", ratio = format!("{ratio:.1}")).to_string()
         };
         let header = if draft.editing_id.is_some() {
-            rust_i18n::t!("app.settings.appearance.custom_theme_edit").to_string()
+            rust_i18n::t!("app.appearance.custom_theme_edit").to_string()
         } else {
-            rust_i18n::t!("app.settings.appearance.custom_theme_new").to_string()
+            rust_i18n::t!("app.appearance.custom_theme_new").to_string()
         };
-        let name_label = rust_i18n::t!("app.settings.appearance.custom_theme_name").to_string();
+        let name_label = rust_i18n::t!("app.appearance.custom_theme_name").to_string();
         div()
             .id("custom-theme-editor")
             .test_support()
@@ -579,12 +579,12 @@ impl DesktopView {
                     .gap_2()
                     .child(
                         desktop_button("custom-theme-cancel")
-                            .label(rust_i18n::t!("app.settings.appearance.custom_theme_cancel").to_string())
+                            .label(rust_i18n::t!("app.appearance.custom_theme_cancel").to_string())
                             .on_click(cx.listener(|view, _, _, cx| view.cancel_custom_theme_editor(cx))),
                     )
                     .child(
                         desktop_default_button("custom-theme-save")
-                            .label(rust_i18n::t!("app.settings.appearance.custom_theme_save").to_string())
+                            .label(rust_i18n::t!("app.appearance.custom_theme_save").to_string())
                             .on_click(cx.listener(|view, _, window, cx| view.save_custom_theme(window, cx))),
                     ),
             )
@@ -594,10 +594,10 @@ impl DesktopView {
 
 fn custom_theme_error_message(error: themes::CustomThemeError) -> String {
     rust_i18n::t!(match error {
-        themes::CustomThemeError::EmptyName => "app.settings.appearance.custom_theme_name_required",
-        themes::CustomThemeError::NameTooLong => "app.settings.appearance.custom_theme_name_too_long",
-        themes::CustomThemeError::DuplicateName => "app.settings.appearance.custom_theme_name_taken",
-        themes::CustomThemeError::LowContrast => "app.settings.appearance.custom_theme_contrast_low_error",
+        themes::CustomThemeError::EmptyName => "app.appearance.custom_theme_name_required",
+        themes::CustomThemeError::NameTooLong => "app.appearance.custom_theme_name_too_long",
+        themes::CustomThemeError::DuplicateName => "app.appearance.custom_theme_name_taken",
+        themes::CustomThemeError::LowContrast => "app.appearance.custom_theme_contrast_low_error",
     })
     .to_string()
 }

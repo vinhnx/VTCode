@@ -46,6 +46,28 @@ fn config_rail_entries_share_a_leading_spine_when_wide(cx: &mut TestAppContext) 
     .unwrap();
 }
 
+/// Catalog glyphs and the settings navigation's brand V share one explicit
+/// rail box: `nav_entry_content` sizes both from `nav_entry_icon_size`, so a
+/// Lucide row and the brand row can never mix the fixed 14px `small` tier
+/// with a font-relative box as the UI font size changes.
+#[gpui_kit::test]
+fn navigation_glyphs_share_one_box(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        assert_eq!(cx.theme().font_size, px(16.), "default UI font size");
+        assert_eq!(
+            super::super::nav_entry_icon_size(),
+            gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(0.875)),
+            "the rail box stays font-relative so it tracks the UI font size"
+        );
+        let bounds = window.find("settings-nav-icon-vtcode").bounds();
+        assert_eq!(bounds.size, size(px(14.), px(14.)), "brand V fills the rail box: {bounds:?}");
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn config_pane_divider_sits_between_rail_and_content(cx: &mut TestAppContext) {
     let (window, _view) = open_config_panes(cx);
