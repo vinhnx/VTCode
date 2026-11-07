@@ -24,6 +24,15 @@ pub struct UpdateStatusSnapshot {
     /// Highlights section); clients render a link-only state then.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub release_highlights: Vec<String>,
+    /// Parsed `### Highlights` bullets for the running `current_version`,
+    /// for the post-update "what's new" moment. Empty unless the cache holds
+    /// notes describing exactly the running version.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub current_release_highlights: Vec<String>,
+    /// HTTPS release page for the running version, sent alongside
+    /// `current_release_highlights` so the "what's new" viewer can link out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_release_url: Option<String>,
     /// Release channel the service follows (stable/beta/nightly).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
@@ -44,20 +53,25 @@ mod tests {
             update_available: true,
             release_url: Some("https://github.com/vinhnx/vtcode/releases/tag/v0.181.0".into()),
             release_highlights: vec!["Faster startup".into(), "New model picker".into()],
+            current_release_highlights: vec!["Older highlight".into()],
+            current_release_url: Some("https://github.com/vinhnx/vtcode/releases/tag/v0.180.5".into()),
             channel: Some("stable".into()),
             check_due: false,
         };
         let decoded: UpdateStatusSnapshot = serde_json::from_value(serde_json::to_value(&snapshot).unwrap()).unwrap();
         assert_eq!(decoded, snapshot);
 
-        // Asymmetric fixtures: an up-to-date service omits every optional field,
-        // and a legacy payload carries only the running version.
+        // Asymmetric fixtures: the post-update shape carries current-version
+        // notes with no update available, and a legacy payload carries only
+        // the running version.
         let quiet = UpdateStatusSnapshot {
             current_version: "0.181.0".into(),
             latest_version: None,
             update_available: false,
             release_url: None,
             release_highlights: Vec::new(),
+            current_release_highlights: vec!["Freshly installed".into()],
+            current_release_url: Some("https://github.com/vinhnx/vtcode/releases/tag/v0.181.0".into()),
             channel: None,
             check_due: true,
         };
@@ -72,6 +86,8 @@ mod tests {
         assert!(!legacy.update_available);
         assert!(legacy.release_url.is_none());
         assert!(legacy.release_highlights.is_empty());
+        assert!(legacy.current_release_highlights.is_empty());
+        assert!(legacy.current_release_url.is_none());
         assert!(legacy.channel.is_none());
         assert!(!legacy.check_due);
     }

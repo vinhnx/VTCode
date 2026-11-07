@@ -88,6 +88,10 @@ pub(super) enum DeepLink {
     Palette(PaletteLink),
     Command(shortcuts::CommandId),
     Action(PaletteAction),
+    /// The changelog viewer: latest release when an update is available,
+    /// else the running version's known notes. A viewer, not a palette
+    /// action, so it bypasses [`PaletteAction`](super::palette::PaletteAction).
+    Changelog,
 }
 
 /// Click destination for a notification banner. Owned so the banner callback
@@ -115,9 +119,8 @@ impl NotificationTarget {
     /// accepts. Address only: clicks still resolve through
     /// [`DesktopView::open_notification_target`], which carries the
     /// stale-tolerance (thread re-select, focus-only-if-current) a bare
-    /// deeplink lacks. An Interaction degrades to its thread link, and a
-    /// changelog target to its settings tab; the waiting-prompt focus and
-    /// the viewer itself have no link form.
+    /// deeplink lacks. An Interaction degrades to its thread link; the
+    /// waiting-prompt focus has no link form.
     #[cfg(test)]
     fn to_deeplink(&self) -> DeepLink {
         match self {
@@ -125,11 +128,10 @@ impl NotificationTarget {
                 DeepLink::Action(PaletteAction::LoadSession(session_id.clone()))
             }
             Self::Workspace => DeepLink::Route(Route::Workspace),
-            // The viewer has no link form (like the waiting-prompt focus),
-            // so it degrades to the tab hosting the update row.
-            Self::UpdateSettings | Self::UpdateChangelog { .. } => {
-                DeepLink::SettingsTab(settings::SettingsTab::Notifications)
-            }
+            Self::UpdateSettings => DeepLink::SettingsTab(settings::SettingsTab::Notifications),
+            // The viewer has a real link form; the pinned version only rides
+            // the live click, which falls back to the tab when stale.
+            Self::UpdateChangelog { .. } => DeepLink::Changelog,
         }
     }
 
@@ -177,6 +179,7 @@ impl DeepLink {
             Self::Palette(kind) => Some(format!("palette/{}", kind.verb())),
             Self::Command(id) => Some(format!("command/{}", id.as_str())),
             Self::Action(action) => action_path(action),
+            Self::Changelog => Some("changelog".to_string()),
         }
     }
 }
@@ -270,6 +273,7 @@ pub(super) fn parse(input: &str) -> Option<DeepLink> {
         "workspace" => exact(tail, DeepLink::Route(Route::Workspace)),
         "browser" => exact(tail, DeepLink::Route(Route::Browser)),
         "review" => exact(tail, DeepLink::Route(Route::Review)),
+        "changelog" => exact(tail, DeepLink::Changelog),
         "settings" => parse_settings(tail),
         "config" => parse_config(tail),
         "palette" => parse_palette(tail),
@@ -472,6 +476,11 @@ impl DesktopView {
                 // reachability so `/go` surfaces the unavailable status error.
                 let reachable = self.palette_action_available(&action);
                 self.run_palette_action(action, window, cx);
+                reachable
+            }
+            DeepLink::Changelog => {
+                let reachable = self.can_view_any_changelog();
+                self.open_best_changelog(window, cx);
                 reachable
             }
         }
@@ -861,6 +870,7 @@ mod tests {
             DeepLink::Action(PaletteAction::PreviewFile("src/main.rs".into())),
             DeepLink::Action(PaletteAction::CopyThreadTitle),
             DeepLink::Action(PaletteAction::CloseOtherTabs),
+            DeepLink::Changelog,
         ];
         for link in links {
             let path = link.path().expect("addressable links have paths");
@@ -924,12 +934,13 @@ mod tests {
         );
         assert_eq!(NotificationTarget::Workspace.path().as_deref(), Some("workspace"));
         assert_eq!(NotificationTarget::UpdateSettings.path().as_deref(), Some("settings/notifications"));
-        // The viewer degrades to its settings tab: no link form of its own.
+        // The viewer has a real link form now (the pinned version only rides
+        // the live click).
         assert_eq!(
             NotificationTarget::UpdateChangelog { version: "0.182.0".into() }
                 .path()
                 .as_deref(),
-            Some("settings/notifications")
+            Some("changelog")
         );
     }
 }

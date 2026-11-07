@@ -243,6 +243,12 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
     let updater = crate::updater::Updater::new(current)?;
     let check = updater.startup_update_check()?;
     let cached_highlights = crate::updater::cached_latest_release_highlights();
+    // The current-version accessor self-matches against the running version,
+    // so unlike the latest pairing above it needs no TOCTOU filter.
+    let (current_highlights, current_url) = match crate::updater::cached_current_release_highlights() {
+        Some((version, items)) => (items, Some(crate::updater::Updater::release_url(&version))),
+        None => (Vec::new(), None),
+    };
     let (latest_version, release_url, release_highlights, update_available) = match check.cached_notice {
         Some(notice) => {
             let url = crate::updater::Updater::release_url(&notice.latest_version);
@@ -257,6 +263,8 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
         update_available,
         release_url,
         release_highlights,
+        current_release_highlights: current_highlights,
+        current_release_url: current_url,
         channel: Some(updater.config().channel.to_string()),
         check_due: check.should_refresh,
     })

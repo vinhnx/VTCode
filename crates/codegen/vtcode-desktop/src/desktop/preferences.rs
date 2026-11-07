@@ -541,6 +541,9 @@ pub(super) struct NotificationPreferences {
     pub updates: Option<bool>,
     /// Latest release version already announced; suppresses repeat banners.
     pub last_notified_update: Option<String>,
+    /// Running version whose release notes were already shown once in the
+    /// changelog viewer (the post-update "what's new" moment).
+    pub last_seen_changelog_version: Option<String>,
 }
 
 impl NotificationPreferences {

@@ -524,6 +524,7 @@ fn notification_preferences_default_on_and_round_trip() {
     assert!(notifications.questions());
     assert!(notifications.updates());
     assert_eq!(notifications.last_notified_update, None);
+    assert_eq!(notifications.last_seen_changelog_version, None);
 
     // Asymmetric fixtures: explicit choices survive a round trip while
     // untouched toggles keep their defaults.
@@ -532,6 +533,7 @@ fn notification_preferences_default_on_and_round_trip() {
     preferences.notifications.set_turn_completion(TurnCompletionMode::Always);
     preferences.notifications.questions = Some(false);
     preferences.notifications.last_notified_update = Some("0.181.0".to_string());
+    preferences.notifications.last_seen_changelog_version = Some("0.181.0".to_string());
     let serialized = serde_json::to_string(&preferences).unwrap();
     assert!(serialized.contains(r#""turnCompletion":"always""#), "{serialized}");
     let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
@@ -541,6 +543,7 @@ fn notification_preferences_default_on_and_round_trip() {
     assert!(!loaded.notifications.questions());
     assert!(loaded.notifications.updates());
     assert_eq!(loaded.notifications.last_notified_update.as_deref(), Some("0.181.0"));
+    assert_eq!(loaded.notifications.last_seen_changelog_version.as_deref(), Some("0.181.0"));
 }
 
 #[test]

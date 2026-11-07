@@ -1,6 +1,7 @@
-use super::super::deeplinks::NotificationTarget;
+use super::super::deeplinks::{DeepLink, NotificationTarget};
 use super::super::licenses::LicenseDocument;
 use super::super::settings::SettingsTab;
+use super::super::updates::ChangelogMode;
 use super::*;
 
 fn status_payload(
@@ -23,6 +24,23 @@ fn status_payload(
 
 fn seed_status(view: &Entity<DesktopView>, payload: serde_json::Value, cx: &mut TestAppContext) {
     view.update(cx, |view, _| view.handle_update_status_response(payload));
+}
+
+/// Layer current-version notes onto a status payload (the post-update shape).
+fn with_current_notes(mut payload: serde_json::Value, highlights: &[&str], url: Option<&str>) -> serde_json::Value {
+    let object = payload.as_object_mut().expect("status payload is an object");
+    let _ = object.insert("currentReleaseHighlights".into(), json!(highlights));
+    let _ = object.insert("currentReleaseUrl".into(), json!(url));
+    payload
+}
+
+fn consume_whats_new(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.maybe_show_pending_whats_new(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
 }
 
 fn open_notification_settings(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
@@ -259,4 +277,198 @@ fn open_changelog_refuses_without_an_available_update(cx: &mut TestAppContext) {
         assert!(!view.read(cx).changelog_open, "quiet status means no viewer");
     })
     .unwrap();
+}
+
+fn post_update_payload() -> serde_json::Value {
+    with_current_notes(
+        status_payload("0.182.0", None, false, &[], None),
+        &["Freshly installed"],
+        Some("https://github.com/vinhnx/vtcode/releases/tag/v0.182.0"),
+    )
+}
+
+#[gpui_kit::test]
+fn whats_new_shows_current_notes_once_and_records_seen(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, post_update_payload(), cx);
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| {
+        let state = view.read(cx);
+        assert!(state.changelog_open, "first sighting opens the viewer");
+        assert_eq!(state.changelog_mode, ChangelogMode::Current);
+        assert_eq!(
+            state.preferences.notifications.last_seen_changelog_version.as_deref(),
+            Some("0.182.0"),
+            "shown versions record seen"
+        );
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("changelog-dialog").is_some());
+        assert!(window.try_find("changelog-highlights").is_some());
+        assert!(window.try_find("changelog-subtitle").is_none(), "current mode omits the upgrade path");
+        assert!(window.try_find("open-release-notes").is_some(), "current notes link out");
+        view.update(cx, |view, cx| view.close_changelog(window, cx));
+    })
+    .unwrap();
+    // A later response for the same version stays silent.
+    seed_status(&view, post_update_payload(), cx);
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| assert!(!view.read(cx).changelog_open, "seen versions never re-show"));
+}
+
+#[gpui_kit::test]
+fn whats_new_skips_without_notes_and_stays_unrecorded(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Fresh install shape: up to date, no notes cached for the running version.
+    seed_status(&view, status_payload("0.182.0", None, false, &[], None), cx);
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| {
+        assert!(!view.read(cx).changelog_open, "nothing to show opens nothing");
+        assert!(
+            view.read(cx).preferences.notifications.last_seen_changelog_version.is_none(),
+            "notes-less launches stay unrecorded so notes showing up later still display"
+        );
+    });
+    // Notes landing later (a background check caught up) display on sighting.
+    seed_status(&view, post_update_payload(), cx);
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| {
+        assert!(view.read(cx).changelog_open, "late notes still get their moment");
+        assert_eq!(view.read(cx).preferences.notifications.last_seen_changelog_version.as_deref(), Some("0.182.0"));
+    });
+}
+
+#[gpui_kit::test]
+fn whats_new_skips_while_modal_open_and_retries(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, post_update_payload(), cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_license_viewer(LicenseDocument::Mit, window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).license_viewer.is_some());
+    })
+    .unwrap();
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| {
+        assert!(!view.read(cx).changelog_open, "no stealing an open modal");
+        assert!(view.read(cx).license_viewer.is_some(), "the open modal survives");
+        assert!(
+            view.read(cx).preferences.notifications.last_seen_changelog_version.is_none(),
+            "skipped moments stay unrecorded for retry"
+        );
+    });
+    // Once the modal closes, the next response retries.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close_license_viewer(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    seed_status(&view, post_update_payload(), cx);
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| assert!(view.read(cx).changelog_open, "retry after the modal closes"));
+}
+
+#[gpui_kit::test]
+fn whats_new_shows_current_despite_an_available_update(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Skipped a version: 0.183 is out, but 0.182's own notes were never seen.
+    // TUI parity prints both the current notes and the update banner.
+    let payload = with_current_notes(
+        status_payload(
+            "0.182.0",
+            Some("0.183.0"),
+            true,
+            &["Something newer"],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/v0.183.0"),
+        ),
+        &["Freshly installed"],
+        Some("https://github.com/vinhnx/vtcode/releases/tag/v0.182.0"),
+    );
+    seed_status(&view, payload, cx);
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| {
+        let state = view.read(cx);
+        assert!(state.changelog_open);
+        assert_eq!(state.changelog_mode, ChangelogMode::Current, "what's new shows current, not latest");
+        assert_eq!(state.preferences.notifications.last_seen_changelog_version.as_deref(), Some("0.182.0"));
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("changelog-subtitle").is_none(), "current mode, not the upgrade view");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn changelog_verb_prefers_the_available_update(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let payload = with_current_notes(
+        status_payload(
+            "0.182.0",
+            Some("0.183.0"),
+            true,
+            &["Something newer"],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/v0.183.0"),
+        ),
+        &["Freshly installed"],
+        Some("https://github.com/vinhnx/vtcode/releases/tag/v0.182.0"),
+    );
+    seed_status(&view, payload, cx);
+    cx.update_window(window, |_, window, cx| {
+        let reachable = view.update(cx, |view, cx| view.open_deeplink(DeepLink::Changelog, window, cx));
+        window.render_frame(cx);
+        assert!(reachable, "an update makes the verb reachable");
+        assert!(view.read(cx).changelog_open);
+        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Latest, "the verb prefers latest");
+        assert!(window.try_find("changelog-subtitle").is_some(), "upgrade view renders");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn changelog_verb_falls_back_to_current_notes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, post_update_payload(), cx);
+    cx.update_window(window, |_, window, cx| {
+        let reachable = view.update(cx, |view, cx| view.open_deeplink(DeepLink::Changelog, window, cx));
+        window.render_frame(cx);
+        assert!(reachable, "known current notes make the verb reachable");
+        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Current);
+        assert!(window.try_find("changelog-dialog").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn changelog_verb_refused_without_notes_leaves_state_untouched(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, status_payload("0.182.0", None, false, &[], None), cx);
+    cx.update_window(window, |_, window, cx| {
+        let reachable = view.update(cx, |view, cx| view.open_deeplink(DeepLink::Changelog, window, cx));
+        window.render_frame(cx);
+        assert!(!reachable, "nothing viewable refuses the verb so /go reports it");
+        assert!(!view.read(cx).changelog_open, "refused links leave state untouched");
+        assert!(window.try_find("changelog-dialog").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn whats_new_ignores_notification_toggles(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| {
+        view.update(cx, |view, _| {
+            view.preferences.notifications.enabled = Some(false);
+            view.preferences.notifications.updates = Some(false);
+        });
+    });
+    seed_status(&view, post_update_payload(), cx);
+    consume_whats_new(window, &view, cx);
+    cx.update(|cx| {
+        assert!(
+            view.read(cx).changelog_open,
+            "installed-version notes show once regardless of update toggles, like the TUI banner"
+        );
+    });
 }

@@ -100,6 +100,7 @@ impl DesktopView {
         self.notify_turn_undo(&event, window, cx);
         self.maybe_notify_update_available(&event, window, cx);
         self.handle_backend_event(event, cx);
+        self.maybe_show_pending_whats_new(window, cx);
         if let Some(text) = self.pending_composer_restore.take() {
             self.replace_composer_text(text, window, cx);
             self.reset_history_recall();

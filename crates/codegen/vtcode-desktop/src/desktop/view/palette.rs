@@ -785,6 +785,7 @@ impl DesktopView {
                 | deeplinks::DeepLink::SettingsTab(_)
                 | deeplinks::DeepLink::ConfigPage
                 | deeplinks::DeepLink::ConfigPath(_) => true,
+                deeplinks::DeepLink::Changelog => self.can_view_any_changelog(),
                 deeplinks::DeepLink::Palette(deeplinks::PaletteLink::ConversationSearch) => {
                     self.selected_session_id.is_some() && self.has_searchable_conversation_content()
                 }
