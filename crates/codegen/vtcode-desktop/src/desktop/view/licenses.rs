@@ -397,6 +397,7 @@ impl DesktopView {
                     .id("license-viewer-panel")
                     .test_support()
                     .track_focus(&self.license_viewer_focus)
+                    .focus_trap("license-viewer", &self.license_viewer_focus)
                     // Click-away dismissal, mirroring the palette panel: a
                     // press on the scrim closes the viewer.
                     .on_mouse_down_out(move |_, window, cx| {
@@ -538,8 +539,7 @@ impl DesktopView {
                                             .child(text),
                                     ),
                             ),
-                    )
-                    .focus_trap("license-viewer", &self.license_viewer_focus),
+                    ),
             )
             .into_any_element()
     }

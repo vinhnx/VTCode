@@ -288,6 +288,7 @@ impl DesktopView {
                     .id("changelog-dialog")
                     .test_support()
                     .track_focus(&self.changelog_focus)
+                    .focus_trap("changelog-dialog", &self.changelog_focus)
                     // Click-away dismissal, mirroring the palette panel: a
                     // press on the scrim closes through the Done path.
                     .on_mouse_down_out(move |_, window, cx| {
@@ -357,8 +358,7 @@ impl DesktopView {
                                         view.close_changelog(window, cx);
                                     })),
                             ),
-                    )
-                    .focus_trap("changelog-dialog", &self.changelog_focus),
+                    ),
             )
             .into_any_element()
     }

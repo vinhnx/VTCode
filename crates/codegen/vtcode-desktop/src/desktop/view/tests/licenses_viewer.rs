@@ -256,3 +256,17 @@ fn clicking_outside_closes_the_license_viewer(cx: &mut TestAppContext) {
         assert!(view.read(cx).license_viewer.is_none(), "viewer state must be closed");
     });
 }
+
+#[gpui_kit::test]
+fn license_viewer_traps_tab_from_rail_to_footer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_viewer(window, &view, LicenseDocument::Mit, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("license-viewer").is_some(), "the viewer opens");
+        // Tab order runs the document rail first (VT Code group first),
+        // then the footer actions.
+        assert_tab_trapped_within_dialog(window, "license-document-mit", "close-license-viewer", cx);
+    })
+    .unwrap();
+}

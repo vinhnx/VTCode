@@ -797,3 +797,55 @@ fn model_switch_invalid_snapshot_keeps_configuration_and_reports_error(cx: &mut 
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn cli_config_enum_editor_contains_tab_focus(cx: &mut TestAppContext) {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![vtcode_desktop_protocol::ConfigSetting {
+                    path: "provider.openai.service_tier".into(),
+                    value: json!("auto"),
+                    origin: Some("user".into()),
+                    label: Some("Service tier".into()),
+                    type_name: Some("string".into()),
+                    default_value: None,
+                    description: Some("Choose the request service tier.".into()),
+                    options: vec!["auto".into(), "fast".into()],
+                    group: Some("Model & Provider".into()),
+                    group_description: None,
+                    editable: true,
+                }],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+            view.open_settings(window, cx);
+            view.open_cli_config_editor("provider.openai.service_tier".into(), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(window.simulate_next_frame(cx) > 0);
+        assert!(window.try_find("cli-config-option-select").is_some(), "the enum editor opens");
+        // The closed Kit Select carries an id-less interior stop (the wrap
+        // cycle visits it between save and the select), so pin containment
+        // like the palette test instead of exact endpoints — and prove the
+        // cycle still reaches both the select and the save action.
+        let mut visited_select = false;
+        let mut visited_save = false;
+        for key in ["tab", "tab", "tab", "tab", "shift-tab", "shift-tab"] {
+            window.press(key, cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).config_editor_focus.contains_focused(window, cx), "{key} stays inside the editor");
+            visited_select |= window.find("cli-config-option-select").focused() == Some(true);
+            visited_save |= window.find("save-cli-config-edit").focused() == Some(true);
+        }
+        assert!(visited_select && visited_save, "tab cycles the editor stops");
+    })
+    .unwrap();
+}

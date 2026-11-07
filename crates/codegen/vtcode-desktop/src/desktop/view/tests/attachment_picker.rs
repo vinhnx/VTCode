@@ -311,3 +311,35 @@ fn workspace_switch_clears_picker_rows_until_rescan(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
 }
+
+#[gpui_kit::test]
+fn attachment_picker_contains_tab_focus_on_both_tabs(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    seed_workspace_files(&view, cx, workspace.path());
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Kit-owned tab ids are not stable endpoints, so pin containment
+        // like the palette test: Tab and Shift-Tab never leave the picker.
+        // Clicking each tab first plants focus inside the trapped scope.
+        for tab in [0usize, 1usize] {
+            window.within("attachment-picker-tabs").click(tab, cx);
+            window.render_frame(cx);
+            for key in ["tab", "tab", "shift-tab", "shift-tab"] {
+                window.press(key, cx);
+                window.render_frame(cx);
+                assert!(
+                    view.read(cx).attachment_picker_focus.contains_focused(window, cx),
+                    "{key} stays inside the picker on tab {tab}"
+                );
+            }
+        }
+        assert!(window.try_find("picker-choose-files").is_some(), "the computer tab renders");
+    })
+    .unwrap();
+}

@@ -472,3 +472,28 @@ fn whats_new_ignores_notification_toggles(cx: &mut TestAppContext) {
         );
     });
 }
+
+#[gpui_kit::test]
+fn changelog_viewer_traps_tab_across_its_footer_actions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(
+        &view,
+        status_payload(
+            "0.181.0",
+            Some("0.182.0"),
+            true,
+            &["Faster startup"],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/0.182.0"),
+        ),
+        cx,
+    );
+    open_notification_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("view-changelog", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("changelog-dialog").is_some(), "the viewer opens");
+        assert!(window.try_find("open-release-notes").is_some(), "two-stop footer renders");
+        assert_tab_trapped_within_dialog(window, "open-release-notes", "close-changelog", cx);
+    })
+    .unwrap();
+}
