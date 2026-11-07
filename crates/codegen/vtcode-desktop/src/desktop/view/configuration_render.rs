@@ -655,11 +655,23 @@ impl DesktopView {
             .justify_center()
             .p_6()
             .bg(modal_scrim(&colors))
+            // Scrim dismissal, guarded for edited values; the press stops
+            // here so the settings gutter never sees it.
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|view, _, window, cx| {
+                    view.request_config_editor_dismiss(window, cx);
+                    cx.stop_propagation();
+                }),
+            )
             .child(
                 div()
                     .id("cli-config-editor")
                     .lock_scroll_axis()
                     .test_support()
+                    // Card presses stop here so the scrim only sees true
+                    // outside presses.
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .role(gpui_kit::Role::Dialog)
                     .aria_label(
                         rust_i18n::t!("app.configuration.edit_title_for", path = editor.path.as_str()).to_string(),

@@ -362,7 +362,7 @@ impl DesktopView {
                 .child(Scrollbar::vertical(&self.browser_scroll))
                 .into_any_element()
         };
-        route_page(
+        dismissable_route_page(
             div()
                 .id("thread-browser")
                 .test_support()
@@ -374,6 +374,9 @@ impl DesktopView {
                 .flex_col()
                 .rounded_xl()
                 .bg(colors.secondary)
+                // Inner presses stop here so the gutter only sees true
+                // background presses.
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(panel_header(
                     div().text_lg().font_semibold().child(title),
                     div()
@@ -411,7 +414,9 @@ impl DesktopView {
                         .child(
                             desktop_dismiss_button("browser-dismiss", rust_i18n::t!("app.browser.close").to_string())
                                 .small()
-                                .on_click(cx.listener(|view, _, window, cx| view.close_browser(window, cx))),
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.request_panel_dismiss(window, cx);
+                                })),
                         ),
                 ))
                 .child(
@@ -428,6 +433,7 @@ impl DesktopView {
                             panel.child(self.render_session_list_more("browser-list-more", cx))
                         }),
                 ),
+            cx,
         )
         .into_any_element()
     }

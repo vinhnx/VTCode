@@ -604,7 +604,7 @@ fn attachment_picker_stays_inside_a_narrow_window(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn outside_click_keeps_editors_with_user_input(cx: &mut TestAppContext) {
+fn scrim_press_dismisses_clean_editors_and_holds_edited_ones(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
@@ -617,17 +617,37 @@ fn outside_click_keeps_editors_with_user_input(cx: &mut TestAppContext) {
         }];
         view.file_directory_paths = std::sync::Arc::new(Default::default());
     });
-    // Rename prefill is user-meaningful content: a stray click must not
-    // discard the dialog.
+    // Prefill-intact rename carries no edits: the scrim press dismisses it.
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_file_rename("README.md".to_string(), window, cx));
         window.render_frame(cx);
         assert!(window.try_find("file-rename-dialog").is_some());
         window.click("message-composer-frame", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).file_rename.is_some(), "outside click keeps the rename dialog");
-        assert!(window.try_find("file-rename-dialog").is_some());
-        view.update(cx, |view, cx| view.cancel_file_rename(window, cx));
+        assert!(view.read(cx).file_rename.is_none(), "clean rename dismisses on scrim press");
+    })
+    .unwrap();
+    // An edited name holds the dialog for the discard prompt instead. The
+    // native prompt never answers headless, so the confirm path is driven
+    // directly — mirroring the file-delete test.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_file_rename("README.md".to_string(), window, cx));
+        window.render_frame(cx);
+        window.input("Renamed.md", cx);
+        window.render_frame(cx);
+        window.click("message-composer-frame", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).file_rename.is_some(), "edited rename waits for the prompt");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CancelRename("OTHER.md".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).file_rename.is_some(), "stale confirm is a no-op");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CancelRename("README.md".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).file_rename.is_none(), "confirmed discard closes the dialog");
     })
     .unwrap();
     // Same policy for the typed settings editor on its own route.
@@ -663,10 +683,32 @@ fn outside_click_keeps_editors_with_user_input(cx: &mut TestAppContext) {
         // The focus-trap wrapper consumes the root id; the cancel control
         // proves the editor mounted.
         assert!(window.try_find("cancel-cli-config-edit").is_some());
-        window.click("settings-navigation", cx);
+        // Untouched editor: the scrim press closes it, staying on Settings.
+        click_editor_scrim(window, cx);
         window.render_frame(cx);
-        assert!(view.read(cx).config_editor.is_some(), "outside click keeps the typed editor");
-        assert!(window.try_find("cancel-cli-config-edit").is_some());
+        assert!(view.read(cx).config_editor.is_none(), "clean editor dismisses on scrim press");
+        assert!(view.read(cx).current_route() == Route::Settings);
+        // Edited editor: holds for the prompt.
+        view.update(cx, |view, cx| {
+            view.open_cli_config_editor("agent.default_model".into(), window, cx);
+            view.config_value_input
+                .update(cx, |input, cx| input.set_value("model-b", window, cx));
+        });
+        window.render_frame(cx);
+        click_editor_scrim(window, cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).config_editor.is_some(), "edited editor waits for the prompt");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CloseConfigEditor("other.path".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).config_editor.is_some(), "stale confirm is a no-op");
+        view.update(cx, |view, cx| {
+            view.discard_after_confirm(DiscardIntent::CloseConfigEditor("agent.default_model".into()), window, cx);
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).config_editor.is_none(), "confirmed discard closes the editor");
+        assert!(view.read(cx).current_route() == Route::Settings);
     })
     .unwrap();
 }

@@ -101,7 +101,7 @@ use ids::{opaque_path_element_id, uuid_like_id};
 use navigation_history::{
     NavigationHistory, NavigationLocation, PendingNavigation, SwipeScrollAccumulator, natural_scroll_enabled,
 };
-use overlays::{Route, RouteHistory};
+use overlays::{DiscardIntent, Route, RouteHistory, dismissable_route_page};
 
 mod about;
 mod app_icon_settings;
@@ -135,6 +135,7 @@ mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
 mod licenses;
+mod login_items;
 mod mcp_app;
 mod menu_bar;
 mod navigation;

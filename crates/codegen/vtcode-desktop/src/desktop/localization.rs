@@ -208,6 +208,8 @@ mod tests_shortcuts;
 #[cfg(test)]
 mod tests_transcript;
 #[cfg(test)]
+mod tests_untranslated;
+#[cfg(test)]
 mod tests_webmcp;
 #[cfg(test)]
 mod tests_workspace;

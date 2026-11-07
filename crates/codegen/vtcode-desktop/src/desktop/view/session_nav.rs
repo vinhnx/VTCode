@@ -57,7 +57,7 @@ impl DesktopView {
             return;
         };
         if self.session_known(&session_id) && self.load_session_from_ui(session_id, window, cx) {
-            self.close_active_route(window, cx);
+            self.request_panel_dismiss(window, cx);
         }
     }
 

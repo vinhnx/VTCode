@@ -245,8 +245,9 @@ impl DesktopView {
             .gap_2()
             .when(self.zen_mode, |buttons| {
                 // Zen keeps the same option commands as one quiet cluster:
-                // model (with effort), mode, and policy stay reachable
-                // opposite the send action while every other control hides.
+                // attach, model (with effort), mode, and policy stay
+                // reachable opposite the send action while every other
+                // control hides.
                 buttons.justify_between().child(
                     div()
                         .id("zen-composer-context")
@@ -260,6 +261,7 @@ impl DesktopView {
                         .with_animation("zen-composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
                             el.opacity(delta)
                         })
+                        .child(self.render_attach_button(cx))
                         .child(self.render_model_button(cx).max_w(px(224.)))
                         .child(self.render_mode_button(cx))
                         .child(self.render_policy_button(cx)),
@@ -277,22 +279,7 @@ impl DesktopView {
                         .with_animation("composer-secondary-fade", zen_fade_animation(cx.theme()), |el, delta| {
                             el.opacity(delta)
                         })
-                        .child(
-                            desktop_button("attach-files")
-                                .icon(IconName::Plus)
-                                .accessibility_label(rust_i18n::t!("app.composer.attach_files").to_string())
-                                .tooltip(rust_i18n::t!("app.composer.attach_files").to_string())
-                                .ghost()
-                                .small()
-                                .desktop_disabled(
-                                    self.workspace.is_none()
-                                        || self.attachments_picker_open
-                                        || self.session_request.is_some(),
-                                )
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.open_attachment_picker(window, cx);
-                                })),
-                        )
+                        .child(self.render_attach_button(cx))
                         .child(self.render_policy_button(cx))
                         .child(self.render_mode_button(cx)),
                 )
@@ -651,6 +638,23 @@ impl DesktopView {
             .max_w(px(112.))
             .desktop_disabled(!self.can_select_session_options())
             .dispatches_desktop_action(OpenPermissions, self.focus_handle.clone())
+    }
+
+    /// Attachments entry point shared by the normal composer and the zen
+    /// option cluster: same id, enablement, and picker in both modes.
+    fn render_attach_button(&self, cx: &Context<Self>) -> Button {
+        desktop_button("attach-files")
+            .icon(IconName::Plus)
+            .accessibility_label(rust_i18n::t!("app.composer.attach_files").to_string())
+            .tooltip(rust_i18n::t!("app.composer.attach_files").to_string())
+            .ghost()
+            .small()
+            .desktop_disabled(
+                self.workspace.is_none() || self.attachments_picker_open || self.session_request.is_some(),
+            )
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.open_attachment_picker(window, cx);
+            }))
     }
 }
 

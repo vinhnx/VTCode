@@ -25,6 +25,13 @@ nucleo-matcher = "0.3"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSButton", "NSControl", "NSFont", "NSFontDescriptor", "NSImage", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "objc2-core-foundation"] }
 objc2-foundation = "0.3.2"
+objc2-service-management = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "SMAppService",
+    "SMErrors",
+    "objc2",
+    "objc2-foundation",
+] }
 plist = "1"
 pulldown-cmark = "0.13.4"
 rand = { workspace = true }

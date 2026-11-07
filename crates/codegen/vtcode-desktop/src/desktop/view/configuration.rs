@@ -64,6 +64,9 @@ pub(super) struct ConfigEditor {
     expected_layer_version: Option<String>,
     options: Vec<String>,
     pub(super) option_select: Option<Entity<ConfigOptionSelectState>>,
+    /// Value text the editor opened with; scrim dismissal compares the live
+    /// input or selection against it to decide clean-close vs confirm.
+    pub(super) initial: String,
 }
 
 impl ConfigValueKind {
@@ -321,7 +324,7 @@ impl DesktopView {
         });
         if option_select.is_none() {
             self.config_value_input
-                .update(cx, |input, cx| input.set_value(text, window, cx));
+                .update(cx, |input, cx| input.set_value(text.clone(), window, cx));
         }
         self.config_editor_error = None;
         self.config_editor = Some(ConfigEditor {
@@ -331,6 +334,7 @@ impl DesktopView {
             expected_layer_version: self.target_version(self.config_target),
             options,
             option_select,
+            initial: text,
         });
         self.config_editor_return_focus = Some(self.settings_focus.clone());
         cx.on_next_frame(window, |view, window, cx| {
@@ -429,6 +433,50 @@ impl DesktopView {
             focus.focus(window, cx);
         }
         cx.notify();
+    }
+
+    /// Whether the open editor holds an edited value: the text input or the
+    /// enum selection differs from the opening snapshot.
+    fn config_editor_has_unsaved_changes(&self, cx: &App) -> bool {
+        let Some(editor) = self.config_editor.as_ref() else {
+            return false;
+        };
+        if let Some(select) = editor.option_select.as_ref() {
+            // Untouched selects hold no selection yet (the submit path asks
+            // for one explicitly), so only a differing pick counts as dirt.
+            return select.read(cx).selected_value().is_some_and(|value| value != &editor.initial);
+        }
+        self.config_value_input.read(cx).value() != editor.initial
+    }
+
+    /// Dismiss the editor through its scrim: edited values confirm first,
+    /// untouched editors close. A write in flight pins the editor.
+    pub(super) fn request_config_editor_dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.config_editor.is_none() || self.config_write_pending {
+            return;
+        }
+        if !self.config_editor_has_unsaved_changes(cx) {
+            self.close_cli_config_editor(window, cx);
+            return;
+        }
+        let path = self.config_editor.as_ref().map(|editor| editor.path.clone());
+        let Some(path) = path else {
+            return;
+        };
+        self.prompt_discard_changes(DiscardIntent::CloseConfigEditor(path), window, cx);
+    }
+
+    /// Run a confirmed editor discard after verifying the same editor is
+    /// still open — the prompt answer arrives async.
+    pub(super) fn discard_config_editor_after_confirm(
+        &mut self,
+        path: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.config_editor.as_ref().is_some_and(|editor| editor.path == path) {
+            self.close_cli_config_editor(window, cx);
+        }
     }
 
     /// The layer file can be opened whenever a backend is attached outside a

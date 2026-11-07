@@ -22,6 +22,12 @@ fn rebased_path(old: &str, new: &str, path: &str) -> Option<String> {
         .map(|rest| format!("{new}{rest}"))
 }
 
+/// Base name prefilled into the rename input. Shared by the opener, the
+/// scrim dirt check, and the same-name commit check so the three cannot drift.
+fn rename_base_name(rel_path: &str) -> &str {
+    rel_path.rsplit('/').next().unwrap_or(rel_path)
+}
+
 pub(super) struct FileRenameState {
     /// Workspace-relative path of the entry being renamed.
     rel_path: String,
@@ -47,7 +53,7 @@ impl DesktopView {
         }
         // Deferred popovers paint above modal scrims: the picker cannot stay open.
         self.close_attachment_picker(window, cx);
-        let current = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
+        let current = rename_base_name(&rel_path).to_string();
         self.disarm_double_escape();
         if self.file_rename.is_none() {
             self.rename_return_focus = window.focused(cx);
@@ -90,6 +96,40 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Whether the dialog holds an edited name. Prefill-intact is clean:
+    /// reopening restores the current name, so nothing is lost.
+    fn rename_has_unsaved_changes(&self, cx: &App) -> bool {
+        let Some(state) = self.file_rename.as_ref() else {
+            return false;
+        };
+        state.name_input.read(cx).value() != rename_base_name(&state.rel_path)
+    }
+
+    /// Dismiss the dialog through its scrim: edited names confirm first,
+    /// prefill-intact dialogs close. A rename write pins the dialog.
+    pub(super) fn request_rename_dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.file_rename.as_ref().is_none_or(|state| state.pending) {
+            return;
+        }
+        if !self.rename_has_unsaved_changes(cx) {
+            self.cancel_file_rename(window, cx);
+            return;
+        }
+        let rel_path = self.file_rename.as_ref().map(|state| state.rel_path.clone());
+        let Some(rel_path) = rel_path else {
+            return;
+        };
+        self.prompt_discard_changes(DiscardIntent::CancelRename(rel_path), window, cx);
+    }
+
+    /// Run a confirmed rename discard after verifying the same dialog is
+    /// still open — the prompt answer arrives async.
+    pub(super) fn discard_rename_after_confirm(&mut self, rel_path: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.file_rename.as_ref().is_some_and(|state| state.rel_path == rel_path) {
+            self.cancel_file_rename(window, cx);
+        }
+    }
+
     pub(super) fn commit_file_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(state) = self.file_rename.as_mut() else {
             return;
@@ -106,7 +146,7 @@ impl DesktopView {
                 return;
             }
         };
-        if name == state.rel_path.rsplit('/').next().unwrap_or(&state.rel_path) {
+        if name == rename_base_name(&state.rel_path) {
             // Same-name rename is a no-op success: close without a write.
             self.close_file_rename(window, cx);
             return;
@@ -250,11 +290,22 @@ impl DesktopView {
             .justify_center()
             .p_4()
             .bg(modal_scrim(&colors))
+            // Scrim dismissal, guarded for edited names.
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|view, _, window, cx| {
+                    view.request_rename_dismiss(window, cx);
+                    cx.stop_propagation();
+                }),
+            )
             .child(
                 div()
                     .id("file-rename-dialog")
                     .test_support()
                     .track_focus(&self.rename_focus)
+                    // Card presses stop here so the scrim only sees true
+                    // outside presses.
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("file-rename-dialog")
                     .aria_label(format!("Rename “{base_name}”"))

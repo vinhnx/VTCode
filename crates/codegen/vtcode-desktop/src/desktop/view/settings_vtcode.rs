@@ -16,7 +16,8 @@ impl DesktopView {
             .child(self.render_shared_preferences(cx))
             .child(self.render_cli_configuration(cx))
             .child(self.render_licenses_settings(cx))
-            .child(self.render_menu_bar_settings(cx));
+            .child(self.render_menu_bar_settings(cx))
+            .child(self.render_login_items_settings(cx));
         content.into_any_element()
     }
 

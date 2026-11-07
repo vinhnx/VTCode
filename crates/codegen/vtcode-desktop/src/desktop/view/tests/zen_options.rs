@@ -321,7 +321,7 @@ fn zen_speed_suffix_renders_quiet_text_and_restores_badge_on_exit(cx: &mut TestA
 }
 
 #[gpui_kit::test]
-fn zen_option_cluster_orders_model_mode_policy_before_send(cx: &mut TestAppContext) {
+fn zen_option_cluster_orders_attach_model_mode_policy_before_send(cx: &mut TestAppContext) {
     use gpui_kit::component::theme::Theme;
 
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
@@ -347,15 +347,16 @@ fn zen_option_cluster_orders_model_mode_policy_before_send(cx: &mut TestAppConte
         });
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
+            let attach = window.find("attach-files").bounds();
             let model = window.find("pick-model").bounds();
             let mode = window.find("composer-mode").bounds();
             let policy = window.find("composer-policy").bounds();
             let send = window.find("send-prompt").bounds();
             assert!(
-                model.right() <= mode.left() && mode.right() <= policy.left(),
-                "cluster reads model, mode, policy left to right at {base_size}px: model={model:?} mode={mode:?} policy={policy:?}"
+                attach.right() <= model.left() && model.right() <= mode.left() && mode.right() <= policy.left(),
+                "cluster reads attach, model, mode, policy left to right at {base_size}px: attach={attach:?} model={model:?} mode={mode:?} policy={policy:?}"
             );
-            for (name, button) in [("mode", mode), ("policy", policy), ("send", send)] {
+            for (name, button) in [("attach", attach), ("mode", mode), ("policy", policy), ("send", send)] {
                 let drift = (button.center().y - model.center().y).abs();
                 assert!(
                     drift <= px(1.),
@@ -385,12 +386,13 @@ fn zen_option_cluster_orders_model_mode_policy_before_send(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("composer-model-speed").is_none());
+        let attach = window.find("attach-files").bounds();
         let model = window.find("pick-model").bounds();
         let mode = window.find("composer-mode").bounds();
         let policy = window.find("composer-policy").bounds();
         assert!(
-            model.right() <= mode.left() && mode.right() <= policy.left(),
-            "cluster order holds without a speed suffix: model={model:?} mode={mode:?} policy={policy:?}"
+            attach.right() <= model.left() && model.right() <= mode.left() && mode.right() <= policy.left(),
+            "cluster order holds without a speed suffix: attach={attach:?} model={model:?} mode={mode:?} policy={policy:?}"
         );
     })
     .unwrap();
@@ -510,4 +512,35 @@ fn zen_toggle_persists_and_relaunch_restores_both_modes(cx: &mut TestAppContext)
     );
     let (_normal_window, normal_view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., path, false);
     cx.update(|cx| assert!(!normal_view.read(cx).zen_mode, "relaunch restores normal mode"));
+}
+
+#[gpui_kit::test]
+fn zen_attach_button_opens_the_picker_with_workspace_and_disables_without(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    // Without a workspace the zen attach is a no-op, like normal mode.
+    view.update(cx, |view, _| {
+        view.workspace = None;
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_none(), "disabled attach opens nothing");
+    })
+    .unwrap();
+    // With a workspace it opens the same tabbed picker.
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("attachment-picker-trap").is_some(), "zen attach opens the picker");
+        assert!(view.read(cx).attachment_picker.is_some());
+    })
+    .unwrap();
 }

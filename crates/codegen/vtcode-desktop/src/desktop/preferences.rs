@@ -634,6 +634,9 @@ pub(super) struct Preferences {
     pub translucent_sidebar: bool,
     /// Keep the main window available from the macOS status bar when closed.
     pub show_in_menu_bar: bool,
+    /// Launch at login through the main-app login item. Missing values keep
+    /// existing installs off; the OS status wins at launch either way.
+    pub launch_at_login: Option<bool>,
     /// Additional foreground contrast, from 0 (theme default) to 100.
     pub contrast: u8,
     /// Sidebar width in logical pixels.
@@ -710,6 +713,10 @@ impl Preferences {
 
     pub(super) fn zen_mode(&self) -> bool {
         self.zen_mode.unwrap_or(true)
+    }
+
+    pub(super) fn launch_at_login_enabled(&self) -> bool {
+        self.launch_at_login.unwrap_or(false)
     }
 
     pub(super) fn typography_for(&self, mode: ThemeMode) -> TypographySettings<'_> {

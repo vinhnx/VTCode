@@ -205,6 +205,90 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Staged page state a pointer dismissal must confirm before dropping:
+    /// unsaved shortcut edits or an open custom-theme draft. Interior layers
+    /// (config editor, capture) unwind first instead — see
+    /// [`Self::request_panel_dismiss`].
+    fn panel_has_unsaved_changes(&self) -> bool {
+        self.shortcuts_editing || self.custom_theme_editor_open()
+    }
+
+    /// One dismiss step for pointer gestures (dismiss buttons, gutter press,
+    /// session rows): unwind one interior layer when one is open, else close
+    /// the route — prompting first when staged state would be lost. A config
+    /// write in flight pins everything, like [`Self::go_route_back`].
+    pub(super) fn request_panel_dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let route = self.current_route();
+        if route == Route::Workspace {
+            return;
+        }
+        if self.config_write_pending {
+            return;
+        }
+        if self.config_editor.is_some() {
+            self.request_config_editor_dismiss(window, cx);
+            return;
+        }
+        if self.shortcut_capture.is_some() {
+            self.cancel_shortcut_capture(window, cx);
+            return;
+        }
+        if !self.panel_has_unsaved_changes() {
+            self.close_active_route(window, cx);
+            return;
+        }
+        // The prompt copy names settings edits: only Settings stages page
+        // state today, so any other route reaching this is a future dirt
+        // source that needs its own copy.
+        self.prompt_discard_changes(DiscardIntent::CloseRoute(route), window, cx);
+    }
+
+    /// Native warning prompt guarding staged state, mirroring the delete
+    /// confirms. Headless-untestable like them, so the post-confirm step
+    /// lives in [`Self::discard_after_confirm`], which tests drive directly.
+    pub(super) fn prompt_discard_changes(
+        &mut self,
+        intent: DiscardIntent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (title, detail) = discard_prompt_text(&intent);
+        let discard = rust_i18n::t!("app.navigation.discard").to_string();
+        let cancel = rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string();
+        let answer = window.prompt(
+            gpui_kit::PromptLevel::Warning,
+            title.as_str(),
+            Some(detail.as_str()),
+            &[discard.as_str(), cancel.as_str()],
+            cx,
+        );
+        cx.spawn_in(window, async move |view, cx| {
+            if matches!(answer.await, Ok(0)) {
+                let _updated = view.update_in(cx, |view, window, cx| {
+                    view.discard_after_confirm(intent, window, cx);
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Run a confirmed discard. Verifies the context is unchanged first —
+    /// the prompt answer arrives async, so the surface may have moved on.
+    pub(super) fn discard_after_confirm(&mut self, intent: DiscardIntent, window: &mut Window, cx: &mut Context<Self>) {
+        match intent {
+            DiscardIntent::CloseRoute(route) if self.current_route() == route => {
+                self.close_active_route(window, cx);
+            }
+            DiscardIntent::CloseConfigEditor(path) => {
+                self.discard_config_editor_after_confirm(&path, window, cx);
+            }
+            DiscardIntent::CancelRename(rel_path) => {
+                self.discard_rename_after_confirm(&rel_path, window, cx);
+            }
+            _ => {}
+        }
+    }
+
     /// Persist the native zoomed state when it changes. Fullscreen is not
     /// maximized: skipping it keeps leaving fullscreen from clobbering the
     /// saved launch state.
@@ -583,9 +667,71 @@ impl DesktopView {
     }
 }
 
+/// What a discard prompt protects: the staged state dropped when the user
+/// confirms. Carries enough identity to verify the context is unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum DiscardIntent {
+    /// Close the route page, dropping staged shortcut/theme edits.
+    CloseRoute(Route),
+    /// Close the CLI config editor, dropping the typed value.
+    CloseConfigEditor(String),
+    /// Cancel the rename dialog, dropping the typed name.
+    CancelRename(String),
+}
+
+/// Localized title/detail for one discard intent. Pure so unit tests pin
+/// the interpolation without rendering.
+fn discard_prompt_text(intent: &DiscardIntent) -> (String, String) {
+    match intent {
+        DiscardIntent::CloseRoute(_) => (
+            rust_i18n::t!("app.settings.discard_title").to_string(),
+            rust_i18n::t!("app.settings.discard_detail").to_string(),
+        ),
+        DiscardIntent::CloseConfigEditor(path) => (
+            rust_i18n::t!("app.configuration.discard_title").to_string(),
+            rust_i18n::t!("app.configuration.discard_detail", path = path).to_string(),
+        ),
+        DiscardIntent::CancelRename(_) => (
+            rust_i18n::t!("app.files.discard_title").to_string(),
+            rust_i18n::t!("app.files.discard_detail").to_string(),
+        ),
+    }
+}
+
+/// Route container with gutter dismissal: presses on the padded area around
+/// the centered panel dismiss through [`DesktopView::request_panel_dismiss`].
+/// Each page stops its own presses, so only true background presses arrive
+/// here — toolbar and sidebar chrome never does.
+pub(super) fn dismissable_route_page(panel: impl IntoElement, cx: &mut Context<DesktopView>) -> impl IntoElement {
+    div()
+        .id("route-page-gutter")
+        .test_support()
+        .flex_1()
+        .min_w_0()
+        .h_full()
+        .flex()
+        .on_mouse_down(MouseButton::Left, cx.listener(|view, _, window, cx| view.request_panel_dismiss(window, cx)))
+        .child(route_page(panel))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Route, RouteHistory};
+    use super::{DiscardIntent, Route, RouteHistory, discard_prompt_text};
+
+    #[test]
+    fn discard_prompt_text_names_each_surface() {
+        crate::desktop::localization::initialize(crate::desktop::localization::UiLanguage::English);
+        let (title, detail) = discard_prompt_text(&DiscardIntent::CloseRoute(Route::Settings));
+        assert_eq!(title, "Discard unsaved changes?");
+        assert_eq!(detail, "Unsaved shortcut and theme edits will be lost.");
+        // Asymmetric path proves the interpolation lands in the detail.
+        let (title, detail) = discard_prompt_text(&DiscardIntent::CloseConfigEditor("agent.default_model".into()));
+        assert_eq!(title, "Discard unsaved value?");
+        assert_eq!(detail, "Changes to agent.default_model will be lost.");
+        let (title, detail) = discard_prompt_text(&DiscardIntent::CancelRename("README.md".into()));
+        assert_eq!(title, "Discard rename?");
+        assert_eq!(detail, "The name change will be lost.");
+    }
 
     #[test]
     fn starts_on_the_workspace_base() {

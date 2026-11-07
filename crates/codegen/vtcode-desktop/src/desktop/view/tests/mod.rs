@@ -13,12 +13,14 @@ pub(super) use gpui_kit::{
 };
 pub(super) use serde_json::json;
 
+pub(super) use super::login_items::LoginItemStatus;
 pub(super) use super::navigation_history::{NavigationLocation, PendingNavigation};
 pub(super) use super::{
-    ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, HandoffScriptCall,
-    MAX_UI_EVENTS_PER_TICK, Route, SESSION_LIST_PAGE_SIZE, TestLaunchIntercept, ThemeMode, WelcomePeriod,
-    append_restored_output_page, content_page_title, eyebrow_label, group_box_title, opaque_path_element_id,
-    restored_output_for_copy, row_title, scale_row_height_for_ui_font, section_label, workspace_picker_options,
+    ActivityState, DesktopButtonExt, DesktopView, DiscardIntent, ExternalLaunchCall, FixedRowSizeCache,
+    HandoffScriptCall, MAX_UI_EVENTS_PER_TICK, Route, SESSION_LIST_PAGE_SIZE, TestLaunchIntercept, ThemeMode,
+    WelcomePeriod, append_restored_output_page, content_page_title, eyebrow_label, group_box_title,
+    opaque_path_element_id, restored_output_for_copy, row_title, scale_row_height_for_ui_font, section_label,
+    workspace_picker_options,
 };
 pub(super) use crate::desktop::files::{ExternalEditor, FileEntry};
 pub(super) use crate::desktop::preferences::{CliTerminal, FileOpenDestination};
@@ -364,6 +366,14 @@ fn assert_panel_embeds(window: &mut gpui_kit::Window, panel_id: &'static str) {
     );
 }
 
+/// Press the editor scrim at the panel's top-left corner: inside the
+/// scrim, outside the centered dialog card in every layout. (Nav-center
+/// clicks can land inside the card and stop there, which is correct
+/// product behavior but a useless test target.)
+fn click_editor_scrim(window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
+    window.click_at("settings-panel", point(px(2.), px(2.)), cx);
+}
+
 fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mut gpui_kit::App) {
     window.press("home", cx);
     window.render_frame(cx);
@@ -621,6 +631,7 @@ mod inspector_layout;
 mod interaction_choices;
 mod licenses_viewer;
 mod loading_lifecycle;
+mod login_items;
 mod mcp_app;
 mod menu_bar_actions;
 mod model_palette;
@@ -630,6 +641,7 @@ mod options_misc;
 mod output_surfaces;
 mod overlay_toggles;
 mod palette_icons;
+mod panel_dismiss;
 mod plan_proposal;
 mod prompt_history;
 mod review_changes;

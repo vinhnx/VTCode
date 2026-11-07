@@ -228,7 +228,7 @@ pub(super) fn apply_vim_navigation(cx: &mut App, enabled: bool) {
 
 pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
     let prefs_phase = vtcode_commons::startup_trace::phase_started();
-    let preferences = preferences::Preferences::load();
+    let mut preferences = preferences::Preferences::load();
     super::super::localization::initialize(preferences.ui_language());
     vtcode_commons::startup_trace::record_phase("desktop_preferences_and_localization", prefs_phase);
     let inbox: SharedUrlInbox = Rc::new(RefCell::new(UrlInbox::default()));
@@ -260,6 +260,7 @@ pub(crate) fn run(startup_link: Option<protocol::handoff_url::HandoffLink>) {
         if preferences.show_in_menu_bar && !menu_bar::set_enabled(true, cx) {
             vtcode_commons::diagnostics::stderr(format_args!("failed to create the macOS menu bar item"));
         }
+        login_items::reconcile_launch_preference(&mut preferences, cx);
         vtcode_commons::startup_trace::record_phase("desktop_chrome", chrome_phase);
         inbox.borrow_mut().set_app(cx.to_async());
         let window_phase = vtcode_commons::startup_trace::phase_started();

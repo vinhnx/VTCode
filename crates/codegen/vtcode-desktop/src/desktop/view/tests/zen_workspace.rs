@@ -158,7 +158,7 @@ fn zen_mode_hides_navigation_and_floats_the_toggle(cx: &mut TestAppContext) {
         assert!(window.try_find("status-bar").is_none());
         assert!(window.try_find("thread-header").is_none());
         assert!(window.try_find("composer-context").is_none());
-        assert!(window.try_find("attach-files").is_none());
+        assert!(window.try_find("attach-files").is_some(), "zen keeps the attach action");
         assert!(window.try_find("composer-policy").is_some());
         assert!(window.try_find("composer-mode").is_some());
         assert!(window.try_find("pick-model").is_some());
@@ -940,10 +940,13 @@ fn zen_composer_pairs_option_controls_with_send_action(cx: &mut TestAppContext) 
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("attach-files").is_none());
+        assert!(window.try_find("attach-files").is_some(), "zen keeps the attach action");
         assert_eq!(window.find("pick-model").label(), Some("claude-sonnet-5 · Medium · Ultrafast"));
         assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Ask before protected actions"));
+        let attach = window.find("attach-files").bounds();
+        let model = window.find("pick-model").bounds();
+        assert!(attach.right() <= model.left(), "attach leads the zen option cluster: {attach:?} vs {model:?}");
         let context = window.find("zen-composer-context").bounds();
         let send = window.find("send-prompt").bounds();
         assert!(

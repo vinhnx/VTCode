@@ -94,6 +94,7 @@ fn config_editor_enforces_the_shared_cli_options() {
         expected_layer_version: None,
         options: vec!["auto".into(), "fast".into()],
         option_select: None,
+        initial: "auto".into(),
     };
     assert_eq!(editor.parse("fast"), Ok(json!("fast")));
     assert!(editor.parse("ultrafast").is_err());

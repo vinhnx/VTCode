@@ -37,6 +37,7 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
             let frame = window.find("message-composer-frame").bounds();
             let cluster = window.find("zen-composer-context").bounds();
             let workspace_button = window.find("composer-workspace").bounds();
+            let attach_button = window.find("attach-files").bounds();
             let model_button = window.find("pick-model").bounds();
             let mode_button = window.find("composer-mode").bounds();
             let policy_button = window.find("composer-policy").bounds();
@@ -51,8 +52,8 @@ fn composer_rows_share_one_leading_spine_in_zen_without_workspace(cx: &mut TestA
                 "context row starts on the frame edge at {base_size}px: context={context:?} frame={frame:?}"
             );
             assert!(
-                (workspace_button.origin.x - model_button.origin.x).abs() <= px(1.),
-                "context-row buttons start on the button-row spine at {base_size}px: workspace={workspace_button:?} model={model_button:?}"
+                (workspace_button.origin.x - attach_button.origin.x).abs() <= px(1.),
+                "context-row buttons start on the button-row spine at {base_size}px: workspace={workspace_button:?} attach={attach_button:?}"
             );
             let leading = cluster.origin.x - frame.origin.x;
             let trailing = (frame.origin.x + frame.size.width) - (send.origin.x + send.size.width);

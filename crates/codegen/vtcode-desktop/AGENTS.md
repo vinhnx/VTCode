@@ -31,7 +31,7 @@
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; the hooks read pending state the handler is about to clear, so never reorder them.
 - Kit `Badge` is an overlay count, not a text pill — use `Tag::secondary().outline().small()` for pills, wrapped in an identified `div` since `RenderOnce` cannot carry `.test_support()`.
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.
-- Plan rail/edit locking, and the desktop-only custom-theme contract, live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
+- Plan rail/edit locking, custom themes, dismiss guards, and login items live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
 - `composer_actions.rs`, `components.rs`, `transcript/mod.rs`, and `backend_events.rs` sit at the 1000-line ceiling (menus live in `menu_bar.rs`, IDs in `view/ids.rs`): put new code in a focused module instead of growing them.
 - Plain `Enter` while scrolled detours through `submit_or_jump_to_latest` (jump first, draft kept); the Send button always submits immediately.
 

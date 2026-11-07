@@ -440,7 +440,7 @@ impl DesktopView {
                                                             this.keyboard_focused_session = Some(session_id.clone());
                                                             if this.load_session_from_ui(session_id.clone(), window, cx)
                                                             {
-                                                                this.close_active_route(window, cx);
+                                                                this.request_panel_dismiss(window, cx);
                                                             }
                                                         })),
                                                 )

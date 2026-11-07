@@ -810,7 +810,7 @@ impl DesktopView {
         } else {
             rust_i18n::t!("app.workspace_review.session_description").to_string()
         };
-        route_page(
+        dismissable_route_page(
             div()
                 .id("diff-review-panel")
                 .test_support()
@@ -823,6 +823,9 @@ impl DesktopView {
                 .flex_col()
                 .rounded_xl()
                 .bg(colors.secondary)
+                // Inner presses stop here so the gutter only sees true
+                // background presses.
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_action(cx.listener(|view, _: &NextReviewChange, _, cx| view.navigate_review_change(true, cx)))
                 .on_action(cx.listener(|view, _: &PreviousReviewChange, _, cx| view.navigate_review_change(false, cx)))
                 .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_workspace_review_file(true, cx)))
@@ -849,10 +852,13 @@ impl DesktopView {
                                 "close-diff-review",
                                 rust_i18n::t!("app.workspace_review.close_review").to_string(),
                             )
-                            .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.request_panel_dismiss(window, cx);
+                            })),
                         ),
                 )
                 .child(content),
+            cx,
         )
         .into_any_element()
     }

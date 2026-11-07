@@ -111,6 +111,10 @@ impl SettingsTab {
             ],
             Self::VtCode => &[
                 "vt code menu bar",
+                "startup",
+                "login",
+                "launch at login",
+                "khởi động",
                 "config",
                 "configuration",
                 "provider",
@@ -200,7 +204,7 @@ impl DesktopView {
         // NARROW_PANEL_BREAKPOINT): the nav stacks above the content and
         // shares the height, mirroring the config rail breakpoint.
         let narrow = window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT);
-        route_page(
+        dismissable_route_page(
             div()
                 .id("settings-panel")
                 .test_support()
@@ -217,12 +221,15 @@ impl DesktopView {
                 // The embedded search has no scrim: any other press inside
                 // the panel dismisses it. The palette and its toggle button
                 // keep their own mouse-downs, so neither ever dismisses it.
+                // Inner presses stop here so the gutter only sees true
+                // background presses.
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|view, _, window, cx| {
                         if view.palette.is_some() && view.palette_kind == PaletteKind::SettingsSearch {
                             view.close_palette(window, cx);
                         }
+                        cx.stop_propagation();
                     }),
                 )
                 .child(panel_header(
@@ -237,7 +244,7 @@ impl DesktopView {
                     desktop_dismiss_button("settings-dismiss", rust_i18n::t!("app.browser.close").to_string())
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| {
-                            view.close_settings(window, cx);
+                            view.request_panel_dismiss(window, cx);
                         })),
                 ))
                 .child(
@@ -269,6 +276,7 @@ impl DesktopView {
                         ),
                 )
                 .when(self.config_editor.is_some(), |panel| panel.child(self.render_cli_config_editor(cx))),
+            cx,
         )
         .into_any_element()
     }
