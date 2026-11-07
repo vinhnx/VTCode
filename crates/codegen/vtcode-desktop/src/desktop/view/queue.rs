@@ -81,24 +81,26 @@ impl DesktopView {
     }
 
     /// Echo a user submission into the transcript; shared by immediate and
-    /// queued submits.
+    /// queued submits. Attachments travel as structured card data (rendered
+    /// above the prompt); only the bare prompt reaches the Markdown body, so
+    /// filenames can no longer inject Markdown into the echo.
     pub(super) fn push_submission_echo(&mut self, draft: &SubmissionDraft) {
-        let echo = if draft.attachments.is_empty() {
-            draft.prompt.clone()
-        } else {
-            let paths = draft
-                .attachments
-                .iter()
-                .map(|attachment| attachment.path.as_str())
-                .collect::<Vec<_>>();
-            format!("{}\n\n{}", draft.prompt, rust_i18n::t!("app.composer.attached_list", paths = paths.join(", ")))
-        };
-        self.transcript.push(TranscriptItem::new(
+        let mut item = TranscriptItem::new(
             draft.echo_id.clone(),
             TranscriptRole::User.as_str().into(),
             rust_i18n::t!(i18n::TRANSCRIPT_YOU).to_string().into(),
-            echo,
-        ));
+            draft.prompt.clone(),
+        );
+        item.user_attachments = draft
+            .attachments
+            .iter()
+            .map(|attachment| UserAttachment {
+                path: attachment.path.clone(),
+                byte_len: attachment.text.len(),
+                is_image: files::is_image_path(&attachment.path),
+            })
+            .collect();
+        self.transcript.push(item);
     }
 
     /// Fill an empty session title from the submission; shared by immediate

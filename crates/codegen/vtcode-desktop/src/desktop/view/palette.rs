@@ -305,7 +305,7 @@ impl DesktopView {
                         from_search: true,
                     },
                 );
-                entry.shared_keywords.extend([item.text.clone(), item.title.clone()]);
+                entry.shared_keywords.extend(item.search_keywords());
                 entry
             })
             .collect()

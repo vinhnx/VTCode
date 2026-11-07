@@ -5,9 +5,9 @@
 
 ## Modules
 
-- `src/desktop/view/` screens, overlays, and routing (`components.rs` shared builders, `menu_bar.rs`, `running_confirm.rs`, `full_access_confirm.rs`, `cli_handoff.rs`, `shortcuts.rs`).
+- `src/desktop/view/` screens, overlays, and routing (`components.rs` shared builders, `attachment_cards.rs` attachment cards, `menu_bar.rs`, `running_confirm.rs`, `full_access_confirm.rs`, `cli_handoff.rs`, `shortcuts.rs`).
 - `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` color tokens; `preferences/`; `transport.rs`.
-- `src/desktop/transcript/` transcript projections; all turn grouping (live and archived) lives in `turn.rs`, `view/` only renders it.
+- `src/desktop/transcript/` transcript projections; all turn grouping (live and archived) lives in `turn.rs`, user-echo attachment data in `user_attachments.rs`, `view/` only renders it.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
 - `src/desktop/localization/` plus per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork and Dock; `assets.rs` extra icons; `build_info.rs` and `startup.rs` About stamp and argv/URL handoff.
 
@@ -33,5 +33,6 @@
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.
 - `InspectorTab::Plan` is conditional: it joins the rail only while a plan approval carries viewable markdown, so rail/keyboard/menu code must use `visible_inspector_tabs()` (never `ALL`), and every interaction replacement or clear must call `reset_plan_inspector_tab_if_hidden()`.
 - Plan-edit holds the panel through the service ack (`interaction_edit_pending`): every `pending_interaction_response` mutation must maintain the flag, and a terminal `TurnStatus` for the same turn releases a stranded lock when no re-show follows (blocked/recovered turns keep it).
+- `view.rs`, `palette.rs`, `transcript/mod.rs`, and `components.rs` sit within ~25 lines of the 1000-line ceiling: put new code in a focused module instead of growing them.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.

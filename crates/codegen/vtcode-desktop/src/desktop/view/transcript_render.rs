@@ -682,6 +682,7 @@ impl DesktopView {
             })
             .w_full()
             .max_w(px(self.content_width()))
+            .min_w_0()
             .gap_1()
             // Assistant prose insets to the header title spine: leading
             // slot + gap + small-button padding (32px). Symmetric so the
@@ -708,28 +709,51 @@ impl DesktopView {
                                 .when(user, |surface| {
                                     surface.bg(colors.secondary).text_color(colors.foreground).px_4().py_2()
                                 })
-                                .child(
-                                    div()
-                                        .id(format!("message-body-{}", item.id))
-                                        .role(gpui_kit::Role::Label)
-                                        .aria_label(format!("{label}: {}", item.accessibility_text))
-                                        .test_support()
-                                        // The kit bubble pins text_sm (14px); the
-                                        // message body is the primary content and
-                                        // reads at the user's full base size, which
-                                        // also rasterizes more smoothly at weight
-                                        // 400 on dark surfaces. Markdown inherits
-                                        // this ambient size; code keeps its own.
-                                        .text_base()
-                                        .child(render_markdown_with_style(
-                                            format!("markdown-{}", item.id),
-                                            item.markdown.clone(),
-                                            item.is_assistant(),
-                                            self.transcript_markdown_style
-                                                .clone()
-                                                .unwrap_or_else(|| markdown_style(cx)),
-                                        )),
-                                ),
+                                .child({
+                                    // Cards first: the call reborrows `cx` mutably, which must
+                                    // end before the body closure below captures it.
+                                    let cards = if item.user_attachments.is_empty() {
+                                        None
+                                    } else {
+                                        Some(self.user_attachment_cards(&item.id, &item.user_attachments, cx))
+                                    };
+                                    // One builder for the prompt body: attachment echoes stack
+                                    // the file cards above it, while text-only rows keep the
+                                    // previous single-child shape exactly.
+                                    let body = || {
+                                        div()
+                                            .id(format!("message-body-{}", item.id))
+                                            .role(gpui_kit::Role::Label)
+                                            .aria_label(format!("{label}: {}", item.accessibility_text))
+                                            .test_support()
+                                            // The kit bubble pins text_sm (14px); the
+                                            // message body is the primary content and
+                                            // reads at the user's full base size, which
+                                            // also rasterizes more smoothly at weight
+                                            // 400 on dark surfaces. Markdown inherits
+                                            // this ambient size; code keeps its own.
+                                            .text_base()
+                                            .child(render_markdown_with_style(
+                                                format!("markdown-{}", item.id),
+                                                item.markdown.clone(),
+                                                item.is_assistant(),
+                                                self.transcript_markdown_style
+                                                    .clone()
+                                                    .unwrap_or_else(|| markdown_style(cx)),
+                                            ))
+                                    };
+                                    match cards {
+                                        None => body().into_any_element(),
+                                        Some(cards) => div()
+                                            .flex()
+                                            .flex_col()
+                                            .min_w_0()
+                                            .gap_2()
+                                            .child(cards)
+                                            .child(body())
+                                            .into_any_element(),
+                                    }
+                                }),
                         ),
                 ),
             )

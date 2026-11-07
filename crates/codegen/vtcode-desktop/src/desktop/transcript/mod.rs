@@ -11,8 +11,10 @@ mod activity;
 mod activity_verbs;
 mod output;
 mod tool_summary;
+mod user_attachments;
 pub(super) use activity_verbs::{ToolCategory, ToolCategoryCounts, describe_activity_verbs, tool_row_gist};
 pub(super) use tool_summary::{activity_details_summary, activity_output_text, activity_payload, activity_text};
+pub(super) use user_attachments::UserAttachment;
 
 pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
 
@@ -181,6 +183,8 @@ pub(super) struct TranscriptItem {
     pub output_truncated: bool,
     /// MCP Apps referenced by this output, for preview cards. Empty for non-app results.
     pub app_previews: Vec<AppPreviewItem>,
+    /// Structured attachments for user echo rows; history rows and other roles leave this empty.
+    pub user_attachments: Vec<UserAttachment>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -370,6 +374,7 @@ impl TranscriptItem {
             output_item_id: None,
             output_truncated: false,
             app_previews: Vec::new(),
+            user_attachments: Vec::new(),
         }
     }
 
@@ -392,6 +397,7 @@ impl TranscriptItem {
         let prepared = prepare_markdown(&self.text);
         self.markdown = prepared.markdown;
         self.accessibility_text = prepared.accessible_text;
+        self.append_attachment_accessibility_suffix();
         self.has_list = prepared.has_list;
     }
 }

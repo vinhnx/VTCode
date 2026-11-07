@@ -85,7 +85,7 @@ use super::strings::{app, bundle, display, i18n, key_context, keys};
 use super::themes;
 use super::transcript::{
     DiffCard, DiffFile, DiffFileKind, NoticeSeverity, ToolCategory, ToolCategoryCounts, Transcript, TranscriptItem,
-    TranscriptRole, activity_details_summary, activity_output_text, activity_payload, activity_text,
+    TranscriptRole, UserAttachment, activity_details_summary, activity_output_text, activity_payload, activity_text,
     describe_activity_verbs, status as tool_status, tool_row_gist,
 };
 use super::transport::{
@@ -103,6 +103,7 @@ use overlays::{Route, RouteHistory};
 mod about;
 mod app_icon_settings;
 mod appearance;
+mod attachment_cards;
 mod attachment_picker;
 mod backend_events;
 mod bootstrap;

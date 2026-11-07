@@ -526,7 +526,14 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
         window.click("send-prompt", cx);
         let view = view.read(cx);
         assert!(view.attachments.is_empty(), "attachments clear after submit");
-        assert!(view.transcript.get(0).unwrap().text.contains("Attached: notes.md"));
+        let echo = view.transcript.get(0).unwrap();
+        assert_eq!(echo.text.as_str(), "Summarize the attachment");
+        assert_eq!(echo.user_attachments.len(), 1, "the echo keeps the surviving attachment as card data");
+        assert_eq!(echo.user_attachments[0].path, "notes.md");
+        assert!(
+            echo.accessibility_text.contains("notes.md"),
+            "the removed chip stays out of the echo while the kept path stays announced"
+        );
     })
     .unwrap();
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {

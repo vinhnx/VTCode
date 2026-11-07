@@ -28,33 +28,7 @@ impl DesktopView {
                     let path = attachment.path.clone();
                     let is_image = files::is_image_path(&attachment.path);
                     let thumbnail = self.attachment_thumbnails.get(&path).cloned();
-                    Attachment::new()
-                        .small()
-                        .w(px(230.))
-                        .media(AttachmentMedia::new().child({
-                            match thumbnail {
-                                Some(image) => {
-                                    img(image).size(px(40.)).rounded_sm().overflow_hidden().into_any_element()
-                                }
-                                None => Icon::new(if is_image {
-                                    IconName::FileImage
-                                } else {
-                                    IconName::FileCode
-                                })
-                                .size_6()
-                                .into_any_element(),
-                            }
-                        }))
-                        .content(
-                            AttachmentContent::new()
-                                .title(AttachmentTitle::new(attachment.path.clone()))
-                                .description(AttachmentDescription::new(if is_image {
-                                    rust_i18n::t!("app.composer.attachment_image").to_string()
-                                } else {
-                                    rust_i18n::t!("app.composer.attachment_file", bytes = attachment.text.len())
-                                        .to_string()
-                                })),
-                        )
+                    attachment_cards::base_attachment_card(&attachment.path, attachment.text.len(), is_image, thumbnail)
                         .actions(
                             AttachmentActions::new()
                                 .child({

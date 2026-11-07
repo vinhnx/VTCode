@@ -158,10 +158,10 @@ impl DesktopView {
 
     /// Snapshot the rows matching the conversation-search `query` for overlay
     /// cycling, anchored at `picked_id`. Case-insensitive substring over the
-    /// same searchable roles the palette offers (title and body), across the
-    /// full transcript rather than the palette's capped window. The picked
-    /// row joins the set even when fuzzy-only so the cycle always contains
-    /// the landing row. Blank queries clear the state: nothing to cycle.
+    /// same keyword set the palette offers (title, body, attached paths),
+    /// across the full transcript rather than the palette's capped window.
+    /// The picked row joins the set even when fuzzy-only so the cycle always
+    /// contains the landing row. Blank queries clear the state: nothing to cycle.
     pub(super) fn remember_filter_matches(&mut self, query: &str, picked_id: &str) {
         let needle = query.trim().to_lowercase();
         if needle.is_empty() {
@@ -172,7 +172,11 @@ impl DesktopView {
             .transcript
             .items()
             .filter(|item| item.is_conversation_searchable())
-            .filter(|item| item.title.to_lowercase().contains(&needle) || item.text.to_lowercase().contains(&needle))
+            .filter(|item| {
+                item.search_keywords()
+                    .iter()
+                    .any(|keyword| keyword.to_lowercase().contains(&needle))
+            })
             .map(|item| item.id.clone())
             .collect();
         if !ids.iter().any(|id| id == picked_id)

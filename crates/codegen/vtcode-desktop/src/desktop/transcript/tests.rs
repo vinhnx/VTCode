@@ -1,6 +1,6 @@
 use super::{
     ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, ToolCategory, ToolCategoryCounts, Transcript,
-    TranscriptItem, TranscriptRole, describe_activity_verbs, tool_row_gist,
+    TranscriptItem, TranscriptRole, UserAttachment, describe_activity_verbs, tool_row_gist,
 };
 use vtcode_exec_events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, DecisionItem, ErrorItem, FileChangeItem,
@@ -887,6 +887,59 @@ fn tool_row_gist_titles_session_followups_like_cli() {
     assert_eq!(
         gist("mcp__tmux__write_stdin", json!({"action": "wait", "session_id": "s"})),
         "Wait for command session"
+    );
+}
+
+#[test]
+fn user_echo_with_attachments_keeps_bare_prompt_and_announces_paths() {
+    let mut transcript = Transcript::default();
+    let mut echo = item(1, "user", "Review these files");
+    // Asymmetric fixtures: a text file with content bytes and an image with none.
+    echo.user_attachments = vec![
+        UserAttachment {
+            path: "src/main.rs".into(),
+            byte_len: 120,
+            is_image: false,
+        },
+        UserAttachment {
+            path: "shot.png".into(),
+            byte_len: 0,
+            is_image: true,
+        },
+    ];
+    transcript.push(echo);
+    let row = transcript.get(0).unwrap();
+    assert_eq!(row.text.as_str(), "Review these files");
+    assert_eq!(row.markdown.as_str(), "Review these files", "filenames must not leak into the Markdown body");
+    assert!(row.accessibility_text.contains("Review these files"));
+    assert!(row.accessibility_text.contains("src/main.rs"), "text-file path stays announced");
+    assert!(row.accessibility_text.contains("shot.png"), "image path stays announced");
+    let keywords = row.search_keywords();
+    assert_eq!(keywords.len(), 4, "title, body, and both attached paths");
+    assert!(keywords.iter().any(|keyword| keyword.contains("main.rs")));
+    assert!(keywords.iter().any(|keyword| keyword.contains("shot.png")));
+}
+
+#[test]
+fn attachment_accessibility_suffix_skips_plain_and_non_user_rows() {
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "user", "Plain follow-up"));
+    assert_eq!(
+        transcript.get(0).unwrap().accessibility_text.as_str(),
+        "Plain follow-up",
+        "text-only echoes keep the previous label shape"
+    );
+
+    let mut assistant = item(2, "assistant", "A response.");
+    assistant.user_attachments = vec![UserAttachment {
+        path: "stray.txt".into(),
+        byte_len: 1,
+        is_image: false,
+    }];
+    transcript.push(assistant);
+    assert!(
+        !transcript.get(1).unwrap().accessibility_text.contains("stray.txt"),
+        "the suffix guard is role-scoped"
     );
 }
 

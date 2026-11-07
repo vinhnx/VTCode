@@ -638,6 +638,7 @@ mod turn_group;
 mod turn_queue;
 mod turn_undo;
 mod turns_transcript;
+mod user_attachments;
 mod worktree_a11y;
 mod zen_options;
 mod zen_workspace;

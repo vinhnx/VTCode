@@ -375,8 +375,8 @@ impl DesktopView {
     }
 
     /// In-app preview overlay for one workspace file (text or image),
-    /// bypassing the external-editor preference — the composer chips' View
-    /// action uses this so viewing stays in-app regardless of configuration.
+    /// bypassing the external-editor preference — the composer chips' and echo
+    /// cards' View actions use this so viewing stays in-app regardless of configuration.
     pub(super) fn open_file_preview_overlay(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
         if self.current_route() == Route::Review {
             self.close_review(window, cx);
