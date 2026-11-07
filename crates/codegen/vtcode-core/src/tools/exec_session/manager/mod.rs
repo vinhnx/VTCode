@@ -3,6 +3,7 @@
 use super::*;
 
 mod create;
+mod monitor;
 
 #[derive(Default)]
 pub(crate) struct SessionPreviewState {
@@ -24,6 +25,7 @@ pub struct ExecSessionManager {
     background_shortcut_result: Arc<ParkingMutex<Option<BackgroundShortcutResult>>>,
     completion_tx: broadcast::Sender<ExecSessionCompletionEvent>,
     completion_notify: Arc<Notify>,
+    monitor_drain_cursor: Arc<ParkingMutex<Option<ExecSessionId>>>,
 }
 
 impl ExecSessionManager {
@@ -43,6 +45,7 @@ impl ExecSessionManager {
             background_shortcut_result: Arc::new(ParkingMutex::new(None)),
             completion_tx,
             completion_notify: Arc::new(Notify::new()),
+            monitor_drain_cursor: Arc::new(ParkingMutex::new(None)),
         }
     }
 

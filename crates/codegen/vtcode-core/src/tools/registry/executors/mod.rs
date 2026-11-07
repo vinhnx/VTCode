@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 
 use super::{ExecSettlementMode, ToolRegistry};
 use crate::config::constants::tools;
+use crate::tools::exec_session::MonitorSpec;
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::registry::unified_actions::CommandSessionAction;
 use crate::tools::{native_memory, tool_intent};
@@ -56,6 +57,7 @@ struct PreparedExecRunRequest {
     sandbox_active: bool,
     background: bool,
     stdin: bool,
+    monitor: Option<MonitorSpec>,
 }
 
 struct ResolvedExecSandboxRequest {
@@ -325,6 +327,16 @@ impl ToolRegistry {
             None => false,
             Some(value) => value.as_bool().ok_or_else(|| anyhow!("stdin must be a boolean"))?,
         };
+        let monitor = match payload.get("monitor_filter") {
+            None => None,
+            Some(value) => Some(
+                MonitorSpec::new(value.as_str().ok_or_else(|| anyhow!("monitor_filter must be a string"))?, None, None)
+                    .with_context(|| "invalid monitor_filter")?,
+            ),
+        };
+        if monitor.is_some() && matches!(backend, ExecRunBackendKind::Pty) {
+            bail!("monitor_filter is pipe-only in v1; pty runs cannot attach a line monitor");
+        }
 
         let (command, auto_raw_command) = parse_command_parts(payload, missing_error, empty_error)?;
         let shell_program = match backend {
@@ -421,6 +433,7 @@ impl ToolRegistry {
             sandbox_active,
             background,
             stdin,
+            monitor,
         })
     }
 

@@ -119,6 +119,9 @@ pub(super) fn poll_config_reload(
 pub(crate) const BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX: &str =
     "Review the authoritative background subprocess completion notice";
 
+/// Stable opening for monitor-only wake, shared with `is_internal_harness_follow_up`.
+pub(crate) const MONITOR_CONTINUATION_PROMPT_PREFIX: &str = "Review the monitored process output note";
+
 /// Budget for best-effort background teardown on the session-exit path.
 ///
 /// Every step here runs after the terminal has been restored, so an unbounded
@@ -131,6 +134,15 @@ pub(super) fn background_completion_continuation_prompt() -> String {
     format!(
         "{BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX} and continue the user's request. \
          Do not poll or wait for those completed tasks."
+    )
+}
+
+/// Monitor-only wake: the commands are still running, so unlike completions
+/// this prompt invites follow-up reads instead of forbidding them.
+pub(super) fn monitor_continuation_prompt() -> String {
+    format!(
+        "{MONITOR_CONTINUATION_PROMPT_PREFIX} and continue the user's request. \
+         The monitored commands are still running; inspect or poll them for more output when needed."
     )
 }
 

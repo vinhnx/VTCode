@@ -619,7 +619,8 @@ async fn record_planning_steering_revision(ctx: &mut TurnLoopContext<'_>, user_i
 /// reworded tail cannot reintroduce transcript noise.
 pub(crate) fn is_internal_harness_follow_up(input: &str) -> bool {
     use crate::agent::runloop::unified::turn::session_loop::{
-        BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, VERIFICATION_AUTO_RECOVERY_PREFIX,
+        BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, MONITOR_CONTINUATION_PROMPT_PREFIX,
+        VERIFICATION_AUTO_RECOVERY_PREFIX,
     };
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
         PLAN_MODE_AUTO_CONTINUE_MARKER, RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX,
@@ -631,6 +632,7 @@ pub(crate) fn is_internal_harness_follow_up(input: &str) -> bool {
         || input.starts_with(PLAN_MODE_AUTO_CONTINUE_MARKER)
         || input.starts_with(RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX)
         || input.starts_with(BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX)
+        || input.starts_with(MONITOR_CONTINUATION_PROMPT_PREFIX)
         || input.starts_with(VERIFICATION_AUTO_RECOVERY_PREFIX)
 }
 

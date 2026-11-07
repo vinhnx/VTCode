@@ -10,6 +10,7 @@ pub(crate) struct PipeSessionRecord {
     exit_task: Mutex<Option<JoinHandle<()>>>,
     activity_tx: watch::Sender<u64>,
     spool: PipeSpoolState,
+    pub(crate) monitor: Arc<ParkingMutex<Option<MonitorState>>>,
 }
 
 pub(crate) struct PipeSpoolState {
@@ -47,6 +48,7 @@ impl PipeSessionRecord {
         exit_task: JoinHandle<()>,
         activity_tx: watch::Sender<u64>,
         spool: PipeSpoolState,
+        monitor: Arc<ParkingMutex<Option<MonitorState>>>,
     ) -> Self {
         Self {
             metadata,
@@ -56,6 +58,7 @@ impl PipeSessionRecord {
             exit_task: Mutex::new(Some(exit_task)),
             activity_tx,
             spool,
+            monitor,
         }
     }
 }
@@ -167,6 +170,8 @@ impl PipeSessionManager {
         let spool_finished_for_task = Arc::clone(&spool_finished);
         let spool_integrity = Arc::new(ParkingMutex::new(None));
         let spool_integrity_for_task = Arc::clone(&spool_integrity);
+        let monitor = Arc::new(ParkingMutex::new(None::<MonitorState>));
+        let monitor_for_task = Arc::clone(&monitor);
         let output_task = tokio::spawn(async move {
             let mut spool_file = spool_file.map(tokio::fs::File::from_std);
             if spool_file.is_none() {
@@ -201,6 +206,12 @@ impl PipeSessionManager {
                             }
                         }
                         output_clone.append(&text, chunk.len()).await;
+                        {
+                            let mut guard = monitor_for_task.lock();
+                            if let Some(state) = guard.as_mut() {
+                                state.push_text(&text);
+                            }
+                        }
                         output_activity_tx.send_modify(|version| *version += 1);
                     }
                     Ok(None) => break,
@@ -216,6 +227,15 @@ impl PipeSessionManager {
             if !tail.is_empty() {
                 output_clone.append(&tail, 0).await;
                 output_activity_tx.send_modify(|version| *version += 1);
+            }
+            {
+                let mut guard = monitor_for_task.lock();
+                if let Some(state) = guard.as_mut() {
+                    if !tail.is_empty() {
+                        state.push_text(&tail);
+                    }
+                    state.flush();
+                }
             }
             if let Some(file) = spool_file.as_mut() {
                 let mut sanitized = spool_redactor.push(&tail);
@@ -261,6 +281,7 @@ impl PipeSessionManager {
                 finished: spool_finished,
                 integrity: spool_integrity,
             },
+            monitor,
         ));
 
         sessions.insert(session_id, record);

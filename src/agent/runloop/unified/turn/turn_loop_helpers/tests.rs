@@ -476,7 +476,8 @@ fn fresh_turn_restores_generated_budget_and_post_tool_recovery_directives() {
 #[test]
 fn internal_harness_follow_ups_stay_quiet_while_user_steering_echoes() {
     use crate::agent::runloop::unified::turn::session_loop::{
-        BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, VERIFICATION_AUTO_RECOVERY_PREFIX,
+        BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, MONITOR_CONTINUATION_PROMPT_PREFIX,
+        VERIFICATION_AUTO_RECOVERY_PREFIX,
     };
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
         PLAN_MODE_AUTO_CONTINUE_MARKER, RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX,
@@ -495,6 +496,9 @@ fn internal_harness_follow_ups_stay_quiet_while_user_steering_echoes() {
     ));
     assert!(is_internal_harness_follow_up(
         format!("{BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX} and continue.").as_str()
+    ));
+    assert!(is_internal_harness_follow_up(
+        format!("{MONITOR_CONTINUATION_PROMPT_PREFIX} and continue.").as_str()
     ));
     assert!(is_internal_harness_follow_up(
         format!("{VERIFICATION_AUTO_RECOVERY_PREFIX} Verification is still pending.").as_str()

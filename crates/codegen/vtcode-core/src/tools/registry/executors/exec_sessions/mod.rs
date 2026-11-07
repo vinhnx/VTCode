@@ -157,6 +157,16 @@ impl ToolRegistry {
             )
             .await?;
 
+        // Attach before the first capture so the filter covers the stream from
+        // the start. Output racing the attach still reaches the model through
+        // the normal capture below; the digest owns the long tail.
+        if let Some(monitor) = request.monitor {
+            self.exec_sessions
+                .set_monitor_filter(session_metadata.id.as_str(), monitor)
+                .await
+                .with_context(|| format!("attach monitor filter to session '{}'", session_metadata.id.as_str()))?;
+        }
+
         let capture = self
             .capture_exec_session_output(
                 session_metadata.id.as_str(),
@@ -380,6 +390,10 @@ impl ToolRegistry {
             "truncated": truncated,
             "content_type": "exec_inspect"
         });
+        // Peek, never drain: inspect promises a non-consuming snapshot.
+        if let Some(session_id) = source_session_id.as_deref() {
+            self.attach_monitor_digest(&mut response, session_id, false).await?;
+        }
         if let Some(session_id) = source_session_id {
             response["session_id"] = json!(session_id);
         }
@@ -485,37 +499,6 @@ impl ToolRegistry {
 
     fn exec_session_output_drained<'a>(&'a self, session_id: &'a str) -> impl Future<Output = Result<bool>> + 'a {
         self.exec_sessions.is_output_drained(session_id)
-    }
-
-    async fn attach_pipe_output_metadata(
-        &self,
-        response: &mut Value,
-        session_id: &str,
-        session_exited: bool,
-    ) -> Result<bool> {
-        let stats = match self.exec_sessions.output_stats(session_id).await {
-            Ok(stats) => stats,
-            // A session closed while its output was still being captured
-            // keeps returning its partial capture; there is no spool left to
-            // describe, and pruning stays gated on the observed exit code.
-            Err(err) if err.downcast_ref::<crate::tools::exec_session::ExecSessionNotFound>().is_some() => {
-                return Ok(true);
-            }
-            Err(err) => return Err(err),
-        };
-        if let Some(stats) = stats {
-            let safe_to_prune = !stats.spool_available || (stats.spool_complete && stats.spool_integrity.is_some());
-            let spooler_config = self.output_spooler.config();
-            attach_spool_metadata(
-                response,
-                &stats,
-                session_exited,
-                spooler_config.enabled,
-                spooler_config.threshold_bytes,
-            );
-            return Ok(safe_to_prune);
-        }
-        Ok(true)
     }
 
     async fn prune_completed_exec_session(&self, session_id: &str) -> Result<()> {
@@ -936,51 +919,6 @@ fn update_exec_capture_output(output: &mut String, chunk: &str, drain_output: bo
     append_bounded_capture(output, chunk);
 }
 
-fn attach_spool_metadata(
-    response: &mut Value,
-    stats: &crate::tools::exec_session::PipeOutputStats,
-    session_exited: bool,
-    spooling_enabled: bool,
-    spool_threshold_bytes: usize,
-) {
-    response["total_output_bytes"] = json!(stats.total_bytes);
-    response["output_truncated"] = json!(stats.truncated);
-
-    let output_exceeds_threshold = stats.total_bytes > spool_threshold_bytes as u64;
-    let response_capped = ["truncated", "query_truncated"]
-        .into_iter()
-        .any(|field| response.get(field).and_then(Value::as_bool).unwrap_or(false));
-    if !spooling_enabled || !(output_exceeds_threshold || stats.truncated || response_capped) {
-        return;
-    }
-
-    if stats.spool_available && stats.spool_complete {
-        let Some(integrity) = stats.spool_integrity.as_ref() else {
-            response["spool_complete"] = json!(false);
-            response["spool_pending"] = json!(true);
-            response["spool_state"] = json!("pending");
-            return;
-        };
-        response["spool_path"] = json!(stats.spool_path);
-        response["output_spooled"] = json!(true);
-        response["spool_complete"] = json!(true);
-        response["spool_state"] = json!("completed");
-        response["spooled_bytes"] = json!(integrity.byte_count);
-        response["spool_line_count"] = json!(integrity.line_count);
-        response["spool_sha256"] = json!(integrity.sha256);
-    } else if stats.spool_available && !session_exited {
-        response["spool_path"] = json!(stats.spool_path);
-        response["output_spooled"] = json!(true);
-        response["spool_complete"] = json!(false);
-        response["spool_pending"] = json!(true);
-        response["spool_state"] = json!("pending");
-    } else if stats.spool_available {
-        response["spool_complete"] = json!(false);
-        response["spool_pending"] = json!(true);
-        response["spool_state"] = json!("pending");
-    }
-}
-
 fn exec_session_payload<'a>(args: &'a Value, object_error: &str) -> Result<&'a serde_json::Map<String, Value>> {
     args.as_object().ok_or_else(|| anyhow!("{object_error}"))
 }
@@ -995,6 +933,8 @@ fn resolve_exec_session_id(
     let raw_sid = crate::tools::command_args::session_id_text(args).ok_or_else(|| anyhow!("{session_id_error}"))?;
     Ok(validate_exec_session_id(raw_sid, validation_context)?.to_string())
 }
+
+mod response_meta;
 
 #[cfg(test)]
 mod tests;

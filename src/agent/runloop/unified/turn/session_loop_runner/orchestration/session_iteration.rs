@@ -145,6 +145,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         exec_completion_notify,
         mut pending_background_completions,
         mut pending_matrix_note,
+        mut pending_monitor_note,
         mut displayed_matrix_revision,
         webmcp_prompt_sender,
         mut webmcp_prompt_receiver,
@@ -261,9 +262,24 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     || (pending_matrix_note.is_some()
                         && queued_inputs.is_empty()
                         && session.events.is_empty()
+                        && !runtime.has_pending_follow_up_inputs())
+                    || (pending_monitor_note.is_some()
+                        && queued_inputs.is_empty()
+                        && session.events.is_empty()
                         && !runtime.has_pending_follow_up_inputs()))
             {
-                match runtime.try_queue_synthetic_follow_up_input(background_completion_continuation_prompt()) {
+                // Monitor-only wake gets its own prompt: the commands are
+                // still running, so the completion prompt's "do not poll
+                // those completed tasks" would mislead the model.
+                let only_monitor_note = !background_continuation_requested
+                    && pending_matrix_note.is_none()
+                    && pending_monitor_note.is_some();
+                let follow_up_prompt = if only_monitor_note {
+                    monitor_continuation_prompt()
+                } else {
+                    background_completion_continuation_prompt()
+                };
+                match runtime.try_queue_synthetic_follow_up_input(follow_up_prompt) {
                     Ok(()) => {
                         if background_continuation_requested {
                             pending_background_completions.mark_continuation_queued();
@@ -364,6 +380,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                         background_completion_receiver: &mut background_completion_receiver,
                         exec_completion_receiver: &mut exec_completion_receiver,
                         pending_background_completions: &mut pending_background_completions,
+                        pending_monitor_note: &mut pending_monitor_note,
                     };
 
                 let mut interaction_state =
@@ -479,6 +496,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     next_checkpoint_turn: &mut next_checkpoint_turn,
                     pending_background_completions: &mut pending_background_completions,
                     pending_matrix_note: &mut pending_matrix_note,
+                    pending_monitor_note: &mut pending_monitor_note,
                     tool_registry: &tool_registry,
                     config: &*config,
                     handle: &handle,

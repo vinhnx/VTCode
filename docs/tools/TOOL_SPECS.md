@@ -33,6 +33,11 @@ Common optional fields:
 - `tty`: allocate a PTY when the command needs an interactive terminal.
 - `yield_time_ms`: how long to wait before returning output.
 - `max_output_tokens`: output budget for the response.
+- `monitor_filter`: optional case-sensitive substring for pipe runs (rejected for `tty` runs). Matching lines collect
+  into a bounded `monitor_digest` on run/wait/poll responses and peek without consuming on `inspect`, so long quiet
+  commands cost no full-output polls. At most 256 characters; the digest holds 50 lines / 4 KiB per window with
+  drop counts and redacts secrets. Idle sessions surface pending digests as a continuation note through the existing
+  background-continuation budgets (at most 8 sessions per tick, round-robin).
 
 Every function tool accepts `max_output_tokens`. It defaults to 10,000 and must be between 1 and 50,000. VT Code spools
 the complete output and limits only the model-visible preview. Completed output spools include `spool_line_count` so

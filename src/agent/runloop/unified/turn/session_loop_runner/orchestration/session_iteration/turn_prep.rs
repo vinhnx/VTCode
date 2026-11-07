@@ -46,6 +46,7 @@ pub(super) struct TurnPrep<'a> {
     pub next_checkpoint_turn: &'a mut usize,
     pub pending_background_completions: &'a mut PendingBackgroundCompletions,
     pub pending_matrix_note: &'a mut Option<String>,
+    pub pending_monitor_note: &'a mut Option<String>,
     pub tool_registry: &'a ToolRegistry,
     pub config: &'a CoreAgentConfig,
     pub handle: &'a InlineHandle,
@@ -91,6 +92,7 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         next_checkpoint_turn,
         pending_background_completions,
         pending_matrix_note,
+        pending_monitor_note,
         tool_registry,
         config,
         handle,
@@ -311,14 +313,24 @@ pub(super) async fn run_turn_prep<'a>(runtime: &'a mut AgentRuntime, gate: TurnP
         }
         Ok(Ok(None)) => None,
     };
+    let wake_notes = [
+        pending_background_completions.take_transient_note(),
+        pending_matrix_note.take(),
+        pending_monitor_note.take(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+    let wake_note = if wake_notes.is_empty() {
+        None
+    } else {
+        Some(wake_notes.join("\n"))
+    };
     let (transient_system_notes, peer_delivery) = preparation_wait!(prepare_transient_turn_notes(
         config.workspace.as_path(),
         tool_registry,
         unrelated_dirty_note,
-        match (pending_background_completions.take_transient_note(), pending_matrix_note.take()) {
-            (Some(background), Some(matrix)) => Some(format!("{background}\n{matrix}")),
-            (background, matrix) => background.or(matrix),
-        },
+        wake_note,
     ));
     working_history.extend(transient_system_notes.iter().cloned().map(Message::system));
     // Ack only after admission: a stop accepted between preparation and this

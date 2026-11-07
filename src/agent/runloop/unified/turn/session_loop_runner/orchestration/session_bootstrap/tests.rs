@@ -11,7 +11,10 @@ use vtcode_core::utils::session_archive::{
 use super::super::super::support::checkpoint_session_archive_start;
 use super::clean_archived_prompts;
 use super::history_cleaning::archived_prompt_content_with_metadata;
-use super::{CoreAgentConfig, ResumeSession, SessionArchiveMetadata, archived_prompt_content, prepare_session_thread};
+use super::{
+    CoreAgentConfig, MONITOR_CONTINUATION_PROMPT_PREFIX, ResumeSession, SessionArchiveMetadata,
+    archived_prompt_content, monitor_continuation_prompt, prepare_session_thread,
+};
 use crate::cli::exec::{
     EXEC_TASK_INSTRUCTIONS_DRY_RUN_PREFIX, EXEC_TASK_INSTRUCTIONS_PREFIX, REVIEW_TASK_INSTRUCTIONS_PREFIX,
 };
@@ -520,4 +523,13 @@ fn clean_archived_prompts_drops_harness_authored_messages() {
 
     let cleaned = clean_archived_prompts(&listings, Path::new(workspace), 10);
     assert_eq!(cleaned.iter().map(|entry| entry.content.as_str()).collect::<Vec<_>>(), vec!["genuine typed prompt"]);
+}
+
+#[test]
+fn monitor_continuation_prompt_describes_running_commands() {
+    let prompt = monitor_continuation_prompt();
+    assert!(prompt.starts_with(MONITOR_CONTINUATION_PROMPT_PREFIX));
+    assert!(prompt.contains("still running"));
+    assert!(!prompt.contains("Do not poll"), "monitor wake must invite follow-up reads: {prompt}");
+    assert!(!prompt.contains("completed tasks"), "nothing completed on a monitor wake: {prompt}");
 }

@@ -28,6 +28,8 @@ fn test_vt_code_guidance_omits_task_tracker() {
     }
     assert!(guidelines.contains("`write_stdin`"));
     assert!(guidelines.contains("At most three live background processes"));
+    assert!(guidelines.contains("`monitor_filter`"));
+    assert!(guidelines.contains("`monitor_digest`"));
     assert!(guidelines.contains("`apply_patch`"));
     assert!(!guidelines.contains("task_tracker"));
     assert!(!guidelines.contains("list_files"));

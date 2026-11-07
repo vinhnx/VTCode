@@ -60,15 +60,18 @@ fn missing_exec_session_error(session_id: &str) -> anyhow::Error {
 pub const MAX_BACKGROUND_PROCESSES: usize = 3;
 
 pub use manager::ExecSessionManager;
+pub use monitor::MonitorWakeNote;
 pub use output_buffer::BackgroundShortcutResult;
 pub use record::{ExecSessionBackend, ExecSessionCompletionEvent, ExecSessionUiSnapshot};
 
 mod manager;
+mod monitor;
 mod output_buffer;
 mod pipe;
 mod record;
 
 pub(crate) use manager::*;
+pub(crate) use monitor::*;
 pub(crate) use output_buffer::*;
 pub(crate) use pipe::*;
 pub(crate) use record::*;

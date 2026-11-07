@@ -292,3 +292,169 @@ async fn command_session_run_preserves_requested_session_id_for_follow_up_calls(
 
     Ok(())
 }
+
+#[tokio::test]
+async fn pipe_run_with_monitor_filter_attaches_only_matches() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let run = registry
+        .execute_harness_command_session(json!({
+            "action": "run",
+            "command": "printf 'ok one\\nerror: bad\\nok two\\n'",
+            "tty": false,
+            "yield_time_ms": 1000,
+            "monitor_filter": "error"
+        }))
+        .await?;
+
+    let digest = &run["monitor_digest"];
+    assert!(digest.is_object(), "run response must carry the digest: {run}");
+    assert_eq!(digest["text"].as_str(), Some("error: bad"));
+    assert_eq!(digest["total_seen"], 1);
+    assert_eq!(digest["dropped_lines"], 0);
+
+    // Asymmetric control: the same command without a filter omits the field.
+    let plain = registry
+        .execute_harness_command_session(json!({
+            "action": "run",
+            "command": "printf 'ok one\\nerror: bad\\nok two\\n'",
+            "tty": false,
+            "yield_time_ms": 1000
+        }))
+        .await?;
+    assert!(plain.get("monitor_digest").is_none(), "unfiltered runs must omit the digest: {plain}");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn monitor_digest_drains_once_across_polls() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let run = registry
+        .execute_harness_command_session(json!({
+            "action": "run",
+            "command": "printf 'error: one\\n'; sleep 30",
+            "tty": false,
+            "background": true,
+            "yield_time_ms": 1000,
+            "monitor_filter": "error"
+        }))
+        .await?;
+    assert_eq!(run["monitor_digest"]["text"].as_str(), Some("error: one"));
+    let session_id = run["session_id"]
+        .as_str()
+        .expect("background run must expose session_id")
+        .to_string();
+
+    let poll = registry
+        .execute_harness_command_session(json!({
+            "action": "poll",
+            "session_id": session_id,
+            "yield_time_ms": 10,
+        }))
+        .await?;
+    assert!(poll.get("monitor_digest").is_none(), "drained window must not reappear: {poll}");
+
+    registry
+        .execute_harness_command_session(json!({"action": "close", "session_id": session_id}))
+        .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn monitor_inspect_peeks_without_draining() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let run = registry
+        .execute_harness_command_session(json!({
+            "action": "run",
+            "command": "printf 'error: one\\n'; sleep 2; printf 'error: two\\n'; sleep 30",
+            "tty": false,
+            "background": true,
+            "yield_time_ms": 1000,
+            "monitor_filter": "error"
+        }))
+        .await?;
+    assert_eq!(run["monitor_digest"]["text"].as_str(), Some("error: one"));
+    let session_id = run["session_id"]
+        .as_str()
+        .expect("background run must expose session_id")
+        .to_string();
+
+    let inspect = registry
+        .execute_harness_command_session(json!({
+            "action": "inspect",
+            "session_id": session_id,
+            "yield_time_ms": 3000,
+        }))
+        .await?;
+    assert_eq!(inspect["monitor_digest"]["text"].as_str(), Some("error: two"));
+
+    // Inspect must not consume: a later poll still sees the same window.
+    let poll = registry
+        .execute_harness_command_session(json!({
+            "action": "poll",
+            "session_id": session_id,
+            "yield_time_ms": 10,
+        }))
+        .await?;
+    assert_eq!(poll["monitor_digest"]["text"].as_str(), Some("error: two"));
+
+    registry
+        .execute_harness_command_session(json!({"action": "close", "session_id": session_id}))
+        .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn monitor_filter_on_pty_run_is_rejected() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    registry.set_inspection_mode(vtcode_config::core::agent::InspectionMode::Off);
+
+    let result = registry
+        .execute_harness_command_session(json!({
+            "action": "run",
+            "command": "sleep 1",
+            "tty": true,
+            "yield_time_ms": 200,
+            "monitor_filter": "error"
+        }))
+        .await;
+
+    match result {
+        Err(error) => assert!(format!("{error:?}").contains("pipe-only"), "{error:?}"),
+        Ok(value) => assert!(value.to_string().contains("pipe-only"), "{value}"),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn monitor_filter_rejects_empty_value_before_spawn() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let result = registry
+        .execute_harness_command_session(json!({
+            "action": "run",
+            "command": "printf hi",
+            "tty": false,
+            "yield_time_ms": 1000,
+            "monitor_filter": ""
+        }))
+        .await;
+
+    match result {
+        Err(error) => assert!(format!("{error:?}").contains("monitor_filter"), "{error:?}"),
+        Ok(value) => assert!(value.to_string().contains("monitor_filter"), "{value}"),
+    }
+
+    Ok(())
+}

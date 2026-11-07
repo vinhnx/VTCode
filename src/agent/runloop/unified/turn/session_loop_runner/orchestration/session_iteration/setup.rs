@@ -158,6 +158,7 @@ pub(super) struct Setup<'a> {
     pub exec_completion_notify: Option<Arc<Notify>>,
     pub pending_background_completions: PendingBackgroundCompletions,
     pub pending_matrix_note: Option<String>,
+    pub pending_monitor_note: Option<String>,
     pub displayed_matrix_revision: Option<(String, u64)>,
     pub webmcp_prompt_sender: mpsc::Sender<String>,
     pub webmcp_prompt_receiver: Option<mpsc::Receiver<String>>,
@@ -695,6 +696,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let exec_completion_notify = Some(exec_session_manager.completion_notify());
     let pending_background_completions = PendingBackgroundCompletions::default();
     let pending_matrix_note: Option<String> = None;
+    let pending_monitor_note: Option<String> = None;
     let displayed_matrix_revision: Option<(String, u64)> = None;
     let (webmcp_prompt_sender, webmcp_prompt_receiver) = crate::agent::runloop::unified::webmcp::prompt_channel();
     let webmcp_prompt_receiver = Some(webmcp_prompt_receiver);
@@ -824,6 +826,7 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         exec_completion_notify,
         pending_background_completions,
         pending_matrix_note,
+        pending_monitor_note,
         displayed_matrix_revision,
         webmcp_prompt_sender,
         webmcp_prompt_receiver,

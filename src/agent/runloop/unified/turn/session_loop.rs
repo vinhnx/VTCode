@@ -4,6 +4,6 @@ mod session_loop_impl;
 pub(crate) use session_loop_impl::clean_archived_prompts;
 pub(crate) use session_loop_impl::run_single_agent_loop_unified;
 pub(crate) use session_loop_impl::{
-    BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, VERIFICATION_AUTO_RECOVERY_PREFIX,
-    run_single_agent_loop_unified_with_host,
+    BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, MONITOR_CONTINUATION_PROMPT_PREFIX,
+    VERIFICATION_AUTO_RECOVERY_PREFIX, run_single_agent_loop_unified_with_host,
 };

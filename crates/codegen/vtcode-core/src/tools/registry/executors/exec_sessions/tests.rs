@@ -1,6 +1,7 @@
 use serde_json::json;
 
-use super::{ResolvedExecSession, attach_spool_metadata, update_exec_capture_output};
+use super::response_meta::attach_spool_metadata;
+use super::{ResolvedExecSession, update_exec_capture_output};
 use crate::tools::exec_session::PipeOutputStats;
 use crate::tools::registry::ExecSettlementMode;
 use crate::tools::types::VTCodeExecSession;

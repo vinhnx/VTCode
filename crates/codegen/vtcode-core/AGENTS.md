@@ -6,7 +6,7 @@
 ## Modules
 
 Paths are under `src/`. `core/agent/` runtime, event recording, runner, request envelopes, completion assessment | `tools/` handlers, registry, policy, execution
-`tools/registry/` admission, dispatch, results, history, completion verification | `tools/exec_session/` unified PTY/pipe registry and background slots | `tools/output_spooler/` bounded previews and spool references | `tools/source_inspection/` session-local source ledger
+`tools/registry/` admission, dispatch, results, history, completion verification | `tools/exec_session/` unified PTY/pipe registry, background slots, pipe line-monitor subscriptions | `tools/output_spooler/` bounded previews and spool references | `tools/source_inspection/` session-local source ledger
 `llm/` re-export facade over `vtcode-llm` | `exec/events.rs` re-exports canonical `ThreadEvent` | `prompts/` static profiles and compiled runtime guidance | `compaction/` history compaction and memory envelopes | `subagents/matrix/` scheduler-owned workers | `mcp/`, `skills/` plugin MCP servers and skill policy/loading | `exec_policy/`, `command_safety/` separate policy layers | `notifications/` per-domain OS alerts | `utils/ansi/` renderer
 
 ## Rules

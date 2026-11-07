@@ -98,6 +98,7 @@ pub(crate) struct InteractionLoopContext<'a> {
         &'a mut Option<broadcast::Receiver<vtcode_core::tools::exec_session::ExecSessionCompletionEvent>>,
     pub pending_background_completions:
         &'a mut crate::agent::runloop::unified::turn::background_completion::PendingBackgroundCompletions,
+    pub pending_monitor_note: &'a mut Option<String>,
 }
 
 impl<'a> InteractionLoopContext<'a> {
