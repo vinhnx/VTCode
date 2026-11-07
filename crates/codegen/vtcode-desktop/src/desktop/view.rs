@@ -129,6 +129,7 @@ mod context_format;
 mod curated;
 mod deeplinks;
 mod exec_controls;
+mod file_preview;
 mod file_rename;
 mod files_panel;
 mod full_access_confirm;
@@ -434,6 +435,7 @@ actions!(
         ActivityLast,
         DeleteHighlightedSession,
         DismissOverlay,
+        SavePreviewSource,
         OpenSettings,
         CloseWindow,
         MinimizeWindow,
@@ -671,9 +673,10 @@ struct DesktopView {
     attachments_task: Option<Task<()>>,
     external_launch_task: Option<Task<()>>,
     file_preview: Option<FilePreview>,
-    /// Read-only highlighted markdown source for the preview toggle; the
-    /// toggle swaps arms, never this state, so scroll and caret survive.
+    /// Highlighted markdown source for the preview toggle; the toggle swaps
+    /// arms, never this state, so scroll, caret, and drafts survive.
     file_preview_source: Entity<EditorState>,
+    _preview_source_subscription: Subscription,
     preview_editor_error: Option<String>,
     #[cfg(test)]
     test_launch_intercept: Option<TestLaunchIntercept>,

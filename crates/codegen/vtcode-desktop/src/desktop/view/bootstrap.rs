@@ -30,6 +30,7 @@ pub(super) const FIXED_RESERVED_CHORDS: &[&str] = &[
     "ctrl-n",
     "ctrl-s",
     "ctrl-g",
+    "cmd-s",
 ];
 
 pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
@@ -81,6 +82,10 @@ pub(super) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         // draft (Ctrl+C stays Kit's Copy in the input context, so it cannot be
         // claimed here without also hijacking Cmd+C).
         KeyBinding::new("ctrl-g", CancelPromptHistory, Some(key_context::DESKTOP)),
+        // Fixed like window chords: the app has exactly one saveable
+        // surface, so Cmd+S always means "save the preview draft" and the
+        // root handler no-ops unless an edit session is armed.
+        KeyBinding::new("cmd-s", SavePreviewSource, Some(key_context::DESKTOP)),
         KeyBinding::new("up", TranscriptPrevious, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("down", TranscriptNext, Some(key_context::TRANSCRIPT)),
         KeyBinding::new("home", TranscriptFirst, Some(key_context::TRANSCRIPT)),
@@ -598,6 +603,13 @@ impl DesktopView {
         });
         // Read before `preferences` moves into the struct below.
         let zen_mode = preferences.zen_mode();
+        let file_preview_source = cx.new(|cx| EditorState::new(window, cx).language("markdown"));
+        let preview_source_subscription = cx.subscribe_in(&file_preview_source, window, |_, _, event, _, cx| {
+            // Re-render so the Save action tracks the dirty state live.
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         Self {
             shortcut_draft,
             shortcut_search_input,
@@ -728,7 +740,8 @@ impl DesktopView {
             attachments_task: None,
             external_launch_task: None,
             file_preview: None,
-            file_preview_source: cx.new(|cx| EditorState::new(window, cx).language("markdown")),
+            file_preview_source,
+            _preview_source_subscription: preview_source_subscription,
             preview_editor_error: None,
             #[cfg(test)]
             test_launch_intercept: None,

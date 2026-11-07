@@ -827,6 +827,7 @@ fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
             text: "preview".into(),
             truncated: false,
             show_source: false,
+            editing: false,
         });
         assert!(!view.swipe_navigation_allowed());
         view.file_preview = None;

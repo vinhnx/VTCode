@@ -1,5 +1,6 @@
-use super::super::shortcuts::{CommandId, action};
+use super::super::shortcuts::{CommandId, action, bindings};
 use super::*;
+use std::collections::BTreeMap;
 
 #[gpui_kit::test]
 fn shortcut_search_filters_rows_and_reports_empty_results(cx: &mut TestAppContext) {
@@ -314,5 +315,18 @@ fn shortcut_save_applies_rebind_live_and_retires_old_chord(cx: &mut TestAppConte
         assert_chord_dead(cx, "cmd-shift-m", desktop);
         assert_chord_resolves_once_to(cx, "ctrl-shift-m", desktop, model.as_ref());
         assert_chord_resolves_to(cx, "cmd-k", desktop, commands.as_ref());
+    });
+}
+
+#[gpui_kit::test]
+fn fixed_preview_save_chord_rejects_configurable_overrides(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        // Cmd+S is fixed to the preview save: a user rebind would be
+        // shadowed by the deeper fixed binding, so validation refuses it
+        // with the reserved-shortcut error instead of failing silently.
+        // No other default owns cmd-s, so any rejection here is the
+        // reserved-shortcut path; the message itself is locale-dependent
+        // (other tests switch languages mid-run), so pin only the Err.
+        assert!(bindings(&BTreeMap::from([("model".into(), "cmd-s".into())]), cx).is_err());
     });
 }

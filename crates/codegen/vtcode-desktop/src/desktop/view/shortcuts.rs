@@ -876,15 +876,18 @@ mod tests {
     #[gpui_kit::test]
     fn secondary_alias_resolves_to_the_host_modifier(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            let loaded = bindings(&BTreeMap::from([("model".into(), "secondary-s".into())]), cx)
+            // `y` is arbitrary but load-bearing: the letter must avoid every
+            // reserved chord on both hosts (`s` collides with the fixed
+            // Cmd+S preview save, `j` with the fixed Ctrl+J composer chord).
+            let loaded = bindings(&BTreeMap::from([("model".into(), "secondary-y".into())]), cx)
                 .expect("secondary- resolves on the host OS");
             assert_eq!(loaded.len(), 36, "full table builds with the secondary override");
             #[cfg(target_os = "macos")]
-            let expected = "cmd-s";
+            let expected = "cmd-y";
             #[cfg(not(target_os = "macos"))]
-            let expected = "ctrl-s";
+            let expected = "ctrl-y";
             assert_eq!(
-                gpui_kit::Keystroke::parse_with_os("secondary-s", host_operating_system())
+                gpui_kit::Keystroke::parse_with_os("secondary-y", host_operating_system())
                     .unwrap()
                     .unparse(host_operating_system()),
                 expected

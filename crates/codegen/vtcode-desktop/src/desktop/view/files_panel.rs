@@ -56,16 +56,6 @@ pub(super) fn file_tree_row_icon(is_dir: bool, expanded: bool) -> IconName {
 /// inset, so both file surfaces share this step (one spacing unit ≈ 12px).
 pub(super) const FILE_TREE_INDENT_REM: f32 = 0.75;
 
-/// Visible source-editor rows, clamped. The kit editor has a fixed intrinsic
-/// height (textarea-style `auto_grow` is not offered on `EditorState`), so
-/// the preview sizes it from the document's line count: short documents keep
-/// a compact panel, long ones get a tall viewport and scroll within it.
-const PREVIEW_SOURCE_MIN_ROWS: usize = 3;
-const PREVIEW_SOURCE_MAX_ROWS: usize = 24;
-/// Mirrors kit's private `EDITOR_LINE_HEIGHT`: the editor scales code rows
-/// from the mono font size, so the preview derives the same row height.
-const PREVIEW_SOURCE_LINE_HEIGHT: f32 = 1.5;
-
 /// Shared file-row label: type icon, file name, and the muted parent path in
 /// search mode. Both file trees render through this so rows stay identical.
 pub(super) fn file_tree_row_label(
@@ -425,6 +415,7 @@ impl DesktopView {
                                 truncated: false,
                                 image: Some(image),
                                 show_source: false,
+                                editing: false,
                             });
                             view.preview_focus.focus(window, cx);
                             view.clear_error();
@@ -708,6 +699,10 @@ impl DesktopView {
         };
         let text = preview.text.clone();
         let mono = theme.mono_font_family.clone();
+        // Only complete markdown previews are editable: truncated ones hold
+        // just the file head in the editor, so saving would destroy the tail.
+        let editable = preview.image.is_none() && !preview.truncated && files::is_markdown_path(&preview.rel_path);
+        let dirty = preview.editing && self.file_preview_source.read(cx).value() != preview.text;
         // File commands ride a Kit toolbar: roving arrow keys across the
         // actions plus one accessible group label. Membership matches the
         // old button row exactly (toggle only for markdown, copy for text).
@@ -748,6 +743,43 @@ impl DesktopView {
                         app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
                         super::super::notifications::copied_to_clipboard(window, app);
                     }),
+            );
+        }
+        if editable {
+            actions = actions.child(
+                desktop_button("edit-preview-source")
+                    .label(if preview.editing { "Done" } else { "Edit" })
+                    .ghost()
+                    .small()
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        if let Some(preview) = view.file_preview.as_mut() {
+                            // Entering from the rendered arm jumps straight
+                            // into the source surface; Done just disarms.
+                            if !preview.show_source {
+                                preview.show_source = true;
+                            }
+                            preview.editing = !preview.editing;
+                            // Entering edit mode hands focus to the source
+                            // editor so typing starts immediately; the
+                            // id-based handle resolves even though the
+                            // editor mounts on the next frame.
+                            if preview.editing {
+                                view.file_preview_source.read(cx).focus_handle(cx).focus(window, cx);
+                            }
+                            cx.notify();
+                        }
+                    })),
+            );
+        }
+        if preview.editing {
+            actions = actions.child(
+                desktop_button("save-preview-source")
+                    .tooltip_with_action("Save", &SavePreviewSource, Some(key_context::DESKTOP))
+                    .label("Save")
+                    .ghost()
+                    .small()
+                    .desktop_disabled(!dirty)
+                    .on_click(cx.listener(|view, _, window, cx| view.save_preview_source(window, cx))),
             );
         }
         actions = actions.child(
@@ -871,8 +903,9 @@ impl DesktopView {
                                 .text
                                 .lines()
                                 .count()
-                                .clamp(PREVIEW_SOURCE_MIN_ROWS, PREVIEW_SOURCE_MAX_ROWS);
-                            let source_height = theme.mono_font_size * PREVIEW_SOURCE_LINE_HEIGHT * rows as f32;
+                                .clamp(file_preview::PREVIEW_SOURCE_MIN_ROWS, file_preview::PREVIEW_SOURCE_MAX_ROWS);
+                            let source_height =
+                                theme.mono_font_size * file_preview::PREVIEW_SOURCE_LINE_HEIGHT * rows as f32;
                             div()
                                 .id("file-preview-body")
                                 .test_support()
@@ -883,7 +916,7 @@ impl DesktopView {
                                 .child(
                                     div().id("file-preview-source").test_support().child(
                                         Editor::new(&self.file_preview_source)
-                                            .readonly(true)
+                                            .readonly(!preview.editing)
                                             .appearance(false)
                                             .aria_label("Markdown source".to_string())
                                             .h(source_height),

@@ -268,6 +268,9 @@ impl Render for DesktopView {
                 )
             })
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
+            .on_action(
+                cx.listener(|view, _: &SavePreviewSource, window, cx| view.save_preview_via_shortcut(window, cx)),
+            )
             .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
             .on_action(cx.listener(|view, _: &OpenThreadBrowser, window, cx| view.open_thread_browser(window, cx)))
             .on_action(cx.listener(|view, _: &OpenConversationSearch, window, cx| {

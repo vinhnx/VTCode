@@ -58,6 +58,9 @@ pub(super) struct FilePreview {
     /// Markdown previews start rendered; the header toggle flips to the raw
     /// source surface. Owned per preview so every open starts rendered.
     pub show_source: bool,
+    /// The source surface is read-only until the Edit toggle arms it; edits
+    /// persist only through Save. Owned per preview like `show_source`.
+    pub editing: bool,
 }
 
 /// Whether a workspace-relative path points at an image the app can render
@@ -184,7 +187,24 @@ pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
         truncated,
         image: None,
         show_source: false,
+        editing: false,
     })
+}
+
+/// Persist edited preview text back to the previewed file. The caller owns
+/// dirty tracking and must refuse truncated previews (their editor holds
+/// only the head, so writing would destroy the tail); this only resolves,
+/// writes, and reports a display-ready error. Call from a background task.
+///
+/// The target resolves through the same confinement boundary as the read
+/// path, so traversal and symlink escapes fail closed and a file deleted
+/// after opening errors instead of being recreated. Absolute previews —
+/// which only arrive from explicit user attachments — resolve directly,
+/// mirroring [`read_preview`].
+pub(super) fn write_preview_text(root: &Path, rel_path: &str, text: &str) -> Result<(), String> {
+    let path = resolve_attachment_path(root, Path::new(rel_path))
+        .map_err(|()| format!("Could not save \"{rel_path}\": it is outside the workspace or no longer exists"))?;
+    fs::write(&path, text).map_err(|error| format!("Could not save \"{rel_path}\": {error}"))
 }
 
 /// External applications supported by the file preview.

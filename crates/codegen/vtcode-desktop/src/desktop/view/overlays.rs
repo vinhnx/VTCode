@@ -560,6 +560,16 @@ impl DesktopView {
         } else if self.palette.is_some() {
             self.disarm_double_escape();
             self.close_palette(window, cx);
+        } else if self.file_preview.as_ref().is_some_and(|preview| preview.editing) {
+            // Editing eats the first Escape: the editable source consumes Tab
+            // for indentation, so leaving edit mode restores Tab navigation
+            // before a second Escape dismisses the preview. The draft stays
+            // in the editor state for re-entry.
+            self.disarm_double_escape();
+            if let Some(preview) = self.file_preview.as_mut() {
+                preview.editing = false;
+            }
+            cx.notify();
         } else if self.file_preview.is_some() {
             self.disarm_double_escape();
             self.close_file_preview(window, cx);
