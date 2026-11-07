@@ -1072,6 +1072,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about OmniRoute Integration Guide?", "How does Configuration work?", "How
     does Model Selection work?"
 
+- **File**: `docs/providers/openllm.md`
+  - **Content**: OpenLLM Integration Guide
+  - **Topics**: Configuration, Model Selection, Cloud Origin, Protocol Behavior, Troubleshooting
+  - **User Questions**: "What can you tell me about OpenLLM Integration Guide?", "How does Configuration work?", "How
+    does Model Selection work?"
+
 - **File**: `docs/providers/openrouter.md`
   - **Content**: OpenRouter Integration Guide
   - **Topics**: Quickstart, Meta Muse models, Persisting configuration, Runtime behaviour, App attribution (opt-in)

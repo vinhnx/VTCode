@@ -67,11 +67,11 @@ VT Code represents a modern approach to AI-powered software development, featuri
 
 ### Provider index
 
-| Category        | Providers                                                                                                                                                              |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cloud LLMs      | Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek, Z.AI, Moonshot, MiniMax, Mistral, Qwen, StepFun                                                                     |
-| Gateways        | OpenRouter, **[Vercel AI Gateway](./providers/vercel-ai-gateway.md)**, **[Merge Gateway](./providers/merge-gateway.md)**, Evolink, HuggingFace, Atlas Cloud, OmniRoute |
-| Local inference | Ollama, LM Studio, llama.cpp                                                                                                                                           |
+| Category        | Providers                                                                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud LLMs      | Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek, Z.AI, Moonshot, MiniMax, Mistral, Qwen, StepFun                                                                                                            |
+| Gateways        | OpenRouter, **[Vercel AI Gateway](./providers/vercel-ai-gateway.md)**, **[Merge Gateway](./providers/merge-gateway.md)**, Evolink, HuggingFace, Atlas Cloud, OmniRoute, **[OpenLLM](./providers/openllm.md)** |
+| Local inference | Ollama, LM Studio, llama.cpp                                                                                                                                                                                  |
 
 See the complete [Provider Guides](./providers/PROVIDER_GUIDES.md) index for authentication, endpoints, model catalogs,
 and setup details.
