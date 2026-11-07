@@ -610,7 +610,7 @@ fn invocation_with_action(name: &str, action: &str) -> ThreadItemDetails {
 
 #[test]
 fn tool_category_mirrors_service_labels_at_summary_granularity() {
-    use ToolCategory::{Edit, Other, Read, Run, Search};
+    use ToolCategory::{Edit, Other, Read, Run, Search, Tracker};
     let classified = [
         ("read_file", Read),
         ("read_pty_session", Read),
@@ -630,7 +630,7 @@ fn tool_category_mirrors_service_labels_at_summary_granularity() {
         ("code_search", Search),
         ("grep", Search),
         ("grep_file", Search),
-        ("task_tracker", Other),
+        ("task_tracker", Tracker),
         ("request_user_input", Other),
         ("some_future_tool", Other),
     ];
@@ -749,6 +749,13 @@ fn activity_verbs_compose_in_fixed_order_with_english_plurals() {
     single.add(ToolCategory::Other);
     single.add(ToolCategory::Other);
     assert_eq!(describe_activity_verbs(&single).as_deref(), Some("Ran 1 command · 2 other actions"));
+    // Tracker rows name their verb instead of collapsing into "other actions".
+    let mut tracker = ToolCategoryCounts::default();
+    assert!(!tracker.has_verbs());
+    tracker.add(ToolCategory::Tracker);
+    tracker.add(ToolCategory::Tracker);
+    assert!(tracker.has_verbs());
+    assert_eq!(describe_activity_verbs(&tracker).as_deref(), Some("Updated 2 task lists"));
 }
 
 fn invocation_item(name: &str, arguments: Option<serde_json::Value>) -> ToolInvocationItem {

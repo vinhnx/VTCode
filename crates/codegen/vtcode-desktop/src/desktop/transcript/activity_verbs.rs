@@ -16,6 +16,7 @@ pub(crate) enum ToolCategory {
     Edit,
     Run,
     Search,
+    Tracker,
     Other,
 }
 
@@ -59,6 +60,10 @@ impl ToolCategory {
             // command field; these four are launches unconditionally).
             "exec_command" | "run_pty_cmd" | "create_pty_session" | "shell" | "bash" => Self::Run,
             "code_search" | "grep" | "grep_file" => Self::Search,
+            // Canonical `task_tracker` (`vtcode-config/src/constants/tools.rs`).
+            // Own category (not `Other`) so tracker rows render the inline
+            // task block and group summaries name the verb.
+            "task_tracker" => Self::Tracker,
             // Internal unified tools dispatch on their action arg; a missing
             // action reads (file) or runs (exec), matching `tool_action_label`.
             "file_operation_internal" => match unified_action(args).unwrap_or("read") {
@@ -107,6 +112,7 @@ pub(crate) struct ToolCategoryCounts {
     pub edit: usize,
     pub run: usize,
     pub search: usize,
+    pub tracker: usize,
     pub other: usize,
 }
 
@@ -117,6 +123,7 @@ impl ToolCategoryCounts {
             ToolCategory::Edit => self.edit += 1,
             ToolCategory::Run => self.run += 1,
             ToolCategory::Search => self.search += 1,
+            ToolCategory::Tracker => self.tracker += 1,
             ToolCategory::Other => self.other += 1,
         }
     }
@@ -124,7 +131,7 @@ impl ToolCategoryCounts {
     /// Whether any row carries a nameable verb. Verb-less groups keep the
     /// legacy count label instead of rendering an empty phrase.
     pub(crate) fn has_verbs(&self) -> bool {
-        self.read > 0 || self.edit > 0 || self.run > 0 || self.search > 0
+        self.read > 0 || self.edit > 0 || self.run > 0 || self.search > 0 || self.tracker > 0
     }
 }
 
@@ -149,6 +156,9 @@ pub(crate) fn describe_activity_verbs(counts: &ToolCategoryCounts) -> Option<Str
     }
     if counts.search > 0 {
         parts.push(verb_part(counts.search, "Searched", "query", "queries"));
+    }
+    if counts.tracker > 0 {
+        parts.push(verb_part(counts.tracker, "Updated", "task list", "task lists"));
     }
     if counts.other > 0 {
         parts.push(format!("{} other {}", counts.other, if counts.other == 1 { "action" } else { "actions" }));
@@ -298,7 +308,9 @@ pub(crate) fn tool_row_gist(tool: &ToolInvocationItem) -> String {
         ToolCategory::Edit => args.and_then(file_basename).map(|base| format!("Edited {base}")),
         ToolCategory::Run => args.and_then(command_text),
         ToolCategory::Search => args.and_then(|args| first_string(args, &["query", "pattern"])),
-        ToolCategory::Other => None,
+        // Tracker rows keep the raw tool name; the inline task block below
+        // the title carries the checklist detail.
+        ToolCategory::Tracker | ToolCategory::Other => None,
     };
     gist.unwrap_or_else(|| tool.tool_name.clone())
 }

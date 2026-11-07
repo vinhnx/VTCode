@@ -768,3 +768,35 @@ fn compact_boundary_deserializes_legacy_payload_without_segment_metadata() -> Re
     assert_eq!(event.new_catalog_hash, None);
     Ok(())
 }
+
+#[test]
+fn tracker_updated_round_trip_preserves_snapshot() -> Result<(), Box<dyn Error>> {
+    let snapshot = tracker::TrackerSnapshot {
+        title: "Release".to_string(),
+        completed: 1,
+        total: 2,
+        items: vec![
+            tracker::TrackerItemState {
+                index_path: "1".to_string(),
+                description: "Write code".to_string(),
+                status: tracker::TrackerItemStatus::Completed,
+            },
+            tracker::TrackerItemState {
+                index_path: "2".to_string(),
+                description: "Ship it".to_string(),
+                status: tracker::TrackerItemStatus::Pending,
+            },
+        ],
+    };
+    let event = ThreadEvent::TrackerUpdated(Box::new(snapshot));
+    let json = serde_json::to_string(&event)?;
+    assert!(json.contains("\"tracker.updated\""), "tagged variant name: {json}");
+    let restored: ThreadEvent = serde_json::from_str(&json)?;
+    assert_eq!(restored, event);
+
+    // Unknown item statuses from newer producers decode to the catch-all.
+    let status: tracker::TrackerItemStatus = serde_json::from_str("\"archived\"")?;
+    assert_eq!(status, tracker::TrackerItemStatus::Unknown);
+    assert_eq!(tracker::TrackerItemStatus::InProgress.as_str(), "in_progress");
+    Ok(())
+}

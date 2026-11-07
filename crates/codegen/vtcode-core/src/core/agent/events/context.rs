@@ -41,6 +41,73 @@ pub fn validate_decision_input(args: serde_json::Value) -> anyhow::Result<crate:
     Ok(d)
 }
 
+/// Parse one raw checklist item into snapshot state.
+///
+/// Mirrors `compact_task_tree_view_from_items` filtering: items without a
+/// non-empty description/text are skipped, unparseable statuses are skipped,
+/// and a missing status defaults to pending. Index paths accept dotted
+/// `index_path` values and numeric `index` values, falling back to the
+/// 1-based position so every row keeps a stable identity.
+fn tracker_item_state(
+    item: &serde_json::Value,
+    position: usize,
+) -> Option<crate::exec::events::tracker::TrackerItemState> {
+    use crate::exec::events::tracker::{TrackerItemState, TrackerItemStatus};
+    use std::str::FromStr;
+
+    let index_path = item
+        .get("index_path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|path| !path.trim().is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            item.get("index")
+                .and_then(serde_json::Value::as_u64)
+                .map(|index| index.to_string())
+        })
+        .unwrap_or_else(|| (position + 1).to_string());
+    let status = match item.get("status").and_then(serde_json::Value::as_str) {
+        Some(raw) => TrackerItemStatus::from_str(raw).ok()?,
+        None => TrackerItemStatus::Pending,
+    };
+    let description = item
+        .get("description")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| item.get("text").and_then(serde_json::Value::as_str))
+        .filter(|description| !description.trim().is_empty())?;
+    let short = crate::tools::handlers::task_tracking::short_task_description(description);
+    let description = if short.trim().is_empty() {
+        description.trim().to_string()
+    } else {
+        short
+    };
+    Some(TrackerItemState { index_path, description, status })
+}
+
+/// Resolve snapshot progress counts.
+///
+/// Explicit `completed`/`total` win; otherwise counts derive from the parsed
+/// items. Returns `None` when neither source can describe progress, mirroring
+/// the CLI progress-line contract.
+fn tracker_snapshot_counts(
+    checklist: &serde_json::Map<String, serde_json::Value>,
+    items: &[crate::exec::events::tracker::TrackerItemState],
+) -> Option<(usize, usize)> {
+    use crate::exec::events::tracker::TrackerItemStatus;
+
+    if let (Some(completed), Some(total)) = (
+        checklist.get("completed").and_then(serde_json::Value::as_u64),
+        checklist.get("total").and_then(serde_json::Value::as_u64),
+    ) {
+        return Some((usize::try_from(completed).unwrap_or(usize::MAX), usize::try_from(total).unwrap_or(usize::MAX)));
+    }
+    if items.is_empty() {
+        return None;
+    }
+    let completed = items.iter().filter(|item| item.status == TrackerItemStatus::Completed).count();
+    Some((completed, items.len()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +212,140 @@ mod tests {
                 .session_message_event("call", "ask_session", &json!({"message_id": "msg-1"}))
                 .is_none()
         );
+    }
+
+    #[test]
+    fn tracker_mutations_publish_typed_checklist_snapshots() {
+        use crate::exec::events::tracker::{TrackerItemState, TrackerItemStatus};
+
+        let tracker = ExecutionContextTracker::default();
+        let output = json!({
+            "status": "updated",
+            "checklist": {
+                "title": "Release",
+                "completed": 1,
+                "total": 3,
+                "items": [
+                    {"index": 1, "description": "Write code", "status": "completed"},
+                    {"index_path": "2.1", "description": "Review docs – expand later", "status": "in_progress"},
+                    {"description": "Ship it", "status": "blocked"},
+                ],
+            },
+        });
+        let event = tracker.tracker_status_event("task_tracker", &output).unwrap();
+        let ThreadEvent::TrackerUpdated(snapshot) = event else {
+            panic!("tracker snapshot expected")
+        };
+        assert_eq!(snapshot.title, "Release");
+        assert_eq!((snapshot.completed, snapshot.total), (1, 3));
+        assert_eq!(
+            snapshot.items,
+            vec![
+                TrackerItemState {
+                    index_path: "1".to_string(),
+                    description: "Write code".to_string(),
+                    status: TrackerItemStatus::Completed,
+                },
+                TrackerItemState {
+                    index_path: "2.1".to_string(),
+                    description: "Review docs".to_string(),
+                    status: TrackerItemStatus::InProgress,
+                },
+                TrackerItemState {
+                    index_path: "3".to_string(),
+                    description: "Ship it".to_string(),
+                    status: TrackerItemStatus::Blocked,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn tracker_snapshots_prefer_explicit_counts_and_skip_malformed_rows() {
+        use crate::exec::events::tracker::TrackerItemStatus;
+
+        let tracker = ExecutionContextTracker::default();
+        // Explicit counts win over derived ones.
+        let explicit = json!({"checklist": {"title": "T", "completed": 5, "total": 9, "items": [
+            {"index": 1, "description": "Only row", "status": "completed"},
+        ]}});
+        let event = tracker.tracker_status_event("task_tracker", &explicit).unwrap();
+        let ThreadEvent::TrackerUpdated(snapshot) = event else {
+            panic!("tracker snapshot expected")
+        };
+        assert_eq!((snapshot.completed, snapshot.total), (5, 9));
+        assert_eq!(snapshot.items.len(), 1);
+
+        // Unknown statuses and blank descriptions drop; a missing status
+        // defaults to pending; `text` backs `description`.
+        let derived = json!({"checklist": {"items": [
+            {"index": 1, "description": "Done", "status": "completed"},
+            {"index": 2, "description": "Mystery", "status": "archived"},
+            {"index": 3, "description": "   "},
+            {"index": 4, "text": "Fallback", "status": "pending"},
+            {"index": 5, "description": "Defaulted"},
+        ]}});
+        let event = tracker.tracker_status_event("task_tracker", &derived).unwrap();
+        let ThreadEvent::TrackerUpdated(snapshot) = event else {
+            panic!("tracker snapshot expected")
+        };
+        assert_eq!(
+            snapshot
+                .items
+                .iter()
+                .map(|item| (item.index_path.as_str(), item.description.as_str(), item.status))
+                .collect::<Vec<_>>(),
+            vec![
+                ("1", "Done", TrackerItemStatus::Completed),
+                ("4", "Fallback", TrackerItemStatus::Pending),
+                ("5", "Defaulted", TrackerItemStatus::Pending),
+            ]
+        );
+        assert_eq!((snapshot.completed, snapshot.total), (1, 3));
+
+        // Reversed inputs keep input order with equal counts (asymmetric pair).
+        let forward = json!({"checklist": {"items": [
+            {"index": 1, "description": "Alpha", "status": "completed"},
+            {"index": 2, "description": "Beta", "status": "pending"},
+        ]}});
+        let backward = json!({"checklist": {"items": [
+            {"index": 2, "description": "Beta", "status": "pending"},
+            {"index": 1, "description": "Alpha", "status": "completed"},
+        ]}});
+        let forward_items = match tracker.tracker_status_event("task_tracker", &forward) {
+            Some(ThreadEvent::TrackerUpdated(snapshot)) => snapshot.items,
+            _ => panic!("tracker snapshot expected"),
+        };
+        let backward_items = match tracker.tracker_status_event("task_tracker", &backward) {
+            Some(ThreadEvent::TrackerUpdated(snapshot)) => snapshot.items,
+            _ => panic!("tracker snapshot expected"),
+        };
+        assert_eq!(forward_items.len(), 2);
+        assert_eq!(backward_items.len(), 2);
+        assert_eq!(forward_items[0].description, "Alpha");
+        assert_eq!(backward_items[0].description, "Beta");
+
+        // Unrelated tools, missing checklists, and count-less empty
+        // checklists produce no event.
+        assert!(tracker.tracker_status_event("exec_command", &derived).is_none());
+        assert!(tracker.tracker_status_event("task_tracker", &json!({"status": "ok"})).is_none());
+        assert!(
+            tracker
+                .tracker_status_event("task_tracker", &json!({"checklist": {"title": "Empty", "items": []}}))
+                .is_none()
+        );
+        // Explicit counts keep an empty checklist visible.
+        let empty = tracker
+            .tracker_status_event(
+                "task_tracker",
+                &json!({"checklist": {"title": "Empty", "completed": 0, "total": 0, "items": []}}),
+            )
+            .unwrap();
+        let ThreadEvent::TrackerUpdated(snapshot) = empty else {
+            panic!("tracker snapshot expected")
+        };
+        assert!(snapshot.items.is_empty());
+        assert_eq!((snapshot.completed, snapshot.total), (0, 0));
     }
 
     #[test]
@@ -443,6 +644,40 @@ impl ExecutionContextTracker {
                 details: ThreadItemDetails::Harness(Box::new(item)),
             },
         }))
+    }
+
+    /// Publish a typed checklist snapshot after a `task_tracker` mutation.
+    ///
+    /// Mirrors [`Self::delegation_status_event`]: parses the structured tool
+    /// output (still a [`serde_json::Value`] here, before output compaction
+    /// renders it into display text) into a [`ThreadEvent::TrackerUpdated`]
+    /// snapshot so desktop and archive consumers replay typed state instead
+    /// of re-parsing rendered output. Returns `None` for other tools,
+    /// missing checklists, and checklists with neither renderable items nor
+    /// explicit counts.
+    pub fn tracker_status_event(&self, tool_name: &str, output: &serde_json::Value) -> Option<ThreadEvent> {
+        use crate::config::constants::tools;
+        use crate::exec::events::tracker::TrackerSnapshot;
+
+        if tool_name != tools::TASK_TRACKER {
+            return None;
+        }
+        let checklist = output.get("checklist")?.as_object()?;
+        let mut items = Vec::new();
+        if let Some(raw_items) = checklist.get("items").and_then(serde_json::Value::as_array) {
+            for (position, item) in raw_items.iter().enumerate() {
+                if let Some(state) = tracker_item_state(item, position) {
+                    items.push(state);
+                }
+            }
+        }
+        let (completed, total) = tracker_snapshot_counts(checklist, &items)?;
+        let title = checklist
+            .get("title")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        Some(ThreadEvent::TrackerUpdated(Box::new(TrackerSnapshot { title, completed, total, items })))
     }
 
     /// A new idle user request starts a task; other origins retain its root goal.

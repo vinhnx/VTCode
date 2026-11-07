@@ -317,7 +317,7 @@ fn activity_group_header_summarizes_tool_verbs(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(
             window.find("activity-group-read-1").label(),
-            Some("Expand Read 1 file · Ran 1 command · 1 other action · 1 failed")
+            Some("Expand Read 1 file · Ran 1 command · Updated 1 task list · 1 failed")
         );
         // The single inspector entry keeps working beside the verb phrase.
         window.hover("transcript-row-read-1", cx);

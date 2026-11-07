@@ -6,7 +6,7 @@
 ## Modules
 
 - `lib.rs` `ThreadEvent` (serde-tagged), `VersionedThreadEvent`, `EventEmitter`, `Usage`, `EVENT_SCHEMA_VERSION` | `items.rs` `ThreadItem`/`ThreadItemDetails`.
-- `planning.rs` plan deltas, approval, recovery snapshots | `matrix.rs` matrix checkpoints | `diagnostic.rs` | `schema.rs`.
+- `planning.rs` plan deltas, approval, recovery snapshots | `matrix.rs` matrix checkpoints | `tracker.rs` task-tracker snapshots | `diagnostic.rs` | `schema.rs`.
 - `atif/` ATIF trajectory export | `trace.rs` Agent Trace attribution | feature-gated emitters in `log_support.rs`, `tracing_support.rs`, `json.rs`.
 
 ## Rules

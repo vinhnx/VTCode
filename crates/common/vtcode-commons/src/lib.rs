@@ -79,6 +79,7 @@ pub mod thread_safety;
 pub mod tokens;
 pub mod tool_types;
 pub mod trace_flush;
+pub mod tracker_title;
 pub mod ui_protocol;
 pub mod unicode;
 pub mod utf8_stream;

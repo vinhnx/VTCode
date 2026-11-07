@@ -266,6 +266,9 @@ fn describe_event(event: &vtcode_core::exec::events::ThreadEvent) -> (&'static s
         vtcode_core::exec::events::ThreadEvent::MatrixUpdated(snapshot) => {
             ("matrix.updated", format!("{}: {:?}", snapshot.spec.id, snapshot.lifecycle))
         }
+        vtcode_core::exec::events::ThreadEvent::TrackerUpdated(snapshot) => {
+            ("tracker.updated", format!("{}: {}/{}", snapshot.title, snapshot.completed, snapshot.total))
+        }
         vtcode_core::exec::events::ThreadEvent::Unknown => ("unknown", String::new()),
     }
 }

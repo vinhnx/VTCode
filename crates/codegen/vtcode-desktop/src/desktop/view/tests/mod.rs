@@ -197,7 +197,7 @@ fn pending_webmcp_pairing() -> vtcode_desktop_protocol::WebmcpPairResult {
 }
 
 fn palette_action_id(action: &super::PaletteAction) -> String {
-    super::palette_entry_element_id(action)
+    super::palette_render::palette_entry_element_id(action)
 }
 
 /// Opening prompt history fetches cross-thread recents exactly once (an
@@ -648,6 +648,7 @@ mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
 mod storage_settings;
+mod tasks_viewer;
 mod theme_picker;
 mod themes_transcript;
 mod thread_tabs;

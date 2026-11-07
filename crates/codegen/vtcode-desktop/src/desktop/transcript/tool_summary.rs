@@ -145,7 +145,7 @@ fn gist_keys(category: ToolCategory) -> &'static [&'static str] {
         ToolCategory::Edit => &["path", "file_path", "filepath", "target_path"],
         ToolCategory::Run => &["command", "cmd", "raw_command", "bash_command"],
         ToolCategory::Search => &["query", "pattern"],
-        ToolCategory::Other => &[],
+        ToolCategory::Tracker | ToolCategory::Other => &[],
     }
 }
 

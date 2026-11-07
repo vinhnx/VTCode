@@ -26,16 +26,18 @@ pub(super) enum InspectorTab {
     Changes,
     Files,
     Activity,
+    Tasks,
     Output,
     Utilities,
     Plan,
 }
 
 impl InspectorTab {
-    pub(super) const ALL: [Self; 6] = [
+    pub(super) const ALL: [Self; 7] = [
         Self::Changes,
         Self::Files,
         Self::Activity,
+        Self::Tasks,
         Self::Output,
         Self::Utilities,
         Self::Plan,
@@ -46,6 +48,8 @@ impl InspectorTab {
             Self::Changes => rust_i18n::t!("app.inspector.tab_changes").to_string(),
             Self::Files => rust_i18n::t!("app.inspector.tab_files").to_string(),
             Self::Activity => rust_i18n::t!("app.inspector.tab_activity").to_string(),
+            // English literal: no translated key covers the Tasks tab yet.
+            Self::Tasks => "Tasks".to_string(),
             Self::Output => rust_i18n::t!("app.inspector.tab_output").to_string(),
             Self::Utilities => rust_i18n::t!("app.inspector.tab_utilities").to_string(),
             Self::Plan => rust_i18n::t!("app.inspector.tab_plan").to_string(),

@@ -8,6 +8,17 @@ impl DesktopView {
         self.transcript.push(item);
     }
 
+    pub(super) fn handle_ui_progress(&mut self, progress: Value, cx: &mut Context<Self>) {
+        if progress
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .is_some_and(|session_id| self.selected_session_id.as_deref() == Some(session_id))
+        {
+            self.ui_progress_active = progress.get("active").and_then(Value::as_bool).unwrap_or(false);
+            cx.notify();
+        }
+    }
+
     pub(super) fn handle_turn_status(&mut self, status: Value) {
         if !status.get(keys::SESSION_ID).and_then(Value::as_str).is_some_and(|session_id| {
             self.notification_matches(session_id, status.get(keys::TURN_ID).and_then(Value::as_str))
@@ -252,6 +263,9 @@ impl DesktopView {
             }
             ThreadEvent::MatrixUpdated(snapshot) => {
                 self.background_activity_count = event_signals::matrix_loading_count(snapshot);
+            }
+            ThreadEvent::TrackerUpdated(snapshot) => {
+                self.tracker_snapshot = Some(snapshot.as_ref().clone());
             }
             _ => {}
         }

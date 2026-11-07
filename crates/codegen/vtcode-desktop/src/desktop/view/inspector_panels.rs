@@ -2,6 +2,10 @@
 
 use super::*;
 mod activity;
+mod tasks;
+
+#[cfg(test)]
+pub(super) use tasks::tracker_current_index;
 
 /// A workspace entry being dragged out of the file tree.
 struct DragWorkspaceFile {

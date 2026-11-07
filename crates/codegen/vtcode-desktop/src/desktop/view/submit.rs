@@ -258,7 +258,7 @@ impl DesktopView {
         self.interaction_step_index = 0;
         self.interaction_immediate_choice_id = None;
         self.interaction_plan_expanded = false;
-        self.reset_plan_inspector_tab_if_hidden();
+        self.reset_hidden_inspector_tab_if_stranded();
     }
 
     pub(super) fn submit_interaction(

@@ -191,6 +191,16 @@ impl DesktopView {
         }
     }
 
+    /// Seed the Tasks viewer from the newest `tracker.updated` checkpoint in
+    /// the restored timeline. Later live updates replace it; sessions without
+    /// tracker activity keep the empty state.
+    pub(super) fn restore_tracker_snapshot(&mut self, events: &[vtcode_exec_events::VersionedThreadEvent]) {
+        self.tracker_snapshot = events.iter().rev().find_map(|event| match event.event() {
+            vtcode_exec_events::ThreadEvent::TrackerUpdated(snapshot) => Some(snapshot.as_ref().clone()),
+            _ => None,
+        });
+    }
+
     pub(super) fn finish_unverified_turn(&mut self, message: &str) {
         self.pending_submission = None;
         self.pending_first_submission = false;

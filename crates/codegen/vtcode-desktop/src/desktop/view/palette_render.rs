@@ -629,6 +629,77 @@ pub(super) fn palette_action_command_id(action: &PaletteAction) -> Option<shortc
     }
 }
 
+/// Keep palette label identity attached to the command when search/filtering changes row order.
+/// Hash payloads so file paths and draft text do not appear in rendered element IDs.
+pub(super) fn palette_entry_element_id(action: &PaletteAction) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::mem::discriminant(action).hash(&mut hasher);
+    match action {
+        PaletteAction::SelectFont { target, family } => {
+            match target {
+                FontTarget::Ui => 0_u8,
+                FontTarget::Code => 1_u8,
+            }
+            .hash(&mut hasher);
+            family.hash(&mut hasher);
+        }
+        PaletteAction::EditConfigSetting(value)
+        | PaletteAction::LoadSession(value)
+        | PaletteAction::PreviewFile(value)
+        | PaletteAction::SelectWorkspaceReviewFile(value)
+        | PaletteAction::AttachFile(value)
+        | PaletteAction::InsertFileMention(value)
+        | PaletteAction::CompleteSlashCommand(value)
+        | PaletteAction::InsertHistoryPrompt(value)
+        | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
+        PaletteAction::OpenConversationSearch { session_id } => session_id.hash(&mut hasher),
+        PaletteAction::JumpToTranscriptItem { session_id, item_id, from_search } => {
+            session_id.hash(&mut hasher);
+            item_id.hash(&mut hasher);
+            from_search.hash(&mut hasher);
+        }
+        PaletteAction::ShowActivityOutput { session_id, item_id } => {
+            session_id.hash(&mut hasher);
+            item_id.hash(&mut hasher);
+        }
+        PaletteAction::SelectSettingsTab(tab) => std::mem::discriminant(tab).hash(&mut hasher),
+        PaletteAction::SelectModel { provider, model } => {
+            provider.hash(&mut hasher);
+            model.hash(&mut hasher);
+        }
+        PaletteAction::SelectSessionOptions(options) => {
+            match options.permission_mode {
+                None => 0_u8,
+                Some(protocol::PermissionMode::Ask) => 1,
+                Some(protocol::PermissionMode::AutoApproveCommands) => 2,
+                Some(protocol::PermissionMode::FullAccess) => 3,
+            }
+            .hash(&mut hasher);
+            options.mode.hash(&mut hasher);
+            options.reasoning_effort.hash(&mut hasher);
+            options.fast_mode.hash(&mut hasher);
+        }
+        PaletteAction::OpenDeepLink(link) => link.path().unwrap_or_else(|| format!("{link:?}")).hash(&mut hasher),
+        PaletteAction::NewSession
+        | PaletteAction::CloseSession
+        | PaletteAction::CopyThreadTitle
+        | PaletteAction::CloseOtherTabs
+        | PaletteAction::OpenInCli
+        | PaletteAction::CopyLatestMessage
+        | PaletteAction::ChooseModel
+        | PaletteAction::ChooseWorkspace
+        | PaletteAction::RefreshSessions
+        | PaletteAction::RefreshFiles
+        | PaletteAction::BrowseThreads
+        | PaletteAction::ToggleInspector
+        | PaletteAction::ToggleZenMode
+        | PaletteAction::ToggleTheme
+        | PaletteAction::AttachFiles
+        | PaletteAction::OpenGoTo => {}
+    }
+    format!("palette-label-{:016x}", hasher.finish())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

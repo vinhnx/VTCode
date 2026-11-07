@@ -33,9 +33,10 @@ pub use items::{
 pub mod matrix;
 pub mod planning;
 pub mod trace;
+pub mod tracker;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.26.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.27.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -122,6 +123,9 @@ pub enum ThreadEvent {
     /// Replayable local matrix lifecycle checkpoint.
     #[serde(rename = "matrix.updated")]
     MatrixUpdated(Box<matrix::MatrixSnapshot>),
+    /// Bounded task-tracker checklist snapshot after a mutation.
+    #[serde(rename = "tracker.updated")]
+    TrackerUpdated(Box<tracker::TrackerSnapshot>),
     /// Indicates that a new execution thread has started.
     #[serde(rename = "thread.started")]
     ThreadStarted(ThreadStartedEvent),

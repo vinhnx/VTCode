@@ -892,20 +892,11 @@ impl DesktopView {
                 self.pending_interaction_response = None;
                 self.interaction_edit_pending = false;
                 self.interaction = Some(interaction);
-                self.reset_plan_inspector_tab_if_hidden();
+                self.reset_hidden_inspector_tab_if_stranded();
                 self.invalidate_webmcp_status();
                 self.status = rust_i18n::t!("app.service.awaiting_decision").to_string();
             }
-            BackendEvent::UiProgress(progress) => {
-                if progress
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .is_some_and(|session_id| self.selected_session_id.as_deref() == Some(session_id))
-                {
-                    self.ui_progress_active = progress.get("active").and_then(Value::as_bool).unwrap_or(false);
-                    cx.notify();
-                }
-            }
+            BackendEvent::UiProgress(progress) => self.handle_ui_progress(progress, cx),
             BackendEvent::TurnQueueStatus(status) => {
                 let Ok(snapshot) = serde_json::from_value::<protocol::TurnQueueStatus>(status) else {
                     return;
@@ -931,6 +922,8 @@ impl DesktopView {
                 self.running = false;
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;
+                self.tracker_snapshot = None;
+                self.reset_hidden_inspector_tab_if_stranded();
                 self.active_turn_id = None;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
@@ -985,6 +978,8 @@ impl DesktopView {
                 self.running = false;
                 self.ui_progress_active = false;
                 self.background_activity_count = 0;
+                self.tracker_snapshot = None;
+                self.reset_hidden_inspector_tab_if_stranded();
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
                 self.clear_queue_state();

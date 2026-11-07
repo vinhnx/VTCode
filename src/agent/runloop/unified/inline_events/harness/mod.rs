@@ -347,6 +347,15 @@ impl HarnessEventEmitter {
         if let Some(event) = delegation {
             self.emit_single(event)?;
         }
+        let tracker = self
+            .inner
+            .context
+            .lock()
+            .map_err(|error| anyhow::anyhow!("execution context lock poisoned: {error}"))?
+            .tracker_status_event(tool_name, output);
+        if let Some(event) = tracker {
+            self.emit_single(event)?;
+        }
         Ok(())
     }
 

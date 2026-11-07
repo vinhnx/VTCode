@@ -396,44 +396,10 @@ fn tracker_progress_counts(val: &Value) -> Option<(usize, usize)> {
     Some((completed, total))
 }
 
-/// Humanize generated tracker titles (`1789108823046-kind-lagoon` → `Kind
-/// Lagoon`) so the transcript header reads as a name instead of a file-stem
-/// ID. Only millisecond-timestamp-prefixed slugs are rewritten; user titles
-/// (`Release`, paths, sentences) pass through verbatim.
+/// Humanize generated tracker titles; shared with the desktop Tasks viewer
+/// through `vtcode_commons::tracker_title`.
 pub(crate) fn humanize_tracker_title(raw: &str) -> String {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return "Task tracker".to_string();
-    }
-    let mut parts = trimmed.splitn(2, ['-', '_']);
-    let prefix = parts.next().unwrap_or_default();
-    let slug = parts.next().unwrap_or_default();
-    let is_generated_id = prefix.len() >= 10
-        && prefix.chars().all(|character| character.is_ascii_digit())
-        && !slug.is_empty()
-        && slug
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_');
-    if !is_generated_id {
-        return trimmed.to_string();
-    }
-    let humanized = slug
-        .split(['-', '_'])
-        .filter(|word| !word.is_empty())
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-    if humanized.is_empty() {
-        trimmed.to_string()
-    } else {
-        humanized
-    }
+    vtcode_commons::tracker_title::humanize_tracker_title(raw)
 }
 
 fn visible_tracker_view_row(value: &Value) -> Option<String> {
@@ -452,47 +418,22 @@ pub(crate) fn tracker_panel_metadata(val: &Value) -> Option<TaskPanelMetadata> {
     Some(TaskPanelMetadata { title, completed, total })
 }
 
-/// Descriptive header title: never surface a generated plan codename.
-///
-/// Checklist titles created from approved plans already carry the plan-summary
-/// clause, but older/manual payloads may still carry a timestamp slug
-/// (`1789108823046-jolly-forest`) or its humanized form (`Jolly Forest`).
-/// Those read as random names and say nothing about the work, so derive a
-/// purpose-indicating title from the first checklist item instead. User titles
-/// pass through verbatim (humanized only for timestamp slugs).
+/// Descriptive header title: never surface a generated plan codename. Title
+/// rules live in `vtcode_commons::tracker_title` (shared with desktop); this
+/// wrapper only walks the tool payload into plain strings.
 fn resolve_tracker_title(val: &Value, fallback_default: &str) -> String {
     let raw = val
         .get("checklist")
         .and_then(Value::as_object)
         .and_then(|checklist| checklist.get("title"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|title| !title.is_empty());
-    let Some(raw) = raw else {
-        return first_item_descriptive_title(val).unwrap_or_else(|| fallback_default.to_string());
-    };
-    if is_generated_tracker_title(raw) {
-        return first_item_descriptive_title(val).unwrap_or_else(|| fallback_default.to_string());
-    }
-    humanize_tracker_title(raw)
+        .and_then(Value::as_str);
+    let first_item = first_item_short(val);
+    vtcode_commons::tracker_title::resolve_tracker_title(raw, first_item.as_deref(), fallback_default)
 }
 
-fn is_generated_tracker_title(raw: &str) -> bool {
-    let trimmed = raw.trim();
-    let mut parts = trimmed.splitn(2, ['-', '_']);
-    let prefix = parts.next().unwrap_or_default();
-    let slug = parts.next().unwrap_or_default();
-    let is_timestamped =
-        prefix.len() >= 10 && prefix.chars().all(|character| character.is_ascii_digit()) && !slug.is_empty();
-    if is_timestamped {
-        return true;
-    }
-    vtcode_commons::slug::is_humanized_codename(&humanize_tracker_title(trimmed))
-}
-
-/// Fallback descriptive title from the first actionable checklist item.
-/// Bounds to the same 60-byte header budget used at tracker creation.
-fn first_item_descriptive_title(val: &Value) -> Option<String> {
+/// Short description of the first actionable checklist item; the shared
+/// resolver applies the header budget.
+fn first_item_short(val: &Value) -> Option<String> {
     let items = val.get("checklist")?.get("items")?.as_array()?;
     for item in items {
         let description = item
@@ -502,7 +443,7 @@ fn first_item_descriptive_title(val: &Value) -> Option<String> {
         let short = short_task_description(description);
         let short = short.trim();
         if !short.is_empty() {
-            return Some(vtcode_commons::formatting::truncate_byte_budget(short, 60, "…"));
+            return Some(short.to_string());
         }
     }
     None

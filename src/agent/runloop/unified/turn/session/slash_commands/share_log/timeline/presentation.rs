@@ -42,6 +42,27 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                 pretty_json_string(&record.event),
                 false,
             ),
+            ThreadEvent::TrackerUpdated(snapshot) => timeline_row(
+                record.sequence,
+                TIMELINE_SOURCE_THREAD_EVENTS,
+                "tracker.updated",
+                None,
+                "tracker",
+                Some(if snapshot.total == 0 {
+                    "pending"
+                } else if snapshot.completed >= snapshot.total {
+                    "completed"
+                } else {
+                    "in_progress"
+                }),
+                record.turn_id.as_deref(),
+                record.submission_id.as_ref().map(|value| value.as_str()),
+                format!("Tracker {}: {}/{}", snapshot.title, snapshot.completed, snapshot.total),
+                String::new(),
+                String::new(),
+                pretty_json_string(&record.event),
+                false,
+            ),
             ThreadEvent::ThreadStarted(event) => timeline_row(
                 record.sequence,
                 TIMELINE_SOURCE_THREAD_EVENTS,

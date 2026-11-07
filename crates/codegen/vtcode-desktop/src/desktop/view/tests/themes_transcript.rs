@@ -104,7 +104,7 @@ fn command_palette_keeps_dialog_accessible_with_reduced_motion(cx: &mut TestAppC
 
 #[gpui_kit::test]
 fn context_usage_percent_handles_unknown_and_saturated_windows() {
-    use super::super::context_usage_percent;
+    use super::super::context_format::context_usage_percent;
     use vtcode_exec_events::Usage;
 
     let usage = Usage {

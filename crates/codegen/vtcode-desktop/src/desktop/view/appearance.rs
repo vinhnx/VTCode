@@ -173,7 +173,7 @@ impl DesktopView {
         let context_percent = configuration
             .and_then(|config| config.context_window)
             .zip(self.last_usage.as_ref())
-            .and_then(|(window, usage)| context_usage_percent(usage, window));
+            .and_then(|(window, usage)| context_format::context_usage_percent(usage, window));
         let workspace_details = div()
             .flex()
             .items_center()

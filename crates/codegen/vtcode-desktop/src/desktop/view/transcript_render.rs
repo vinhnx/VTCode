@@ -912,6 +912,13 @@ impl DesktopView {
         );
         // Grouped rows nest under their shared header; single tool rows stay flush.
         panel = panel.when(item.activity_grouped, |panel| panel.pl_6());
+        // Tracker rows replay the newest checklist snapshot inline: header plus
+        // current task when collapsed, the bounded tree when expanded.
+        if item.activity_category == Some(ToolCategory::Tracker)
+            && let Some(block) = self.render_tracker_inline_block(item.id.as_str(), item.expanded, &colors)
+        {
+            panel = panel.child(div().id(format!("tracker-inline-{}", item.id)).test_support().child(block));
+        }
         if item.expanded {
             let output = item.output.as_ref().cloned().unwrap_or_else(|| item.text.clone());
             let full_output = inspector::output_with_truncation_notice(&output, item.output_truncated);

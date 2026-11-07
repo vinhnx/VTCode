@@ -81,12 +81,13 @@ impl DesktopView {
     }
 
     /// Tabs on the inspector rail. Plan joins only while a plan approval
-    /// carries viewable markdown, so the five persistent tabs keep their
-    /// no-scroll fit at default width.
+    /// carries viewable markdown and Tasks joins only with tracker activity,
+    /// so the five persistent tabs keep their no-scroll fit at default width.
     pub(super) fn visible_inspector_tabs(&self) -> Vec<InspectorTab> {
         InspectorTab::ALL
             .into_iter()
             .filter(|tab| *tab != InspectorTab::Plan || self.has_pending_plan_proposal())
+            .filter(|tab| *tab != InspectorTab::Tasks || self.tracker_snapshot.is_some())
             .collect()
     }
 
@@ -100,10 +101,14 @@ impl DesktopView {
         )
     }
 
-    /// Drop a stranded Plan selection when its approval leaves. Call after
-    /// every interaction replacement or clear.
-    pub(super) fn reset_plan_inspector_tab_if_hidden(&mut self) {
+    /// Drop a stranded conditional-tab selection when its content leaves.
+    /// Call after every interaction replacement or clear (Plan) and every
+    /// tracker snapshot clear (Tasks).
+    pub(super) fn reset_hidden_inspector_tab_if_stranded(&mut self) {
         if self.inspector_tab == InspectorTab::Plan && !self.has_pending_plan_proposal() {
+            self.inspector_tab = InspectorTab::Changes;
+        }
+        if self.inspector_tab == InspectorTab::Tasks && self.tracker_snapshot.is_none() {
             self.inspector_tab = InspectorTab::Changes;
         }
     }
@@ -176,6 +181,7 @@ impl DesktopView {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),
             InspectorTab::Files => self.render_inspector_files_tab(cx),
             InspectorTab::Activity => self.render_activity_tab(&colors, cx),
+            InspectorTab::Tasks => self.render_tasks_tab(&colors, cx),
             InspectorTab::Output => self.render_output_tab(cx),
             InspectorTab::Utilities => self.render_utilities(cx),
             InspectorTab::Plan => self.render_plan_tab(cx),
