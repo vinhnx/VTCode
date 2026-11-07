@@ -32,7 +32,7 @@
 - Kit `Badge` is an overlay count, not a text pill — use `Tag::secondary().outline().small()` for pills, wrapped in an identified `div` since `RenderOnce` cannot carry `.test_support()`.
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.
 - Plan rail/edit locking, custom themes, dismiss guards, and login items live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
-- `composer_actions.rs`, `components.rs`, `transcript/mod.rs`, `backend_events.rs`, `view.rs` are at the 1000-line ceiling (menus in `menu_bar.rs`, IDs in `view/ids.rs`): put new code in a focused module.
+- `composer_actions.rs`, `components.rs`, `transcript/mod.rs`, `backend_events.rs`, `view.rs`, `shortcuts.rs` are at the 1000-line ceiling (menus in `menu_bar.rs`, IDs in `view/ids.rs`): put new code in a focused module.
 - Plain `Enter` while scrolled detours through `submit_or_jump_to_latest` (jump first, draft kept); the Send button always submits immediately.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.
