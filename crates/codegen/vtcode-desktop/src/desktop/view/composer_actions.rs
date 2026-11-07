@@ -554,7 +554,7 @@ impl DesktopView {
         match self.palette_kind {
             PaletteKind::FileMentions => {
                 if !self.accept_composer_suggestion(window, cx) {
-                    self.submit_prompt(window, cx);
+                    self.submit_or_jump_to_latest(window, cx);
                 }
             }
             PaletteKind::PromptHistory => {
@@ -562,15 +562,29 @@ impl DesktopView {
                     // Empty history or a filter matching nothing: Enter
                     // submits the draft instead of dying silently.
                     self.close_palette(window, cx);
-                    self.submit_prompt(window, cx);
+                    self.submit_or_jump_to_latest(window, cx);
                 }
             }
             PaletteKind::SlashCommands => {
                 let _accepted = self.accept_composer_suggestion(window, cx);
-                self.submit_prompt(window, cx);
+                self.submit_or_jump_to_latest(window, cx);
             }
-            _ => self.submit_prompt(window, cx),
+            _ => self.submit_or_jump_to_latest(window, cx),
         }
+    }
+
+    /// Plain-Enter submit with viewport reconciliation: a non-empty draft
+    /// while scrolled away from the tail first jumps to the latest message
+    /// (draft and focus preserved) instead of submitting; the next Enter
+    /// submits. The Send button keeps immediate submit; only Enter detours.
+    fn submit_or_jump_to_latest(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let draft = self.composer.read(cx).value().to_string();
+        if !draft.trim().is_empty() && !self.message_scroller.read(cx).is_following_tail() {
+            self.transcript.follow_latest();
+            cx.notify();
+            return;
+        }
+        self.submit_prompt(window, cx);
     }
 
     pub(super) fn complete_composer_trigger(

@@ -117,6 +117,7 @@ impl Session {
             evicted_message_count: 0,
             pending_new_messages: 0,
             last_change_line_idx: None,
+            transcript_flash: None,
             should_exit: false,
             last_interrupt_press: None,
             last_escape_press: None,

@@ -539,3 +539,158 @@ fn focus_composer_shortcut_lands_from_every_route(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+fn scroll_transcript_up(window: &AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
+    cx.update_window(*window, |_, window, cx| {
+        window.scroll("transcript-scroll", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-120.))), cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(250));
+    cx.update_window(*window, |_, window, cx| {
+        window.render_frame(cx);
+        let scroller = view.read(cx).message_scroller.clone();
+        assert!(!scroller.read(cx).is_following_tail(), "fixture must leave the tail");
+    })
+    .unwrap();
+}
+
+fn push_tall_transcript(view: &Entity<DesktopView>, cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        view.update(cx, |view, _| {
+            for index in 0..20 {
+                view.transcript.push(TranscriptItem::new(
+                    format!("message-{index}"),
+                    "assistant".to_string(),
+                    "VT Code".into(),
+                    format!("Message {index}\n\n{}", "wrapped words ".repeat(index + 1)),
+                ));
+            }
+        });
+    });
+}
+
+#[gpui_kit::test]
+fn enter_with_draft_while_scrolled_jumps_to_latest_before_submitting(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    push_tall_transcript(&view, cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("enter-jump".into());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("keep this draft", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    scroll_transcript_up(&window, &view, cx);
+    // First Enter reconciles the viewport: jump, keep the draft, send nothing.
+    cx.update_window(window, |_, window, cx| {
+        window.press("enter", cx);
+        window.render_frame(cx);
+        let scroller = view.read(cx).message_scroller.clone();
+        assert!(scroller.read(cx).is_following_tail(), "first Enter jumps to latest");
+        assert_eq!(view.read(cx).composer.read(cx).value(), "keep this draft");
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window), "jump keeps composer focus");
+        assert!(!view.read(cx).running);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "jump sends nothing");
+    // Second Enter submits now that the tail is visible.
+    cx.update_window(window, |_, window, cx| {
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_ok(), "second Enter submits");
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn enter_on_empty_transcript_submits_first_message_immediately(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("enter-empty".into());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("first message", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_ok(), "empty-transcript Enter submits immediately");
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value(), "");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn enter_at_tail_submits_and_empty_enter_stays_put(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    push_tall_transcript(&view, cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("enter-tail".into());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("send me", window, cx);
+                state.focus(window, cx);
+            });
+        });
+        window.render_frame(cx);
+        let scroller = view.read(cx).message_scroller.clone();
+        assert!(scroller.read(cx).is_following_tail(), "fixture starts at the tail");
+        // At the tail a draft submits on the first Enter.
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_ok(), "tail Enter submits immediately");
+    // Scrolled up with an empty draft: Enter neither jumps nor submits.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| state.set_value("", window, cx));
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    scroll_transcript_up(&window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.press("enter", cx);
+        window.render_frame(cx);
+        let scroller = view.read(cx).message_scroller.clone();
+        assert!(!scroller.read(cx).is_following_tail(), "empty Enter stays scrolled");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "empty Enter sends nothing");
+    // Whitespace-only counts as empty, matching the submit guard.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |state, cx| state.set_value("   ", window, cx));
+        });
+        window.press("enter", cx);
+        window.render_frame(cx);
+        let scroller = view.read(cx).message_scroller.clone();
+        assert!(!scroller.read(cx).is_following_tail(), "blank Enter stays scrolled");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "blank Enter sends nothing");
+}

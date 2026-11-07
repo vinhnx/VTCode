@@ -19,6 +19,17 @@ pub(super) struct FilterMatches {
     index: usize,
 }
 
+/// How long a search/deeplink jump tints its landing row.
+const TRANSIENT_FLASH_DURATION: Duration = Duration::from_millis(1500);
+
+/// Transient search/deeplink locator: which row is tinted and which arming
+/// set it, so a stale expiry task cannot clear a newer jump.
+#[derive(Clone, Debug)]
+pub(super) struct TranscriptFlash {
+    pub(super) item_id: String,
+    pub(super) generation: u64,
+}
+
 impl DesktopView {
     /// Rows the renderer hides (collapsed activity members) are also skipped by
     /// keyboard navigation, so the highlight never lands on an invisible row.
@@ -96,7 +107,8 @@ impl DesktopView {
     /// settles the exact position once revealed rows are measured (matters
     /// for large collapsed groups). Frame callbacks never run in headless
     /// tests, so tests pin the synchronous base. The keyboard highlight
-    /// anchors on the target as position memory. Returns whether the id
+    /// anchors on the target as position memory, and the landing row tints
+    /// briefly (see `arm_transcript_flash`). Returns whether the id
     /// resolved to a live row; unknown ids leave state untouched. Callers
     /// that cross sessions must guard the selection first.
     pub(super) fn jump_to_transcript_item(
@@ -144,7 +156,35 @@ impl DesktopView {
                 let _scrolled = state.scroll_to_item(index, cx);
             });
         }
+        self.arm_transcript_flash(item_id, cx);
         true
+    }
+
+    /// Tint the landing row briefly so the eye finds it after the scroll.
+    /// Re-arming supersedes: the expiry task clears only its own generation
+    /// on its own session, so a newer jump or a session switch survives an
+    /// older timer. Instant appear/disappear (no transition), so reduced
+    /// motion needs no gate — same rationale as the transcript overlays.
+    fn arm_transcript_flash(&mut self, item_id: &str, cx: &mut Context<Self>) {
+        self.transcript_flash_generation = self.transcript_flash_generation.wrapping_add(1);
+        let generation = self.transcript_flash_generation;
+        self.transcript_flash = Some(TranscriptFlash { item_id: item_id.to_string(), generation });
+        let item_id = item_id.to_string();
+        let session_id = self.selected_session_id.clone();
+        cx.spawn(async move |view, cx| {
+            cx.background_executor().timer(TRANSIENT_FLASH_DURATION).await;
+            let _updated = view.update(cx, |view, cx| {
+                let current = view
+                    .transcript_flash
+                    .as_ref()
+                    .is_some_and(|flash| flash.generation == generation && flash.item_id == item_id);
+                if view.selected_session_id == session_id && current {
+                    view.transcript_flash = None;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     /// Scroll to the first transcript row. A pure viewport move: unlike a

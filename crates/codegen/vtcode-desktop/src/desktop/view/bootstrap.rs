@@ -745,6 +745,8 @@ impl DesktopView {
             session_focus: cx.focus_handle().tab_stop(true),
             keyboard_focused_session: None,
             keyboard_focused_message: None,
+            transcript_flash: None,
+            transcript_flash_generation: 0,
             running: false,
             turn_content_seen: false,
             status: rust_i18n::t!("app.workspace.startup_hint").to_string(),

@@ -519,6 +519,130 @@ fn filter_cycle_skips_evicted_matches_and_clears_when_empty(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn search_jump_flashes_landing_row_and_expiry_clears_only_its_generation(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let session_id = "flash-thread".to_string();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some(session_id.clone());
+            for (id, role) in [
+                ("flash-first", "user"),
+                ("flash-target", "assistant"),
+                ("flash-last", "assistant"),
+            ] {
+                view.transcript.push(TranscriptItem::new(
+                    id.into(),
+                    role.into(),
+                    "VT Code".into(),
+                    format!("Body {id}"),
+                ));
+            }
+        });
+        window.render_frame(cx);
+        // A search pick lands, anchors, and tints only the target row.
+        view.update(cx, |view, cx| {
+            view.palette_query = "target".into();
+            view.run_palette_action(
+                PaletteAction::JumpToTranscriptItem {
+                    session_id: session_id.clone(),
+                    item_id: "flash-target".to_string(),
+                    from_search: true,
+                },
+                window,
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).keyboard_focused_message.as_deref(), Some("flash-target"));
+        assert!(view.read(cx).transcript_row_flashed("flash-target"));
+        assert!(window.try_find("transcript-flash-flash-target").is_some(), "landing row tints");
+        assert!(window.try_find("transcript-flash-flash-first").is_none(), "neighbors stay untinted");
+        assert!(window.try_find("transcript-flash-flash-last").is_none(), "neighbors stay untinted");
+    })
+    .unwrap();
+    // Boundary: 1ms before the deadline the tint survives.
+    cx.executor().advance_clock(Duration::from_millis(1499));
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("transcript-flash-flash-target").is_some(), "tint survives until the deadline");
+        // Re-arm on a new jump: the tint moves and the older timer goes stale.
+        view.update(cx, |view, cx| {
+            view.run_palette_action(
+                PaletteAction::JumpToTranscriptItem {
+                    session_id: session_id.clone(),
+                    item_id: "flash-last".to_string(),
+                    from_search: true,
+                },
+                window,
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("transcript-flash-flash-target").is_none(), "re-arm moves the tint");
+        assert!(window.try_find("transcript-flash-flash-last").is_some());
+    })
+    .unwrap();
+    // The first deadline passes: the stale timer must not clear the re-armed tint.
+    cx.executor().advance_clock(Duration::from_millis(1));
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("transcript-flash-flash-last").is_some(), "stale expiry clears nothing");
+    })
+    .unwrap();
+    // The second deadline passes: the tint clears but the anchor rail stays.
+    cx.executor().advance_clock(Duration::from_millis(1499));
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("transcript-flash-flash-last").is_none(), "expiry clears the tint");
+        assert!(!view.read(cx).transcript_row_flashed("flash-last"));
+        assert!(window.try_find("transcript-focus-rail-flash-last").is_some(), "anchor rail outlives the tint");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn deeplink_jump_flashes_without_seeding_filter_and_reset_clears(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let session_id = "flash-deeplink".to_string();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some(session_id.clone());
+            view.transcript.push(TranscriptItem::new(
+                "deep-target".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Deep body".into(),
+            ));
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| {
+            view.palette_query = "deep".into();
+            view.run_palette_action(
+                PaletteAction::JumpToTranscriptItem {
+                    session_id: session_id.clone(),
+                    item_id: "deep-target".to_string(),
+                    from_search: false,
+                },
+                window,
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("transcript-flash-deep-target").is_some(), "deeplink jumps tint");
+        assert!(window.try_find("transcript-filter-next").is_none(), "deeplinks seed no filter");
+        // Session reset clears the tint along with the anchor.
+        view.update(cx, |view, _| view.reset_session_state());
+        window.render_frame(cx);
+        assert!(window.try_find("transcript-flash-deep-target").is_none(), "reset clears the tint");
+        assert!(view.read(cx).transcript_flash.is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn jump_to_unknown_message_leaves_state_untouched(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -534,6 +658,7 @@ fn jump_to_unknown_message_leaves_state_untouched(cx: &mut TestAppContext) {
         let jumped = view.update(cx, |view, cx| view.jump_to_transcript_item("missing-id", window, cx));
         assert!(!jumped);
         assert!(view.read(cx).keyboard_focused_message.is_none(), "failed jumps set no anchor");
+        assert!(view.read(cx).transcript_flash.is_none(), "failed jumps tint nothing");
     })
     .unwrap();
 }

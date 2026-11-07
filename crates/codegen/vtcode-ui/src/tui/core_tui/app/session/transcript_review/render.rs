@@ -87,6 +87,15 @@ impl ToolOutputViewerState {
         self.cached_export_text = Some(export.clone());
         export
     }
+    /// Whether this logical row carries the transient landing tint: the most
+    /// recent search jump or focused open, still within its deadline.
+    /// Named predicate shared by the painter and its tests.
+    pub(crate) fn row_flashed(&self, row: usize) -> bool {
+        self.flash
+            .as_ref()
+            .is_some_and(|flash| flash.row == row && Instant::now() < flash.expires_at)
+    }
+
     pub(crate) fn visible_lines(&self, height: usize) -> Vec<Line<'static>> {
         let height = height.max(1);
         let end = self.scroll_top.saturating_add(height).min(self.total_lines);
@@ -95,8 +104,14 @@ impl ToolOutputViewerState {
 
         for row in self.scroll_top..end {
             let mut line = self.line_for_mode_at(row).unwrap_or_default();
-            if current_match_line == Some(row) {
-                let style = line.style.add_modifier(Modifier::REVERSED);
+            let current = current_match_line == Some(row);
+            let flashed = self.row_flashed(row);
+            // A focused-open landing has no current match; it still tints.
+            if current || flashed {
+                let mut style = line.style.add_modifier(Modifier::REVERSED);
+                if current && flashed {
+                    style = style.add_modifier(Modifier::BOLD);
+                }
                 line = line.style(style);
             }
             visible.push(line);

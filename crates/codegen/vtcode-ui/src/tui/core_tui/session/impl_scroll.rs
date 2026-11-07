@@ -150,6 +150,20 @@ impl Session {
         self.mark_dirty();
     }
 
+    /// Plain-Enter viewport reconciliation shared by both Enter funnels
+    /// (core + app): when the draft is non-empty and the transcript sits
+    /// away from the tail, jump to the latest message with the draft
+    /// preserved and report the key consumed so the caller submits nothing.
+    /// Blank drafts fall through to the submit path, whose take already
+    /// re-follows the tail while clearing.
+    pub(crate) fn consume_enter_jump_to_latest(&mut self) -> bool {
+        if self.input_manager.content().trim().is_empty() || self.scroll_offset() == 0 {
+            return false;
+        }
+        self.scroll_to_bottom();
+        true
+    }
+
     /// Whether the Jump to last change hint should be shown.
     ///
     /// Visible only while scrolled up with a tracked change. At the live
@@ -191,6 +205,7 @@ impl Session {
         }
         self.sync_follow_state();
         self.invalidate_transcript_viewport();
+        self.arm_transcript_flash(target_idx);
         self.mark_dirty();
         true
     }

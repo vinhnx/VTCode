@@ -725,6 +725,8 @@ impl DesktopView {
         self.cancel_session_load_task();
         self.active_primary_agent_display = None;
         self.keyboard_focused_message = None;
+        self.transcript_flash = None;
+        self.transcript_flash_generation = self.transcript_flash_generation.wrapping_add(1);
         self.hovered_message = None;
         self.transcript_layout_settled = false;
         self.filter_matches = None;

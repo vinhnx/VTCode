@@ -173,6 +173,11 @@ pub(super) fn handle_enter_key(
         };
     }
 
+    if session.core.consume_enter_jump_to_latest() {
+        session.mark_dirty();
+        return None;
+    }
+
     let should_submit_now = slash::should_submit_immediately_from_palette(session);
     let Some(submitted) = take_submitted_input(session) else {
         session.mark_dirty();

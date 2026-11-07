@@ -27,5 +27,7 @@
 - Modal painting must check `has_active_overlay()` before clearing the frame, otherwise only stale modal hit areas are cleared.
 - `Blocked` is quiescent despite its status text, so it must not start spinners or block slash commands.
 - Floating overlays own mouse input only inside `modal_list_area`; wheel events outside must pass through so long transcripts stay scrollable.
+- Enter has dual funnels (core `session/events.rs` + app `app/session/events/key_actions.rs`): land behavior in both via a shared core helper.
+- `take_submitted_input` re-follows the tail even when it returns `None`, so never rely on scroll surviving a take.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-ui.md) — read the section for the subsystem you change before editing it.

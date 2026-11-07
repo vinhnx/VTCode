@@ -35,6 +35,10 @@ autocompletes on `Tab`, history picker consumes navigation keys.
 With `ui.busy_enter_behavior = "steer"`, busy plain-text `Enter` steers the live turn (`Steer`) instead of
 queueing; slash commands and attachments still queue, and `Ctrl+Enter`/`Tab` keep their queue role.
 
+Scrolled up with a non-empty draft, the first plain `Enter` jumps to the latest message and keeps the draft;
+the next `Enter` submits (idle) or queues/steers (busy). `Ctrl+Enter`/`Cmd+Enter` bypass the jump, and the
+desktop Send button always submits immediately. The desktop app shares this behavior.
+
 ## Composer line editing
 
 | Shortcut                                             | Single-line input                                                                     | Multiline input                                                                                                                                                                                     |
@@ -98,7 +102,7 @@ Overlay bindings still take precedence.
 | :---------------------------------------------------------------------- | :------------------------------------------------ |
 | `Ctrl+T` (default) / `Alt+O`                                            | Open/close Transcript Review.                     |
 | `r`                                                                     | Toggle rich/raw.                                  |
-| `/`, `Enter`, `Esc`, `n`/`N`                                            | Search start/commit/cancel, next/previous match.  |
+| `/`, `Enter`, `Esc`, `n`/`N`                                            | Search start/commit/cancel, next/previous match; commits jump to and briefly highlight the match. |
 | `j`/`k`, `Up`/`Down`, `Ctrl+U`/`D`, `Ctrl+B`/`F`, `g`/`G`, `Home`/`End` | Scroll line, half-page, full-page, top/bottom.    |
 | `v`, `[`, `q`                                                           | Open in editor, hand to native scrollback, close. |
 | `PgUp`/`PgDn`, wheel, `Ctrl+Home`/`End`                                 | Fullscreen transcript scroll.                     |

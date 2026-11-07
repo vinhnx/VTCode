@@ -34,7 +34,32 @@ impl ToolOutputViewerState {
             })
             .collect()
     }
+    /// Tint `row` briefly so the eye finds the landing row after a jump.
+    /// Every jump re-arms, superseding any live tint.
+    pub(crate) fn arm_flash(&mut self, row: usize) {
+        self.flash = Some(ReviewFlash {
+            row,
+            expires_at: Instant::now() + REVIEW_FLASH_DURATION,
+        });
+    }
+
+    /// Drop the landing tint once its deadline passes. Runs every frame via
+    /// `refresh`, so an idle viewer still clears on the next tick.
+    pub(crate) fn expire_flash(&mut self) {
+        if self.flash.as_ref().is_some_and(|flash| Instant::now() >= flash.expires_at) {
+            self.flash = None;
+        }
+    }
+
+    /// Whether a landing tint is armed. Tick gating keys on arming (not the
+    /// deadline), mirroring core expiries: the tick itself runs the refresh
+    /// that clears it.
+    pub(crate) fn flash_live(&self) -> bool {
+        self.flash.is_some()
+    }
+
     pub(crate) fn refresh(&mut self, session: &Session, width: u16, height: u16) {
+        self.expire_flash();
         let width = width.max(1);
         let height = height.max(1);
         let revision = ReviewRevision {
@@ -52,6 +77,10 @@ impl ToolOutputViewerState {
         let width_changed = self.width != width;
         let presentation_changed = self.source_revision.presentation != revision.presentation;
         self.refresh_messages(session, width, width_changed || presentation_changed);
+        if width_changed || presentation_changed {
+            // Reflowed rows invalidate the stored index; a rebuilt layout tints nothing.
+            self.flash = None;
+        }
         self.width = width;
         self.height = height;
         self.source_revision = revision;
@@ -78,8 +107,11 @@ impl ToolOutputViewerState {
         else {
             return false;
         };
-        self.scroll_top = self.row_offsets.get(message_index).copied().unwrap_or_default();
-        self.scroll_top = self.scroll_top.min(self.max_scroll(height));
+        // The tint keys on the logical row: the clamped scroll position can sit
+        // above the block when the viewport fits everything.
+        let landed = self.row_offsets.get(message_index).copied().unwrap_or_default();
+        self.scroll_top = landed.min(self.max_scroll(height));
+        self.arm_flash(landed);
         self.focus_target = None;
         true
     }

@@ -548,6 +548,9 @@ struct DesktopView {
     /// Keyboard highlight for Up/Down transcript navigation (message id).
     /// Reveals the same row actions as hover; Esc leaves it as position memory.
     keyboard_focused_message: Option<String>,
+    /// Transient search/deeplink tint; the generation guards stale expiry (see `TranscriptFlash`).
+    transcript_flash: Option<TranscriptFlash>,
+    transcript_flash_generation: u64,
     session_focus: FocusHandle,
     /// Keyboard highlight for Up/Down threads-panel navigation (session id).
     /// Distinct from the loaded selection; Enter loads it, clicks anchor it.

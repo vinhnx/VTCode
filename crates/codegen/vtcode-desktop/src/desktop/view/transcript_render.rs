@@ -585,6 +585,7 @@ impl DesktopView {
         let message_id = item.id.clone();
         let clicked_id = item.id.clone();
         let keyboard_focused = self.keyboard_focused_message.as_deref() == Some(item.id.as_str());
+        let flashed = self.transcript_row_flashed(item.id.as_str());
         // Active-descendant announcements need a role, so user/assistant rows
         // (deliberately role-less) stay silent.
         let announceable = item.is_tool() || item.is_diff();
@@ -617,6 +618,22 @@ impl DesktopView {
                         .bg(cx.theme().colors.accent),
                 )
             })
+            // Transient search/deeplink tint: absolute like the rail, so the
+            // flash never reflows the row; an earlier child than the content,
+            // so the wash sits below the text and it stays crisp.
+            .when(flashed, |row| {
+                row.child(
+                    div()
+                        .id(format!("transcript-flash-{}", item.id))
+                        .test_support()
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .top_0()
+                        .bottom_0()
+                        .bg(cx.theme().colors.accent.opacity(0.12)),
+                )
+            })
             // MessageScroller owns the shared horizontal row inset. The bottom
             // tiers encode the relationship: conversation turns (user +
             // assistant) breathe at the section tier while metadata clusters
@@ -646,6 +663,12 @@ impl DesktopView {
     /// stays reachable through the inspector toggle plus tab keys.
     pub(super) fn transcript_row_revealed(&self, id: &str) -> bool {
         self.hovered_message.as_deref() == Some(id) || self.keyboard_focused_message.as_deref() == Some(id)
+    }
+
+    /// Whether this row carries the transient search/deeplink tint. Named
+    /// predicate shared by the row renderer and its tests.
+    pub(super) fn transcript_row_flashed(&self, id: &str) -> bool {
+        self.transcript_flash.as_ref().is_some_and(|flash| flash.item_id == id)
     }
 
     fn render_transcript_item(

@@ -571,6 +571,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 };
             }
 
+            if session.consume_enter_jump_to_latest() {
+                session.mark_dirty();
+                return None;
+            }
+
             let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;

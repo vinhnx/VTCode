@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use ratatui::{
     prelude::*,
@@ -48,6 +49,18 @@ pub(crate) struct ToolOutputSearchState {
     restore_scroll_top: usize,
     restore_query: String,
     restore_match: Option<usize>,
+}
+
+/// How long a search jump or focused open tints its landing row.
+const REVIEW_FLASH_DURATION: Duration = Duration::from_millis(1500);
+
+/// Transient landing-row tint: which logical row glows and when the glow
+/// ends. Re-armed by every search jump and focused open; row indexes are
+/// only stable until the next reflow, so rebuilds clear it.
+#[derive(Clone, Debug)]
+pub(crate) struct ReviewFlash {
+    row: usize,
+    expires_at: Instant,
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -107,6 +120,7 @@ pub(crate) struct ToolOutputViewerState {
     cached_export_text: Option<String>,
     scroll_top: usize,
     search: ToolOutputSearchState,
+    flash: Option<ReviewFlash>,
     mode: TranscriptRenderMode,
     focus_target: Option<u64>,
     viewer_area: Rect,

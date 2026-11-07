@@ -4,6 +4,7 @@
 )]
 use super::super::*;
 use super::helpers::*;
+use std::time::{Duration, Instant};
 
 fn push_agent_lines(session: &mut Session, count: usize) {
     for index in 0..count {
@@ -286,4 +287,57 @@ fn footer_hint_appends_jump_label_while_scrolled() {
         after_text.contains("Jump to last change [Ctrl+End]"),
         "scrolled view must show the jump hint, got: {after_text}"
     );
+}
+
+#[test]
+fn jump_arms_flash_and_resolves_its_live_row_range() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    let flash = session.transcript_flash.as_ref().expect("jump arms a flash");
+    assert_eq!(flash.line_idx, 9);
+    assert!(flash.expires_at > Instant::now());
+    let (start, end) = session
+        .transcript_flash_rows(VIEW_WIDTH)
+        .expect("live flash resolves a row range");
+    assert!(start < end, "landed message spans at least one row");
+    // Asymmetric: an earlier change flashes its own message, not the tail.
+    session.record_transcript_change(1);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    assert_eq!(session.transcript_flash.as_ref().expect("re-jump re-arms").line_idx, 1);
+    let (early_start, early_end) = session.transcript_flash_rows(VIEW_WIDTH).expect("re-armed flash resolves");
+    assert!(early_start < start, "earlier message lands on earlier rows");
+    assert!(early_start < early_end);
+}
+
+#[test]
+fn flash_expires_on_tick_and_rests_idle_afterwards() {
+    let mut idle = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(!idle.needs_animation_tick());
+    idle.arm_transcript_flash(0);
+    assert!(idle.needs_animation_tick(), "live flash needs ticks");
+    idle.transcript_flash.as_mut().expect("arm stores a flash").expires_at = Instant::now()
+        .checked_sub(Duration::from_secs(1))
+        .expect("test clock backdates 1s");
+    idle.handle_tick();
+    assert!(idle.transcript_flash.is_none());
+    assert!(!idle.needs_animation_tick(), "expired flash must rest");
+}
+
+#[test]
+fn eviction_and_clear_screen_drop_the_flash() {
+    let mut session = prepare_sized_session(10);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    assert!(session.transcript_flash.is_some());
+    session.shift_tracked_change_after_eviction(5);
+    assert!(session.transcript_flash.is_none(), "eviction drops the index-keyed tint");
+    // Re-arm, then clear the whole transcript.
+    session.record_transcript_change(4);
+    session.scroll_page_up();
+    assert!(session.jump_to_last_change());
+    assert!(session.transcript_flash.is_some());
+    session.clear_screen();
+    assert!(session.transcript_flash.is_none(), "clear drops the tint");
 }

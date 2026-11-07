@@ -51,7 +51,7 @@ difference; **oos** = out of scope (terminal-only).
 
 | CLI | Desktop | Status |
 | --- | --- | --- |
-| `Enter` submit, queue while running | `handle_composer_enter` + `enqueue_queued_submission` | done |
+| `Enter` submit, queue while running; scrolled + draft jumps to latest first | `handle_composer_enter` → `submit_or_jump_to_latest` + `enqueue_queued_submission` | done (`enter_with_draft_while_scrolled…` test) |
 | `Ctrl+Enter` batchable queue | `cmd-enter` → `QueueBatched` | done (fixed secondary-Enter fallthrough; `cmd_enter_keypress…` test) |
 | `Tab` accept suggestion first | `IndentInline` capture → suggestion accept, else focus-next | done |
 | `Shift+Enter` newline | Kit `Enter{shift}` inserts newline | native |
