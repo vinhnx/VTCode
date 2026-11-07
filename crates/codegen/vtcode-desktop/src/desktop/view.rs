@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+// Re-exported through `use super::*`: several view modules hash element IDs
+// and need these traits in scope for method resolution.
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -95,6 +97,7 @@ use super::transport::{
 use cli_handoff::CliHandoff;
 use file_rename::FileRenameState;
 use full_access_confirm::FullAccessConfirmState;
+use ids::{opaque_path_element_id, uuid_like_id};
 use navigation_history::{
     NavigationHistory, NavigationLocation, PendingNavigation, SwipeScrollAccumulator, natural_scroll_enabled,
 };
@@ -126,6 +129,7 @@ mod exec_controls;
 mod file_rename;
 mod files_panel;
 mod full_access_confirm;
+mod ids;
 mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
@@ -173,7 +177,7 @@ use super::localization::{UiLanguageOption, UiLanguageSelectState};
 use backend_events::*;
 pub(crate) use bootstrap::run;
 #[cfg(test)]
-use bootstrap::{init_keybindings, init_native_menus, open_or_activate_main_window};
+use bootstrap::{init_keybindings, open_or_activate_main_window};
 use chrome::*;
 use components::*;
 use inspector_changes::*;
@@ -581,6 +585,10 @@ struct DesktopView {
     license_viewer_focus: FocusHandle,
     license_return_focus: Option<FocusHandle>,
     license_open_task: Option<Task<()>>,
+    changelog_open: bool,
+    changelog_focus: FocusHandle,
+    changelog_return_focus: Option<FocusHandle>,
+    changelog_scroll: ScrollHandle,
     service_info: Option<protocol::InitializeResult>,
     interaction: Option<InteractionRequest>,
     interaction_focus: FocusHandle,
@@ -965,12 +973,6 @@ fn context_usage_percent(usage: &vtcode_exec_events::Usage, context_window: u64)
     u8::try_from(percent).ok().or(Some(100))
 }
 
-fn uuid_like_id() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-    NEXT_ID.fetch_add(1, Ordering::Relaxed).to_string()
-}
-
 fn desktop_window_options() -> WindowOptions {
     let mut options = TitleBar::window_options();
     if let Some(titlebar) = options.titlebar.as_mut() {
@@ -987,13 +989,6 @@ fn desktop_window_options() -> WindowOptions {
 
 fn chrome_background(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
     themes::navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail
-}
-
-/// Keep local paths out of element IDs while preserving path-based identity across sorting.
-fn opaque_path_element_id(prefix: &str, path: &str) -> String {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    path.hash(&mut hasher);
-    format!("{prefix}-{:016x}", hasher.finish())
 }
 
 #[cfg(test)]

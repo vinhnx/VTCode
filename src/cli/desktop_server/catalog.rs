@@ -242,21 +242,39 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
     let current = env!("CARGO_PKG_VERSION");
     let updater = crate::updater::Updater::new(current)?;
     let check = updater.startup_update_check()?;
-    let (latest_version, release_url, update_available) = match check.cached_notice {
+    let cached_highlights = crate::updater::cached_latest_release_highlights();
+    let (latest_version, release_url, release_highlights, update_available) = match check.cached_notice {
         Some(notice) => {
             let url = crate::updater::Updater::release_url(&notice.latest_version);
-            (Some(notice.latest_version.to_string()), Some(url), true)
+            let highlights = highlights_for_latest(Some(&notice.latest_version), cached_highlights);
+            (Some(notice.latest_version.to_string()), Some(url), highlights, true)
         }
-        None => (None, None, false),
+        None => (None, None, Vec::new(), false),
     };
     Ok(protocol::UpdateStatusSnapshot {
         current_version: current.to_string(),
         latest_version,
         update_available,
         release_url,
+        release_highlights,
         channel: Some(updater.config().channel.to_string()),
         check_due: check.should_refresh,
     })
+}
+
+/// Highlights served with a status snapshot: the cached items only when they
+/// describe the served `latest_version`. The notice and the notes come from
+/// two cache reads, so a concurrent refresh could otherwise pair one
+/// release's version with another's changelog; mismatches fail closed to a
+/// link-only viewer state.
+fn highlights_for_latest(
+    latest: Option<&semver::Version>,
+    cached: Option<(semver::Version, Vec<String>)>,
+) -> Vec<String> {
+    match (latest, cached) {
+        (Some(want), Some((have, items))) if want == &have => items,
+        _ => Vec::new(),
+    }
 }
 
 /// The selectable model catalog, mirroring the TUI picker's source.
@@ -302,5 +320,27 @@ pub(super) fn sanitize_public_error(message: &str) -> String {
         "desktop service request failed".to_string()
     } else {
         sanitized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn version(text: &str) -> semver::Version {
+        semver::Version::parse(text).expect("valid fixture version")
+    }
+
+    #[test]
+    fn highlights_serve_only_for_the_matching_latest_version() {
+        let items = vec!["Faster startup".to_string()];
+        // Match: the cached notes describe the served release.
+        assert_eq!(highlights_for_latest(Some(&version("0.181.0")), Some((version("0.181.0"), items.clone()))), items);
+        // Mismatch: a concurrent refresh wrote a different release between
+        // the two cache reads; fail closed to a link-only state.
+        assert!(highlights_for_latest(Some(&version("0.181.0")), Some((version("0.180.0"), items.clone()))).is_empty());
+        // No notice or no notes: nothing to pair.
+        assert!(highlights_for_latest(None, Some((version("0.181.0"), items.clone()))).is_empty());
+        assert!(highlights_for_latest(Some(&version("0.181.0")), None).is_empty());
     }
 }

@@ -201,6 +201,16 @@ pub(super) fn current_release_info(current: &Version) -> Option<(Version, String
     Some((current.clone(), snapshot.release_notes?))
 }
 
+/// Return the cached release metadata for the latest known release,
+/// regardless of the running version. Like [`current_release_info`], this
+/// never performs network I/O; the desktop `update/status` handler serves it
+/// straight from disk.
+pub(super) fn latest_release_info() -> Option<(Version, String)> {
+    let snapshot = read_snapshot().ok()?;
+    let latest = snapshot.latest_version?;
+    Some((latest, snapshot.release_notes?))
+}
+
 pub(super) fn clear_dismissed_version() -> Result<()> {
     update_snapshot(|snapshot| {
         snapshot.dismissed_version = None;

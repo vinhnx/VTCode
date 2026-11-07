@@ -146,7 +146,7 @@ fn open_desktop_sized_with_preferences_path(
     cx.update(super::super::notifications::initialize);
     let preferences = crate::desktop::preferences::Preferences::load();
     cx.update(|cx| super::init_keybindings(cx, &preferences));
-    cx.update(super::init_native_menus);
+    cx.update(super::menu_bar::init_native_menus);
     cx.update(|cx| {
         gpui_kit::open_window(
             WindowOptions {
@@ -593,6 +593,7 @@ mod activity_settings;
 mod activity_summary;
 mod attachment_picker;
 mod browser_navigation;
+mod changelog_viewer;
 mod cli_handoff;
 mod composer_alignment;
 mod composer_font_scale;

@@ -372,7 +372,10 @@ fn blocked_image_source() -> ImageSource {
     }))
 }
 
-fn external_web_url(raw_url: &str) -> Option<url::Url> {
+/// Fail-closed gate for opening a remote URL in the browser: http(s) with a
+/// host and no embedded credentials or control characters. Shared by
+/// transcript links and the update changelog viewer.
+pub(super) fn external_web_url(raw_url: &str) -> Option<url::Url> {
     if raw_url.chars().any(char::is_control) {
         return None;
     }

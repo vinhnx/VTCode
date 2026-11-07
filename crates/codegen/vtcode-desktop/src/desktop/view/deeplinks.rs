@@ -104,6 +104,9 @@ pub(super) enum NotificationTarget {
     Workspace,
     /// New release: the Notifications settings tab (update row + Check button).
     UpdateSettings,
+    /// New release: the changelog viewer for the notified version, falling
+    /// back to [`NotificationTarget::UpdateSettings`] when the status moved on.
+    UpdateChangelog { version: String },
 }
 
 impl NotificationTarget {
@@ -112,8 +115,9 @@ impl NotificationTarget {
     /// accepts. Address only: clicks still resolve through
     /// [`DesktopView::open_notification_target`], which carries the
     /// stale-tolerance (thread re-select, focus-only-if-current) a bare
-    /// deeplink lacks. An Interaction degrades to its thread link; the
-    /// waiting-prompt focus has no link form.
+    /// deeplink lacks. An Interaction degrades to its thread link, and a
+    /// changelog target to its settings tab; the waiting-prompt focus and
+    /// the viewer itself have no link form.
     #[cfg(test)]
     fn to_deeplink(&self) -> DeepLink {
         match self {
@@ -121,7 +125,11 @@ impl NotificationTarget {
                 DeepLink::Action(PaletteAction::LoadSession(session_id.clone()))
             }
             Self::Workspace => DeepLink::Route(Route::Workspace),
-            Self::UpdateSettings => DeepLink::SettingsTab(settings::SettingsTab::Notifications),
+            // The viewer has no link form (like the waiting-prompt focus),
+            // so it degrades to the tab hosting the update row.
+            Self::UpdateSettings | Self::UpdateChangelog { .. } => {
+                DeepLink::SettingsTab(settings::SettingsTab::Notifications)
+            }
         }
     }
 
@@ -512,6 +520,23 @@ impl DesktopView {
                     cx,
                 );
             }
+            NotificationTarget::UpdateChangelog { version } => {
+                // Stale-tolerance: the status may have refreshed between the
+                // notification and the click. Open the viewer only when it
+                // still describes the notified release; otherwise land on
+                // the update row, which always reflects the live status.
+                let still_current = self
+                    .update_status
+                    .as_ref()
+                    .filter(|status| status.update_available)
+                    .and_then(|status| status.latest_version.as_deref())
+                    == Some(version.as_str());
+                if still_current {
+                    self.open_changelog(window, cx);
+                } else {
+                    self.open_notification_target(NotificationTarget::UpdateSettings, window, cx);
+                }
+            }
         }
     }
 
@@ -879,6 +904,7 @@ mod tests {
             },
             NotificationTarget::Workspace,
             NotificationTarget::UpdateSettings,
+            NotificationTarget::UpdateChangelog { version: "0.182.0".into() },
         ];
         for target in targets {
             let path = target.path().expect("every target has a link form");
@@ -898,5 +924,12 @@ mod tests {
         );
         assert_eq!(NotificationTarget::Workspace.path().as_deref(), Some("workspace"));
         assert_eq!(NotificationTarget::UpdateSettings.path().as_deref(), Some("settings/notifications"));
+        // The viewer degrades to its settings tab: no link form of its own.
+        assert_eq!(
+            NotificationTarget::UpdateChangelog { version: "0.182.0".into() }
+                .path()
+                .as_deref(),
+            Some("settings/notifications")
+        );
     }
 }

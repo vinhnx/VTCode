@@ -365,6 +365,11 @@ impl Render for DesktopView {
         if self.license_viewer.is_some() {
             body = body.child(self.render_license_viewer(cx));
         }
+        // The changelog viewer paints above the license viewer (opening it
+        // discards that layer) and below the palette popovers.
+        if self.changelog_open {
+            body = body.child(self.render_changelog_viewer(cx));
+        }
         if !(self.current_route() == Route::Settings && self.palette_kind == PaletteKind::SettingsSearch)
             && !self.palette_kind.is_composer_popup()
             && let Some(state) = self.palette.clone()

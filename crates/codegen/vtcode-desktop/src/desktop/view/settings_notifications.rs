@@ -82,14 +82,34 @@ impl DesktopView {
                     .child(settings_row(
                         rust_i18n::t!("app.settings.notifications.updates_status").to_string(),
                         self.update_status_description(),
-                        desktop_button("check-for-updates")
-                            .label(rust_i18n::t!("app.settings.notifications.check_for_updates").to_string())
-                            .ghost()
-                            .small()
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.request_update_status();
-                                cx.notify();
-                            })),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                desktop_button("check-for-updates")
+                                    .label(rust_i18n::t!("app.settings.notifications.check_for_updates").to_string())
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(|view, _, _, cx| {
+                                        view.request_update_status();
+                                        cx.notify();
+                                    })),
+                            )
+                            // The changelog action only exists while an update
+                            // is viewable; the Check button keeps its stable
+                            // leading slot either way.
+                            .when(self.can_view_changelog(), |row| {
+                                row.child(
+                                    desktop_button("view-changelog")
+                                        .label(rust_i18n::t!("app.settings.notifications.view_changelog").to_string())
+                                        .ghost()
+                                        .small()
+                                        .on_click(cx.listener(|view, _, window, cx| {
+                                            view.open_changelog(window, cx);
+                                        })),
+                                )
+                            }),
                         &colors,
                     )),
             ))

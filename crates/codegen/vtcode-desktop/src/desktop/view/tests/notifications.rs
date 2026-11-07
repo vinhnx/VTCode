@@ -136,7 +136,7 @@ fn update_status_event(current: &str, latest: Option<&str>, available: bool) -> 
             "currentVersion": current,
             "latestVersion": latest,
             "updateAvailable": available,
-            "releaseUrl": "https://github.com/vinhnx/vtcode/releases/tag/v0.181.0",
+            "releaseUrl": latest.map(|version| format!("https://github.com/vinhnx/vtcode/releases/tag/v{version}")),
             "channel": "stable",
             "checkDue": false,
         })),

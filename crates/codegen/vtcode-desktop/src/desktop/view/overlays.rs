@@ -429,7 +429,7 @@ impl DesktopView {
         let full_screen = window.is_fullscreen();
         if full_screen != self.menus_show_exit_full_screen {
             self.menus_show_exit_full_screen = full_screen;
-            bootstrap::set_native_menus(cx, full_screen);
+            menu_bar::set_native_menus(cx, full_screen);
         }
     }
 
@@ -455,6 +455,10 @@ impl DesktopView {
         } else if self.file_rename.is_some() {
             self.disarm_double_escape();
             self.cancel_file_rename(window, cx);
+        } else if self.changelog_open {
+            // Painted above the license viewer, so Escape reaches it first.
+            self.disarm_double_escape();
+            self.close_changelog(window, cx);
         } else if self.license_viewer.is_some() {
             self.disarm_double_escape();
             self.close_license_viewer(window, cx);

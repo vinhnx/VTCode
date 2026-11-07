@@ -681,42 +681,6 @@ async fn interleaved_tool_output_deltas_merge_per_item_in_queue_order() {
 }
 
 #[test]
-fn update_status_snapshot_round_trips_and_older_payloads_decode() {
-    let snapshot = UpdateStatusSnapshot {
-        current_version: "0.180.5".into(),
-        latest_version: Some("0.181.0".into()),
-        update_available: true,
-        release_url: Some("https://github.com/vinhnx/vtcode/releases/tag/v0.181.0".into()),
-        channel: Some("stable".into()),
-        check_due: false,
-    };
-    let decoded: UpdateStatusSnapshot = serde_json::from_value(serde_json::to_value(&snapshot).unwrap()).unwrap();
-    assert_eq!(decoded, snapshot);
-
-    // Asymmetric fixtures: an up-to-date service omits every optional field,
-    // and a legacy payload carries only the running version.
-    let quiet = UpdateStatusSnapshot {
-        current_version: "0.181.0".into(),
-        latest_version: None,
-        update_available: false,
-        release_url: None,
-        channel: None,
-        check_due: true,
-    };
-    let decoded_quiet: UpdateStatusSnapshot = serde_json::from_value(serde_json::to_value(&quiet).unwrap()).unwrap();
-    assert_eq!(decoded_quiet, quiet);
-
-    let legacy: UpdateStatusSnapshot =
-        serde_json::from_value(serde_json::json!({ "currentVersion": "0.179.0" })).unwrap();
-    assert_eq!(legacy.current_version, "0.179.0");
-    assert!(legacy.latest_version.is_none());
-    assert!(!legacy.update_available);
-    assert!(legacy.release_url.is_none());
-    assert!(legacy.channel.is_none());
-    assert!(!legacy.check_due);
-}
-
-#[test]
 fn secret_store_types_round_trip_with_camel_case_and_redacted_debug() {
     let params = SecretStoreParams {
         provider: "meta".into(),

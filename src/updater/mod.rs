@@ -314,9 +314,20 @@ pub(crate) fn should_show_release_notes_for_current_version() -> bool {
 
 pub(crate) fn cached_current_release_highlights() -> Option<(Version, Vec<String>)> {
     let current = Version::parse(env!("CARGO_PKG_VERSION")).ok()?;
-    let (_, release_notes) = cache::current_release_info(&current)?;
-    let parsed = parse_highlights(&current, &release_notes);
-    (!parsed.items.is_empty()).then_some((current, parsed.items))
+    parse_cached_highlights(cache::current_release_info(&current))
+}
+
+/// Parsed Highlights for the latest known release, served to the desktop
+/// `update/status` handler. `None` when the cache holds no notes (or no
+/// Highlights section); callers render a link-only state then.
+pub(crate) fn cached_latest_release_highlights() -> Option<(Version, Vec<String>)> {
+    parse_cached_highlights(cache::latest_release_info())
+}
+
+fn parse_cached_highlights(info: Option<(Version, String)>) -> Option<(Version, Vec<String>)> {
+    let (version, release_notes) = info?;
+    let parsed = parse_highlights(&version, &release_notes);
+    (!parsed.items.is_empty()).then_some((version, parsed.items))
 }
 
 /// Seed the update cache with the release notes for a newly installed version.
@@ -458,6 +469,52 @@ mod tests {
 
         record_current_version_seen();
         assert!(!should_show_release_notes_for_current_version(), "notes must show once, then be marked seen");
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn latest_release_highlights_serve_a_newer_cached_release() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        // A background check found a newer release: its notes belong to the
+        // desktop status snapshot, not to the current-version startup banner.
+        let latest = Version::parse("99.0.0").expect("latest version");
+        assert_ne!(latest.to_string(), env!("CARGO_PKG_VERSION"));
+        let body = "### Highlights\n- Shiny feature (abc1234)\n";
+        cache::record_successful_check_with_notes(Some(&latest), true, Some(body)).expect("write cache");
+
+        let served = cached_latest_release_highlights().expect("latest highlights must be readable");
+        assert_eq!(served.0, latest);
+        assert_eq!(served.1, vec!["Shiny feature".to_string()]);
+        assert!(
+            cached_current_release_highlights().is_none(),
+            "newer notes must not leak into the current-version banner"
+        );
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn latest_release_highlights_are_none_without_notes_or_section() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        let latest = Version::parse("99.0.0").expect("latest version");
+        cache::record_successful_check_with_notes(Some(&latest), true, None).expect("write cache");
+        assert!(cached_latest_release_highlights().is_none(), "no cached notes serves no highlights");
+
+        cache::record_successful_check_with_notes(Some(&latest), true, Some("## 99.0.0\nNo highlights here\n"))
+            .expect("write cache");
+        assert!(
+            cached_latest_release_highlights().is_none(),
+            "notes without a Highlights section serve no highlights"
+        );
 
         cache::set_cache_dir_override_for_tests(previous);
     }
