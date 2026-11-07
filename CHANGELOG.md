@@ -5,6 +5,116 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.5 - 2026-11-07
+
+### Highlights
+
+#### Bug Fixes
+
+- Generate lint-clean, machine-independent skills index (6533d638)
+- Publish vtcode-commons before vtcode-desktop-protocol (217eda9d)
+- Resolve clippy findings in desktop and a2a (6362a604)
+- Truncate instruction files on a char boundary (b69cb9a5)
+- Use one instruction budget for welcome highlights (b25de828)
+- Decode streamed skill output across read boundaries (01d19cc7)
+- Decode command output across pipe and PTY read boundaries (a88cea82)
+- Cut byte-capped text on char boundaries (569ea6dd)
+- Silence MCP catalog ready notice (db97e9ce)
+- State the real macOS first-launch approval steps (f3291095)
+- Diagnose redacted source mismatches (2c91e6ff)
+- Unify transcript header alignment and simplify tool-group chrome (bea6e2a6)
+- Separate markdown list items with a blank row (0f26d474)
+- Bake Clear glass tile and use display-sized in-app art (359b6da4)
+- Dim resting shimmer text and pin the sweep bright (d40e34c1)
+- Anchor shimmer resting tone to the popover seat (0ea93d61)
+- Share CLI fuzzy ranking for Ctrl+R prompt history (55589129)
+- Cap merged history rows and stop faking an empty history (90e74a36)
+- Gate inline copy to final turn response; align transcript spine (f3fcd378)
+- Restore convergence on repeated inspection (b8dd0e50)
+- Retry pending handoff across transient gate contention (d421f67a)
+- Ungate queue wait-time formatter used by production code (06f1ae9b)
+- Resolve clippy gate failures in queue helpers and tests (25d46f63)
+
+#### Documentation
+
+- Fix markdownlint findings in first-party docs (6daca0b6)
+- Condense module AGENTS.md files into maintainer notes (bf74c4f5)
+- Fix rust-skills counts and links in the vendored skill (afa267e0)
+- Treat AGENTS.md as the canonical instruction file (0b51b8ae)
+- Fit root AGENTS.md inside VT Code's instruction budget (6caf02bd)
+- Regenerate a portable, current config field reference (5db4209b)
+- Document Utf8StreamDecoder as the single chunked UTF-8 decoder (2e84792c)
+- Ground rust-skills in VT Code conventions (9c616191)
+- Document the cask install path and tighten install docs (bfaabf45)
+- Fix README heading level and INDEX duplicates (a0d4cb0f)
+- Audit module guides for scoped history search (0d30f7b5)
+- List instruction_audit module in binary module map (03346204)
+
+#### Features
+
+- Show build version and credits in About (13a46a9d)
+- Scoped prompt-history search for CLI and desktop (cf6042d7)
+- Report instruction files cut or skipped by the budget (2d34f688)
+- Publish the desktop app as a Homebrew cask (5df2e397)
+- Unify run-cluster geometry, add tertiary tier (c3302a86)
+- Persist zen layout preference across launches (54ec86de)
+- Page the thread list with show-more footers (4e51f1c4)
+- Widen reading columns for comfortable read (87a0e7d0)
+- Deeplink notification clicks to related surfaces (f935023e)
+- Safe per-turn file-change undo service (d70e416a)
+- Turn grouping cards, archive restore, and per-turn undo (78957b4f)
+- Merge shell invocation/output rows with explicit delta contract (2798f715)
+- Restyle HITL panel, add dismiss helper and pill contrast gate (d05ce84d)
+- Unify icon size tiers, add command palette icons, refresh run cluster (5b419e67)
+- Show concise CLI-parity tool summaries in transcript (fa03dbe4)
+- Expandable plan proposal with inspector side view (a07f4e17)
+- Plan-edit parity with service-owned external editor (98a1e4a4)
+- Preview markdown files through the shared viewer (db8c59f0)
+- Use non-red icons for composer running trio (ffd56353)
+- Trace startup timeline via startup_trace (7b03a1eb)
+- Per-row queue panel with entry ids, wait times, and removal (3dc66b95)
+- Customizable diff view settings (ecdac7ca)
+- Add shimmer effect to composer run button (6fcf3115)
+- Render rich attachment cards in user echo bubbles (92cfc4b7)
+- Deeplink notification toasts to their targets (83bf8b87)
+- Add user-authored custom themes to Appearance (874d26c4)
+- Add pipe line-monitor subscriptions with idle-wake digests (0558d268)
+- Advertise monitor_filter in exec tool schema (4945013f)
+- Promote setup checkup to first-class /doctor with prompt-audit (97a291fd)
+- Move background action to thread header, slim run cluster (2374dd4c)
+- Harden storage chart empty state, coverage, and series contrast (4ec6a54c)
+- Add busy_enter_behavior queue/steer setting (80ade673)
+- Flash search landing rows and jump to latest on Enter (b5842913)
+
+### Other Changes
+
+#### Build
+
+- Share governance gates across check-dev.sh and check.sh (ccc76be4)
+- Check links in all maintained Markdown, skipping code (5eb137f2)
+- Fail on stale structured-logging and large-file allowlist rules (f5825c3e)
+
+#### Other
+
+- Apply rustfmt to the MCP lifecycle handler (67721fe8)
+
+#### Performance
+
+- Hold UI animations under 300ms with ease-out curves (1fda31bb)
+
+#### Refactors
+
+- Use floor_char_boundary for byte-capped text cuts (d48485ff)
+- Back truncate_utf8_prefix with floor_char_boundary (b4efaeaa)
+- Replace hand-rolled char-boundary loops with std floor/ceil (ae8b89c9)
+
+#### Tests
+
+- Derive check-dev fixture gate stubs from common.sh (789feedd)
+- Isolate slow headless planning probe in quick profile (54c3e840)
+- Centralize system-prompt budgets and compose goldens from guidance const (2c7c8057)
+- Shorten verification ceiling fixture to fit the quick profile (0a09f21f)
+
 ## 0.181.4 - 2026-11-05
 
 ### Highlights
