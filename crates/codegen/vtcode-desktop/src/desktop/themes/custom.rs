@@ -123,23 +123,39 @@ fn slug(name: &str) -> String {
     }
 }
 
-/// Skip entries that fail to deserialize instead of quarantining every saved
-/// preference, so one hand-edited or stale theme cannot wipe the whole file.
+/// Skip invalid entries instead of quarantining every saved preference, so one
+/// hand-edited or stale theme cannot make the application unreadable.
 pub(crate) fn deserialize_custom_themes<'de, D>(deserializer: D) -> Result<Vec<CustomTheme>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
-    Ok(values
-        .into_iter()
-        .filter_map(|value| match serde_json::from_value::<CustomTheme>(value) {
-            Ok(theme) => Some(theme),
+    let mut themes = Vec::new();
+    for value in values {
+        match serde_json::from_value::<CustomTheme>(value) {
+            Ok(theme) => {
+                if !theme.id.starts_with(CUSTOM_THEME_ID_PREFIX)
+                    || theme.id.len() == CUSTOM_THEME_ID_PREFIX.len()
+                    || super::mode_for_id(&theme.id).is_some()
+                    || themes.iter().any(|saved: &CustomTheme| saved.id == theme.id)
+                {
+                    vtcode_commons::diagnostics::stderr(format_args!(
+                        "skipping custom desktop theme with invalid or duplicate id"
+                    ));
+                } else if let Err(error) = validate(&theme.name, theme.foreground, theme.background, false) {
+                    vtcode_commons::diagnostics::stderr(format_args!(
+                        "skipping invalid custom desktop theme: {error:?}"
+                    ));
+                } else {
+                    themes.push(theme);
+                }
+            }
             Err(error) => {
                 vtcode_commons::diagnostics::stderr(format_args!("skipping unreadable custom desktop theme: {error}"));
-                None
             }
-        })
-        .collect())
+        }
+    }
+    Ok(themes)
 }
 
 #[cfg(test)]
@@ -231,5 +247,42 @@ mod tests {
         assert_eq!(wrapper.themes[0].id, "custom-good");
         let empty: Wrapper = serde_json::from_value(serde_json::json!({})).unwrap();
         assert!(empty.themes.is_empty());
+    }
+
+    #[test]
+    fn invalid_saved_contrast_does_not_discard_readable_neighbors() {
+        let mut invalid = seed("custom-invalid", "Invalid");
+        invalid.foreground = invalid.background;
+        let mut light = seed("custom-light", "Light");
+        light.mode = ThemeMode::Light;
+        light.background = rgb(0xfafafa).into();
+        light.foreground = rgb(0x202020).into();
+        let wrapper: Wrapper = serde_json::from_value(serde_json::json!({
+            "themes": [seed("custom-dark", "Dark"), invalid, light]
+        }))
+        .unwrap();
+        assert_eq!(
+            wrapper.themes.iter().map(|theme| theme.id.as_str()).collect::<Vec<_>>(),
+            ["custom-dark", "custom-light"]
+        );
+    }
+
+    #[test]
+    fn loaded_ids_cannot_shadow_builtins_or_alias_another_theme() {
+        let first = seed("custom-ocean", "First");
+        let duplicate = seed("custom-ocean", "Second");
+        let wrapper: Wrapper = serde_json::from_value(serde_json::json!({
+            "themes": [seed("ciapre", "Shadow"), seed("system-light", "System"),
+                       seed("custom-", "Empty"), first, duplicate, seed("custom-paper", "Paper")]
+        }))
+        .unwrap();
+        assert_eq!(
+            wrapper
+                .themes
+                .iter()
+                .map(|theme| (theme.id.as_str(), theme.name.as_str()))
+                .collect::<Vec<_>>(),
+            [("custom-ocean", "First"), ("custom-paper", "Paper")]
+        );
     }
 }
