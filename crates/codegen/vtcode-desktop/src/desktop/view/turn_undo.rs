@@ -121,8 +121,18 @@ impl DesktopView {
         let Some(result) = result else { return };
         match turn_undo_outcome(&self.turn_undos, self.selected_session_id.as_deref(), result) {
             TurnUndoOutcome::Undone { .. } => {
+                // The outcome mapping guarantees a selected session; the
+                // `else` only keeps this total if that ever changes.
+                let Some(session_id) = self.selected_session_id.clone() else {
+                    return;
+                };
+                let weak = cx.entity().downgrade();
+                let target = deeplinks::NotificationTarget::Thread { session_id };
                 window.push_notification(
-                    Notification::success(rust_i18n::t!("app.notifications.turn_undo_done").to_string()),
+                    Notification::success(rust_i18n::t!("app.notifications.turn_undo_done").to_string())
+                        .id::<super::super::notifications::TurnUndoNotification>()
+                        .placement(Anchor::BottomRight)
+                        .on_click(deeplinks::click_handler(target, weak)),
                     cx,
                 );
             }
@@ -132,7 +142,12 @@ impl DesktopView {
                 } else {
                     reason
                 };
-                window.push_notification(Notification::error(message), cx);
+                // No click target: refusals fire on the already-selected
+                // thread and surface inline plus the status row.
+                window.push_notification(
+                    Notification::error(message).id::<super::super::notifications::TurnUndoNotification>(),
+                    cx,
+                );
             }
             TurnUndoOutcome::Stale | TurnUndoOutcome::Invalid => {}
         }

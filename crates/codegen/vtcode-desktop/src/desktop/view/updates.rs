@@ -58,11 +58,7 @@ impl DesktopView {
             window,
             latest,
             system,
-            move |_, window, cx| {
-                let _updated = weak.update(cx, |view, cx| {
-                    view.open_notification_target(deeplinks::NotificationTarget::UpdateSettings, window, cx);
-                });
-            },
+            deeplinks::click_handler(deeplinks::NotificationTarget::UpdateSettings, weak),
             cx,
         );
         self.preferences.notifications.last_notified_update = Some(latest.to_string());

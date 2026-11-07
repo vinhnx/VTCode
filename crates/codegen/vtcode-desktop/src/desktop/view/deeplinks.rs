@@ -21,6 +21,7 @@
 //! which only make sense with live trigger state.
 
 use super::*;
+use gpui_kit::{ClickEvent, WeakEntity};
 
 /// Prefix an OS-registered scheme would wrap these links with. Accepted and
 /// stripped so typed, pasted, and future external links parse identically.
@@ -103,6 +104,49 @@ pub(super) enum NotificationTarget {
     Workspace,
     /// New release: the Notifications settings tab (update row + Check button).
     UpdateSettings,
+}
+
+impl NotificationTarget {
+    /// Canonical deeplink address for this target, so every notification
+    /// destination round-trips through the same `verb/path` spelling `/go`
+    /// accepts. Address only: clicks still resolve through
+    /// [`DesktopView::open_notification_target`], which carries the
+    /// stale-tolerance (thread re-select, focus-only-if-current) a bare
+    /// deeplink lacks. An Interaction degrades to its thread link; the
+    /// waiting-prompt focus has no link form.
+    #[cfg(test)]
+    fn to_deeplink(&self) -> DeepLink {
+        match self {
+            Self::Thread { session_id } | Self::Interaction { session_id, .. } => {
+                DeepLink::Action(PaletteAction::LoadSession(session_id.clone()))
+            }
+            Self::Workspace => DeepLink::Route(Route::Workspace),
+            Self::UpdateSettings => DeepLink::SettingsTab(settings::SettingsTab::Notifications),
+        }
+    }
+
+    /// Canonical link text for this target. Test-only contract pin: every
+    /// target must stay addressable through the same `verb/path` spelling
+    /// `/go` accepts. Clicks resolve through
+    /// [`DesktopView::open_notification_target`], not this address.
+    #[cfg(test)]
+    pub(super) fn path(&self) -> Option<String> {
+        self.to_deeplink().path()
+    }
+}
+
+/// Shared banner/toast click handler: carry an owned target behind a weak
+/// view so clicks land after thread switches and view teardown alike. One
+/// construction for the agent-activity, update, and turn-undo emitters.
+pub(super) fn click_handler(
+    target: NotificationTarget,
+    view: WeakEntity<DesktopView>,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    move |_, window, cx| {
+        let _updated = view.update(cx, |view, cx| {
+            view.open_notification_target(target.clone(), window, cx);
+        });
+    }
 }
 
 impl DeepLink {
@@ -823,5 +867,36 @@ mod tests {
                 .as_deref(),
             Some("config/agent.x")
         );
+    }
+
+    #[test]
+    fn notification_target_paths_round_trip_through_parse() {
+        let targets = [
+            NotificationTarget::Thread { session_id: "thread-a".into() },
+            NotificationTarget::Interaction {
+                session_id: "thread-a".into(),
+                interaction_id: "prompt-1".into(),
+            },
+            NotificationTarget::Workspace,
+            NotificationTarget::UpdateSettings,
+        ];
+        for target in targets {
+            let path = target.path().expect("every target has a link form");
+            let link = parse(&path).expect("target paths parse as deeplinks");
+            assert_eq!(link.path().as_deref(), Some(path.as_str()), "re-parsed link keeps its spelling");
+        }
+        // Asymmetric by design: an interaction shares its thread link (the
+        // waiting-prompt focus has no link form), while workspace and update
+        // settings address distinctly.
+        assert_eq!(
+            NotificationTarget::Thread { session_id: "s".into() }.path(),
+            NotificationTarget::Interaction { session_id: "s".into(), interaction_id: "i".into() }.path()
+        );
+        assert_eq!(
+            NotificationTarget::Thread { session_id: "s".into() }.path().as_deref(),
+            Some("action/load-session/s")
+        );
+        assert_eq!(NotificationTarget::Workspace.path().as_deref(), Some("workspace"));
+        assert_eq!(NotificationTarget::UpdateSettings.path().as_deref(), Some("settings/notifications"));
     }
 }

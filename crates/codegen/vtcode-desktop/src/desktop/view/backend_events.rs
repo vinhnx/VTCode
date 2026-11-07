@@ -191,17 +191,16 @@ impl DesktopView {
         ) {
             return;
         }
-        // The banner outlives this event: carry an owned target behind a weak
-        // view so clicks land after thread switches and view teardown alike.
+        // Focused windows toast in-app where the click target lives;
+        // backgrounded windows banner through the OS center, mirroring the
+        // update notice. Either way the click resolves the same target.
+        let system = !window.is_window_active();
         let weak = cx.entity().downgrade();
         super::super::notifications::background_agent_activity(
             window,
             activity,
-            move |_, window, cx| {
-                let _updated = weak.update(cx, |view, cx| {
-                    view.open_notification_target(target.clone(), window, cx);
-                });
-            },
+            system,
+            deeplinks::click_handler(target, weak),
             cx,
         );
     }
