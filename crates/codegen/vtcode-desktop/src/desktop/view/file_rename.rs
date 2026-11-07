@@ -303,6 +303,7 @@ impl DesktopView {
                     .id("file-rename-dialog")
                     .test_support()
                     .track_focus(&self.rename_focus)
+                    .focus_trap("file-rename-dialog", &self.rename_focus)
                     // Card presses stop here so the scrim only sees true
                     // outside presses.
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())

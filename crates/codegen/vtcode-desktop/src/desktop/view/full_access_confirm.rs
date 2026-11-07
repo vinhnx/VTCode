@@ -100,6 +100,7 @@ impl DesktopView {
                     .id("full-access-confirm-dialog")
                     .test_support()
                     .track_focus(&self.full_access_focus)
+                    .focus_trap("full-access-confirm-dialog", &self.full_access_focus)
                     // Click-away cancellation, mirroring the palette panel: a
                     // press on the scrim cancels through the Cancel path.
                     .on_mouse_down_out(move |_, window, cx| {

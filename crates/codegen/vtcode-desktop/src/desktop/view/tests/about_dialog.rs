@@ -133,3 +133,13 @@ fn clicking_outside_closes_the_about_dialog(cx: &mut TestAppContext) {
         assert!(!view.read(cx).about_open, "dialog state must be closed");
     });
 }
+
+#[gpui_kit::test]
+fn about_dialog_traps_tab_across_its_footer_actions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_about(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        assert_tab_trapped_within_dialog(window, "about-license", "about-done", cx);
+    })
+    .unwrap();
+}

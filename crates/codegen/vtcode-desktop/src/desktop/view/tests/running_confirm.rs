@@ -917,3 +917,16 @@ fn clicking_outside_cancels_the_running_confirm(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn running_confirm_traps_tab_between_its_actions(cx: &mut TestAppContext) {
+    let (window, _view, _requests) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("thread-tab-new", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("running-confirm-dialog").is_some());
+        assert_tab_trapped_within_dialog(window, "running-confirm-cancel", "running-confirm-stop", cx);
+    })
+    .unwrap();
+}

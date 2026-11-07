@@ -338,3 +338,47 @@ fn config_row_menu_copies_path_and_value(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("0"));
 }
+
+#[gpui_kit::test]
+fn workspaceless_config_empty_offers_the_workspace_chooser(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands: tokio::sync::mpsc::channel(2).0 });
+            view.workspace = None;
+            view.cli_config_settings = None;
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("choose-workspace-from-config").label(), Some("Choose folder…"));
+        window.click("choose-workspace-from-config", cx);
+        assert!(view.read(cx).workspace_picker_open, "the empty-state action opens the native picker");
+    })
+    .unwrap();
+
+    assert!(cx.did_prompt_for_paths());
+    cx.simulate_path_prompt_response(|options| {
+        assert!(options.directories);
+        None
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        // Canceling keeps the workspaceless state; a workspace then moves the
+        // page to the loading branch, where the chooser has no business.
+        assert!(!view.read(cx).workspace_picker_open, "canceling the picker closes it");
+        assert!(view.read(cx).workspace.is_none(), "canceling keeps the workspaceless state");
+        view.update(cx, |view, cx| {
+            view.workspace = Some(PathBuf::from("/projects/demo"));
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(
+            window.find_all("choose-workspace-from-config").is_empty(),
+            "the chooser only renders for the workspaceless empty state"
+        );
+    })
+    .unwrap();
+}

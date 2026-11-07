@@ -192,6 +192,7 @@ impl DesktopView {
                     .id("running-confirm-dialog")
                     .test_support()
                     .track_focus(&self.running_confirm_focus)
+                    .focus_trap("running-confirm-dialog", &self.running_confirm_focus)
                     // Click-away cancellation, mirroring the palette panel: a
                     // press on the scrim cancels through the Cancel path.
                     .on_mouse_down_out(move |_, window, cx| {

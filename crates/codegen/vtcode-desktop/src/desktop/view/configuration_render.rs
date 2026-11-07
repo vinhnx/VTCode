@@ -159,11 +159,21 @@ impl DesktopView {
             self.render_config_body(rail, content, wide, &colors)
         } else {
             match (self.cli_config_settings.as_ref(), selected.as_ref()) {
-                (None, _) if self.workspace.is_none() => self.render_config_content_frame(centered_empty_state(
-                    rust_i18n::t!("app.configuration.empty_workspace_title").to_string(),
-                    rust_i18n::t!("app.configuration.empty_workspace_description").to_string(),
-                    IconName::Folder,
-                )),
+                (None, _) if self.workspace.is_none() => self.render_config_content_frame(
+                    centered_empty_state(
+                        rust_i18n::t!("app.configuration.empty_workspace_title").to_string(),
+                        rust_i18n::t!("app.configuration.empty_workspace_description").to_string(),
+                        IconName::Folder,
+                    )
+                    .gap_3()
+                    .child(
+                        desktop_button("choose-workspace-from-config")
+                            .label(rust_i18n::t!("app.workspace.choose_folder").to_string())
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                    ),
+                ),
                 (None, _) => self.render_config_content_frame(
                     div()
                         .flex_1()

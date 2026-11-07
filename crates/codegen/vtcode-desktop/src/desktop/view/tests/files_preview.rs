@@ -39,3 +39,24 @@ fn markdown_files_preview_through_the_shared_viewer(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn file_preview_traps_tab_across_its_header_actions(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("notes.md"), "# Notes\n").unwrap();
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_file_preview("notes.md".into(), window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("file-preview").is_some(), "the preview overlay opens");
+        assert_tab_trapped_within_dialog(window, "open-preview-editor", "close-preview", cx);
+    })
+    .unwrap();
+}

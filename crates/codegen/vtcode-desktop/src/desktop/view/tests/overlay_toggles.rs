@@ -563,6 +563,92 @@ fn opening_a_route_drops_the_attachment_picker(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn title_bar_actions_fit_the_minimum_window(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop_sized(cx, 600., 560.);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        // The fixture carries a speed, so the header renders its speed tag:
+        // this plus the hidden rail is the widest trailing set the bar owns.
+        view.configuration = Some(runtime_options_config());
+    });
+    let assert_inside = |window: &mut gpui_kit::Window, id: &'static str| {
+        let viewport = window.viewport_size();
+        let bounds = window.find(id).bounds();
+        assert!(
+            bounds.origin.x >= px(0.) && bounds.origin.x + bounds.size.width <= viewport.width,
+            "{id} escapes the title bar horizontally: bounds={bounds:?}, viewport={viewport:?}"
+        );
+    };
+    let chrome_ids = [
+        "navigate-back",
+        "navigate-forward",
+        "toggle-sidebar",
+        "search-commands",
+        "toggle-inspector",
+        "open-settings",
+        "header-overflow",
+        "zen-mode-toggle",
+    ];
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            window.find_all("title-bar-workspace").is_empty(),
+            "the workspace suffix collapses below the breakpoint"
+        );
+        for id in chrome_ids {
+            assert_inside(window, id);
+        }
+        // Hiding the rail adds the workspace actions; every id is rechecked
+        // because the leading cluster re-lays-out around the wider bar.
+        view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
+        window.render_frame(cx);
+        for id in chrome_ids.into_iter().chain(["top-new-thread", "top-utilities"]) {
+            assert_inside(window, id);
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn title_bar_workspace_label_returns_above_the_breakpoint_capped(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 800., 560.);
+    view.update(cx, |view, _| {
+        view.workspace = Some(PathBuf::from(format!("/projects/{}", "w".repeat(40))));
+        view.configuration = Some(runtime_options_config());
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let label = window.find("title-bar-workspace");
+        // Literal, not the const: changing WORKSPACE_LABEL_MAX_WIDTH must
+        // re-prove the breakpoint arithmetic in view.rs, not silently follow.
+        assert!(
+            label.bounds().size.width <= px(161.),
+            "a 40-char workspace caps at the label bound: {:?}",
+            label.bounds()
+        );
+        view.update(cx, |view, cx| view.set_navigation_visible(false, cx));
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        for id in [
+            "navigate-back",
+            "toggle-sidebar",
+            "top-new-thread",
+            "search-commands",
+            "header-overflow",
+            "zen-mode-toggle",
+        ] {
+            let bounds = window.find(id).bounds();
+            assert!(
+                bounds.origin.x >= px(0.) && bounds.origin.x + bounds.size.width <= viewport.width,
+                "{id} escapes the title bar horizontally: bounds={bounds:?}, viewport={viewport:?}"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn attachment_picker_stays_inside_a_narrow_window(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop_sized(cx, 600., 700.);
@@ -811,6 +897,30 @@ fn new_session_action_pops_an_open_panel(cx: &mut TestAppContext) {
             view.read(cx).current_route() == Route::Workspace,
             "starting a thread leaves the panel for the workspace"
         );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn file_rename_traps_tab_across_input_and_actions(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.files = vec![FileEntry {
+            rel_path: "README.md".into(),
+            depth: 0,
+            is_dir: false,
+        }];
+        view.file_directory_paths = std::sync::Arc::new(Default::default());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_file_rename("README.md".to_string(), window, cx));
+        window.render_frame(cx);
+        // A non-blank name enables commit, so all three stops participate.
+        window.input("Renamed.md", cx);
+        window.render_frame(cx);
+        assert_tab_trapped_within_dialog(window, "file-rename-input", "file-rename-commit", cx);
     })
     .unwrap();
 }

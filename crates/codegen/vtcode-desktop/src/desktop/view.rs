@@ -26,7 +26,9 @@ use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandSt
 use gpui_kit::component::description_list::DescriptionList;
 use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
 use gpui_kit::component::diff::{Diff, DiffMode, DiffState};
-use gpui_kit::component::empty::{Empty as EmptyState, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
+use gpui_kit::component::empty::{
+    Empty as EmptyState, EmptyDescription, EmptyHeader, EmptyMedia, EmptyMediaVariant, EmptyTitle,
+};
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{
     Copy, Cut, DeleteToBeginningOfLine, DeleteToEndOfLine, DeleteToNextWordEnd, DeleteToPreviousWordStart, Enter,
@@ -337,6 +339,17 @@ const ZEN_DRAG_STRIP_HEIGHT: f32 = 40.;
 /// content. The embedded slot cannot hold full chrome plus side-by-side
 /// panels below ~900px (sidebar ~320 + settings nav 240 + readable rows).
 const NARROW_PANEL_BREAKPOINT: f32 = 900.;
+/// Title-bar workspace suffix breakpoint: below this viewport width the
+/// "/ workspace" label hides (identity stays in the sidebar/composer) and
+/// above it the label caps at `WORKSPACE_LABEL_MAX_WIDTH`. Measured worst
+/// case: lights 80 + leading fixed ~168 + trailing max ~278 (rail-hidden
+/// set plus speed tag) + trailing pad 12 = ~538, so hidden always fits the
+/// 600px minimum and capped always fits above the breakpoint. Explicit
+/// bounds, not flex shrink: the leading cluster carries
+/// flex_1/min_w_0/truncate yet measures identical widths with and without
+/// trailing pressure, so the bar cannot rely on it to absorb overflow.
+const TITLE_BAR_LABEL_BREAKPOINT: f32 = 760.;
+const WORKSPACE_LABEL_MAX_WIDTH: f32 = 160.;
 const TOOLBAR_HEIGHT: f32 = 48.;
 
 actions!(

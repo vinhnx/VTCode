@@ -287,6 +287,24 @@ fn focus_element_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mu
     panic!("Tab did not reach focusable element {id}");
 }
 
+/// Modal-trap contract: Tab from the last stop wraps to the first, and
+/// Shift-Tab from the first wraps to the last — focus never escapes the
+/// dialog in either direction.
+fn assert_tab_trapped_within_dialog(
+    window: &mut gpui_kit::Window,
+    first_id: &'static str,
+    last_id: &'static str,
+    cx: &mut gpui_kit::App,
+) {
+    focus_element_by_tab(window, last_id, cx);
+    window.press("tab", cx);
+    window.render_frame(cx);
+    assert_eq!(window.find(first_id).focused(), Some(true), "tab from the last stop must wrap to the first");
+    window.press("shift-tab", cx);
+    window.render_frame(cx);
+    assert_eq!(window.find(last_id).focused(), Some(true), "shift-tab from the first stop must wrap to the last");
+}
+
 /// Click one thread tab's close button, revealing it first. Folder tabs keep
 /// their natural width and the strip scrolls, so the button can sit outside
 /// the viewport (and outside hit-testing) until revealed — the same scroll a

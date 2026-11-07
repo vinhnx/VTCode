@@ -687,14 +687,19 @@ impl DesktopView {
                                 .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                         )
                         .child(div().text_sm().font_semibold().child(app::NAME))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .truncate()
-                                .text_sm()
-                                .text_color(theme.colors.foreground)
-                                .child(format!("/ {workspace}")),
-                        ),
+                        .when(window.viewport_size().width >= px(TITLE_BAR_LABEL_BREAKPOINT), |row| {
+                            row.child(
+                                div()
+                                    .id("title-bar-workspace")
+                                    .test_support()
+                                    .min_w_0()
+                                    .max_w(px(WORKSPACE_LABEL_MAX_WIDTH))
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(theme.colors.foreground)
+                                    .child(format!("/ {workspace}")),
+                            )
+                        }),
                 )
                 .child(self.render_header_actions(cx)),
         )

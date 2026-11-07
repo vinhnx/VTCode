@@ -704,6 +704,7 @@ impl DesktopView {
                     .id("file-preview")
                     .test_support()
                     .track_focus(&self.preview_focus)
+                    .focus_trap("file-preview", &self.preview_focus)
                     // Click-away dismissal, mirroring the palette panel: a
                     // press on the scrim closes the preview.
                     .on_mouse_down_out(move |_, window, cx| {

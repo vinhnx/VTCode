@@ -794,11 +794,11 @@ pub(super) fn empty_state(
     let title = title.into();
     EmptyState::new().header(
         EmptyHeader::new()
-            .media(EmptyMedia::new().child(if matches!(icon, IconName::Bot) {
-                brand_logo(40.).into_any_element()
+            .media(if matches!(icon, IconName::Bot) {
+                EmptyMedia::new().child(brand_logo(40.))
             } else {
-                Icon::new(icon).size_6().into_any_element()
-            }))
+                EmptyMedia::new().with_variant(EmptyMediaVariant::Icon).child(Icon::new(icon))
+            })
             .title(EmptyTitle::new().text_lg().font_semibold().child(title))
             .description(EmptyDescription::new().child(description.into())),
     )
