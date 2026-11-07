@@ -15,6 +15,7 @@ mod budgets;
 mod corrections;
 mod history;
 mod lifecycle;
+mod pairing;
 mod patching;
 mod planning;
 mod preflight;
