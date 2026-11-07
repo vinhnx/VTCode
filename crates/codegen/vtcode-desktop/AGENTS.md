@@ -5,9 +5,9 @@
 
 ## Modules
 
-- `src/desktop/view/` screens, overlays, and routing (`components.rs` shared builders, `attachment_cards.rs` attachment cards, `menu_bar.rs`, `running_confirm.rs`, `full_access_confirm.rs`, `cli_handoff.rs`, `shortcuts.rs`).
-- `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` color tokens; `preferences/`; `transport.rs`.
-- `src/desktop/transcript/` transcript projections; all turn grouping (live and archived) lives in `turn.rs`, user-echo attachment data in `user_attachments.rs`, `view/` only renders it.
+- `src/desktop/view/` screens, overlays, and routing (`components.rs` shared builders, plus the per-dialog modules); `appearance_themes.rs` owns custom-theme editing.
+- `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` color tokens (`custom.rs` user themes); `preferences/`; `transport.rs`.
+- `src/desktop/transcript/` transcript projections: turn grouping lives in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders it.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
 - `src/desktop/localization/` plus per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork and Dock; `assets.rs` extra icons; `build_info.rs` and `startup.rs` About stamp and argv/URL handoff.
 
@@ -31,8 +31,7 @@
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; the hooks read pending state the handler is about to clear, so never reorder them.
 - Kit `Badge` is an overlay count, not a text pill — use `Tag::secondary().outline().small()` for pills, wrapped in an identified `div` since `RenderOnce` cannot carry `.test_support()`.
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.
-- `InspectorTab::Plan` is conditional: it joins the rail only while a plan approval carries viewable markdown, so rail/keyboard/menu code must use `visible_inspector_tabs()` (never `ALL`), and every interaction replacement or clear must call `reset_plan_inspector_tab_if_hidden()`.
-- Plan-edit holds the panel through the service ack (`interaction_edit_pending`): every `pending_interaction_response` mutation must maintain the flag, and a terminal `TurnStatus` for the same turn releases a stranded lock when no re-show follows (blocked/recovered turns keep it).
-- `view.rs`, `palette.rs`, `transcript/mod.rs`, and `components.rs` sit within ~25 lines of the 1000-line ceiling: put new code in a focused module instead of growing them.
+- Plan rail/edit locking, and the desktop-only custom-theme contract, live in the [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md#gotchas).
+- `view.rs`, `bootstrap.rs`, `palette.rs`, `transcript/mod.rs`, and `components.rs` sit at the 1000-line ceiling: put new code in a focused module instead of growing them.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-desktop.md) — read the section for the subsystem you change before editing it.

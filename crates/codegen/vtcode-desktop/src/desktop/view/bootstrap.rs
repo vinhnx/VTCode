@@ -424,10 +424,11 @@ pub(super) fn open_or_activate_main_window(
         .theme
         .clone()
         .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
+    let start_customs = preferences.custom_themes.clone();
     let start_maximized = preferences.window_maximized();
     let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, move |window, cx| {
         window.set_window_title(app::NAME);
-        let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
+        let theme_mode = themes::apply_selection(&start_theme, &start_customs, Some(window), cx);
         let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, preferences));
         view.update(cx, |view, cx| view.load_preferences(window, cx));
         view
@@ -850,6 +851,7 @@ impl DesktopView {
             config_page_group: None,
             theme_scroll_light: ScrollHandle::default(),
             theme_scroll_dark: ScrollHandle::default(),
+            theme_editor: appearance_themes::CustomThemeState::new(window, cx),
             settings_scroll: ScrollHandle::default(),
             settings_nav_scroll: ScrollHandle::default(),
             config_rail_scroll: ScrollHandle::default(),
@@ -976,12 +978,7 @@ impl DesktopView {
     pub(super) fn load_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let preferences = self.preferences.clone();
         self.preferences.follow_cli_theme = Some(preferences.follow_cli_theme.unwrap_or(preferences.theme.is_none()));
-        if let Some(theme) = preferences.theme.as_deref() {
-            self.theme_mode = themes::apply_with_contrast(theme, preferences.contrast(), Some(window), cx);
-            self.theme_id = theme.to_string();
-        } else if preferences.contrast() > 0 {
-            self.theme_mode = themes::apply_with_contrast(&self.theme_id, preferences.contrast(), Some(window), cx);
-        }
+        self.restore_saved_theme(window, cx);
         self.apply_typography(cx);
         self.refresh_dock_icon();
         self.sidebar_width = preferences.sidebar_width();

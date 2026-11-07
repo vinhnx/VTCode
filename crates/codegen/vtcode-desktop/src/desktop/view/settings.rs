@@ -524,8 +524,7 @@ impl DesktopView {
             return;
         }
         if let Some(tab) = SettingsTab::ALL.get(index) {
-            self.settings_tab = *tab;
-            self.config_page_open = false;
+            self.select_settings_tab(*tab);
             if *tab == SettingsTab::Storage {
                 self.maybe_request_storage_summary(cx);
             }

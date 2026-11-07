@@ -646,8 +646,7 @@ impl DesktopView {
             PaletteAction::OpenGoTo => self.open_goto_palette(window, cx),
             PaletteAction::SelectFont { target, family } => self.select_font(target, family, cx),
             PaletteAction::SelectSettingsTab(tab) => {
-                self.settings_tab = tab;
-                self.config_page_open = false;
+                self.select_settings_tab(tab);
                 if tab == settings::SettingsTab::Storage {
                     self.maybe_request_storage_summary(cx);
                 }

@@ -165,6 +165,8 @@ impl DesktopView {
             self.shortcuts_editing = false;
             self.shortcut_message = None;
         }
+        // A staged custom theme is page-local too; reopening always starts fresh.
+        self.theme_editor.draft = None;
     }
 
     /// Focus the entry point of a route: the panel focus for panels, the
@@ -300,6 +302,8 @@ impl DesktopView {
             self.close_cli_config_editor(window, cx);
         } else if self.shortcut_capture.is_some() {
             self.cancel_shortcut_capture(window, cx);
+        } else if self.custom_theme_editor_open() {
+            self.cancel_custom_theme_editor(cx);
         } else if self.palette.is_some() {
             self.close_palette(window, cx);
         } else if self.config_page_open {

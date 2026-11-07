@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use super::diff_preferences;
 use super::files::ExternalEditor;
 use super::localization::UiLanguage;
+use super::themes;
 
 const MAX_RECENT_WORKSPACES: usize = 8;
 const DEFAULT_SIDEBAR_WIDTH: f32 = 270.0;
@@ -604,6 +605,10 @@ pub(super) struct Preferences {
     pub dark_theme: Option<String>,
     pub light_typography: Option<TypographyProfile>,
     pub dark_typography: Option<TypographyProfile>,
+    /// Desktop-only user-authored themes, in creation order. They never sync
+    /// to the CLI, which owns only its own palette registry.
+    #[serde(default, deserialize_with = "themes::deserialize_custom_themes")]
+    pub custom_themes: Vec<themes::CustomTheme>,
     /// None preserves legacy explicit theme choices; new profiles follow the CLI.
     pub follow_cli_theme: Option<bool>,
     /// Recently opened workspaces, most recent first.

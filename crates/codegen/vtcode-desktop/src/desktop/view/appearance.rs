@@ -74,7 +74,13 @@ impl DesktopView {
             return;
         }
         self.preferences.contrast = contrast;
-        self.theme_mode = themes::apply_with_contrast(&self.theme_id, contrast, Some(window), cx);
+        self.theme_mode = themes::apply_selection_with_contrast(
+            &self.theme_id,
+            contrast,
+            &self.preferences.custom_themes,
+            Some(window),
+            cx,
+        );
         self.apply_typography(cx);
         self.transcript.remeasure();
         self.save_preferences();
@@ -259,7 +265,7 @@ impl DesktopView {
                 ThemeMode::Dark => self.preferences.dark_theme.as_deref(),
             };
             candidate
-                .filter(|id| themes::mode_for_id(id) == Some(target_mode))
+                .filter(|id| themes::mode_for_selection(id, &self.preferences.custom_themes) == Some(target_mode))
                 .unwrap_or_else(|| themes::default_id(target_mode))
         } else {
             themes::system_id(target_mode)
@@ -294,15 +300,41 @@ impl DesktopView {
         self.apply_theme_state(id, Some(window), cx);
     }
 
+    /// Restore the saved selection at startup. The current id is the fallback
+    /// when only the contrast setting changed; custom ids resolve through the
+    /// same path as palette rows. Loading never re-saves, so this stops short
+    /// of [`Self::apply_theme_state`].
+    pub(super) fn restore_saved_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let preferences = self.preferences.clone();
+        if preferences.theme.is_none() && preferences.contrast() == 0 {
+            return;
+        }
+        let id = preferences.theme.clone().unwrap_or_else(|| self.theme_id.clone());
+        let mode = themes::apply_selection_with_contrast(
+            &id,
+            preferences.contrast(),
+            &preferences.custom_themes,
+            Some(window),
+            cx,
+        );
+        self.theme_mode = mode;
+        // A deleted custom theme (or a stale preference) must not survive as a
+        // dangling id: resolve to the applied mode's default exactly as a live
+        // selection does.
+        self.theme_id = themes::canonical_selection(&id, mode, &preferences.custom_themes);
+    }
+
     pub(super) fn apply_theme_state(&mut self, id: String, window: Option<&mut Window>, cx: &mut Context<Self>) {
-        let mode = themes::apply_with_contrast(&id, self.preferences.contrast(), window, cx);
+        let mode = themes::apply_selection_with_contrast(
+            &id,
+            self.preferences.contrast(),
+            &self.preferences.custom_themes,
+            window,
+            cx,
+        );
         let mode_changed = mode != self.theme_mode;
         self.theme_mode = mode;
-        let id = if themes::mode_for_id(&id) == Some(self.theme_mode) {
-            id
-        } else {
-            themes::default_id(self.theme_mode).to_string()
-        };
+        let id = themes::canonical_selection(&id, mode, &self.preferences.custom_themes);
         if self.preferences.separate_theme_profiles {
             match self.theme_mode {
                 ThemeMode::Light => self.preferences.light_theme = Some(id.clone()),
@@ -798,7 +830,8 @@ impl DesktopView {
                             .gap_4()
                             .when_some(light_group, |list, group| list.child(group))
                             .when_some(dark_group, |list, group| list.child(group)),
-                    ),
+                    )
+                    .child(self.render_custom_themes_group(cx)),
             ))
             .child(accessible_group_box(
                 "appearance-typography-group",

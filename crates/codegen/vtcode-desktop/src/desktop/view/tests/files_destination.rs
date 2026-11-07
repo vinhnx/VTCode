@@ -9,9 +9,7 @@ fn file_destination_dropdown_click_persists_and_relaunch_applies_it(cx: &mut Tes
     // Drive the real dropdown like a user: open the menu, click an option.
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1000.))), cx);
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "file-open-destination-select", cx);
         window.within("file-open-destination-select").click("input", cx);
         window.render_frame(cx);
         window.click("destination-option-system", cx);

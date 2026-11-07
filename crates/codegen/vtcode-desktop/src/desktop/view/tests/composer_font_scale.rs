@@ -284,6 +284,8 @@ fn composer_follows_settings_stepper_clicks(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
+        // The appearance page scrolls: center the stepper before clicking.
+        scroll_settings_into_view(window, "font-ui-1", cx);
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(17.));

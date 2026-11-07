@@ -263,7 +263,7 @@ fn caret_falls_back_to_foreground_for_unreadable_accents(cx: &mut gpui_kit::Test
                 danger: foreground,
                 warning: foreground,
             };
-            let _mode = apply_palette(&theme, None, cx);
+            let _mode = apply_palette(theme.seeds(), None, cx);
             let colors = cx.theme().colors;
             assert_eq!(colors.caret, colors.foreground, "{id}: unreadable accent falls back");
             assert_ne!(colors.caret, theme.accent, "{id}: fallback leaves the accent behind");

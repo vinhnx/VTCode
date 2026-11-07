@@ -508,7 +508,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "choose-ui-font", cx);
         window.within("settings-panel").click("choose-ui-font", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -526,6 +526,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
         assert_eq!(cx.theme().font_family.as_str(), ".SystemUIFont");
         assert_eq!(cx.theme().font_size, px(16.));
         assert_eq!(cx.theme().mono_font_size, px(14.));
+        scroll_settings_into_view(window, "choose-code-font", cx);
         window.within("settings-panel").click("choose-code-font", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -553,9 +554,12 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
         });
-        window.render_frame(cx);
+        // The appearance page scrolls: center each control before clicking so
+        // groups added above the typography section cannot push it out of view.
+        scroll_settings_into_view(window, "font-ui-1", cx);
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
+        scroll_settings_into_view(window, "font-code-0", cx);
         window.within("settings-panel").click("font-code-0", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
@@ -569,8 +573,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
             view.apply_theme("ciapre".into(), window, cx);
         });
         assert_eq!(cx.theme().font_size, px(17.));
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-640.))), cx);
+        scroll_settings_into_view(window, "reset-appearance", cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(16.));
@@ -597,20 +600,10 @@ fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppConte
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
         });
-        window.render_frame(cx);
         // Center each target before interacting: fixed offsets break whenever
         // settings content above the target grows or shrinks.
-        let content = window.find("settings-content").bounds();
-        let content_center = content.origin.y + content.size.height / 2.;
         // The picker sits below reset-appearance; scroll it into view.
-        let picker = window.find("appearance-app-icon-group").bounds();
-        let picker_center = picker.origin.y + picker.size.height / 2.;
-        window.scroll(
-            "settings-content",
-            gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - picker_center)),
-            cx,
-        );
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "appearance-app-icon-group", cx);
         assert_eq!(window.find("appearance-app-icon-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("app-icon-dynamic").label(), Some("Dynamic (selected)"));
         window.within("settings-panel").click("app-icon-dark", cx);
@@ -621,14 +614,7 @@ fn appearance_app_icon_picker_switches_persists_and_resets(cx: &mut TestAppConte
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!(saved.app_icon(), AppIconPreference::Dark);
         // Scroll to the reset row above the picker.
-        let reset = window.find("reset-appearance").bounds();
-        let reset_center = reset.origin.y + reset.size.height / 2.;
-        window.scroll(
-            "settings-content",
-            gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - reset_center)),
-            cx,
-        );
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "reset-appearance", cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).preferences.app_icon(), AppIconPreference::Dynamic);

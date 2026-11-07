@@ -272,6 +272,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Increase text contrast | Settings → Appearance → Contrast adjusts desktop text toward the high-contrast end of the selected theme. The default is zero; the setting persists across theme changes and Reset appearance restores the default. |
 | Change interface language | Settings → Appearance offers 20 languages, including Hindi, Ukrainian, and Swedish. Use the searchable language picker by native name or locale code; the selection updates supported labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark controls switch between saved profiles. The selected profile remains visible in the theme swatches. |
+| Create a custom theme | Appearance → Custom themes saves a personal palette with a name, a Light or Dark base, and the seven seed colors (background, text, accent, secondary, success, danger, warning) picked with the Kit color picker. Each row applies, renames, or deletes; renames keep the theme's stable id so profile assignments survive. Save rejects empty/duplicate names and a text/background pair below 4.5:1; the editor's live preview reports the measured ratio. Derived tokens, hover fills, and focus rings come from the same contrast derivation as built-in themes, so accent and semantic seeds self-correct when a hand-edited value is unreadable. Deleting the active theme falls back to that mode's default, and custom themes stay on this device — they never sync to the CLI, whose registry owns only its own palettes. |
 
 ### Utilities pane
 
@@ -387,22 +388,21 @@ The header uses Kit’s `TitleBar` over a transparent macOS title bar, with the 
 reserved at the left. Kit owns window dragging and delegates double clicks to the system title-bar behavior.
 The header and navigation rail share a subtle theme-derived surface. Matching overflow buttons expose
 existing thread, navigation, inspector, search, and Settings actions; unavailable session actions remain disabled.
-Menus preserve the draft and retain Kit keyboard navigation and dismissal.
-Toolbar, sidebar, and status bar persist while the settings, browser, or review panel owns the content
-slot. The panel Back/Forward history sits in front of session history: toolbar Back pops panel layers
-before walking threads, Forward reopens a backed-out panel, and each panel header carries an explicit
-Close control that dismisses without a Forward trail.
+Menus preserve the draft and retain Kit keyboard navigation and dismissal. Toolbar, sidebar, and status bar persist
+while the settings, browser, or review panel owns the content slot. The panel Back/Forward history sits in front of
+session history: toolbar Back pops panel layers before walking threads, Forward reopens a backed-out panel, and each
+panel header carries an explicit Close control that dismisses without a Forward trail.
 
 ### Startup and desktop shortcuts
 
 Ciapre remains the CLI and desktop default. New desktop profiles follow the CLI-resolved theme delivered
 by `config/discover`. Existing explicit desktop theme choices are preserved during preference migration.
 Choosing a swatch creates a desktop override; **CLI preferences → Use CLI theme** restores inheritance.
-**Sync current theme to CLI** persists a built-in swatch to the active CLI config layer using the shared
-`ConfigManager` writer, then starts the next session with that theme. System appearance swatches cannot
-be written as CLI themes. A failed write leaves Desktop's current appearance unchanged.
-Font families and sizes remain independent of theme inheritance, and theme updates preserve the draft.
-Unsupported CLI themes produce an explicit error rather than silently substituting a palette.
+**Sync current theme to CLI** persists a built-in swatch to the active CLI config layer via the shared `ConfigManager`
+writer, then starts the next session with that theme. System appearance swatches and custom themes cannot be written
+as CLI themes; a failed write leaves Desktop's current appearance unchanged.
+Font families and sizes remain independent of theme inheritance, and theme updates preserve the draft; unsupported
+CLI themes produce an explicit error rather than silently substituting a palette.
 
 **CLI configuration** reads a bounded, searchable projection of the typed CLI configuration from the shared
 `ConfigService`, fills in CLI defaults, and reuses the same curated group and field metadata as the CLI `/config`

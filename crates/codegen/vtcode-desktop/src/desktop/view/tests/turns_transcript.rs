@@ -63,8 +63,8 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
-        window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-420.))), cx);
+        // The appearance page scrolls: center the language row before use.
+        scroll_settings_into_view(window, "ui-language-select", cx);
     })
     .unwrap();
 

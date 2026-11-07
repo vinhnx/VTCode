@@ -103,6 +103,7 @@ use overlays::{Route, RouteHistory};
 mod about;
 mod app_icon_settings;
 mod appearance;
+mod appearance_themes;
 mod attachment_cards;
 mod attachment_picker;
 mod backend_events;
@@ -690,6 +691,7 @@ struct DesktopView {
     config_page_group: Option<String>,
     theme_scroll_light: ScrollHandle,
     theme_scroll_dark: ScrollHandle,
+    theme_editor: appearance_themes::CustomThemeState,
     settings_scroll: ScrollHandle,
     settings_nav_scroll: ScrollHandle,
     config_rail_scroll: ScrollHandle,

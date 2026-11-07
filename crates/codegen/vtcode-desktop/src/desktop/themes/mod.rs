@@ -12,6 +12,12 @@ use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
 use gpui_kit::{App, Hsla, Window, rgb};
 use vtcode_ui::theme::{self, UiThemeColors};
 
+mod custom;
+pub(super) use custom::{
+    CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
+    validate as validate_custom_theme,
+};
+
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
 
@@ -71,6 +77,54 @@ pub(super) struct DesktopTheme {
     pub warning: Hsla,
 }
 
+/// The seed palette every theme resolves through [`apply_palette`]: seven
+/// colors plus the mode. Built-in rows and custom themes share this shape so
+/// the derived-token pipeline (and its WCAG floors) stays single-sourced.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PaletteSeeds {
+    pub mode: ThemeMode,
+    pub background: Hsla,
+    pub foreground: Hsla,
+    pub accent: Hsla,
+    pub secondary: Hsla,
+    pub success: Hsla,
+    pub danger: Hsla,
+    pub warning: Hsla,
+}
+
+impl DesktopTheme {
+    pub(super) fn seeds(&self) -> PaletteSeeds {
+        PaletteSeeds {
+            mode: self.mode,
+            background: self.background,
+            foreground: self.foreground,
+            accent: self.accent,
+            secondary: self.secondary,
+            success: self.success,
+            danger: self.danger,
+            warning: self.warning,
+        }
+    }
+}
+
+impl CustomTheme {
+    /// Resolve a saved custom theme through the same derivation as built-ins.
+    /// Accent and semantic colors are re-seated at apply time, so a saved
+    /// value that later turns out unreadable still renders legibly.
+    pub(super) fn seeds(&self) -> PaletteSeeds {
+        PaletteSeeds {
+            mode: self.mode,
+            background: self.background,
+            foreground: self.foreground,
+            accent: readable_indicator_color(self.background, self.foreground, self.accent),
+            secondary: self.secondary,
+            success: readable_semantic_color(self.background, self.foreground, self.success),
+            danger: readable_semantic_color(self.background, self.foreground, self.danger),
+            warning: readable_semantic_color(self.background, self.foreground, self.warning),
+        }
+    }
+}
+
 /// Build one desktop palette row. The kit's color constructors are not
 /// `const`, so rows are assembled at first use.
 fn theme(
@@ -126,6 +180,37 @@ fn ported(spec: (&'static str, bool, UiThemeColors)) -> DesktopTheme {
 /// unknown ids fall back to the VT Code default.
 pub(super) fn find(id: &str) -> Option<&'static DesktopTheme> {
     all_themes().iter().find(|theme| theme.id == id)
+}
+
+/// Resolve a saved custom theme by id.
+pub(super) fn find_custom<'a>(id: &str, customs: &'a [CustomTheme]) -> Option<&'a CustomTheme> {
+    customs.iter().find(|theme| theme.id == id)
+}
+
+/// Mode of a selection: system sentinels, built-in palette rows, or a saved
+/// custom theme. `None` means the id is unknown.
+pub(super) fn mode_for_selection(id: &str, customs: &[CustomTheme]) -> Option<ThemeMode> {
+    find_custom(id, customs).map(|theme| theme.mode).or_else(|| mode_for_id(id))
+}
+
+/// Seeds for a selection, used to seed the custom-theme editor from the
+/// currently applied theme.
+pub(super) fn selection_seeds(id: &str, customs: &[CustomTheme]) -> Option<PaletteSeeds> {
+    find_custom(id, customs)
+        .map(CustomTheme::seeds)
+        .or_else(|| find(id).map(DesktopTheme::seeds))
+}
+
+/// Canonicalize a selection against the mode actually applied. An id that does
+/// not resolve (a deleted custom theme, a stale preference) or that belongs to
+/// the other mode is replaced by that mode's default, so the stored selection
+/// never dangles. `apply_theme_state` and startup restore both route here.
+pub(super) fn canonical_selection(id: &str, mode: ThemeMode, customs: &[CustomTheme]) -> String {
+    if mode_for_selection(id, customs) == Some(mode) {
+        id.to_string()
+    } else {
+        default_id(mode).to_string()
+    }
 }
 
 /// The full CLI palette table, built once because the kit's color constructors
@@ -246,14 +331,40 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
             let Some(theme) = find(id) else {
                 return apply_by_id(DEFAULT_THEME_ID, window, cx);
             };
-            apply_palette(theme, window, cx)
+            apply_palette(theme.seeds(), window, cx)
         }
     }
 }
 
+/// Apply any selection: a kit base sentinel, a built-in palette row, or a saved
+/// custom theme. Unknown ids keep the existing default fallback.
+pub(super) fn apply_selection(
+    id: &str,
+    customs: &[CustomTheme],
+    window: Option<&mut Window>,
+    cx: &mut App,
+) -> ThemeMode {
+    match find_custom(id, customs) {
+        Some(custom) => apply_palette(custom.seeds(), window, cx),
+        None => apply_by_id(id, window, cx),
+    }
+}
+
 /// Apply an additional foreground contrast while rebuilding its dependent surfaces.
+#[cfg(test)]
 pub(super) fn apply_with_contrast(id: &str, contrast: u8, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
-    let mode = apply_by_id(id, window, cx);
+    apply_selection_with_contrast(id, contrast, &[], window, cx)
+}
+
+/// Custom-aware variant of [`apply_with_contrast`].
+pub(super) fn apply_selection_with_contrast(
+    id: &str,
+    contrast: u8,
+    customs: &[CustomTheme],
+    window: Option<&mut Window>,
+    cx: &mut App,
+) -> ThemeMode {
+    let mode = apply_selection(id, customs, window, cx);
     if contrast == 0 {
         return mode;
     }
@@ -275,40 +386,40 @@ pub(super) fn apply_with_contrast(id: &str, contrast: u8, window: Option<&mut Wi
     mode
 }
 
-fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
-    Theme::change(theme.mode, window, cx);
+fn apply_palette(seeds: PaletteSeeds, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
+    Theme::change(seeds.mode, window, cx);
     Theme::update(cx, |kit_theme| {
         let colors = &mut kit_theme.colors;
-        colors.background = theme.background;
-        colors.foreground = theme.foreground;
+        colors.background = seeds.background;
+        colors.foreground = seeds.foreground;
         apply_filled_surfaces(colors);
         apply_surface_borders(colors);
-        colors.chart_2 = theme.secondary;
-        colors.sidebar_primary = theme.accent;
-        colors.sidebar_primary_foreground = filled_button_foreground(theme.accent);
-        colors.list = theme.background;
-        colors.list_active_border = theme.accent;
-        colors.success = theme.success;
-        colors.success_foreground = filled_button_foreground(theme.success);
-        colors.danger = theme.danger;
-        colors.danger_foreground = filled_button_foreground(theme.danger);
-        colors.warning = theme.warning;
-        colors.primary = theme.accent;
-        colors.primary_foreground = filled_button_foreground(theme.accent);
+        colors.chart_2 = seeds.secondary;
+        colors.sidebar_primary = seeds.accent;
+        colors.sidebar_primary_foreground = filled_button_foreground(seeds.accent);
+        colors.list = seeds.background;
+        colors.list_active_border = seeds.accent;
+        colors.success = seeds.success;
+        colors.success_foreground = filled_button_foreground(seeds.success);
+        colors.danger = seeds.danger;
+        colors.danger_foreground = filled_button_foreground(seeds.danger);
+        colors.warning = seeds.warning;
+        colors.primary = seeds.accent;
+        colors.primary_foreground = filled_button_foreground(seeds.accent);
         let contrast_end = filled_button_foreground(colors.primary_foreground);
-        colors.primary_hover = mix(theme.accent, contrast_end, 0.08);
-        colors.primary_active = mix(theme.accent, contrast_end, 0.16);
+        colors.primary_hover = mix(seeds.accent, contrast_end, 0.08);
+        colors.primary_active = mix(seeds.accent, contrast_end, 0.16);
         colors.button_primary = colors.primary;
         colors.button_primary_foreground = colors.primary_foreground;
         colors.button_primary_hover = colors.primary_hover;
         colors.button_primary_active = colors.primary_active;
-        apply_unified_hover_surface(colors, hover_surface(theme.background, theme.foreground));
-        colors.ring = accessible_focus_color(theme.accent, colors);
+        apply_unified_hover_surface(colors, hover_surface(seeds.background, seeds.foreground));
+        colors.ring = accessible_focus_color(seeds.accent, colors);
         // The text caret shares the focus-visibility rule: brand accent when
         // it holds 3:1 on interactive surfaces, else the foreground.
-        colors.caret = accessible_focus_color(theme.accent, colors);
+        colors.caret = accessible_focus_color(seeds.accent, colors);
     });
-    theme.mode
+    seeds.mode
 }
 
 /// Keep keyboard focus and the text caret visible while retaining brand color

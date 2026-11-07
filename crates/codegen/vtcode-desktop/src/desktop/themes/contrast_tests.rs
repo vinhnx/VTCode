@@ -25,6 +25,72 @@ fn contrast_setting_increases_foreground_contrast_for_every_theme(cx: &mut gpui_
     });
 }
 
+/// Custom themes ride the same seed derivation as built-in rows, so their
+/// derived tokens must clear the same floors even when a saved seed was hand
+/// edited into an unreadable value.
+#[gpui_kit::test]
+fn custom_theme_seeds_hold_the_same_contrast_floors(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        // Asymmetric fixtures: a readable dark pair with hostile accent and
+        // semantic seeds, and a readable light pair whose accent is nearly the
+        // background. Both must self-correct at apply time.
+        let dark = CustomTheme {
+            id: "custom-dark".to_string(),
+            name: "Synthetic Dark".to_string(),
+            mode: ThemeMode::Dark,
+            background: rgb(0x101010).into(),
+            foreground: rgb(0xf0f0f0).into(),
+            accent: rgb(0x111111).into(),
+            secondary: rgb(0x121212).into(),
+            success: rgb(0x131313).into(),
+            danger: rgb(0x141414).into(),
+            warning: rgb(0x151515).into(),
+        };
+        let light = CustomTheme {
+            id: "custom-light".to_string(),
+            name: "Synthetic Light".to_string(),
+            mode: ThemeMode::Light,
+            background: rgb(0xfafafa).into(),
+            foreground: rgb(0x101010).into(),
+            accent: rgb(0xf9f9f9).into(),
+            secondary: rgb(0xf8f8f8).into(),
+            success: rgb(0xf7f7f7).into(),
+            danger: rgb(0xf6f6f6).into(),
+            warning: rgb(0xf5f5f5).into(),
+        };
+        for custom in [dark, light] {
+            let customs = [custom.clone()];
+            let _mode = apply_selection(&custom.id, &customs, None, cx);
+            let colors = cx.theme().colors;
+            let canvas = contrast_ratio(colors.foreground, colors.background);
+            assert!(canvas >= 4.5, "{}: canvas text is {canvas:.2}", custom.id);
+            for (name, surface) in [
+                ("panel", colors.secondary),
+                ("group box", colors.group_box),
+                ("popover", colors.popover),
+            ] {
+                let ratio = contrast_ratio(colors.foreground, surface);
+                assert!(ratio >= 4.5, "{}: text on {name} is {ratio:.2}", custom.id);
+            }
+            for (name, status) in [
+                ("accent", colors.primary),
+                ("success", colors.success),
+                ("danger", colors.danger),
+                ("warning", colors.warning),
+            ] {
+                let ratio = contrast_ratio(status, colors.background);
+                assert!(ratio >= 4.5, "{}: {name} is {ratio:.2}", custom.id);
+            }
+            // Focus visibility is checked separately at 3:1.
+            for surface in [colors.background, colors.secondary, colors.popover] {
+                let ratio = contrast_ratio(colors.ring, surface);
+                assert!(ratio >= 3.0, "{}: focus ring is {ratio:.2} against {surface:?}", custom.id);
+            }
+        }
+    });
+}
+
 #[gpui_kit::test]
 fn profile_captions_hold_muted_contrast_under_contrast_boost(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {

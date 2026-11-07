@@ -373,6 +373,23 @@ fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mu
     }
 }
 
+/// Center a settings-content target in the panel viewport before clicking it.
+/// Geometry-driven, so a group added above the target cannot silently push the
+/// click out of view (Kit rejects clicks on clipped elements).
+fn scroll_settings_into_view(
+    window: &mut gpui_kit::Window,
+    target: impl Into<gpui_kit::ElementId>,
+    cx: &mut gpui_kit::App,
+) {
+    window.render_frame(cx);
+    let content = window.find("settings-content").bounds();
+    let content_center = content.origin.y + content.size.height / 2.;
+    let target = window.find(target).bounds();
+    let target_center = target.origin.y + target.size.height / 2.;
+    window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - target_center)), cx);
+    window.render_frame(cx);
+}
+
 fn scroll_theme_into_view(
     window: &mut gpui_kit::Window,
     view: &Entity<DesktopView>,
@@ -584,6 +601,7 @@ mod config_catalog;
 mod config_deep_links;
 mod config_sessions;
 mod curated_config;
+mod custom_themes;
 mod deeplinks;
 mod diagnostic_notice;
 mod diff_settings;

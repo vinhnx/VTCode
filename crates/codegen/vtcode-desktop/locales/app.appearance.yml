@@ -27,3 +27,28 @@ app:
     increase: {en: "Increase", vi: "Tăng", es: "Aumentar", fr: "Augmenter", ja: "拡大", de: "Erhöhen", it: "Aumenta", zh-CN: "增大", zh-TW: "放大", zh-HK: "放大", pt-BR: "Aumentar", ko: "늘리기", nl: "Vergroten", sv: "Öka", uk: "Збільшити", hi: "बढ़ाएँ", pl: "Zwiększ", tr: "Artır", ru: "Увеличить", id: "Tambah"}
     sandbox_label: {en: "Sandbox: %{value}", vi: "Hộp cát: %{value}", es: "Sandbox: %{value}", fr: "Bac à sable : %{value}", ja: "サンドボックス: %{value}", de: "Sandbox: %{value}", it: "Sandbox: %{value}", zh-CN: "沙盒：%{value}", zh-TW: "沙盒：%{value}", zh-HK: "沙盒：%{value}", pt-BR: "Sandbox: %{value}", ko: "샌드박스: %{value}", nl: "Sandbox: %{value}", sv: "Sandlåda: %{value}", uk: "Пісочниця: %{value}", hi: "सैंडबॉक्स: %{value}", pl: "Piaskownica: %{value}", tr: "Korumalı alan: %{value}", ru: "Песочница: %{value}", id: "Sandbox: %{value}"}
     size_pixels: {en: "%{label}: %{size} pixels", vi: "%{label}: %{size} pixel", es: "%{label}: %{size} píxeles", fr: "%{label} : %{size} pixels", ja: "%{label}: %{size} ピクセル", de: "%{label}: %{size} Pixel", it: "%{label}: %{size} pixel", zh-CN: "%{label}：%{size} 像素", zh-TW: "%{label}：%{size} 像素", zh-HK: "%{label}：%{size} 像素", pt-BR: "%{label}: %{size} pixels", ko: "%{label}: %{size}픽셀", nl: "%{label}: %{size} pixels", sv: "%{label}: %{size} pixlar", uk: "%{label}: %{size} пікс.", hi: "%{label}: %{size} पिक्सेल", pl: "%{label}: %{size} pikseli", tr: "%{label}: %{size} piksel", ru: "%{label}: %{size} пикс.", id: "%{label}: %{size} piksel"}
+    custom_themes: {en: "Custom themes"}
+    custom_themes_description: {en: "Create themes from your own colors. They stay on this device and are never sent to the CLI."}
+    custom_themes_empty: {en: "No custom themes yet."}
+    custom_theme_new: {en: "New theme"}
+    custom_theme_edit: {en: "Edit theme"}
+    custom_theme_delete: {en: "Delete theme"}
+    custom_theme_name: {en: "Name"}
+    custom_theme_name_placeholder: {en: "Theme name"}
+    custom_theme_preview: {en: "Preview"}
+    custom_theme_contrast: {en: "Text contrast %{ratio}:1"}
+    custom_theme_contrast_low: {en: "Text contrast %{ratio}:1, below the 4.5:1 minimum"}
+    custom_theme_save: {en: "Save theme"}
+    custom_theme_cancel: {en: "Cancel"}
+    custom_theme_delete_detail: {en: "This removes the theme from this device. The current selection falls back to the default theme."}
+    custom_theme_name_required: {en: "Enter a theme name."}
+    custom_theme_name_too_long: {en: "Theme names are limited to 40 characters."}
+    custom_theme_name_taken: {en: "A theme with that name already exists."}
+    custom_theme_contrast_low_error: {en: "Text and background need at least 4.5:1 contrast."}
+    custom_color_background: {en: "Background"}
+    custom_color_foreground: {en: "Text"}
+    custom_color_accent: {en: "Accent"}
+    custom_color_secondary: {en: "Secondary"}
+    custom_color_success: {en: "Success"}
+    custom_color_danger: {en: "Danger"}
+    custom_color_warning: {en: "Warning"}
