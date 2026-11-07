@@ -8,10 +8,10 @@
 //! hanging the suite.
 
 use super::handlers::{
-    handle_clear_screen, handle_manage_skills, handle_oauth_login, handle_open_donate_links, handle_show_log_viewer,
-    handle_show_memory_config, handle_show_permissions, handle_show_settings_reset, handle_show_transcript_stats,
-    handle_start_mode_palette, handle_start_session_palette, handle_start_theme_palette,
-    handle_toggle_planning_workflow,
+    handle_clear_screen, handle_manage_skills, handle_oauth_login, handle_open_donate_links,
+    handle_run_instruction_audit, handle_show_log_viewer, handle_show_memory_config, handle_show_permissions,
+    handle_show_settings_reset, handle_show_transcript_stats, handle_start_mode_palette, handle_start_session_palette,
+    handle_start_theme_palette, handle_toggle_planning_workflow,
 };
 use super::secrets::handle_manage_secrets;
 use super::{SlashCommandContext, SlashCommandControl};
@@ -292,6 +292,17 @@ async fn headless_skills_doctor_renders_populated_report_without_waiting() {
     )
     .await;
     assert!(harness.palette_state().is_none(), "/skills doctor must not park modal state");
+}
+
+#[tokio::test]
+async fn headless_doctor_prompt_audit_renders_without_waiting() {
+    let mut harness = HeadlessHarness::new().await;
+    expect_continue(
+        timeout(HEADLESS_TEST_TIMEOUT, handle_run_instruction_audit(harness.ctx())).await,
+        "/doctor prompt-audit",
+    )
+    .await;
+    assert!(harness.palette_state().is_none(), "/doctor prompt-audit must not park modal state");
 }
 
 #[tokio::test]

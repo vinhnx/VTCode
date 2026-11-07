@@ -330,9 +330,14 @@ into it; the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`, `mem
   After confirmation the header shows Plan immediately. When the plan agent needs a material clarification, the inline
   interview wizard presents selectable answers and resumes planning with the chosen answer. Use `/plan off` to cancel an
   active planning workflow without implementing its draft and restore the previous execution agent (`build`/`auto`).
-- `/config checkup` runs configuration diagnostics and suggests reversible optimizations. Use
-  `/config checkup [--quick|--full]` (defaults to a full pass); optimizations are confirmed via the selection modal
-  before any config is mutated. The old `/checkup` name still works as a hidden alias.
+- `/doctor` runs the setup checkup: installation, configuration, provider credentials, dependencies, MCP status,
+  workspace links, loaded skills, and reversible optimizations. Reports findings first and confirms before mutating
+  anything. Use `/doctor [--quick|--full]` (defaults to the interactive picker in the TUI, or a full pass elsewhere);
+  `/config checkup`, `/config doctor`, and `/checkup` remain compatibility aliases.
+- `/doctor prompt-audit` audits always-loaded guidance instead of the installation. It reports instruction-file sizes
+  and budget usage, full-content duplicates and shared long lines across `AGENTS.md`/`CLAUDE.md` files, fenced
+  example content that is usually derivable from the codebase, skill description cost, and configured MCP providers.
+  The audit is read-only; apply fixes yourself.
 - `/model` works while a turn is running, including reasoning-effort selection in the model picker. The selection is
   shown immediately as pending the next request; the in-flight request keeps its original settings and the next model
   request uses the new provider, model, context budget, and reasoning effort (the same turn when it makes another

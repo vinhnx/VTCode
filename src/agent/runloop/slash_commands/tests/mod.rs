@@ -1,4 +1,6 @@
-pub(super) use super::builtins::{CheckupCommand, parse_checkup_args, parse_update_args};
+pub(super) use super::builtins::{
+    CheckupCommand, DoctorCommand, parse_checkup_args, parse_doctor_args, parse_update_args,
+};
 pub(super) use super::{
     AgentManagerAction, CompactConversationCommand, SecretCommandAction, SessionLogExportFormat, SlashCommandOutcome,
     SubprocessManagerAction, handle_slash_command,

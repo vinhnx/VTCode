@@ -143,7 +143,9 @@ pub(in crate::agent::runloop::slash_commands) fn normalize_command_key(command_k
 /// Hidden backward-compat aliases consolidated under `/config`.
 ///
 /// These names no longer appear in the `/` palette or skill registry; typing
-/// them still works by routing through `/config <section>`.
+/// them still works by routing through `/config <section>`. `/doctor` is a
+/// first-class command (see `COMMAND_SKILL_SPECS`) and deliberately stays out
+/// of this map so `prompt-audit` and its own usage text reach its handler.
 pub(in crate::agent::runloop::slash_commands) fn config_consolidated_section(
     command_key: &str,
 ) -> Option<&'static str> {
@@ -154,7 +156,7 @@ pub(in crate::agent::runloop::slash_commands) fn config_consolidated_section(
         "log" => Some("log"),
         "subprocess" | "subprocesses" => Some("subprocess"),
         "notify" => Some("notify"),
-        "checkup" | "doctor" => Some("checkup"),
+        "checkup" => Some("checkup"),
         _ => None,
     }
 }

@@ -182,6 +182,7 @@ pub(crate) enum SlashCommandOutcome {
     RunCheckup {
         quick: bool,
     },
+    AuditInstructions,
     Update {
         check_only: bool,
         install: bool,

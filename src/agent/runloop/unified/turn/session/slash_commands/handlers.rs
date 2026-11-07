@@ -58,8 +58,8 @@ pub(super) use control::{
 };
 pub(super) use desktop::handle_open_desktop;
 pub(super) use diagnostics::{
-    handle_run_checkup, handle_show_memory_config, handle_show_splash, handle_show_status,
-    handle_start_checkup_interactive, handle_start_terminal_setup,
+    handle_run_checkup, handle_run_instruction_audit, handle_show_memory_config, handle_show_splash,
+    handle_show_status, handle_start_checkup_interactive, handle_start_terminal_setup,
 };
 // Re-exported at the `slash_commands` level so sibling command modules (compact,
 // config_toml, the future checkup flow, etc.) share one tested

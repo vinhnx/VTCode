@@ -233,14 +233,35 @@ fn handle_notify_command(args: &str) -> Result<SlashCommandOutcome> {
     })
 }
 
+fn checkup_outcome(command: CheckupCommand) -> SlashCommandOutcome {
+    match command {
+        CheckupCommand::Interactive => SlashCommandOutcome::StartCheckupInteractive,
+        CheckupCommand::Run { quick } => SlashCommandOutcome::RunCheckup { quick },
+    }
+}
+
 fn handle_checkup_command(
     args: &str,
     renderer: &mut AnsiRenderer,
     supports_inline_ui: bool,
 ) -> Result<SlashCommandOutcome> {
     match parse_checkup_args(args, supports_inline_ui) {
-        Ok(CheckupCommand::Interactive) => Ok(SlashCommandOutcome::StartCheckupInteractive),
-        Ok(CheckupCommand::Run { quick }) => Ok(SlashCommandOutcome::RunCheckup { quick }),
+        Ok(command) => Ok(checkup_outcome(command)),
+        Err(message) => {
+            renderer.line(MessageStyle::Error, &message)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+    }
+}
+
+fn handle_doctor_command(
+    args: &str,
+    renderer: &mut AnsiRenderer,
+    supports_inline_ui: bool,
+) -> Result<SlashCommandOutcome> {
+    match parse_doctor_args(args, supports_inline_ui) {
+        Ok(DoctorCommand::Checkup(command)) => Ok(checkup_outcome(command)),
+        Ok(DoctorCommand::PromptAudit) => Ok(SlashCommandOutcome::AuditInstructions),
         Err(message) => {
             renderer.line(MessageStyle::Error, &message)?;
             Ok(SlashCommandOutcome::Handled)
@@ -501,6 +522,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "donate" => handle_donate_command(renderer),
         "theme" => handle_theme_command(args, renderer),
         "init" => handle_init_command(args, renderer),
+        "doctor" => handle_doctor_command(args, renderer, renderer.supports_inline_ui()),
         "config" | "settings" | "setttings" => handle_config_command(args, renderer),
         "statusline" => handle_statusline_command(args),
         "title" => handle_title_command(args, renderer),
@@ -676,9 +698,59 @@ pub(in crate::agent::runloop::slash_commands) enum CheckupCommand {
     Run { quick: bool },
 }
 
+#[derive(Debug)]
+pub(in crate::agent::runloop::slash_commands) enum DoctorCommand {
+    Checkup(CheckupCommand),
+    PromptAudit,
+}
+
 pub(in crate::agent::runloop::slash_commands) fn parse_checkup_args(
     args: &str,
     supports_inline_ui: bool,
+) -> std::result::Result<CheckupCommand, String> {
+    parse_checkup_flags(
+        args,
+        supports_inline_ui,
+        "Usage: /checkup [--quick|--full]\nExamples: /checkup, /checkup --quick",
+    )
+}
+
+pub(in crate::agent::runloop::slash_commands) fn parse_doctor_args(
+    args: &str,
+    supports_inline_ui: bool,
+) -> std::result::Result<DoctorCommand, String> {
+    const PROMPT_AUDIT_USAGE: &str = "Usage: /doctor prompt-audit";
+    let trimmed = args.trim();
+    let mut tokens = trimmed.split_whitespace();
+    let first = tokens.next();
+
+    if first.is_some_and(is_prompt_audit_token) {
+        return if tokens.next().is_none() {
+            Ok(DoctorCommand::PromptAudit)
+        } else {
+            Err(PROMPT_AUDIT_USAGE.to_string())
+        };
+    }
+    if tokens.any(is_prompt_audit_token) {
+        return Err(PROMPT_AUDIT_USAGE.to_string());
+    }
+
+    parse_checkup_flags(
+        trimmed,
+        supports_inline_ui,
+        "Usage: /doctor [--quick|--full|prompt-audit]\nExamples: /doctor, /doctor --quick, /doctor prompt-audit",
+    )
+    .map(DoctorCommand::Checkup)
+}
+
+fn is_prompt_audit_token(token: &str) -> bool {
+    token.eq_ignore_ascii_case("prompt-audit")
+}
+
+fn parse_checkup_flags(
+    args: &str,
+    supports_inline_ui: bool,
+    usage: &str,
 ) -> std::result::Result<CheckupCommand, String> {
     let mut quick = false;
     let mut full = false;
@@ -688,7 +760,7 @@ pub(in crate::agent::runloop::slash_commands) fn parse_checkup_args(
             "--quick" | "-q" | "quick" => quick = true,
             "--full" | "full" => full = true,
             _ => {
-                return Err("Usage: /checkup [--quick|--full]\nExamples: /checkup, /checkup --quick".to_string());
+                return Err(usage.to_string());
             }
         }
         Ok(())

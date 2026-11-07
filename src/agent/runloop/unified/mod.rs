@@ -11,6 +11,7 @@ pub(crate) mod external_url_guard;
 pub(crate) mod fast_mode;
 mod incremental_system_prompt;
 mod inline_events;
+pub(crate) mod instruction_audit;
 pub(crate) use inline_events::{QueuedInput, pop_batched_submission, push_capped};
 mod intent_extractor;
 pub(crate) mod interactive_features;

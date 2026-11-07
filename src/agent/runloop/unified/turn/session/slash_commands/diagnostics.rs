@@ -19,9 +19,9 @@ const CHECKUP_ACTION_PREFIX: &str = "checkup.action.";
 const CHECKUP_ACTION_BACK: &str = "checkup.action.back";
 const CHECKUP_ACTION_OPTIMIZE_PREFIX: &str = "checkup.optimize.";
 
-/// Identifies an applicable `/config checkup` optimization the user can apply.
+/// Identifies an applicable `/doctor` optimization the user can apply.
 ///
-/// These are all reversible config mutations; `/config checkup` confirms with the user
+/// These are all reversible config mutations; `/doctor` confirms with the user
 /// (via the selection modal) before mutating anything.
 #[derive(Debug)]
 struct CheckupRemediation {
@@ -192,6 +192,25 @@ pub(crate) async fn handle_show_memory_config(mut ctx: SlashCommandContext<'_>) 
 
 pub(crate) async fn handle_run_checkup(mut ctx: SlashCommandContext<'_>, quick: bool) -> Result<SlashCommandControl> {
     run_checkup(&mut ctx, quick).await?;
+    Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_run_instruction_audit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    let active_instruction_directory = ctx
+        .context_manager
+        .active_instruction_directory_snapshot()
+        .unwrap_or_else(|| ctx.config.workspace.clone());
+    let instruction_context_paths = ctx.context_manager.instruction_context_paths_snapshot();
+
+    crate::agent::runloop::unified::instruction_audit::run_instruction_audit(
+        ctx.renderer,
+        ctx.vt_cfg.as_ref(),
+        &active_instruction_directory,
+        &instruction_context_paths,
+        ctx.loaded_skills,
+    )
+    .await?;
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
 

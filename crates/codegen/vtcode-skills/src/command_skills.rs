@@ -159,6 +159,12 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/config [memory|permissions|model|ide|tasks|jobs|log|subprocess|notify|checkup|<path>|reset]",
         "configuration"
     ),
+    built_in_command_spec!(
+        "doctor",
+        "Run the setup checkup or audit always-loaded guidance (usage: /doctor [--quick|--full|prompt-audit])",
+        "/doctor [--quick|--full|prompt-audit]",
+        "support"
+    ),
     CommandSkillSpec {
         slash_name: "model",
         skill_name: "cmd-model",
@@ -523,10 +529,18 @@ mod tests {
     }
 
     #[test]
+    fn doctor_covers_setup_and_prompt_audit() {
+        let doctor = find_command_skill_by_slash_name("doctor").expect("doctor spec");
+        assert!(doctor.is_built_in());
+        assert_eq!(doctor.category(), "support");
+        assert!(doctor.usage.contains("prompt-audit"));
+        assert!(doctor.usage.contains("--quick"));
+    }
+
+    #[test]
     fn removed_config_consolidated_commands_are_not_registered() {
         for removed in [
             "checkup",
-            "doctor",
             "permissions",
             "ide",
             "tasks",

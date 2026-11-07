@@ -108,8 +108,8 @@ VT Code has undergone significant improvements:
   canonical `ThreadEvent` history remains authoritative. See
   [context architecture](./ARCHITECTURE.md#request-projection-and-context-budgets) and the
   [Compaction Engine](./development/compaction.md).
-- **`/config checkup` Command** - Configuration diagnostics that surface reversible, confirm-before-apply optimizations
-  (e.g. tool-result clearing, client tool search, token-efficiency warnings).
+- **`/doctor` Command** - Setup diagnostics that surface reversible, confirm-before-apply optimizations, plus
+  `/doctor prompt-audit` for read-only instruction, skill, and MCP context-cost auditing.
 - **GPT-5.6 Models** - Added support for OpenAI's GPT-5.6 family across configurations.
 
 - **GLM-5.3 Model Support** - Z.ai's flagship coding model with frontier long-horizon agentic performance and 1M-token

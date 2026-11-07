@@ -51,6 +51,7 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::ManageMcp { .. }
         | SlashCommandOutcome::StartCheckupInteractive
         | SlashCommandOutcome::RunCheckup { .. }
+        | SlashCommandOutcome::AuditInstructions
         | SlashCommandOutcome::Update { .. }
         | SlashCommandOutcome::StartTerminalSetup
         | SlashCommandOutcome::ManageLocalServer { .. }) => route_runtime_outcome(outcome, ctx).await,
@@ -148,6 +149,7 @@ async fn route_runtime_outcome(
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
         SlashCommandOutcome::StartCheckupInteractive => handlers::handle_start_checkup_interactive(ctx).await,
         SlashCommandOutcome::RunCheckup { quick } => handlers::handle_run_checkup(ctx, quick).await,
+        SlashCommandOutcome::AuditInstructions => handlers::handle_run_instruction_audit(ctx).await,
         SlashCommandOutcome::Update { check_only, install, force } => {
             handlers::handle_update(ctx, check_only, install, force).await
         }
