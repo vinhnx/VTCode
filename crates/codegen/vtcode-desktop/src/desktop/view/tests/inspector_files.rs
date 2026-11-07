@@ -652,12 +652,15 @@ fn file_delete_stays_confirm_gated_and_trashes_after_confirm(cx: &mut TestAppCon
     use super::super::files_panel::DeleteFilePath;
 
     let workspace = tempfile::TempDir::new().expect("temp workspace");
+    let sink = tempfile::TempDir::new().expect("trash sink");
     std::fs::write(workspace.path().join("doomed.md"), "doomed").expect("write file");
     std::fs::write(workspace.path().join("spared.md"), "spared").expect("write file");
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
+            // Stand in for `~/.Trash`: this test must not litter the real one.
+            view.test_trash_sink = Some(sink.path().to_path_buf());
             view.refresh_files(cx);
         });
     })
@@ -687,6 +690,7 @@ fn file_delete_stays_confirm_gated_and_trashes_after_confirm(cx: &mut TestAppCon
     .unwrap();
     cx.run_until_parked();
     assert!(!workspace.path().join("doomed.md").exists());
+    assert_eq!(std::fs::read_to_string(sink.path().join("doomed.md")).unwrap(), "doomed");
     assert_eq!(std::fs::read_to_string(workspace.path().join("spared.md")).unwrap(), "spared");
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);

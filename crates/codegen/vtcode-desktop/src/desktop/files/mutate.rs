@@ -7,7 +7,7 @@
 //! must run on a background executor, never in render.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::resolve_attachment_path;
 
@@ -69,12 +69,43 @@ pub(crate) fn rename_entry(root: &Path, rel_path: &str, new_name: &str) -> Resul
 /// the Finder convention instead of deleting permanently. Fails closed on
 /// missing sources and anything outside the workspace.
 pub(crate) fn trash_entry(root: &Path, rel_path: &str) -> Result<(), String> {
+    move_to_trash(&confined_target(root, rel_path)?)
+}
+
+/// Resolve `rel_path` inside `root`, refusing anything that escapes the
+/// workspace or no longer exists. Shared so the system trash path and the
+/// test sink apply the identical confinement boundary.
+fn confined_target(root: &Path, rel_path: &str) -> Result<PathBuf, String> {
     let root = vtcode_commons::paths::canonicalize(root).map_err(|error| error.to_string())?;
     let target = resolve_attachment_path(&root, Path::new(rel_path)).map_err(|_error| missing_entry())?;
     if fs::symlink_metadata(&target).is_err() {
         return Err(missing_entry());
     }
-    move_to_trash(&target)
+    Ok(target)
+}
+
+/// Test-only sibling of [`trash_entry`] that moves the entry into
+/// `trash_dir` instead of the user's real `~/.Trash`. Tests exercise the
+/// confinement and "left the tree" behavior without leaving litter behind
+/// on the developer's machine.
+#[cfg(test)]
+pub(crate) fn trash_entry_into(root: &Path, rel_path: &str, trash_dir: &Path) -> Result<(), String> {
+    move_into(&confined_target(root, rel_path)?, trash_dir)
+}
+
+/// Move `target` into `trash_dir`, using Finder's `name 2.ext` collision
+/// convention so a repeat run never overwrites an earlier entry.
+#[cfg(test)]
+fn move_into(target: &Path, trash_dir: &Path) -> Result<(), String> {
+    let name = target.file_name().ok_or_else(missing_entry)?.to_string_lossy().into_owned();
+    fs::create_dir_all(trash_dir).map_err(|error| error.to_string())?;
+    let mut destination = trash_dir.join(&name);
+    let mut sequence = 2;
+    while fs::symlink_metadata(&destination).is_ok() {
+        destination = trash_dir.join(format!("{name} {sequence}"));
+        sequence += 1;
+    }
+    fs::rename(target, &destination).map_err(|error| error.to_string())
 }
 
 /// Trash one confined path through `NSFileManager`, the same API Finder
@@ -191,16 +222,39 @@ mod tests {
 
     #[test]
     fn trash_moves_workspace_entries_out_of_the_tree() {
-        // One real Trash write per run: the highest-risk behavior (macOS
-        // trashItemAtURL on tempdir files) is only proven by doing it.
+        // A sink directory stands in for `~/.Trash`: the real
+        // `trashItemAtURL` call would deposit a permanent, user-visible
+        // entry on the developer's machine on every run, and the assertion
+        // below (entry left the tree, entry arrived intact) is what the
+        // behavior actually guarantees. `trash_hits_the_system_trash` proves
+        // the real binding separately.
         let workspace = temp_workspace();
+        let sink = temp_workspace();
         fs::write(workspace.path().join("doomed.md"), "doomed").unwrap();
         fs::create_dir(workspace.path().join("doomed-dir")).unwrap();
 
-        trash_entry(workspace.path(), "doomed.md").unwrap();
+        trash_entry_into(workspace.path(), "doomed.md", sink.path()).unwrap();
         assert!(!workspace.path().join("doomed.md").exists());
-        trash_entry(workspace.path(), "doomed-dir").unwrap();
+        assert_eq!(fs::read_to_string(sink.path().join("doomed.md")).unwrap(), "doomed");
+
+        trash_entry_into(workspace.path(), "doomed-dir", sink.path()).unwrap();
         assert!(!workspace.path().join("doomed-dir").exists());
+        assert!(sink.path().join("doomed-dir").is_dir());
+    }
+
+    #[test]
+    fn trashing_into_the_same_sink_twice_keeps_both_entries() {
+        // Collision convention: Finder never overwrites, so a second run
+        // must land beside the first instead of destroying it.
+        let workspace = temp_workspace();
+        let sink = temp_workspace();
+        fs::write(workspace.path().join("doomed.md"), "first").unwrap();
+        trash_entry_into(workspace.path(), "doomed.md", sink.path()).unwrap();
+        fs::write(workspace.path().join("doomed.md"), "second").unwrap();
+        trash_entry_into(workspace.path(), "doomed.md", sink.path()).unwrap();
+
+        assert_eq!(fs::read_to_string(sink.path().join("doomed.md")).unwrap(), "first");
+        assert_eq!(fs::read_to_string(sink.path().join("doomed.md 2")).unwrap(), "second");
     }
 
     #[test]
@@ -218,5 +272,19 @@ mod tests {
 
         assert_eq!(fs::read_to_string(workspace.path().join("keep.md")).unwrap(), "keep");
         assert_eq!(fs::read_to_string(outside.path().join("outside.rs")).unwrap(), "private");
+    }
+
+    #[test]
+    #[ignore = "writes a real ~/.Trash entry; run with `--run-ignored` when touching the NSFileManager binding"]
+    fn trash_hits_the_system_trash() {
+        // Opt-in only: this is the one test that proves the real
+        // `trashItemAtURL_resultingItemURL_error` binding, at the cost of a
+        // permanent, user-visible Trash entry. Everything else uses the sink.
+        let workspace = temp_workspace();
+        let name = format!("vtcode-trash-probe-{}", std::process::id());
+        fs::write(workspace.path().join(&name), "probe").unwrap();
+
+        trash_entry(workspace.path(), &name).unwrap();
+        assert!(!workspace.path().join(&name).exists(), "the entry must leave the workspace");
     }
 }

@@ -560,6 +560,12 @@ impl DesktopView {
         if self.workspace.as_ref() != Some(&workspace) {
             return;
         }
+        #[cfg(test)]
+        if let Some(sink) = self.test_trash_sink.clone() {
+            let outcome = files::trash_entry_into(&workspace, &rel_path, &sink);
+            self.finish_file_delete(&workspace, &rel_path, outcome, window, cx);
+            return;
+        }
         let root = workspace.clone();
         let path = rel_path.clone();
         cx.spawn_in(window, async move |view, cx| {

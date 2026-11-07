@@ -729,6 +729,8 @@ impl DesktopView {
             preview_editor_error: None,
             #[cfg(test)]
             test_launch_intercept: None,
+            #[cfg(test)]
+            test_trash_sink: None,
             preview_focus: cx.focus_handle(),
             preview_return_focus: None,
             file_rename: None,

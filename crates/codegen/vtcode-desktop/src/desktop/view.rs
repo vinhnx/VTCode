@@ -646,6 +646,11 @@ struct DesktopView {
     preview_editor_error: Option<String>,
     #[cfg(test)]
     test_launch_intercept: Option<TestLaunchIntercept>,
+    /// Test-only substitution for the user's real `~/.Trash`: when set, the
+    /// post-confirm delete moves the entry into this scratch directory
+    /// instead of calling `NSFileManager`. Left `None` in production.
+    #[cfg(test)]
+    test_trash_sink: Option<PathBuf>,
     preview_focus: FocusHandle,
     preview_return_focus: Option<FocusHandle>,
     file_rename: Option<FileRenameState>,

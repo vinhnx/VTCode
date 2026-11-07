@@ -17,6 +17,8 @@ pub(super) use launch::{
     reveal_in_finder, terminal_runs_handoff_script, write_handoff_script,
 };
 pub(super) use model::{SEARCH_MAX_HITS, SNAPSHOT_MAX_ENTRIES, fuzzy_search, fuzzy_search_files, scan_snapshot};
+#[cfg(test)]
+pub(super) use mutate::trash_entry_into;
 pub(super) use mutate::{rename_entry, trash_entry, validated_file_name};
 
 /// Preview read bound; a `usize` so buffer sizing never truncates.
