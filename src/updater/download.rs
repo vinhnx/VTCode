@@ -145,7 +145,7 @@ pub(super) fn parse_checksum_metadata(metadata: &str, archive_name: &str) -> Opt
     })
 }
 
-pub(super) fn verify_checksum(contents: &[u8], expected: &str) -> Result<()> {
+fn verify_checksum(contents: &[u8], expected: &str) -> Result<()> {
     if !is_sha256(expected) {
         bail!("invalid SHA-256 checksum metadata");
     }

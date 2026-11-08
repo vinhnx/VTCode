@@ -50,7 +50,7 @@ impl InstallSource {
         self.update_action_for_os(env::consts::OS)
     }
 
-    pub(crate) fn update_action_for_os(self, os: &str) -> UpdateAction {
+    fn update_action_for_os(self, os: &str) -> UpdateAction {
         match self {
             Self::Standalone if os == "windows" => UpdateAction {
                 source_label: self.label(),
@@ -179,7 +179,7 @@ pub(super) fn get_target_triple() -> Option<&'static str> {
 /// Windows ARM is intentionally unsupported until the build workflow produces
 /// that target; returning `None` surfaces "Unsupported platform for
 /// auto-update" instead of a misleading "no compatible archive found".
-pub(super) fn get_target_triple_for(os: &str, arch: &str) -> Option<&'static str> {
+fn get_target_triple_for(os: &str, arch: &str) -> Option<&'static str> {
     match (os, arch) {
         ("macos", "x86_64") => Some("x86_64-apple-darwin"),
         ("macos", "aarch64") => Some("aarch64-apple-darwin"),

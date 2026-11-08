@@ -121,7 +121,7 @@ fn connect_timeout() -> Option<Duration> {
     vtcode_commons::http::http_timeouts().connect
 }
 
-pub(super) fn github_client() -> Result<reqwest::Client> {
+fn github_client() -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder().user_agent("vtcode-updater");
     if let Some(connect) = connect_timeout() {
         builder = builder.connect_timeout(connect);
@@ -142,7 +142,7 @@ pub(super) fn github_client() -> Result<reqwest::Client> {
     builder.build().context("Failed to create HTTP client")
 }
 
-pub(super) fn github_token() -> Option<String> {
+fn github_token() -> Option<String> {
     std::env::var("GITHUB_TOKEN")
         .ok()
         .or_else(|| std::env::var("GH_TOKEN").ok())

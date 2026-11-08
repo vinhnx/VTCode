@@ -19,7 +19,7 @@ pub(super) struct UpdateCacheSnapshot {
     pub(super) latest_was_newer: bool,
     pub(super) last_seen_version: Option<Version>,
     pub(super) dismissed_version: Option<Version>,
-    pub(super) release_notes: Option<String>,
+    release_notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
