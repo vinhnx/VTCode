@@ -52,3 +52,26 @@ fn login_items_copy_resolves_in_every_language() {
     }
     assert_eq!(rust_i18n::t!("app.settings.login_items.title", locale = "en").to_string(), "Launch at login");
 }
+
+#[test]
+fn diagram_preview_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.markdown.view_diagram",
+            "app.markdown.diagram_preview_title",
+            "app.markdown.diagram_open_failed",
+            "app.markdown.diagram_too_large",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+        let detail =
+            rust_i18n::t!("app.markdown.diagram_open_failed_detail", locale = locale, detail = "EACCES").to_string();
+        assert!(detail.contains("EACCES"), "{locale} dropped the detail");
+    }
+    assert_eq!(rust_i18n::t!("app.markdown.view_diagram", locale = "en").to_string(), "View diagram");
+}

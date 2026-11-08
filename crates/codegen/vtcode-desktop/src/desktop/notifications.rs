@@ -4,6 +4,7 @@ use gpui_kit::{Anchor, App, ClickEvent, Window};
 use super::strings::app;
 
 struct ClipboardCopyNotification;
+struct DiagramPreviewNotification;
 struct BackgroundAgentActivityNotification;
 struct UpdateAvailableNotification;
 /// Replace marker for turn-undo outcome toasts, so rapid undos replace
@@ -53,6 +54,15 @@ pub(super) fn copied_to_clipboard(window: &mut Window, cx: &mut App) {
     window.push_notification(
         Notification::success(rust_i18n::t!("app.notifications.copied").to_string())
             .id::<ClipboardCopyNotification>()
+            .placement(Anchor::BottomRight),
+        cx,
+    );
+}
+
+pub(super) fn diagram_preview_failed(window: &mut Window, message: String, cx: &mut App) {
+    window.push_notification(
+        Notification::error(message)
+            .id::<DiagramPreviewNotification>()
             .placement(Anchor::BottomRight),
         cx,
     );

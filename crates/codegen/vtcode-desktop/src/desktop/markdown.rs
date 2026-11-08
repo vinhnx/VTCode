@@ -342,7 +342,7 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
         })
         .code_block_actions(|block, _, _| {
             let code = block.code();
-            Button::new("copy-code")
+            let copy = Button::new("copy-code")
                 .tab_stop(true)
                 .cursor_pointer()
                 .label(rust_i18n::t!("app.markdown.copy_code").to_string())
@@ -350,7 +350,20 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
                 .on_click(move |_, window, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
                     super::notifications::copied_to_clipboard(window, cx);
-                })
+                });
+            if !super::diagram::is_mermaid_fence(block.lang().as_deref()) {
+                return copy.into_any_element();
+            }
+            let source = block.code();
+            let view = Button::new("view-diagram")
+                .tab_stop(true)
+                .cursor_pointer()
+                .label(rust_i18n::t!("app.markdown.view_diagram").to_string())
+                .ghost()
+                .on_click(move |_, window, cx| {
+                    super::diagram::open_diagram_preview(&source, window, cx);
+                });
+            div().flex().items_center().gap_1().child(copy).child(view).into_any_element()
         })
 }
 
@@ -657,5 +670,49 @@ mod tests {
         assert!(!super::has_viewable_plan_markdown(Some("")));
         assert!(!super::has_viewable_plan_markdown(Some("  \n ")));
         assert!(super::has_viewable_plan_markdown(Some("# Plan")));
+    }
+
+    struct FenceFixture {
+        source: gpui_kit::SharedString,
+    }
+
+    impl Render for FenceFixture {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            gpui_kit::div().size_full().child(super::render_markdown(
+                "fence-fixture-markdown".into(),
+                self.source.clone(),
+                false,
+                cx,
+            ))
+        }
+    }
+
+    #[gpui_kit::test]
+    fn mermaid_fences_gain_a_view_diagram_action(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        // Presence only: clicking would launch a real browser. Copy stays on
+        // every fence; View diagram joins mermaid fences alone.
+        for (source, expect_view) in [
+            ("```mermaid\nflowchart TD\n  A --> B\n```", true),
+            ("```Mermaid\nflowchart TD\n  A --> B\n```", true),
+            ("```rust\nfn main() {}\n```", false),
+            ("```\nplain\n```", false),
+        ] {
+            let source: gpui_kit::SharedString = source.into();
+            let (window, _) = cx.update(|cx| {
+                gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| {
+                    cx.new(|_| FenceFixture { source: source.clone() })
+                })
+                .unwrap()
+            });
+            let (copy, view) = cx
+                .update_window(window, |_, window, cx| {
+                    window.render_frame(cx);
+                    (window.try_find("copy-code").is_some(), window.try_find("view-diagram").is_some())
+                })
+                .unwrap();
+            assert!(copy, "copy action missing for {source:?}");
+            assert_eq!(view, expect_view, "view action for {source:?}");
+        }
     }
 }

@@ -1,6 +1,7 @@
 mod app_icon;
 mod assets;
 mod build_info;
+mod diagram;
 mod diff_preferences;
 mod files;
 mod inspector;

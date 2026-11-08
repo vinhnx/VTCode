@@ -137,9 +137,29 @@ fn shell_quote(word: &str) -> String {
 /// per-process counter so concurrent handoffs never collide. No cleanup: the
 /// OS purges temp, and deleting eagerly would race the terminal launch.
 pub(crate) fn write_handoff_script(content: &str) -> Result<PathBuf, String> {
-    static NEXT_SCRIPT_ID: AtomicU64 = AtomicU64::new(0);
-    let id = NEXT_SCRIPT_ID.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!("vtcode-handoff-{}-{id}.command", std::process::id()));
+    write_owner_only_temp("handoff", "command", content, |error| {
+        rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string()
+    })
+}
+
+/// Write a diagram preview page to an owner-only temp file. Same
+/// exclusive-create + pid/counter discipline as handoff scripts; the OS
+/// purges temp, and deleting eagerly would race the browser launch.
+pub(crate) fn write_preview_html(content: &str) -> Result<PathBuf, String> {
+    write_owner_only_temp("diagram", "html", content, |error| {
+        rust_i18n::t!("app.markdown.diagram_open_failed_detail", detail = error.to_string()).to_string()
+    })
+}
+
+fn write_owner_only_temp(
+    prefix: &str,
+    extension: &str,
+    content: &str,
+    write_error: impl Fn(std::io::Error) -> String,
+) -> Result<PathBuf, String> {
+    static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+    let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!("vtcode-{prefix}-{}-{id}.{extension}", std::process::id()));
     let mut options = fs::OpenOptions::new();
     let _options = options.write(true).create_new(true);
     #[cfg(unix)]
@@ -147,11 +167,8 @@ pub(crate) fn write_handoff_script(content: &str) -> Result<PathBuf, String> {
         use std::os::unix::fs::OpenOptionsExt;
         let _options = options.mode(0o700);
     }
-    let mut file = options
-        .open(&path)
-        .map_err(|error| rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string())?;
-    file.write_all(content.as_bytes())
-        .map_err(|error| rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string())?;
+    let mut file = options.open(&path).map_err(&write_error)?;
+    file.write_all(content.as_bytes()).map_err(write_error)?;
     Ok(path)
 }
 
@@ -161,6 +178,28 @@ pub(crate) fn write_handoff_script(content: &str) -> Result<PathBuf, String> {
 pub(crate) fn open_script_in_terminal(script: &Path, terminal: ExternalEditor) -> Result<(), String> {
     debug_assert!(terminal_runs_handoff_script(terminal), "handoff scripts only auto-run in verified terminals");
     run_open_command(editor_command(terminal, script))
+}
+
+/// Open a diagram preview page in the default browser: fixed `open <path>`
+/// argv, never a shell command. The path is app-generated (see
+/// [`write_preview_html`]); a missing or non-file target fails closed.
+/// Fire-and-forget like transcript link opens: `open` is reaped on a
+/// short-lived thread so a cold browser launch never blocks the UI.
+pub(crate) fn open_in_browser(path: &Path) -> Result<(), String> {
+    if !fs::metadata(path).map(|metadata| metadata.is_file()).unwrap_or(false) {
+        return Err(rust_i18n::t!("app.markdown.diagram_open_failed").to_string());
+    }
+    let mut child = browser_command(path).spawn().map_err(|error| {
+        rust_i18n::t!("app.markdown.diagram_open_failed_detail", detail = error.to_string()).to_string()
+    })?;
+    let _reaper = std::thread::spawn(move || drop(child.wait()));
+    Ok(())
+}
+
+fn browser_command(path: &Path) -> std::process::Command {
+    let mut command = std::process::Command::new("/usr/bin/open");
+    let _command = command.arg(path);
+    command
 }
 
 fn run_open_command(mut command: std::process::Command) -> Result<(), String> {
@@ -397,6 +436,48 @@ mod tests {
         let raw = OsString::from_vec(b"/tmp/\xff\xfe".to_vec());
         assert!(build_handoff_script(Path::new("/bin/vtcode"), Path::new(&raw), "sess-1").is_none());
         assert!(build_handoff_script(Path::new(&raw), Path::new("/tmp/ws"), "sess-1").is_none());
+    }
+
+    #[test]
+    fn preview_html_files_are_owner_only_and_unique() {
+        struct RemoveOnDrop(PathBuf);
+        impl Drop for RemoveOnDrop {
+            fn drop(&mut self) {
+                drop(fs::remove_file(&self.0));
+            }
+        }
+        let first = write_preview_html("<html></html>").expect("first write");
+        let _first_guard = RemoveOnDrop(first.clone());
+        let second = write_preview_html("<html></html>").expect("second write");
+        let _second_guard = RemoveOnDrop(second.clone());
+        assert_ne!(first, second, "concurrent previews must not share a path");
+        assert_eq!(first.extension().and_then(|ext| ext.to_str()), Some("html"));
+        assert_eq!(fs::read_to_string(&first).unwrap(), "<html></html>");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&first).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        assert!(
+            first.file_name().unwrap().to_string_lossy().starts_with("vtcode-diagram-"),
+            "prefix keeps previews apart from handoff scripts under one counter"
+        );
+    }
+
+    #[test]
+    fn browser_open_argv_is_a_fixed_open_of_the_app_generated_path() {
+        let path = PathBuf::from("/tmp/vtcode-diagram-1-0.html");
+        let command = browser_command(&path);
+        assert_eq!(command.get_program(), "/usr/bin/open");
+        assert_eq!(command.get_args().collect::<Vec<_>>(), vec![path.as_os_str()]);
+    }
+
+    #[test]
+    fn browser_open_rejects_missing_and_non_file_targets_without_launching() {
+        // The success path spawns a real browser, so only the fail-closed
+        // guards are pinned here.
+        let workspace = temp_workspace();
+        assert!(open_in_browser(&workspace.path().join("missing.html")).is_err());
+        assert!(open_in_browser(workspace.path()).is_err(), "directories are rejected");
     }
 
     #[test]
