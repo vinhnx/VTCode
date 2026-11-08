@@ -198,6 +198,44 @@ dialog p {
   gap: 7px;
 }
 
+.diagram-dialog {
+  width: min(880px, calc(100vw - 28px));
+  max-width: 880px;
+}
+
+.diagram-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.diagram-container {
+  min-height: 240px;
+  max-height: 60vh;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--ciapre-border);
+  border-radius: 2px;
+  background: var(--pele-bg, var(--ciapre-background));
+  padding: 16px;
+}
+
+.diagram-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.diagram-error {
+  margin: 0;
+  border: 1px solid var(--ciapre-alert);
+  border-radius: 2px;
+  background: var(--ciapre-background);
+  color: var(--ciapre-alert-foreground);
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
 .evidence-summary {
   border-top: 1px solid var(--ciapre-border);
   color: var(--ciapre-secondary);

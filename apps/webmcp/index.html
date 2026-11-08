@@ -148,6 +148,7 @@
         <div class="editor-toolbar">
           <button id="reloadFile" class="toolbar-button" type="button">Reload</button>
           <button id="discardDraft" class="toolbar-button" type="button">Discard draft</button>
+          <button id="previewDiagram" class="toolbar-button" type="button">Preview diagram</button>
           <span class="toolbar-hint">Ctrl/Cmd+S reviews · ⌘⇧P actions · ? help</span>
           <button id="reviewChanges" class="button primary" type="button">Review changes</button>
         </div>
@@ -221,6 +222,17 @@
       <p id="evidenceSummary" class="evidence-summary">No client selected · 0 discovery events · 0 tool calls</p>
       <pre id="evidenceOutput" class="evidence-output">Start a run to collect evidence.</pre>
       <p class="dialog-hint">Pair this JSON with a screenshot or screen recording of the client. The selected label is supplied by the person recording the run.</p>
+    </form>
+  </dialog>
+  <dialog id="diagramDialog" class="diagram-dialog" aria-labelledby="diagramTitle">
+    <form method="dialog">
+      <div class="dialog-header">
+        <div><span class="dialog-kicker">DIAGRAM</span><h2 id="diagramTitle">Diagram preview</h2></div>
+        <button id="closeDiagram" class="toolbar-button" type="button">Close</button>
+      </div>
+      <div id="diagramContainer" class="diagram-container" role="img" aria-label="Diagram preview"></div>
+      <pre id="diagramError" class="diagram-error" hidden></pre>
+      <p class="dialog-hint">Large diagrams zoom to fit. The source stays in the editor.</p>
     </form>
   </dialog>
   <dialog id="quickActionDialog" class="quick-actions-dialog" aria-labelledby="quickActionTitle">
