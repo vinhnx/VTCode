@@ -79,14 +79,14 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (active)"));
         // The grouped picker pushes typography below the fold; scroll down
         // for the font row, then back up for the profile buttons above.
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        scroll_settings_by(window, px(-240.), cx);
         window.render_frame(cx);
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(17.));
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
         assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(240.))), cx);
+        scroll_settings_by(window, px(240.), cx);
         window.render_frame(cx);
         window.click("edit-dark-profile", cx);
         window.render_frame(cx);
@@ -234,7 +234,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         // The stacked groups overflow the narrow panel: reveal the dark row,
         // then re-baseline the typography pin so the assertions below keep
         // proving that horizontal theme scrolling leaves it untouched.
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-250.))), cx);
+        scroll_settings_by(window, px(-250.), cx);
         window.render_frame(cx);
         let typography_top = window.find("choose-ui-font").bounds().top();
         scroll_theme_into_view(window, &view, "theme-catppuccin-mocha", cx);
@@ -250,7 +250,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         window.scroll("theme-list-dark", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
         window.render_frame(cx);
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(250.))), cx);
+        scroll_settings_by(window, px(250.), cx);
         window.render_frame(cx);
         window.click("theme-system-light", cx);
         window.render_frame(cx);

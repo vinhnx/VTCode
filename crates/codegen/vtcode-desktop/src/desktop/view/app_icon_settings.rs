@@ -2,6 +2,21 @@
 
 use super::*;
 
+/// Cloned render inputs for the app-icon picker (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct AppIconSettingsProps {
+    pub(super) current: AppIconPreference,
+}
+
+impl AppIconSettingsProps {
+    /// Snapshot the view fields the app-icon builder reads. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self { current: view.preferences.app_icon() }
+    }
+}
+
 impl DesktopView {
     pub(super) fn set_app_icon(&mut self, preference: AppIconPreference, cx: &mut Context<Self>) {
         if self.preferences.app_icon() == preference {
@@ -20,7 +35,12 @@ impl DesktopView {
         let _applied = app_icon::apply_dock_icon(app_icon::png_bytes(self.preferences.app_icon(), self.theme_mode));
     }
 
-    fn render_app_icon_tile(&self, preference: AppIconPreference, cx: &Context<Self>) -> AnyElement {
+    fn render_app_icon_tile_content(
+        preference: AppIconPreference,
+        active: bool,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let label = match preference {
             AppIconPreference::Dynamic | AppIconPreference::Unknown => {
                 rust_i18n::t!("app.settings.appearance.app_icon_dynamic").to_string()
@@ -30,7 +50,6 @@ impl DesktopView {
             AppIconPreference::Clear => rust_i18n::t!("app.settings.appearance.app_icon_clear").to_string(),
             AppIconPreference::Tinted => rust_i18n::t!("app.settings.appearance.app_icon_tinted").to_string(),
         };
-        let active = self.preferences.app_icon() == preference;
         let accessibility_label = if active {
             format!("{label}{}", rust_i18n::t!("app.appearance.selected_suffix"))
         } else {
@@ -46,9 +65,14 @@ impl DesktopView {
             .p_2()
             .when(active, |button| button.bg(cx.theme().colors.popover).text_color(cx.theme().colors.foreground))
             .rounded_lg()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.set_app_icon(preference, cx);
-            }))
+            .on_click({
+                let view = view.clone();
+                move |_, _: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| {
+                        view.set_app_icon(preference, cx);
+                    });
+                }
+            })
             .child(
                 div()
                     .w_full()
@@ -68,14 +92,23 @@ impl DesktopView {
             .into_any_element()
     }
 
-    pub(super) fn render_app_icon_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_app_icon_settings_content(
+        props: AppIconSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let title = rust_i18n::t!("app.settings.appearance.app_icon").to_string();
-        let theme = cx.theme();
-        let colors = &theme.colors;
+        // Build the cx-consuming tiles before borrowing the theme colors:
+        // `cx.theme()` borrows `cx`, so the borrow must start after the
+        // last mutable `cx` use.
         let tiles = AppIconPreference::ALL
             .into_iter()
-            .map(|preference| self.render_app_icon_tile(preference, cx))
+            .map(|preference| {
+                Self::render_app_icon_tile_content(preference, props.current == preference, view.clone(), cx)
+            })
             .collect::<Vec<_>>();
+        let theme = cx.theme();
+        let colors = &theme.colors;
         accessible_group_box(
             "appearance-app-icon-group",
             title.clone(),

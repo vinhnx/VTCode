@@ -12,7 +12,7 @@ fn menu_bar_setting_keeps_the_window_and_draft_when_closed(cx: &mut TestAppConte
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         assert_eq!(window.find("show-in-menu-bar").checked(), Some(false));
         window.click("show-in-menu-bar", cx);
@@ -38,7 +38,7 @@ fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         view.read(cx).contrast_focus.clone().focus(window, cx);
         window.press("right", cx);
@@ -67,16 +67,7 @@ fn contrast_slider_keyboard_changes_persist_and_reset(cx: &mut TestAppContext) {
         // Geometry-driven scroll: center the reset button in the viewport
         // from the laid-out (possibly off-screen) bounds, so the click
         // survives card-height changes that fixed-pixel choreography cannot.
-        let content = window.find("settings-content").bounds();
-        let reset = window.find("reset-appearance").bounds();
-        let content_center = content.origin.y + content.size.height / 2.;
-        let reset_center = reset.origin.y + reset.size.height / 2.;
-        window.scroll(
-            "settings-content",
-            gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - reset_center)),
-            cx,
-        );
-        window.render_frame(cx);
+        scroll_settings_into_view(window, "reset-appearance", cx);
         window.click("reset-appearance", cx);
     })
     .unwrap();
@@ -694,7 +685,7 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
         });
         window.render_frame(cx);
         select_settings_category(window, 1, cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        scroll_settings_by(window, px(-240.), cx);
         window.render_frame(cx);
         assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
         assert_eq!(window.find("reduce-motion-system").checked(), Some(true));

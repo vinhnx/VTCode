@@ -44,19 +44,8 @@ fn diff_appearance_clicks_persist_and_relaunch_applies_them(cx: &mut TestAppCont
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        let content = window.find("settings-content").bounds();
-        let content_center = content.origin.y + content.size.height / 2.;
         for id in ["diff-soft-wrap", "diff-indicator-bars", "diff-context-unfolded"] {
-            let target = window.find(id).bounds();
-            window.scroll(
-                "settings-content",
-                gpui_kit::ScrollDelta::Pixels(point(
-                    px(0.),
-                    content_center - (target.origin.y + target.size.height / 2.),
-                )),
-                cx,
-            );
-            window.render_frame(cx);
+            scroll_settings_into_view(window, id, cx);
             window.click(id, cx);
             window.render_frame(cx);
         }

@@ -503,7 +503,7 @@ fn vim_toggle_persists_and_reset_restores_keyboard_defaults(cx: &mut TestAppCont
         select_settings_category(window, 2, cx);
         window.render_frame(cx);
         assert!(window.try_find("vim-navigation").is_some(), "switch renders in the shortcuts tab");
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-6000.))), cx);
+        scroll_settings_by(window, px(-6000.), cx);
         window.render_frame(cx);
         window.click("vim-navigation", cx);
         assert!(view.read(cx).preferences.vim_navigation, "switch turns vim on");
@@ -513,7 +513,7 @@ fn vim_toggle_persists_and_reset_restores_keyboard_defaults(cx: &mut TestAppCont
         window.render_frame(cx);
         // Reset restores every keyboard default at once: staged shortcuts plus
         // the immediately-applied vim toggle.
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(6000.))), cx);
+        scroll_settings_by(window, px(6000.), cx);
         window.render_frame(cx);
         window.click("reset-shortcuts", cx);
         window.render_frame(cx);

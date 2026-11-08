@@ -52,7 +52,9 @@ fn config_rail_entries_share_a_leading_spine_when_wide(cx: &mut TestAppContext) 
 /// with a font-relative box as the UI font size changes.
 #[gpui_kit::test]
 fn navigation_glyphs_share_one_box(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    // The brand V-mark lives in the legacy navigation: narrow keeps it
+    // (wide viewports host the Kit sidebar, which takes a Lucide glyph).
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
@@ -120,20 +122,24 @@ fn config_rail_marks_the_selected_group(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn settings_pane_divider_sits_between_navigation_and_content(cx: &mut TestAppContext) {
+fn settings_sidebar_sits_beside_content_when_wide_and_stacks_when_narrow(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        let navigation = window.find("settings-navigation").bounds();
-        let divider = window.find("settings-pane-divider").bounds();
-        let content = window.find("settings-content").bounds();
-        assert_eq!(divider.size.width, px(1.), "wide divider is a 1px vertical line: {divider:?}");
-        assert!(divider.size.height > px(0.), "the divider spans the panel height: {divider:?}");
+        // Wide viewports host the Kit container: its sidebar rows sit
+        // beside the hosted pane content (no legacy divider involved).
+        for ix in 0..8 {
+            assert!(
+                window.try_find(format!("0-{ix}")).is_some(),
+                "Kit sidebar row 0-{ix} missing from settings navigation"
+            );
+        }
+        let sidebar_row = window.find("0-0").bounds();
+        let content = window.find("appearance-settings").bounds();
         assert!(
-            navigation.origin.x + navigation.size.width <= divider.origin.x + px(1.)
-                && divider.origin.x + divider.size.width <= content.origin.x + px(1.),
-            "wide viewports put the divider between nav and content: navigation={navigation:?} divider={divider:?} content={content:?}"
+            sidebar_row.origin.x + sidebar_row.size.width <= content.origin.x + px(1.),
+            "wide viewports put the Kit sidebar beside content: row={sidebar_row:?} content={content:?}"
         );
     })
     .unwrap();
@@ -157,7 +163,9 @@ fn settings_pane_divider_sits_between_navigation_and_content(cx: &mut TestAppCon
 
 #[gpui_kit::test]
 fn settings_navigation_groups_desktop_tabs_and_cli_config(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    // Tab grouping lives in the legacy navigation: narrow keeps it (the
+    // Kit sidebar stays flat until upstream sidebar sections land).
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
@@ -289,7 +297,9 @@ fn windowed_zen_route_pages_start_below_the_traffic_lights(cx: &mut TestAppConte
 
 #[gpui_kit::test]
 fn settings_page_title_tracks_the_selected_tab(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    // The per-tab Heading lives in the legacy content: narrow keeps it
+    // (Kit pages title themselves without a Heading role).
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);

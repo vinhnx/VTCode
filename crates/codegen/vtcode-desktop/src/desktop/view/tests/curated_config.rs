@@ -101,7 +101,7 @@ fn curated_network_toggle_writes_the_mapped_policy_in_both_directions(cx: &mut T
         // Panel-scale padding pushes the toggle just below the fold in the
         // embedded slot; scroll it into view like a user would before
         // interacting (see the efforts tests below).
-        window.scroll("cli-config-page-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-300.))), cx);
+        scroll_settings_by(window, px(-300.), cx);
         window.render_frame(cx);
         window.click("curated-network", cx);
     })

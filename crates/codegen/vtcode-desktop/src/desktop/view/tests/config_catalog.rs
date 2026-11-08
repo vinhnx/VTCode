@@ -55,15 +55,38 @@ fn scroll_config_show_more_into_view(
     view: &Entity<DesktopView>,
     cx: &mut gpui_kit::App,
 ) {
+    // Wide viewports host the Kit container: Kit's list owns the page
+    // scroll, so drive the button into the panel viewport with outer
+    // scrolls only (the inner frame never overflows inside the list).
+    let legacy = window.try_find("settings-content").is_some();
     for _ in 0..120 {
-        let viewport = window.find("cli-config-page-content").bounds();
+        let frame = window.find("cli-config-page-content").bounds();
+        if !legacy {
+            let panel = window.find("settings-panel").bounds();
+            let item = window
+                .find_all("config-show-more")
+                .into_iter()
+                .next()
+                .expect("show-more renders while rows remain")
+                .bounds();
+            if item.top() >= panel.top() - px(1.) && item.bottom() <= panel.bottom() + px(1.) {
+                return;
+            }
+            if item.bottom() > panel.bottom() {
+                scroll_settings_by(window, px(-600.), cx);
+            } else {
+                scroll_settings_by(window, px(600.), cx);
+            }
+            window.render_frame(cx);
+            continue;
+        }
         let item = window
             .find_all("config-show-more")
             .into_iter()
             .next()
             .expect("show-more renders while rows remain")
             .bounds();
-        if item.top() >= viewport.top() - px(1.) && item.bottom() <= viewport.bottom() + px(1.) {
+        if item.top() >= frame.top() - px(1.) && item.bottom() <= frame.bottom() + px(1.) {
             return;
         }
         view.update(cx, |view, cx| {

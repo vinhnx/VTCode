@@ -163,22 +163,35 @@ pub(super) fn test_settings_opened(cx: &App) -> bool {
 }
 
 impl DesktopView {
-    pub(super) fn render_login_items_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure.
+    pub(super) fn render_login_items_settings_content(
+        launch_at_login_enabled: bool,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let title = rust_i18n::t!("app.settings.login_items.title").to_string();
         let colors = &cx.theme().colors;
         let mut group = settings_group_box(title.clone(), colors).child(settings_row(
             title.clone(),
             rust_i18n::t!("app.settings.login_items.description").to_string(),
             gpui_kit::component::switch::Switch::new("launch-at-login")
-                .checked(self.preferences.launch_at_login_enabled())
+                .checked(launch_at_login_enabled)
                 .accessibility_label(title.clone())
-                .on_click(cx.listener(|view, checked, window, cx| {
-                    match apply_launch_at_login(*checked, &mut view.preferences, cx) {
-                        Ok(_) => {
-                            view.save_preferences();
-                            cx.notify();
-                        }
-                        Err(error) => {
+                .on_click({
+                    let view = view.clone();
+                    move |checked: &bool, window: &mut Window, cx: &mut App| {
+                        let applied = view.update(cx, |view, cx| {
+                            // The launch helper takes `&mut App`; the update
+                            // context derefs to it.
+                            let result = apply_launch_at_login(*checked, &mut view.preferences, cx);
+                            if result.is_ok() {
+                                view.save_preferences();
+                                cx.notify();
+                            }
+                            result
+                        });
+                        if let Err(error) = applied {
                             window.push_notification(
                                 gpui_kit::component::notification::Notification::error(
                                     rust_i18n::t!("app.settings.login_items.unavailable", error = error).to_string(),
@@ -187,7 +200,7 @@ impl DesktopView {
                             );
                         }
                     }
-                })),
+                }),
             colors,
         ));
         // Approval-pending keeps the intent on: the hint names the fix and
@@ -198,7 +211,7 @@ impl DesktopView {
                 rust_i18n::t!("app.settings.login_items.approval_hint").to_string(),
                 desktop_button("open-login-items")
                     .label(rust_i18n::t!("app.settings.login_items.open_settings").to_string())
-                    .on_click(cx.listener(|_, _, _, cx| open_login_settings(cx))),
+                    .on_click(move |_, _: &mut Window, cx: &mut App| open_login_settings(cx)),
                 colors,
             ));
         }

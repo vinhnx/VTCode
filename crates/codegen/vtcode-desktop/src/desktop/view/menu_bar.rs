@@ -343,7 +343,13 @@ pub(super) fn hide(cx: &mut App) {
 }
 
 impl DesktopView {
-    pub(super) fn render_menu_bar_settings(&self, cx: &Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure.
+    pub(super) fn render_menu_bar_settings_content(
+        show_in_menu_bar: bool,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let title = rust_i18n::t!("app.settings.menu_bar.title").to_string();
         accessible_group_box(
             "menu-bar-settings-group",
@@ -352,22 +358,27 @@ impl DesktopView {
                 title.clone(),
                 rust_i18n::t!("app.settings.menu_bar.description").to_string(),
                 gpui_kit::component::switch::Switch::new("show-in-menu-bar")
-                    .checked(self.preferences.show_in_menu_bar && enabled(cx))
+                    .checked(show_in_menu_bar && enabled(cx))
                     .accessibility_label(title)
-                    .on_click(cx.listener(|view, checked, window, cx| {
-                        if set_enabled(*checked, cx) {
-                            view.preferences.show_in_menu_bar = *checked;
-                            view.save_preferences();
-                            cx.notify();
-                        } else {
-                            window.push_notification(
-                                gpui_kit::component::notification::Notification::error(
-                                    rust_i18n::t!("app.settings.menu_bar.unavailable").to_string(),
-                                ),
-                                cx,
-                            );
+                    .on_click({
+                        let view = view.clone();
+                        move |checked: &bool, window: &mut Window, cx: &mut App| {
+                            if set_enabled(*checked, cx) {
+                                view.update(cx, |view, cx| {
+                                    view.preferences.show_in_menu_bar = *checked;
+                                    view.save_preferences();
+                                    cx.notify();
+                                });
+                            } else {
+                                window.push_notification(
+                                    gpui_kit::component::notification::Notification::error(
+                                        rust_i18n::t!("app.settings.menu_bar.unavailable").to_string(),
+                                    ),
+                                    cx,
+                                );
+                            }
                         }
-                    })),
+                    }),
                 &cx.theme().colors,
             )),
         )

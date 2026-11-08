@@ -179,7 +179,7 @@ fn toolbar_back_pops_the_panel_and_forward_reopens_it(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings, "forward reopens the panel");
-        assert_eq!(window.find("settings-navigation").focused(), Some(true), "reopened panel takes focus");
+        assert_eq!(window.find("settings-panel").focused(), Some(true), "reopened panel takes focus");
     })
     .unwrap();
 }
@@ -192,7 +192,9 @@ fn forward_reopens_each_panel_with_its_focus(cx: &mut TestAppContext) {
             let (panel, focus_id) = match index {
                 0 => {
                     view.update(cx, |view, cx| view.open_settings(window, cx));
-                    ("settings-panel", "settings-navigation")
+                    // Wide viewports host the Kit container (click-only
+                    // sidebar), so reopening focuses the panel root.
+                    ("settings-panel", "settings-panel")
                 }
                 1 => {
                     view.update(cx, |view, cx| view.open_thread_browser(window, cx));

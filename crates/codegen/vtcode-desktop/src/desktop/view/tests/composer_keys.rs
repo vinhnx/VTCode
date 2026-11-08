@@ -511,7 +511,7 @@ fn focus_composer_shortcut_lands_from_every_route(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings);
-        window.click("settings-navigation", cx);
+        view.update(cx, |view, cx| view.focus_settings_selection(window, cx));
         window.render_frame(cx);
         window.press("cmd-l", cx);
         assert!(view.read(cx).current_route() == Route::Workspace, "cmd-l leaves settings");

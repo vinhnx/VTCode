@@ -66,7 +66,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
         assert!(view.read(cx).shortcut_message.is_none(), "tab never commits nor errors");
         assert!(window.try_find("shortcut-capture-commands").is_none(), "tabbing away hides the pill");
         assert!(window.try_find("shortcut-badge-commands").is_some());
-        assert!(window.try_find("keyboard-settings").is_some());
+        assert!(window.try_find("shortcut-search").is_some());
         window.click("shortcut-edit-commands", cx);
         window.render_frame(cx);
         window.press("cmd-b", cx);
@@ -76,7 +76,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
         assert_eq!(view.read(cx).sidebar_open, sidebar_open, "captured chords stay inert inside settings");
         window.press("left", cx);
         window.render_frame(cx);
-        assert!(window.try_find("keyboard-settings").is_some(), "arrows never navigate away mid-capture");
+        assert!(window.try_find("shortcut-search").is_some(), "arrows never navigate away mid-capture");
         assert!(view.read(cx).shortcut_capture.is_some());
         window.press("cmd-f", cx);
         window.render_frame(cx);
@@ -90,7 +90,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("reserved"));
         assert!(view.read(cx).shortcut_capture.is_some());
-        assert!(window.try_find("keyboard-settings").is_some());
+        assert!(window.try_find("shortcut-search").is_some());
     })
     .unwrap();
 }

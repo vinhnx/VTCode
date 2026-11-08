@@ -203,7 +203,7 @@ impl DesktopView {
         // Compact layout below the shared breakpoint (see
         // NARROW_PANEL_BREAKPOINT): the nav stacks above the content and
         // shares the height, mirroring the config rail breakpoint.
-        let narrow = window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT);
+        let narrow = Self::settings_use_legacy_layout(window);
         dismissable_route_page(
             div()
                 .id("settings-panel")
@@ -232,6 +232,45 @@ impl DesktopView {
                         cx.stop_propagation();
                     }),
                 )
+                // Wide viewports host the Kit container instead of the
+                // legacy navigation, so the panel carries the settings key
+                // context and tab actions the nav owns in narrow mode.
+                .when(!narrow && !self.capture_suppresses_bindings(window), |panel| {
+                    panel.key_context(key_context::SETTINGS)
+                })
+                .when(!narrow, |panel| {
+                    panel
+                        .on_action(cx.listener(|view, _: &NextSettingsTab, window, cx| {
+                            view.run_settings_panel_action(window, cx, |view, window, cx| {
+                                view.cycle_settings_tab(true, window, cx)
+                            })
+                        }))
+                        .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
+                            view.run_settings_panel_action(window, cx, |view, window, cx| {
+                                view.cycle_settings_tab(false, window, cx)
+                            })
+                        }))
+                        .on_action(cx.listener(|view, _: &OpenSettingsSearch, window, cx| {
+                            view.run_settings_panel_action(window, cx, |view, window, cx| {
+                                view.open_settings_search_palette(window, cx)
+                            })
+                        }))
+                        .on_action(cx.listener(|view, _: &OpenSettings, window, cx| {
+                            view.run_settings_panel_action(window, cx, |view, window, cx| {
+                                view.toggle_settings(window, cx)
+                            })
+                        }))
+                        .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
+                            view.run_settings_panel_action(window, cx, |view, window, cx| {
+                                view.select_settings_page_from_keyboard(0, window, cx)
+                            })
+                        }))
+                        .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
+                            view.run_settings_panel_action(window, cx, |view, window, cx| {
+                                view.select_settings_page_from_keyboard(SettingsTab::PAGE_COUNT - 1, window, cx)
+                            })
+                        }))
+                })
                 .child(panel_header(
                     div()
                         .text_lg()
@@ -247,13 +286,13 @@ impl DesktopView {
                             view.request_panel_dismiss(window, cx);
                         })),
                 ))
-                .child(
+                .child(if narrow {
                     div()
                         .flex_1()
                         .min_h_0()
                         .w_full()
                         .flex()
-                        .when(narrow, |row| row.flex_col())
+                        .flex_col()
                         // Two gaps flank the divider at one panel step each, so
                         // the nav/content separation reads at major-region
                         // scale (33px total) while the hairline owns the
@@ -264,17 +303,23 @@ impl DesktopView {
                         .pb_4()
                         .child(self.render_settings_navigation(window, cx, narrow))
                         .child(pane_divider("settings-pane-divider", !narrow, &colors))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .min_h_0()
-                                .flex()
-                                .flex_col()
-                                .when(narrow, |content| content.w_full())
-                                .child(content),
-                        ),
-                )
+                        .child(div().flex_1().min_w_0().min_h_0().flex().flex_col().w_full().child(content))
+                        .into_any_element()
+                } else {
+                    // Wide viewports host the Kit container, which owns its
+                    // sidebar and search; the panel keeps the title row and
+                    // dismissal above it.
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .px_4()
+                        .pb_4()
+                        .child(content)
+                        .into_any_element()
+                })
                 .when(self.config_editor.is_some(), |panel| panel.child(self.render_cli_config_editor(cx))),
             cx,
         )
@@ -423,11 +468,14 @@ impl DesktopView {
         {
             return self.render_command_palette(state, window, cx);
         }
+        if !Self::settings_use_legacy_layout(window) {
+            return self.render_settings_kit(cx);
+        }
         if self.config_page_open {
             // Side-by-side rail and rows need room for both navigations plus
             // readable rows (settings nav 240 + chrome + config rail 240 +
             // ~320 row minimum); narrower windows stack the rail above.
-            let wide = window.viewport_size().width >= px(960.);
+            let wide = window.viewport_size().width >= px(configuration_render::CONFIG_WIDE_VIEWPORT);
             return self.render_cli_config_page(wide, cx);
         }
         let title = self.settings_tab.label();
@@ -511,6 +559,42 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Legacy stacked layout (navigation above content) below the shared
+    /// breakpoint; wide viewports host the Kit `Settings` container.
+    fn settings_use_legacy_layout(window: &Window) -> bool {
+        window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT)
+    }
+
+    /// Focus the settings selection chrome: the legacy navigation in
+    /// narrow stacked mode, the panel root under the Kit host (whose
+    /// sidebar is click-only until upstream keyboard navigation lands).
+    pub(super) fn focus_settings_selection(&self, window: &mut Window, cx: &mut App) {
+        if Self::settings_use_legacy_layout(window) {
+            self.settings_navigation_focus.focus(window, cx);
+        } else {
+            self.settings_focus.focus(window, cx);
+        }
+    }
+
+    /// Run a panel-level settings action only from the panel root. The
+    /// legacy navigation scoped its key context to itself; the panel-level
+    /// replacement covers the hosted content too, so without this gate
+    /// tab-cycle arrows would hijack sliders, inputs, and lists while a
+    /// control holds focus. Matched actions stop propagation by default,
+    /// so the gate re-propagates for focused controls.
+    fn run_settings_panel_action(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        act: impl FnOnce(&mut Self, &mut Window, &mut Context<Self>),
+    ) {
+        if self.settings_focus.is_focused(window) {
+            act(self, window, cx);
+        } else {
+            cx.propagate();
+        }
+    }
+
     /// Navigation index of the visible page: the tab position, or the
     /// trailing configuration entry while the config page is open.
     pub(super) fn settings_page_index(&self) -> usize {
@@ -537,7 +621,7 @@ impl DesktopView {
             if reveal {
                 self.settings_nav_scroll.scroll_to_item(index);
             }
-            self.settings_navigation_focus.focus(window, cx);
+            self.focus_settings_selection(window, cx);
             cx.notify();
             return;
         }
@@ -557,7 +641,7 @@ impl DesktopView {
             if reveal {
                 self.settings_nav_scroll.scroll_to_item(index);
             }
-            self.settings_navigation_focus.focus(window, cx);
+            self.focus_settings_selection(window, cx);
             cx.notify();
         }
     }
@@ -571,6 +655,21 @@ impl DesktopView {
             (current + count - 1) % count
         };
         self.select_settings_page_from_keyboard(index, window, cx);
+    }
+}
+
+/// Kit-compatible switch handler: the `cx.listener` one-liner replacement
+/// for plain boolean setters. The view handle updates outside render, so
+/// the setter runs with full view context and no double-borrow.
+pub(super) fn switch_action(
+    view: &Entity<DesktopView>,
+    set: fn(&mut DesktopView, bool, &mut Context<DesktopView>),
+) -> impl Fn(&bool, &mut Window, &mut App) + use<> {
+    let view = view.clone();
+    move |checked: &bool, _: &mut Window, cx: &mut App| {
+        view.update(cx, |view, cx| {
+            set(view, *checked, cx);
+        });
     }
 }
 

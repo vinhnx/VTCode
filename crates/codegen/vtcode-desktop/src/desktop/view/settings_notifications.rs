@@ -1,9 +1,43 @@
+use super::settings::switch_action;
 use super::*;
 
+/// Cloned render inputs for the notifications pane. Kit item closures run
+/// without access to the rendering view, so everything the content
+/// builder reads is cloned here per frame; writes go through the view
+/// handle in event handlers instead.
+#[derive(Clone)]
+pub(super) struct NotificationSettingsProps {
+    pub(super) notifications: preferences::NotificationPreferences,
+    pub(super) turn_completion_select: Entity<preferences::TurnCompletionModeSelectState>,
+    pub(super) update_status_description: String,
+    pub(super) can_view_changelog: bool,
+}
+
+impl NotificationSettingsProps {
+    /// Snapshot the view fields the notifications builder reads. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            notifications: view.preferences.notifications.clone(),
+            turn_completion_select: view.turn_completion_select.clone(),
+            update_status_description: view.update_status_description(),
+            can_view_changelog: view.can_view_changelog(),
+        }
+    }
+}
+
 impl DesktopView {
-    pub(super) fn render_notification_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure. Render-time reads come from cloned props; event-time
+    /// writes go through the view handle (events run outside render, so
+    /// there is no double-borrow of the rendering view).
+    pub(super) fn render_notification_settings_content(
+        props: NotificationSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let colors = cx.theme().colors;
-        let notifications = &self.preferences.notifications;
+        let notifications = &props.notifications;
         let group_title = rust_i18n::t!("app.settings.notifications.group").to_string();
         div()
             .id("notification-settings")
@@ -22,16 +56,14 @@ impl DesktopView {
                             "notifications-enabled",
                             rust_i18n::t!("app.settings.notifications.enable").to_string(),
                             notifications.enabled(),
-                            cx.listener(|view, checked, _, cx| {
-                                view.set_notification_enabled(*checked, cx);
-                            }),
+                            switch_action(&view, Self::set_notification_enabled),
                         ),
                         &colors,
                     ))
                     .child(settings_row(
                         rust_i18n::t!("app.settings.notifications.turn_completion.title").to_string(),
                         rust_i18n::t!("app.settings.notifications.turn_completion.description").to_string(),
-                        Select::new(&self.turn_completion_select)
+                        Select::new(&props.turn_completion_select)
                             .id("turn-completion-select")
                             .accessibility_label(
                                 rust_i18n::t!("app.settings.notifications.turn_completion.title").to_string(),
@@ -47,9 +79,7 @@ impl DesktopView {
                             "notifications-permission",
                             rust_i18n::t!("app.settings.notifications.permission").to_string(),
                             notifications.permission_prompts(),
-                            cx.listener(|view, checked, _, cx| {
-                                view.set_notification_permission(*checked, cx);
-                            }),
+                            switch_action(&view, Self::set_notification_permission),
                         ),
                         &colors,
                     ))
@@ -60,9 +90,7 @@ impl DesktopView {
                             "notifications-questions",
                             rust_i18n::t!("app.settings.notifications.questions").to_string(),
                             notifications.questions(),
-                            cx.listener(|view, checked, _, cx| {
-                                view.set_notification_questions(*checked, cx);
-                            }),
+                            switch_action(&view, Self::set_notification_questions),
                         ),
                         &colors,
                     ))
@@ -73,15 +101,13 @@ impl DesktopView {
                             "notifications-updates",
                             rust_i18n::t!("app.settings.notifications.updates").to_string(),
                             notifications.updates(),
-                            cx.listener(|view, checked, _, cx| {
-                                view.set_notification_updates(*checked, cx);
-                            }),
+                            switch_action(&view, Self::set_notification_updates),
                         ),
                         &colors,
                     ))
                     .child(settings_row(
                         rust_i18n::t!("app.settings.notifications.updates_status").to_string(),
-                        self.update_status_description(),
+                        props.update_status_description.clone(),
                         div()
                             .flex()
                             .items_center()
@@ -91,29 +117,43 @@ impl DesktopView {
                                     .label(rust_i18n::t!("app.settings.notifications.check_for_updates").to_string())
                                     .ghost()
                                     .small()
-                                    .on_click(cx.listener(|view, _, _, cx| {
-                                        view.request_update_status();
-                                        cx.notify();
-                                    })),
+                                    .on_click({
+                                        let view = view.clone();
+                                        move |_, _: &mut Window, cx: &mut App| {
+                                            view.update(cx, |view, cx| {
+                                                view.request_update_status();
+                                                cx.notify();
+                                            });
+                                        }
+                                    }),
                             )
                             // The changelog action only exists while an update
                             // is viewable; the Check button keeps its stable
                             // leading slot either way.
-                            .when(self.can_view_changelog(), |row| {
+                            .when(props.can_view_changelog, |row| {
                                 row.child(
                                     desktop_button("view-changelog")
                                         .label(rust_i18n::t!("app.settings.notifications.view_changelog").to_string())
                                         .ghost()
                                         .small()
-                                        .on_click(cx.listener(|view, _, window, cx| {
-                                            view.open_changelog(window, cx);
-                                        })),
+                                        .on_click({
+                                            let view = view.clone();
+                                            move |_, window: &mut Window, cx: &mut App| {
+                                                view.update(cx, |view, cx| {
+                                                    view.open_changelog(window, cx);
+                                                });
+                                            }
+                                        }),
                                 )
                             }),
                         &colors,
                     )),
             ))
             .into_any_element()
+    }
+
+    pub(super) fn render_notification_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        Self::render_notification_settings_content(NotificationSettingsProps::capture(self), cx.entity(), cx)
     }
 
     fn update_status_description(&self) -> String {

@@ -1,12 +1,74 @@
 //! Theme, typography, reduced-motion, and status-bar presentation.
 
+use super::settings::switch_action;
 use super::*;
 
+/// Cloned render inputs for the appearance tab (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct AppearanceSettingsProps {
+    pub(super) separate_theme_profiles: bool,
+    pub(super) theme_mode: ThemeMode,
+    pub(super) theme_id: String,
+    pub(super) light_theme: Option<String>,
+    pub(super) dark_theme: Option<String>,
+    pub(super) theme_scroll_light: ScrollHandle,
+    pub(super) theme_scroll_dark: ScrollHandle,
+    pub(super) ui_font_size: u8,
+    pub(super) code_font_size: u8,
+    pub(super) ui_language_select: Entity<UiLanguageSelectState>,
+    pub(super) navigation_visible: bool,
+    pub(super) navigation_on_right: bool,
+    pub(super) translucent_sidebar: bool,
+    pub(super) file_destination_select: Entity<preferences::FileDestinationSelectState>,
+    pub(super) diff: settings_diff::DiffSettingsProps,
+    pub(super) app_icon: app_icon_settings::AppIconSettingsProps,
+    pub(super) custom: appearance_themes::CustomThemesProps,
+    pub(super) contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
+    pub(super) contrast_focus: FocusHandle,
+    pub(super) contrast: u8,
+}
+
+impl AppearanceSettingsProps {
+    /// Snapshot the view fields the appearance builders read. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        let typography = view.preferences.typography_for(view.theme_mode);
+        Self {
+            separate_theme_profiles: view.preferences.separate_theme_profiles,
+            theme_mode: view.theme_mode,
+            theme_id: view.theme_id.clone(),
+            light_theme: view.preferences.light_theme.clone(),
+            dark_theme: view.preferences.dark_theme.clone(),
+            theme_scroll_light: view.theme_scroll_light.clone(),
+            theme_scroll_dark: view.theme_scroll_dark.clone(),
+            ui_font_size: typography.ui_font_size,
+            code_font_size: typography.code_font_size,
+            ui_language_select: view.ui_language_select.clone(),
+            navigation_visible: view.preferences.navigation_visible(),
+            navigation_on_right: view.preferences.navigation_on_right(),
+            translucent_sidebar: view.preferences.translucent_sidebar,
+            file_destination_select: view.file_destination_select.clone(),
+            diff: settings_diff::DiffSettingsProps::capture(view),
+            app_icon: app_icon_settings::AppIconSettingsProps::capture(view),
+            custom: appearance_themes::CustomThemesProps::capture(view),
+            contrast_slider: view.contrast_slider.clone(),
+            contrast_focus: view.contrast_focus.clone(),
+            contrast: view.preferences.contrast,
+        }
+    }
+}
+
 impl DesktopView {
-    pub(super) fn render_contrast_settings(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_contrast_settings_content(
+        props: &AppearanceSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        let _ = &view;
         let label = rust_i18n::t!("app.settings.appearance.contrast").to_string();
-        let slider = self.contrast_slider.clone();
-        let focus = self.contrast_focus.clone();
+        let slider = props.contrast_slider.clone();
+        let focus = props.contrast_focus.clone();
         let ring = cx.theme().colors.ring;
         accessible_group_box(
             "appearance-contrast-group",
@@ -22,7 +84,7 @@ impl DesktopView {
                         div()
                             .id("contrast-slider-control")
                             .test_support()
-                            .track_focus(&self.contrast_focus)
+                            .track_focus(&props.contrast_focus)
                             .focus_visible(move |style| style.border_1().border_color(ring))
                             .capture_any_mouse_down(move |event, window, cx| {
                                 if event.button == MouseButton::Left {
@@ -49,12 +111,12 @@ impl DesktopView {
                                 });
                             })
                             .child(
-                                gpui_kit::component::slider::Slider::new(&self.contrast_slider)
+                                gpui_kit::component::slider::Slider::new(&props.contrast_slider)
                                     .accessibility_label(label)
                                     .w(px(180.)),
                             ),
                     )
-                    .child(self.preferences.contrast().to_string()),
+                    .child(props.contrast.to_string()),
                 &cx.theme().colors,
             )),
         )
@@ -92,11 +154,22 @@ impl DesktopView {
         self.contrast_slider.update(cx, |slider, cx| slider.set_value(0.0, window, cx));
     }
 
-    pub(super) fn render_translucent_sidebar_switch(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_translucent_sidebar_switch_content(
+        props: &AppearanceSettingsProps,
+        view: Entity<Self>,
+        _cx: &mut App,
+    ) -> AnyElement {
         gpui_kit::component::switch::Switch::new("translucent-sidebar")
             .label(rust_i18n::t!("app.settings.appearance.translucent_sidebar").to_string())
-            .checked(self.preferences.translucent_sidebar)
-            .on_click(cx.listener(|view, checked, window, cx| view.set_translucent_sidebar(*checked, window, cx)))
+            .checked(props.translucent_sidebar)
+            .on_click({
+                let view = view.clone();
+                move |checked: &bool, window: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| {
+                        view.set_translucent_sidebar(*checked, window, cx);
+                    });
+                }
+            })
             .into_any_element()
     }
 
@@ -371,8 +444,11 @@ impl DesktopView {
         cx.notify();
     }
 
-    pub(super) fn render_reduced_motion(&self, cx: &Context<Self>) -> AnyElement {
-        let current = self.preferences.reduced_motion;
+    pub(super) fn render_reduced_motion_content(
+        current: preferences::ReducedMotionPreference,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let colors = cx.theme().colors;
         div()
             .id("reduced-motion-setting")
@@ -417,20 +493,30 @@ impl DesktopView {
                             .ghost()
                             .toggled(selected)
                             .when(selected, |button| button.bg(colors.popover).text_color(colors.foreground))
-                            .on_click(cx.listener(move |view, _, _, cx| view.set_reduced_motion(preference, cx)))
+                            .on_click({
+                                let view = view.clone();
+                                move |_, _: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| view.set_reduced_motion(preference, cx));
+                                }
+                            })
                     })),
                 &colors,
             ))
             .into_any_element()
     }
 
-    pub(super) fn render_font_size(&self, code: bool, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_font_size_content(
+        code: bool,
+        props: &AppearanceSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let (key, label, description, size, minimum, maximum) = if code {
             (
                 "code",
                 rust_i18n::t!("app.appearance.code_font_size").to_string(),
                 rust_i18n::t!("app.appearance.code_font_desc").to_string(),
-                self.preferences.typography_for(self.theme_mode).code_font_size,
+                props.code_font_size,
                 preferences::MIN_CODE_FONT_SIZE,
                 preferences::MAX_CODE_FONT_SIZE,
             )
@@ -439,7 +525,7 @@ impl DesktopView {
                 "ui",
                 rust_i18n::t!("app.appearance.ui_font_size").to_string(),
                 rust_i18n::t!("app.appearance.ui_font_desc").to_string(),
-                self.preferences.typography_for(self.theme_mode).ui_font_size,
+                props.ui_font_size,
                 preferences::MIN_UI_FONT_SIZE,
                 preferences::MAX_UI_FONT_SIZE,
             )
@@ -464,26 +550,31 @@ impl DesktopView {
                         ))
                         .ghost()
                         .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
-                        .on_click(cx.listener(move |view, _, _, cx| {
-                            let current = if code {
-                                view.preferences.typography_for(view.theme_mode).code_font_size
-                            } else {
-                                view.preferences.typography_for(view.theme_mode).ui_font_size
-                            };
-                            let next = if delta < 0 {
-                                current.saturating_sub(1)
-                            } else {
-                                current.saturating_add(1)
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| {
+                                    let current = if code {
+                                        view.preferences.typography_for(view.theme_mode).code_font_size
+                                    } else {
+                                        view.preferences.typography_for(view.theme_mode).ui_font_size
+                                    };
+                                    let next = if delta < 0 {
+                                        current.saturating_sub(1)
+                                    } else {
+                                        current.saturating_add(1)
+                                    }
+                                    .clamp(minimum, maximum);
+                                    if code {
+                                        view.preferences.set_code_font_size(view.theme_mode, next);
+                                    } else {
+                                        view.preferences.set_ui_font_size(view.theme_mode, next);
+                                    }
+                                    view.apply_typography(cx);
+                                    view.save_preferences();
+                                });
                             }
-                            .clamp(minimum, maximum);
-                            if code {
-                                view.preferences.set_code_font_size(view.theme_mode, next);
-                            } else {
-                                view.preferences.set_ui_font_size(view.theme_mode, next);
-                            }
-                            view.apply_typography(cx);
-                            view.save_preferences();
-                        }))
+                        })
                 }))
                 .child(
                     div()
@@ -502,181 +593,13 @@ impl DesktopView {
         .into_any_element()
     }
 
-    /// One theme entry in the settings picker: a color preview chip that
-    /// applies live on click.
-    pub(super) fn render_theme_swatch(
-        &self,
-        entry: themes::SwatchEntry,
-        duplicate: bool,
-        cx: &mut Context<Self>,
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure.
+    pub(super) fn render_appearance_settings_content(
+        props: AppearanceSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
     ) -> AnyElement {
-        let (background, foreground) = entry.preview();
-        let entry_id = entry.id();
-        let label = if duplicate {
-            format!("{entry_id} · {}", entry.label())
-        } else {
-            entry.label().to_owned()
-        };
-        let active = self.theme_id == entry_id;
-        let light_profile = self.preferences.separate_theme_profiles
-            && self.preferences.light_theme.as_deref() == Some(entry_id.as_str());
-        let dark_profile = self.preferences.separate_theme_profiles
-            && self.preferences.dark_theme.as_deref() == Some(entry_id.as_str());
-        let badge = if active {
-            "active"
-        } else if light_profile && dark_profile {
-            "light and dark profiles"
-        } else if light_profile {
-            "light profile"
-        } else if dark_profile {
-            "dark profile"
-        } else {
-            ""
-        };
-        // Only the active theme gets the filled highlight; profile themes keep a
-        // semibold label so a light/dark pair never reads as doubly selected.
-        // Profile assignments also get a visible caption: semibold alone is too
-        // quiet to explain which swatch a light/dark profile points at.
-        let badged = !badge.is_empty();
-        let mut caption = Vec::new();
-        if light_profile {
-            caption.push(rust_i18n::t!("app.settings.appearance.light").to_string());
-        }
-        if dark_profile {
-            caption.push(rust_i18n::t!("app.settings.appearance.dark").to_string());
-        }
-        let profile_caption = (!caption.is_empty()).then(|| caption.join(" · "));
-        let id = format!("theme-{entry_id}");
-        let swatch = div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .h(px(40.))
-                    .rounded_md()
-                    .bg(background)
-                    .border_1()
-                    .border_color(themes::hairline(background, cx.theme().colors.foreground))
-                    .p_1()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .when_some(entry.accent(), |chip, accent| chip.child(div().h(px(6.)).rounded_sm().bg(accent)))
-                    .child(div().h(px(4.)).w_3_4().rounded_sm().bg(foreground))
-                    .child(div().h(px(4.)).w_1_2().rounded_sm().bg(foreground.opacity(0.6))),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .truncate()
-                    .when(badged, |label| label.font_semibold())
-                    .child(label.clone()),
-            )
-            .child(
-                div()
-                    .id(format!("theme-{entry_id}-profile"))
-                    .test_support()
-                    .h(px(20.))
-                    .text_xs()
-                    .truncate()
-                    .text_color(cx.theme().colors.muted_foreground)
-                    .when_some(profile_caption, |lane, caption| {
-                        lane.role(gpui_kit::Role::Label).aria_label(caption.clone()).child(caption)
-                    }),
-            );
-        desktop_button(id)
-            .accessibility_label(if badged { format!("{label} ({badge})") } else { label })
-            .toggled(active)
-            .ghost()
-            .w(px(104.))
-            .flex_shrink_0()
-            .h(px(112.))
-            .p_2()
-            .when(active, |button| button.bg(cx.theme().colors.popover))
-            .rounded_lg()
-            .on_click(cx.listener(move |this, _, window, cx| {
-                let theme_id = entry.id();
-                this.apply_theme(theme_id, window, cx);
-            }))
-            .child(swatch)
-            .into_any_element()
-    }
-
-    /// One mode group inside the theme picker: a subordinate header plus its
-    /// own horizontal swatch scroller. Headers sit one type step below the
-    /// section title so Light/Dark read as groups under Themes.
-    fn render_theme_group(
-        &self,
-        mode: ThemeMode,
-        counts: &HashMap<&'static str, usize>,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let light = mode == ThemeMode::Light;
-        let label = if light {
-            rust_i18n::t!("app.settings.appearance.light").to_string()
-        } else {
-            rust_i18n::t!("app.settings.appearance.dark").to_string()
-        };
-        let swatches = themes::picker_swatches_for(mode)
-            .map(|entry| {
-                self.render_theme_swatch(entry, counts.get(entry.label()).copied().unwrap_or_default() > 1, cx)
-            })
-            .collect::<Vec<_>>();
-        let scroll = if light {
-            &self.theme_scroll_light
-        } else {
-            &self.theme_scroll_dark
-        };
-        let list_id = if light { "theme-list-light" } else { "theme-list-dark" };
-        let scroller_id = if light {
-            "theme-scroller-light"
-        } else {
-            "theme-scroller-dark"
-        };
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_semibold()
-                    .text_color(themes::label_foreground(&cx.theme().colors))
-                    .child(label.clone()),
-            )
-            .child(
-                div()
-                    .id(list_id)
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(label)
-                    .w_full()
-                    .min_w_0()
-                    .flex_shrink_0()
-                    .h(px(128.))
-                    .relative()
-                    .child(
-                        div()
-                            .id(scroller_id)
-                            .lock_scroll_axis()
-                            .size_full()
-                            .overflow_x_scroll()
-                            .track_scroll(scroll)
-                            .flex()
-                            .items_start()
-                            .gap_2()
-                            .children(swatches)
-                            .test_support(),
-                    )
-                    .child(ScrollableMask::vertical_wheel(scroll))
-                    .child(Scrollbar::horizontal(scroll)),
-            )
-            .into_any_element()
-    }
-
-    pub(super) fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         // Count every swatch in both modes so labels never rename when the
         // visible grid changes.
         let mut counts = HashMap::new();
@@ -689,15 +612,19 @@ impl DesktopView {
         // selector, so an opposite-mode click is the mode switch.
         // Build the swatch groups before borrowing the theme colors: the
         // groups need `cx` mutably while the colors borrow it immutably.
-        let separate = self.preferences.separate_theme_profiles;
-        let editing = self.theme_mode;
+        let separate = props.separate_theme_profiles;
+        let editing = props.theme_mode;
         let show_light = !separate || editing == ThemeMode::Light;
         let show_dark = !separate || editing == ThemeMode::Dark;
-        let light_group = show_light.then(|| self.render_theme_group(ThemeMode::Light, &counts, cx));
-        let dark_group = show_dark.then(|| self.render_theme_group(ThemeMode::Dark, &counts, cx));
-        let theme = cx.theme();
+        let light_group =
+            show_light.then(|| Self::render_theme_group_content(ThemeMode::Light, &counts, &props, view.clone(), cx));
+        let dark_group =
+            show_dark.then(|| Self::render_theme_group_content(ThemeMode::Dark, &counts, &props, view.clone(), cx));
+        // Own the theme: `cx.theme()` borrows `cx`, but the content
+        // builders below take `cx` mutably in later chain links.
+        let theme = cx.theme().clone();
         let colors = &theme.colors;
-        let active_theme_profile = if self.theme_mode == ThemeMode::Light {
+        let active_theme_profile = if props.theme_mode == ThemeMode::Light {
             rust_i18n::t!("app.settings.appearance.light").to_string()
         } else {
             rust_i18n::t!("app.settings.appearance.dark").to_string()
@@ -718,10 +645,15 @@ impl DesktopView {
                     .child(
                         gpui_kit::component::switch::Switch::new("separate-theme-profiles")
                             .label(rust_i18n::t!("app.settings.appearance.separate_modes").to_string())
-                            .checked(self.preferences.separate_theme_profiles)
-                            .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
+                            .checked(props.separate_theme_profiles)
+                            .on_click({
+                                let view = view.clone();
+                                move |_, _: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| view.toggle_separate_theme_profiles(cx));
+                                }
+                            }),
                     )
-                    .when(self.preferences.separate_theme_profiles, |group| {
+                    .when(props.separate_theme_profiles, |group| {
                         group.child(
                             div()
                                 .flex()
@@ -752,7 +684,7 @@ impl DesktopView {
                                     } else {
                                         rust_i18n::t!("app.settings.appearance.dark").to_string()
                                     };
-                                    let selected = self.theme_mode == mode;
+                                    let selected = props.theme_mode == mode;
                                     let profile_action_key = if selected {
                                         "app.settings.appearance.edit_profile_selected"
                                     } else {
@@ -764,11 +696,16 @@ impl DesktopView {
                                             rust_i18n::t!(profile_action_key, profile = label).to_string(),
                                         )
                                         .desktop_selected(selected, colors)
-                                        .on_click(cx.listener(move |view, _, window, cx| {
-                                            if view.theme_mode != mode {
-                                                view.apply_theme_mode(mode, window, cx);
+                                        .on_click({
+                                            let view = view.clone();
+                                            move |_, window: &mut Window, cx: &mut App| {
+                                                view.update(cx, |view, cx| {
+                                                    if view.theme_mode != mode {
+                                                        view.apply_theme_mode(mode, window, cx);
+                                                    }
+                                                });
                                             }
-                                        }))
+                                        })
                                 })),
                         )
                     })
@@ -780,8 +717,8 @@ impl DesktopView {
                             .gap_2()
                             .child(section_label(&rust_i18n::t!("app.settings.appearance.themes").to_string(), colors))
                             .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
-                                let light = self.theme_scroll_light.clone();
-                                let dark = self.theme_scroll_dark.clone();
+                                let light = props.theme_scroll_light.clone();
+                                let dark = props.theme_scroll_dark.clone();
                                 // Owned copies: the click listener below is
                                 // 'static and cannot borrow this render frame.
                                 // Both arrays stay `Copy` so the `Fn` listener
@@ -803,17 +740,20 @@ impl DesktopView {
                                     )
                                     .ghost()
                                     .small()
-                                    .on_click(cx.listener(move |_, _, _, cx| {
-                                        for (shown, scroll) in visible.into_iter().zip([&light, &dark]) {
-                                            if !shown {
-                                                continue;
+                                    .on_click({
+                                        let view = view.clone();
+                                        move |_, _: &mut Window, cx: &mut App| {
+                                            for (shown, scroll) in visible.into_iter().zip([&light, &dark]) {
+                                                if !shown {
+                                                    continue;
+                                                }
+                                                let mut offset = scroll.offset();
+                                                offset.x += px(if forward { -336. } else { 336. });
+                                                scroll.set_offset(offset);
                                             }
-                                            let mut offset = scroll.offset();
-                                            offset.x += px(if forward { -336. } else { 336. });
-                                            scroll.set_offset(offset);
+                                            cx.notify(view.entity_id());
                                         }
-                                        cx.notify();
-                                    }))
+                                    })
                             }))),
                     )
                     .child(
@@ -831,16 +771,16 @@ impl DesktopView {
                             .when_some(light_group, |list, group| list.child(group))
                             .when_some(dark_group, |list, group| list.child(group)),
                     )
-                    .child(self.render_custom_themes_group(cx)),
+                    .child(Self::render_custom_themes_group_content(&props.custom, view.clone(), cx)),
             ))
             .child(accessible_group_box(
                 "appearance-typography-group",
                 typography.clone(),
                 settings_group_box(typography, colors)
-                    .child(self.render_font_family(FontTarget::Ui, cx))
-                    .child(self.render_font_family(FontTarget::Code, cx))
-                    .child(self.render_font_size(false, cx))
-                    .child(self.render_font_size(true, cx))
+                    .child(Self::render_font_family_content(FontTarget::Ui, view.clone(), cx))
+                    .child(Self::render_font_family_content(FontTarget::Code, view.clone(), cx))
+                    .child(Self::render_font_size_content(false, &props, view.clone(), cx))
+                    .child(Self::render_font_size_content(true, &props, view.clone(), cx))
                     .child(
                         div()
                             .id("appearance-code-preview")
@@ -862,7 +802,7 @@ impl DesktopView {
             settings_group_box(language_group_title, colors).child(settings_row(
                 rust_i18n::t!("app.settings.language.label").to_string(),
                 rust_i18n::t!("app.settings.language.description").to_string(),
-                Select::new(&self.ui_language_select)
+                Select::new(&props.ui_language_select)
                     .id("ui-language-select")
                     .accessibility_label(rust_i18n::t!("app.settings.language.label").to_string())
                     .search_placeholder(rust_i18n::t!("app.settings.language.search").to_string())
@@ -885,48 +825,53 @@ impl DesktopView {
                         .child(
                             gpui_kit::component::switch::Switch::new("navigation-visible")
                                 .label(rust_i18n::t!("app.settings.appearance.show_navigation").to_string())
-                                .checked(self.preferences.navigation_visible())
-                                .on_click(cx.listener(|view, checked, _, cx| {
-                                    view.set_navigation_visible(*checked, cx);
-                                })),
+                                .checked(props.navigation_visible)
+                                .on_click(switch_action(&view, DesktopView::set_navigation_visible)),
                         )
                         .child(row_description(
                             rust_i18n::t!("app.settings.appearance.navigation_hint").to_string(),
                             colors,
                         )),
                 )
-                .child(self.render_translucent_sidebar_switch(cx))
+                .child(Self::render_translucent_sidebar_switch_content(&props, view.clone(), cx))
                 .child(
                     gpui_kit::component::switch::Switch::new("navigation-on-right")
                         .label(rust_i18n::t!("app.settings.appearance.navigation_right").to_string())
-                        .checked(self.preferences.navigation_on_right())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_navigation_on_right(*checked, cx);
-                        })),
+                        .checked(props.navigation_on_right)
+                        .on_click(switch_action(&view, DesktopView::set_navigation_on_right)),
                 ),
         ));
 
         content = content.child(
             desktop_default_button("reset-appearance")
                 .label(rust_i18n::t!("app.settings.appearance.reset").to_string())
-                .on_click(cx.listener(|view, _, window, cx| {
-                    view.preferences.separate_theme_profiles = false;
-                    view.preferences.light_theme = None;
-                    view.preferences.dark_theme = None;
-                    view.preferences.light_typography = None;
-                    view.preferences.dark_typography = None;
-                    view.preferences.ui_font_family = None;
-                    view.preferences.code_font_family = None;
-                    view.preferences.ui_font_size = None;
-                    view.preferences.code_font_size = None;
-                    view.preferences.app_icon = None;
-                    view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
-                    view.set_translucent_sidebar(false, window, cx);
-                    view.reset_contrast(window, cx);
-                    preferences::apply_reduced_motion(view.preferences.reduced_motion, view.system_motion_baseline, cx);
-                    view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
-                    view.refresh_dock_icon();
-                })),
+                .on_click({
+                    let view = view.clone();
+                    move |_, window: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| {
+                            view.preferences.separate_theme_profiles = false;
+                            view.preferences.light_theme = None;
+                            view.preferences.dark_theme = None;
+                            view.preferences.light_typography = None;
+                            view.preferences.dark_typography = None;
+                            view.preferences.ui_font_family = None;
+                            view.preferences.code_font_family = None;
+                            view.preferences.ui_font_size = None;
+                            view.preferences.code_font_size = None;
+                            view.preferences.app_icon = None;
+                            view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
+                            view.set_translucent_sidebar(false, window, cx);
+                            view.reset_contrast(window, cx);
+                            preferences::apply_reduced_motion(
+                                view.preferences.reduced_motion,
+                                view.system_motion_baseline,
+                                cx,
+                            );
+                            view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
+                            view.refresh_dock_icon();
+                        });
+                    }
+                }),
         );
         let files_group_title = rust_i18n::t!("app.settings.files.group").to_string();
         content = content.child(accessible_group_box(
@@ -935,7 +880,7 @@ impl DesktopView {
             settings_group_box(files_group_title, colors).child(settings_row(
                 rust_i18n::t!("app.settings.files.destination.label").to_string(),
                 rust_i18n::t!("app.settings.files.destination.description").to_string(),
-                Select::new(&self.file_destination_select)
+                Select::new(&props.file_destination_select)
                     .id("file-open-destination-select")
                     .accessibility_label(rust_i18n::t!("app.settings.files.destination.label").to_string())
                     .menu_max_h(px(320.))
@@ -943,8 +888,18 @@ impl DesktopView {
                 colors,
             )),
         ));
-        content = content.child(self.render_diff_settings(cx));
-        content = content.child(self.render_app_icon_settings(cx));
-        content.child(self.render_contrast_settings(cx)).into_any_element()
+        content = content.child(Self::render_diff_settings_content(props.diff.clone(), view.clone(), cx));
+        content = content.child(Self::render_app_icon_settings_content(props.app_icon.clone(), view.clone(), cx));
+        content
+            .child(Self::render_contrast_settings_content(&props, view.clone(), cx))
+            .into_any_element()
+    }
+
+    /// Legacy Context shell: captures props and delegates to the
+    /// App-context content builder.
+    pub(super) fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let props = AppearanceSettingsProps::capture(self);
+        let view = cx.entity();
+        Self::render_appearance_settings_content(props, view, cx)
     }
 }

@@ -280,46 +280,36 @@ fn settings_container_and_sections_keep_horizontal_air(cx: &mut TestAppContext) 
             window.render_frame(cx);
             let panel = window.find("settings-panel").bounds();
             let title = window.find("settings-title").bounds();
-            let navigation = window.find("settings-navigation").bounds();
-            let divider = window.find("settings-pane-divider").bounds();
-            let content = window.find("settings-content").bounds();
+            // Wide viewports host the Kit container: the sidebar rows and
+            // the full-width typography group proxy the legacy nav and
+            // content edges (Kit exposes no stable full-height content
+            // id, so the bottom inset has no equivalent here).
+            let sidebar_row = window.find("0-0").bounds();
+            let group = window.find("appearance-typography-group").bounds();
             let panel_right = panel.origin.x + panel.size.width;
-            let panel_bottom = panel.origin.y + panel.size.height;
-            // Panel insets at `px_4` (1rem): nav and content sit one panel
-            // step inside the panel on every side.
+            // Panel insets at `px_4` (1rem): sidebar and content sit one
+            // panel step inside the panel.
             let inset = base_size - 1.;
             assert!(
-                navigation.origin.x - panel.origin.x >= px(inset),
-                "nav keeps a panel-scale leading inset at {base_size}px: navigation={navigation:?} panel={panel:?}"
+                sidebar_row.origin.x - panel.origin.x >= px(inset),
+                "sidebar keeps a panel-scale leading inset at {base_size}px: row={sidebar_row:?} panel={panel:?}"
             );
             assert!(
-                panel_right - (content.origin.x + content.size.width) >= px(inset),
-                "content keeps a panel-scale trailing inset at {base_size}px: content={content:?} panel={panel:?}"
+                title.origin.x - panel.origin.x >= px(inset),
+                "title keeps a panel-scale leading inset at {base_size}px: title={title:?} panel={panel:?}"
             );
             assert!(
-                panel_bottom - (content.origin.y + content.size.height) >= px(inset),
-                "content keeps a panel-scale bottom inset at {base_size}px: content={content:?} panel={panel:?}"
+                panel_right - (group.origin.x + group.size.width) >= px(inset),
+                "content keeps a panel-scale trailing inset at {base_size}px: group={group:?} panel={panel:?}"
             );
-            // Divider gaps at `gap_4` (1rem) per side: the nav/content
-            // separation reads at major-region scale instead of hairline-tight.
-            let flank = base_size - 1.;
+            // The Kit sidebar sits beside the hosted content instead of
+            // overlapping it.
             assert!(
-                divider.origin.x - (navigation.origin.x + navigation.size.width) >= px(flank),
-                "divider keeps air from the nav at {base_size}px: navigation={navigation:?} divider={divider:?}"
-            );
-            assert!(
-                content.origin.x - (divider.origin.x + divider.size.width) >= px(flank),
-                "content keeps air from the divider at {base_size}px: divider={divider:?} content={content:?}"
-            );
-            // Title shares the body spine: header `px_3` plus the title's
-            // own `pl_1` equals body `px_4`, so both start on one edge.
-            assert!(
-                (title.origin.x - navigation.origin.x).abs() <= px(1.),
-                "title aligns to the nav spine at {base_size}px: title={title:?} navigation={navigation:?}"
+                sidebar_row.origin.x + sidebar_row.size.width <= group.origin.x + px(1.),
+                "sidebar sits beside content at {base_size}px: row={sidebar_row:?} group={group:?}"
             );
             // Section surfaces pad horizontal at `px_6` (1.5rem): the full-
             // width code preview pins both edges of the air inside the card.
-            let group = window.find("appearance-typography-group").bounds();
             let preview = window.find("appearance-code-preview").bounds();
             let group_right = group.origin.x + group.size.width;
             let air = base_size * 1.5 - 1.;

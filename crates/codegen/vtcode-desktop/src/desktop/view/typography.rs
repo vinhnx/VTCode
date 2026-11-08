@@ -4,7 +4,7 @@ use super::{DesktopView, PaletteAction, PaletteKind, command, desktop_button, se
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, App, Context, Window};
+use gpui_kit::{AnyElement, App, Context, Entity, Window};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum FontTarget {
@@ -88,7 +88,10 @@ impl DesktopView {
         self.save_preferences();
     }
 
-    pub(super) fn render_font_family(&self, target: FontTarget, cx: &Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure. The family display reads the live theme; only the palette
+    /// opener needs the view handle.
+    pub(super) fn render_font_family_content(target: FontTarget, view: Entity<Self>, cx: &mut App) -> AnyElement {
         let (id, label, family) = match target {
             FontTarget::Ui => {
                 ("choose-ui-font", rust_i18n::t!("app.appearance.ui_font").to_string(), &cx.theme().font_family)
@@ -118,7 +121,12 @@ impl DesktopView {
                         .to_string(),
                 )
                 .ghost()
-                .on_click(cx.listener(move |view, _, window, cx| view.open_font_palette(target, window, cx))),
+                .on_click({
+                    let view = view.clone();
+                    move |_, window: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.open_font_palette(target, window, cx));
+                    }
+                }),
             &cx.theme().colors,
         )
         .into_any_element()

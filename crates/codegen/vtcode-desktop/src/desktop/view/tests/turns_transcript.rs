@@ -92,6 +92,9 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         ("sv", "Inställningar", Some("Ny tråd"), crate::desktop::localization::UiLanguage::Swedish),
     ] {
         cx.update_window(window, |_, window, cx| {
+            // Relocalizing re-renders the hosted page: re-center the row
+            // every iteration so the click survives scroll resets.
+            scroll_settings_into_view(window, "ui-language-select", cx);
             window.within("ui-language-select").click("input", cx);
             window.input(locale, cx);
         })

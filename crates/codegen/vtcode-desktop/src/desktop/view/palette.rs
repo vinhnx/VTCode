@@ -657,7 +657,7 @@ impl DesktopView {
                     self.request_webmcp_status();
                 }
                 self.open_settings(window, cx);
-                self.settings_navigation_focus.focus(window, cx);
+                self.focus_settings_selection(window, cx);
                 cx.notify();
             }
             PaletteAction::EditConfigSetting(path) => self.open_cli_config_editor(path, window, cx),

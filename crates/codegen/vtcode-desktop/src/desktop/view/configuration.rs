@@ -931,3 +931,42 @@ pub(super) fn value_summary(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests;
+
+/// Cloned render inputs for the CLI configuration summary group (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale). Only counts
+/// and flags cross into props — never the settings snapshot.
+#[derive(Clone)]
+pub(super) struct CliConfigurationProps {
+    pub(super) setting_count: usize,
+    pub(super) editable_count: usize,
+    pub(super) omitted_sensitive: usize,
+    pub(super) omitted_large: usize,
+    pub(super) omitted_limit: usize,
+    pub(super) read_only_count: usize,
+    pub(super) has_snapshot: bool,
+    pub(super) has_workspace: bool,
+    pub(super) target: protocol::ConfigTarget,
+    pub(super) can_edit: bool,
+}
+
+impl CliConfigurationProps {
+    /// Snapshot the view fields the summary builder reads. Both the legacy
+    /// shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        let snapshot = view.cli_config_settings.as_ref();
+        Self {
+            setting_count: snapshot.map_or(0, |snapshot| snapshot.settings.len()),
+            editable_count: snapshot
+                .map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| setting.editable).count()),
+            omitted_sensitive: snapshot.map_or(0, |snapshot| snapshot.omitted_sensitive),
+            omitted_large: snapshot.map_or(0, |snapshot| snapshot.omitted_large),
+            omitted_limit: snapshot.map_or(0, |snapshot| snapshot.omitted_limit),
+            read_only_count: snapshot
+                .map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| !setting.editable).count()),
+            has_snapshot: snapshot.is_some(),
+            has_workspace: view.workspace.is_some(),
+            target: view.config_target,
+            can_edit: view.can_edit_cli_settings(),
+        }
+    }
+}

@@ -7,18 +7,43 @@
 //! back; failures ask for a fresh paste.
 
 use super::*;
+use gpui_kit::component::input::InputState;
+
+/// Cloned render inputs for the secret-store form (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct SecretStoreProps {
+    pub(super) input: Entity<InputState>,
+    pub(super) pending: bool,
+    pub(super) backend_available: bool,
+    pub(super) error: Option<String>,
+}
+
+impl SecretStoreProps {
+    /// Snapshot the view fields the secret form reads. Both the legacy
+    /// shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            input: view.secret_input.clone(),
+            pending: view.secret_save_pending,
+            backend_available: view.backend.is_some(),
+            error: view.secret_editor_error.clone(),
+        }
+    }
+}
 
 impl DesktopView {
-    pub(super) fn render_secret_store_form(
-        &self,
+    pub(super) fn render_secret_store_form_content(
         info: &protocol::SecretStoreInfo,
-        cx: &mut Context<Self>,
+        props: &SecretStoreProps,
+        view: Entity<Self>,
+        cx: &mut App,
     ) -> AnyElement {
         let colors = cx.theme().colors;
-        let pending = self.secret_save_pending;
-        let value = self.secret_input.read(cx).value().trim().to_string();
+        let pending = props.pending;
+        let value = props.input.read(cx).value().trim().to_string();
         let provider = info.provider.clone();
-        let sendable = !pending && self.backend.is_some() && !value.is_empty();
+        let sendable = !pending && props.backend_available && !value.is_empty();
         div()
             .flex()
             .flex_col()
@@ -30,7 +55,7 @@ impl DesktopView {
                     .gap_1()
                     .child(row_title(rust_i18n::t!("app.secrets.panel_title").to_string(), &colors))
                     .child(
-                        Input::new(&self.secret_input)
+                        Input::new(&props.input)
                             .id("secret-input")
                             .accessibility_id("secret-api-key")
                             .aria_label(rust_i18n::t!("app.secrets.provider_aria").to_string())
@@ -49,9 +74,14 @@ impl DesktopView {
                         rust_i18n::t!("app.secrets.save_key").to_string()
                     })
                     .desktop_disabled(!sendable)
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        view.save_secret_store(provider.clone(), value.clone(), window, cx);
-                    })),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| {
+                                view.save_secret_store(provider.clone(), value.clone(), window, cx);
+                            });
+                        }
+                    }),
             )
             .child(
                 div()
@@ -59,7 +89,7 @@ impl DesktopView {
                     .text_color(colors.muted_foreground)
                     .child(rust_i18n::t!("app.secrets.stored_as", var = info.env_var.as_str()).to_string()),
             )
-            .when_some(self.secret_editor_error.as_ref(), |form, error| {
+            .when_some(props.error.as_ref(), |form, error| {
                 form.child(
                     div()
                         .id("secret-error")

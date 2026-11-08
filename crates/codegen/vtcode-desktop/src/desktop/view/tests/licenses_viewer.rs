@@ -24,10 +24,16 @@ fn scroll_settings_into_view(
     id: &'static str,
     cx: &mut TestAppContext,
 ) {
+    // Wide viewports host the Kit container (no legacy scroller): center
+    // against the panel and scroll the row itself, which bubbles to
+    // Kit's content list.
+    let legacy = cx
+        .update_window(window, |_, window, _| window.try_find("settings-content").is_some())
+        .unwrap();
     for _ in 0..80 {
         let step = cx
             .update_window(window, |_, window, _| {
-                let viewport = window.find("settings-content").bounds();
+                let viewport = window.find(if legacy { "settings-content" } else { "settings-panel" }).bounds();
                 let item = window.find(id).bounds();
                 if item.top() >= viewport.top() - px(1.) && item.bottom() <= viewport.bottom() + px(1.) {
                     return None;
@@ -46,12 +52,19 @@ fn scroll_settings_into_view(
             return;
         };
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, cx| {
-                let mut offset = view.settings_scroll.offset();
-                offset.y += step;
-                view.settings_scroll.set_offset(offset);
-                cx.notify();
-            });
+            if legacy {
+                view.update(cx, |view, cx| {
+                    let mut offset = view.settings_scroll.offset();
+                    offset.y += step;
+                    view.settings_scroll.set_offset(offset);
+                    cx.notify();
+                });
+            } else {
+                // Scroll from the panel, whose center sits over the
+                // content list: a below-fold row cannot anchor a scroll
+                // (test scrolls dispatch at the anchor's position).
+                window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), step)), cx);
+            }
             window.render_frame(cx);
         })
         .unwrap();

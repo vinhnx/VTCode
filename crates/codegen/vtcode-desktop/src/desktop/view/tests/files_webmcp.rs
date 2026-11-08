@@ -368,7 +368,7 @@ fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestA
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1000.))), cx);
+        scroll_settings_by(window, px(-1000.), cx);
         window.render_frame(cx);
         assert_eq!(window.find_all("file-open-destination-select").len(), 1);
         assert_eq!(window.find("file-open-destination-select").value(), Some("File viewer"));

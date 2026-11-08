@@ -1,73 +1,130 @@
 //! Searchable shortcut editor: per-row capture and unbind over a staged draft.
 use super::*;
+use gpui_kit::component::input::InputState;
 use gpui_kit::component::kbd::Kbd;
+use gpui_kit::{App, Entity};
+
+/// Cloned render inputs for the shortcuts editor (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct ShortcutSettingsProps {
+    pub(super) editing: bool,
+    pub(super) search_input: Entity<InputState>,
+    pub(super) draft: std::collections::BTreeMap<String, String>,
+    pub(super) capture: Option<shortcuts::CommandId>,
+    pub(super) capture_focus: FocusHandle,
+    pub(super) cli_shortcuts_available: bool,
+    pub(super) message: Option<String>,
+    pub(super) vim_navigation: bool,
+}
+
+impl ShortcutSettingsProps {
+    /// Snapshot the view fields the shortcuts editor reads. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            editing: view.shortcuts_editing,
+            search_input: view.shortcut_search_input.clone(),
+            draft: view.shortcut_draft.clone(),
+            capture: view.shortcut_capture,
+            capture_focus: view.shortcut_capture_focus.clone(),
+            cli_shortcuts_available: view
+                .configuration
+                .as_ref()
+                .and_then(|configuration| configuration.shared_ui.as_ref())
+                .is_some(),
+            message: view.shortcut_message.clone(),
+            vim_navigation: view.preferences.vim_navigation,
+        }
+    }
+}
 
 impl DesktopView {
-    pub(super) fn render_shortcuts(&self, window: &Window, cx: &Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure. Takes `&App`: the body only reads through the props, so
+    /// the legacy `&Context` shell can delegate by deref.
+    pub(super) fn render_shortcuts_content(
+        props: ShortcutSettingsProps,
+        view: Entity<Self>,
+        window: &Window,
+        cx: &App,
+    ) -> AnyElement {
         let colors = &cx.theme().colors;
         // Capture is live only while the pill holds focus. Tab and click-away move focus
         // elsewhere without touching state, so the pill renders exactly when armed and focused;
         // every exit path (commit, cancel, save, reset, import, page close) clears the arm.
-        let pill_focused = self.shortcut_capture_focus.is_focused(window);
-        let description = if self.shortcuts_editing {
+        let pill_focused = props.capture_focus.is_focused(window);
+        let description = if props.editing {
             rust_i18n::t!("app.shortcuts.unsaved_description").to_string()
         } else {
             rust_i18n::t!("app.shortcuts.browse_description").to_string()
         };
-        let query = self.shortcut_search_input.read(cx).value().trim().to_string();
+        let query = props.search_input.read(cx).value().trim().to_string();
         let terms = config_search::config_search_terms(&query);
         let visible: Vec<&shortcuts::ShortcutCommand> = shortcuts::COMMANDS
             .iter()
             .filter(|command| {
-                shortcuts::shortcut_matches_query(
-                    command,
-                    shortcuts::staged_value(&self.shortcut_draft, command),
-                    &terms,
-                )
+                shortcuts::shortcut_matches_query(command, shortcuts::staged_value(&props.draft, command), &terms)
             })
             .collect();
 
-        let cli_shortcuts_available = self
-            .configuration
-            .as_ref()
-            .and_then(|configuration| configuration.shared_ui.as_ref())
-            .is_some();
+        let cli_shortcuts_available = props.cli_shortcuts_available;
         let mut actions = div().flex().flex_wrap().gap_2();
-        if self.shortcuts_editing {
+        if props.editing {
             actions = actions
                 .child(
                     desktop_primary_button("save-shortcuts")
                         .label(rust_i18n::t!("app.shortcuts.save").to_string())
-                        .on_click(cx.listener(|view, _, window, cx| view.save_shortcut_draft(window, cx))),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, window: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| view.save_shortcut_draft(window, cx));
+                            }
+                        }),
                 )
                 .child(
                     desktop_default_button("cancel-shortcuts")
                         .label(rust_i18n::t!(i18n::CONFIGURATION_CANCEL).to_string())
-                        .on_click(cx.listener(|view, _, window, cx| view.cancel_shortcut_edit(window, cx))),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, window: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| view.cancel_shortcut_edit(window, cx));
+                            }
+                        }),
                 );
         }
         actions = actions
             .child(
                 desktop_default_button("reset-shortcuts")
                     .label(rust_i18n::t!("app.shortcuts.reset_all").to_string())
-                    .on_click(cx.listener(|view, _, window, cx| view.reset_shortcuts(window, cx))),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.reset_shortcuts(window, cx));
+                        }
+                    }),
             )
             .child(
                 desktop_default_button("import-cli-shortcuts")
                     .label(rust_i18n::t!("app.shortcuts.import_cli").to_string())
                     .desktop_disabled(!cli_shortcuts_available)
-                    .on_click(cx.listener(|view, _, window, cx| view.import_cli_shortcuts(window, cx))),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| view.import_cli_shortcuts(window, cx));
+                        }
+                    }),
             );
 
         let mut children = Vec::with_capacity(visible.len());
         for command in visible.iter() {
-            children.push(shortcut_row(
+            children.push(shortcut_row_content(
                 command,
-                shortcuts::staged_value(&self.shortcut_draft, command),
-                pill_focused && self.shortcut_capture == Some(command.id),
-                &self.shortcut_capture_focus,
+                shortcuts::staged_value(&props.draft, command),
+                pill_focused && props.capture == Some(command.id),
+                &props.capture_focus,
                 colors,
-                cx,
+                view.clone(),
             ));
         }
         if visible.is_empty() {
@@ -92,7 +149,7 @@ impl DesktopView {
             )
             .child(
                 div().flex().gap_2().child(
-                    Input::new(&self.shortcut_search_input)
+                    Input::new(&props.search_input)
                         .id("shortcut-search")
                         .flex_1()
                         .min_w_0()
@@ -104,7 +161,7 @@ impl DesktopView {
             )
             .child(actions)
             .children(children)
-            .children(self.shortcut_message.as_ref().map(|message| {
+            .children(props.message.as_ref().map(|message| {
                 div()
                     .id("shortcut-status")
                     .role(gpui_kit::Role::Status)
@@ -125,8 +182,13 @@ impl DesktopView {
             "Move with j/k, jump with g/G, switch tabs with h/l, focus the composer with i, search with /.".to_string(),
             gpui_kit::component::switch::Switch::new("vim-navigation")
                 .accessibility_label("Vim navigation".to_string())
-                .checked(self.preferences.vim_navigation)
-                .on_click(cx.listener(|view, _, _, cx| view.toggle_vim_navigation(cx))),
+                .checked(props.vim_navigation)
+                .on_click({
+                    let view = view.clone();
+                    move |_, _: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.toggle_vim_navigation(cx));
+                    }
+                }),
             colors,
         ));
         // The experimental toggle sits below the shortcut table so existing
@@ -142,6 +204,14 @@ impl DesktopView {
             ))
             .child(accessible_group_box("vim-navigation-group", "Vim navigation (experimental)".to_string(), vim_group))
             .into_any_element()
+    }
+
+    /// Legacy Context shell: captures props and delegates to the
+    /// App-context content builder.
+    pub(super) fn render_shortcuts(&self, window: &Window, cx: &Context<Self>) -> AnyElement {
+        let props = ShortcutSettingsProps::capture(self);
+        let view = cx.entity();
+        Self::render_shortcuts_content(props, view, window, cx)
     }
 
     pub(super) fn toggle_vim_navigation(&mut self, cx: &mut Context<Self>) {
@@ -253,7 +323,7 @@ impl DesktopView {
                         self.preferences = preferences;
                         self.shortcut_capture = None;
                         self.shortcuts_editing = false;
-                        self.settings_navigation_focus.focus(window, cx);
+                        self.focus_settings_selection(window, cx);
                         self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.saved").to_string());
                     }
                     Err(error) => self.shortcut_message = Some(error),
@@ -269,7 +339,7 @@ impl DesktopView {
         self.shortcut_capture = None;
         self.shortcut_message = None;
         self.shortcuts_editing = false;
-        self.settings_navigation_focus.focus(window, cx);
+        self.focus_settings_selection(window, cx);
         cx.notify();
     }
 
@@ -304,13 +374,13 @@ impl DesktopView {
     }
 }
 
-fn shortcut_row(
+fn shortcut_row_content(
     command: &shortcuts::ShortcutCommand,
     staged: &str,
     capturing: bool,
     capture_focus: &FocusHandle,
     colors: &gpui_kit::component::theme::ThemeColor,
-    cx: &Context<DesktopView>,
+    view: Entity<DesktopView>,
 ) -> AnyElement {
     let id = command.id;
     let faded = themes::faded_chrome(colors.background, colors.foreground);
@@ -330,12 +400,18 @@ fn shortcut_row(
             .text_xs()
             .text_color(colors.foreground)
             .child(rust_i18n::t!("app.shortcuts.press_keys_hint").to_string())
-            .on_action(cx.listener(|view, _: &gpui_kit::base::actions::Cancel, window, cx| {
-                view.cancel_shortcut_capture(window, cx);
-            }))
-            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                view.capture_shortcut_key(id, event, window, cx);
-            }))
+            .on_action({
+                let view = view.clone();
+                move |_: &gpui_kit::base::actions::Cancel, window: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| view.cancel_shortcut_capture(window, cx));
+                }
+            })
+            .on_key_down({
+                let view = view.clone();
+                move |event: &KeyDownEvent, window: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| view.capture_shortcut_key(id, event, window, cx));
+                }
+            })
             .into_any_element()
     } else {
         shortcut_staged_badge(command, staged, colors)
@@ -351,7 +427,12 @@ fn shortcut_row(
                 .ghost()
                 .small()
                 .accessibility_label(rust_i18n::t!("app.shortcuts.edit_for", label = command.label()).to_string())
-                .on_click(cx.listener(move |view, _, window, cx| view.begin_shortcut_capture(id, window, cx))),
+                .on_click({
+                    let view = view.clone();
+                    move |_, window: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.begin_shortcut_capture(id, window, cx));
+                    }
+                }),
         )
         .child(
             desktop_button(format!("shortcut-remove-{}", id.as_str()))
@@ -360,7 +441,12 @@ fn shortcut_row(
                 .small()
                 .accessibility_label(rust_i18n::t!("app.shortcuts.remove_for", label = command.label()).to_string())
                 .desktop_disabled(staged.is_empty())
-                .on_click(cx.listener(move |view, _, _, cx| view.unbind_shortcut(id, cx))),
+                .on_click({
+                    let view = view.clone();
+                    move |_, _: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.unbind_shortcut(id, cx));
+                    }
+                }),
         );
     div()
         .id(format!("shortcut-row-{}", id.as_str()))

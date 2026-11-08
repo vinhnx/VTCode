@@ -1,7 +1,15 @@
 use super::*;
 
 fn open_settings_search(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
-    let (window, view) = open_desktop(cx);
+    open_settings_search_sized(cx, 1280., 900.)
+}
+
+fn open_settings_search_sized(
+    cx: &mut TestAppContext,
+    width: f32,
+    height: f32,
+) -> (AnyWindowHandle, Entity<DesktopView>) {
+    let (window, view) = open_desktop_sized(cx, width, height);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
@@ -18,7 +26,10 @@ fn open_settings_search(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<Des
 fn reopen_settings_search(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("settings-filter-search", cx);
+        // The legacy search button is gone on wide viewports (Kit owns
+        // the sidebar there), so reopen through the same palette entry
+        // the button dispatches instead of clicking it.
+        view.update(cx, |view, cx| view.open_settings_search_palette(window, cx));
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
@@ -68,22 +79,24 @@ fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut Test
 }
 
 #[gpui_kit::test]
-fn clicking_settings_navigation_dismisses_the_search(cx: &mut TestAppContext) {
-    let (window, view) = open_settings_search(cx);
+fn clicking_settings_chrome_dismisses_the_search(cx: &mut TestAppContext) {
+    let (window, _view) = open_settings_search(cx);
     cx.update_window(window, |_, window, cx| {
         assert!(window.try_find("command-palette").is_some(), "search renders inline");
-        window.click("settings-nav-storage", cx);
+        // The palette replaces the hosted content while open, so the Kit
+        // sidebar is unreachable: an outside click lands on the panel
+        // header, which dismisses through the shared panel handler.
+        window.click("settings-title", cx);
         window.render_frame(cx);
         assert!(window.try_find("command-palette").is_none(), "outside click dismisses the search");
-        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Storage);
-        assert!(window.try_find("storage-settings").is_some(), "the selected tab content renders");
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
 fn clicking_the_search_button_again_closes_the_search(cx: &mut TestAppContext) {
-    let (window, _view) = open_settings_search(cx);
+    // The search button lives in the legacy navigation: narrow keeps it.
+    let (window, _view) = open_settings_search_sized(cx, 600., 700.);
     cx.update_window(window, |_, window, cx| {
         assert!(window.try_find("command-palette").is_some(), "search renders inline");
         window.click("settings-filter-search", cx);
@@ -186,7 +199,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
         assert!(view.read(cx).current_route() == Route::Settings);
         assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::Appearance);
 
-        window.click("settings-filter-search", cx);
+        view.update(cx, |view, cx| view.open_settings_search_palette(window, cx));
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);

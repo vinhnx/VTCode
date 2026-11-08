@@ -5,7 +5,7 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, Context, StatefulInteractiveElement, TestSupportExt, Window, div, px};
+use gpui_kit::{AnyElement, App, Context, Entity, StatefulInteractiveElement, TestSupportExt, Window, div, px};
 use protocol::slash_command::{
     WEBMCP_ROOTS_HELP, WEBMCP_TOOLS_HELP, WebmcpSlashCommand, WebmcpSlashCommandParseError, parse_webmcp_slash_command,
 };
@@ -168,11 +168,15 @@ impl DesktopView {
     /// `origin_controls` draws the origin list, pairing input, and pairing
     /// actions after the browser section; `false` yields the connection status
     /// alone (the origin controls depend on browser output).
-    pub(super) fn render_webmcp_settings(&self, origin_controls: bool, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_webmcp_settings_content(
+        origin_controls: bool,
+        props: &WebmcpSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let colors = cx.theme().colors;
-        let status = self.webmcp_status.as_ref();
-        let busy = self.webmcp_request_pending.is_some();
-        let configured_origins = status.map(|status| status.allowed_origins.as_slice()).unwrap_or_default();
+        let status = props.status.as_ref();
+        let busy = props.busy;
         let (section_id, section_title, section_label) = if origin_controls {
             (
                 "webmcp-pairing",
@@ -196,9 +200,9 @@ impl DesktopView {
                         .text_color(colors.muted_foreground)
                         .child(rust_i18n::t!("app.webmcp.pair_description").to_string()),
                 )
-                .child(self.render_webmcp_origin_controls(configured_origins, busy, cx));
+                .child(Self::render_webmcp_origin_controls_content(props, view.clone(), cx));
 
-            if let Some(pairing) = self.webmcp_pairing.as_ref() {
+            if let Some(pairing) = props.pairing.as_ref() {
                 let endpoint = pairing.endpoint.clone();
                 let pairing_code = pairing.pairing_code.clone();
                 group = group.child(
@@ -252,16 +256,13 @@ impl DesktopView {
         } else {
             let connected = rust_i18n::t!("app.webmcp.connected_prefix").to_string();
             let status_label = match status {
-                Some(status)
-                    if status.running
-                        && (self.session_request.is_some() || self.running || self.interaction.is_some()) =>
-                {
+                Some(status) if status.running && props.session_busy => {
                     format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_busy"))
                 }
                 Some(status) if status.running && busy => {
                     format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_checking"))
                 }
-                Some(status) if status.running && self.webmcp_status_dirty => {
+                Some(status) if status.running && props.status_dirty => {
                     format!("{connected} · {}", rust_i18n::t!("app.webmcp.connected_detail_unavailable"))
                 }
                 Some(status) if status.running && status.turns_available => {
@@ -308,7 +309,12 @@ impl DesktopView {
                                 .ghost()
                                 .small()
                                 .desktop_disabled(busy)
-                                .on_click(cx.listener(|view, _, _, cx| view.request_webmcp_status_with_notify(cx))),
+                                .on_click({
+                                    let view = view.clone();
+                                    move |_, _: &mut Window, cx: &mut App| {
+                                        view.update(cx, |view, cx| view.request_webmcp_status_with_notify(cx));
+                                    }
+                                }),
                         ),
                 );
         }
@@ -317,14 +323,15 @@ impl DesktopView {
     }
 
     /// Origin list, pairing input, and pairing actions for one connection.
-    fn render_webmcp_origin_controls(
-        &self,
-        configured_origins: &[String],
-        busy: bool,
-        cx: &mut Context<Self>,
+    fn render_webmcp_origin_controls_content(
+        props: &WebmcpSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
     ) -> AnyElement {
         let colors = cx.theme().colors;
-        let status = self.webmcp_status.as_ref();
+        let status = props.status.as_ref();
+        let configured_origins: &[String] = status.map(|status| status.allowed_origins.as_slice()).unwrap_or_default();
+        let busy = props.busy;
         let mut controls = div().flex().flex_col().gap_3();
         if !configured_origins.is_empty() {
             controls = controls.child(div().flex().flex_wrap().gap_1().children(configured_origins.iter().map(
@@ -338,10 +345,15 @@ impl DesktopView {
                     .ghost()
                     .small()
                     .desktop_disabled(busy)
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.request_webmcp_pair(origin_value.clone(), false);
-                        cx.notify();
-                    }))
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| {
+                                view.request_webmcp_pair(origin_value.clone(), false);
+                                cx.notify();
+                            });
+                        }
+                    })
                 },
             )));
         }
@@ -357,7 +369,7 @@ impl DesktopView {
                 .px_2()
                 .py_1()
                 .child(
-                    Textarea::new(&self.webmcp_origin_input)
+                    Textarea::new(&props.origin_input)
                         .accessibility_id("webmcp-origin")
                         .aria_label(rust_i18n::t!("app.webmcp.origin_aria").to_string())
                         .cursor_text()
@@ -366,7 +378,7 @@ impl DesktopView {
                 ),
         );
 
-        let origin = self.webmcp_origin_input.read(cx).value().trim().to_string();
+        let origin = props.origin_input.read(cx).value().trim().to_string();
         controls = controls.child(
             div()
                 .flex()
@@ -378,10 +390,15 @@ impl DesktopView {
                         .icon(IconName::ExternalLink)
                         .label(rust_i18n::t!("app.webmcp.create_code").to_string())
                         .desktop_disabled(busy || origin.is_empty())
-                        .on_click(cx.listener(move |view, _, _, cx| {
-                            view.request_webmcp_pair(origin.clone(), false);
-                            cx.notify();
-                        })),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| {
+                                    view.request_webmcp_pair(origin.clone(), false);
+                                    cx.notify();
+                                });
+                            }
+                        }),
                 )
                 .child(
                     desktop_button("open-webmcp-app")
@@ -396,15 +413,20 @@ impl DesktopView {
                             .label(rust_i18n::t!("app.webmcp.disconnect").to_string())
                             .ghost()
                             .desktop_disabled(busy)
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.request_webmcp_stop();
-                                cx.notify();
-                            })),
+                            .on_click({
+                                let view = view.clone();
+                                move |_, _: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| {
+                                        view.request_webmcp_stop();
+                                        cx.notify();
+                                    });
+                                }
+                            }),
                     )
                 }),
         );
 
-        if let Some(notice) = self.webmcp_notice.as_ref() {
+        if let Some(notice) = props.notice.as_ref() {
             let notice = notice.text();
             controls = controls.child(
                 div()
@@ -532,12 +554,37 @@ impl DesktopView {
     }
 }
 
-fn copy_value_row(
-    value_label: String,
-    value: String,
-    id: &'static str,
-    cx: &mut Context<DesktopView>,
-) -> impl IntoElement {
+/// Cloned render inputs for the WebMCP settings groups (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct WebmcpSettingsProps {
+    pub(super) status: Option<protocol::WebmcpBridgeStatus>,
+    pub(super) busy: bool,
+    pub(super) pairing: Option<protocol::WebmcpPairResult>,
+    pub(super) session_busy: bool,
+    pub(super) status_dirty: bool,
+    pub(super) origin_input: Entity<gpui_kit::component::input::TextareaState>,
+    pub(super) notice: Option<WebmcpNotice>,
+}
+
+impl WebmcpSettingsProps {
+    /// Snapshot the view fields the WebMCP builders read. Both the legacy
+    /// shell wrapper and the Kit adapter build props here, so the capture
+    /// logic cannot drift between them.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            status: view.webmcp_status.clone(),
+            busy: view.webmcp_request_pending.is_some(),
+            pairing: view.webmcp_pairing.clone(),
+            session_busy: view.session_request.is_some() || view.running || view.interaction.is_some(),
+            status_dirty: view.webmcp_status_dirty,
+            origin_input: view.webmcp_origin_input.clone(),
+            notice: view.webmcp_notice.clone(),
+        }
+    }
+}
+
+fn copy_value_row(value_label: String, value: String, id: &'static str, cx: &mut App) -> impl IntoElement {
     let copy = value.clone();
     div()
         .w_full()

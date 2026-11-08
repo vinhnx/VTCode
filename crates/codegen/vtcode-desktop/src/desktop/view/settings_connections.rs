@@ -1,5 +1,28 @@
 use super::*;
 
+/// Cloned render inputs for the connections pane (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct ConnectionsSettingsProps {
+    pub(super) webmcp: webmcp::WebmcpSettingsProps,
+    pub(super) terminal_command: String,
+    pub(super) cli_terminal_select: Entity<preferences::CliTerminalSelectState>,
+    pub(super) service_info: Option<protocol::InitializeResult>,
+}
+
+impl ConnectionsSettingsProps {
+    /// Snapshot the view fields the connections builders read. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            webmcp: webmcp::WebmcpSettingsProps::capture(view),
+            terminal_command: DesktopView::terminal_command_for_session(view.selected_session_id.as_deref()),
+            cli_terminal_select: view.cli_terminal_select.clone(),
+            service_info: view.service_info.clone().filter(|_| view.backend.is_some()),
+        }
+    }
+}
+
 impl DesktopView {
     /// Continue a session from any directory as an independent fork; bounded
     /// archive IDs are safe to interpolate unquoted. A fork (not `--resume`)
@@ -23,8 +46,14 @@ impl DesktopView {
         cx.notify();
     }
 
-    pub(super) fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        let service_info = self.service_info.as_ref().filter(|_| self.backend.is_some());
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure.
+    pub(super) fn render_connections_settings_content(
+        props: ConnectionsSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        let service_info = props.service_info.as_ref();
         let service_connected = service_info.is_some();
         let service_status = if service_connected {
             Tag::success()
@@ -74,11 +103,11 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_6()
-            .child(self.render_webmcp_settings(false, cx))
-            .child(self.render_webmcp_settings(true, cx))
+            .child(Self::render_webmcp_settings_content(false, &props.webmcp, view.clone(), cx))
+            .child(Self::render_webmcp_settings_content(true, &props.webmcp, view.clone(), cx))
             .child({
                 let group_title = rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string();
-                let command = Self::terminal_command_for_session(self.selected_session_id.as_deref());
+                let command = props.terminal_command.clone();
                 // English literals: the repo does not add locale keys without
                 // full native-quality translations for every locale.
                 let terminal_row_title = "Terminal application".to_string();
@@ -105,7 +134,7 @@ impl DesktopView {
                             terminal_row_title.clone(),
                             "Terminal runs the handoff automatically; other terminals open with the command copied."
                                 .to_string(),
-                            Select::new(&self.cli_terminal_select)
+                            Select::new(&props.cli_terminal_select)
                                 .id("cli-terminal-select")
                                 .accessibility_label(terminal_row_title)
                                 .menu_max_h(px(320.))
@@ -142,5 +171,9 @@ impl DesktopView {
                 ),
             ))
             .into_any_element()
+    }
+
+    pub(super) fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        Self::render_connections_settings_content(ConnectionsSettingsProps::capture(self), cx.entity(), cx)
     }
 }

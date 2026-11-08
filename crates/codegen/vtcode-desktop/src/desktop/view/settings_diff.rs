@@ -1,9 +1,32 @@
 //! Diff viewer presentation settings (Appearance tab).
+use super::super::diff_preferences::DiffPreferences;
+use super::settings::switch_action;
 use super::*;
 use gpui_kit::component::diff::{DiffChangeIndicator, DiffHoverHighlight, DiffHunkSeparator, DiffInlineUnit};
 
+/// Cloned render inputs for the diff viewer group (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct DiffSettingsProps {
+    pub(super) diff: DiffPreferences,
+}
+
+impl DiffSettingsProps {
+    /// Snapshot the view fields the diff builders read. Both the legacy
+    /// shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self { diff: view.preferences.diff.clone() }
+    }
+}
+
 impl DesktopView {
-    pub(super) fn render_diff_settings(&self, cx: &Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure.
+    pub(super) fn render_diff_settings_content(
+        props: DiffSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let colors = &cx.theme().colors;
         let title = rust_i18n::t!("app.settings.diff.group").to_string();
         accessible_group_box(
@@ -13,48 +36,38 @@ impl DesktopView {
                 .child(
                     gpui_kit::component::switch::Switch::new("diff-soft-wrap")
                         .label(rust_i18n::t!("app.settings.diff.wrap.label").to_string())
-                        .checked(self.preferences.diff.soft_wrap())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_diff_soft_wrap(*checked, cx);
-                        })),
+                        .checked(props.diff.soft_wrap())
+                        .on_click(switch_action(&view, Self::set_diff_soft_wrap)),
                 )
                 .child(
                     gpui_kit::component::switch::Switch::new("diff-line-numbers")
                         .label(rust_i18n::t!("app.settings.diff.numbers.label").to_string())
-                        .checked(self.preferences.diff.line_numbers())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_diff_line_numbers(*checked, cx);
-                        })),
+                        .checked(props.diff.line_numbers())
+                        .on_click(switch_action(&view, Self::set_diff_line_numbers)),
                 )
                 .child(
                     gpui_kit::component::switch::Switch::new("diff-syntax-highlight")
                         .label(rust_i18n::t!("app.settings.diff.syntax.label").to_string())
-                        .checked(self.preferences.diff.syntax_highlight())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_diff_syntax_highlight(*checked, cx);
-                        })),
+                        .checked(props.diff.syntax_highlight())
+                        .on_click(switch_action(&view, Self::set_diff_syntax_highlight)),
                 )
                 .child(
                     gpui_kit::component::switch::Switch::new("diff-file-headers")
                         .label(rust_i18n::t!("app.settings.diff.headers.label").to_string())
-                        .checked(self.preferences.diff.file_headers())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_diff_file_headers(*checked, cx);
-                        })),
+                        .checked(props.diff.file_headers())
+                        .on_click(switch_action(&view, Self::set_diff_file_headers)),
                 )
                 .child(
                     gpui_kit::component::switch::Switch::new("diff-change-background")
                         .label(rust_i18n::t!("app.settings.diff.tint.label").to_string())
-                        .checked(self.preferences.diff.change_background())
-                        .on_click(cx.listener(|view, checked, _, cx| {
-                            view.set_diff_change_background(*checked, cx);
-                        })),
+                        .checked(props.diff.change_background())
+                        .on_click(switch_action(&view, Self::set_diff_change_background)),
                 )
-                .child(self.render_indicator_options(colors, cx))
-                .child(self.render_separator_options(colors, cx))
-                .child(self.render_hover_options(colors, cx))
-                .child(self.render_context_options(colors, cx))
-                .child(self.render_inline_options(colors, cx)),
+                .child(Self::render_indicator_options_content(props.diff.change_indicator(), colors, view.clone()))
+                .child(Self::render_separator_options_content(props.diff.hunk_separator(), colors, view.clone()))
+                .child(Self::render_hover_options_content(props.diff.hover_highlight(), colors, view.clone()))
+                .child(Self::render_context_options_content(props.diff.context_lines(), colors, view.clone()))
+                .child(Self::render_inline_options_content(props.diff.inline_unit(), colors, view)),
         )
     }
 
@@ -65,7 +78,7 @@ impl DesktopView {
         label: String,
         selected: bool,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        view: Entity<Self>,
         select: Select,
     ) -> impl IntoElement + use<Select>
     where
@@ -75,7 +88,12 @@ impl DesktopView {
             .label(label)
             .small()
             .desktop_selected(selected, colors)
-            .on_click(cx.listener(move |view, _, _, cx| select(view, cx)))
+            .on_click({
+                let view = view.clone();
+                move |_, _: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| select(view, cx));
+                }
+            })
     }
 
     /// One exclusive-choice row: title and description stacked left, the
@@ -103,12 +121,11 @@ impl DesktopView {
         settings_row(label, rust_i18n::t!(description_key).to_string(), group, colors)
     }
 
-    fn render_indicator_options(
-        &self,
+    fn render_indicator_options_content(
+        current: DiffChangeIndicator,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        view: Entity<Self>,
     ) -> impl IntoElement {
-        let current = self.preferences.diff.change_indicator();
         let mut buttons = Vec::new();
         for (id, key, value) in [
             ("diff-indicator-signs", "app.settings.diff.indicator.signs", DiffChangeIndicator::Signs),
@@ -120,7 +137,7 @@ impl DesktopView {
                 rust_i18n::t!(key).to_string(),
                 current == value,
                 colors,
-                cx,
+                view.clone(),
                 move |view, cx| view.set_diff_change_indicator(value, cx),
             ));
         }
@@ -133,12 +150,11 @@ impl DesktopView {
         )
     }
 
-    fn render_separator_options(
-        &self,
+    fn render_separator_options_content(
+        current: DiffHunkSeparator,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        view: Entity<Self>,
     ) -> impl IntoElement {
-        let current = self.preferences.diff.hunk_separator();
         let mut buttons = Vec::new();
         for (id, key, value) in [
             ("diff-separator-metadata", "app.settings.diff.separator.metadata", DiffHunkSeparator::Metadata),
@@ -150,7 +166,7 @@ impl DesktopView {
                 rust_i18n::t!(key).to_string(),
                 current == value,
                 colors,
-                cx,
+                view.clone(),
                 move |view, cx| view.set_diff_hunk_separator(value, cx),
             ));
         }
@@ -163,12 +179,11 @@ impl DesktopView {
         )
     }
 
-    fn render_hover_options(
-        &self,
+    fn render_hover_options_content(
+        current: DiffHoverHighlight,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        view: Entity<Self>,
     ) -> impl IntoElement {
-        let current = self.preferences.diff.hover_highlight();
         let mut buttons = Vec::new();
         for (id, key, value) in [
             ("diff-hover-none", "app.settings.diff.hover.none", DiffHoverHighlight::None),
@@ -181,7 +196,7 @@ impl DesktopView {
                 rust_i18n::t!(key).to_string(),
                 current == value,
                 colors,
-                cx,
+                view.clone(),
                 move |view, cx| view.set_diff_hover_highlight(value, cx),
             ));
         }
@@ -194,12 +209,11 @@ impl DesktopView {
         )
     }
 
-    fn render_context_options(
-        &self,
+    fn render_context_options_content(
+        current: Option<usize>,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        view: Entity<Self>,
     ) -> impl IntoElement {
-        let current = self.preferences.diff.context_lines();
         let mut buttons = Vec::new();
         for (id, key, value) in [
             ("diff-context-3", "app.settings.diff.context.depth_3", Some(3)),
@@ -212,7 +226,7 @@ impl DesktopView {
                 rust_i18n::t!(key).to_string(),
                 current == value,
                 colors,
-                cx,
+                view.clone(),
                 move |view, cx| view.set_diff_context_lines(value, cx),
             ));
         }
@@ -225,12 +239,11 @@ impl DesktopView {
         )
     }
 
-    fn render_inline_options(
-        &self,
+    fn render_inline_options_content(
+        current: Option<DiffInlineUnit>,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        view: Entity<Self>,
     ) -> impl IntoElement {
-        let current = self.preferences.diff.inline_unit();
         let mut buttons = Vec::new();
         for (id, key, value) in [
             ("diff-inline-words", "app.settings.diff.inline.words", Some(DiffInlineUnit::Word)),
@@ -242,7 +255,7 @@ impl DesktopView {
                 rust_i18n::t!(key).to_string(),
                 current == value,
                 colors,
-                cx,
+                view.clone(),
                 move |view, cx| view.set_diff_inline_unit(value, cx),
             ));
         }

@@ -410,12 +410,37 @@ fn scroll_settings_into_view(
     cx: &mut gpui_kit::App,
 ) {
     window.render_frame(cx);
-    let content = window.find("settings-content").bounds();
-    let content_center = content.origin.y + content.size.height / 2.;
-    let target = window.find(target).bounds();
-    let target_center = target.origin.y + target.size.height / 2.;
-    window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), content_center - target_center)), cx);
+    let target = target.into();
+    // Wide viewports host the Kit container (no legacy scroller): center
+    // against the panel and scroll from the visible host, whose center
+    // sits over the content list (a below-fold target cannot anchor a
+    // scroll: test scrolls dispatch at the anchor's position).
+    let legacy = window.try_find("settings-content").is_some();
+    let viewport = window.find(if legacy { "settings-content" } else { "settings-panel" }).bounds();
+    let viewport_center = viewport.origin.y + viewport.size.height / 2.;
+    let tb = window.find(target).bounds();
+    let target_center = tb.origin.y + tb.size.height / 2.;
+    let delta = gpui_kit::ScrollDelta::Pixels(point(px(0.), viewport_center - target_center));
+    if legacy {
+        window.scroll("settings-content", delta, cx);
+    } else {
+        // The Kit host id is a state scope, not an element: scroll from
+        // the panel, whose center sits over the content list.
+        window.scroll("settings-panel", delta, cx);
+    }
     window.render_frame(cx);
+}
+
+/// Scroll the settings content by a fixed vertical delta. Wide viewports
+/// host the Kit container (no legacy scroller), so the scroll anchors on
+/// the panel, whose center sits over the content list.
+fn scroll_settings_by(window: &mut gpui_kit::Window, dy: gpui_kit::Pixels, cx: &mut gpui_kit::App) {
+    let anchor = if window.try_find("settings-content").is_some() {
+        "settings-content"
+    } else {
+        "settings-panel"
+    };
+    window.scroll(anchor, gpui_kit::ScrollDelta::Pixels(point(px(0.), dy)), cx);
 }
 
 fn scroll_theme_into_view(
@@ -672,6 +697,8 @@ mod service_navigation;
 mod session_link;
 mod session_navigation;
 mod sessions_startup;
+mod settings_kit_host;
+mod settings_kit_spike;
 mod settings_panes;
 mod settings_spacing;
 mod shortcuts_editor;

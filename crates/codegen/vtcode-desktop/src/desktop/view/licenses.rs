@@ -280,7 +280,10 @@ impl DesktopView {
         }));
     }
 
-    pub(super) fn render_licenses_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure. The license rows read no view state; the viewer opens
+    /// through the view handle.
+    pub(super) fn render_licenses_settings_content(view: Entity<Self>, cx: &mut App) -> AnyElement {
         let colors = cx.theme().colors;
         let title = rust_i18n::t!(i18n::LICENSES_TITLE).to_string();
         accessible_group_box(
@@ -293,9 +296,14 @@ impl DesktopView {
                     desktop_button("open-vtcode-license")
                         .label(rust_i18n::t!(i18n::LICENSES_VIEW).to_string())
                         .accessibility_label(rust_i18n::t!("app.licenses.first_party_title").to_string())
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_license_viewer(LicenseDocument::Mit, window, cx)
-                        })),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, window: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| {
+                                    view.open_license_viewer(LicenseDocument::Mit, window, cx);
+                                });
+                            }
+                        }),
                     &colors,
                 ))
                 .child(settings_row(
@@ -304,9 +312,14 @@ impl DesktopView {
                     desktop_button("open-third-party-notices")
                         .label(rust_i18n::t!(i18n::LICENSES_VIEW).to_string())
                         .accessibility_label(rust_i18n::t!("app.licenses.third_party_title").to_string())
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_license_viewer(LicenseDocument::Notices, window, cx)
-                        })),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, window: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| {
+                                    view.open_license_viewer(LicenseDocument::Notices, window, cx);
+                                });
+                            }
+                        }),
                     &colors,
                 )),
         )

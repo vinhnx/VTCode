@@ -13,7 +13,7 @@ fn launch_at_login_toggle_applies_and_persists_intent(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         assert_eq!(window.find("launch-at-login").checked(), Some(false));
         assert!(view.read(cx).preferences.launch_at_login.is_none());
@@ -75,7 +75,7 @@ fn approval_pending_shows_the_settings_shortcut(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         assert!(window.try_find("open-login-items").is_some(), "approval shows the shortcut");
         window.click("open-login-items", cx);

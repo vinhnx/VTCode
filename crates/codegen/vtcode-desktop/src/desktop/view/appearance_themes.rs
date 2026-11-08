@@ -251,7 +251,7 @@ impl DesktopView {
         }
         self.theme_editor.draft = None;
         self.apply_theme(id, window, cx);
-        self.settings_navigation_focus.focus(window, cx);
+        self.focus_settings_selection(window, cx);
     }
 
     /// Delete through the native warning prompt, matching every other
@@ -311,16 +311,23 @@ impl DesktopView {
         }
     }
 
-    pub(super) fn render_custom_themes_group(&self, cx: &Context<Self>) -> AnyElement {
-        let colors = &cx.theme().colors;
+    pub(super) fn render_custom_themes_group_content(
+        props: &CustomThemesProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
+        // Own the theme: `cx.theme()` borrows `cx`, but the editor and row
+        // builders below take `colors` and `cx` in the same call.
+        let theme = cx.theme().clone();
+        let colors = &theme.colors;
         let title = rust_i18n::t!("app.appearance.custom_themes").to_string();
         let mut group = settings_group_box(title.clone(), colors)
             .child(row_description(rust_i18n::t!("app.appearance.custom_themes_description").to_string(), colors));
-        if let Some(draft) = self.theme_editor.draft.as_ref() {
-            group = group.child(self.render_custom_theme_editor(draft, colors, cx));
+        if let Some(draft) = props.draft.as_ref() {
+            group = group.child(Self::render_custom_theme_editor_content(draft, colors, props, view.clone(), cx));
         }
-        if self.preferences.custom_themes.is_empty() {
-            if self.theme_editor.draft.is_none() {
+        if props.custom_themes.is_empty() {
+            if props.draft.is_none() {
                 group = group
                     .child(row_description(rust_i18n::t!("app.appearance.custom_themes_empty").to_string(), colors));
             }
@@ -335,30 +342,38 @@ impl DesktopView {
                     .flex_col()
                     .gap_1()
                     .w_full()
-                    .children(
-                        self.preferences
-                            .custom_themes
-                            .iter()
-                            .map(|theme| self.render_custom_theme_row(theme, colors, cx)),
-                    ),
+                    .children(props.custom_themes.iter().map(|theme| {
+                        Self::render_custom_theme_row_content(
+                            theme,
+                            colors,
+                            props.theme_id == theme.id,
+                            view.clone(),
+                            cx,
+                        )
+                    })),
             );
         }
         group = group.child(
             desktop_button("custom-theme-new")
                 .icon(IconName::Plus)
                 .label(rust_i18n::t!("app.appearance.custom_theme_new").to_string())
-                .on_click(cx.listener(|view, _, window, cx| view.open_custom_theme_editor(window, cx))),
+                .on_click({
+                    let view = view.clone();
+                    move |_, window: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.open_custom_theme_editor(window, cx));
+                    }
+                }),
         );
         accessible_group_box("appearance-custom-themes-group", title, group)
     }
 
-    fn render_custom_theme_row(
-        &self,
+    fn render_custom_theme_row_content(
         theme: &themes::CustomTheme,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        active: bool,
+        view: Entity<Self>,
+        _cx: &mut App,
     ) -> AnyElement {
-        let active = self.theme_id == theme.id;
         let mode_label = rust_i18n::t!(match theme.mode {
             ThemeMode::Light => "app.settings.appearance.light",
             ThemeMode::Dark => "app.settings.appearance.dark",
@@ -386,9 +401,14 @@ impl DesktopView {
                     .desktop_selected(active, colors)
                     .flex_1()
                     .min_w_0()
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        view.apply_theme(apply_target.clone(), window, cx);
-                    }))
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| {
+                                view.apply_theme(apply_target.clone(), window, cx);
+                            });
+                        }
+                    })
                     .child(
                         div()
                             .flex()
@@ -428,9 +448,14 @@ impl DesktopView {
                     .ghost()
                     .small()
                     .accessibility_label(edit_label)
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        view.edit_custom_theme(&edit_target, window, cx);
-                    })),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| {
+                                view.edit_custom_theme(&edit_target, window, cx);
+                            });
+                        }
+                    }),
             )
             .child(
                 desktop_button(delete_id)
@@ -438,25 +463,31 @@ impl DesktopView {
                     .ghost()
                     .small()
                     .accessibility_label(delete_label)
-                    .on_click(cx.listener(move |view, _, window, cx| {
-                        view.request_delete_custom_theme(delete_target.clone(), window, cx);
-                    })),
+                    .on_click({
+                        let view = view.clone();
+                        move |_, window: &mut Window, cx: &mut App| {
+                            view.update(cx, |view, cx| {
+                                view.request_delete_custom_theme(delete_target.clone(), window, cx);
+                            });
+                        }
+                    }),
             )
             .into_any_element()
     }
 
-    fn render_custom_theme_editor(
-        &self,
+    fn render_custom_theme_editor_content(
         draft: &CustomThemeDraft,
         colors: &gpui_kit::component::theme::ThemeColor,
-        cx: &Context<Self>,
+        props: &CustomThemesProps,
+        view: Entity<Self>,
+        cx: &mut App,
     ) -> AnyElement {
         let background = draft.seeds.background;
         let foreground = draft.seeds.foreground;
         let accent = draft.seeds.accent;
         let ratio = themes::contrast_ratio(foreground, background);
         let readable = ratio >= 4.5;
-        let typed_name = self.theme_editor.name_input.read(cx).value().trim().to_string();
+        let typed_name = props.name_input.read(cx).value().trim().to_string();
         let preview_label = if typed_name.is_empty() {
             rust_i18n::t!("app.appearance.custom_theme_preview").to_string()
         } else {
@@ -493,7 +524,7 @@ impl DesktopView {
                     .gap_1()
                     .child(div().text_xs().text_color(colors.muted_foreground).child(name_label.clone()))
                     .child(
-                        Input::new(&self.theme_editor.name_input)
+                        Input::new(&props.name_input)
                             .id("custom-theme-name")
                             .aria_label(name_label)
                             .small()
@@ -517,25 +548,29 @@ impl DesktopView {
                         .label(label.clone())
                         .accessibility_label(label)
                         .desktop_selected(draft.seeds.mode == mode, colors)
-                        .on_click(cx.listener(move |view, _, _, cx| view.select_custom_theme_mode(mode, cx)))
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _: &mut Window, cx: &mut App| {
+                                view.update(cx, |view, cx| view.select_custom_theme_mode(mode, cx));
+                            }
+                        })
                     })),
             )
             .child(
-                div().flex().flex_wrap().gap_3().children(
-                    CustomColorSlot::ALL
-                        .into_iter()
-                        .zip(&self.theme_editor.pickers)
-                        .map(|(slot, picker)| {
-                            let label = slot.label();
-                            div()
-                                .w(px(200.))
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(div().text_xs().text_color(colors.muted_foreground).child(label.clone()))
-                                .child(ColorSelect::new(picker).small().accessibility_label(label))
-                        }),
-                ),
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_3()
+                    .children(CustomColorSlot::ALL.into_iter().zip(&props.pickers).map(|(slot, picker)| {
+                        let label = slot.label();
+                        div()
+                            .w(px(200.))
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(div().text_xs().text_color(colors.muted_foreground).child(label.clone()))
+                            .child(ColorSelect::new(picker).small().accessibility_label(label))
+                    })),
             )
             .child(
                 div()
@@ -580,15 +615,50 @@ impl DesktopView {
                     .child(
                         desktop_button("custom-theme-cancel")
                             .label(rust_i18n::t!("app.appearance.custom_theme_cancel").to_string())
-                            .on_click(cx.listener(|view, _, _, cx| view.cancel_custom_theme_editor(cx))),
+                            .on_click({
+                                let view = view.clone();
+                                move |_, _: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| view.cancel_custom_theme_editor(cx));
+                                }
+                            }),
                     )
                     .child(
                         desktop_default_button("custom-theme-save")
                             .label(rust_i18n::t!("app.appearance.custom_theme_save").to_string())
-                            .on_click(cx.listener(|view, _, window, cx| view.save_custom_theme(window, cx))),
+                            .on_click({
+                                let view = view.clone();
+                                move |_, window: &mut Window, cx: &mut App| {
+                                    view.update(cx, |view, cx| view.save_custom_theme(window, cx));
+                                }
+                            }),
                     ),
             )
             .into_any_element()
+    }
+}
+
+/// Cloned render inputs for the custom-themes group (see
+/// `NotificationSettingsProps` for the Kit-hosting rationale).
+#[derive(Clone)]
+pub(super) struct CustomThemesProps {
+    pub(super) draft: Option<CustomThemeDraft>,
+    pub(super) custom_themes: Vec<themes::CustomTheme>,
+    pub(super) theme_id: String,
+    pub(super) name_input: Entity<InputState>,
+    pub(super) pickers: Vec<Entity<ColorPickerState>>,
+}
+
+impl CustomThemesProps {
+    /// Snapshot the view fields the custom-theme builders read. Both the
+    /// legacy shell wrapper and the Kit adapter build props here.
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            draft: view.theme_editor.draft.clone(),
+            custom_themes: view.preferences.custom_themes.clone(),
+            theme_id: view.theme_id.clone(),
+            name_input: view.theme_editor.name_input.clone(),
+            pickers: view.theme_editor.pickers.clone(),
+        }
     }
 }
 

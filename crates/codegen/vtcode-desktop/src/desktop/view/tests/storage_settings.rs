@@ -192,6 +192,63 @@ fn storage_refresh_resends_the_summary_request(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn kit_sidebar_click_fetches_the_storage_summary(cx: &mut TestAppContext) {
+    // Kit owns sidebar selection with no callback, so the Storage item
+    // fetches on display; without it a Kit click shows the empty state.
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop_sized(cx, 1280., 900.);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(requests.try_recv().is_err(), "no fetch before Storage displays");
+        window.click("0-6", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    drain_summary_request(&mut requests);
+    assert!(requests.try_recv().is_err(), "summary requested once while loading");
+    cx.update(|cx| assert!(view.read(cx).storage.loading));
+}
+
+#[gpui_kit::test]
+fn failed_summary_send_leaves_no_stuck_loading(cx: &mut TestAppContext) {
+    // No backend: both the Kit fetch-on-display and the view-driven
+    // selection must leave the page idle, never on a stuck skeleton.
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop_sized(cx, 1280., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.click("0-6", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(!view.storage.loading, "failed Kit-click fetch must not stick loading");
+        assert!(view.storage.summary.is_none());
+    });
+    cx.update_window(window, |_, window, cx| {
+        // The view still selects Appearance (Kit clicks do not sync back),
+        // so six tab cycles land on Storage through the view-driven path.
+        for _ in 0..6 {
+            window.dispatch_action(Box::new(super::super::NextSettingsTab), cx);
+            window.render_frame(cx);
+        }
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(!view.storage.loading, "failed view-driven fetch must not stick loading");
+        assert!(view.storage.summary.is_none());
+    });
+}
+
+#[gpui_kit::test]
 fn storage_review_lists_oldest_first_and_marks_the_current_session(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
     drain_summary_request(&mut requests);
@@ -272,7 +329,7 @@ fn storage_worktrees_list_and_remove_entries(cx: &mut TestAppContext) {
     let (window, view, mut requests) = open_storage_tab(cx);
     drain_summary_request(&mut requests);
     cx.update_window(window, |_, window, cx| {
-        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-3000.))), cx);
+        scroll_settings_by(window, px(-3000.), cx);
         window.render_frame(cx);
         window.click("storage-manage-worktrees", cx);
         window.render_frame(cx);
