@@ -564,6 +564,8 @@ fn trackpad_swipe_back_loads_previous_thread_with_loading_feedback(cx: &mut Test
     let summaries = swipe_history_fixture(cx, &view, commands);
 
     swipe_navigate(window, NavigationDirection::Back, cx);
+    assert!(requests.try_recv().is_err(), "a discrete swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("swipe back should load the previous thread");
     };
@@ -618,6 +620,8 @@ fn trackpad_swipe_forward_loads_next_thread_with_loading_feedback(cx: &mut TestA
     let _summaries = swipe_history_fixture(cx, &view, commands);
 
     swipe_navigate(window, NavigationDirection::Forward, cx);
+    assert!(requests.try_recv().is_err(), "a discrete swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("swipe forward should load the next thread");
     };
@@ -646,6 +650,7 @@ fn trackpad_swipe_ignores_empty_history(cx: &mut TestAppContext) {
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });
         view.workspace = Some(workspace.clone());
+        view.preferences.swipe_navigation = true;
         view.selected_session_id = Some("only-session".into());
         view.navigation_history
             .record(NavigationLocation { workspace, session_id: Some("only-session".into()) });
@@ -669,8 +674,10 @@ fn horizontal_scroll_back_loads_previous_thread_with_loading_feedback(cx: &mut T
     });
 
     scroll_swipe(window, 70., 0., cx);
+    assert!(requests.try_recv().is_err(), "a threshold crossing arms instead of navigating");
+    scroll_swipe_with_phase(window, 0., 0., TouchPhase::Ended, cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
-        panic!("sustained horizontal scroll should load the previous thread");
+        panic!("finger lift should commit the armed scroll");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
     assert_eq!(params, json!({ "sessionId": "swipe-first" }));
@@ -698,8 +705,10 @@ fn horizontal_scroll_forward_loads_next_thread(cx: &mut TestAppContext) {
     let _summaries = swipe_history_fixture(cx, &view, commands);
 
     scroll_swipe(window, -140., 0., cx);
+    assert!(requests.try_recv().is_err(), "a threshold crossing arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
-        panic!("sustained horizontal scroll should load the next thread");
+        panic!("the settle timer should commit the armed scroll");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
     assert_eq!(params, json!({ "sessionId": "swipe-third" }));
@@ -747,6 +756,8 @@ fn horizontal_scroll_over_open_palette_does_not_navigate(cx: &mut TestAppContext
     })
     .unwrap();
     scroll_swipe(window, 140., 0., cx);
+    assert!(requests.try_recv().is_err(), "the scroll arms instead of navigating");
+    scroll_swipe_with_phase(window, 0., 0., TouchPhase::Ended, cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("the same scroll navigates once the palette is closed");
     };
@@ -764,6 +775,9 @@ fn line_based_horizontal_scroll_navigates(cx: &mut TestAppContext) {
         window.scroll("pane-root", gpui_kit::ScrollDelta::Lines(point(20., 0.)), cx);
     })
     .unwrap();
+    assert!(requests.try_recv().is_err(), "a wheel crossing arms instead of navigating");
+    // A notched wheel never sends `Ended`, so the settle timer is its commit path.
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("a notched horizontal wheel scroll should navigate like a trackpad swipe");
     };
@@ -800,6 +814,8 @@ fn trackpad_swipe_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
         );
     })
     .unwrap();
+    assert!(requests.try_recv().is_err(), "the swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("the same swipe navigates once the palette is closed");
     };
@@ -811,6 +827,7 @@ fn trackpad_swipe_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
 fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
+        view.preferences.swipe_navigation = true;
         assert!(view.swipe_navigation_allowed());
         view.route_history.open(Route::Settings);
         assert!(!view.swipe_navigation_allowed());

@@ -76,3 +76,26 @@ fn diagram_preview_copy_resolves_in_every_language() {
     }
     assert_eq!(rust_i18n::t!("app.markdown.view_diagram", locale = "en").to_string(), "View diagram");
 }
+
+#[test]
+fn swipe_navigation_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in ["app.navigation.swipe_back_to", "app.navigation.swipe_forward_to"] {
+            let text = rust_i18n::t!(key, locale = locale, thread = "Demo thread").to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+            assert!(text.contains("Demo thread"), "{locale}/{key} dropped the thread name");
+        }
+    }
+    assert_eq!(
+        rust_i18n::t!("app.navigation.swipe_back_to", locale = "en", thread = "Demo").to_string(),
+        "Back to Demo"
+    );
+    assert_eq!(
+        rust_i18n::t!("app.navigation.swipe_forward_to", locale = "en", thread = "Demo").to_string(),
+        "Forward to Demo"
+    );
+}

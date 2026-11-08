@@ -16,6 +16,7 @@ pub(super) struct ShortcutSettingsProps {
     pub(super) cli_shortcuts_available: bool,
     pub(super) message: Option<String>,
     pub(super) vim_navigation: bool,
+    pub(super) swipe_navigation: bool,
 }
 
 impl ShortcutSettingsProps {
@@ -35,6 +36,7 @@ impl ShortcutSettingsProps {
                 .is_some(),
             message: view.shortcut_message.clone(),
             vim_navigation: view.preferences.vim_navigation,
+            swipe_navigation: view.preferences.swipe_navigation,
         }
     }
 }
@@ -191,6 +193,22 @@ impl DesktopView {
                 }),
             colors,
         ));
+        // Same English-literal rule as the vim toggle above: settings rows
+        // stay untranslated until full native-quality translations ship.
+        let swipe_group = settings_group_box("Trackpad navigation".to_string(), colors).child(settings_row(
+            "Swipe navigation".to_string(),
+            "Navigate thread history with a two-finger swipe or horizontal scroll. Turn off to disable trackpad navigation completely.".to_string(),
+            gpui_kit::component::switch::Switch::new("swipe-navigation")
+                .accessibility_label("Swipe navigation".to_string())
+                .checked(props.swipe_navigation)
+                .on_click({
+                    let view = view.clone();
+                    move |_, _: &mut Window, cx: &mut App| {
+                        view.update(cx, |view, cx| view.toggle_swipe_navigation(cx));
+                    }
+                }),
+            colors,
+        ));
         // The experimental toggle sits below the shortcut table so existing
         // rows keep their positions (headed tests click them unscrolled).
         div()
@@ -203,6 +221,7 @@ impl DesktopView {
                 group,
             ))
             .child(accessible_group_box("vim-navigation-group", "Vim navigation (experimental)".to_string(), vim_group))
+            .child(accessible_group_box("swipe-navigation-group", "Trackpad navigation".to_string(), swipe_group))
             .into_any_element()
     }
 
@@ -218,6 +237,16 @@ impl DesktopView {
         self.preferences.vim_navigation = !self.preferences.vim_navigation;
         self.save_preferences();
         bootstrap::apply_vim_navigation(cx, self.preferences.vim_navigation);
+        cx.notify();
+    }
+
+    /// Flips swipe navigation, retiring any live arm so the pill unmounts
+    /// immediately instead of lingering to the commit attempt. Toolbar
+    /// buttons and keyboard shortcuts bypass the gate and keep working.
+    pub(super) fn toggle_swipe_navigation(&mut self, cx: &mut Context<Self>) {
+        self.preferences.swipe_navigation = !self.preferences.swipe_navigation;
+        self.save_preferences();
+        self.cancel_pending_swipe(cx);
         cx.notify();
     }
 

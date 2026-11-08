@@ -583,6 +583,12 @@ impl DesktopView {
         } else if self.file_preview.is_some() {
             self.disarm_double_escape();
             self.close_file_preview(window, cx);
+        } else if self.swipe_arming.pending_direction().is_some() {
+            // Armed swipe sits beneath every modal and panel above: those
+            // dismiss first, then the gesture state. A stale arm (overlay
+            // opened mid-arm) evaporates here instead of lingering.
+            self.disarm_double_escape();
+            self.cancel_pending_swipe(cx);
         } else if self.composer.read(cx).focus_handle(cx).is_focused(window)
             && !self.composer.read(cx).value().is_empty()
         {

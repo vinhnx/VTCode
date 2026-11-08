@@ -8,8 +8,8 @@ pub(super) use gpui_kit::component::WindowExt as _;
 pub(super) use gpui_kit::component::select::SelectEvent;
 pub(super) use gpui_kit::test::{ClickOptions, TestWindowExt};
 pub(super) use gpui_kit::{
-    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, MouseButton, NavigationDirection, TestAppContext,
-    WindowBounds, WindowOptions, point, px, size,
+    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, InputEvent, MouseButton, NavigationDirection,
+    ScrollEvent, TestAppContext, TouchPhase, WindowBounds, WindowOptions, point, px, size,
 };
 pub(super) use serde_json::json;
 
@@ -540,6 +540,7 @@ fn swipe_history_fixture(
         })
         .collect::<Vec<_>>();
     view.update(cx, |view, _| {
+        view.preferences.swipe_navigation = true;
         view.backend = Some(BackendHandle { commands });
         view.workspace = Some(workspace.clone());
         view.sessions.clone_from(&summaries);
@@ -568,6 +569,47 @@ fn scroll_swipe(window: AnyWindowHandle, dx_px: f32, dy_px: f32, cx: &mut TestAp
         window.scroll("pane-root", gpui_kit::ScrollDelta::Pixels(point(px(dx_px), px(dy_px))), cx);
     })
     .unwrap();
+}
+
+/// Full-path scroll dispatch with an explicit gesture phase: `window.scroll`
+/// always sends `Moved`, so finger-lift (`Ended`) and gesture-abort
+/// (`Cancelled`) commits need this helper. The body-level swipe listener
+/// spans the window, so the viewport center always lands inside it.
+fn scroll_swipe_with_phase(
+    window: AnyWindowHandle,
+    dx_px: f32,
+    dy_px: f32,
+    phase: TouchPhase,
+    cx: &mut TestAppContext,
+) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.viewport_size();
+        let position = point(viewport.width * 0.5, viewport.height * 0.5);
+        let _dispatched = window.dispatch_event(
+            ScrollEvent {
+                position,
+                delta: gpui_kit::ScrollDelta::Pixels(point(px(dx_px), px(dy_px))),
+                touch_phase: phase,
+                modifiers: window.modifiers(),
+                ..Default::default()
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
+/// Advances the background clock past the swipe settle delay and drains the
+/// resulting commit task. Deterministic: no wall-clock sleep. The clock
+/// advance runs outside `cx.update`: it polls newly-ready tasks inline, and
+/// the commit task borrows the app itself.
+fn settle_swipe_commit(cx: &mut TestAppContext) {
+    let background = cx.update(|cx| cx.background_executor().clone());
+    background.advance_clock(super::navigation_history::SWIPE_COMMIT_DELAY + Duration::from_millis(1));
+    cx.run_until_parked();
 }
 
 fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
@@ -705,6 +747,7 @@ mod shortcuts_editor;
 mod slash_options;
 mod startup_interactions;
 mod storage_settings;
+mod swipe_navigation_debounce;
 mod tasks_viewer;
 mod theme_picker;
 mod themes_transcript;

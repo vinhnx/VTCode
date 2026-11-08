@@ -5,11 +5,9 @@ impl DesktopView {
     /// Native window title: the selected thread title, or the app name when
     /// no thread is selected or its title is blank.
     pub(super) fn window_title(&self) -> &str {
-        self.sessions
-            .iter()
-            .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
-            .and_then(|session| session.title.as_deref())
-            .filter(|title| !title.trim().is_empty())
+        self.selected_session_id
+            .as_deref()
+            .and_then(|id| self.session_title(id))
             .unwrap_or(app::NAME)
     }
 }
@@ -220,16 +218,16 @@ impl Render for DesktopView {
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|view, _, _, cx| {
-                    if view.swipe_navigation_allowed() {
-                        view.navigate_back(cx);
+                    if view.swipe_navigation_allowed() && view.swipe_direction_available(NavigationDirection::Back) {
+                        view.arm_pending_swipe(NavigationDirection::Back, cx);
                     }
                 }),
             )
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Forward),
                 cx.listener(|view, _, _, cx| {
-                    if view.swipe_navigation_allowed() {
-                        view.navigate_forward(cx);
+                    if view.swipe_navigation_allowed() && view.swipe_direction_available(NavigationDirection::Forward) {
+                        view.arm_pending_swipe(NavigationDirection::Forward, cx);
                     }
                 }),
             )
@@ -362,6 +360,11 @@ impl Render for DesktopView {
             }
         } else {
             body = body.child(main);
+        }
+        // Armed-swipe pill paints beneath the modals: a modal opening mid-arm
+        // blocks the commit via the guard re-check, and the arm evaporates.
+        if self.swipe_arming.pending_direction().is_some() {
+            body = body.child(self.render_swipe_navigation_overlay(cx));
         }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));

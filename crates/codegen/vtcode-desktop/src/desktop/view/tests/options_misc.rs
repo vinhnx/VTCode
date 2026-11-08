@@ -594,6 +594,8 @@ fn trackpad_swipe_over_open_browser_does_not_navigate(cx: &mut TestAppContext) {
         );
     })
     .unwrap();
+    assert!(requests.try_recv().is_err(), "the swipe arms instead of navigating");
+    settle_swipe_commit(cx);
     let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
         panic!("closing the browser must re-arm background swipe navigation");
     };
