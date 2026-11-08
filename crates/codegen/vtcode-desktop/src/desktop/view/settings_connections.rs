@@ -53,6 +53,7 @@ impl DesktopView {
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
+        let colors = cx.theme().colors;
         let service_info = props.service_info.as_ref();
         let service_connected = service_info.is_some();
         let service_status = if service_connected {
@@ -92,7 +93,7 @@ impl DesktopView {
                 .min_w_0()
                 .child(row_description(
                     rust_i18n::t!("app.settings.connections.local_service_unavailable").to_string(),
-                    &cx.theme().colors,
+                    &colors,
                 ))
                 .into_any_element()
         };
@@ -114,7 +115,7 @@ impl DesktopView {
                 accessible_group_box(
                     "terminal-settings-group",
                     group_title.clone(),
-                    settings_group_box(group_title, &cx.theme().colors)
+                    settings_group_box(group_title, &colors)
                         .child(settings_row(
                             rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string(),
                             command.clone(),
@@ -128,7 +129,7 @@ impl DesktopView {
                                         super::super::notifications::copied_to_clipboard(window, cx);
                                     }
                                 }),
-                            &cx.theme().colors,
+                            &colors,
                         ))
                         .child(settings_row(
                             terminal_row_title.clone(),
@@ -139,18 +140,14 @@ impl DesktopView {
                                 .accessibility_label(terminal_row_title)
                                 .menu_max_h(px(320.))
                                 .w(px(240.)),
-                            &cx.theme().colors,
+                            &colors,
                         )),
                 )
             })
             .child(accessible_group_box(
                 "local-service-settings-group",
                 rust_i18n::t!("app.settings.connections.local_service").to_string(),
-                settings_group_box(
-                    rust_i18n::t!("app.settings.connections.local_service").to_string(),
-                    &cx.theme().colors,
-                )
-                .child(
+                settings_group_box(rust_i18n::t!("app.settings.connections.local_service").to_string(), &colors).child(
                     div()
                         .id("local-service-details")
                         .test_support()

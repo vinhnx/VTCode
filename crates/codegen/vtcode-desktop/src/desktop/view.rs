@@ -300,7 +300,7 @@ fn provider_auth_guidance(configuration: Option<&ConfigurationSnapshot>) -> Stri
         .map(|snapshot| snapshot.credential_setup_command.trim())
         .filter(|command| !command.is_empty())
         .unwrap_or("vtcode auth");
-    if configuration.and_then(|snapshot| snapshot.secret_store.as_ref()).is_some() {
+    if configuration.is_some_and(|snapshot| snapshot.secret_store.is_some()) {
         format!(
             "{PROVIDER_AUTH_GUIDANCE_PREFIX} Save your API key in Settings → VT Code → Provider to reconnect. Terminal alternative: run `{setup}`, then choose Reload CLI settings in Settings → VT Code."
         )

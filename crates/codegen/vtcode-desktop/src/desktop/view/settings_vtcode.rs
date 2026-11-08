@@ -35,10 +35,7 @@ impl VtcodeSettingsProps {
                 .configuration
                 .as_ref()
                 .map_or_else(String::new, |configuration| configuration.model.clone()),
-            secret_store: view
-                .configuration
-                .as_ref()
-                .and_then(|configuration| configuration.secret_store.clone()),
+            secret_store: view.secret_store_info().cloned(),
             credential_setup_command: view
                 .configuration
                 .as_ref()

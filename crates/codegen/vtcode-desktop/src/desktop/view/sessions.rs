@@ -424,6 +424,11 @@ impl DesktopView {
         self.configuration.as_ref().and_then(|config| config.session_options.as_ref())
     }
 
+    /// Borrowed secret-store info, once the service has discovered it.
+    pub(super) fn secret_store_info(&self) -> Option<&protocol::SecretStoreInfo> {
+        self.configuration.as_ref().and_then(|config| config.secret_store.as_ref())
+    }
+
     /// Refresh the cached session options after a session boundary while Full
     /// access was active. The mode is session-only: the service restores the
     /// prior mode, so the client re-discovers to stay in sync.

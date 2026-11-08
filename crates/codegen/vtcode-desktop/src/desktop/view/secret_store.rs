@@ -122,11 +122,7 @@ impl DesktopView {
         }
         // Ignore renders that predate a provider switch; the fresh form
         // carries the new target.
-        let expected = self
-            .configuration
-            .as_ref()
-            .and_then(|configuration| configuration.secret_store.as_ref())
-            .map(|info| info.provider.as_str());
+        let expected = self.secret_store_info().map(|info| info.provider.as_str());
         if expected != Some(provider.as_str()) {
             return;
         }

@@ -596,23 +596,22 @@ impl DesktopView {
     /// zen option cluster.
     fn render_policy_button(&self, cx: &Context<Self>) -> Button {
         let permission_mode = self.session_options().map(|options| options.permission_mode);
-        let (policy, policy_label) = match permission_mode {
-            Some(protocol::PermissionMode::Ask) => {
+        let sandbox = self.configuration.as_ref().and_then(|config| config.sandbox.as_deref());
+        let (policy, policy_label) = match (permission_mode, sandbox) {
+            (Some(protocol::PermissionMode::Ask), _) => {
                 (rust_i18n::t!(i18n::COMPOSER_PERMISSION_ASK).to_string(), "Ask".to_owned())
             }
-            Some(protocol::PermissionMode::AutoApproveCommands) => {
+            (Some(protocol::PermissionMode::AutoApproveCommands), _) => {
                 (rust_i18n::t!(i18n::COMPOSER_PERMISSION_AUTO).to_string(), "Auto".to_owned())
             }
-            Some(protocol::PermissionMode::FullAccess) => {
+            (Some(protocol::PermissionMode::FullAccess), _) => {
                 (rust_i18n::t!(i18n::COMPOSER_PERMISSION_FULL).to_string(), "Full access".to_owned())
             }
-            None => match self.configuration.as_ref().and_then(|config| config.sandbox.clone()) {
-                Some(policy) => (policy.clone(), policy),
-                None => (
-                    rust_i18n::t!("app.composer.permissions_unavailable").to_string(),
-                    rust_i18n::t!("app.composer.policy").to_string(),
-                ),
-            },
+            (None, Some(policy)) => (policy.to_owned(), policy.to_owned()),
+            (None, None) => (
+                rust_i18n::t!("app.composer.permissions_unavailable").to_string(),
+                rust_i18n::t!("app.composer.policy").to_string(),
+            ),
         };
         let (permission_icon, permission_icon_color) =
             composer_controls::permission_indicator(permission_mode, cx.theme().colors);
