@@ -5,8 +5,8 @@ diagram preview. It is third-party code, synced from upstream, not maintained
 here.
 
 - Package: `pele` 1.13.0 (MIT, © kepano / Obsidian)
-- Source: https://registry.npmjs.org/pele/-/pele-1.13.0.tgz
-- Upstream repo: https://github.com/obsidianmd/pele
+- Source: <https://registry.npmjs.org/pele/-/pele-1.13.0.tgz>
+- Upstream repo: <https://github.com/obsidianmd/pele>
 - File: `pele.global.js` (browser global `pele`: `render`, `mount`, `PeleError`)
 - SHA-256 (`pele.global.js`):
   `0b0a46c57a5a6971670c09f5ec4066705bd78505f90fd11adf6260325efa0910`
