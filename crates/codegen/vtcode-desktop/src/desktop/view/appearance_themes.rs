@@ -1,10 +1,14 @@
-//! Custom theme management: staged editor, saved-theme list, and persistence.
+//! Custom theme management: folded section, staged editor, saved-theme list,
+//! and persistence.
 //!
 //! A custom theme is the same seven-seed palette a built-in row carries, so it
 //! resolves through the shared derivation in [`themes::apply_palette`] and
-//! inherits every WCAG floor. The editor is inline (like the shortcuts editor)
-//! rather than an overlay: no scrim, focus trap, or overlay ordering is needed,
-//! and Escape returns through `go_route_back` like any other staged edit.
+//! inherits every WCAG floor. The section is a disclosure that starts folded,
+//! keeping the Appearance page focused on the built-in palettes; expanding it
+//! mounts one card holding the description, the saved rows, and the inline
+//! editor. The editor is inline (like the shortcuts editor) rather than an
+//! overlay: no scrim, focus trap, or overlay ordering is needed, and Escape
+//! returns through `go_route_back` like any other staged edit.
 
 use super::*;
 use gpui_kit::Hsla;
@@ -99,6 +103,9 @@ pub(super) struct CustomThemeState {
     /// picker change streams, which would freeze the live preview.
     pub _subscriptions: Vec<Subscription>,
     pub draft: Option<CustomThemeDraft>,
+    /// Disclosure state for the section; starts folded so the Appearance page
+    /// leads with the built-in palettes and the saved-theme list stays opt-in.
+    pub expanded: bool,
 }
 
 impl CustomThemeState {
@@ -139,6 +146,7 @@ impl CustomThemeState {
             pickers,
             _subscriptions: subscriptions,
             draft: None,
+            expanded: false,
         }
     }
 }
@@ -164,14 +172,28 @@ impl DesktopView {
         self.theme_editor.draft.is_some()
     }
 
+    /// Fold or unfold the saved-theme section. The editor lives inside the body,
+    /// so folding closes it exactly like the Cancel button: an interior layer
+    /// that is no longer visible must not keep consuming Back presses or make a
+    /// later dismiss prompt name an editor nobody can see.
+    pub(super) fn toggle_custom_themes_section(&mut self, cx: &mut Context<Self>) {
+        self.theme_editor.expanded = !self.theme_editor.expanded;
+        if !self.theme_editor.expanded {
+            self.cancel_custom_theme_editor(cx);
+        }
+        cx.notify();
+    }
+
     /// Route-level settings tab selection shared by the rail, the command
     /// palette, and keyboard navigation. A staged custom theme is page-local,
-    /// so leaving Appearance discards it.
+    /// so leaving Appearance discards it and folds the section back to its
+    /// default.
     pub(super) fn select_settings_tab(&mut self, tab: settings::SettingsTab) {
         self.settings_tab = tab;
         self.config_page_open = false;
         if tab != settings::SettingsTab::Appearance {
             self.theme_editor.draft = None;
+            self.theme_editor.expanded = false;
         }
     }
 
@@ -198,6 +220,10 @@ impl DesktopView {
         cx: &mut Context<Self>,
     ) {
         self.theme_editor.draft = Some(CustomThemeDraft { editing_id, seeds, error: None });
+        // Opening an editor from any entry point (Edit row, keyboard action,
+        // tests) needs its host section unfolded, or the draft would be staged
+        // behind a folded header.
+        self.theme_editor.expanded = true;
         self.theme_editor
             .name_input
             .update(cx, |input, cx| input.set_value(name, window, cx));
@@ -311,6 +337,11 @@ impl DesktopView {
         }
     }
 
+    /// The Appearance section is a disclosure: a header row that stays visible,
+    /// with the saved-theme list, editor, and New theme action inside the card
+    /// that only mounts when expanded. Folding closes the editor like Cancel, so
+    /// no draft is ever left staged behind a hidden body (Back and route
+    /// dismisses must never consume a press for an editor nobody can see).
     pub(super) fn render_custom_themes_group_content(
         props: &CustomThemesProps,
         view: Entity<Self>,
@@ -321,39 +352,72 @@ impl DesktopView {
         let theme = cx.theme().clone();
         let colors = &theme.colors;
         let title = rust_i18n::t!("app.appearance.custom_themes").to_string();
-        let mut group = settings_group_box(title.clone(), colors)
+        let expanded = props.expanded;
+        let toggle_label = format!(
+            "{} {title}",
+            rust_i18n::t!(if expanded {
+                "app.transcript.collapse"
+            } else {
+                "app.transcript.expand"
+            })
+        );
+        let header = desktop_button("custom-themes-toggle")
+            .accessibility_label(toggle_label)
+            .toggled(expanded)
+            .ghost()
+            .w_full()
+            .px_0()
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(group_box_title(title.clone(), colors))
+                    .child(transcript_chevron_lane(expanded).text_color(colors.muted_foreground)),
+            )
+            .on_click({
+                let view = view.clone();
+                move |_, _: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| view.toggle_custom_themes_section(cx));
+                }
+            });
+        // A default (Normal) group is a transparent column with no fill, border,
+        // or padding, and flex `gap` only spaces children *between* each other.
+        // So the folded section (one child) costs exactly the header row, and
+        // expanding adds `gap_3` of air above the card. Routing the header
+        // through Kit's `title` slot instead would always mount the empty child
+        // column and pay one gap for it (44px folded instead of 32px).
+        let section = GroupBox::new()
+            .gap_3()
+            .child(header)
+            .when(expanded, |section| section.child(Self::render_custom_themes_body(props, view, cx)));
+        accessible_group_box("appearance-custom-themes-group", title, section)
+    }
+
+    /// Expanded content: description, staged editor, saved rows, and the New
+    /// theme action share one card surface, so the editor and the list read as
+    /// parts of the same section rather than nested boxes.
+    fn render_custom_themes_body(props: &CustomThemesProps, view: Entity<Self>, cx: &mut App) -> AnyElement {
+        let theme = cx.theme().clone();
+        let colors = &theme.colors;
+        let mut body = settings_group_box_untitled(colors)
             .child(row_description(rust_i18n::t!("app.appearance.custom_themes_description").to_string(), colors));
         if let Some(draft) = props.draft.as_ref() {
-            group = group.child(Self::render_custom_theme_editor_content(draft, colors, props, view.clone(), cx));
+            body = body.child(Self::render_custom_theme_editor_content(draft, colors, props, view.clone(), cx));
         }
         if props.custom_themes.is_empty() {
             if props.draft.is_none() {
-                group = group
+                body = body
                     .child(row_description(rust_i18n::t!("app.appearance.custom_themes_empty").to_string(), colors));
             }
         } else {
-            group = group.child(
-                div()
-                    .id("custom-themes-list")
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(title.clone())
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .w_full()
-                    .children(props.custom_themes.iter().map(|theme| {
-                        Self::render_custom_theme_row_content(
-                            theme,
-                            colors,
-                            props.theme_id == theme.id,
-                            view.clone(),
-                            cx,
-                        )
-                    })),
-            );
+            body = body.children(props.custom_themes.iter().map(|theme| {
+                Self::render_custom_theme_row_content(theme, colors, props.theme_id == theme.id, view.clone(), cx)
+            }));
         }
-        group = group.child(
+        body.child(
             desktop_button("custom-theme-new")
                 .icon(IconName::Plus)
                 .label(rust_i18n::t!("app.appearance.custom_theme_new").to_string())
@@ -363,8 +427,8 @@ impl DesktopView {
                         view.update(cx, |view, cx| view.open_custom_theme_editor(window, cx));
                     }
                 }),
-        );
-        accessible_group_box("appearance-custom-themes-group", title, group)
+        )
+        .into_any_element()
     }
 
     fn render_custom_theme_row_content(
@@ -504,6 +568,8 @@ impl DesktopView {
             rust_i18n::t!("app.appearance.custom_theme_new").to_string()
         };
         let name_label = rust_i18n::t!("app.appearance.custom_theme_name").to_string();
+        // The editor lives inside the section card, so it owns no chrome of its
+        // own: a plain column separated by the card's gap.
         div()
             .id("custom-theme-editor")
             .test_support()
@@ -511,11 +577,6 @@ impl DesktopView {
             .flex_col()
             .gap_3()
             .w_full()
-            .p_3()
-            .rounded_lg()
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.popover)
             .child(row_title(header, colors))
             .child(
                 div()
@@ -646,6 +707,7 @@ pub(super) struct CustomThemesProps {
     pub(super) theme_id: String,
     pub(super) name_input: Entity<InputState>,
     pub(super) pickers: Vec<Entity<ColorPickerState>>,
+    pub(super) expanded: bool,
 }
 
 impl CustomThemesProps {
@@ -658,6 +720,7 @@ impl CustomThemesProps {
             theme_id: view.theme_id.clone(),
             name_input: view.theme_editor.name_input.clone(),
             pickers: view.theme_editor.pickers.clone(),
+            expanded: view.theme_editor.expanded,
         }
     }
 }

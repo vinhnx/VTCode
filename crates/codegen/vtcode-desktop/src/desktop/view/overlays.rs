@@ -165,8 +165,10 @@ impl DesktopView {
             self.shortcuts_editing = false;
             self.shortcut_message = None;
         }
-        // A staged custom theme is page-local too; reopening always starts fresh.
+        // A staged custom theme is page-local too; reopening always starts fresh
+        // and folded.
         self.theme_editor.draft = None;
+        self.theme_editor.expanded = false;
     }
 
     /// Focus the entry point of a route: the panel focus for panels, the

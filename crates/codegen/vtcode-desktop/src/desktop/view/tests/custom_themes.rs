@@ -17,6 +17,112 @@ fn set_name(view: &Entity<DesktopView>, name: &str, window: &mut gpui_kit::Windo
     });
 }
 
+/// The section starts folded: the Appearance page leads with the built-in
+/// palettes, and the saved list, the New theme action, and the editor only
+/// mount once the header is expanded. Folding closes the editor like Cancel.
+#[gpui_kit::test]
+fn custom_themes_section_starts_collapsed_and_toggles(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        open_appearance(window, &view, cx);
+        assert!(!view.read(cx).theme_editor.expanded, "the section defaults to folded");
+        assert!(window.try_find("custom-themes-toggle").is_some(), "the header stays visible");
+        assert!(window.try_find("custom-theme-new").is_none(), "the body is unmounted while folded");
+        assert!(window.try_find("appearance-custom-themes-group").is_some());
+        let collapsed_height = window.find("appearance-custom-themes-group").bounds().size.height;
+
+        window.click("custom-themes-toggle", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).theme_editor.expanded);
+        assert!(window.try_find("custom-theme-new").is_some(), "expanding mounts the body");
+        let expanded_height = window.find("appearance-custom-themes-group").bounds().size.height;
+        assert!(
+            expanded_height > collapsed_height,
+            "the expanded section grows past its header row ({expanded_height:?} vs {collapsed_height:?})"
+        );
+        // Folded, the section is the header row alone. Asserting the exact
+        // equality (not a magic ceiling) is what catches a phantom gap: Kit's
+        // `title` slot would have added one `gap_3` under the header.
+        let header_height = window.find("custom-themes-toggle").bounds().size.height;
+        assert_eq!(
+            collapsed_height, header_height,
+            "the folded section must be exactly its header row, with no phantom gap"
+        );
+
+        view.update(cx, |view, cx| view.open_custom_theme_editor(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).theme_editor.draft.is_some());
+
+        // Folding again closes the editor as Cancel does: no invisible layer
+        // survives to swallow the next Back press.
+        window.click("custom-themes-toggle", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).theme_editor.expanded);
+        assert!(window.try_find("custom-theme-new").is_none(), "collapsing unmounts the body");
+        assert!(!view.read(cx).custom_theme_editor_open(), "collapsing ends the hidden draft");
+
+        // Reopening starts fresh, not on the discarded palette.
+        window.click("custom-themes-toggle", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("custom-theme-new").is_some());
+        assert!(window.try_find("custom-theme-editor").is_none(), "the cancelled draft stays closed");
+    })
+    .unwrap();
+}
+
+/// The regression this guards: folding used to keep the draft, so Back consumed
+/// one press cancelling an editor the user could not see. Folding must leave no
+/// interior layer, so Back goes straight to the route-level step.
+#[gpui_kit::test]
+fn folding_the_section_leaves_no_back_consuming_layer(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        open_appearance(window, &view, cx);
+        // Start a draft, then fold it away.
+        view.update(cx, |view, cx| view.open_custom_theme_editor(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).custom_theme_editor_open());
+        view.update(cx, |view, cx| view.toggle_custom_themes_section(cx));
+        window.render_frame(cx);
+        assert!(!view.read(cx).custom_theme_editor_open(), "folding cancelled the hidden draft");
+
+        // Back now closes Settings in one press instead of eating a press on the
+        // invisible editor.
+        let moved = view.update(cx, |view, cx| view.go_route_back(window, cx));
+        window.render_frame(cx);
+        assert!(moved);
+        assert!(view.read(cx).current_route() != Route::Settings, "Back closed the route");
+    })
+    .unwrap();
+}
+
+/// Opening the editor from a folded header unfolds the section so the draft is
+/// never staged behind a closed disclosure, and leaving Appearance folds it back.
+#[gpui_kit::test]
+fn opening_the_custom_theme_editor_unfolds_the_section(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        open_appearance(window, &view, cx);
+        assert!(!view.read(cx).theme_editor.expanded);
+        view.update(cx, |view, cx| view.open_custom_theme_editor(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).theme_editor.expanded, "the editor needs its host unfolded");
+        assert!(window.try_find("custom-theme-editor").is_some());
+
+        // Leaving Appearance drops the draft and folds the section back.
+        view.update(cx, |view, _| {
+            view.select_settings_tab(super::super::settings::SettingsTab::VtCode);
+            view.select_settings_tab(super::super::settings::SettingsTab::Appearance);
+        });
+        window.render_frame(cx);
+        assert!(!view.read(cx).theme_editor.expanded, "returning to Appearance folds the section again");
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn custom_theme_saves_applies_persists_and_reloads(cx: &mut TestAppContext) {
     let prefs_path = crate::desktop::preferences::install_test_preferences_path();
@@ -235,7 +341,6 @@ fn deleting_the_active_custom_theme_falls_back_to_the_mode_default(cx: &mut Test
             assert!(view.preferences.light_theme.is_none());
             assert!(view.preferences.dark_theme.is_none());
         }
-        assert!(window.try_find("custom-themes-list").is_none());
         assert!(window.try_find("custom-theme-apply-custom-ocean-night").is_none());
     })
     .unwrap();
