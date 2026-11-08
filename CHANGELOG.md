@@ -5,6 +5,83 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.6 - 2026-11-08
+
+### Highlights
+
+#### Bug Fixes
+
+- Keep trash tests out of the real ~/.Trash (84115cbb)
+- Unify nav glyph size and localize custom themes (a40ffb70)
+- Answer recorded tool calls abandoned by dispatch (d47a588d)
+- Resolve dangling symlinks instead of treating them as missing (d0c61b4c)
+- Fail closed on unresolvable additional-permission roots (afc4afdb)
+- Validate custom theme ids and contrast on load (a69fabe1)
+- Harden event log sync, rollback, and separator handling (34e324e8)
+- Make the quick-profile gate pass again (d93f8262)
+- Harden diagram previews from review (CSP, UTF-16 gate, sweep) (2f01c6e2)
+- Generate license notices for the whole workspace (0c0c3387)
+- Full-size maximized launch, redeliver windowless handoffs (0e120d22)
+- Bound outbound clients, jitter all retry backoffs (d76edf16)
+- Announce release notes once per release, inline on desktop (0b6e65b0)
+- Stop per-frame native calls and clones in settings (4ea6955e)
+- Validate nested agent temperature ranges (aa308ba3)
+
+#### Documentation
+
+- Tighten overview install usage and docs index flow (23fd1555)
+- Component review, maintainer notes, module guide (30f41297)
+- Preview editing review notes and module guide (73dc680b)
+- Fix markdown lint in Pele provenance and webmcp notes (d096b319)
+- Re-confirm dropdown verdict, fix stale run-cluster prose (d71c72b2)
+- Regenerate field reference for 0.181.5 (145946e0)
+- Tighten overview, usage, desktop, and documentation prose (75ff45c6)
+
+#### Features
+
+- Open latest changelog from update notification (e2f76d6c)
+- Post-update what's-new moment and changelog deeplink verb (b6819a6b)
+- Keep approved plan visible in sidebar for the plan session (ff186b6c)
+- Add inline TODO tracker viewers synced via typed tracker.updated events (6a61db6d)
+- Guarded outside-click dismiss, launch-at-login, zen attach (281bdc84)
+- Empty actions, modal focus traps, title-bar responsive collapse (d938ceed)
+- Main-relative title-bar collapse with sidebar rail yield (d3ef93df)
+- Markdown preview toggle, highlighted source, header toolbar (b814db54)
+- Editable markdown preview with Cmd+S save (32ba1cd0)
+- Host settings surface on Kit Settings for wide viewports (d56380d6)
+- Preview Mermaid diagrams in the browser via Pele (b774d09a)
+- Reorder settings rail and add About page (76e6f314)
+- Render mermaid diagrams in preview dialog via Pele (ad7bf761)
+- Render mermaid diagrams inline via vendored Pele (c0bae575)
+- Glass button tier and inline reverse search (bde97db4)
+- Roll glass primaries out to popover and secondary seats (8dd244f1)
+- Debounced swipe navigation, off by default (34d85666)
+- Extend swipe navigation gating and reset coverage (1f76514e)
+
+### Other Changes
+
+#### Performance
+
+- Apply memory-latency lessons to indexer and memory query (32fa921a)
+- Apply sysinfo read-and-apply lessons to tree, digests, walker docs (3d5568ad)
+
+#### Refactors
+
+- Drop shimmer from composer run button (314f929a)
+- Share license-viewer row builder across settings pages (5001cf89)
+- Secret-store accessor, theme hoist, policy-match flatten (8b516bf2)
+- Hoist repeated theme lookups in transcript render (6b0c47aa)
+- Narrow module-local visibilities to private (b56f9f55)
+- Split handle_backend_event into backend_events/handle.rs (9cc6b00e)
+- Drop redundant Fuse; document async completion-state rules (10fea64a)
+- Centralize byte-length heuristic in vtcode-commons (b0bab3c6)
+- Deduplicate timeout resolution, harden converters (46942c74)
+- Canonicalize duplicated TTY and LLM contracts (ba99d974)
+
+#### Tests
+
+- Trap and escape pins for every modal (f33b3ef9)
+
 ## 0.181.5 - 2026-11-07
 
 ### Highlights
