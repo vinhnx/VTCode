@@ -492,13 +492,21 @@ fn emitted_model_tool_schema_fits_within_first_request_budget() {
     // parameter descriptions (trimming only long tails), because models
     // that follow tool definitions literally act on the whole text. The
     // cap is the harness-tax gate (HarnessTax): keep the emitted schema
-    // envelope tight so first-call fixed overhead stays low. Measured
-    // ~2,336 on the Codex-4 default profile with public decision recording
-    // in the initial catalog and discovery surface. Retain a bounded
-    // 2,400-token envelope.
+    // envelope tight so first-call fixed overhead stays low.
+    //
+    // Measured 2,470 once `monitor_filter` joined the exec schema. That
+    // parameter costs ~73 fixed tokens but removes full-output polls on
+    // long quiet commands, so it pays for itself within a single run; the
+    // ceiling moves to 2,500 to admit it while keeping the envelope bound.
+    // The previous 2,400 cap had drifted to 2,397 measured (3 tokens of
+    // headroom), so any new parameter would have failed regardless of how
+    // tersely it was documented — raise the cap only with a measured
+    // number, never to silence a specific failure.
     assert!(
-        total_tokens <= 2_400,
-        "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 2_400"
+        total_tokens <= 2_500,
+        "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 2_500. \
+         This is a harness-tax budget: trim or merge parameter descriptions instead of raising the cap \
+         without a measured rationale."
     );
 }
 
