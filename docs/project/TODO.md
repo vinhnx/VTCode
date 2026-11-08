@@ -22,9 +22,6 @@ gpui apps for other plqtforms
 
 gpui-fast-linux, gpui-fast-windows, gpui-fast-web, gpui-fast-macos
 
----
-
-find every invariant my app relies on but doesn't explicitly enforce
 
 ---
 
@@ -32,66 +29,15 @@ gpui-web ?
 
 ---
 
----
-implement a simple markdown preview for desktop app.
-
----
-
 implement standalone terminal for desktop app.
-
---
----
-
-https://github.com/longbridge/gpui-kit/releases/tag/v0.9.0
 
 ---
 
 contribute back to OSS with learning from this project. check gotchas and decicions.
 
 ---
----
-
-note integrate pele to desktop app
-
-https://pele.run/
-
----
-
----
 
 build and replace/revamp current desktop app components where suitable https://gpui-kit.com/component/dropdown_button/
-
-
----
-
-https://gpui-kit.com/component/toolbar/
-
----
-
-https://gpui-kit.com/component/title-bar/
-
----
-
-improve existing desktop shimmer https://gpui-kit.com/component/shimmer/
-
----
-
-revamp existing manual build settings/config screen with https://gpui-kit.com/component/settings/ for more consistency
-
-
----
---
-
-https://gpui-kit.com/component/editor/
-
----
----
-
-https://gpui-kit.com/component/empty/
-
----
-
-https://gpui-kit.com/component/focus-trap/
 
 ---
 
@@ -131,5 +77,3 @@ phase 3 - only on demand signal: linux preview tarball, no auto-update, document
 verify: manual QA checklist (WCAG AA 4.5:1, 20 locales, keyboard/focus/Escape, trash fail-closed, launch argv boundary).
 
 non-goals: no windows packaging/signing now; no auto-update for linux preview; no behavior change on mac.
-
----
