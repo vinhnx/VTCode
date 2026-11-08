@@ -118,6 +118,7 @@ impl DesktopView {
             && self.history_page_error.is_none();
         let content = if self.pending_blank_transition() {
             let label = rust_i18n::t!(i18n::SESSION_PREPARING_NEW_THREAD).to_string();
+            let colors = cx.theme().colors;
             div()
                 .id("new-thread-pending")
                 .test_support()
@@ -127,8 +128,8 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_color(cx.theme().colors.foreground)
-                .child(shimmer_label("new-thread-pending-label", label, cx.theme().colors.foreground, cx))
+                .text_color(colors.foreground)
+                .child(shimmer_label("new-thread-pending-label", label, colors.foreground, cx))
                 .into_any_element()
         } else if empty_conversation && !self.zen_mode {
             let colors = cx.theme().colors;
@@ -201,12 +202,12 @@ impl DesktopView {
             self.render_zen_empty_state(cx)
         } else {
             let remaining_history_capacity = self.transcript.remaining_capacity();
+            let colors = cx.theme().colors;
             let mut transcript_content = div().size_full().min_h_0().flex().flex_col();
             if self.history_has_earlier || self.history_page_loading || self.history_page_error.is_some() {
                 let mut history_bar = div().w_full().flex().flex_col().items_center().gap_1().px_3().py_1();
                 if let Some(error) = &self.history_page_error {
-                    history_bar =
-                        history_bar.child(warning_alert("history-page-error", error.clone(), &cx.theme().colors));
+                    history_bar = history_bar.child(warning_alert("history-page-error", error.clone(), &colors));
                 }
                 if self.history_has_earlier && remaining_history_capacity == 0 {
                     history_bar = history_bar.child(
@@ -219,7 +220,7 @@ impl DesktopView {
                                 Marker::new()
                                     .with_variant(MarkerVariant::Separator)
                                     .text_xs()
-                                    .text_color(cx.theme().colors.muted_foreground)
+                                    .text_color(colors.muted_foreground)
                                     .content(
                                         MarkerContent::new()
                                             .text(rust_i18n::t!("app.transcript.history_limit_reached").to_string()),
@@ -248,7 +249,7 @@ impl DesktopView {
                     history_bar = history_bar.child(loading_marker_row(
                         "history-loading-label",
                         rust_i18n::t!(i18n::PALETTE_HISTORY_LOADING).to_string(),
-                        cx.theme().colors.muted_foreground,
+                        colors.muted_foreground,
                         cx,
                     ));
                 }
@@ -368,6 +369,7 @@ impl DesktopView {
             Some(NavigationDirection::Forward) => rust_i18n::t!("app.transcript.navigating_forward").to_string(),
             None => rust_i18n::t!("app.transcript.navigating").to_string(),
         };
+        let muted = cx.theme().colors.muted_foreground;
         div()
             .id("navigation-loading")
             .test_support()
@@ -380,9 +382,9 @@ impl DesktopView {
             .gap_2()
             .py_1()
             .text_xs()
-            .text_color(cx.theme().colors.muted_foreground)
-            .child(Spinner::new().small().color(cx.theme().colors.muted_foreground))
-            .child(shimmer_label("navigation-loading-label", label, cx.theme().colors.muted_foreground, cx))
+            .text_color(muted)
+            .child(Spinner::new().small().color(muted))
+            .child(shimmer_label("navigation-loading-label", label, muted, cx))
     }
 
     fn render_transcript_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -395,6 +397,7 @@ impl DesktopView {
         if !Self::transcript_row_visible(item) {
             return div().into_any_element();
         }
+        let colors = cx.theme().colors;
         let group_header = item
             .activity_group_head
             .then(|| self.transcript.activity_group(index))
@@ -448,7 +451,7 @@ impl DesktopView {
                     if self.turn_undos.get(turn_id.as_str()) == Some(&TurnUndoState::Undone) {
                         div()
                             .text_sm()
-                            .text_color(themes::muted_text(&cx.theme().colors))
+                            .text_color(themes::muted_text(&colors))
                             .child(rust_i18n::t!("app.transcript.turn_undone").to_string())
                             .into_any_element()
                     } else {
@@ -469,7 +472,7 @@ impl DesktopView {
                 let mut card = div()
                     .w_full()
                     .rounded_md()
-                    .bg(cx.theme().colors.secondary)
+                    .bg(colors.secondary)
                     .px_3()
                     .py_2()
                     .flex()
@@ -494,7 +497,7 @@ impl DesktopView {
                                         summary.child(
                                             div()
                                                 .text_xs()
-                                                .text_color(themes::muted_text(&cx.theme().colors))
+                                                .text_color(themes::muted_text(&colors))
                                                 .child(rust_i18n::t!("app.inspector.partial_diff").to_string()),
                                         )
                                     })
@@ -504,16 +507,8 @@ impl DesktopView {
                                                 .flex()
                                                 .gap_2()
                                                 .text_sm()
-                                                .child(
-                                                    div()
-                                                        .text_color(cx.theme().colors.success)
-                                                        .child(format!("+{added}")),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_color(cx.theme().colors.danger)
-                                                        .child(format!("−{deleted}")),
-                                                ),
+                                                .child(div().text_color(colors.success).child(format!("+{added}")))
+                                                .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
                                         )
                                     }),
                             )
@@ -547,7 +542,7 @@ impl DesktopView {
                             .gap_2()
                             .min_w_0()
                             .text_sm()
-                            .text_color(themes::muted_text(&cx.theme().colors))
+                            .text_color(themes::muted_text(&colors))
                             .child(div().min_w_0().flex_1().truncate().child(file.file.path.clone()))
                             .when_some(file.counts, |row, (added, deleted)| {
                                 row.child(
@@ -555,8 +550,8 @@ impl DesktopView {
                                         .flex()
                                         .flex_shrink_0()
                                         .gap_1()
-                                        .child(div().text_color(cx.theme().colors.success).child(format!("+{added}")))
-                                        .child(div().text_color(cx.theme().colors.danger).child(format!("−{deleted}"))),
+                                        .child(div().text_color(colors.success).child(format!("+{added}")))
+                                        .child(div().text_color(colors.danger).child(format!("−{deleted}"))),
                                 )
                             }),
                     );
@@ -615,7 +610,7 @@ impl DesktopView {
                         .top_0()
                         .bottom_0()
                         .w(px(2.))
-                        .bg(cx.theme().colors.accent),
+                        .bg(colors.accent),
                 )
             })
             // Transient search/deeplink tint: absolute like the rail, so the
@@ -631,7 +626,7 @@ impl DesktopView {
                         .right_0()
                         .top_0()
                         .bottom_0()
-                        .bg(cx.theme().colors.accent.opacity(0.12)),
+                        .bg(colors.accent.opacity(0.12)),
                 )
             })
             // MessageScroller owns the shared horizontal row inset. The bottom
