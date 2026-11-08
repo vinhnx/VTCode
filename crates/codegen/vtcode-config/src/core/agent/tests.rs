@@ -180,6 +180,35 @@ budget_warning_threshold = 0.5
 }
 
 #[test]
+fn test_nested_temperature_validation_matches_top_level_range() {
+    let config = AgentConfig::default();
+    assert!(config.validate_llm_params().is_ok());
+
+    for value in [0.0, 0.3, 1.0] {
+        let mut valid = AgentConfig::default();
+        valid.small_model.temperature = value;
+        valid.prompt_suggestions.temperature = value;
+        assert!(valid.validate_llm_params().is_ok(), "temperature {value} should be accepted");
+    }
+
+    for value in [-0.1, 1.5, f32::NAN] {
+        let mut invalid = AgentConfig::default();
+        invalid.small_model.temperature = value;
+        let err = invalid
+            .validate_llm_params()
+            .expect_err("small_model.temperature should be rejected");
+        assert!(err.contains("small_model.temperature"), "unexpected error: {err}");
+
+        let mut invalid = AgentConfig::default();
+        invalid.prompt_suggestions.temperature = value;
+        let err = invalid
+            .validate_llm_params()
+            .expect_err("prompt_suggestions.temperature should be rejected");
+        assert!(err.contains("prompt_suggestions.temperature"), "unexpected error: {err}");
+    }
+}
+
+#[test]
 fn test_persistent_memory_is_disabled_by_default() {
     let config = AgentConfig::default();
     assert!(!config.persistent_memory.enabled);

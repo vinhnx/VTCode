@@ -142,7 +142,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.prompt_suggestions.enabled` | `boolean` | no | `true` | Enable inline prompt suggestions in the chat composer. |
 | `agent.prompt_suggestions.model` | `string` | no | `""` | Lightweight model to use for suggestions. Leave empty to auto-select an efficient sibling of the main model. |
 | `agent.prompt_suggestions.show_cost_notice` | `boolean` | no | `true` | Whether VT Code should remind users that LLM-backed suggestions consume tokens. |
-| `agent.prompt_suggestions.temperature` | `number` | no | `0.3` | Temperature for inline prompt suggestion generation. |
+| `agent.prompt_suggestions.temperature` | `number` | no | `0.3` | Temperature for inline prompt suggestion generation (0.0-1.0). |
 | `agent.provider` | `string` | no | `"openrouter"` | Active provider for single-agent runs. |
 | `agent.reasoning_effort` | `string` | no | `"none"` | Reasoning depth for capable models (none to max). |
 | `agent.refine_prompts_enabled` | `boolean` | no | `false` | Enable prompt refinement pass before sending to LLM |
@@ -153,7 +153,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.shell_prompt_profile` | `string` | no | `"auto"` | Shell syntax profile used in model-facing command examples. This controls prompt wording only; command policy remains in the runtime. Values: auto, unix_like, powershell. |
 | `agent.small_model.enabled` | `boolean` | no | `true` | Enable small model tier for efficient operations |
 | `agent.small_model.model` | `string` | no | `""` | Provider-specific model ID for efficient operations. Leave empty to auto-select a lightweight sibling of the main model |
-| `agent.small_model.temperature` | `number` | no | `0.3` | Temperature for small model responses |
+| `agent.small_model.temperature` | `number` | no | `0.3` | Temperature for small model responses (0.0-1.0). |
 | `agent.small_model.use_for_git_history` | `boolean` | no | `true` | Enable small model for git history processing |
 | `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable small model for large file reads (>50KB) |
 | `agent.small_model.use_for_memory` | `boolean` | no | `true` | Enable small model for persistent memory classification and summary refresh |
