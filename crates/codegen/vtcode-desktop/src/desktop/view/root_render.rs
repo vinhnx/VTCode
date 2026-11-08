@@ -49,6 +49,7 @@ impl Render for DesktopView {
                     && !self.pending_blank_transition(),
                 |column| column.child(self.render_thread_header(cx.theme())),
             )
+            .when(self.release_notes_banner_visible(), |column| column.child(self.render_release_notes_banner(cx)))
             .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
                 column.child(self.render_navigation_loading(cx))
             })

@@ -24,6 +24,13 @@ impl DesktopView {
 
     pub(super) fn handle_update_status_response(&mut self, result: Value) {
         self.update_request_pending = false;
+        self.apply_update_status(result);
+    }
+
+    /// Store a status snapshot and re-derive the release-notes banner. Shared
+    /// by the status request and the acknowledgement response (which also
+    /// carries a snapshot) without touching the status-request in-flight flag.
+    pub(super) fn apply_update_status(&mut self, result: Value) {
         match serde_json::from_value::<protocol::UpdateStatusSnapshot>(result) {
             Ok(status) => {
                 self.update_status = Some(status);
@@ -34,47 +41,61 @@ impl DesktopView {
                     self.changelog_open = false;
                     self.changelog_return_focus = None;
                 }
-                // Arm the post-update "what's new" moment; the windowed
-                // backend-event entry consumes it right below, once opening
-                // has a window. Never survives past this dispatch.
-                self.whats_new_pending = self.should_show_whats_new();
+                // The release-notes banner is passive: it never steals focus
+                // or blocks input, so arming it here needs no window and
+                // survives any number of refreshes until dismissed.
+                self.release_notes_banner_visible_now = self.should_show_release_notes_banner();
             }
             Err(_) => self.error = Some(rust_i18n::t!("app.service.invalid_updates").to_string()),
         }
     }
 
-    /// Post-update "what's new" moment (TUI `seed_release_notes` parity):
-    /// show the running version's notes exactly once, the first time a
-    /// status response carries them. Consumed from the windowed event entry
-    /// after the response above is stored, so the viewer reads fresh data.
-    /// Skipped while a modal is open (the version stays unrecorded, so a
-    /// later response retries); never gated on notification toggles.
-    pub(super) fn maybe_show_pending_whats_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !std::mem::take(&mut self.whats_new_pending) {
-            return;
-        }
-        if self.changelog_open || self.about_open || self.license_viewer.is_some() {
-            return;
-        }
-        self.open_current_changelog(window, cx);
-        if self.changelog_open {
-            if let Some(status) = self.update_status.as_ref() {
-                self.preferences.notifications.last_seen_changelog_version = Some(status.current_version.clone());
-                self.preferences.save();
-            }
-        }
-    }
-
     /// Whether the stored status carries unseen notes for the running
-    /// version. Mirrors the TUI gate: versions without notes never record,
-    /// so a notes-less launch retries instead of marking seen.
-    fn should_show_whats_new(&self) -> bool {
+    /// version. The seen marker lives in the shared update cache (served as
+    /// `current_release_seen`), so notes the CLI already printed are never
+    /// repeated here, and the desktop records the same marker back. Versions
+    /// without notes never record, so a notes-less launch retries instead of
+    /// marking seen.
+    fn should_show_release_notes_banner(&self) -> bool {
         let Some(status) = self.update_status.as_ref() else {
             return false;
         };
         !status.current_release_highlights.is_empty()
-            && self.preferences.notifications.last_seen_changelog_version.as_deref()
-                != Some(status.current_version.as_str())
+            && !status.current_release_seen
+            && self.dismissed_release_notes_version.as_deref() != Some(status.current_version.as_str())
+    }
+
+    /// The banner is shown on every route (welcome, workspace, zen) because it
+    /// sits in the conversation column and owns no overlay or focus.
+    pub(super) fn release_notes_banner_visible(&self) -> bool {
+        self.release_notes_banner_visible_now
+    }
+
+    /// Dismiss the banner and mark the running version's notes seen. The
+    /// acknowledgement goes to the service so the shared cache — and the CLI —
+    /// agree this release was announced; a failed request only risks one
+    /// reminder on the next launch.
+    ///
+    /// `dismissed_release_notes_version` is the local guard: an older service
+    /// rejects `update/acknowledge` and keeps reporting the notes unseen, so
+    /// the banner must stay retired for this launch regardless of the echo.
+    pub(super) fn dismiss_release_notes_banner(&mut self, cx: &mut Context<Self>) {
+        if !self.release_notes_banner_visible_now {
+            return;
+        }
+        if let Some(status) = self.update_status.as_ref() {
+            self.dismissed_release_notes_version = Some(status.current_version.clone());
+        }
+        self.release_notes_banner_visible_now = false;
+        let _ = self.request(protocol::method::UPDATE_ACKNOWLEDGE, json!({}));
+        cx.notify();
+    }
+
+    /// Open the viewer for the running version's notes from the banner, then
+    /// retire the banner: the reader has seen what it advertised.
+    pub(super) fn view_release_notes_from_banner(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_current_changelog(window, cx);
+        self.dismiss_release_notes_banner(cx);
     }
 
     /// Announce a newly reported release exactly once per version. Runs ahead
@@ -359,6 +380,82 @@ impl DesktopView {
                                     })),
                             ),
                     ),
+            )
+            .into_any_element()
+    }
+
+    /// Passive "what's new" banner: the running version's highlights inline in
+    /// the conversation column. It never steals focus, blocks input, or covers
+    /// the launch screen — it simply occupies one row above the transcript and
+    /// stays until dismissed, so a first-launch user sees it on welcome and a
+    /// post-update user sees it on their workspace without losing their place.
+    pub(super) fn render_release_notes_banner(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let Some(status) = self.update_status.as_ref() else {
+            return div().into_any_element();
+        };
+        let highlights = &status.current_release_highlights;
+        let summary = highlights.first().map(String::as_str).unwrap_or_default();
+        let more = highlights.len().saturating_sub(1);
+        let title = rust_i18n::t!("app.changelog.banner_title", version = status.current_version.as_str()).to_string();
+        let message = if more == 0 {
+            summary.to_owned()
+        } else {
+            rust_i18n::t!("app.changelog.banner_more", summary = summary, count = more).to_string()
+        };
+        let view_label = rust_i18n::t!("app.changelog.banner_view").to_string();
+        let dismiss_label = rust_i18n::t!("app.changelog.banner_dismiss").to_string();
+
+        div()
+            .w_full()
+            .flex()
+            .justify_center()
+            .px_3()
+            .child(
+                div()
+                    .id("release-notes-banner")
+                    .test_support()
+                    // Info severity, not Alert: this is a passive announcement,
+                    // not an interruption, so it takes the same quiet
+                    // secondary+border pairing as `status_alert` without
+                    // borrowing the warning/danger tones.
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(format!("{title}. {message}"))
+                    .w_full()
+                    .max_w(px(self.content_width()))
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.secondary)
+                    .text_sm()
+                    .text_color(colors.secondary_foreground)
+                    .child(Icon::new(IconName::Info).small().text_color(colors.primary))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(div().flex_shrink_0().font_semibold().child(title))
+                            .child(div().min_w_0().truncate().child(message)),
+                    )
+                    .child(desktop_button("release-notes-open").label(view_label).ghost().small().on_click(
+                        cx.listener(|view, _, window, cx| {
+                            view.view_release_notes_from_banner(window, cx);
+                        }),
+                    ))
+                    .child(desktop_dismiss_button("release-notes-dismiss", dismiss_label).small().on_click(
+                        cx.listener(|view, _, _, cx| {
+                            view.dismiss_release_notes_banner(cx);
+                        }),
+                    )),
             )
             .into_any_element()
     }

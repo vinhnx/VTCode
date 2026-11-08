@@ -87,6 +87,9 @@ pub const WEBMCP_PAIR: &str = "webmcp/pair";
 pub const WEBMCP_STOP: &str = "webmcp/stop";
 /// Read the cached updater status (current/latest version, no network I/O).
 pub const UPDATE_STATUS: &str = "update/status";
+/// Mark the running version's release notes as seen in the shared update
+/// cache, so the CLI and desktop app never show the same release twice.
+pub const UPDATE_ACKNOWLEDGE: &str = "update/acknowledge";
 
 /// Transient UI progress for the active desktop session.
 pub const UI_PROGRESS: &str = "session/ui_progress";

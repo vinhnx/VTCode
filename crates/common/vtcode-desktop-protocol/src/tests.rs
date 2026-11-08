@@ -750,6 +750,9 @@ fn storage_dtos_round_trip_with_camel_case_keys() {
     assert_eq!(method::SESSION_DELETE, "session/delete");
     assert_eq!(method::WORKTREE_LIST, "worktree/list");
     assert_eq!(method::WORKTREE_REMOVE, "worktree/remove");
+    // The release-notes acknowledgement rides beside the cached status read.
+    assert_eq!(method::UPDATE_STATUS, "update/status");
+    assert_eq!(method::UPDATE_ACKNOWLEDGE, "update/acknowledge");
 }
 
 #[tokio::test]

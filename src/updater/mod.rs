@@ -32,6 +32,10 @@ pub(crate) use types::{
     VersionInfo,
 };
 
+/// Test seam: redirect the update cache away from the real user cache.
+#[cfg(test)]
+pub(crate) use cache::set_cache_dir_override_for_tests as set_test_update_cache_dir;
+
 /// Auto-updater for VT Code binary from GitHub Releases
 pub(crate) struct Updater {
     current_version: Version,
@@ -297,17 +301,39 @@ impl Updater {
 /// Check whether release notes should be shown for the current version.
 ///
 /// Returns `true` if the current version has not been recorded as "seen" in the
-/// update cache.
+/// update cache. A cache read failure stays quiet (`false`): the notes are a
+/// courtesy, never worth a spurious banner.
+///
+/// This is the single source of truth for "does this release still owe the
+/// user its notes?" — the TUI transcript banner and the desktop inline banner
+/// both derive from it, so one release is announced once across surfaces.
 pub(crate) fn should_show_release_notes_for_current_version() -> bool {
-    let current = match Version::parse(env!("CARGO_PKG_VERSION")) {
-        Ok(v) => v,
-        Err(_) => return false,
+    let Ok(current) = Version::parse(env!("CARGO_PKG_VERSION")) else {
+        return false;
     };
+    !current_version_notes_seen_for(&current)
+}
+
+/// Whether the running version's release notes were already announced by any
+/// VT Code surface (TUI transcript or desktop banner).
+///
+/// The marker lives in the shared update cache, so the CLI and the desktop app
+/// cannot both announce the same release. A cache read failure reports "seen":
+/// announcements are a courtesy, so an unreadable cache must stay quiet rather
+/// than risk repeating the notes on every launch.
+pub(crate) fn current_version_notes_seen() -> bool {
+    let Ok(current) = Version::parse(env!("CARGO_PKG_VERSION")) else {
+        return true;
+    };
+    current_version_notes_seen_for(&current)
+}
+
+fn current_version_notes_seen_for(version: &Version) -> bool {
     match cache::read_snapshot() {
-        Ok(snapshot) => snapshot.last_seen_version.as_ref() != Some(&current),
+        Ok(snapshot) => snapshot.last_seen_version.as_ref() == Some(version),
         Err(err) => {
             debug!("Failed to read update cache for release notes check: {err}");
-            false
+            true
         }
     }
 }
@@ -338,13 +364,27 @@ fn parse_cached_highlights(info: Option<(Version, String)>) -> Option<(Version, 
 /// its first start. Best effort: cache failures are ignored.
 pub(crate) fn seed_release_notes_for_installed_version(version: &Version, release_notes: &str) {
     let _ = cache::record_successful_check_with_notes(Some(version), false, Some(release_notes));
+    // Keep the install record apart from the check slot: a later check that
+    // reports an even newer release overwrites `latest_version`/`release_notes`
+    // and would otherwise hide the notes this version still owes the user.
+    let _ = cache::record_installed_release(version, release_notes);
     let _ = cache::clear_dismissed_version();
+}
+
+/// Record that a version's release notes have been shown.
+///
+/// Called by every surface that announced the notes: `vtcode update` (for the
+/// version it just installed, so the next launch stays quiet — the running
+/// process still reports the old `CARGO_PKG_VERSION`), the TUI transcript
+/// banner, and the desktop banner via `update/acknowledge`.
+pub(crate) fn record_version_notes_seen(version: &Version) {
+    let _ = cache::record_seen_version(version);
 }
 
 /// Record that the current version's release notes have been shown.
 pub(crate) fn record_current_version_seen() {
     if let Ok(current) = Version::parse(env!("CARGO_PKG_VERSION")) {
-        let _ = cache::record_seen_version(&current);
+        record_version_notes_seen(&current);
     }
 }
 
@@ -470,6 +510,101 @@ mod tests {
         record_current_version_seen();
         assert!(!should_show_release_notes_for_current_version(), "notes must show once, then be marked seen");
 
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn seeded_release_notes_survive_a_later_newer_check() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        // The updater installs the running version and seeds its notes, then a
+        // preflight check reports an even newer release before first launch
+        // (the common N+1 race). The installed version's notes must still be
+        // readable instead of being handed the newer release's changelog.
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        seed_release_notes_for_installed_version(&current, "### Highlights\n- Fresh feature (abc1234)\n");
+
+        let newer = Version::parse("99.0.0").expect("newer version");
+        cache::record_successful_check_with_notes(
+            Some(&newer),
+            true,
+            Some("### Highlights\n- Later feature (def5678)\n"),
+        )
+        .expect("write newer check");
+
+        let served = cached_current_release_highlights().expect("install notes survive the newer check");
+        assert_eq!(served.0, current);
+        assert_eq!(served.1, vec!["Fresh feature".to_string()]);
+        assert_eq!(cached_latest_release_highlights().map(|(version, _)| version), Some(newer));
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn seen_marker_is_per_version_so_update_can_acknowledge_the_installed_release() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        // `vtcode update` prints the new release's notes before the replaced
+        // binary exits, so it acknowledges that version explicitly while
+        // `CARGO_PKG_VERSION` is still the old one.
+        let installed = Version::parse("99.1.0").expect("installed version");
+        record_version_notes_seen(&installed);
+
+        assert!(cache::current_release_info(&Version::parse(env!("CARGO_PKG_VERSION")).expect("current")).is_none());
+        assert!(!current_version_notes_seen(), "acknowledging the new release does not mark the running one");
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn current_version_notes_seen_tracks_the_shared_marker() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        assert!(!current_version_notes_seen(), "a fresh cache reports unseen notes");
+        record_current_version_seen();
+        assert!(current_version_notes_seen(), "the shared marker records the running version");
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn seeing_an_installed_release_drops_its_cached_body() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+        // The install record bridges install time to the first announcement;
+        // once seen it must not linger as a second copy of the changelog.
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("current version");
+        seed_release_notes_for_installed_version(&current, "### Highlights\n- Fresh feature (abc1234)\n");
+        let snapshot = cache::read_snapshot().expect("snapshot");
+        assert!(snapshot.installed_release.is_some(), "install record exists before it is seen");
+
+        record_current_version_seen();
+        let snapshot = cache::read_snapshot().expect("snapshot");
+        assert!(snapshot.installed_release.is_none(), "the seen install record is dropped");
+
+        cache::set_cache_dir_override_for_tests(previous);
+    }
+
+    #[test]
+    fn an_unreadable_cache_stays_quiet_about_release_notes() {
+        // The gate and its "seen" mirror must agree on a broken cache: an
+        // announcement is a courtesy, so neither may surface one.
+        let previous =
+            cache::set_cache_dir_override_for_tests(Some(std::path::PathBuf::from("/nonexistent/vtcode-cache")));
+        assert!(current_version_notes_seen(), "an unreadable cache reports seen");
+        assert!(!should_show_release_notes_for_current_version(), "and never announces");
         cache::set_cache_dir_override_for_tests(previous);
     }
 

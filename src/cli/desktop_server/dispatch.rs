@@ -388,6 +388,13 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             let status = update_status_snapshot()?;
             Ok((serde_json::to_value(status)?, false))
         }
+        method::UPDATE_ACKNOWLEDGE => {
+            // Best-effort: the banner already rendered, so a cache write
+            // failure only risks one extra reminder next launch.
+            crate::updater::record_current_version_seen();
+            let status = update_status_snapshot()?;
+            Ok((serde_json::to_value(status)?, false))
+        }
         method::CONFIG_MODELS => {
             let (provider, model) = {
                 let agent = active_agent_config(context).await;

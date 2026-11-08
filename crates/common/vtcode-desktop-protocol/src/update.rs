@@ -33,6 +33,11 @@ pub struct UpdateStatusSnapshot {
     /// `current_release_highlights` so the "what's new" viewer can link out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_release_url: Option<String>,
+    /// Whether the running version's notes were already announced by any VT
+    /// Code surface. The marker lives in the shared update cache, so notes
+    /// shown by the CLI are not repeated by the desktop app and vice versa.
+    #[serde(default)]
+    pub current_release_seen: bool,
     /// Release channel the service follows (stable/beta/nightly).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
@@ -55,6 +60,7 @@ mod tests {
             release_highlights: vec!["Faster startup".into(), "New model picker".into()],
             current_release_highlights: vec!["Older highlight".into()],
             current_release_url: Some("https://github.com/vinhnx/vtcode/releases/tag/v0.180.5".into()),
+            current_release_seen: true,
             channel: Some("stable".into()),
             check_due: false,
         };
@@ -72,6 +78,7 @@ mod tests {
             release_highlights: Vec::new(),
             current_release_highlights: vec!["Freshly installed".into()],
             current_release_url: Some("https://github.com/vinhnx/vtcode/releases/tag/v0.181.0".into()),
+            current_release_seen: false,
             channel: None,
             check_due: true,
         };
@@ -88,6 +95,7 @@ mod tests {
         assert!(legacy.release_highlights.is_empty());
         assert!(legacy.current_release_highlights.is_empty());
         assert!(legacy.current_release_url.is_none());
+        assert!(!legacy.current_release_seen);
         assert!(legacy.channel.is_none());
         assert!(!legacy.check_due);
     }

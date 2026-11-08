@@ -541,8 +541,10 @@ pub(super) struct NotificationPreferences {
     pub updates: Option<bool>,
     /// Latest release version already announced; suppresses repeat banners.
     pub last_notified_update: Option<String>,
-    /// Running version whose release notes were already shown once in the
-    /// changelog viewer (the post-update "what's new" moment).
+    /// Legacy client-local marker for the post-update "what's new" moment.
+    /// The shared update cache owns the real seen marker now (so the CLI and
+    /// desktop never repeat one release); this field is kept only so older
+    /// preference files deserialize without loss.
     pub last_seen_changelog_version: Option<String>,
 }
 

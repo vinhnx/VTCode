@@ -6,3 +6,7 @@ app:
     empty: {en: "Highlights aren't available for this release."}
     view_full_notes: {en: "View full release notes"}
     done: {en: "Done"}
+    banner_title: {en: "What's new in v%{version}"}
+    banner_more: {en: "%{summary} (+%{count} more)"}
+    banner_view: {en: "View"}
+    banner_dismiss: {en: "Dismiss release notes"}

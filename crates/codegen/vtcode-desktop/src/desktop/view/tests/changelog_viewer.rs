@@ -17,6 +17,7 @@ fn status_payload(
         "updateAvailable": available,
         "releaseUrl": release_url,
         "releaseHighlights": highlights,
+        "currentReleaseSeen": true,
         "channel": "stable",
         "checkDue": false,
     })
@@ -27,20 +28,13 @@ fn seed_status(view: &Entity<DesktopView>, payload: serde_json::Value, cx: &mut 
 }
 
 /// Layer current-version notes onto a status payload (the post-update shape).
+/// Notes start unseen, which is what arms the banner.
 fn with_current_notes(mut payload: serde_json::Value, highlights: &[&str], url: Option<&str>) -> serde_json::Value {
     let object = payload.as_object_mut().expect("status payload is an object");
     let _ = object.insert("currentReleaseHighlights".into(), json!(highlights));
     let _ = object.insert("currentReleaseUrl".into(), json!(url));
+    let _ = object.insert("currentReleaseSeen".into(), json!(false));
     payload
-}
-
-fn consume_whats_new(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.maybe_show_pending_whats_new(window, cx));
-        window.render_frame(cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
 }
 
 fn open_notification_settings(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
@@ -288,92 +282,151 @@ fn post_update_payload() -> serde_json::Value {
 }
 
 #[gpui_kit::test]
-fn whats_new_shows_current_notes_once_and_records_seen(cx: &mut TestAppContext) {
+fn release_notes_banner_shows_once_and_dismiss_records_seen(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     seed_status(&view, post_update_payload(), cx);
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| {
-        let state = view.read(cx);
-        assert!(state.changelog_open, "first sighting opens the viewer");
-        assert_eq!(state.changelog_mode, ChangelogMode::Current);
-        assert_eq!(
-            state.preferences.notifications.last_seen_changelog_version.as_deref(),
-            Some("0.182.0"),
-            "shown versions record seen"
-        );
-    });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("changelog-dialog").is_some());
-        assert!(window.try_find("changelog-highlights").is_some());
-        assert!(window.try_find("changelog-subtitle").is_none(), "current mode omits the upgrade path");
-        assert!(window.try_find("open-release-notes").is_some(), "current notes link out");
-        view.update(cx, |view, cx| view.close_changelog(window, cx));
+        assert!(view.read(cx).release_notes_banner_visible());
+        assert!(window.try_find("release-notes-banner").is_some(), "the banner renders inline");
+        assert!(!view.read(cx).changelog_open, "the banner never steals the workspace with a modal");
+        window.click("release-notes-dismiss", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).release_notes_banner_visible(), "dismiss hides it");
+        assert!(window.try_find("release-notes-banner").is_none());
     })
     .unwrap();
-    // A later response for the same version stays silent.
-    seed_status(&view, post_update_payload(), cx);
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| assert!(!view.read(cx).changelog_open, "seen versions never re-show"));
+    // The service echoes the shared seen marker on the next status response.
+    let mut seen = post_update_payload();
+    let _ = seen.as_object_mut().unwrap().insert("currentReleaseSeen".into(), json!(true));
+    seed_status(&view, seen, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(!view.read(cx).release_notes_banner_visible(), "seen releases never re-show");
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
-fn whats_new_skips_without_notes_and_stays_unrecorded(cx: &mut TestAppContext) {
+fn release_notes_banner_hides_when_the_cli_already_showed_it(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // A CLI launch printed the notes and recorded the shared marker, so the
+    // desktop must not repeat them on its first status response.
+    let mut payload = post_update_payload();
+    let _ = payload
+        .as_object_mut()
+        .unwrap()
+        .insert("currentReleaseSeen".into(), json!(true));
+    seed_status(&view, payload, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(!view.read(cx).release_notes_banner_visible(), "one release announces once across surfaces");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn release_notes_acknowledge_failure_stays_silent(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.handle_update_status_response(post_update_payload());
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).release_notes_banner_visible());
+        window.click("release-notes-dismiss", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    // The dismissal queued one acknowledgement carrying no payload.
+    let BackendCommand::Request { method, .. } = requests.try_recv().expect("acknowledge was requested") else {
+        panic!("dismissal must send update/acknowledge");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::UPDATE_ACKNOWLEDGE);
+
+    // An older service rejects it. Bookkeeping must never paint an error
+    // banner: the banner already retired itself locally.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::UPDATE_ACKNOWLEDGE.into(),
+                    result: None,
+                    error: Some("unknown desktop method".into()),
+                },
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).error.is_none(), "a failed acknowledgement stays silent");
+        assert!(!view.read(cx).release_notes_banner_visible(), "the banner stays retired");
+    })
+    .unwrap();
+    // It must not have cleared an in-flight status request either.
+    while requests.try_recv().is_ok() {}
+}
+
+#[gpui_kit::test]
+fn release_notes_banner_shows_on_the_launch_screen(cx: &mut TestAppContext) {
+    // Fresh launch: no workspace, no session, the welcome screen owns the
+    // column. The banner must still reach the user there — that is the whole
+    // point of an inline banner instead of a workspace-only dialog.
+    let (window, view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., isolate_preferences(), false);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.zen_mode = false;
+            view.workspace = None;
+            view.selected_session_id = None;
+            view.handle_update_status_response(post_update_payload());
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("welcome").is_some(), "the launch screen is showing");
+        assert!(window.try_find("release-notes-banner").is_some(), "the banner does not need a workspace");
+        assert!(window.try_find("release-notes-dismiss").is_some(), "and it is dismissible there");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn release_notes_banner_shows_in_zen_mode(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.zen_mode = true;
+            view.handle_update_status_response(post_update_payload());
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("release-notes-banner").is_some(), "zen mode keeps the banner inline");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn release_notes_banner_waits_for_notes_and_stays_unrecorded(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     // Fresh install shape: up to date, no notes cached for the running version.
     seed_status(&view, status_payload("0.182.0", None, false, &[], None), cx);
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| {
-        assert!(!view.read(cx).changelog_open, "nothing to show opens nothing");
-        assert!(
-            view.read(cx).preferences.notifications.last_seen_changelog_version.is_none(),
-            "notes-less launches stay unrecorded so notes showing up later still display"
-        );
-    });
-    // Notes landing later (a background check caught up) display on sighting.
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(!view.read(cx).release_notes_banner_visible(), "nothing to show renders nothing");
+    })
+    .unwrap();
+    // Notes landing later (a background check caught up) arm the banner.
     seed_status(&view, post_update_payload(), cx);
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| {
-        assert!(view.read(cx).changelog_open, "late notes still get their moment");
-        assert_eq!(view.read(cx).preferences.notifications.last_seen_changelog_version.as_deref(), Some("0.182.0"));
-    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).release_notes_banner_visible(), "late notes still get their moment");
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
-fn whats_new_skips_while_modal_open_and_retries(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    seed_status(&view, post_update_payload(), cx);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.open_license_viewer(LicenseDocument::Mit, window, cx));
-        window.render_frame(cx);
-        assert!(view.read(cx).license_viewer.is_some());
-    })
-    .unwrap();
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| {
-        assert!(!view.read(cx).changelog_open, "no stealing an open modal");
-        assert!(view.read(cx).license_viewer.is_some(), "the open modal survives");
-        assert!(
-            view.read(cx).preferences.notifications.last_seen_changelog_version.is_none(),
-            "skipped moments stay unrecorded for retry"
-        );
-    });
-    // Once the modal closes, the next response retries.
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.close_license_viewer(window, cx));
-        window.render_frame(cx);
-    })
-    .unwrap();
-    seed_status(&view, post_update_payload(), cx);
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| assert!(view.read(cx).changelog_open, "retry after the modal closes"));
-}
-
-#[gpui_kit::test]
-fn whats_new_shows_current_despite_an_available_update(cx: &mut TestAppContext) {
+fn release_notes_banner_view_opens_current_changelog(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     // Skipped a version: 0.183 is out, but 0.182's own notes were never seen.
-    // TUI parity prints both the current notes and the update banner.
+    // The banner advertises the running version, not the pending update.
     let payload = with_current_notes(
         status_payload(
             "0.182.0",
@@ -386,16 +439,16 @@ fn whats_new_shows_current_despite_an_available_update(cx: &mut TestAppContext) 
         Some("https://github.com/vinhnx/vtcode/releases/tag/v0.182.0"),
     );
     seed_status(&view, payload, cx);
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| {
-        let state = view.read(cx);
-        assert!(state.changelog_open);
-        assert_eq!(state.changelog_mode, ChangelogMode::Current, "what's new shows current, not latest");
-        assert_eq!(state.preferences.notifications.last_seen_changelog_version.as_deref(), Some("0.182.0"));
-    });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert!(view.read(cx).release_notes_banner_visible());
+        window.click("release-notes-open", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).changelog_open, "View opens the viewer on demand");
+        assert_eq!(view.read(cx).changelog_mode, ChangelogMode::Current, "what's new shows current, not latest");
+        assert!(!view.read(cx).release_notes_banner_visible(), "viewing retires the banner");
         assert!(window.try_find("changelog-subtitle").is_none(), "current mode, not the upgrade view");
+        assert!(window.try_find("open-release-notes").is_some(), "current notes link out");
     })
     .unwrap();
 }
@@ -455,7 +508,7 @@ fn changelog_verb_refused_without_notes_leaves_state_untouched(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn whats_new_ignores_notification_toggles(cx: &mut TestAppContext) {
+fn release_notes_banner_ignores_notification_toggles(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| {
         view.update(cx, |view, _| {
@@ -464,13 +517,14 @@ fn whats_new_ignores_notification_toggles(cx: &mut TestAppContext) {
         });
     });
     seed_status(&view, post_update_payload(), cx);
-    consume_whats_new(window, &view, cx);
-    cx.update(|cx| {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
         assert!(
-            view.read(cx).changelog_open,
+            view.read(cx).release_notes_banner_visible(),
             "installed-version notes show once regardless of update toggles, like the TUI banner"
         );
-    });
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

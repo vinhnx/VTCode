@@ -731,8 +731,12 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
         session_end_reason = SessionEndReason::Completed;
     }
 
-    // Show release notes on first launch after update
-    if !startup_update_requested_restart
+    // Show release notes on the first launch after an update. Only a real
+    // terminal renders the transcript banner: a host session (desktop app)
+    // discards terminal output and shows its own inline release-notes banner,
+    // so printing here would mark the release seen without anyone seeing it.
+    if terminal_enabled
+        && !startup_update_requested_restart
         && let Some((ref version, ref highlights)) = session_bootstrap.release_highlights
     {
         crate::updater::display_release_notes(&handle, version, highlights);

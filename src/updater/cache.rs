@@ -20,6 +20,17 @@ pub(super) struct UpdateCacheSnapshot {
     pub(super) last_seen_version: Option<Version>,
     pub(super) dismissed_version: Option<Version>,
     release_notes: Option<String>,
+    /// Notes recorded for a version an updater just installed. Kept apart from
+    /// the check fields so a later check reporting an even newer release cannot
+    /// hide the notes the freshly installed version still owes the user.
+    pub(super) installed_release: Option<InstalledRelease>,
+}
+
+/// Version plus body of the release an updater just installed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct InstalledRelease {
+    pub(super) version: Version,
+    pub(super) notes: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +46,10 @@ struct UpdateCachePayload {
     dismissed_version: Option<String>,
     #[serde(default)]
     release_notes: Option<String>,
+    #[serde(default)]
+    installed_release_version: Option<String>,
+    #[serde(default)]
+    installed_release_notes: Option<String>,
 }
 
 pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
@@ -109,6 +124,7 @@ fn read_snapshot_file(path: &Path) -> Result<Option<(UpdateCacheSnapshot, bool)>
                 last_seen_version: None,
                 dismissed_version: None,
                 release_notes: None,
+                installed_release: None,
             },
             false,
         )));
@@ -123,6 +139,7 @@ fn read_snapshot_file(path: &Path) -> Result<Option<(UpdateCacheSnapshot, bool)>
                 last_seen_version: None,
                 dismissed_version: None,
                 release_notes: None,
+                installed_release: None,
             },
             false,
         )));
@@ -143,9 +160,20 @@ fn read_snapshot_file(path: &Path) -> Result<Option<(UpdateCacheSnapshot, bool)>
                 .as_deref()
                 .and_then(|value| Version::parse(value).ok()),
             release_notes: payload.release_notes,
+            installed_release: installed_release_from(
+                &payload.installed_release_version,
+                &payload.installed_release_notes,
+            ),
         },
         true,
     )))
+}
+
+/// Pair the recorded installed version with its notes; either half missing
+/// means there is no installed-release record to show.
+fn installed_release_from(version: &Option<String>, notes: &Option<String>) -> Option<InstalledRelease> {
+    let version = Version::parse(version.as_deref()?).ok()?;
+    Some(InstalledRelease { version, notes: notes.clone()? })
 }
 
 pub(super) fn record_successful_check_with_notes(
@@ -179,6 +207,17 @@ pub(super) fn record_failed_check() -> Result<()> {
 pub(super) fn record_seen_version(version: &Version) -> Result<()> {
     update_snapshot(|snapshot| {
         snapshot.last_seen_version = Some(version.clone());
+        // The install record exists only to bridge the gap between a fresh
+        // install and its first announcement, so once that version is seen the
+        // body is dropped: leaving it would keep a second full copy of the
+        // changelog in the cache for every later startup to re-read.
+        if snapshot
+            .installed_release
+            .as_ref()
+            .is_some_and(|installed| &installed.version == version)
+        {
+            snapshot.installed_release = None;
+        }
         Ok(())
     })
 }
@@ -191,14 +230,30 @@ pub(super) fn record_dismissed_version(version: &Version) -> Result<()> {
 }
 
 /// Return the release metadata cached by the background update check when it
-/// describes the running version. This deliberately never performs network
-/// I/O; session setup must not wait for GitHub.
+/// describes the running version, falling back to the notes of the release an
+/// updater installed. This deliberately never performs network I/O; session
+/// setup must not wait for GitHub.
 pub(super) fn current_release_info(current: &Version) -> Option<(Version, String)> {
     let snapshot = read_snapshot().ok()?;
-    if snapshot.latest_version.as_ref() != Some(current) {
-        return None;
+    if snapshot.latest_version.as_ref() == Some(current)
+        && let Some(notes) = snapshot.release_notes.clone()
+    {
+        return Some((current.clone(), notes));
     }
-    Some((current.clone(), snapshot.release_notes?))
+    installed_release_info_in(&snapshot, current)
+}
+
+/// Record the release notes of a version an updater just installed.
+pub(super) fn record_installed_release(version: &Version, notes: &str) -> Result<()> {
+    update_snapshot(|snapshot| {
+        snapshot.installed_release = Some(InstalledRelease { version: version.clone(), notes: notes.to_owned() });
+        Ok(())
+    })
+}
+
+fn installed_release_info_in(snapshot: &UpdateCacheSnapshot, current: &Version) -> Option<(Version, String)> {
+    let installed = snapshot.installed_release.as_ref()?;
+    (&installed.version == current).then(|| (installed.version.clone(), installed.notes.clone()))
 }
 
 /// Return the cached release metadata for the latest known release,
@@ -241,6 +296,11 @@ fn snapshot_write_payload(cache_file: &Path, snapshot: &UpdateCacheSnapshot) -> 
         last_seen_version: snapshot.last_seen_version.as_ref().map(ToString::to_string),
         dismissed_version: snapshot.dismissed_version.as_ref().map(ToString::to_string),
         release_notes: snapshot.release_notes.clone(),
+        installed_release_version: snapshot
+            .installed_release
+            .as_ref()
+            .map(|installed| installed.version.to_string()),
+        installed_release_notes: snapshot.installed_release.as_ref().map(|installed| installed.notes.clone()),
     };
     let serialized = serde_json::to_vec(&payload).context("Failed to serialize update cache payload")?;
     if let Some(parent) = cache_file.parent() {
@@ -302,7 +362,7 @@ fn get_cache_dir() -> Result<PathBuf> {
 }
 
 #[cfg(test)]
-pub(super) fn set_cache_dir_override_for_tests(path: Option<PathBuf>) -> Option<PathBuf> {
+pub(crate) fn set_cache_dir_override_for_tests(path: Option<PathBuf>) -> Option<PathBuf> {
     TEST_CACHE_DIR.with(|current| std::mem::replace(&mut *current.borrow_mut(), path))
 }
 
@@ -323,6 +383,8 @@ mod tests {
             last_seen_version: None,
             dismissed_version: None,
             release_notes: None,
+            installed_release_version: None,
+            installed_release_notes: None,
         };
         std::fs::write(path, serde_json::to_string(&payload).expect("serialize update cache payload"))
             .expect("write update cache payload");

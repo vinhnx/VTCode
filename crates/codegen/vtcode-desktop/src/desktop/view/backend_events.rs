@@ -100,7 +100,6 @@ impl DesktopView {
         self.notify_turn_undo(&event, window, cx);
         self.maybe_notify_update_available(&event, window, cx);
         self.handle_backend_event(event, cx);
-        self.maybe_show_pending_whats_new(window, cx);
         if let Some(text) = self.pending_composer_restore.take() {
             self.replace_composer_text(text, window, cx);
             self.reset_history_recall();
@@ -354,6 +353,12 @@ impl DesktopView {
                         self.fail_storage_worktrees(error.clone(), cx);
                         return;
                     }
+                    if method == protocol::method::UPDATE_ACKNOWLEDGE {
+                        // Enhancement, not a requirement: an older service
+                        // lacks the method, and the local banner already
+                        // retired itself. Never banner for bookkeeping.
+                        return;
+                    }
                     if method == protocol::method::UPDATE_STATUS {
                         self.update_request_pending = false;
                     }
@@ -504,6 +509,13 @@ impl DesktopView {
                     }
                     protocol::method::UPDATE_STATUS => {
                         self.handle_update_status_response(result);
+                    }
+                    protocol::method::UPDATE_ACKNOWLEDGE => {
+                        // Enhancement, not a requirement: an older service
+                        // lacks the method, and the banner already retired
+                        // itself locally. Apply the echoed snapshot without
+                        // touching the status-request in-flight flag.
+                        self.apply_update_status(result);
                     }
                     protocol::method::CONFIG_MODELS => {
                         match serde_json::from_value::<Vec<protocol::ModelInfo>>(result) {

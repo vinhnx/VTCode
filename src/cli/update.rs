@@ -335,6 +335,9 @@ async fn print_installed_release_notes(version: &Version, release_notes: &str) {
         }
     }
     println!("{} {}", "→".cyan(), Updater::release_url(version).cyan());
+    // `vtcode update` just announced this release in full. Mark it seen so the
+    // next launch (TUI transcript or desktop banner) does not repeat it.
+    crate::updater::record_version_notes_seen(version);
 }
 
 async fn install_update(

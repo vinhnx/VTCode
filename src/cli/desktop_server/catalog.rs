@@ -249,6 +249,7 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
         Some((version, items)) => (items, Some(crate::updater::Updater::release_url(&version))),
         None => (Vec::new(), None),
     };
+    let current_release_seen = crate::updater::current_version_notes_seen();
     let (latest_version, release_url, release_highlights, update_available) = match check.cached_notice {
         Some(notice) => {
             let url = crate::updater::Updater::release_url(&notice.latest_version);
@@ -265,6 +266,7 @@ pub(super) fn update_status_snapshot() -> Result<protocol::UpdateStatusSnapshot>
         release_highlights,
         current_release_highlights: current_highlights,
         current_release_url: current_url,
+        current_release_seen,
         channel: Some(updater.config().channel.to_string()),
         check_due: check.should_refresh,
     })
