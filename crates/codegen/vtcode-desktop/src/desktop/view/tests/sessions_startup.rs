@@ -1,4 +1,5 @@
 use super::*;
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 #[gpui_kit::test]
 fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &mut TestAppContext) {
@@ -900,4 +901,64 @@ fn window_title_follows_the_selected_thread_title(cx: &mut TestAppContext) {
         view.selected_session_id = Some("missing".into());
         assert_eq!(view.window_title(), "VT Code");
     });
+}
+
+fn appkit_rect(x: f64, y: f64, width: f64, height: f64) -> NSRect {
+    NSRect {
+        origin: NSPoint { x, y },
+        size: NSSize { width, height },
+    }
+}
+
+#[test]
+fn maximized_launch_bounds_fill_the_main_screen_visible_frame() {
+    // Main screen in AppKit's bottom-left origin: 28px menu bar on top, 60px Dock at the bottom.
+    let frame = appkit_rect(0.0, 0.0, 1512.0, 982.0);
+    let visible = appkit_rect(0.0, 60.0, 1512.0, 894.0);
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, visible).expect("insets convert");
+    assert_eq!(bounds.origin, point(px(0.), px(28.)));
+    assert_eq!(bounds.size, size(px(1512.), px(894.)));
+
+    // Asymmetric: a left Dock shifts the origin right instead of down.
+    let visible = appkit_rect(80.0, 0.0, 1432.0, 954.0);
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, visible).expect("left Dock converts");
+    assert_eq!(bounds.origin, point(px(80.), px(28.)));
+    assert_eq!(bounds.size, size(px(1432.), px(954.)));
+
+    // No insets: visible equals frame, origin stays top-left.
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, frame).expect("full frame converts");
+    assert_eq!(bounds.origin, point(px(0.), px(0.)));
+    assert_eq!(bounds.size, size(px(1512.), px(982.)));
+
+    // Offset frame with insets on both axes: the origin stays relative to the frame.
+    let frame = appkit_rect(100.0, 200.0, 1000.0, 800.0);
+    let visible = appkit_rect(180.0, 260.0, 920.0, 512.0);
+    let bounds = super::super::launch_bounds::visible_bounds_from_frames(frame, visible).expect("offset converts");
+    assert_eq!(bounds.origin, point(px(80.), px(228.)));
+    assert_eq!(bounds.size, size(px(920.), px(512.)));
+}
+
+#[test]
+fn maximized_launch_bounds_reject_degenerate_or_escaped_frames() {
+    let frame = appkit_rect(0.0, 0.0, 1512.0, 982.0);
+    for (name, visible) in [
+        ("zero width", appkit_rect(0.0, 60.0, 0.0, 894.0)),
+        ("negative height", appkit_rect(0.0, 60.0, 1512.0, -10.0)),
+        ("NaN width", appkit_rect(0.0, 60.0, f64::NAN, 894.0)),
+        ("escaped left", appkit_rect(-5.0, 60.0, 1512.0, 894.0)),
+        ("taller than frame", appkit_rect(0.0, 0.0, 1512.0, 1000.0)),
+    ] {
+        assert!(
+            super::super::launch_bounds::visible_bounds_from_frames(frame, visible).is_none(),
+            "{name} must fall back to zoom"
+        );
+    }
+}
+
+#[test]
+fn headless_probe_keeps_the_zoom_fallback() {
+    assert!(
+        super::super::launch_bounds::main_screen_visible_bounds().is_none(),
+        "no AppKit screens headless: launch keeps the zoom fallback"
+    );
 }

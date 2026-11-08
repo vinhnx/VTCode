@@ -376,3 +376,49 @@ fn handoff_link_with_missing_workspace_reports_invalid_folder(cx: &mut TestAppCo
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn windowless_handoff_reopens_a_window_instead_of_dropping(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let (window, _view) = open_desktop(cx);
+    cx.update_window(window, |_, window, _| window.remove_window()).unwrap();
+    cx.update(|cx| assert!(cx.windows().is_empty(), "precondition: no live window"));
+    cx.update(|cx| {
+        super::super::dispatch_handoff_links(
+            cx,
+            vec![HandoffLink {
+                session_id: "linked-session".into(),
+                workspace: PathBuf::from("/missing/workspace"),
+            }],
+        );
+        assert_eq!(cx.windows().len(), 1, "handoff must reopen a window to land on");
+    });
+}
+
+#[gpui_kit::test]
+fn warm_handoff_reuses_the_existing_window(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let (window, _view) = open_desktop(cx);
+    cx.update(|cx| {
+        super::super::dispatch_handoff_links(
+            cx,
+            vec![HandoffLink {
+                session_id: "linked-session".into(),
+                workspace: PathBuf::from("/missing/workspace"),
+            }],
+        );
+        assert_eq!(cx.windows(), vec![window], "handoff must not duplicate the window");
+    });
+}
+
+#[gpui_kit::test]
+fn empty_handoff_opens_no_window(cx: &mut TestAppContext) {
+    let (window, _view) = open_desktop(cx);
+    cx.update_window(window, |_, window, _| window.remove_window()).unwrap();
+    cx.update(|cx| {
+        super::super::dispatch_handoff_links(cx, Vec::new());
+        assert!(cx.windows().is_empty(), "no links must not spawn a window");
+    });
+}

@@ -165,7 +165,8 @@ mod tests {
     use gpui_kit::component::theme::Theme;
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{
-        AnyWindowHandle, Bounds, Context, Render, TestAppContext, TestSupportExt, Window, WindowBounds, div,
+        AnyWindowHandle, Bounds, Context, Render, TestAppContext, TestSupportExt, Window, WindowBounds, WindowOptions,
+        div,
     };
 
     #[test]

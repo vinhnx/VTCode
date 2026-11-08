@@ -1,6 +1,7 @@
 //! App startup: menus, keybindings, window reopen, construction, and preference persistence.
 use super::super::{SharedUrlInbox, UrlInbox};
 use super::*;
+use gpui_kit::WindowBounds;
 use std::{cell::RefCell, rc::Rc};
 
 /// Documentation and issue tracker opened by the Help menu and About dialog.
@@ -295,10 +296,20 @@ struct MainWindow {
 impl gpui_kit::Global for MainWindow {}
 
 /// Route handoff links to the live main window. Unknown sessions and
-/// workspaces fail through the same notices as the argv path. A missing
-/// window (failed open, closed since) drops the links silently: there is
-/// no surface to report on.
-fn dispatch_handoff_links(cx: &mut App, links: Vec<protocol::handoff_url::HandoffLink>) {
+/// workspaces fail through the same notices as the argv path. A handoff
+/// with no live window reopens first: dropping the links silently would
+/// strand CLI `/desktop` invocations against a windowless app, and
+/// reopening also raises a hidden or backgrounded window since the user
+/// invoked the app. Only a failed reopen drops the links: there is no
+/// surface to report on.
+pub(super) fn dispatch_handoff_links(cx: &mut App, links: Vec<protocol::handoff_url::HandoffLink>) {
+    if links.is_empty() {
+        return;
+    }
+    if open_or_activate_main_window(cx, None, None).is_err() {
+        vtcode_commons::diagnostics::stderr(format_args!("handoff delivery missed its window"));
+        return;
+    }
     let Some(main) = cx.try_global::<MainWindow>() else {
         return;
     };
@@ -348,7 +359,22 @@ pub(super) fn open_or_activate_main_window(
         .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
     let start_customs = preferences.custom_themes.clone();
     let start_maximized = preferences.window_maximized();
-    let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, move |window, cx| {
+    let mut options = desktop_window_options();
+    // A maximized launch fills the main screen's visible frame explicitly:
+    // AppKit `zoom:` targets the content-derived standard frame (GPUI sets
+    // no standard-frame delegate), which leaves gaps and never satisfies
+    // `is_maximized`, so the bounds observer would persist windowed and
+    // regress the next launch. Zoom stays as the fallback when the probe
+    // fails (nil screen, off-main-thread, degenerate frame).
+    let mut zoom_after_open = false;
+    if start_maximized {
+        if let Some(bounds) = main_screen_visible_bounds() {
+            options.window_bounds = Some(WindowBounds::Windowed(bounds));
+        } else {
+            zoom_after_open = true;
+        }
+    }
+    let (window, view) = gpui_kit::open_window(options, cx, move |window, cx| {
         window.set_window_title(app::NAME);
         let theme_mode = themes::apply_selection(&start_theme, &start_customs, Some(window), cx);
         let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, preferences));
@@ -367,10 +393,11 @@ pub(super) fn open_or_activate_main_window(
         });
     })?;
     cx.set_global(MainWindow { view: view.downgrade(), window });
-    if start_maximized {
-        // macOS ignores WindowBounds::Maximized at creation, so zoom after
-        // opening to reach the native zoomed state the Zoom menu toggles.
-        // The headless test platform leaves zoom unimplemented.
+    if zoom_after_open {
+        // Fallback when the visible-frame probe failed: macOS ignores
+        // WindowBounds::Maximized at creation, so zoom after opening to
+        // reach the native zoomed state the Zoom menu toggles. The
+        // headless test platform leaves zoom unimplemented.
         #[cfg(not(test))]
         window.update(cx, |_, window, _| window.zoom_window())?;
     }

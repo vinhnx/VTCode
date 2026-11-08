@@ -61,8 +61,8 @@ use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, ExternalPaths,
     FocusHandle, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, NavigationDirection, NoAction, OsAction, PathPromptOptions, Pixels, Render,
-    ScrollEvent, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions,
-    actions, anchored, deferred, div, img, point, px, size,
+    ScrollEvent, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, actions, anchored,
+    deferred, div, img, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -138,6 +138,7 @@ mod ids;
 mod inspector_changes;
 mod inspector_panels;
 mod interaction_render;
+mod launch_bounds;
 mod licenses;
 mod login_items;
 mod mcp_app;
@@ -184,10 +185,11 @@ use super::localization::{UiLanguageOption, UiLanguageSelectState};
 use backend_events::*;
 pub(crate) use bootstrap::run;
 #[cfg(test)]
-use bootstrap::{init_keybindings, open_or_activate_main_window};
+use bootstrap::{dispatch_handoff_links, init_keybindings, open_or_activate_main_window};
 use chrome::*;
 use components::*;
 use inspector_changes::*;
+use launch_bounds::{desktop_window_options, main_screen_visible_bounds};
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
 use palette::*;
 use queue::*;
@@ -976,20 +978,6 @@ fn workspace_picker_options() -> PathPromptOptions {
         multiple: false,
         prompt: Some(rust_i18n::t!(i18n::WORKSPACE_CHOOSE).to_string().into()),
     }
-}
-
-fn desktop_window_options() -> WindowOptions {
-    let mut options = TitleBar::window_options();
-    if let Some(titlebar) = options.titlebar.as_mut() {
-        titlebar.traffic_light_position = Some(point(px(TRAFFIC_LIGHT_X), px(TRAFFIC_LIGHT_Y)));
-    }
-    // Smallest geometry that keeps every surface non-degenerate: 600x560 is
-    // the smallest headless-tested size with all suites green, while 400px
-    // tall provably starves flex content (the config header plus rail alone
-    // exceed the row). The platform enforces this; headless tests may still
-    // open smaller windows to stress overflow paths.
-    options.window_min_size = Some(size(px(600.), px(560.)));
-    options
 }
 
 fn chrome_background(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
