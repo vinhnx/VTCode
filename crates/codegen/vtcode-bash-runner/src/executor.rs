@@ -159,7 +159,11 @@ impl CommandOutput {
     }
 }
 
-/// Trait implemented by concrete command execution strategies.
+/// Trait implemented by concrete command execution strategies (sync,
+/// validated-invocation form).
+///
+/// See `vtcode_core::tools::shell::CommandExecutor` for the async
+/// string-command counterpart used by core's `ShellRunner`.
 pub trait CommandExecutor: Send + Sync {
     fn execute(&self, invocation: &CommandInvocation) -> Result<CommandOutput>;
 }

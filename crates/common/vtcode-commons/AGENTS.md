@@ -17,7 +17,7 @@
 - `classify_anyhow_error` is the single tool-error classifier and `RetryPolicy` in `retry` is the canonical retry policy.
 - `.vtcodegitignore` registered by `walk::apply_defaults` is the single ignore source of truth, so never fork a UI-side skip list.
 - `VtCodePaths::write_private_file_atomic` owns synced atomic private writes without pre-deleting the destination, and legacy migration copies only regular files and never follows links.
-- Canonical helpers (`formatting/`, `search/`, `validation/`, `task_guard`, `tracker_title::resolve_tracker_title`, `utils::env_flag_enabled`, `llm::Usage::billable_totals`) are the single homes, so downstream crates delegate rather than re-implement.
+- Canonical helpers (`formatting/`, `search/`, `validation/`, `task_guard`, `tracker_title::resolve_tracker_title`, `utils::env_flag_enabled`, `llm::Usage::billable_totals`, `tty::TtyExt`) are the single homes, so downstream crates delegate rather than re-implement.
 - `Utf8StreamDecoder` (`utf8_stream`) is the single chunked UTF-8 decoder: never `from_utf8_lossy` one read chunk, since a character split across reads becomes U+FFFD; use `push_cow` in hot loops and `finish()` at EOF.
 - Keep `ui_protocol::tool_summary` and `ui_protocol::progress` out of `ThreadEvent` and independent of TUI/runtime types.
 - `HistoryScope` (`history_scope`) is the single prompt-history scope model (labels, Ctrl+S cycle order, wire values) for the CLI picker, desktop palette, and desktop service; never fork per-surface copies.

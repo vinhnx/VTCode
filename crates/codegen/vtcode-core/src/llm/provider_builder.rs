@@ -28,7 +28,7 @@ impl<T> Default for ProviderBuilder<T> {
 
 impl<T> ProviderBuilder<T>
 where
-    T: ProviderConfig,
+    T: ProviderSpec,
 {
     /// Create a new builder with all fields unset.
     pub fn new() -> Self {
@@ -83,8 +83,11 @@ where
     }
 }
 
-/// Trait for provider-specific configuration and creation
-pub trait ProviderConfig {
+/// Static provider specification: registry metadata plus construction.
+///
+/// Each provider config type implements this once so [`ProviderBuilder`] can
+/// construct it through the canonical factory without per-provider glue.
+pub trait ProviderSpec {
     /// Registry key used to look up this provider in the factory.
     const PROVIDER_KEY: &'static str;
     /// Human-readable display name for this provider.
@@ -121,7 +124,7 @@ pub trait ProviderConfig {
         ) {
             Ok(provider) => provider,
             Err(error) => {
-                panic!("provider config invariant violated for `{}`: {}", Self::PROVIDER_KEY, error)
+                panic!("provider spec invariant violated for `{}`: {}", Self::PROVIDER_KEY, error)
             }
         }
     }
@@ -129,6 +132,10 @@ pub trait ProviderConfig {
     /// Provider-specific prompt cache configuration type.
     type PromptCacheSettings: Clone + Default + Send + Sync + 'static;
 }
+
+/// Deprecated alias for [`ProviderSpec`].
+#[deprecated(note = "renamed to `ProviderSpec`")]
+pub use self::ProviderSpec as ProviderConfig;
 
 /// HTTP client pool to avoid creating new clients for each provider
 mod http_client_pool {

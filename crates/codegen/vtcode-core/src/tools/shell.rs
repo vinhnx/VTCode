@@ -31,7 +31,10 @@ pub struct ShellRunner<E: CommandExecutor = SystemExecutor> {
     executor: E,
 }
 
-/// Trait for command execution strategies
+/// Trait for command execution strategies (async, string-command form).
+///
+/// See [`vtcode_bash_runner::CommandExecutor`] for the sync
+/// validated-invocation counterpart used by the bash-runner crate.
 #[async_trait::async_trait]
 pub trait CommandExecutor: Send + Sync {
     /// Execute a command in the given directory
