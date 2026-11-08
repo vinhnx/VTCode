@@ -14,10 +14,19 @@ use gpui_kit::component::theme::ThemeColor;
 /// checksum live in `resources/pele/PROVENANCE.md`.
 pub(super) const PELE_BUNDLE_JS: &str = include_str!("../../../../../resources/pele/pele.global.js");
 
-/// Largest diagram source accepted for preview, in Unicode scalar values.
-/// Matches Pele's own default `limit` (50,000 characters); larger sources
-/// fail closed instead of writing an unbounded preview file.
+/// Largest diagram source accepted for preview, in UTF-16 code units.
+/// Matches Pele's own default `limit` exactly (it enforces
+/// `source.length`, which counts UTF-16 units, not scalar values);
+/// larger sources fail closed instead of writing an unbounded preview
+/// file.
 pub(super) const MAX_DIAGRAM_SOURCE_CHARS: usize = 50_000;
+
+/// Content Security Policy for the preview page: the page is fully
+/// self-contained (inlined bundle and styles, system fonts, canvas text
+/// measurement), so every network-capable directive is denied. Inline
+/// scripts and styles stay allowed because the bundle and theme ship
+/// inline; a renderer bug therefore cannot exfiltrate.
+pub(super) const PREVIEW_CSP: &str = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 /// Rejection from [`build_preview_html`] when the source exceeds
 /// [`MAX_DIAGRAM_SOURCE_CHARS`].
@@ -123,7 +132,7 @@ pub(super) fn build_preview_html(
     vars_css: &str,
     bundle_js: &str,
 ) -> Result<String, DiagramTooLarge> {
-    if source.chars().count() > MAX_DIAGRAM_SOURCE_CHARS {
+    if source.encode_utf16().count() > MAX_DIAGRAM_SOURCE_CHARS {
         return Err(DiagramTooLarge);
     }
     let source_js = js_string_literal(source);
@@ -135,6 +144,7 @@ pub(super) fn build_preview_html(
          <head>\n\
          <meta charset=\"utf-8\">\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
+         <meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\">\n\
          <title>{title_html}</title>\n\
          <style>\n\
          :root {{\n\
@@ -194,14 +204,19 @@ pub(super) fn build_preview_html(
          }})();\n\
          </script>\n\
          </body>\n\
-         </html>\n"
+         </html>\n",
+        csp = PREVIEW_CSP,
     ))
 }
 
 /// Open a Mermaid fence in the system browser as a themed Pele preview.
-/// Building and writing the page measures ~1ms; the browser launch is
-/// fire-and-forget. Success needs no toast (the browser opening is the
-/// feedback); every failure toasts.
+/// Page build plus bounded stale sweep plus owner-only write plus one
+/// `posix_spawn` measure ~6ms with no waits, so this stays on the calling
+/// thread like the adjacent copy action's clipboard IPC; the browser
+/// launch itself is fire-and-forget with a reaper thread. Success needs
+/// no toast (the browser opening is the feedback); every failure the app
+/// can observe toasts (the fire-and-forget exit status is unobserved by
+/// design).
 pub(super) fn open_diagram_preview(source: &str, window: &mut gpui_kit::Window, cx: &mut gpui_kit::App) {
     use gpui_kit::component::theme::ActiveTheme as _;
 
@@ -215,6 +230,7 @@ pub(super) fn open_diagram_preview(source: &str, window: &mut gpui_kit::Window, 
             return;
         }
     };
+    let _swept = super::files::sweep_stale_previews();
     let path = match super::files::write_preview_html(&page) {
         Ok(path) => path,
         Err(message) => {
@@ -319,6 +335,24 @@ mod tests {
         for forbidden in ["http://", "https://", "src=", "href="] {
             assert!(!page.contains(forbidden), "template must not contain {forbidden:?}");
         }
+        // The CSP pins the hermetic property at runtime: independently
+        // written literal, so template drift fails loudly.
+        assert!(
+            page.contains(
+                "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'\">"
+            ),
+            "CSP meta present"
+        );
+    }
+
+    #[test]
+    fn preview_html_counts_utf16_units_like_pele() {
+        // Pele enforces `source.length` (UTF-16 units); astral characters
+        // count double. Boundary pair around the limit.
+        let at_limit = format!("{}🎨", "x".repeat(MAX_DIAGRAM_SOURCE_CHARS - 2));
+        assert!(build_preview_html(&at_limit, "t", "en", "", "/*bundle*/").is_ok(), "exactly 50_000 units");
+        let over_limit = format!("{}🎨", "x".repeat(MAX_DIAGRAM_SOURCE_CHARS - 1));
+        assert_eq!(build_preview_html(&over_limit, "t", "en", "", "/*bundle*/"), Err(DiagramTooLarge));
     }
 
     #[test]

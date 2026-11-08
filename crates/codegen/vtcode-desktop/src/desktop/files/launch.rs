@@ -132,40 +132,102 @@ fn shell_quote(word: &str) -> String {
     quoted
 }
 
+/// Temp-file identities, shared by the writers and the stale sweep so the
+/// sweep can never touch another file.
+const HANDOFF_TEMP_PREFIX: &str = "vtcode-handoff-";
+const PREVIEW_TEMP_PREFIX: &str = "vtcode-diagram-";
+const PREVIEW_TEMP_EXTENSION: &str = "html";
+/// Previews older than this are removed on the next preview open. A page
+/// only needs to outlive the browser load; a day is generous.
+const PREVIEW_TEMP_TTL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+/// Upper bound per sweep so a pathological temp dir cannot stall a click.
+const SWEEP_MAX_REMOVE: usize = 50;
+
 /// Write a handoff script to an owner-only temp file, exclusively created so
 /// a pre-existing symlink can never hijack the path. Names carry pid + a
 /// per-process counter so concurrent handoffs never collide. No cleanup: the
 /// OS purges temp, and deleting eagerly would race the terminal launch.
 pub(crate) fn write_handoff_script(content: &str) -> Result<PathBuf, String> {
-    write_owner_only_temp("handoff", "command", content, |error| {
+    write_owner_only_temp(HANDOFF_TEMP_PREFIX, "command", 0o700, content, |error| {
         rust_i18n::t!("app.files.launch_failed", error = error.to_string()).to_string()
     })
 }
 
 /// Write a diagram preview page to an owner-only temp file. Same
-/// exclusive-create + pid/counter discipline as handoff scripts; the OS
-/// purges temp, and deleting eagerly would race the browser launch.
+/// exclusive-create + pid/counter discipline as handoff scripts, without
+/// the exec bit HTML does not need. No cleanup here: the OS purges temp,
+/// deleting eagerly would race the browser launch, and
+/// [`sweep_stale_previews`] reaps old pages on the next open.
 pub(crate) fn write_preview_html(content: &str) -> Result<PathBuf, String> {
-    write_owner_only_temp("diagram", "html", content, |error| {
+    write_owner_only_temp(PREVIEW_TEMP_PREFIX, PREVIEW_TEMP_EXTENSION, 0o600, content, |error| {
         rust_i18n::t!("app.markdown.diagram_open_failed_detail", detail = error.to_string()).to_string()
     })
+}
+
+/// Remove diagram previews older than [`PREVIEW_TEMP_TTL`], returning how
+/// many were removed. Best-effort by design: every I/O error is ignored
+/// so a hostile temp dir can never break opening a preview. Only files
+/// written by [`write_preview_html`] (exact prefix + extension, regular
+/// files only) are candidates, and unmeasurable ages are treated as fresh.
+pub(crate) fn sweep_stale_previews() -> usize {
+    sweep_previews_older_than(&std::env::temp_dir(), PREVIEW_TEMP_TTL)
+}
+
+fn sweep_previews_older_than(dir: &Path, ttl: std::time::Duration) -> usize {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return 0,
+    };
+    let mut removed = 0;
+    for entry in entries.flatten().take(SWEEP_MAX_REMOVE * 4) {
+        if removed >= SWEEP_MAX_REMOVE {
+            break;
+        }
+        if !is_preview_temp_file(&entry) {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| preview_is_stale(age, ttl));
+        if stale && fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+fn is_preview_temp_file(entry: &fs::DirEntry) -> bool {
+    entry.file_type().map(|kind| kind.is_file()).unwrap_or(false)
+        && entry.file_name().to_string_lossy().starts_with(PREVIEW_TEMP_PREFIX)
+        && entry.path().extension().and_then(|ext| ext.to_str()) == Some(PREVIEW_TEMP_EXTENSION)
+}
+
+/// Staleness policy for preview temp files, shared by the sweep and its
+/// boundary tests.
+fn preview_is_stale(age: std::time::Duration, ttl: std::time::Duration) -> bool {
+    age >= ttl
 }
 
 fn write_owner_only_temp(
     prefix: &str,
     extension: &str,
+    mode: u32,
     content: &str,
     write_error: impl Fn(std::io::Error) -> String,
 ) -> Result<PathBuf, String> {
+    let _ = mode;
     static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
     let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!("vtcode-{prefix}-{}-{id}.{extension}", std::process::id()));
+    let path = std::env::temp_dir().join(format!("{prefix}{}-{id}.{extension}", std::process::id()));
     let mut options = fs::OpenOptions::new();
     let _options = options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        let _options = options.mode(0o700);
+        let _options = options.mode(mode);
     }
     let mut file = options.open(&path).map_err(&write_error)?;
     file.write_all(content.as_bytes()).map_err(write_error)?;
@@ -455,12 +517,54 @@ mod tests {
         assert_eq!(fs::read_to_string(&first).unwrap(), "<html></html>");
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_eq!(fs::metadata(&first).unwrap().permissions().mode() & 0o777, 0o700);
+            assert_eq!(fs::metadata(&first).unwrap().permissions().mode() & 0o777, 0o600);
         }
         assert!(
-            first.file_name().unwrap().to_string_lossy().starts_with("vtcode-diagram-"),
+            first.file_name().unwrap().to_string_lossy().starts_with(PREVIEW_TEMP_PREFIX),
             "prefix keeps previews apart from handoff scripts under one counter"
         );
+    }
+
+    #[test]
+    fn stale_preview_policy_expires_at_the_ttl_boundary() {
+        let ttl = std::time::Duration::from_secs(24 * 60 * 60);
+        assert!(!preview_is_stale(std::time::Duration::ZERO, ttl));
+        let just_under = ttl.checked_sub(std::time::Duration::from_nanos(1)).expect("ttl is large");
+        assert!(!preview_is_stale(just_under, ttl));
+        assert!(preview_is_stale(ttl, ttl));
+        assert!(preview_is_stale(ttl + std::time::Duration::from_nanos(1), ttl));
+    }
+
+    #[test]
+    fn sweep_removes_only_stale_previews_in_isolation() {
+        let workspace = temp_workspace();
+        let stale_a = workspace.path().join("vtcode-diagram-1-0.html");
+        let stale_b = workspace.path().join("vtcode-diagram-2-0.html");
+        let foreign = workspace.path().join("other.txt");
+        let not_a_file = workspace.path().join("vtcode-diagram-subdir");
+        fs::write(&stale_a, "<html></html>").unwrap();
+        fs::write(&stale_b, "<html></html>").unwrap();
+        fs::write(&foreign, "x").unwrap();
+        fs::create_dir(&not_a_file).unwrap();
+        // Zero TTL makes every measurable age stale, deterministically.
+        assert_eq!(sweep_previews_older_than(workspace.path(), std::time::Duration::ZERO), 2);
+        assert!(!stale_a.exists() && !stale_b.exists(), "stale previews removed");
+        assert!(foreign.exists(), "foreign files untouched");
+        assert!(not_a_file.exists(), "directories untouched");
+    }
+
+    #[test]
+    fn sweep_keeps_fresh_previews_in_shared_temp() {
+        struct RemoveOnDrop(PathBuf);
+        impl Drop for RemoveOnDrop {
+            fn drop(&mut self) {
+                drop(fs::remove_file(&self.0));
+            }
+        }
+        let path = write_preview_html("<html></html>").expect("write");
+        let _guard = RemoveOnDrop(path.clone());
+        let _removed = sweep_stale_previews();
+        assert!(path.exists(), "fresh previews survive the production sweep");
     }
 
     #[test]
