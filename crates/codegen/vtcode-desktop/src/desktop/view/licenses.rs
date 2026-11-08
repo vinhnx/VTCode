@@ -280,6 +280,35 @@ impl DesktopView {
         }));
     }
 
+    /// One license-viewer settings row: title and description left, a View
+    /// button right that opens `document` through the view handle. The
+    /// button label and the accessibility-label-equals-title convention are
+    /// pinned here so the VT Code and About pages cannot drift apart.
+    pub(super) fn license_viewer_row(
+        view: &Entity<Self>,
+        element_id: &'static str,
+        title: impl Into<gpui_kit::SharedString>,
+        description: impl Into<gpui_kit::SharedString>,
+        document: LicenseDocument,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> impl IntoElement {
+        let title = title.into();
+        let view = view.clone();
+        settings_row(
+            title.clone(),
+            description,
+            desktop_button(element_id)
+                .label(rust_i18n::t!(i18n::LICENSES_VIEW).to_string())
+                .accessibility_label(title)
+                .on_click(move |_, window: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| {
+                        view.open_license_viewer(document, window, cx);
+                    });
+                }),
+            colors,
+        )
+    }
+
     /// App-context content builder, hostable inside a Kit `SettingItem`
     /// closure. The license rows read no view state; the viewer opens
     /// through the view handle.
@@ -290,36 +319,20 @@ impl DesktopView {
             "licenses-settings-group",
             title.clone(),
             settings_group_box(title, &colors)
-                .child(settings_row(
+                .child(Self::license_viewer_row(
+                    &view,
+                    "open-vtcode-license",
                     rust_i18n::t!("app.licenses.first_party_title").to_string(),
                     rust_i18n::t!("app.licenses.first_party_description").to_string(),
-                    desktop_button("open-vtcode-license")
-                        .label(rust_i18n::t!(i18n::LICENSES_VIEW).to_string())
-                        .accessibility_label(rust_i18n::t!("app.licenses.first_party_title").to_string())
-                        .on_click({
-                            let view = view.clone();
-                            move |_, window: &mut Window, cx: &mut App| {
-                                view.update(cx, |view, cx| {
-                                    view.open_license_viewer(LicenseDocument::Mit, window, cx);
-                                });
-                            }
-                        }),
+                    LicenseDocument::Mit,
                     &colors,
                 ))
-                .child(settings_row(
+                .child(Self::license_viewer_row(
+                    &view,
+                    "open-third-party-notices",
                     rust_i18n::t!("app.licenses.third_party_title").to_string(),
                     rust_i18n::t!("app.licenses.third_party_description").to_string(),
-                    desktop_button("open-third-party-notices")
-                        .label(rust_i18n::t!(i18n::LICENSES_VIEW).to_string())
-                        .accessibility_label(rust_i18n::t!("app.licenses.third_party_title").to_string())
-                        .on_click({
-                            let view = view.clone();
-                            move |_, window: &mut Window, cx: &mut App| {
-                                view.update(cx, |view, cx| {
-                                    view.open_license_viewer(LicenseDocument::Notices, window, cx);
-                                });
-                            }
-                        }),
+                    LicenseDocument::Notices,
                     &colors,
                 )),
         )

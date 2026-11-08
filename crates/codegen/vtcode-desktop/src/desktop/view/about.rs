@@ -88,6 +88,85 @@ impl DesktopView {
         self.open_license_viewer(licenses::LicenseDocument::Mit, window, cx);
     }
 
+    /// Settings → About page: brand identity plus the license, acknowledgments,
+    /// and project link the native About panel exposes.
+    pub(super) fn render_about_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        Self::render_about_settings_content(cx.entity(), cx)
+    }
+
+    /// App-context content builder, hostable inside a Kit `SettingItem`
+    /// closure. The rows open the shared license viewer through the view
+    /// handle; the website action is a plain external launch.
+    pub(super) fn render_about_settings_content(view: Entity<Self>, cx: &mut App) -> AnyElement {
+        let colors = cx.theme().colors;
+        let title = rust_i18n::t!("app.menus.about").to_string();
+        let identity = div()
+            .id("about-settings-identity")
+            .test_support()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap_2()
+            .child(brand_logo(64.))
+            .child(
+                div()
+                    .text_lg()
+                    .font_semibold()
+                    .text_color(colors.foreground)
+                    .child(app::NAME.to_string()),
+            )
+            .child(
+                div()
+                    .id("about-settings-version")
+                    .test_support()
+                    .text_sm()
+                    .text_color(colors.foreground)
+                    .child(rust_i18n::t!("app.about.version", version = build_info::display_version()).to_string()),
+            )
+            .child(
+                div()
+                    .id("about-settings-copyright")
+                    .test_support()
+                    .text_xs()
+                    .text_color(colors.muted_foreground)
+                    .child("Copyright 2025 Vinh Nguyen · MIT OR Apache-2.0"),
+            );
+        div()
+            .id("about-settings")
+            .test_support()
+            .child(accessible_group_box(
+                "about-settings-group",
+                title.clone(),
+                settings_group_box(title, &colors)
+                    .child(identity)
+                    .child(Self::license_viewer_row(
+                        &view,
+                        "about-settings-license",
+                        rust_i18n::t!("app.licenses.first_party_title").to_string(),
+                        rust_i18n::t!("app.licenses.first_party_description").to_string(),
+                        licenses::LicenseDocument::Mit,
+                        &colors,
+                    ))
+                    .child(Self::license_viewer_row(
+                        &view,
+                        "about-settings-acknowledgments",
+                        rust_i18n::t!("app.about.acknowledgments").to_string(),
+                        rust_i18n::t!("app.licenses.third_party_description").to_string(),
+                        licenses::LicenseDocument::Notices,
+                        &colors,
+                    ))
+                    .child(settings_row(
+                        rust_i18n::t!("app.menus.help_website").to_string(),
+                        HELP_URL,
+                        desktop_button("about-settings-website")
+                            .label(rust_i18n::t!("app.menus.help_website").to_string())
+                            .on_click(|_, _, cx: &mut App| cx.open_url(HELP_URL)),
+                        &colors,
+                    )),
+            ))
+            .into_any_element()
+    }
+
     /// Centered brand card over the shared modal scrim: logo tile, name,
     /// version chip, then project pointers. Escape dismisses (topmost layer).
     pub(super) fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {

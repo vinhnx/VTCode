@@ -121,6 +121,47 @@ fn settings_rows_open_the_viewer_at_their_document(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn about_page_rows_open_the_viewer_at_their_document(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_via_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.settings_tab = super::super::settings::SettingsTab::About;
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    scroll_settings_into_view(window, &view, "about-settings-license", cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("about-settings-license", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).license_viewer.as_ref().map(LicenseViewerState::document), Some(LicenseDocument::Mit));
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("close-license-viewer", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    scroll_settings_into_view(window, &view, "about-settings-acknowledgments", cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("about-settings-acknowledgments", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        assert_eq!(
+            view.read(cx).license_viewer.as_ref().map(LicenseViewerState::document),
+            Some(LicenseDocument::Notices)
+        );
+    });
+}
+
+#[gpui_kit::test]
 fn viewer_groups_first_party_and_third_party_documents(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     open_viewer(window, &view, LicenseDocument::Mit, cx);
