@@ -370,6 +370,20 @@ impl DesktopView {
     }
 
     pub(super) fn update_composer_suggestions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
+            // Reverse search is inline: the panel shows rows only, so every
+            // draft change re-ranks from the composer text. History owns the
+            // session until accept/cancel — triggers must not hijack a search
+            // just because the filter contains `@` or `/`.
+            let draft = self.composer.read(cx).value();
+            if draft == self.palette_query {
+                // Cursor moves and clicks re-enter here with identical text:
+                // skip the re-rank so arrow-key navigation keeps its row.
+                return;
+            }
+            self.refresh_prompt_history(&draft, window, cx);
+            return;
+        }
         let value = self.composer.read(cx).value();
         let cursor = self.composer.read(cx).cursor();
         let Some(trigger) = composer_trigger(&value, cursor) else {
@@ -497,8 +511,8 @@ impl DesktopView {
                 flat - 1
             }
         };
-        // Kit-side filtering (prompt-history seed) hides rows, and selecting a
-        // hidden row collapses the highlight to None: step until a row sticks.
+        // The highlight resolves against Kit's installed model, which lags the
+        // host rows between a refresh and its render: step until a row sticks.
         // No `on_select` is wired, so probes are side-effect-free notifies.
         let mut candidate = current.map_or(if down { 0 } else { item_count - 1 }, step_from);
         state.update(cx, |state, cx| {

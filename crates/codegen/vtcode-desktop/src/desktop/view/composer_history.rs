@@ -8,25 +8,24 @@ impl DesktopView {
     /// cycles to the next match on the same chord, so an already-open history
     /// palette cycles here too (`on_prompt_history_shortcut`). Only the
     /// trigger buttons use the toggle-close convention.
+    ///
+    /// Reverse search is inline: the panel shows rows only (no search field),
+    /// and the composer draft is the live filter — every draft change
+    /// re-ranks through `update_composer_suggestions`. The seed below only
+    /// filters the first paint; cancel restores the pre-search draft.
     pub(super) fn open_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
             return;
         }
-        // CLI parity: seed the filter from the draft. The palette is built
-        // from the seed up front because `set_query` runs before the first
-        // render installs the model, so its `on_query` callback never fires
-        // and (with Kit filtering disabled) would leave the rows unfiltered.
-        // Cancel-restore is automatic — the palette query is separate from the
-        // composer draft.
-        let seed = self.composer.read(cx).value().trim().to_string();
+        // Stash the exact pre-search draft (untrimmed): the filter is typed
+        // into the composer, so cancel must restore this verbatim.
+        let draft = self.composer.read(cx).value();
+        self.history_filter_stash = draft.clone();
+        let seed = draft.trim().to_string();
         self.show_palette(PaletteKind::PromptHistory, self.history_palette_groups(&seed), window, cx);
-        // `show_palette` clears the query, so record the seed after it.
-        self.palette_query = seed.as_str().into();
-        if !seed.is_empty() {
-            if let Some(palette) = &self.palette {
-                palette.update(cx, |state, cx| state.set_query(seed, window, cx));
-            }
-        }
+        // `show_palette` clears the query: mirror the untrimmed draft (the
+        // ranker trims internally) so the unchanged-text guard matches first try.
+        self.palette_query = draft;
         self.request_recent_prompts();
     }
 
@@ -65,17 +64,53 @@ impl DesktopView {
                 || self.recent_prompts.is_empty())
     }
 
-    /// Re-rank the history palette for `query`, driven from the palette's
-    /// `on_query` callback. The palette runs with Kit filtering disabled, so
-    /// these rows are exactly what the user sees; matching, ranking, dedup,
-    /// and capping all come from the shared CLI ranker.
-    pub(super) fn refresh_prompt_history(&mut self, query: &str, cx: &mut Context<Self>) {
+    /// Re-rank the history palette for `query`, driven from the composer
+    /// draft on every change. The palette runs with Kit filtering disabled,
+    /// so these rows are exactly what the user sees; matching, ranking,
+    /// dedup, and capping all come from the shared CLI ranker. Re-ranking
+    /// resets the highlight like a fresh query (Kit did this while it owned
+    /// the input): first row when rows exist, none when empty.
+    pub(super) fn refresh_prompt_history(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.palette_kind != PaletteKind::PromptHistory || self.palette.is_none() {
             return;
         }
         self.palette_query = query.into();
-        self.palette_groups = share_palette_commands(self.history_palette_groups(query));
+        let groups = self.history_palette_groups(query);
+        let has_rows = groups.iter().any(|(_, entries)| !entries.is_empty());
+        self.palette_groups = share_palette_commands(groups);
+        if has_rows && let Some(state) = self.palette.clone() {
+            if state.read(cx).matched_count() > 0 {
+                // Fresh model: resolve the highlight now so Enter accepts the
+                // first row without waiting a frame.
+                let first = Some(gpui_kit::component::IndexPath::new(0));
+                state.update(cx, |state, cx| state.set_selected_index(first, window, cx));
+            } else {
+                // Stale-empty model (the filter went 0→N): the new rows
+                // install at render, so resolve the highlight after that.
+                cx.on_next_frame(window, |view, window, cx| view.select_first_history_match(window, cx));
+            }
+        }
         cx.notify();
+    }
+
+    /// Post-install highlight for history re-ranks that landed while Kit's
+    /// model was stale-empty. Skips when something is already highlighted —
+    /// a newer refresh or arrow navigation may have won the race.
+    pub(super) fn select_first_history_match(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette_kind != PaletteKind::PromptHistory || self.palette.is_none() {
+            return;
+        }
+        if !self.palette_groups.iter().any(|(_, entries)| !entries.is_empty()) {
+            return;
+        }
+        if let Some(state) = self.palette.clone() {
+            let highlighted = state.read(cx).selected_index().is_some();
+            if !highlighted {
+                state.update(cx, |state, cx| {
+                    state.set_selected_index(Some(gpui_kit::component::IndexPath::new(0)), window, cx)
+                });
+            }
+        }
     }
 
     /// Palette groups for Ctrl+R: the live thread first, then cached

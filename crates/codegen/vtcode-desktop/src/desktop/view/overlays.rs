@@ -487,7 +487,17 @@ impl DesktopView {
             self.palette_kind,
             PaletteKind::ConfigSettings | PaletteKind::Fonts(_) | PaletteKind::SettingsSearch
         ) && self.palette.is_some();
+        // Reverse search types the filter into the composer: every dismissal
+        // (Esc, Ctrl+G, click-out, Kit cancel, palette switch) restores the
+        // pre-search draft. Accept is safe: it inserts after closing, and
+        // Enter-with-no-match submits the restored original.
+        let restore_history_draft = self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory;
         self.clear_palette_state();
+        if restore_history_draft {
+            let stash = std::mem::take(&mut self.history_filter_stash);
+            self.composer.update(cx, |input, cx| input.replace_all(stash, window, cx));
+            self.move_composer_caret_to_end(window, cx);
+        }
         if let Some(focus) = self.palette_return_focus.take() {
             focus.focus(window, cx);
         } else {

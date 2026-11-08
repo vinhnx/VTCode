@@ -697,6 +697,7 @@ impl DesktopView {
             last_escape_press: None,
             composer_history_index: None,
             composer_history_stash: gpui_kit::SharedString::from(""),
+            history_filter_stash: gpui_kit::SharedString::from(""),
             transcript_focus: cx.focus_handle().tab_stop(true),
             session_focus: cx.focus_handle().tab_stop(true),
             keyboard_focused_session: None,

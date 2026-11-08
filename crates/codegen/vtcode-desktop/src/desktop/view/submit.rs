@@ -26,6 +26,12 @@ impl DesktopView {
     }
 
     fn submit_prompt_with_batching(&mut self, window: &mut Window, cx: &mut Context<Self>, batchable: bool) {
+        // Reverse search types the filter into the composer: abandon the
+        // search (restoring the pre-search draft) before reading anything to
+        // submit, so Cmd+Enter submits the draft instead of filter text.
+        if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
+            self.close_palette(window, cx);
+        }
         let prompt = self.composer.read(cx).value().to_string();
         // Reset before every early return: webmcp and slash handlers consume
         // the draft without reaching the send block below.

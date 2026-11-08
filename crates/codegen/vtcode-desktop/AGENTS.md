@@ -5,8 +5,8 @@
 
 ## Modules
 
-- `src/desktop/view/` screens, overlays, and routing (`components.rs` shared builders, plus the per-dialog modules); `appearance_themes.rs` owns custom-theme editing; Kit host: `settings_kit.rs`.
-- `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` color tokens (`custom.rs` user themes); `preferences/`; `transport.rs`.
+- `src/desktop/view/` screens, overlays, and routing (`components.rs` + `glass_buttons.rs` shared builders, plus per-dialog modules); `appearance_themes.rs` owns custom-theme editing; Kit host: `settings_kit.rs`.
+- `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` color tokens (`custom.rs` user + `glass.rs` glass themes); `preferences/`; `transport.rs`.
 - `src/desktop/transcript/` transcript projections: turn grouping lives in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders it.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
 - `src/desktop/localization/` plus per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork and Dock; `assets.rs` extra icons; `build_info.rs` and `startup.rs` About stamp and argv/URL handoff.

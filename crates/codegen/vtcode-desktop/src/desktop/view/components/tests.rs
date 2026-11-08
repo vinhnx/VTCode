@@ -25,10 +25,14 @@ fn vtcode_nav_mark_is_the_stroke_only_v_on_transparency() {
 
 #[test]
 fn button_tiers_keep_the_pointing_hand_cursor() {
+    use gpui_kit::component::theme::ThemeColor;
+
+    let colors = ThemeColor::default();
     for mut button in [
         desktop_default_button("tier-cursor-default"),
         desktop_primary_button("tier-cursor-primary"),
         desktop_danger_button("tier-cursor-danger"),
+        desktop_glass_primary_button("tier-cursor-glass", &colors, false),
     ] {
         assert_eq!(
             button.style().mouse_cursor,

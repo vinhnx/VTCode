@@ -9,6 +9,16 @@ fn open_history_with_prompts(
     prompts: &[&str],
     cx: &mut TestAppContext,
 ) {
+    open_history_with_draft(window, view, prompts, "", cx);
+}
+
+fn open_history_with_draft(
+    window: &AnyWindowHandle,
+    view: &Entity<DesktopView>,
+    prompts: &[&str],
+    draft: &str,
+    cx: &mut TestAppContext,
+) {
     cx.update_window(*window, |_, window, cx| {
         view.update(cx, |view, cx| {
             for (index, prompt) in prompts.iter().enumerate() {
@@ -20,9 +30,10 @@ fn open_history_with_prompts(
                 ));
             }
             view.composer.update(cx, |state, cx| {
-                state.set_value("", window, cx);
+                state.set_value(draft, window, cx);
                 state.focus(window, cx);
             });
+            view.move_composer_caret_to_end(window, cx);
         });
         window.render_frame(cx);
         window.press("ctrl-r", cx);
@@ -32,12 +43,26 @@ fn open_history_with_prompts(
     .unwrap();
 }
 
+/// Type filter text with honest keystrokes, then drive the refresh the
+/// Change subscription runs in production (subscription effects flush too
+/// late to assert in-test, like the mentions tests).
+fn type_history_filter(window: &AnyWindowHandle, view: &Entity<DesktopView>, text: &str, cx: &mut TestAppContext) {
+    cx.update_window(*window, |_, window, cx| {
+        window.input(text, cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.update_composer_suggestions(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
 fn set_history_query(window: &AnyWindowHandle, view: &Entity<DesktopView>, query: &str, cx: &mut TestAppContext) {
     cx.update_window(*window, |_, window, cx| {
+        // Inline design: the composer text is the filter, so write the draft
+        // and drive the refresh the Change subscription runs in production.
         view.update(cx, |view, cx| {
-            let palette = view.palette.clone().expect("history palette must be open");
-            palette.update(cx, |state, cx| state.set_query(query, window, cx));
-            view.focus_palette_state(window, cx);
+            view.composer.update(cx, |input, cx| input.set_value(query, window, cx));
+            view.update_composer_suggestions(window, cx);
         });
         window.render_frame(cx);
     })
@@ -52,8 +77,14 @@ fn history_search_matches_second_line_of_multiline_prompt(cx: &mut TestAppContex
     // "zebra" appears only in the second line: label-only search misses it.
     set_history_query(&window, &view, "zebra", cx);
     cx.update_window(window, |_, window, cx| {
-        let matched = view.read(cx).palette.as_ref().expect("palette open").read(cx).matched_count();
-        assert_eq!(matched, 1, "full prompt text must be searchable, not just the title row");
+        // Rows-only panel: Kit's match counter is vestigial, so the host
+        // groups are the oracle.
+        let groups = section_contents(&view.read(cx).palette_groups);
+        assert_eq!(
+            groups[0].1,
+            vec![target.to_string()],
+            "full prompt text must be searchable, not just the title row"
+        );
         window.press("enter", cx);
         window.render_frame(cx);
     })
@@ -74,8 +105,10 @@ fn history_search_matches_text_beyond_truncated_title(cx: &mut TestAppContext) {
     open_history_with_prompts(&window, &view, &["unrelated short prompt", target.as_str()], cx);
     set_history_query(&window, &view, "needle-past-title", cx);
     cx.update_window(window, |_, window, cx| {
-        let matched = view.read(cx).palette.as_ref().expect("palette open").read(cx).matched_count();
-        assert_eq!(matched, 1, "search must cover the full prompt, not the 72-char title");
+        // Rows-only panel: Kit's match counter is vestigial, so the host
+        // groups are the oracle.
+        let groups = section_contents(&view.read(cx).palette_groups);
+        assert_eq!(groups[0].1, vec![target.clone()], "search must cover the full prompt, not the 72-char title");
         window.press("enter", cx);
         window.render_frame(cx);
     })
@@ -145,6 +178,10 @@ fn deliver_recent_prompts(
         });
     })
     .unwrap();
+}
+
+fn selected_row(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> Option<gpui_kit::component::IndexPath> {
+    view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index())
 }
 
 fn section_contents(groups: &[(String, Vec<std::rc::Rc<super::super::PaletteCommand>>)]) -> Vec<(String, Vec<String>)> {
@@ -357,10 +394,10 @@ fn history_search_matches_non_contiguous_multi_word_query(cx: &mut TestAppContex
     // the shared nucleo ranker.
     set_history_query(&window, &view, "impl chg", cx);
     cx.update_window(window, |_, _, cx| {
-        let matched = view.read(cx).palette.as_ref().expect("palette open").read(cx).matched_count();
-        assert_eq!(matched, 1, "fuzzy multi-token search must span the phrase");
+        // Rows-only panel: Kit's match counter is vestigial, so the host
+        // groups are the oracle.
         let groups = section_contents(&view.read(cx).palette_groups);
-        assert_eq!(groups[0].1, vec![target.to_string()]);
+        assert_eq!(groups[0].1, vec![target.to_string()], "fuzzy multi-token search must span the phrase");
     })
     .unwrap();
 }
@@ -388,22 +425,205 @@ fn history_empty_query_lists_prompts_newest_first(cx: &mut TestAppContext) {
 fn ctrl_r_cycles_through_matches_without_closing(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt", "gamma prompt"], cx);
-    let selected = |view: &Entity<DesktopView>, cx: &gpui_kit::App| {
-        view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index())
-    };
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
-        let first = selected(&view, cx);
+        let first = selected_row(&view, cx);
         window.press("ctrl-r", cx);
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_some(), "ctrl-r cycles instead of closing");
-        let second = selected(&view, cx);
+        let second = selected_row(&view, cx);
         assert_ne!(first, second, "ctrl-r advances the highlight");
         window.press("ctrl-r", cx);
         window.render_frame(cx);
-        let third = selected(&view, cx);
+        let third = selected_row(&view, cx);
         assert_ne!(second, third, "ctrl-r keeps advancing");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_palette_filters_from_composer_text(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt", "gamma prompt"], cx);
+    // Reverse search is inline: the composer keeps focus and its text is the
+    // filter.
+    type_history_filter(&window, &view, "beta", cx);
+    cx.update_window(window, |_, _, cx| {
+        assert_eq!(
+            view.read(cx).composer.read(cx).value().to_string(),
+            "beta",
+            "the composer keeps focus and holds the typed filter"
+        );
+        assert_eq!(view.read(cx).palette_query.to_string(), "beta", "the palette query mirrors the draft");
+        let groups = section_contents(&view.read(cx).palette_groups);
+        assert_eq!(groups[0].1, vec!["beta prompt".to_string()], "the fuzzy ranker narrows the rows to the match");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_cancel_after_typing_restores_presearch_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_draft(&window, &view, &["alpha prompt", "beta prompt"], "original request", cx);
+    // The filter is typed into the composer; abandoning the search must
+    // bring back exactly what was there before.
+    type_history_filter(&window, &view, "zzz", cx);
+    cx.update_window(window, |_, window, cx| {
+        assert_eq!(view.read(cx).composer.read(cx).value().to_string(), "original requestzzz");
+        window.press("ctrl-g", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "ctrl-g dismisses the history palette");
+        assert_eq!(
+            view.read(cx).composer.read(cx).value().to_string(),
+            "original request",
+            "cancel restores the pre-search draft verbatim"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_arrow_navigation_survives_unchanged_draft_refresh(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt", "gamma prompt"], cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        let first = selected_row(&view, cx);
+        assert!(first.is_some(), "opening selects the first row");
+        // Arrow down (as the MoveDown capture does), then the deferred
+        // navigation refresh with identical text must not reset the row.
+        view.update(cx, |view, cx| {
+            assert!(view.move_composer_suggestion(true, window, cx));
+        });
+        let second = selected_row(&view, cx);
+        assert_ne!(first, second, "arrow down must move the highlight");
+        view.update(cx, |view, cx| view.update_composer_suggestions(window, cx));
+        window.render_frame(cx);
+        assert_eq!(selected_row(&view, cx), second, "unchanged draft must not reset the highlight");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_escape_after_typing_restores_presearch_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_draft(&window, &view, &["Review stale diffs"], "original request", cx);
+    type_history_filter(&window, &view, "zzz", cx);
+    cx.update_window(window, |_, window, cx| {
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "escape dismisses the history palette");
+        assert_eq!(
+            view.read(cx).composer.read(cx).value().to_string(),
+            "original request",
+            "every dismissal restores the pre-search draft, not just ctrl-g"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_empty_then_nonempty_restores_highlight_and_accepts(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt"], cx);
+    // Filter to zero rows, then back to a match — without rendering between,
+    // so Kit's installed model is stale-empty (the deferred-highlight input).
+    set_history_query(&window, &view, "zzzznomatch", cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(section_contents(&view.read(cx).palette_groups)[0].1.is_empty());
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |input, cx| input.set_value("beta", window, cx));
+            view.update_composer_suggestions(window, cx);
+        });
+        let palette = view.read(cx).palette.clone().expect("history palette must be open");
+        assert_eq!(palette.read(cx).matched_count(), 0, "installed model is stale-empty");
+        assert!(!section_contents(&view.read(cx).palette_groups)[0].1.is_empty(), "host rows are back");
+        // Arrow against the stale model (the same-frame device race), then
+        // render and drive the deferred post-install highlight (`on_next_frame`
+        // never runs headless): Enter must accept the row.
+        view.update(cx, |view, cx| {
+            assert!(view.move_composer_suggestion(true, window, cx));
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.select_first_history_match(window, cx));
+        window.render_frame(cx);
+        window.press("enter", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).composer.read(cx).value().to_string(),
+            "beta prompt",
+            "enter after empty-then-match accepts the row"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_cmd_enter_submits_presearch_draft_not_filter(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    open_history_with_draft(&window, &view, &["alpha prompt"], "original request", cx);
+    type_history_filter(&window, &view, "zzz", cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".to_string());
+            view.running = true;
+        });
+        window.render_frame(cx);
+        window.press("cmd-enter", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "submit abandons the search");
+        let view = view.read(cx);
+        assert_eq!(view.queued_submissions.len(), 1);
+        assert_eq!(
+            view.queued_submissions[0].prompt, "original request",
+            "submit reads the restored draft, not the filter text"
+        );
+    })
+    .unwrap();
+    let BackendCommand::Request { params, .. } = requests.try_recv().unwrap() else {
+        panic!("expected queued turn request");
+    };
+    assert_eq!(params["batchable"], true);
+}
+
+#[gpui_kit::test]
+fn history_enter_on_empty_match_submits_presearch_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_draft(&window, &view, &["Review stale diffs"], "original request", cx);
+    type_history_filter(&window, &view, "zzz", cx);
+    cx.update_window(window, |_, window, cx| {
+        // No row matches: Enter closes and submits the restored original,
+        // never the filter-polluted draft.
+        window.press("enter", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none());
+        assert_eq!(
+            view.read(cx).composer.read(cx).value().to_string(),
+            "original request",
+            "enter on empty match must not submit filter text"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn history_padded_seed_keeps_arrow_navigation(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_history_with_draft(&window, &view, &["alpha prompt", "beta prompt", "gamma prompt"], "  ", cx);
+    cx.update_window(window, |_, window, cx| {
+        // The mirror holds the untrimmed draft, so a navigation refresh with
+        // identical text is a no-op and keeps the moved highlight.
+        view.update(cx, |view, cx| {
+            assert!(view.move_composer_suggestion(true, window, cx));
+        });
+        let second = selected_row(&view, cx);
+        view.update(cx, |view, cx| view.update_composer_suggestions(window, cx));
+        window.render_frame(cx);
+        assert_eq!(selected_row(&view, cx), second, "identical padded text must not reset the highlight");
     })
     .unwrap();
 }
@@ -424,17 +644,14 @@ fn ctrl_g_cancels_prompt_history_and_keeps_the_draft(cx: &mut TestAppContext) {
 fn tab_cycles_history_matches_instead_of_accepting(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     open_history_with_prompts(&window, &view, &["alpha prompt", "beta prompt", "gamma prompt"], cx);
-    let selected = |view: &Entity<DesktopView>, cx: &gpui_kit::App| {
-        view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index())
-    };
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
-        let first = selected(&view, cx);
+        let first = selected_row(&view, cx);
         window.press("tab", cx);
         window.render_frame(cx);
         assert!(view.read(cx).palette.is_some(), "tab must not accept the row");
-        assert_ne!(first, selected(&view, cx), "tab cycles to the next match");
+        assert_ne!(first, selected_row(&view, cx), "tab cycles to the next match");
     })
     .unwrap();
 }

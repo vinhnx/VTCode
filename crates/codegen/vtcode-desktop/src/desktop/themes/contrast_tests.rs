@@ -339,6 +339,102 @@ fn composite_over(fg: Hsla, alpha: f32, bg: Hsla) -> Hsla {
     })
 }
 
+/// Glass primaries composite their accent fill over the canvas seat: the
+/// theme's primary text must hold AA on that composite in every palette and
+/// across the whole contrast range, using the independent `composite_over`
+/// oracle rather than the production blend. The rest fill also keeps the
+/// accent's hue (opacity only dims it) and stays inside the glass alpha band.
+#[gpui_kit::test]
+fn glass_primary_rest_holds_aa_on_the_canvas_seat(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            for amount in [0, 40, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                let rest = glass_primary_rest(&colors);
+                assert!(
+                    (0.60..=1.0).contains(&rest.a),
+                    "{id} at {amount}: glass alpha {a} left the 0.60-1.00 band",
+                    a = rest.a
+                );
+                let composite = composite_over(colors.button_primary, rest.a, colors.background);
+                let ratio = contrast_ratio(colors.button_primary_foreground, composite);
+                assert!(ratio >= 4.5, "{id} at {amount}: glass primary text is {ratio:.2}");
+                let rest_rgb = gpui_kit::Rgba::from(rest);
+                let accent_rgb = gpui_kit::Rgba::from(colors.button_primary);
+                assert_eq!(
+                    (rest_rgb.r, rest_rgb.g, rest_rgb.b),
+                    (accent_rgb.r, accent_rgb.g, accent_rgb.b),
+                    "{id} at {amount}: glass must dim the accent, not shift its hue"
+                );
+            }
+        }
+    });
+}
+
+/// The pilot must actually show glass on the default theme, not silently
+/// sit on the opaque fallback everywhere (which would still pass the AA
+/// matrix above while changing nothing visible).
+#[gpui_kit::test]
+fn glass_primary_engages_translucency_on_the_default_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let _mode = apply_by_id(DEFAULT_THEME_ID, None, cx);
+        let colors = cx.theme().colors;
+        let rest = glass_primary_rest(&colors);
+        assert!(rest.a < 1.0, "default theme must show glass, not the opaque fallback");
+    });
+}
+
+/// Asymmetric fixtures: a zero-headroom palette (white accent, white text on
+/// a white seat) where no alpha can separate must fall back to the opaque
+/// fill, while a headroom-rich palette (black accent on a black seat with
+/// white text) must engage translucency at exactly the glass floor.
+#[test]
+fn glass_primary_rest_degrades_to_opaque_without_headroom() {
+    let white: Hsla = rgb(0xffffff).into();
+    let black: Hsla = rgb(0x000000).into();
+    let stuck = ThemeColor {
+        background: white,
+        button_primary: white,
+        button_primary_foreground: white,
+        ..ThemeColor::default()
+    };
+    assert_eq!(glass_primary_rest(&stuck).a, 1.0, "no alpha can separate white on white");
+    let roomy = ThemeColor {
+        background: black,
+        button_primary: black,
+        button_primary_foreground: white,
+        ..ThemeColor::default()
+    };
+    let rest = glass_primary_rest(&roomy);
+    assert!((rest.a - 0.60).abs() < 1e-6, "headroom must engage the glass floor, got {}", rest.a);
+}
+
+/// The disabled wash is Kit's own disabled-primary formula
+/// (`button_primary` at 0.15), pinned so a disabled glass button reads
+/// exactly like a disabled opaque one.
+#[test]
+fn glass_disabled_wash_matches_kit_disabled_primary() {
+    let colors = ThemeColor {
+        button_primary: rgb(0x3b82f6).into(),
+        ..ThemeColor::default()
+    };
+    let wash = glass_disabled_wash(&colors);
+    assert!((wash.a - 0.15).abs() < 1e-6, "wash must sit at 0.15 alpha, got {}", wash.a);
+    let wash_rgb = gpui_kit::Rgba::from(wash);
+    let accent_rgb = gpui_kit::Rgba::from(colors.button_primary);
+    assert_eq!(
+        (wash_rgb.r, wash_rgb.g, wash_rgb.b),
+        (accent_rgb.r, accent_rgb.g, accent_rgb.b),
+        "wash must dim the accent, not shift its hue"
+    );
+}
+
 /// The Recommended pill paints `muted_text` over the choice-row washes
 /// (checked 8%, hover 4% primary on popover): the small pill text must
 /// hold AA on both seats. The Tag outline default (`muted_foreground`)

@@ -196,6 +196,9 @@ impl DesktopView {
             // capped by the shared CLI ranker, so Kit must not re-filter them:
             // its substring test is exactly the divergence this replaced.
             command = command.filterable(false);
+            // Reverse search is inline: the composer text is the filter, so
+            // the panel shows rows only and keeps no search field of its own.
+            command = command.searchable(false);
         }
         let show_history_control =
             conversation_search && (older_history_available || history_page_loading || history_page_failed);
@@ -479,10 +482,9 @@ impl DesktopView {
                     if !view.palette_is_current(palette_id) {
                         return;
                     }
-                    if view.palette_kind == PaletteKind::PromptHistory {
-                        view.refresh_prompt_history(query, cx);
-                        return;
-                    }
+                    // No PromptHistory arm: the panel is rows-only
+                    // (`searchable(false)`), so Kit never calls back — the
+                    // draft drives refreshes instead.
                     view.palette_query = query.into();
                     cx.notify();
                 });

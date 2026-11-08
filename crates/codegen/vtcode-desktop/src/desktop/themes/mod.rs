@@ -17,6 +17,8 @@ pub(super) use custom::{
     CustomTheme, CustomThemeError, custom_id_for, deserialize_custom_themes, name_taken,
     validate as validate_custom_theme,
 };
+mod glass;
+pub(super) use glass::{glass_disabled_wash, glass_primary_rest};
 
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
@@ -945,16 +947,11 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
 /// Choose a translucent sidebar fill that remains readable over light and dark backdrops.
 pub(super) fn translucent_sidebar_surface(colors: &ThemeColor) -> Hsla {
     let surface = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
-    let rgba = gpui_kit::Rgba::from(surface);
     for step in 0..=20 {
         let alpha = 0.80 + step as f32 * 0.01;
         let readable = [0.0, 1.0].into_iter().all(|backdrop| {
-            let composite = Hsla::from(gpui_kit::Rgba {
-                r: rgba.r * alpha + backdrop * (1.0 - alpha),
-                g: rgba.g * alpha + backdrop * (1.0 - alpha),
-                b: rgba.b * alpha + backdrop * (1.0 - alpha),
-                a: 1.0,
-            });
+            let backdrop = Hsla { h: 0.0, s: 0.0, l: backdrop, a: 1.0 };
+            let composite = composite_status_surface(backdrop, surface, alpha);
             contrast_ratio(colors.foreground, composite) >= 4.5
                 && contrast_ratio(colors.muted_foreground, composite) >= 4.5
                 && contrast_ratio(label_foreground(colors), composite) >= 4.5

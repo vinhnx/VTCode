@@ -134,6 +134,7 @@ mod file_preview;
 mod file_rename;
 mod files_panel;
 mod full_access_confirm;
+mod glass_buttons;
 mod ids;
 mod inspector_changes;
 mod inspector_panels;
@@ -188,6 +189,7 @@ pub(crate) use bootstrap::run;
 use bootstrap::{dispatch_handoff_links, init_keybindings, open_or_activate_main_window};
 use chrome::*;
 use components::*;
+use glass_buttons::*;
 use inspector_changes::*;
 use launch_bounds::{desktop_window_options, main_screen_visible_bounds};
 use mcp_app::{McpAppBodyKey, PendingMcpAppRead};
@@ -578,6 +580,8 @@ struct DesktopView {
     composer_history_index: Option<usize>,
     /// Live draft stashed when recall starts; restored when traversing back.
     composer_history_stash: gpui_kit::SharedString,
+    /// Pre-search draft stashed when reverse search opens; restored on cancel.
+    history_filter_stash: gpui_kit::SharedString,
     transcript_focus: FocusHandle,
     /// Keyboard highlight for Up/Down transcript navigation (message id).
     /// Reveals the same row actions as hover; Esc leaves it as position memory.

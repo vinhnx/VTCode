@@ -323,7 +323,7 @@ impl DesktopView {
                         .on_click(cx.listener(|this, _, _, cx| this.force_cancel_foreground_sessions(cx))),
                 )
                 .child(
-                    composer_run_geometry(desktop_primary_button("cancel-turn"))
+                    composer_run_geometry(desktop_glass_primary_button("cancel-turn", &colors, false))
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
@@ -336,12 +336,11 @@ impl DesktopView {
                 );
         } else {
             model_actions = model_actions.child(
-                composer_run_geometry(desktop_primary_button("send-prompt"))
+                composer_run_geometry(desktop_glass_primary_button("send-prompt", &colors, !can_submit))
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
                     .when(can_submit, |button| button.desktop_elevated())
-                    .desktop_disabled(!can_submit)
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
             );
         }
