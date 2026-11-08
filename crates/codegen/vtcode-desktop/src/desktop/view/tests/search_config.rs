@@ -140,7 +140,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -158,7 +158,7 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
@@ -235,7 +235,7 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -253,14 +253,15 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
-            let snapshot = view.cli_config_settings.as_mut().unwrap();
-            let mut reference = snapshot.settings[0].clone();
+            }));
+            let mut owned = view.cli_config_settings.as_deref().unwrap().clone();
+            let mut reference = owned.settings[0].clone();
             reference.path = "tools.example".into();
             reference.group = Some("Tools".into());
             reference.label = Some("Tool reference".into());
             reference.editable = false;
-            snapshot.settings.push(reference);
+            owned.settings.push(reference);
+            view.cli_config_settings = Some(std::rc::Rc::new(owned));
             view.slash_commands = vec![vtcode_desktop_protocol::SlashCommandInfo {
                 name: "config".into(),
                 description: "Open CLI configuration".into(),
@@ -334,13 +335,13 @@ fn cli_config_page_keeps_header_fixed_while_catalog_scrolls_in_short_windows(cx:
                     )
                 })
                 .collect();
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings,
                 target_versions: Vec::new(),
                 omitted_sensitive: 1,
                 omitted_large: 1,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -399,13 +400,13 @@ fn config_rail_sits_beside_content_when_wide_and_above_when_narrow(cx: &mut Test
                     )
                 })
                 .collect();
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings,
                 target_versions: Vec::new(),
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -444,7 +445,7 @@ fn config_boolean_switch_writes_the_toggled_value_in_both_directions(cx: &mut Te
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![
                     config_page_setting("agent.verbose", json!(true), "Model & Provider"),
                     config_page_setting("agent.quiet", json!(false), "Model & Provider"),
@@ -453,7 +454,7 @@ fn config_boolean_switch_writes_the_toggled_value_in_both_directions(cx: &mut Te
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_group = Some("Model & Provider".into());
             view.config_page_open = true;
             view.open_settings(window, cx);
@@ -503,7 +504,7 @@ fn config_page_footer_shows_reset_hint_and_write_notice(cx: &mut TestAppContext)
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![config_page_setting(
                     "agent.default_model",
                     json!("model-a"),
@@ -513,7 +514,7 @@ fn config_page_footer_shows_reset_hint_and_write_notice(cx: &mut TestAppContext)
                 omitted_sensitive: 1,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_write_notice = Some("Saved agent.default_model to workspace configuration.".into());
             view.config_page_open = true;
             view.open_settings(window, cx);
@@ -960,7 +961,7 @@ fn config_target_switch_flips_selected_accessibility_state(cx: &mut TestAppConte
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![config_page_setting(
                     "agent.default_model",
                     json!("model-a"),
@@ -970,7 +971,7 @@ fn config_target_switch_flips_selected_accessibility_state(cx: &mut TestAppConte
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });

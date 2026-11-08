@@ -18,6 +18,7 @@ pub(super) struct VtcodeSettingsProps {
     pub(super) cli: configuration::CliConfigurationProps,
     pub(super) show_in_menu_bar: bool,
     pub(super) launch_at_login_enabled: bool,
+    pub(super) login_item_status: login_items::LoginItemStatus,
     pub(super) secret: secret_store::SecretStoreProps,
 }
 
@@ -44,6 +45,7 @@ impl VtcodeSettingsProps {
             cli: configuration::CliConfigurationProps::capture(view),
             show_in_menu_bar: view.preferences.show_in_menu_bar,
             launch_at_login_enabled: view.preferences.launch_at_login_enabled(),
+            login_item_status: view.login_item_status,
             secret: secret_store::SecretStoreProps::capture(view),
         }
     }
@@ -68,7 +70,12 @@ impl DesktopView {
             .child(Self::render_cli_configuration_content(&props.cli, view.clone(), cx))
             .child(Self::render_licenses_settings_content(view.clone(), cx))
             .child(Self::render_menu_bar_settings_content(props.show_in_menu_bar, view.clone(), cx))
-            .child(Self::render_login_items_settings_content(props.launch_at_login_enabled, view, cx));
+            .child(Self::render_login_items_settings_content(
+                props.launch_at_login_enabled,
+                props.login_item_status,
+                view,
+                cx,
+            ));
         content.into_any_element()
     }
 

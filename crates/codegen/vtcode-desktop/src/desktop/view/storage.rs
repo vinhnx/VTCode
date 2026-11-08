@@ -42,9 +42,16 @@ impl StorageSettingsProps {
     /// Snapshot the view fields the storage builders read. Both the
     /// legacy shell wrapper and the Kit adapter build props here.
     pub(super) fn capture(view: &DesktopView) -> Self {
+        // Only the review view reads the session list; the summary and
+        // worktree views skip the clone on every settings render.
+        let sessions = if view.storage.view == StorageView::ReviewSessions {
+            view.sessions.clone()
+        } else {
+            Vec::new()
+        };
         Self {
             storage: view.storage.clone(),
-            sessions: view.sessions.clone(),
+            sessions,
             selected_session_id: view.selected_session_id.clone(),
         }
     }

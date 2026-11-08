@@ -267,7 +267,7 @@ fn route_back_peels_settings_layers_in_order(cx: &mut TestAppContext) {
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });
-        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
             settings: vec![vtcode_desktop_protocol::ConfigSetting {
                 path: "agent.default_model".into(),
                 value: serde_json::json!("model-a"),
@@ -285,7 +285,7 @@ fn route_back_peels_settings_layers_in_order(cx: &mut TestAppContext) {
             omitted_sensitive: 0,
             omitted_large: 0,
             omitted_limit: 0,
-        });
+        }));
     });
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
@@ -757,7 +757,7 @@ fn scrim_press_dismisses_clean_editors_and_holds_edited_ones(cx: &mut TestAppCon
     view.update(cx, |view, _| {
         let (commands, _) = tokio::sync::mpsc::channel(2);
         view.backend = Some(BackendHandle { commands });
-        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
             settings: vec![vtcode_desktop_protocol::ConfigSetting {
                 path: "agent.default_model".into(),
                 value: serde_json::json!("model-a"),
@@ -775,7 +775,7 @@ fn scrim_press_dismisses_clean_editors_and_holds_edited_ones(cx: &mut TestAppCon
             omitted_sensitive: 0,
             omitted_large: 0,
             omitted_limit: 0,
-        });
+        }));
     });
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {

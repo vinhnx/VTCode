@@ -7,7 +7,7 @@ fn open_config_panes(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<Deskto
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![
                     config_page_setting("agent.default_model", json!("model-a"), "Model & Provider"),
                     config_page_setting("tools.auto_approve", json!(true), "Tools"),
@@ -16,7 +16,7 @@ fn open_config_panes(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<Deskto
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });

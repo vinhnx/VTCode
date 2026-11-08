@@ -648,6 +648,9 @@ impl DesktopView {
             PaletteAction::SelectFont { target, family } => self.select_font(target, family, cx),
             PaletteAction::SelectSettingsTab(tab) => {
                 self.select_settings_tab(tab);
+                if tab == settings::SettingsTab::VtCode {
+                    self.refresh_login_item_status(cx);
+                }
                 if tab == settings::SettingsTab::Storage {
                     self.maybe_request_storage_summary(cx);
                 }

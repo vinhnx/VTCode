@@ -20,13 +20,13 @@ fn disconnected_config_catalog_cannot_be_edited(cx: &mut TestAppContext) {
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
     view.update(cx, |view, _| {
         view.workspace = Some("/workspace".into());
-        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
             settings: Vec::new(),
             target_versions: Vec::new(),
             omitted_sensitive: 0,
             omitted_large: 0,
             omitted_limit: 0,
-        });
+        }));
         assert!(!view.can_edit_cli_settings());
         view.backend = Some(BackendHandle { commands });
         assert!(view.can_edit_cli_settings());

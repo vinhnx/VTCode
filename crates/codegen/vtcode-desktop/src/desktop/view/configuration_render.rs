@@ -24,10 +24,9 @@ pub(super) const CONFIG_WIDE_VIEWPORT: f32 = 960.;
 pub(super) struct ConfigPageProps {
     pub(super) search_input: Entity<InputState>,
     // `Rc`-wrapped: the Kit item closure re-clones props on every Kit
-    // render, so the two large fields cross as shared pointers to keep
-    // that re-clone cheap. Capture itself still clones each once per
-    // settings render; the freshness check protects the catalog rebuild,
-    // not the clone.
+    // render, so the large fields cross as shared pointers. The snapshot
+    // is `Rc` on the view itself, so capture only bumps the refcount —
+    // the 730-setting deep clone per settings render is gone.
     pub(super) catalog_cache: Option<Rc<ConfigCatalogCache>>,
     pub(super) epoch: u64,
     pub(super) snapshot: Option<Rc<protocol::ConfigSettingsSnapshot>>,
@@ -51,7 +50,7 @@ impl ConfigPageProps {
             search_input: view.config_search_input.clone(),
             catalog_cache: view.config_catalog_cache.clone().map(Rc::new),
             epoch: view.config_catalog_epoch,
-            snapshot: view.cli_config_settings.clone().map(Rc::new),
+            snapshot: view.cli_config_settings.clone(),
             page_group: view.config_page_group.clone(),
             cli: CliConfigurationProps::capture(view),
             server_version: view.service_info.as_ref().map(|info| info.server_version.clone()),

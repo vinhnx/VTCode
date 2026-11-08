@@ -66,7 +66,7 @@ fn gutter_press_unwinds_one_layer_and_theme_draft_holds_for_the_prompt(cx: &mut 
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
     view.update(cx, |view, _| {
         view.backend = Some(BackendHandle { commands });
-        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
             settings: vec![vtcode_desktop_protocol::ConfigSetting {
                 path: "agent.default_model".into(),
                 value: serde_json::json!("model-a"),
@@ -84,7 +84,7 @@ fn gutter_press_unwinds_one_layer_and_theme_draft_holds_for_the_prompt(cx: &mut 
             omitted_sensitive: 0,
             omitted_large: 0,
             omitted_limit: 0,
-        });
+        }));
     });
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
@@ -140,7 +140,7 @@ fn enum_editor_selection_dirt_holds_for_the_prompt(cx: &mut TestAppContext) {
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
         view.backend = Some(BackendHandle { commands });
-        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
             settings: vec![vtcode_desktop_protocol::ConfigSetting {
                 path: "provider.openai.service_tier".into(),
                 value: serde_json::json!("auto"),
@@ -158,7 +158,7 @@ fn enum_editor_selection_dirt_holds_for_the_prompt(cx: &mut TestAppContext) {
             omitted_sensitive: 0,
             omitted_large: 0,
             omitted_limit: 0,
-        });
+        }));
     });
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {

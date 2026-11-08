@@ -650,6 +650,9 @@ impl DesktopView {
         }
         if let Some(tab) = SettingsTab::ALL.get(index) {
             self.select_settings_tab(*tab);
+            if *tab == SettingsTab::VtCode {
+                self.refresh_login_item_status(cx);
+            }
             if *tab == SettingsTab::Storage {
                 self.maybe_request_storage_summary(cx);
             }

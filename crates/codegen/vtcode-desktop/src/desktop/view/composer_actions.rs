@@ -71,6 +71,9 @@ impl DesktopView {
                 self.settings_tab = tab.unwrap_or(settings::SettingsTab::Appearance);
                 self.clear_submitted_command(window, cx);
                 self.open_settings(window, cx);
+                if self.settings_tab == settings::SettingsTab::VtCode {
+                    self.refresh_login_item_status(cx);
+                }
                 true
             }
             DesktopSlashAction::Permissions => {

@@ -177,7 +177,7 @@ fn escape_closes_cli_config_editor_before_the_settings_page(cx: &mut TestAppCont
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -195,7 +195,7 @@ fn escape_closes_cli_config_editor_before_the_settings_page(cx: &mut TestAppCont
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
             view.open_cli_config_editor("agent.default_model".into(), window, cx);
         });
@@ -244,7 +244,7 @@ fn settings_surface_close_clears_the_editor_first_and_never_during_a_write(cx: &
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
                     value: json!("model-a"),
@@ -262,7 +262,7 @@ fn settings_surface_close_clears_the_editor_first_and_never_during_a_write(cx: &
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
             view.open_cli_config_editor("agent.default_model".into(), window, cx);
         });
@@ -312,7 +312,7 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "provider.openai.service_tier".into(),
                     value: json!("auto"),
@@ -330,7 +330,7 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
             view.open_cli_config_editor("provider.openai.service_tier".into(), window, cx);
         });
@@ -807,7 +807,7 @@ fn cli_config_enum_editor_contains_tab_focus(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "provider.openai.service_tier".into(),
                     value: json!("auto"),
@@ -825,7 +825,7 @@ fn cli_config_enum_editor_contains_tab_focus(cx: &mut TestAppContext) {
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.open_settings(window, cx);
             view.open_cli_config_editor("provider.openai.service_tier".into(), window, cx);
         });

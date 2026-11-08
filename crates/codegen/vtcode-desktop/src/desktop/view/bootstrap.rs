@@ -637,6 +637,8 @@ impl DesktopView {
                 cx.notify();
             }
         });
+        // One native read at construction; render and scroll never touch the OS.
+        let login_item_status = login_items::status(cx);
         Self {
             shortcut_draft,
             shortcut_search_input,
@@ -935,6 +937,7 @@ impl DesktopView {
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
             preferences,
+            login_item_status,
             system_motion_baseline,
             sidebar_open: false,
             navigation_peek: false,

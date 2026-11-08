@@ -534,3 +534,23 @@ fn storage_back_returns_to_the_summary(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn storage_capture_only_clones_sessions_for_the_review_view(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.sessions = vec![review_session_fixture("old", 30, Some(100))];
+    });
+    // Summary view (the default): no session clone.
+    view.update(cx, |view, _| {
+        assert_eq!(view.storage.view, super::super::storage::StorageView::Summary);
+        let captured = super::super::storage::StorageSettingsProps::capture(view);
+        assert!(captured.sessions.is_empty(), "summary capture skips the session clone");
+    });
+    // Review view: the list is captured.
+    view.update(cx, |view, _| {
+        view.storage.view = super::super::storage::StorageView::ReviewSessions;
+        let captured = super::super::storage::StorageSettingsProps::capture(view);
+        assert_eq!(captured.sessions.len(), 1, "review capture carries the session list");
+    });
+}

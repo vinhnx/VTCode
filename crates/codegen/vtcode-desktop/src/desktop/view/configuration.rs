@@ -271,7 +271,11 @@ impl DesktopView {
         if !self.can_edit_cli_settings() {
             return;
         }
-        let groups = self.cli_config_settings.as_ref().map(config_palette_groups).unwrap_or_default();
+        let groups = self
+            .cli_config_settings
+            .as_ref()
+            .map(|snapshot| config_palette_groups(snapshot))
+            .unwrap_or_default();
         self.show_palette(PaletteKind::ConfigSettings, groups, window, cx);
     }
 
@@ -601,7 +605,7 @@ impl DesktopView {
     pub(super) fn handle_cli_config_read_response(&mut self, result: Value, cx: &App) {
         match serde_json::from_value::<protocol::ConfigSettingsSnapshot>(result) {
             Ok(snapshot) => {
-                self.cli_config_settings = Some(snapshot);
+                self.cli_config_settings = Some(Rc::new(snapshot));
                 self.config_catalog_epoch = self.config_catalog_epoch.wrapping_add(1);
                 // Keep the reader's page across reloads (post-write refresh
                 // included); new queries and group switches reset via refresh.

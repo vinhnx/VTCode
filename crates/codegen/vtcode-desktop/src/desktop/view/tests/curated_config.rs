@@ -28,7 +28,7 @@ fn curated_overview_is_the_default_config_landing(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(curated_snapshot());
+            view.cli_config_settings = Some(std::rc::Rc::new(curated_snapshot()));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -69,7 +69,7 @@ fn curated_deep_link_returns_to_the_overview(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(curated_snapshot());
+            view.cli_config_settings = Some(std::rc::Rc::new(curated_snapshot()));
             view.config_page_group = Some("Tools & Integrations".into());
             let action =
                 super::super::composer_controls::DesktopSlashAction::Configuration(Some("configuration".into()));
@@ -93,7 +93,7 @@ fn curated_network_toggle_writes_the_mapped_policy_in_both_directions(cx: &mut T
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(curated_snapshot());
+            view.cli_config_settings = Some(std::rc::Rc::new(curated_snapshot()));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -118,13 +118,14 @@ fn curated_network_toggle_writes_the_mapped_policy_in_both_directions(cx: &mut T
         view.update(cx, |view, cx| {
             view.config_write_pending = false;
             view.session_request = None;
-            let snapshot = view.cli_config_settings.as_mut().expect("snapshot");
-            let policy = snapshot
+            let mut owned = view.cli_config_settings.as_deref().expect("snapshot").clone();
+            let policy = owned
                 .settings
                 .iter_mut()
                 .find(|setting| setting.path == "sandbox.network.policy")
                 .expect("network policy");
             policy.value = json!("allow_all");
+            view.cli_config_settings = Some(std::rc::Rc::new(owned));
             cx.notify();
         });
         window.render_frame(cx);
@@ -158,7 +159,7 @@ fn curated_network_toggle_is_disabled_outside_workspace_write(cx: &mut TestAppCo
                 .find(|setting| setting.path == "sandbox.default_policy")
                 .expect("sandbox policy")
                 .value = json!("read_only");
-            view.cli_config_settings = Some(snapshot);
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -182,7 +183,7 @@ fn curated_open_file_requests_the_selected_layer(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(curated_snapshot());
+            view.cli_config_settings = Some(std::rc::Rc::new(curated_snapshot()));
             view.config_target = vtcode_desktop_protocol::ConfigTarget::Workspace;
             view.config_page_open = true;
             view.open_settings(window, cx);
@@ -207,7 +208,7 @@ fn curated_effort_switch_updates_the_saved_selection(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(curated_snapshot());
+            view.cli_config_settings = Some(std::rc::Rc::new(curated_snapshot()));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -316,7 +317,7 @@ fn blocked_network_policy_disables_the_toggle(cx: &mut TestAppContext) {
                 .find(|setting| setting.path == "sandbox.network.policy")
                 .expect("network policy")
                 .value = json!("block_all");
-            view.cli_config_settings = Some(snapshot);
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -348,7 +349,7 @@ fn non_editable_network_policy_disables_the_toggle(cx: &mut TestAppContext) {
                 .find(|setting| setting.path == "sandbox.network.policy")
                 .expect("network policy")
                 .editable = false;
-            view.cli_config_settings = Some(snapshot);
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -366,7 +367,7 @@ fn missing_curated_paths_render_unavailable_rows(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            view.cli_config_settings = Some(std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![config_page_setting(
                     "agent.default_model",
                     json!("model-a"),
@@ -376,7 +377,7 @@ fn missing_curated_paths_render_unavailable_rows(cx: &mut TestAppContext) {
                 omitted_sensitive: 0,
                 omitted_large: 0,
                 omitted_limit: 0,
-            });
+            }));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -428,7 +429,7 @@ fn sandboxing_row_writes_the_toggled_value(cx: &mut TestAppContext) {
                 .find(|setting| setting.path == "sandbox.enabled")
                 .expect("sandbox enabled")
                 .value = json!(false);
-            view.cli_config_settings = Some(snapshot);
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -465,7 +466,7 @@ fn curated_value_rows_show_origin_and_default_tiers(cx: &mut TestAppContext) {
                     setting.origin = None;
                 }
             }
-            view.cli_config_settings = Some(snapshot);
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
             view.config_page_open = true;
             view.open_settings(window, cx);
         });
@@ -494,7 +495,7 @@ fn open_file_is_disabled_while_a_write_is_pending(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.workspace = Some(workspace.path().to_path_buf());
             view.backend = Some(BackendHandle { commands });
-            view.cli_config_settings = Some(curated_snapshot());
+            view.cli_config_settings = Some(std::rc::Rc::new(curated_snapshot()));
             view.config_write_pending = true;
             view.config_page_open = true;
             view.open_settings(window, cx);

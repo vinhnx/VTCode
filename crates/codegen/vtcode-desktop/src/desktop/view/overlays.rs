@@ -329,6 +329,8 @@ impl DesktopView {
         // slash command); the viewer would layer over the page it came from.
         self.discard_license_viewer();
         self.route_history.open(Route::Settings);
+        // One native read per open; render and scroll use the cache.
+        self.refresh_login_item_status(cx);
         if self.settings_tab == settings::SettingsTab::Storage {
             self.maybe_request_storage_summary(cx);
         }

@@ -806,7 +806,7 @@ struct DesktopView {
     webmcp_notice: Option<webmcp::WebmcpNotice>,
     update_status: Option<protocol::UpdateStatusSnapshot>,
     update_request_pending: bool,
-    cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
+    cli_config_settings: Option<Rc<protocol::ConfigSettingsSnapshot>>,
     /// Memoized catalog grouping; refreshed on every snapshot/query change.
     /// `refresh_config_catalog` is the only writer besides tests.
     config_catalog_cache: Option<configuration::ConfigCatalogCache>,
@@ -894,6 +894,9 @@ struct DesktopView {
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
     preferences: preferences::Preferences,
+    /// Cached login-item status; refreshed on gestures, never per render
+    /// (the native ServiceManagement read is synchronous XPC).
+    login_item_status: login_items::LoginItemStatus,
     system_motion_baseline: bool,
     default_code_font: gpui_kit::SharedString,
     sidebar_open: bool,

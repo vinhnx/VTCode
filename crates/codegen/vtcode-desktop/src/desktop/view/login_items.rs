@@ -163,10 +163,18 @@ pub(super) fn test_settings_opened(cx: &App) -> bool {
 }
 
 impl DesktopView {
+    /// Refresh the cached login-item status from the OS. Call on explicit
+    /// gestures only (settings open, VT Code tab select); render reads the
+    /// cache so scrolling never pays for synchronous ServiceManagement IPC.
+    pub(super) fn refresh_login_item_status(&mut self, cx: &mut App) {
+        self.login_item_status = status(cx);
+    }
+
     /// App-context content builder, hostable inside a Kit `SettingItem`
     /// closure.
     pub(super) fn render_login_items_settings_content(
         launch_at_login_enabled: bool,
+        login_item_status: LoginItemStatus,
         view: Entity<Self>,
         cx: &mut App,
     ) -> AnyElement {
@@ -184,12 +192,15 @@ impl DesktopView {
                         let applied = view.update(cx, |view, cx| {
                             // The launch helper takes `&mut App`; the update
                             // context derefs to it.
-                            let result = apply_launch_at_login(*checked, &mut view.preferences, cx);
-                            if result.is_ok() {
-                                view.save_preferences();
-                                cx.notify();
+                            match apply_launch_at_login(*checked, &mut view.preferences, cx) {
+                                Ok(status) => {
+                                    view.login_item_status = status;
+                                    view.save_preferences();
+                                    cx.notify();
+                                    Ok(status)
+                                }
+                                Err(error) => Err(error),
                             }
-                            result
                         });
                         if let Err(error) = applied {
                             window.push_notification(
@@ -204,8 +215,9 @@ impl DesktopView {
             colors,
         ));
         // Approval-pending keeps the intent on: the hint names the fix and
-        // the button opens System Settings at Login Items.
-        if status(cx) == LoginItemStatus::RequiresApproval {
+        // the button opens System Settings at Login Items. The cached
+        // status keeps render off the synchronous ServiceManagement call.
+        if login_item_status == LoginItemStatus::RequiresApproval {
             group = group.child(settings_row(
                 rust_i18n::t!("app.settings.login_items.approval_title").to_string(),
                 rust_i18n::t!("app.settings.login_items.approval_hint").to_string(),

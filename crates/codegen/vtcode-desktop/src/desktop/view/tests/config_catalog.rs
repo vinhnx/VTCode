@@ -31,7 +31,7 @@ fn open_paged_config(
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands: tokio::sync::mpsc::channel(2).0 });
-            view.cli_config_settings = Some(snapshot);
+            view.cli_config_settings = Some(std::rc::Rc::new(snapshot));
             view.config_page_group = Some(group);
             view.config_page_open = true;
             view.open_settings(window, cx);
@@ -404,4 +404,20 @@ fn workspaceless_config_empty_offers_the_workspace_chooser(cx: &mut TestAppConte
         );
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn config_capture_shares_the_snapshot_pointer(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.cli_config_settings = Some(std::rc::Rc::new(paged_snapshot("tools", "Tools", 3)));
+    });
+    view.update(cx, |view, _| {
+        let captured = super::super::configuration_render::ConfigPageProps::capture(view);
+        let live = view.cli_config_settings.as_ref().expect("snapshot");
+        assert!(
+            std::rc::Rc::ptr_eq(live, captured.snapshot.as_ref().expect("captured snapshot")),
+            "capture must share the snapshot allocation, not deep-clone 730 settings per frame"
+        );
+    });
 }
