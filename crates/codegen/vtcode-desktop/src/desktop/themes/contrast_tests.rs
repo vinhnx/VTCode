@@ -376,6 +376,98 @@ fn glass_primary_rest_holds_aa_on_the_canvas_seat(cx: &mut gpui_kit::TestAppCont
     });
 }
 
+/// Popover seat matrix: same AA, hue, and band contract as the canvas row,
+/// composited over `popover` for dialog commits.
+#[gpui_kit::test]
+fn glass_primary_rest_holds_aa_on_the_popover_seat(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            for amount in [0, 40, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                let rest = glass_primary_rest_on_popover(&colors);
+                assert!(
+                    (0.60..=1.0).contains(&rest.a),
+                    "{id} at {amount}: glass alpha {a} left the 0.60-1.00 band",
+                    a = rest.a
+                );
+                let composite = composite_over(colors.button_primary, rest.a, colors.popover);
+                let ratio = contrast_ratio(colors.button_primary_foreground, composite);
+                assert!(ratio >= 4.5, "{id} at {amount}: glass primary text is {ratio:.2}");
+                let rest_rgb = gpui_kit::Rgba::from(rest);
+                let accent_rgb = gpui_kit::Rgba::from(colors.button_primary);
+                assert_eq!(
+                    (rest_rgb.r, rest_rgb.g, rest_rgb.b),
+                    (accent_rgb.r, accent_rgb.g, accent_rgb.b),
+                    "{id} at {amount}: glass must dim the accent, not shift its hue"
+                );
+            }
+        }
+    });
+}
+
+/// Secondary seat matrix: same AA, hue, and band contract as the canvas row,
+/// composited over `secondary` for settings-surface commits.
+#[gpui_kit::test]
+fn glass_primary_rest_holds_aa_on_the_secondary_seat(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            for amount in [0, 40, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                let rest = glass_primary_rest_on_secondary(&colors);
+                assert!(
+                    (0.60..=1.0).contains(&rest.a),
+                    "{id} at {amount}: glass alpha {a} left the 0.60-1.00 band",
+                    a = rest.a
+                );
+                let composite = composite_over(colors.button_primary, rest.a, colors.secondary);
+                let ratio = contrast_ratio(colors.button_primary_foreground, composite);
+                assert!(ratio >= 4.5, "{id} at {amount}: glass primary text is {ratio:.2}");
+                let rest_rgb = gpui_kit::Rgba::from(rest);
+                let accent_rgb = gpui_kit::Rgba::from(colors.button_primary);
+                assert_eq!(
+                    (rest_rgb.r, rest_rgb.g, rest_rgb.b),
+                    (accent_rgb.r, accent_rgb.g, accent_rgb.b),
+                    "{id} at {amount}: glass must dim the accent, not shift its hue"
+                );
+            }
+        }
+    });
+}
+
+/// The secondary recipe's seat assumption: settings saves sit on group-box
+/// fills, so `group_box` must equal `secondary` on every theme and contrast
+/// amount, else the secondary matrix above guarantees the wrong seat.
+#[gpui_kit::test]
+fn group_box_matches_secondary_on_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            for amount in [0, 40, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                assert_eq!(
+                    gpui_kit::Rgba::from(colors.group_box),
+                    gpui_kit::Rgba::from(colors.secondary),
+                    "{id} at {amount}: group box must share the secondary seat"
+                );
+            }
+        }
+    });
+}
+
 /// The pilot must actually show glass on the default theme, not silently
 /// sit on the opaque fallback everywhere (which would still pass the AA
 /// matrix above while changing nothing visible).
@@ -387,32 +479,52 @@ fn glass_primary_engages_translucency_on_the_default_theme(cx: &mut gpui_kit::Te
         let colors = cx.theme().colors;
         let rest = glass_primary_rest(&colors);
         assert!(rest.a < 1.0, "default theme must show glass, not the opaque fallback");
+        let popover = glass_primary_rest_on_popover(&colors);
+        assert!(popover.a < 1.0, "default theme must show glass on the popover seat");
+        let secondary = glass_primary_rest_on_secondary(&colors);
+        assert!(secondary.a < 1.0, "default theme must show glass on the secondary seat");
     });
 }
 
 /// Asymmetric fixtures: a zero-headroom palette (white accent, white text on
-/// a white seat) where no alpha can separate must fall back to the opaque
-/// fill, while a headroom-rich palette (black accent on a black seat with
-/// white text) must engage translucency at exactly the glass floor.
+/// white seats) where no alpha can separate must fall back to the opaque
+/// fill on every seat, while a headroom-rich palette (black accent on black
+/// seats with white text) must engage translucency at exactly the glass
+/// floor on every seat.
 #[test]
 fn glass_primary_rest_degrades_to_opaque_without_headroom() {
     let white: Hsla = rgb(0xffffff).into();
     let black: Hsla = rgb(0x000000).into();
     let stuck = ThemeColor {
         background: white,
+        popover: white,
+        secondary: white,
         button_primary: white,
         button_primary_foreground: white,
         ..ThemeColor::default()
     };
     assert_eq!(glass_primary_rest(&stuck).a, 1.0, "no alpha can separate white on white");
+    assert_eq!(glass_primary_rest_on_popover(&stuck).a, 1.0, "the popover seat falls back with its canvas sibling");
+    assert_eq!(
+        glass_primary_rest_on_secondary(&stuck).a,
+        1.0,
+        "the secondary seat falls back with its canvas sibling"
+    );
     let roomy = ThemeColor {
         background: black,
+        popover: black,
+        secondary: black,
         button_primary: black,
         button_primary_foreground: white,
         ..ThemeColor::default()
     };
-    let rest = glass_primary_rest(&roomy);
-    assert!((rest.a - 0.60).abs() < 1e-6, "headroom must engage the glass floor, got {}", rest.a);
+    for (name, rest) in [
+        ("canvas", glass_primary_rest(&roomy)),
+        ("popover", glass_primary_rest_on_popover(&roomy)),
+        ("secondary", glass_primary_rest_on_secondary(&roomy)),
+    ] {
+        assert!((rest.a - 0.60).abs() < 1e-6, "{name} headroom must engage the glass floor, got {}", rest.a);
+    }
 }
 
 /// The disabled wash is Kit's own disabled-primary formula

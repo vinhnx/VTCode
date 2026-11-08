@@ -73,7 +73,7 @@ impl DesktopView {
         if props.editing {
             actions = actions
                 .child(
-                    desktop_primary_button("save-shortcuts")
+                    desktop_glass_secondary_primary_button("save-shortcuts", colors, false)
                         .label(rust_i18n::t!("app.shortcuts.save").to_string())
                         .on_click({
                             let view = view.clone();

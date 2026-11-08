@@ -67,13 +67,12 @@ impl DesktopView {
                     ),
             )
             .child(
-                desktop_primary_button("save-secret")
+                desktop_glass_secondary_primary_button("save-secret", &colors, !sendable)
                     .label(if pending {
                         rust_i18n::t!("app.secrets.saving").to_string()
                     } else {
                         rust_i18n::t!("app.secrets.save_key").to_string()
                     })
-                    .desktop_disabled(!sendable)
                     .on_click({
                         let view = view.clone();
                         move |_, window: &mut Window, cx: &mut App| {

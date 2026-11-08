@@ -18,7 +18,9 @@ pub(super) use custom::{
     validate as validate_custom_theme,
 };
 mod glass;
-pub(super) use glass::{glass_disabled_wash, glass_primary_rest};
+pub(super) use glass::{
+    glass_disabled_wash, glass_primary_rest, glass_primary_rest_on_popover, glass_primary_rest_on_secondary,
+};
 
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";

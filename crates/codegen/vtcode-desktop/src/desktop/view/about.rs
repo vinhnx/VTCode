@@ -276,7 +276,7 @@ impl DesktopView {
                                     })),
                             )
                             .child(
-                                desktop_primary_button("about-done")
+                                desktop_glass_popover_primary_button("about-done", &colors, false)
                                     .label(rust_i18n::t!("app.about.done").to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_about(window, cx);

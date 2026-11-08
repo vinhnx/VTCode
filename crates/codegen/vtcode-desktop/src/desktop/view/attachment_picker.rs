@@ -173,7 +173,7 @@ impl DesktopView {
                 .gap_3()
                 .p_4()
                 .child(
-                    desktop_primary_button("picker-choose-files")
+                    desktop_glass_popover_primary_button("picker-choose-files", &colors, false)
                         .label(rust_i18n::t!("app.composer.attach_files").to_string())
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.close_attachment_picker(window, cx);

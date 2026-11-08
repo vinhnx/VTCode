@@ -33,6 +33,8 @@ fn button_tiers_keep_the_pointing_hand_cursor() {
         desktop_primary_button("tier-cursor-primary"),
         desktop_danger_button("tier-cursor-danger"),
         desktop_glass_primary_button("tier-cursor-glass", &colors, false),
+        desktop_glass_popover_primary_button("tier-cursor-glass-popover", &colors, false),
+        desktop_glass_secondary_primary_button("tier-cursor-glass-secondary", &colors, false),
     ] {
         assert_eq!(
             button.style().mouse_cursor,

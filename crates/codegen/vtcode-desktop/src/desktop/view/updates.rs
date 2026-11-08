@@ -373,7 +373,7 @@ impl DesktopView {
                                 )
                             })
                             .child(
-                                desktop_primary_button("close-changelog")
+                                desktop_glass_popover_primary_button("close-changelog", &colors, false)
                                     .label(rust_i18n::t!("app.changelog.done").to_string())
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_changelog(window, cx);

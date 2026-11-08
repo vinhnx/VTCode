@@ -443,9 +443,8 @@ impl DesktopView {
                     // the checked card is a no-op, so the highlighted row
                     // needs an explicit default commitment next to Cancel.
                     row.child(
-                        desktop_primary_button("confirm-interaction")
+                        desktop_glass_popover_primary_button("confirm-interaction", &colors, submitting)
                             .label(rust_i18n::t!("app.interaction.confirm").to_string())
-                            .desktop_disabled(submitting)
                             .on_click(cx.listener(|this, _, window, cx| this.confirm_immediate_choice(window, cx))),
                     )
                 })
@@ -471,13 +470,12 @@ impl DesktopView {
                                 )
                             })
                             .child(
-                                desktop_primary_button("continue-question")
+                                desktop_glass_popover_primary_button("continue-question", &colors, submitting)
                                     .label(if self.interaction_step_index + 1 == interaction.steps.len() {
                                         rust_i18n::t!("app.interaction.submit_answers").to_string()
                                     } else {
                                         rust_i18n::t!("app.interaction.next_question").to_string()
                                     })
-                                    .desktop_disabled(submitting)
                                     .on_click(
                                         cx.listener(|this, _, window, cx| this.advance_interaction_step(window, cx)),
                                     ),

@@ -928,16 +928,17 @@ impl DesktopView {
                                     ),
                             )
                             .child(
-                                desktop_primary_button("save-cli-config-edit")
-                                    .label(if self.config_write_pending {
-                                        rust_i18n::t!("app.configuration.saving").to_string()
-                                    } else {
-                                        rust_i18n::t!("app.configuration.save_reload").to_string()
-                                    })
-                                    .desktop_disabled(self.config_write_pending || !self.can_edit_cli_settings())
-                                    .on_click(
-                                        cx.listener(|view, _, window, cx| view.submit_cli_config_edit(window, cx)),
-                                    ),
+                                desktop_glass_secondary_primary_button(
+                                    "save-cli-config-edit",
+                                    &colors,
+                                    self.config_write_pending || !self.can_edit_cli_settings(),
+                                )
+                                .label(if self.config_write_pending {
+                                    rust_i18n::t!("app.configuration.saving").to_string()
+                                } else {
+                                    rust_i18n::t!("app.configuration.save_reload").to_string()
+                                })
+                                .on_click(cx.listener(|view, _, window, cx| view.submit_cli_config_edit(window, cx))),
                             ),
                     )
                     .focus_trap("cli-config-editor-trap", &self.config_editor_focus),

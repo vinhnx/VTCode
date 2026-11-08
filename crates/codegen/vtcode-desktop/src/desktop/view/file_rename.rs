@@ -366,13 +366,12 @@ impl DesktopView {
                                     })),
                             )
                             .child(
-                                desktop_primary_button("file-rename-commit")
+                                desktop_glass_popover_primary_button("file-rename-commit", &colors, blank || pending)
                                     .label(if pending {
                                         "Renaming…".to_string()
                                     } else {
                                         "Rename".to_string()
                                     })
-                                    .desktop_disabled(blank || pending)
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.commit_file_rename(window, cx);
                                     })),
