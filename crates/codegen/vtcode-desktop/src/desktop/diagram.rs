@@ -48,7 +48,22 @@ pub(super) fn is_mermaid_fence(language: Option<&str>) -> bool {
 /// already defaults correctly (`--pele-fg-on-light`, fonts, weights) are
 /// left unset.
 pub(super) fn pele_css_vars(colors: &ThemeColor) -> String {
-    let vars = [
+    let mut out = String::new();
+    for (name, color) in pele_var_colors(colors) {
+        out.push_str("  ");
+        out.push_str(name);
+        out.push_str(": ");
+        out.push_str(&css_hex(color));
+        out.push_str(";\n");
+    }
+    out
+}
+
+/// The `--pele-*` variable names with their theme colors, shared by the
+/// browser preview stylesheet and the inline renderer's substitution map so
+/// both paths theme identically.
+pub(super) fn pele_var_colors(colors: &ThemeColor) -> [(&'static str, gpui_kit::Hsla); 18] {
+    [
         ("--pele-bg", colors.background),
         ("--pele-fg", colors.foreground),
         ("--pele-muted", super::themes::muted_text(colors)),
@@ -67,19 +82,11 @@ pub(super) fn pele_css_vars(colors: &ThemeColor) -> String {
         ("--pele-series-6", colors.accent),
         ("--pele-series-7", colors.secondary),
         ("--pele-series-8", colors.primary),
-    ];
-    let mut out = String::new();
-    for (name, color) in vars {
-        out.push_str("  ");
-        out.push_str(name);
-        out.push_str(": ");
-        out.push_str(&css_hex(color));
-        out.push_str(";\n");
-    }
-    out
+    ]
 }
 
-fn css_hex(color: gpui_kit::Hsla) -> String {
+/// Format a theme color as `#rrggbb` for Pele stylesheets and substitution.
+pub(super) fn css_hex(color: gpui_kit::Hsla) -> String {
     let rgb = color.to_rgb();
     format!("#{:02x}{:02x}{:02x}", channel(rgb.r), channel(rgb.g), channel(rgb.b))
 }

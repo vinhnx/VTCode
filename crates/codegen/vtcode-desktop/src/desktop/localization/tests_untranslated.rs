@@ -64,6 +64,7 @@ fn diagram_preview_copy_resolves_in_every_language() {
             "app.markdown.diagram_preview_title",
             "app.markdown.diagram_open_failed",
             "app.markdown.diagram_too_large",
+            "app.markdown.diagram_image_alt",
         ] {
             let text = rust_i18n::t!(key, locale = locale).to_string();
             assert!(!text.is_empty(), "{locale}/{key}");

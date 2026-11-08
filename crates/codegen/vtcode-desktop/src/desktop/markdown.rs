@@ -6,7 +6,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::theme::{ActiveTheme, ThemeColor};
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, ClipboardItem, ImageCacheError, ImageSource, SharedString, TestSupportExt, div, relative};
-use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
 pub(super) struct PreparedMarkdown {
     pub markdown: SharedString,
@@ -24,33 +24,115 @@ pub(super) struct PreparedMarkdown {
 const TRANSCRIPT_LINE_HEIGHT: f32 = 1.6;
 const _: () = assert!(TRANSCRIPT_LINE_HEIGHT >= 1.5, "WCAG 1.4.8 needs at least 1.5x body leading");
 
-/// Preserve Markdown structure and derive readable text while dropping raw HTML.
+/// Source edit: replace `source[start..end]` with `replacement`.
+/// Insertions use `start == end`.
+struct SourceEdit {
+    start: usize,
+    end: usize,
+    replacement: String,
+}
+
+/// Apply collected edits back to front so earlier offsets stay valid.
+/// `None` when an offset falls outside the source (never for parser
+/// ranges); callers fail closed to [`invalid_markdown`].
+fn apply_source_edits(source: &str, edits: &mut [SourceEdit]) -> Option<String> {
+    // Stable descending sort: parser ranges never overlap, so ties are
+    // impossible; stability keeps the order deterministic regardless.
+    edits.sort_by_key(|edit| std::cmp::Reverse(edit.start));
+    let mut out = source.to_string();
+    for edit in edits {
+        let (Some(before), Some(after)) = (out.get(..edit.start), out.get(edit.end..)) else {
+            return None;
+        };
+        out = format!("{before}{}{after}", edit.replacement);
+    }
+    Some(out)
+}
+
+/// Fence body accumulated between its start and end events.
+struct OpenFence {
+    body: String,
+}
+
+/// Whether a fenced code info string selects Mermaid diagrams. Only the
+/// first whitespace-separated token counts (`mermaid title` matches;
+/// `mermaidjs` and unlabeled fences never do).
+fn is_mermaid_info(info: &str) -> bool {
+    super::diagram::is_mermaid_fence(info.split_whitespace().next())
+}
+
+/// Whether a fenced block ends with a literal closing run. Pulldown spans
+/// fence events over the whole block (including auto-closed ones at end of
+/// input), so only a bare trailing run of backticks or tildes counts;
+/// partial fences must not render (streaming text, and parity with the
+/// WebMCP preview gate).
+fn fence_explicitly_closed(source: &str, fence_range: &std::ops::Range<usize>) -> bool {
+    let Some(span) = source.get(fence_range.clone()) else {
+        return false;
+    };
+    span.lines().next_back().is_some_and(|last| {
+        let line = last.trim();
+        line.len() >= 3 && (line.bytes().all(|byte| byte == b'`') || line.bytes().all(|byte| byte == b'~'))
+    })
+}
+
+/// Preserve Markdown structure and derive readable text while dropping raw
+/// HTML. Closed non-blank mermaid fences additionally gain an inline
+/// `diagram:` image reference (registered for the image hook) plus its alt
+/// text for assistive clients; unclosed and blank fences pass through, so
+/// streaming text never shows a half-rendered diagram.
 pub(super) fn prepare_markdown(source: &SharedString) -> PreparedMarkdown {
-    let mut sanitized = String::new();
     let mut accessible_text = String::new();
     let mut has_list = false;
-    let mut retained_start = 0;
+    let mut edits: Vec<SourceEdit> = Vec::new();
+    let mut open_fence: Option<OpenFence> = None;
     for (event, range) in Parser::new(source).into_offset_iter() {
         append_accessible_text(&mut accessible_text, &event);
         if matches!(event, Event::Start(Tag::List(_))) {
             has_list = true;
         }
-        if matches!(event, Event::Html(_) | Event::InlineHtml(_)) {
-            let Some(retained) = source.get(retained_start..range.start) else {
-                return invalid_markdown();
-            };
-            sanitized.push_str(retained);
-            retained_start = range.end;
+        match event {
+            Event::Html(_) | Event::InlineHtml(_) => {
+                edits.push(SourceEdit {
+                    start: range.start,
+                    end: range.end,
+                    replacement: String::new(),
+                });
+            }
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) if is_mermaid_info(&info) => {
+                open_fence = Some(OpenFence { body: String::new() });
+            }
+            Event::Text(text) => {
+                if let Some(fence) = open_fence.as_mut() {
+                    fence.body.push_str(&text);
+                }
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some(fence) = open_fence.take()
+                    && !fence.body.trim().is_empty()
+                    && fence_explicitly_closed(source, &range)
+                {
+                    let hash = super::diagram_inline::register_diagram_source(&fence.body);
+                    let alt = rust_i18n::t!("app.markdown.diagram_image_alt").to_string();
+                    edits.push(SourceEdit {
+                        start: range.end,
+                        end: range.end,
+                        replacement: super::diagram_inline::diagram_image_markdown(&hash, &alt),
+                    });
+                    append_block_separator(&mut accessible_text);
+                    accessible_text.push_str(&alt);
+                }
+            }
+            _ => {}
         }
     }
-    let markdown = if retained_start == 0 {
+    let markdown = if edits.is_empty() {
         source.clone()
     } else {
-        let Some(retained) = source.get(retained_start..) else {
+        let Some(rewritten) = apply_source_edits(source, &mut edits) else {
             return invalid_markdown();
         };
-        sanitized.push_str(retained);
-        sanitized.into()
+        rewritten.into()
     };
     PreparedMarkdown {
         markdown,
@@ -332,7 +414,16 @@ fn harden_transcript_text_view(text_view: TextView) -> TextView {
         .line_height(relative(TRANSCRIPT_LINE_HEIGHT))
         .scrollable(false)
         // A richer renderer must not fetch URLs or local files from agent output.
-        .image_source(|_| blocked_image_source())
+        // The sole exception is inline diagrams: `prepare_markdown` appends
+        // `diagram:<hash>` references after mermaid fences, resolved here
+        // from the render cache. Anything else stays blocked.
+        .image_source(|uri| {
+            if let Some(hash) = super::diagram_inline::parse_diagram_uri(uri) {
+                ImageSource::Custom(Arc::new(move |_, cx| super::diagram_store::diagram_image_data(&hash, cx)))
+            } else {
+                blocked_image_source()
+            }
+        })
         .on_link_click(|url, event, _, cx| {
             if !event.is_right_click()
                 && let Some(url) = external_web_url(url)
@@ -670,6 +761,76 @@ mod tests {
         assert!(!super::has_viewable_plan_markdown(Some("")));
         assert!(!super::has_viewable_plan_markdown(Some("  \n ")));
         assert!(super::has_viewable_plan_markdown(Some("# Plan")));
+    }
+
+    fn diagram_reference(markdown: &str) -> Option<String> {
+        let start = markdown.find("](diagram:")? + 2;
+        let tail = markdown.get(start..)?;
+        let end = tail.find(')')?;
+        tail.get(..end).map(str::to_string)
+    }
+
+    #[test]
+    fn mermaid_fence_appends_a_stable_image_reference() {
+        let source = "Intro\n\n```mermaid\nflowchart TD\n  A --> B\n```\n\nOutro";
+        let first = prepare_markdown(&source.into());
+        let reference = diagram_reference(&first.markdown).expect("image reference appended");
+        let hash = reference.strip_prefix("diagram:").expect("diagram scheme");
+        assert_eq!(hash.len(), 64, "sha256 hex: {hash:?}");
+        assert!(hash.bytes().all(|byte| byte.is_ascii_hexdigit()), "{hash:?}");
+        assert!(first.markdown.contains("```mermaid\nflowchart TD\n  A --> B\n```"), "fence intact");
+        // Deterministic: preparing twice yields the identical reference.
+        let second = prepare_markdown(&source.into());
+        assert_eq!(second.markdown, first.markdown);
+        // Distinct bodies hash distinctly.
+        let other = prepare_markdown(&"```mermaid\nflowchart TD\n  A --> C\n```".into());
+        assert_ne!(diagram_reference(&other.markdown), diagram_reference(&first.markdown));
+    }
+
+    #[test]
+    fn non_mermaid_unclosed_and_blank_fences_pass_through() {
+        for source in [
+            "```rust\nfn main() {}\n```",
+            "```\nplain\n```",
+            "```mermaidjs\nflowchart TD\n  A --> B\n```",
+            "```mermaid\nunclosed",
+            "```mermaid\nfoo```",
+            "```mermaid\n  \n```",
+            "    indented code",
+        ] {
+            let prepared = prepare_markdown(&source.into());
+            assert!(!prepared.markdown.contains("](diagram:"), "unexpected image ref in {source:?}");
+        }
+        // Info strings carry metadata after the language token.
+        let prepared = prepare_markdown(&"```mermaid title here\nflowchart TD\n  A --> B\n```".into());
+        assert!(diagram_reference(&prepared.markdown).is_some(), "info metadata must match");
+        // Case-insensitive like the action row.
+        let prepared = prepare_markdown(&"```Mermaid\nflowchart TD\n  A --> B\n```".into());
+        assert!(diagram_reference(&prepared.markdown).is_some(), "capitalized info must match");
+        // Tilde fences close with tildes.
+        let prepared = prepare_markdown(&"~~~mermaid\nflowchart TD\n  A --> B\n~~~".into());
+        assert!(diagram_reference(&prepared.markdown).is_some(), "tilde fence must match");
+    }
+
+    #[test]
+    fn html_strip_and_diagram_insertion_compose() {
+        let source = "<div>banner</div>\n\n```mermaid\nflowchart TD\n  A --> B\n```\n\ntail <b>bold</b>";
+        let prepared = prepare_markdown(&source.into());
+        assert!(!prepared.markdown.contains("<div>"), "html stripped: {}", prepared.markdown);
+        assert!(!prepared.markdown.contains("<b>"), "inline html stripped: {}", prepared.markdown);
+        assert!(prepared.markdown.contains("```mermaid\nflowchart TD\n  A --> B\n```"), "fence intact");
+        assert!(diagram_reference(&prepared.markdown).is_some(), "image inserted");
+        assert!(prepared.markdown.contains("tail bold"), "tail intact");
+    }
+
+    #[test]
+    fn accessible_text_names_the_rendered_diagram_after_its_code() {
+        let source = "```mermaid\nflowchart TD\n  A --> B\n```";
+        let prepared = prepare_markdown(&source.into());
+        let alt = rust_i18n::t!("app.markdown.diagram_image_alt").to_string();
+        let code_at = prepared.accessible_text.find("flowchart TD").expect("code text kept");
+        let alt_at = prepared.accessible_text.find(&alt).expect("alt appended");
+        assert!(code_at < alt_at, "alt follows code: {:?}", prepared.accessible_text.as_str());
     }
 
     struct FenceFixture {
