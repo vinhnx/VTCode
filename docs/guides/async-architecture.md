@@ -155,26 +155,21 @@ let event_fut = tokio::task::spawn_blocking(|| {
 
 ### Pattern 3: Multiple Concurrent Operations
 
-**File:** `src/agent/runloop/unified/tool_pipeline.rs:6-9`
+**File:** `crates/codegen/vtcode-core/src/subagents/matrix/mod.rs:375-376` (worker fan-out via `JoinSet`)
 
 ```rust
-use tokio::sync::Notify;
-use tokio::task::JoinHandle;
-use tokio::time;
-use tokio_util::sync::CancellationToken;
+use tokio::task::JoinSet;
 
-// Tools execute concurrently
-let tool_tasks: Vec<JoinHandle<_>> = tools
-    .iter()
-    .map(|tool| {
-        tokio::spawn(async move {
-            tool.execute().await
-        })
-    })
-    .collect();
+// Tools execute concurrently. Prefer JoinSet over join_all for task
+// fan-out: it only wakes for tasks that are actually ready, while
+// join_all re-polls every child on each wake (O(N^2) total polls).
+let mut tool_tasks = JoinSet::new();
+for tool in tools {
+    tool_tasks.spawn(async move { tool.execute().await });
+}
 
 // Wait for all to finish
-let results = tokio::join_all(tool_tasks).await;
+let results = tool_tasks.join_all().await;
 ```
 
 ### Pattern 4: Graceful Shutdown with CancellationToken
@@ -364,6 +359,27 @@ Conventions, in order of preference:
    `vtcode-webmcp`), take `self: Pin<&mut Self>` and get `&mut Self` via `self.get_mut()` — the conditional `Unpin` impl
    makes that safe without `unsafe`. If the inner type is genuinely `!Unpin`, use `self.project()` from `pin-project`
    rather than hand-written unsafe projections.
+
+### Pattern 9: Explicit completion state for held futures
+
+Polling a future after it returned `Ready` is unsupported and panics for `async` blocks, and
+`futures::future::Fuse` hides completion behind `Pending` (the consumer hangs unless it also checks
+`is_terminated`). VT Code has no manual `Future` impls, so the only exposure is futures held across
+`tokio::select!` loop iterations. Rules:
+
+1. **Track completion in an `Option<Output>` slot, never in the future.** Store `None` while pending,
+   `Some(output)` once complete, and guard the branch with `if slot.is_none()` (or `take()` the slot
+   at the top of the iteration and break). Exemplars: `exec/async_command.rs` (stdout/stderr/wait
+   slots) and `tool_pipeline/pty_stream/runtime.rs` (`finish_requested.take()` before re-poll).
+2. **Never `.fuse()` for `tokio::select!`.** It does not need fused futures; a fresh future per
+   iteration (or a pinned future that `break`s on completion, like the keepalive loops) is correct
+   without it. Zero `.fuse()` calls is the expected `rg` result.
+3. **Single-`select!` losers are provably pending.** `select!` returns on the first `Ready` branch,
+   so awaiting the loser afterwards (`setup.rs`, `executors/subagents.rs`) is safe — no guard needed.
+4. **`biased` is cancel/shutdown-first only.** All branches are still polled each pass, so a ready
+   child is never snoozed; keep the first branch edge-triggered (cancel, oneshot) and document any
+   deliberate priority inversion with its starvation bound (see `drive.rs` input bias +
+   `MAX_TERMINAL_EVENTS_PER_TURN`).
 
 ### Local stdio transport decision
 

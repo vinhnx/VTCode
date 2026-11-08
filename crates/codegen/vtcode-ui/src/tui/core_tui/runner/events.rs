@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEventKind, MouseEventKind};
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError, error::TrySendError};
 use tokio_util::sync::CancellationToken;
@@ -232,7 +232,7 @@ pub(super) async fn spawn_event_loop(
         let elapsed = last_tick.elapsed();
         let sleep_duration = tick_duration.saturating_sub(elapsed);
 
-        let crossterm_event = reader.next().fuse();
+        let crossterm_event = reader.next();
 
         tokio::select! {
             _ = cancellation_token.cancelled() => {
