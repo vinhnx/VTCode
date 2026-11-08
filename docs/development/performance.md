@@ -228,6 +228,14 @@ or scheduler-latency metric. Compare idle controls and cache hits, retain noisy 
 Metadata is warm, the global ignore matcher has its normal empty default, and no cold-disk, loaded-ignore, live-provider,
 or whole-agent latency claim follows from these workloads.
 
+### Memory-stall attribution
+
+Wall time cannot tell a compute-bound loop from a memory-stalled one. For suspected memory-bound grouping or
+aggregation code, capture stall counters alongside timing with `scripts/perf/memstat.sh <command>`: it records
+cache-miss and instruction counters via Linux `perf stat` and runs the command without counters (with guidance) where
+`perf` is unavailable. See [Memory Latency & Cache-First Aggregation](rust-performance-principles.md#memory-latency--cache-first-aggregation)
+for the decision rules.
+
 ### Directory listing experiment (2026-10-07)
 
 A private basic-list candidate moved the full directory scan into one blocking task per cache miss, following

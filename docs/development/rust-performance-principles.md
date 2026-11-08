@@ -19,6 +19,7 @@ optimizer, the standard library, and day-to-day coding decisions.
 - [Breaking Inter-Iteration Dependencies (Value Speculation)](#breaking-inter-iteration-dependencies-value-speculation)
 - [Branchless Programming: Removing Unpredictable Branches](#branchless-programming-removing-unpredictable-branches)
 - [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows)
+- [Memory Latency & Cache-First Aggregation](#memory-latency--cache-first-aggregation)
 - [Checklist for VT Code Hot Paths](#checklist-for-vt-code-hot-paths)
 
 ---
@@ -673,6 +674,40 @@ workspace root plus a `to_lowercase()` per entry cost 0.05 ms, and one `ensure_p
 cost 0.44 ms — real numbers, but paid once per tool call and dwarfed by the I/O they guard. Leaving them
 alone is the correct KISS outcome; the syscall removes worth doing are the ones multiplied by entry count.
 
+## Memory Latency & Cache-First Aggregation
+
+A CPU reporting 100% utilization may be doing little useful work: it can be stalled waiting on memory. A modern core
+executes ~4-8 instructions/ns, while a DRAM access costs ~50-100ns — roughly 400-800 instructions per round-trip. The
+cache hierarchy exists to hide this gap:
+
+| Level | Latency  | Size                  | Instructions per access |
+| ----- | -------- | --------------------- | ----------------------- |
+| L1    | ~1 ns    | ~64 KB                | ~4-8                    |
+| L2    | ~3-4 ns  | ~1 MB                 | ~15-30                  |
+| L3    | ~10-15 ns| up to a few hundred MB| ~50-100                 |
+| DRAM  | ~50-100ns| GBs                   | ~400-800                |
+
+The GROUP BY lesson from Pivot (see References): a single ever-growing `HashTable` over millions of distinct keys turns
+nearly every probe into a cold DRAM hit. Partitioning the input by hash prefix into N small buckets, then aggregating
+each bucket with a small cache-fitting `HashMap` (reusing the stored hash), executes _more_ total instructions but far
+_fewer_ DRAM accesses — and wins decisively (50% to 23% memory-stall slots, 4.5 GB to 1.5 GB DRAM traffic).
+
+### VT Code guidelines
+
+- **Diagnose stalls before rewriting grouping code.** Cache-miss and instruction counters (see
+  `scripts/perf/memstat.sh`) tell a compute-bound loop from a memory-stalled one; wall time alone cannot. A "100% CPU"
+  loop with a high miss rate and few instructions retired per cycle is memory-bound.
+- **Keep aggregation working sets cache-sized.** Prefer partition-then-aggregate (hash-prefix buckets, per-worker heaps,
+  chunked rayon scoring) over one giant map. `vtcode-indexer` `file_search::query` already scores in parallel rayon
+  chunks with per-worker top-K heaps merged afterward — follow that shape for new large-N aggregations.
+- **Reuse hashes across phases.** Hash once and carry `(hash, key)` into the per-partition map instead of rehashing per
+  phase.
+- **Trading more CPU for less DRAM is nearly always a win — once a profile proves the loop is memory-bound.** For VT
+  Code's small-N, I/O-paced sites (tool catalog, session facts, `max_results`-bounded candidates), the simple
+  single-pass shape stays; do not radix-partition without a measured hotspot.
+- **No portable prefetch on stable.** Cache-prefetch intrinsics are nightly-only, so prefer chunked/partitioned
+  iteration, which achieves the same locality with stable code.
+
 ## Checklist for VT Code Hot Paths
 
 When reviewing or writing a hot path in vtcode:
@@ -717,6 +752,11 @@ When reviewing or writing a hot path in vtcode:
 - [ ] Does a per-entry loop call a helper that re-derives a fact the iterator already handed over —
       an entry's `FileType`, or the workspace root's canonical form? See
       [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows).
+- [ ] For grouping/aggregation over a large key space, is the working set cache-sized — partition-then-aggregate
+      with hash reuse — instead of one ever-growing map? Small-N sites keep the simple shape. See
+      [Memory Latency](#memory-latency--cache-first-aggregation).
+- [ ] Was a suspected memory-bound loop diagnosed with cache-miss/instruction counters (`scripts/perf/memstat.sh`),
+      not wall time alone?
 - [ ] Has the performance been measured against baseline before/after?
 
 ---
@@ -750,6 +790,9 @@ When reviewing or writing a hot path in vtcode:
   blyxyas, 2026 (source of the Per-Unit Cost of Expensive Work section: per-expression global-lock and
   interner acquisition behind an innocuous helper, the pre-expansion rewrite, and the maintainer duty to
   make the bad shape hard to write — enforced here by the `no-per-call-regex-literal` ast-grep rule).
+- [It's the memory latency, stupid](https://pivotlake.io/blog/its-the-memory-latency-stupid) —
+  Pivot/Epsio Labs, 2026 (source of the Memory Latency section: cache table, GROUP BY radix partitioning,
+  and the more-CPU-for-less-DRAM trade).
 - VT Code internal: `docs/development/performance.md`
 - VT Code internal: `docs/development/performance-hasher-policy.md`
 - VT Code internal: `docs/development/async-performance-audit.md`
