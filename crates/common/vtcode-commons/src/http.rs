@@ -264,6 +264,18 @@ pub fn get_or_create_default_client(existing: Option<Client>) -> Client {
     existing.unwrap_or_else(create_default_client)
 }
 
+/// Apply the installed connect budget to an explicit client builder.
+///
+/// Prefer the `create_*` constructors; use this only where a call site needs
+/// builder options they do not offer (redirect or retry policy tweaks).
+/// A `None` budget (the phase was disabled) leaves the builder untouched.
+pub fn apply_connect_timeout(builder: ClientBuilder) -> ClientBuilder {
+    match http_timeouts().connect {
+        Some(connect) => builder.connect_timeout(connect),
+        None => builder,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,5 +354,154 @@ mod tests {
                 create_default_client_without_redirects().expect("client without redirects should build");
             drop(origin_bound);
         }
+    }
+
+    /// Reserved, unroutable TEST-NET-2 address (RFC 5737): connection attempts
+    /// stall in (or fail fast from) the handshake without any live server.
+    const UNROUTABLE_URL: &str = "http://198.51.100.1:9/hang";
+
+    /// Outer bound for every stall test: the client budget must fire long
+    /// before this guard, which exists only to fail (never hang) the suite
+    /// if a timeout regresses.
+    const STALL_TEST_OUTER_GUARD: Duration = Duration::from_secs(15);
+
+    /// Bind an ephemeral localhost fixture listener. Returns `None` when the
+    /// sandbox forbids binding (callers skip): mirrors the OAuth
+    /// callback-server tests, which cannot assume socket access either.
+    fn bind_fixture_listener() -> Option<std::net::TcpListener> {
+        match std::net::TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => Some(listener),
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => None,
+            Err(err) => panic!("bind fixture listener: {err}"),
+        }
+    }
+
+    /// Fixture for request-budget tests: a bound listener that is never
+    /// accepted, so the kernel completes the TCP handshake via the backlog
+    /// and the request stalls waiting for a response. The listener must stay
+    /// alive for the whole request.
+    fn stalled_listener() -> Option<std::net::TcpListener> {
+        bind_fixture_listener()
+    }
+
+    /// Serve exactly one minimal `200 OK` on a background thread, then exit.
+    /// The handle is deliberately detached, never joined: joining would hang
+    /// the suite if the client errored before sending.
+    fn respond_once(listener: std::net::TcpListener) {
+        drop(std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept test connection");
+            use std::io::{Read, Write};
+            let mut request = [0u8; 4096];
+            let request_bytes = stream.read(&mut request).expect("read test request");
+            assert!(request_bytes > 0, "client must send the request");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .expect("write test response");
+        }));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn default_client_request_budget_bounds_an_accept_then_stall_server() {
+        let _guard = InstalledTimeoutsGuard::recording_current();
+        install_http_timeouts(HttpTimeouts::from_seconds(5, 2, 300));
+
+        let Some(listener) = stalled_listener() else { return };
+        let addr = listener.local_addr().expect("listener address");
+
+        let client = create_default_client();
+        let started = std::time::Instant::now();
+        let outcome =
+            tokio::time::timeout(STALL_TEST_OUTER_GUARD, client.get(format!("http://{addr}/hang")).send()).await;
+        let elapsed = started.elapsed();
+
+        let error = outcome
+            .expect("request budget must fire before the outer guard")
+            .expect_err("a stalled server must not succeed");
+        assert!(error.is_timeout(), "expected a timeout error, got: {error}");
+        assert!(elapsed >= Duration::from_secs(2), "2s budget returned after {elapsed:?}");
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn default_client_connect_phase_cannot_hang_on_unroutable_host() {
+        let _guard = InstalledTimeoutsGuard::recording_current();
+        install_http_timeouts(HttpTimeouts::from_seconds(2, 30, 300));
+
+        let client = create_default_client();
+        let outcome = tokio::time::timeout(STALL_TEST_OUTER_GUARD, client.get(UNROUTABLE_URL).send()).await;
+
+        // No `is_timeout`/elapsed asserts here: some environments fail fast
+        // with "unreachable" instead of timing out. The guarantee under test
+        // is that the connect phase always resolves bounded with a diagnostic.
+        let error = outcome
+            .expect("connect phase must resolve before the outer guard")
+            .expect_err("an unroutable endpoint must not succeed");
+        assert!(!error.to_string().is_empty(), "failure must carry a diagnostic");
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn origin_bound_client_request_budget_bounds_a_stalled_server() {
+        let _guard = InstalledTimeoutsGuard::recording_current();
+        install_http_timeouts(HttpTimeouts::from_seconds(5, 2, 300));
+
+        let Some(listener) = stalled_listener() else { return };
+        let addr = listener.local_addr().expect("listener address");
+
+        let client = create_default_client_without_redirects().expect("origin-bound client builds");
+        let started = std::time::Instant::now();
+        let outcome =
+            tokio::time::timeout(STALL_TEST_OUTER_GUARD, client.get(format!("http://{addr}/hang")).send()).await;
+        let elapsed = started.elapsed();
+
+        let error = outcome
+            .expect("request budget must fire before the outer guard")
+            .expect_err("a stalled server must not succeed");
+        assert!(error.is_timeout(), "expected a timeout error, got: {error}");
+        assert!(elapsed >= Duration::from_secs(2), "2s budget returned after {elapsed:?}");
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn bounded_clients_still_succeed_against_a_healthy_server() {
+        let _guard = InstalledTimeoutsGuard::recording_current();
+        install_http_timeouts(HttpTimeouts::from_seconds(5, 5, 300));
+
+        let Some(listener) = bind_fixture_listener() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener address");
+        respond_once(listener);
+
+        let outcome =
+            tokio::time::timeout(STALL_TEST_OUTER_GUARD, create_default_client().get(format!("http://{addr}/")).send())
+                .await;
+        let body = outcome
+            .expect("healthy server must answer before the outer guard")
+            .expect("bounded client must succeed")
+            .text()
+            .await
+            .expect("read healthy body");
+        assert_eq!(body, "ok");
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn apply_connect_timeout_bounds_an_explicit_builder() {
+        let _guard = InstalledTimeoutsGuard::recording_current();
+        install_http_timeouts(HttpTimeouts::from_seconds(2, 30, 300));
+
+        let client = apply_connect_timeout(Client::builder())
+            .build()
+            .expect("explicit builder builds");
+        let outcome = tokio::time::timeout(STALL_TEST_OUTER_GUARD, client.get(UNROUTABLE_URL).send()).await;
+
+        // Same robustness caveat as the unroutable-host test: the guarantee
+        // under test is a bounded connect phase with a diagnostic.
+        let error = outcome
+            .expect("connect phase must resolve before the outer guard")
+            .expect_err("an unroutable endpoint must not succeed");
+        assert!(!error.to_string().is_empty(), "failure must carry a diagnostic");
     }
 }

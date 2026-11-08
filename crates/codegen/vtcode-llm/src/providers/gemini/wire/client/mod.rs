@@ -40,7 +40,7 @@ impl Client {
             .build()
             .unwrap_or_else(|error| {
                 warn!(error = %error, "Failed to build Gemini HTTP client; using default client");
-                ReqwestClient::new()
+                vtcode_commons::http::create_client_with_timeouts(config.connect_timeout, config.request_timeout)
             });
 
         Self {

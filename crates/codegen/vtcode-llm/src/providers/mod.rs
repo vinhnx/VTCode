@@ -5,7 +5,6 @@
 
 pub mod anthropic;
 pub mod anthropic_types;
-pub mod base;
 pub mod deepseek;
 pub mod error_handling;
 pub mod evolink;

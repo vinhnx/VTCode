@@ -350,7 +350,9 @@ impl ModelsManager {
 
     /// Fetch models from Ollama API
     async fn fetch_ollama_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
-        let client = reqwest::Client::new();
+        // Localhost metadata fetch: a short total budget plus the installed
+        // connect default, so a stalled Ollama server cannot hang discovery.
+        let client = vtcode_commons::http::create_client_with_timeout(Duration::from_secs(5));
         let resp = client.get("http://localhost:11434/api/tags").send().await?;
 
         if !resp.status().is_success() {

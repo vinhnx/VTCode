@@ -1,0 +1,38 @@
+id: no-unbounded-http-client
+language: Rust
+severity: error
+message: Build outbound HTTP clients via vtcode_commons::http so timeouts apply.
+note: |
+  `Client::new()` installs no timeout: a stalled server hangs the caller forever.
+  Use `vtcode_commons::http` (`create_default_client`, `create_client_with_timeout(s)`,
+  `create_default_client_without_redirects`, `create_download_client`), which apply
+  the installed `[timeouts]` budgets. Explicit `Client::builder()` chains must set
+  `.timeout(...)` and `.connect_timeout(...)`; keep them only where the shared
+  helpers genuinely do not fit.
+rule:
+  all:
+    - any:
+        - pattern: Client::new()
+        - pattern: reqwest::Client::new()
+        - pattern: HttpClient::new()
+        - pattern: ReqwestClient::new()
+        - pattern: ClientBuilder::new()
+        - pattern: reqwest::ClientBuilder::new()
+    # Test-only modules are conventionally named `tests`; fixture clients there
+    # target localhost harnesses and must not fail the gate. (Attribute-aware
+    # exclusion is not expressible: `#[cfg(test)]` parses as a sibling of the
+    # `mod` item, so `inside` cannot see both at once. A production module
+    # named `tests` would also be excluded; none exists in this repo.)
+    - not:
+        inside:
+          pattern: "mod tests { $$$ }"
+          stopBy: end
+files:
+  - "**/*.rs"
+ignores:
+  - "patches/**"
+  - "crates/common/vtcode-commons/src/http.rs"
+  - "**/tests/**"
+  - "**/tests.rs"
+  - "**/*_test.rs"
+  - "**/test_*.rs"

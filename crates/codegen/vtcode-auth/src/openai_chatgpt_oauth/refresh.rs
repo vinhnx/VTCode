@@ -2,7 +2,6 @@
 
 use anyhow::{Context, Result, anyhow, bail};
 use fs2::FileExt;
-use reqwest::Client;
 use serde::Deserialize;
 use std::fs;
 use std::fs::OpenOptions;
@@ -36,7 +35,9 @@ pub async fn exchange_openai_chatgpt_code_for_tokens(
         urlencoding::encode(&challenge.code_verifier),
     );
 
-    let token_response: OpenAITokenResponse = Client::new()
+    let token_client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openai token client")?;
+    let token_response: OpenAITokenResponse = token_client
         .post(OPENAI_TOKEN_URL)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
@@ -127,7 +128,9 @@ async fn refresh_openai_chatgpt_session_without_lock(
     storage_mode: AuthCredentialsStoreMode,
 ) -> Result<OpenAIChatGptSession> {
     let identity = resolve_oauth_client_identity()?;
-    let response = Client::new()
+    let token_client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openai token client")?;
+    let response = token_client
         .post(OPENAI_TOKEN_URL)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(format!(
@@ -295,7 +298,9 @@ async fn exchange_openai_chatgpt_api_key(id_token: &str) -> Result<String> {
     }
 
     let identity = resolve_oauth_client_identity()?;
-    let exchange: ExchangeResponse = Client::new()
+    let token_client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openai token client")?;
+    let exchange: ExchangeResponse = token_client
         .post(OPENAI_TOKEN_URL)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(format!(

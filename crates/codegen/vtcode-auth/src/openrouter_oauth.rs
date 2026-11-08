@@ -131,7 +131,8 @@ pub fn get_auth_url(challenge: &PkceChallenge, callback_port: u16) -> String {
 /// # Returns
 /// The obtained API key on success.
 pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> Result<String> {
-    let client = reqwest::Client::new();
+    let client = vtcode_commons::http::create_default_client_without_redirects()
+        .context("failed to build openrouter token client")?;
 
     let payload = serde_json::json!({
         "code": code,

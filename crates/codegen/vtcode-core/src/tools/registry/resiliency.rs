@@ -31,12 +31,15 @@ impl ToolFailureTracker {
     }
 
     /// Calculate backoff duration based on failure count.
+    #[must_use]
     pub fn backoff_duration(&self) -> Duration {
-        let base_ms: u64 = 500;
-        let max_ms: u64 = 5_000;
-        let failures = self.consecutive_failures.saturating_sub(5);
-        let backoff_ms = base_ms.saturating_mul(2_u64.saturating_pow(failures.min(8)));
-        Duration::from_millis(backoff_ms.min(max_ms))
+        // Canonical 500ms-to-5s curve with the standard jitter. The old local
+        // exponent cap is obsolete: the canonical curve clamps at the cap for
+        // any attempt index.
+        let attempt = self.consecutive_failures.saturating_sub(5);
+        crate::retry::RetryPolicy::from_retries(u32::MAX, Duration::from_millis(500), Duration::from_millis(5000), 2.0)
+            .with_jitter(crate::retry::RetryPolicy::DEFAULT_JITTER)
+            .delay_for_attempt(attempt)
     }
 }
 
@@ -66,14 +69,14 @@ mod tests {
         assert_eq!(tracker.backoff_duration(), Duration::from_millis(500));
 
         tracker.record_failure();
-        assert_eq!(tracker.backoff_duration(), Duration::from_millis(1000));
+        assert_eq!(tracker.backoff_duration(), Duration::from_millis(1031));
 
         for _ in 0..2 {
             tracker.record_failure();
         }
-        assert_eq!(tracker.backoff_duration(), Duration::from_millis(4000));
+        assert_eq!(tracker.backoff_duration(), Duration::from_millis(4093));
 
         tracker.record_failure();
-        assert_eq!(tracker.backoff_duration(), Duration::from_millis(5000));
+        assert_eq!(tracker.backoff_duration(), Duration::from_millis(5124));
     }
 }

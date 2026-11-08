@@ -154,6 +154,9 @@ impl SqliteLoopMemory {
 
     fn from_path(db_path: PathBuf) -> Result<Self> {
         let conn = rusqlite::Connection::open(&db_path)?;
+        // A second vtcode process on the same workspace must wait out a
+        // writer instead of failing immediately with `SQLITE_BUSY`.
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS notes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -409,6 +412,32 @@ mod tests {
                 assert!(notes.contains("first run note"));
                 assert!(notes.contains("second run note"));
             }
+        }
+
+        #[test]
+        fn sqlite_memory_waits_out_a_concurrent_writer() {
+            let tmp = TempDir::new().expect("temp dir");
+            let db_path = tmp.path().join("test.db");
+            let memory = SqliteLoopMemory::with_path(db_path.clone()).expect("create");
+
+            // A second connection holds an open write transaction, simulating
+            // another vtcode process mid-write on the same workspace database.
+            let holder = rusqlite::Connection::open(&db_path).expect("second connection");
+            holder
+                .execute_batch("BEGIN IMMEDIATE; INSERT INTO notes (timestamp, content) VALUES ('held', 'held');")
+                .expect("hold write lock");
+
+            // Without `busy_timeout` this fails immediately with SQLITE_BUSY;
+            // with it, the write waits for the holder to commit.
+            let writer = std::thread::spawn(move || {
+                memory.write_note("after concurrent writer").expect("write waits out the lock");
+            });
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            holder.execute_batch("COMMIT;").expect("release write lock");
+            writer.join().expect("writer thread");
+
+            let memory = SqliteLoopMemory::with_path(db_path).expect("reopen");
+            assert!(memory.read_notes().expect("read").contains("after concurrent writer"));
         }
     }
 }

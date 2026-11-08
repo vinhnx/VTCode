@@ -736,12 +736,19 @@ impl McpClient {
         self.config.retry_attempts.try_into().unwrap_or(usize::MAX).saturating_add(1)
     }
 
+    #[must_use]
     fn provider_retry_delay(attempt_idx: usize) -> Duration {
-        let base_ms = 250u64;
-        let max_ms = 5000u64;
-        let exp = base_ms.saturating_mul(2u64.saturating_pow(u32::try_from(attempt_idx).unwrap_or(u32::MAX)));
-        let delay = exp.min(max_ms);
-        Duration::from_millis(delay)
+        // Canonical 250ms-to-5s curve with the standard jitter: concurrent
+        // provider reconnects must not retry in lockstep.
+        let attempt = u32::try_from(attempt_idx).unwrap_or(u32::MAX);
+        vtcode_commons::retry::RetryPolicy::from_retries(
+            u32::MAX,
+            Duration::from_millis(250),
+            Duration::from_secs(5),
+            2.0,
+        )
+        .with_jitter(vtcode_commons::retry::RetryPolicy::DEFAULT_JITTER)
+        .delay_for_attempt(attempt)
     }
 
     pub(super) fn tool_timeout(&self) -> Option<Duration> {

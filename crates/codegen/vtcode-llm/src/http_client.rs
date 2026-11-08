@@ -62,7 +62,7 @@ impl HttpClientFactory {
             .pool_idle_timeout(Some(Duration::from_secs(90)))
             .pool_max_idle_per_host(1)
             .build()
-            .unwrap_or_else(|_| Client::new())
+            .unwrap_or_else(|_| vtcode_commons::http::create_streaming_client())
     }
 
     /// Create an HTTP client with explicit timeout values.

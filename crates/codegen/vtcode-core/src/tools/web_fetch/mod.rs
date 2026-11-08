@@ -332,11 +332,13 @@ impl WebFetchTool {
             follow_with_budget(attempt, redirect_budget.as_ref())
         });
 
-        let client = reqwest::Client::builder()
-            .default_headers(default_headers)
-            .timeout(std::time::Duration::from_secs(timeout_secs))
-            .redirect(redirect_policy)
-            .build()?;
+        let client = vtcode_commons::http::apply_connect_timeout(
+            reqwest::Client::builder()
+                .default_headers(default_headers)
+                .timeout(std::time::Duration::from_secs(timeout_secs))
+                .redirect(redirect_policy),
+        )
+        .build()?;
 
         let response = fetch_response(&client, url, max_bytes, timeout_secs, budget.as_ref()).await?;
 

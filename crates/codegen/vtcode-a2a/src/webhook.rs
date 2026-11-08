@@ -37,6 +37,13 @@ pub(crate) fn parse_webhook_url(raw_url: &str) -> Result<Url, String> {
     }
 }
 
+/// Total request budget for one webhook delivery attempt.
+const WEBHOOK_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// Connect-phase budget: a stalled handshake must not consume the attempt budget.
+const WEBHOOK_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// Cap for the exponential retry curve, before jitter.
+const WEBHOOK_MAX_RETRY_DELAY_MS: u64 = 30_000;
+
 /// Webhook notifier for delivering A2A events
 #[derive(Debug, Clone)]
 pub struct WebhookNotifier {
@@ -54,7 +61,8 @@ impl Default for WebhookNotifier {
 impl WebhookNotifier {
     fn build_http_client() -> Option<Client> {
         match Client::builder()
-            .timeout(Duration::from_secs(10))
+            .timeout(WEBHOOK_REQUEST_TIMEOUT)
+            .connect_timeout(WEBHOOK_CONNECT_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .build()
         {
@@ -97,11 +105,22 @@ impl WebhookNotifier {
         self.send_with_retry(&url, &json, config.authentication.as_deref()).await
     }
 
-    /// Retry delay before `attempt` (1-based) with unbounded exponential growth
-    /// guarded against overflow.
+    /// Retry delay before `attempt` (1-based): exponential backoff capped at
+    /// [`WEBHOOK_MAX_RETRY_DELAY_MS`], plus small deterministic jitter so
+    /// concurrent notifiers do not retry in lockstep.
+    ///
+    /// Jitter is deterministic (a function of the attempt index) rather than
+    /// random, keeping delay tests exact while still decorrelating attempts.
+    /// (`vtcode-a2a` is Layer 0 and cannot reuse `vtcode_commons::retry`;
+    /// this mirrors its capped-exponential-plus-jitter curve.)
     fn retry_delay(&self, attempt: u32) -> Duration {
         let exponent = attempt.saturating_sub(1);
-        Duration::from_millis(self.retry_delay_ms.saturating_mul(2_u64.saturating_pow(exponent)))
+        let backoff_ms = self
+            .retry_delay_ms
+            .saturating_mul(2_u64.saturating_pow(exponent))
+            .min(WEBHOOK_MAX_RETRY_DELAY_MS);
+        let jitter_ms = (u64::from(exponent) * 31) % (backoff_ms / 4).saturating_add(1);
+        Duration::from_millis(backoff_ms.saturating_add(jitter_ms))
     }
 
     /// Send webhook with retry logic
@@ -122,6 +141,9 @@ impl WebhookNotifier {
                 }
                 Err(e) => {
                     warn!("Webhook delivery attempt {} failed: {}", attempt + 1, e);
+                    if !is_retryable_webhook_error(&e) {
+                        return Err(e);
+                    }
                     last_error = Some(e);
                 }
             }
@@ -156,6 +178,21 @@ impl WebhookNotifier {
         } else {
             Err(WebhookError::HttpError(response.status().as_u16()))
         }
+    }
+}
+
+/// Failures worth a webhook redelivery: transport errors plus server-side and
+/// rate-limit statuses. Anything else (client errors, local misconfiguration)
+/// fails fast: another identical POST cannot fix it.
+#[must_use]
+fn is_retryable_webhook_error(error: &WebhookError) -> bool {
+    match error {
+        WebhookError::Network(_) => true,
+        WebhookError::HttpError(status) => matches!(status, 429 | 500..=599),
+        WebhookError::Serialization(_)
+        | WebhookError::InvalidUrl(_)
+        | WebhookError::ClientUnavailable
+        | WebhookError::Unknown => false,
     }
 }
 
@@ -204,14 +241,39 @@ mod tests {
     #[test]
     fn test_webhook_retry_delay_doubles_and_saturates() {
         let notifier = WebhookNotifier::with_settings(3, 1_000);
+        // Exponential curve with deterministic jitter (exact pins).
         assert_eq!(notifier.retry_delay(1), Duration::from_millis(1_000));
-        assert_eq!(notifier.retry_delay(2), Duration::from_millis(2_000));
-        assert_eq!(notifier.retry_delay(3), Duration::from_millis(4_000));
-        assert_eq!(
-            notifier.retry_delay(u32::MAX),
-            Duration::from_millis(u64::MAX),
-            "an overflowing exponent must saturate instead of panicking"
-        );
+        assert_eq!(notifier.retry_delay(2), Duration::from_millis(2_031));
+        assert_eq!(notifier.retry_delay(3), Duration::from_millis(4_062));
+        // The cap engages: attempt 6 would be 32s uncapped.
+        assert_eq!(notifier.retry_delay(6), Duration::from_millis(30_155));
+        // Jitter is deterministic, and the curve never escapes its bound even
+        // for an overflowing exponent.
+        assert_eq!(notifier.retry_delay(3), notifier.retry_delay(3));
+        for attempt in [7, 100, u32::MAX] {
+            let delay = notifier.retry_delay(attempt);
+            assert!(
+                (Duration::from_millis(30_000)..=Duration::from_millis(37_500)).contains(&delay),
+                "attempt {attempt} delay {delay:?} escapes the 30s cap + jitter bound"
+            );
+        }
+    }
+
+    #[test]
+    fn webhook_retries_only_transient_failures() {
+        assert!(is_retryable_webhook_error(&WebhookError::Network("connection reset".to_string())));
+        // Asymmetric neighbors across the retryable line: 429 retries while
+        // 404 fails fast; 5xx retries while other 4xx fail fast.
+        for status in [429, 500, 502, 503, 504] {
+            assert!(is_retryable_webhook_error(&WebhookError::HttpError(status)), "HTTP {status} must retry");
+        }
+        for status in [400, 401, 403, 404] {
+            assert!(!is_retryable_webhook_error(&WebhookError::HttpError(status)), "HTTP {status} must fail fast");
+        }
+        assert!(!is_retryable_webhook_error(&WebhookError::Serialization("bad json".to_string())));
+        assert!(!is_retryable_webhook_error(&WebhookError::InvalidUrl("ftp://example.test/hook".to_string())));
+        assert!(!is_retryable_webhook_error(&WebhookError::ClientUnavailable));
+        assert!(!is_retryable_webhook_error(&WebhookError::Unknown));
     }
 
     #[test]

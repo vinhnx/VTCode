@@ -11,10 +11,11 @@ pub async fn read_image_from_url(url: &str) -> Result<ImageData> {
         return Err(anyhow::anyhow!("Invalid URL: {url}"));
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .context("Failed to create HTTP client")?;
+    let client = vtcode_commons::http::apply_connect_timeout(
+        reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)),
+    )
+    .build()
+    .context("Failed to create HTTP client")?;
 
     let response = client
         .get(url)

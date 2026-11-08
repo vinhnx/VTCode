@@ -67,7 +67,8 @@ impl AgentRunner {
     ) -> VtCodeResult<TaskResults> {
         use std::time::Duration;
 
-        let policy = RetryPolicy::from_retries(max_retries, Duration::from_secs(2), Duration::from_secs(30), 2.0);
+        let policy = RetryPolicy::from_retries(max_retries, Duration::from_secs(2), Duration::from_secs(30), 2.0)
+            .with_jitter(RetryPolicy::DEFAULT_JITTER);
         let metrics = self.tool_registry.metrics_collector();
         let task_id = task.id.clone();
         let mut ctx = AgentRetryContext {

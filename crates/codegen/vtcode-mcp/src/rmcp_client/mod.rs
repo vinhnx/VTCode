@@ -421,6 +421,13 @@ impl RmcpClient {
             // those secrets. Surface `3xx` as a transport error instead; MCP
             // has no legitimate redirect flow on this path.
             .redirect(rmcp_reqwest::redirect::Policy::none());
+        // Bound the TCP/TLS handshake from the installed `[timeouts]` budget.
+        // No transport-level total timeout by design: every operation is
+        // wrapped in `run_with_timeout` with its tool-appropriate budget, and
+        // a total here would abort legitimately long SSE-streamed tool calls.
+        if let Some(connect) = vtcode_commons::http::http_timeouts().connect {
+            client_builder = client_builder.connect_timeout(connect);
+        }
 
         let http_client = client_builder
             .build()

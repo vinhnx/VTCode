@@ -1,6 +1,5 @@
 #![expect(
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
     reason = "Retry exponents and jitter are clamped to the supported retry range before conversion."
 )]
 
@@ -36,6 +35,17 @@ pub struct RetryPolicy {
 impl RetryPolicy {
     pub const DEFAULT: Self = Self::from_retries(2, Duration::from_secs(1), Duration::from_secs(60), 2.0);
 
+    /// Standard jitter ratio for outbound retries: up to 15% deterministic
+    /// offset. `DEFAULT` keeps `0.0` so pinned delay math stays exact; call
+    /// sites that retry shared external services opt in via [`Self::with_jitter`].
+    pub const DEFAULT_JITTER: f64 = 0.15;
+
+    /// Builder-style jitter override, so call sites need no `mut` binding.
+    pub fn with_jitter(mut self, jitter: f64) -> Self {
+        self.jitter = jitter;
+        self
+    }
+
     pub const fn new(max_attempts: u32, initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
         Self {
             max_attempts: if max_attempts < 1 { 1 } else { max_attempts },
@@ -61,7 +71,10 @@ impl RetryPolicy {
 
     #[must_use]
     pub fn delay_for_attempt(&self, attempt_index: u32) -> Duration {
-        let multiplier = self.multiplier.powi(attempt_index as i32);
+        // Saturate, never wrap: attempts past the `i32` exponent range must pin
+        // at the cap instead of collapsing to a tiny delay.
+        let exponent = i32::try_from(attempt_index).unwrap_or(i32::MAX);
+        let multiplier = self.multiplier.powi(exponent);
         let base_delay = Duration::try_from_secs_f64(self.initial_delay.as_secs_f64() * multiplier)
             .unwrap_or(self.max_delay)
             .min(self.max_delay);
@@ -265,5 +278,33 @@ mod tests {
         assert!(decision.retryable);
         assert_eq!(decision.delay, Some(Duration::from_secs(7)));
         assert_eq!(decision.retry_after, Some(Duration::from_secs(7)));
+    }
+
+    #[test]
+    fn with_jitter_applies_a_deterministic_offset() {
+        let plain = RetryPolicy::from_retries(3, Duration::from_millis(1000), Duration::from_secs(30), 2.0);
+        let jittered = plain.with_jitter(RetryPolicy::DEFAULT_JITTER);
+        // Attempt 0 draws a zero offset, so the base is unchanged; attempt 1
+        // shifts by exactly 31ms while the jitter-free curve does not move.
+        assert_eq!(jittered.delay_for_attempt(0), Duration::from_millis(1000));
+        assert_eq!(jittered.delay_for_attempt(1), Duration::from_millis(2031));
+        assert_eq!(plain.delay_for_attempt(1), Duration::from_millis(2000));
+        // Deterministic: the same attempt always draws the same delay.
+        assert_eq!(jittered.delay_for_attempt(1), jittered.delay_for_attempt(1));
+    }
+
+    #[test]
+    fn extreme_attempts_saturate_at_the_cap() {
+        let policy = RetryPolicy::from_retries(3, Duration::from_millis(1000), Duration::from_millis(5000), 2.0)
+            .with_jitter(RetryPolicy::DEFAULT_JITTER);
+        // Without saturation the `u32`-to-`i32` exponent would wrap and the
+        // delay would collapse instead of capping.
+        for attempt in [100, 10_000, u32::MAX] {
+            let delay = policy.delay_for_attempt(attempt);
+            assert!(
+                (Duration::from_millis(5000)..=Duration::from_millis(5750)).contains(&delay),
+                "attempt {attempt} escaped the cap: {delay:?}"
+            );
+        }
     }
 }

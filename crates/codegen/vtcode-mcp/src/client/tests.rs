@@ -346,3 +346,21 @@ fn pool_timeouts_clamp_zero_to_one_second() {
     };
     assert_eq!(McpClient::new(config).pool_timeouts(), (1, 1));
 }
+
+#[test]
+fn provider_retry_delay_is_capped_exponential_with_jitter() {
+    use std::time::Duration;
+    // Exact pins on the 250ms doubling curve.
+    assert_eq!(McpClient::provider_retry_delay(0), Duration::from_millis(250));
+    assert_eq!(McpClient::provider_retry_delay(1), Duration::from_millis(531));
+    assert_eq!(McpClient::provider_retry_delay(2), Duration::from_millis(1062));
+    assert_eq!(McpClient::provider_retry_delay(5), Duration::from_millis(5155));
+    // The 5s cap plus jitter bound holds at any scale.
+    for attempt in [6, 100, usize::MAX] {
+        let delay = McpClient::provider_retry_delay(attempt);
+        assert!(
+            (Duration::from_millis(5000)..=Duration::from_millis(5750)).contains(&delay),
+            "attempt {attempt} escaped the cap: {delay:?}"
+        );
+    }
+}
