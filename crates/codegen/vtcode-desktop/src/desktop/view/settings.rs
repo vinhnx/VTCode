@@ -3,24 +3,28 @@ use crate::desktop::localization::UiLanguage;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum SettingsTab {
+    VtCode,
     Appearance,
     Accessibility,
     Shortcuts,
-    VtCode,
     Connections,
     Notifications,
     Storage,
+    About,
 }
 
 impl SettingsTab {
-    pub(super) const ALL: [Self; 7] = [
+    /// VT Code leads the rail (app identity first), then the desktop tabs,
+    /// with About closing the group after Storage.
+    pub(super) const ALL: [Self; 8] = [
+        Self::VtCode,
         Self::Appearance,
         Self::Accessibility,
         Self::Shortcuts,
-        Self::VtCode,
         Self::Connections,
         Self::Notifications,
         Self::Storage,
+        Self::About,
     ];
 
     /// Index of the CLI configuration entry in the unified settings
@@ -31,35 +35,55 @@ impl SettingsTab {
     /// Tabs plus the configuration entry.
     pub(super) const PAGE_COUNT: usize = Self::ALL.len() + 1;
 
-    pub(super) fn label(self) -> String {
+    /// i18n key for the tab label, resolved once in [`SettingsTab::label`].
+    const fn label_key(self) -> &'static str {
         match self {
-            Self::Appearance => rust_i18n::t!("app.settings.tab.appearance"),
-            Self::Accessibility => rust_i18n::t!("app.settings.tab.accessibility"),
-            Self::Shortcuts => rust_i18n::t!("app.settings.tab.shortcuts"),
-            Self::VtCode => rust_i18n::t!("app.settings.tab.vtcode"),
-            Self::Connections => rust_i18n::t!("app.settings.tab.connections"),
-            Self::Notifications => rust_i18n::t!("app.settings.tab.notifications"),
-            Self::Storage => rust_i18n::t!("app.settings.tab.storage"),
+            Self::VtCode => "app.settings.tab.vtcode",
+            Self::Appearance => "app.settings.tab.appearance",
+            Self::Accessibility => "app.settings.tab.accessibility",
+            Self::Shortcuts => "app.settings.tab.shortcuts",
+            Self::Connections => "app.settings.tab.connections",
+            Self::Notifications => "app.settings.tab.notifications",
+            Self::Storage => "app.settings.tab.storage",
+            Self::About => "app.settings.tab.about",
         }
-        .to_string()
+    }
+
+    pub(super) fn label(self) -> String {
+        rust_i18n::t!(self.label_key()).to_string()
     }
 
     /// Lucide glyph for the tab, or `None` when the tab uses the brand V
     /// mark ([`vtcode_nav_mark`]) instead of a catalog icon.
     pub(super) fn icon(self) -> Option<IconName> {
         match self {
-            Self::Appearance => Some(IconName::Palette),
+            Self::VtCode => None,
+            Self::Appearance => Some(IconName::SunMoon),
             Self::Accessibility => Some(IconName::PersonStanding),
             Self::Shortcuts => Some(IconName::Keyboard),
-            Self::VtCode => None,
             Self::Connections => Some(IconName::Plug),
             Self::Notifications => Some(IconName::Bell),
             Self::Storage => Some(IconName::HardDrive),
+            Self::About => Some(IconName::Info),
         }
     }
 
     pub(super) fn search_keywords(self) -> &'static [&'static str] {
         match self {
+            Self::VtCode => &[
+                "vt code menu bar",
+                "startup",
+                "login",
+                "launch at login",
+                "khởi động",
+                "config",
+                "configuration",
+                "provider",
+                "model",
+                "agent",
+                "cli",
+                "permissions",
+            ],
             Self::Appearance => &[
                 "appearance",
                 "themes",
@@ -109,30 +133,6 @@ impl SettingsTab {
                 "bindings",
                 "phím tắt",
             ],
-            Self::VtCode => &[
-                "vt code menu bar",
-                "startup",
-                "login",
-                "launch at login",
-                "khởi động",
-                "config",
-                "configuration",
-                "provider",
-                "model",
-                "agent",
-                "cli",
-                "permissions",
-                "license",
-                "licenses",
-                "open source",
-                "open source licenses",
-                "third-party notices",
-                "attribution",
-                "legal",
-                "copyright",
-                "apache",
-                "mit",
-            ],
             Self::Connections => &["connections", "mcp", "webmcp", "server", "bridge"],
             Self::Notifications => &[
                 "notifications",
@@ -158,6 +158,28 @@ impl SettingsTab {
                 "worktrees",
                 "archive",
                 "delete",
+            ],
+            Self::About => &[
+                "about",
+                "version",
+                "build",
+                "acknowledgments",
+                "acknowledgements",
+                "credits",
+                "thanks",
+                "third-party notices",
+                "licenses",
+                "license",
+                "open source",
+                "open source licenses",
+                "attribution",
+                "legal",
+                "copyright",
+                "apache",
+                "mit",
+                "website",
+                "repository",
+                "giới thiệu",
             ],
         }
     }
@@ -480,6 +502,7 @@ impl DesktopView {
         }
         let title = self.settings_tab.label();
         let page = match self.settings_tab {
+            SettingsTab::VtCode => self.render_vtcode_settings(cx),
             SettingsTab::Appearance => self.render_appearance_settings(cx),
             SettingsTab::Accessibility => self.render_accessibility_settings(cx),
             SettingsTab::Shortcuts => div()
@@ -487,10 +510,10 @@ impl DesktopView {
                 .test_support()
                 .child(self.render_shortcuts(window, cx))
                 .into_any_element(),
-            SettingsTab::VtCode => self.render_vtcode_settings(cx),
             SettingsTab::Connections => self.render_connections_settings(cx),
             SettingsTab::Notifications => self.render_notification_settings(cx),
             SettingsTab::Storage => self.render_storage_settings(cx),
+            SettingsTab::About => self.render_about_settings(cx),
         };
         let content = div()
             .flex()
@@ -679,16 +702,24 @@ mod tests {
 
     #[test]
     fn settings_tab_icons_cover_every_tab_exactly_once() {
-        assert_eq!(SettingsTab::Appearance.icon(), Some(IconName::Palette));
+        assert_eq!(SettingsTab::VtCode.icon(), None);
+        assert_eq!(SettingsTab::Appearance.icon(), Some(IconName::SunMoon));
         assert_eq!(SettingsTab::Accessibility.icon(), Some(IconName::PersonStanding));
         assert_eq!(SettingsTab::Shortcuts.icon(), Some(IconName::Keyboard));
-        assert_eq!(SettingsTab::VtCode.icon(), None);
         assert_eq!(SettingsTab::Connections.icon(), Some(IconName::Plug));
         assert_eq!(SettingsTab::Notifications.icon(), Some(IconName::Bell));
         assert_eq!(SettingsTab::Storage.icon(), Some(IconName::HardDrive));
+        assert_eq!(SettingsTab::About.icon(), Some(IconName::Info));
         let icons = SettingsTab::ALL.map(SettingsTab::icon);
         for (index, icon) in icons.iter().enumerate() {
             assert!(icons.iter().skip(index + 1).all(|other| other != icon), "duplicate nav icon {icon:?}");
         }
+    }
+
+    #[test]
+    fn vtcode_leads_the_settings_rail_and_about_closes_it() {
+        assert_eq!(SettingsTab::ALL.first(), Some(&SettingsTab::VtCode));
+        assert_eq!(SettingsTab::ALL.last(), Some(&SettingsTab::About));
+        assert_eq!(SettingsTab::CONFIG_INDEX, SettingsTab::ALL.len());
     }
 }

@@ -500,7 +500,7 @@ fn vim_toggle_persists_and_reset_restores_keyboard_defaults(cx: &mut TestAppCont
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.render_frame(cx);
         assert!(window.try_find("vim-navigation").is_some(), "switch renders in the shortcuts tab");
         scroll_settings_by(window, px(-6000.), cx);

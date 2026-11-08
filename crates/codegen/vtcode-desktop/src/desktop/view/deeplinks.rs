@@ -194,6 +194,7 @@ fn tab_name(tab: settings::SettingsTab) -> &'static str {
         settings::SettingsTab::Connections => "connections",
         settings::SettingsTab::Notifications => "notifications",
         settings::SettingsTab::Storage => "storage",
+        settings::SettingsTab::About => "about",
     }
 }
 
@@ -738,6 +739,7 @@ mod tests {
             ("connections", SettingsTab::Connections),
             ("notifications", SettingsTab::Notifications),
             ("storage", SettingsTab::Storage),
+            ("about", SettingsTab::About),
         ] {
             assert_eq!(parse(&format!("settings/{name}")), Some(DeepLink::SettingsTab(tab)), "{name}");
         }

@@ -147,7 +147,7 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         window.render_frame(cx);
         window.click("open-settings", cx);
         window.render_frame(cx);
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.render_frame(cx);
         assert_eq!(window.find("provider-details").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("provider-details").label(), Some("Provider and model configuration"));
@@ -162,7 +162,7 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         window.render_frame(cx);
         assert_eq!(window.find("local-service-settings-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("local-service-details").label(), Some("Local service connection details"));
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.render_frame(cx);
         window.click("copy-credential-command", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode login ollama"));
@@ -417,7 +417,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.click("sync-cli-theme", cx);
         let BackendCommand::Request { method, params } = requests.try_recv().expect("theme request") else {
             panic!("expected a theme request");

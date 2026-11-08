@@ -11,7 +11,7 @@ fn shortcut_search_filters_rows_and_reports_empty_results(cx: &mut TestAppContex
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.render_frame(cx);
         assert!(window.try_find("shortcut-row-model").is_some());
         assert!(window.try_find("shortcut-empty").is_none());
@@ -50,7 +50,7 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         let sidebar_open = view.read(cx).sidebar_open;
         window.click("shortcut-edit-commands", cx);
         window.render_frame(cx);
@@ -104,7 +104,7 @@ fn shortcut_reset_from_defaults_reports_noop(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.click("reset-shortcuts", cx);
         window.render_frame(cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already match"));
@@ -122,7 +122,7 @@ fn shortcut_invalid_staged_value_marks_badge_and_blocks_save(cx: &mut TestAppCon
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         view.update(cx, |view, _| {
             let _previous = view.preferences.shortcuts.insert("model".into(), "a-b".into());
             view.shortcut_draft = super::super::shortcuts::draft_from(&view.preferences.shortcuts);
@@ -147,7 +147,7 @@ fn shortcut_unbind_marks_unassigned_and_persists(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         view.update(cx, |view, cx| {
             view.shortcut_search_input
                 .update(cx, |input, cx| input.set_value("model picker", window, cx));
@@ -291,7 +291,7 @@ fn shortcut_save_applies_rebind_live_and_retires_old_chord(cx: &mut TestAppConte
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         view.update(cx, |view, _| {
             let _previous = view.shortcut_draft.insert("model".into(), "ctrl-shift-m".into());
             view.shortcuts_editing = true;

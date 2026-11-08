@@ -68,8 +68,19 @@ fn settings_deep_links_cover_every_settings_tab() {
         ("notification", SettingsTab::Notifications),
         ("alerts", SettingsTab::Notifications),
         ("updates", SettingsTab::Notifications),
+        ("storage", SettingsTab::Storage),
+        ("disk", SettingsTab::Storage),
+        ("cleanup", SettingsTab::Storage),
+        ("about", SettingsTab::About),
+        ("info", SettingsTab::About),
     ] {
         assert_eq!(settings_tab_for_name(name), Some(expected), "alias {name:?}");
+    }
+    // Every tab is reachable from `/settings`, so a new tab cannot ship with
+    // only a canonical name that this alias table never exercises.
+    for tab in SettingsTab::ALL {
+        let canonical = format!("{tab:?}").to_lowercase();
+        assert_eq!(settings_tab_for_name(&canonical), Some(tab), "canonical name for {tab:?}");
     }
     assert_eq!(settings_tab_for_name("unknown"), None);
 }

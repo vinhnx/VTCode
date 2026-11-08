@@ -166,7 +166,7 @@ fn cli_settings_reload_button_and_action_share_the_transition_guard(cx: &mut Tes
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         window.click("reload-cli-settings", cx);
         assert!(matches!(requests.try_recv(), Ok(BackendCommand::Stop)));
         assert!(view.read(cx).pending_workspace.is_some());

@@ -99,6 +99,9 @@ impl DesktopView {
     /// handle; the website action is a plain external launch.
     pub(super) fn render_about_settings_content(view: Entity<Self>, cx: &mut App) -> AnyElement {
         let colors = cx.theme().colors;
+        // The page header already reads "About" and the card opens with the app
+        // name, so the card stays untitled (the curated configuration overview
+        // uses the same shape) instead of adding a third "About VT Code" line.
         let title = rust_i18n::t!("app.menus.about").to_string();
         let identity = div()
             .id("about-settings-identity")
@@ -136,8 +139,8 @@ impl DesktopView {
             .test_support()
             .child(accessible_group_box(
                 "about-settings-group",
-                title.clone(),
-                settings_group_box(title, &colors)
+                title,
+                settings_group_box_untitled(&colors)
                     .child(identity)
                     .child(Self::license_viewer_row(
                         &view,

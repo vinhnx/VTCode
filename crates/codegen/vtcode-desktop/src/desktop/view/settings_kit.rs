@@ -25,15 +25,29 @@ const CONFIG_PAGE_KEYWORDS: &[&str] = &["configuration", "config", "cli", "setti
 
 /// A v1 tab page: one Element item hosting the pane builder. Title, icon,
 /// and keywords come from the tab so the Kit sidebar cannot drift from the
-/// navigation model. The brand V mark has no Kit `Icon` equivalent, so
-/// VtCode keeps a neutral agent glyph meanwhile.
+/// navigation model. The brand V mark has no Kit `IconName` equivalent, so
+/// VT Code renders it through `vtcode_nav_mark()` while the other tabs use
+/// their catalog glyph.
+///
+/// Both branches carry [`nav_entry_icon_size`] explicitly: Kit's sidebar row
+/// sets `text_sm` (0.875rem) and an unsized `Icon` inherits that text size, so
+/// without the explicit box the wide (default) layout would paint 14px glyphs
+/// while the narrow legacy rail paints the shared 16px baseline.
+fn kit_page_icon(tab: SettingsTab) -> Icon {
+    match tab.icon() {
+        Some(name) => Icon::new(name),
+        None => vtcode_nav_mark(),
+    }
+    .size(nav_entry_icon_size())
+}
+
 fn kit_single_item_page<R, E>(tab: SettingsTab, render: R) -> SettingPage
 where
     R: Fn(&RenderOptions, &mut Window, &mut App) -> E + 'static,
     E: IntoElement,
 {
     SettingPage::new(tab.label())
-        .icon(tab.icon().unwrap_or(IconName::Bot))
+        .icon(kit_page_icon(tab))
         .group(SettingGroup::new().item(SettingItem::render(render).keywords(tab.search_keywords().iter().copied())))
 }
 
@@ -59,6 +73,12 @@ impl DesktopView {
         for tab in SettingsTab::ALL {
             let page_view = view.clone();
             let page = match tab {
+                SettingsTab::VtCode => {
+                    let props = VtcodeSettingsProps::capture(self);
+                    kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                        Self::render_vtcode_settings_content(props.clone(), page_view.clone(), cx)
+                    })
+                }
                 SettingsTab::Appearance => {
                     let props = AppearanceSettingsProps::capture(self);
                     kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
@@ -75,12 +95,6 @@ impl DesktopView {
                     let props = ShortcutSettingsProps::capture(self);
                     kit_single_item_page(tab, move |_: &RenderOptions, window: &mut Window, cx: &mut App| {
                         Self::render_shortcuts_content(props.clone(), page_view.clone(), window, cx)
-                    })
-                }
-                SettingsTab::VtCode => {
-                    let props = VtcodeSettingsProps::capture(self);
-                    kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                        Self::render_vtcode_settings_content(props.clone(), page_view.clone(), cx)
                     })
                 }
                 SettingsTab::Connections => {
@@ -113,6 +127,11 @@ impl DesktopView {
                         Self::render_storage_settings_content(props.clone(), page_view.clone(), cx)
                     })
                 }
+                SettingsTab::About => {
+                    kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
+                        Self::render_about_settings_content(page_view.clone(), cx)
+                    })
+                }
             };
             pages.push(page);
         }
@@ -143,6 +162,11 @@ impl DesktopView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::component::theme::Theme;
+    use gpui_kit::test::TestWindowExt;
+    use gpui_kit::{
+        AnyWindowHandle, Bounds, Context, Render, TestAppContext, TestSupportExt, Window, WindowBounds, div,
+    };
 
     #[test]
     fn kit_pages_carry_search_keywords() {
@@ -150,5 +174,90 @@ mod tests {
             assert!(!tab.search_keywords().is_empty(), "Kit page `{}` needs search keywords", tab.label());
         }
         assert!(!CONFIG_PAGE_KEYWORDS.is_empty(), "config page needs search keywords");
+    }
+
+    /// Probe mounting the Kit page glyphs so the shared rail box is asserted on
+    /// rendered geometry. `Icon` is `RenderOnce` with no id, so each glyph sits
+    /// in an identified wrapper that owns the measured box.
+    struct KitGlyphProbe;
+
+    impl Render for KitGlyphProbe {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            // Row containers mirror Kit's sidebar row (`.text_sm()`), the
+            // condition that shrinks an unsized `Icon` to 14px. Each identified
+            // wrapper is a `flex_shrink_0` item, so it shrink-wraps the glyph
+            // instead of stretching to the window width.
+            div()
+                .flex()
+                .flex_col()
+                .size_full()
+                .child(
+                    div().flex().text_sm().child(
+                        div()
+                            .id("probe-kit-glyph-catalog")
+                            .test_support()
+                            .flex_shrink_0()
+                            .child(kit_page_icon(SettingsTab::Appearance)),
+                    ),
+                )
+                .child(
+                    div().flex().text_sm().child(
+                        div()
+                            .id("probe-kit-glyph-mark")
+                            .test_support()
+                            .flex_shrink_0()
+                            .child(kit_page_icon(SettingsTab::VtCode)),
+                    ),
+                )
+        }
+    }
+
+    fn open_kit_glyph_probe(cx: &mut TestAppContext) -> AnyWindowHandle {
+        cx.update(gpui_kit::init);
+        let (window, _probe) = cx
+            .update(|cx| {
+                gpui_kit::open_window(
+                    WindowOptions {
+                        window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                            point(px(0.), px(0.)),
+                            size(px(640.), px(480.)),
+                        ))),
+                        ..Default::default()
+                    },
+                    cx,
+                    |_, cx| cx.new(|_| KitGlyphProbe),
+                )
+            })
+            .expect("open Kit glyph probe window");
+        window
+    }
+
+    /// The Kit sidebar row is `text_sm` (0.875rem); an unsized `Icon` inherits
+    /// that 14px text size. Both glyph branches must instead paint the shared
+    /// 16px app baseline and keep growing with the UI font size setting, or the
+    /// wide (default) layout drifts below the narrow legacy rail.
+    #[gpui_kit::test]
+    fn kit_page_glyphs_keep_the_shared_rail_box(cx: &mut TestAppContext) {
+        let window = open_kit_glyph_probe(cx);
+        for base_size in [14., 24.] {
+            cx.update(|cx| {
+                Theme::update(cx, |theme| {
+                    theme.font_size = px(base_size);
+                });
+            });
+            cx.update_window(window, |_, window, cx| {
+                window.render_frame(cx);
+                for id in ["probe-kit-glyph-catalog", "probe-kit-glyph-mark"] {
+                    let box_ = window.find(id).bounds();
+                    let expected = base_size * 1.0;
+                    assert_eq!(
+                        box_.size,
+                        size(px(expected), px(expected)),
+                        "{id} must paint the font-relative 1rem rail box at {base_size}px: {box_:?}"
+                    );
+                }
+            })
+            .unwrap();
+        }
     }
 }

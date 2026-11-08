@@ -24,7 +24,7 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 3, cx);
+        select_settings_category(window, 0, cx);
         focus_element_by_tab(window, "use-cli-theme", cx);
         window.press("enter", cx);
         assert_eq!(view.read(cx).theme_id, "solarized-light");
@@ -53,7 +53,7 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.click("import-cli-shortcuts", cx);
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!(saved.shortcuts.get("cancel").map(String::as_str), Some("ctrl-c"));
@@ -109,7 +109,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         assert!(crate::desktop::preferences::Preferences::load().show_status_bar);
         window.press("cmd-,", cx);
         window.render_frame(cx);
-        select_settings_category(window, 1, cx);
+        select_settings_category(window, 2, cx);
         window.click("show-status-bar", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).preferences.show_status_bar);

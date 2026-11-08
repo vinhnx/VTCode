@@ -48,6 +48,7 @@ pub(super) fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab>
         "connections" | "mcp" | "webmcp" => Some(settings::SettingsTab::Connections),
         "notifications" | "notification" | "alerts" | "updates" => Some(settings::SettingsTab::Notifications),
         "storage" | "disk" | "cleanup" => Some(settings::SettingsTab::Storage),
+        "about" | "info" => Some(settings::SettingsTab::About),
         _ => None,
     }
 }

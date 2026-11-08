@@ -684,7 +684,7 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        select_settings_category(window, 1, cx);
+        select_settings_category(window, 2, cx);
         scroll_settings_by(window, px(-240.), cx);
         window.render_frame(cx);
         assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));

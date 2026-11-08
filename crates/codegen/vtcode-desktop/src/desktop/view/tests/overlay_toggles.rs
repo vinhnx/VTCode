@@ -290,7 +290,7 @@ fn route_back_peels_settings_layers_in_order(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        select_settings_category(window, 2, cx);
+        select_settings_category(window, 3, cx);
         window.click("shortcut-edit-commands", cx);
         view.update(cx, |view, cx| {
             view.open_cli_config_editor("agent.default_model".into(), window, cx);

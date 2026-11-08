@@ -85,7 +85,7 @@ fn storage_keyboard_navigation_requests_summary_once(cx: &mut TestAppContext) {
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        for _ in 0..6 {
+        for _ in 0..5 {
             window.dispatch_action(Box::new(super::super::NextSettingsTab), cx);
             window.render_frame(cx);
         }

@@ -417,13 +417,14 @@ pub(super) fn nav_group_header(
 
 /// Rail glyph size shared by Lucide catalog icons and the brand mark.
 ///
-/// One font-relative square (`0.875rem`, 14px at the default 16px UI font)
-/// that grows with the UI font size setting, unlike Lucide's fixed `small`
-/// tier. Both the Lucide names and the brand SVG render through it, so the
-/// settings navigation and the configuration rail keep one glyph box per
-/// row and the rows never drift apart as the font size changes.
+/// One font-relative square (`1rem`, 16px at the default 16px UI font) — the
+/// same baseline the app's navigation rows use (`size_4`) — that grows with
+/// the UI font size setting, unlike Lucide's fixed `small` tier. Both the
+/// Lucide names and the brand SVG render through it, so the settings
+/// navigation and the configuration rail keep one glyph box per row and the
+/// rows never drift apart as the font size changes.
 pub(super) fn nav_entry_icon_size() -> gpui_kit::AbsoluteLength {
-    gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(0.875))
+    gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(1.0))
 }
 
 /// Navigation entry content: an icon pinned to a truncating label on one
@@ -460,9 +461,10 @@ pub(super) fn nav_entry_content(
 }
 
 /// Brand V mark shared by the welcome empty states and the settings
-/// navigation. GPUI paints SVGs as tinted monochrome sprites, so the mark
-/// follows the surrounding text color in every theme.
-const VTCODE_NAV_MARK_SVG: &[u8] = include_bytes!("../../../../../../resources/icons/vtcode-mark.svg");
+/// navigation. Uses the monochrome V artwork (`vtcode-mono.svg`); GPUI paints
+/// SVGs as tinted monochrome sprites, so the mark follows the surrounding text
+/// color in every theme.
+const VTCODE_NAV_MARK_SVG: &[u8] = include_bytes!("../../../../../../resources/icons/vtcode-mono.svg");
 
 /// Settings-nav leading mark for the VT Code entry: the brand V at the same
 /// [`nav_entry_icon_size`] and inherited color as the Lucide sibling rows.

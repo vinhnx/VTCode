@@ -91,6 +91,7 @@ mod tests {
                 Some(IconName::ALargeSmall),
             ),
             (PaletteAction::SelectSettingsTab(settings::SettingsTab::Shortcuts), Some(IconName::Keyboard)),
+            (PaletteAction::SelectSettingsTab(settings::SettingsTab::About), Some(IconName::Info)),
             (PaletteAction::SelectSettingsTab(settings::SettingsTab::VtCode), None),
             (PaletteAction::EditConfigSetting("tab".to_string()), Some(IconName::Wrench)),
             (PaletteAction::LoadSession("session-1".to_string()), Some(IconName::MessageSquare)),

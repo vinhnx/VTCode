@@ -49,7 +49,7 @@ fn config_rail_entries_share_a_leading_spine_when_wide(cx: &mut TestAppContext) 
 /// Catalog glyphs and the settings navigation's brand V share one explicit
 /// rail box: `nav_entry_content` sizes both from `nav_entry_icon_size`, so a
 /// Lucide row and the brand row can never mix the fixed 14px `small` tier
-/// with a font-relative box as the UI font size changes.
+/// with the font-relative 16px app baseline as the UI font size changes.
 #[gpui_kit::test]
 fn navigation_glyphs_share_one_box(cx: &mut TestAppContext) {
     // The brand V-mark lives in the legacy navigation: narrow keeps it
@@ -61,11 +61,11 @@ fn navigation_glyphs_share_one_box(cx: &mut TestAppContext) {
         assert_eq!(cx.theme().font_size, px(16.), "default UI font size");
         assert_eq!(
             super::super::nav_entry_icon_size(),
-            gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(0.875)),
+            gpui_kit::AbsoluteLength::Rems(gpui_kit::rems(1.0)),
             "the rail box stays font-relative so it tracks the UI font size"
         );
         let bounds = window.find("settings-nav-icon-vtcode").bounds();
-        assert_eq!(bounds.size, size(px(14.), px(14.)), "brand V fills the rail box: {bounds:?}");
+        assert_eq!(bounds.size, size(px(16.), px(16.)), "brand V fills the rail box: {bounds:?}");
     })
     .unwrap();
 }
@@ -129,7 +129,7 @@ fn settings_sidebar_sits_beside_content_when_wide_and_stacks_when_narrow(cx: &mu
         window.render_frame(cx);
         // Wide viewports host the Kit container: its sidebar rows sit
         // beside the hosted pane content (no legacy divider involved).
-        for ix in 0..8 {
+        for ix in 0..9 {
             assert!(
                 window.try_find(format!("0-{ix}")).is_some(),
                 "Kit sidebar row 0-{ix} missing from settings navigation"
@@ -303,16 +303,16 @@ fn settings_page_title_tracks_the_selected_tab(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        // Asymmetric pair: the first and last tabs prove the title follows
+        // Asymmetric pair: the second and last tabs prove the title follows
         // selection instead of pinning one label.
-        select_settings_category(window, 0, cx);
+        select_settings_category(window, 1, cx);
         window.render_frame(cx);
         let title = window.find("settings-page-title");
         assert_eq!(title.role(), Some(gpui_kit::Role::Heading));
         assert_eq!(title.label(), Some("Appearance"));
-        select_settings_category(window, 6, cx);
+        select_settings_category(window, 7, cx);
         window.render_frame(cx);
-        assert_eq!(window.find("settings-page-title").label(), Some("Storage"));
+        assert_eq!(window.find("settings-page-title").label(), Some("About"));
     })
     .unwrap();
 

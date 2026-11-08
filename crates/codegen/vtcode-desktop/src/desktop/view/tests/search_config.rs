@@ -44,18 +44,18 @@ fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.within("command-palette").input("license", cx);
         window.render_frame(cx);
-        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
-        assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::About);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("About"));
         window.within("command-palette").click(palette_action_id(&action), cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::VtCode);
-        assert_eq!(window.find("open-vtcode-license").role(), Some(gpui_kit::Role::Button));
-        assert_eq!(window.find("open-vtcode-license").label(), Some("VT Code license"));
-        assert_eq!(window.find("open-third-party-notices").label(), Some("Third-party notices"));
+        assert_eq!(view.read(cx).settings_tab, super::super::settings::SettingsTab::About);
+        assert_eq!(window.find("about-settings-license").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("about-settings-license").label(), Some("VT Code license"));
+        assert_eq!(window.find("about-settings-acknowledgments").label(), Some("Acknowledgments"));
     })
     .unwrap();
     reopen_settings_search(window, &view, cx);
@@ -72,8 +72,8 @@ fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.within("command-palette").input("third-party notices", cx);
         window.render_frame(cx);
-        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::VtCode);
-        assert_eq!(window.find(palette_action_id(&action)).label(), Some("VT Code"));
+        let action = super::super::PaletteAction::SelectSettingsTab(super::super::settings::SettingsTab::About);
+        assert_eq!(window.find(palette_action_id(&action)).label(), Some("About"));
     })
     .unwrap();
 }

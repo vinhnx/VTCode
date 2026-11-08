@@ -22,11 +22,11 @@ fn goto_palette_lists_destinations_and_lands_on_confirm(cx: &mut TestAppContext)
         assert!(matches!(view.read(cx).palette_kind, super::super::PaletteKind::GoTo));
         assert_eq!(window.find("command-palette").label(), Some("Go to"));
         // Three groups: destinations (4 routes + 12 palettes), settings
-        // (7 tabs + config page), and every shortcut command.
+        // (8 tabs + config page), and every shortcut command.
         let groups = view.read(cx).palette_groups.clone();
         assert_eq!(groups.len(), 3);
         assert_eq!(groups[0].1.len(), 16);
-        assert_eq!(groups[1].1.len(), 8);
+        assert_eq!(groups[1].1.len(), 9);
         assert_eq!(groups[2].1.len(), 34);
         // Command rows reuse the shared badge mapping: filter to one and
         // its saved chord badge renders.
