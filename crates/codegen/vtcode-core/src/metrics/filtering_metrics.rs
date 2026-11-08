@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len_u64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilteringMetrics {
@@ -61,10 +62,10 @@ impl FilteringMetrics {
         }
     }
 
-    /// Estimate tokens saved based on rough conversion (1 token ≈ 4 bytes)
+    /// Estimate tokens saved with the canonical byte-length heuristic.
     pub fn estimated_tokens_saved(&self) -> u64 {
         let bytes_saved = self.total_input_bytes.saturating_sub(self.total_output_bytes);
-        bytes_saved / 4 // Rough estimate
+        heuristic_tokens_from_byte_len_u64(bytes_saved)
     }
 
     pub fn avg_duration_ms(&self) -> u64 {

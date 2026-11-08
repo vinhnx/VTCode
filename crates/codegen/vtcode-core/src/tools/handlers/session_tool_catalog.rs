@@ -19,6 +19,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::sync::{Arc, OnceLock};
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len;
 use vtcode_utility_tool_specs::{parse_tool_input_schema, with_max_output_tokens_parameter};
 
 use super::session_tool_projection::{ToolEntryProjection, ToolProjectionCache};
@@ -642,7 +643,7 @@ fn serialized_schema_token_estimate(name: &str, description: &str, parameters: &
         "description": description,
         "parameters": parameters,
     }))
-    .map(|serialized| serialized.len() / 4)
+    .map(|serialized| heuristic_tokens_from_byte_len(serialized.len()))
     .unwrap_or(0)
 }
 

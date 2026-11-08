@@ -3,6 +3,7 @@
 /// Tracks token cost of search results to enable intelligent caching,
 /// sampling, and summarization of expensive searches in large codebases.
 use hashbrown::HashMap;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len;
 
 /// Metrics for a single search operation
 #[derive(Debug, Clone)]
@@ -66,12 +67,8 @@ impl SearchMetrics {
         duration_ms: u64,
         files_searched: usize,
     ) {
-        // Estimate tokens from character count (using default 4.0 chars/token)
-        #[allow(
-            clippy::cast_sign_loss,
-            reason = "Intentional compatibility, platform, or test-only suppression."
-        )]
-        let estimated_tokens = ((result_chars as f64 / 4.0).ceil()).max(0.0) as usize;
+        // Estimate tokens from the character count with the canonical heuristic.
+        let estimated_tokens = heuristic_tokens_from_byte_len(result_chars);
         let is_expensive = estimated_tokens > self.expensive_threshold;
 
         let metric = SearchMetric {

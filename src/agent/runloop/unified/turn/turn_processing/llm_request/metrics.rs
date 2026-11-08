@@ -1,4 +1,5 @@
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len;
 use vtcode_core::llm::provider::{Message, ToolDefinition, Usage};
 
 pub(super) fn prompt_cache_hit_ratio(provider: &str, usage: &Usage) -> f64 {
@@ -268,7 +269,7 @@ pub(super) fn estimate_tool_schema_tokens(tools: &[ToolDefinition]) -> usize {
         .map(|tool| {
             buf.clear();
             serde_json::to_writer(&mut buf, tool)
-                .map(|_| buf.len().div_ceil(4))
+                .map(|_| heuristic_tokens_from_byte_len(buf.len()))
                 .unwrap_or(0)
         })
         .sum()

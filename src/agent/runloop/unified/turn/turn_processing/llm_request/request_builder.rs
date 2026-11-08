@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use crate::agent::runloop::unified::turn::context::last_user_message_index;
 use vtcode_commons::reasoning::ReasoningEffortLevel;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len;
 use vtcode_core::config::build_session_affinity_prompt_cache_key;
 use vtcode_core::config::constants::llm_generation;
 use vtcode_core::config::models::{Provider, ProviderModelSupport};
@@ -568,7 +569,11 @@ pub(super) async fn build_turn_request(
     // real on-wire request payload. Cache read/write/miss are already surfaced
     // via `SessionStats` prompt-cache diagnostics, so they are not duplicated.
     let request = &request_plan.request;
-    let system_prompt_tokens = request.system_prompt.as_ref().map(|sp| sp.len().div_ceil(4)).unwrap_or(0);
+    let system_prompt_tokens = request
+        .system_prompt
+        .as_ref()
+        .map(|sp| heuristic_tokens_from_byte_len(sp.len()))
+        .unwrap_or(0);
     let (on_wire_tools, tool_schema_tokens) = request
         .tools
         .as_ref()

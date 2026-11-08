@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 use vtcode_commons::formatting::truncate_byte_budget;
 use vtcode_commons::sanitizer::redact_secrets;
+use vtcode_commons::tokens::{CHARS_PER_TOKEN, heuristic_tokens_from_byte_len};
 
 use super::ToolRegistry;
 use super::spool_processing::{
@@ -38,10 +39,8 @@ impl ToolRegistry {
         let trimmed = Self::clamp_value_recursive(&value, entry_fuse, depth_fuse);
 
         let serialized = trimmed.to_string();
-        let approx_tokens = serialized.len() / 4;
-        let max_preview_bytes = max_output_tokens
-            .saturating_mul(crate::tools::output_limits::OUTPUT_PREVIEW_CHARS_PER_TOKEN)
-            .max(1);
+        let approx_tokens = heuristic_tokens_from_byte_len(serialized.len());
+        let max_preview_bytes = max_output_tokens.saturating_mul(CHARS_PER_TOKEN).max(1);
         let byte_fuse = byte_fuse.min(max_preview_bytes);
         let token_fuse = token_fuse.min(max_output_tokens);
         if serialized.len() > byte_fuse || approx_tokens > token_fuse {
@@ -77,7 +76,10 @@ impl ToolRegistry {
                     .map(|v| Self::clamp_value_recursive(v, entry_fuse, depth - 1))
                     .collect();
                 if overflow > 0 {
-                    let approx_tokens = trimmed.iter().map(|v| v.to_string().len() / 4).sum::<usize>();
+                    let approx_tokens = trimmed
+                        .iter()
+                        .map(|v| heuristic_tokens_from_byte_len(v.to_string().len()))
+                        .sum::<usize>();
                     json!({
                         "truncated": true,
                         "note": "Array truncated to protect context budget",
@@ -100,7 +102,10 @@ impl ToolRegistry {
                     head.insert(k.clone(), Self::clamp_value_recursive(v, entry_fuse, depth - 1));
                 }
                 if overflow > 0 {
-                    let approx_tokens = head.iter().map(|(k, v)| (k.len() + v.to_string().len()) / 4).sum::<usize>();
+                    let approx_tokens = head
+                        .iter()
+                        .map(|(k, v)| heuristic_tokens_from_byte_len(k.len() + v.to_string().len()))
+                        .sum::<usize>();
                     json!({
                         "truncated": true,
                         "note": "Object truncated to protect context budget",
@@ -159,10 +164,9 @@ impl ToolRegistry {
     ) -> Value {
         // Every result gets its own bounded preview. History compaction owns
         // accumulated context; prior calls must never hide fresh evidence.
-        let max_output_tokens = max_output_tokens.min(
-            vtcode_config::constants::output_limits::turn_preview_budget_bytes(self.is_planning_active())
-                / crate::tools::output_limits::OUTPUT_PREVIEW_CHARS_PER_TOKEN,
-        );
+        let max_output_tokens = max_output_tokens.min(heuristic_tokens_from_byte_len(
+            vtcode_config::constants::output_limits::turn_preview_budget_bytes(self.is_planning_active()),
+        ));
         self.process_tool_output_inner(tool_name, value, is_mcp, max_output_tokens)
             .await
     }

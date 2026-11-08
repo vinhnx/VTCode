@@ -6,8 +6,6 @@ use vtcode_utility_tool_specs::{
     DEFAULT_MAX_OUTPUT_TOKENS, MAX_MAX_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS_FIELD, MIN_MAX_OUTPUT_TOKENS,
 };
 
-pub(crate) const OUTPUT_PREVIEW_CHARS_PER_TOKEN: usize = 4;
-
 /// Default per-result preview budget for plan-mode inspections that omit an
 /// explicit `max_output_tokens` (`2_000` tokens ≈ 8 KiB). Planning research
 /// fans out across many reads, so the smaller default keeps a dozen previews

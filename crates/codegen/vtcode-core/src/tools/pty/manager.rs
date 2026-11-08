@@ -100,6 +100,7 @@ use crate::utils::gatekeeper;
 use crate::utils::path::ensure_path_within_workspace;
 use crate::utils::unicode_monitor::UNICODE_MONITOR;
 use vtcode_commons::canonicalize;
+use vtcode_commons::tokens::CHARS_PER_TOKEN;
 
 mod session_ops;
 
@@ -424,8 +425,9 @@ impl PtyManager {
             if let Some(max_tokens) = max_tokens {
                 if max_tokens > 0 {
                     // Simple byte-based truncation
-                    if output.len() > max_tokens * 4 {
-                        let truncate_point = (max_tokens * 4).min(output.len());
+                    let max_bytes = max_tokens.saturating_mul(CHARS_PER_TOKEN);
+                    if output.len() > max_bytes {
+                        let truncate_point = max_bytes.min(output.len());
                         output.truncate(truncate_point);
                         output.push_str("\n[... truncated by max_tokens ...]");
                     }

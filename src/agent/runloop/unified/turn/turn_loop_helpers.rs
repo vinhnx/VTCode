@@ -714,7 +714,7 @@ fn push_steered_user_message(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs());
-    let tokens = input.len().saturating_div(4);
+    let tokens = vtcode_commons::tokens::heuristic_tokens_from_byte_len(input.len());
     let metadata = match provenance {
         FollowUpProvenance::UserInput => vtcode_commons::message_metadata::MessageMetadata::user_input(now, tokens),
         FollowUpProvenance::Synthetic => vtcode_commons::message_metadata::MessageMetadata::harness_notice(now, tokens),

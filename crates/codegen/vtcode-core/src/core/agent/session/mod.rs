@@ -13,6 +13,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use vtcode_commons::ErrorCategory;
+use vtcode_commons::tokens::heuristic_tokens_from_byte_len;
 use vtcode_exec_events::ThreadEvent;
 
 #[derive(Debug, Clone)]
@@ -383,7 +384,7 @@ impl AgentSessionState {
         synthetic: bool,
     ) -> crate::core::message_metadata::MessageMetadata {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        let tokens = text.len().saturating_div(4); // rough estimate: ~4 chars per token
+        let tokens = heuristic_tokens_from_byte_len(text.len());
         let metadata = if synthetic {
             crate::core::message_metadata::MessageMetadata::harness_notice(now, tokens)
         } else {

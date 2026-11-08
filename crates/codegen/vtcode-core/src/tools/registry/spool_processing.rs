@@ -1,6 +1,5 @@
 use serde_json::Value;
-
-use crate::tools::output_limits::OUTPUT_PREVIEW_CHARS_PER_TOKEN;
+use vtcode_commons::tokens::CHARS_PER_TOKEN;
 
 /// Primary single-string output fields, in precedence order. `stderr`,
 /// `content`, and `preview` participate only in preview capping, never in
@@ -27,7 +26,7 @@ fn output_field_bytes(value: &Value) -> usize {
 }
 
 fn output_budget_bytes(max_output_tokens: usize) -> usize {
-    max_output_tokens.saturating_mul(OUTPUT_PREVIEW_CHARS_PER_TOKEN)
+    max_output_tokens.saturating_mul(CHARS_PER_TOKEN)
 }
 
 pub(super) fn preview_budget_bytes(max_output_tokens: usize) -> usize {

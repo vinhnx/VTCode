@@ -67,7 +67,9 @@ pub(crate) async fn read_system_prompt(
 
     if !available_subagents.is_empty() {
         let subagent_chars = estimate_subagent_section_chars(available_subagents);
-        let max_chars = (remaining_budget * 4) as usize;
+        let max_chars =
+            usize::try_from(remaining_budget.saturating_mul(vtcode_commons::tokens::CHARS_PER_TOKEN as u64))
+                .unwrap_or(usize::MAX);
         let section = if available_subagents.len() > 3 {
             build_summarized_subagent_section(available_subagents)
         } else if subagent_chars > max_chars {
