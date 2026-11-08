@@ -28,12 +28,14 @@ pub fn build_default_walker(root: &Path) -> WalkBuilder {
     builder
 }
 
-/// Build a single-threaded [`WalkBuilder`] with the same defaults as
-/// [`build_default_walker`].
+/// Build a [`WalkBuilder`] with the same defaults as [`build_default_walker`]
+/// plus `threads(1)`.
 ///
-/// Use this in synchronous contexts where spawning the `ignore` crate's
-/// thread pool would be wasteful (e.g., inside `spawn_blocking` closures
-/// that already run on a dedicated thread).
+/// `threads(1)` only constrains `build_parallel()`: the sequential `build()`
+/// never spawns the `ignore` thread pool (verified against the `ignore 0.4.34`
+/// source, where only `build_parallel` reads the setting), so this helper is
+/// equivalent to [`build_default_walker`] for `.build()` callers. Prefer it
+/// only when the walker may go parallel.
 pub fn build_walker_single_threaded(root: &Path) -> WalkBuilder {
     let mut builder = WalkBuilder::new(root);
     builder.threads(1);

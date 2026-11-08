@@ -757,6 +757,15 @@ When reviewing or writing a hot path in vtcode:
       [Memory Latency](#memory-latency--cache-first-aggregation).
 - [ ] Was a suspected memory-bound loop diagnosed with cache-miss/instruction counters (`scripts/perf/memstat.sh`),
       not wall time alone?
+- [ ] Does a per-entry/per-byte loop allocate where a pre-sized buffer plus `write!` would do —
+      `format!` inside the loop, or a `String` tag for a two-state fact? Render labels at
+      emission from a `bool`/enum instead (sysinfo read-and-apply pass, 2026-11-08).
+- [ ] Does a traversal read content before exhausting the cheap metadata the iterator already
+      provides (dirent `FileType`, file name, size)? Stat/open/read only survivors (sysinfo
+      `readlink`-before-`fdinfo` lesson).
+- [ ] Does per-item work recompute a fact shared with a parent/sibling pass? Copy or hoist it
+      instead of re-deriving (sysinfo fd-table lesson; see
+      [Hoist What the Loop Already Knows](#hoist-what-the-loop-already-knows)).
 - [ ] Has the performance been measured against baseline before/after?
 
 ---
@@ -780,6 +789,13 @@ When reviewing or writing a hot path in vtcode:
 - [Replacing a Rust Enum with a 64-bit Word](https://pointersgonewild.com/2026-08-25-replacing-a-rust-enum-with-a-64-bit-word/)
   — 2026 (source of the Enum Footprint section: discriminant/alignment padding, boxing sparse payloads, and the measured
   17% speedup / 37% peak-RSS reduction from shrinking a bulk-stored value type).
+<!-- markdownlint-disable-next-line MD013 -->
+- [sysinfo: retrieving process GPU usage information](https://blog.guillaume-gomez.fr/articles/2026-10-28+sysinfo%3A+retrieving+process+GPU+usage+information) —
+  Guillaume Gomez, 2026 (per-OS retrieval: PDH queries, `/proc` fdinfo drm keys, IORegistry walk).
+<!-- markdownlint-disable-next-line MD013 -->
+- [sysinfo: fixing performance to retrieve process GPU usage](https://blog.guillaume-gomez.fr/articles/2026-10-30+sysinfo%3A+fixing+performance+to+retrieve+process+GPU+usage) —
+  Guillaume Gomez, 2026 (source of the traversal checklist items above: cheap-metadata-first
+  filtering, batched syscalls, buffer reuse, and the fd-table copy-don't-recompute win).
 - [TIL: Rust's derive often implies inline](https://yossarian.net/til/post/rust-s-derive-often-implies-inline/) —
   yossarian.net (source of the Derived trait impls subsection: derive emits `#[inline]`; nested error `Debug` impls
   inline transitively; `uv` reclaimed ~160 KB with an `#[inline(never)]` Debug derive).

@@ -18,6 +18,16 @@ const TREE_MAX_NODES: usize = 200;
 /// default tree far sparser than the pre-cap behavior.
 const TREE_MAX_PER_DIR: usize = 50;
 
+/// One tree child carried from the walk to JSON emission.
+///
+/// The directory flag stays a `bool` until rendering, mirroring the sibling
+/// `ListEntry`: eagerly allocating `"directory"`/`"file"` per walked entry
+/// wastes a heap `String` for a two-state fact.
+struct TreeChild {
+    name: String,
+    is_dir: bool,
+}
+
 pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> Result<Value> {
     let search_path = tool.normalize_list_path(input).await?;
 
@@ -30,7 +40,7 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
         return Err(anyhow!("Path '{}' is excluded by .vtcodegitignore", input.path));
     }
 
-    let mut dir_contents: HashMap<String, Vec<(String, String)>> = HashMap::new(); // path -> [(name, type)]
+    let mut dir_contents: HashMap<String, Vec<TreeChild>> = HashMap::new();
 
     let walker_entries = walk_entries(search_path.clone()).await?;
 
@@ -65,7 +75,7 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
         dir_contents
             .entry(parent_key)
             .or_insert_with(|| Vec::with_capacity(16))
-            .push((name.into_owned(), if is_dir { "directory" } else { "file" }.to_string()));
+            .push(TreeChild { name: name.into_owned(), is_dir });
     }
 
     let mut budget = TREE_MAX_NODES;
@@ -92,7 +102,7 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
 fn build_tree_structure(
     tool: &FileOpsTool,
     base_path: &Path,
-    dir_contents: &HashMap<String, Vec<(String, String)>>,
+    dir_contents: &HashMap<String, Vec<TreeChild>>,
     include_hidden: bool,
     budget: &mut usize,
     truncated: &mut bool,
@@ -106,8 +116,8 @@ fn build_tree_structure(
     if let Some(contents) = dir_contents.get(&relative_path) {
         let cap = TREE_MAX_PER_DIR;
         let mut emitted = 0usize;
-        for (name, entry_type) in contents {
-            if !include_hidden && name.starts_with('.') {
+        for child in contents {
+            if !include_hidden && child.name.starts_with('.') {
                 continue;
             }
             if *budget == 0 {
@@ -118,8 +128,10 @@ fn build_tree_structure(
                 *truncated = true;
                 break;
             }
+            let name = child.name.as_str();
+            let entry_type = if child.is_dir { "directory" } else { "file" };
 
-            let item = if entry_type == "directory" {
+            let item = if child.is_dir {
                 let sub_path = base_path.join(name);
                 let sub_relative_path = tool.relative_key_json(&sub_path);
 
@@ -128,8 +140,8 @@ fn build_tree_structure(
                     let mut sub_items = Vec::new();
                     let sub_cap = TREE_MAX_PER_DIR;
                     let mut sub_emitted = 0usize;
-                    for (sub_name, sub_type) in sub_contents {
-                        if !include_hidden && sub_name.starts_with('.') {
+                    for sub_child in sub_contents {
+                        if !include_hidden && sub_child.name.starts_with('.') {
                             continue;
                         }
                         if *budget == 0 {
@@ -143,8 +155,8 @@ fn build_tree_structure(
                         *budget = budget.saturating_sub(1);
                         sub_emitted += 1;
                         sub_items.push(json!({
-                            "name": sub_name,
-                            "type": sub_type
+                            "name": sub_child.name,
+                            "type": if sub_child.is_dir { "directory" } else { "file" }
                         }));
                     }
                     sub_items
@@ -188,11 +200,11 @@ mod tests {
         FileOpsTool::new(root, Arc::new(GrepSearchManager::new(PathBuf::from("/workspace"))))
     }
 
-    fn flat_dir_entries(count: usize) -> HashMap<String, Vec<(String, String)>> {
+    fn flat_dir_entries(count: usize) -> HashMap<String, Vec<TreeChild>> {
         let mut map = HashMap::new();
         let mut children = Vec::with_capacity(count);
         for i in 0..count {
-            children.push((format!("f{i:04}.rs"), "file".to_string()));
+            children.push(TreeChild { name: format!("f{i:04}.rs"), is_dir: false });
         }
         map.insert(String::new(), children);
         map
@@ -243,6 +255,11 @@ mod tests {
         assert!(child_names.contains(&"nested"), "{child_names:?}");
         assert_eq!(src["type"], "directory");
 
+        // Asymmetric pin: files must render "file" while directories render
+        // "directory" — the bool-to-label mapping has two sides.
+        let top = items.iter().find(|item| item["name"] == "top.rs").expect("top node");
+        assert_eq!(top["type"], "file");
+
         // Emitted paths must be workspace-relative. The walker reports resolved
         // paths while `workspace_root` keeps the tempdir spelling, so a bare
         // `strip_prefix(workspace_root)` used to leak absolute paths here.
@@ -261,9 +278,10 @@ mod tests {
         let mut root = Vec::new();
         for d in 0..6 {
             let name = format!("d{d}");
-            root.push((name.clone(), "directory".to_string()));
-            let children: Vec<(String, String)> =
-                (0..50).map(|i| (format!("{name}/f{i:02}.rs"), "file".to_string())).collect();
+            root.push(TreeChild { name: name.clone(), is_dir: true });
+            let children: Vec<TreeChild> = (0..50)
+                .map(|i| TreeChild { name: format!("{name}/f{i:02}.rs"), is_dir: false })
+                .collect();
             contents.insert(name, children);
         }
         contents.insert(String::new(), root);

@@ -315,6 +315,14 @@ async fn reads_and_check_output_are_bounded() {
     writer_task.await.expect("test output writer");
 }
 
+#[test]
+fn digest_text_matches_known_sha256_vectors() {
+    // NIST/FIPS standard vectors, independent of the implementation: the
+    // single-buffer `write!` rewrite must stay byte-identical to `format!`.
+    assert_eq!(digest_text(""), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    assert_eq!(digest_text("abc"), "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+}
+
 #[tokio::test]
 async fn rollback_does_not_overwrite_an_external_change() {
     let (_temp, adapter) = workspace(true).await;
