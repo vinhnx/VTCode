@@ -323,6 +323,15 @@ fn vim_navigation_defaults_off_and_round_trips() {
 }
 
 #[test]
+fn swipe_navigation_defaults_off_and_round_trips() {
+    let old: Preferences = serde_json::from_str("{}").unwrap();
+    assert!(!old.swipe_navigation);
+    let enabled = Preferences { swipe_navigation: true, ..old };
+    let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&enabled).unwrap()).unwrap();
+    assert!(loaded.swipe_navigation);
+}
+
+#[test]
 fn font_families_round_trip_independently_and_legacy_defaults_remain_optional() {
     let old: Preferences = serde_json::from_str("{}").unwrap();
     assert!(old.ui_font_family.is_none() && old.code_font_family.is_none());

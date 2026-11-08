@@ -596,8 +596,9 @@ pub(super) struct Preferences {
     /// Missing values keep existing installs on the default off behavior.
     pub vim_navigation: bool,
     /// Navigate thread history with a trackpad swipe; off by default.
-    /// Missing values keep swipe disabled. Toolbar buttons and keyboard
-    /// shortcuts bypass this gate and keep working.
+    /// Missing values keep swipe disabled. Physical mouse back/forward
+    /// buttons share the swipe event and follow this gate; toolbar buttons
+    /// and keyboard shortcuts bypass it and keep working.
     pub swipe_navigation: bool,
     pub ui_font_family: Option<String>,
     pub code_font_family: Option<String>,

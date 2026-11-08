@@ -526,3 +526,69 @@ fn swipe_switch_toggles_and_persists(cx: &mut TestAppContext) {
         "the persisted toggle survives reload"
     );
 }
+
+#[gpui_kit::test]
+fn reset_shortcuts_turns_swipe_off(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
+        window.render_frame(cx);
+        scroll_settings_by(window, px(-6000.), cx);
+        window.render_frame(cx);
+        window.click("swipe-navigation", cx);
+        assert!(view.read(cx).preferences.swipe_navigation, "switch turns swipe on");
+        scroll_settings_by(window, px(6000.), cx);
+        window.render_frame(cx);
+        window.click("reset-shortcuts", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).preferences.swipe_navigation, "reset turns swipe off");
+    })
+    .unwrap();
+    assert!(!crate::desktop::preferences::Preferences::load().swipe_navigation, "the reset persists");
+}
+
+#[gpui_kit::test]
+fn swipe_switch_renders_in_narrow_legacy_settings(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::Shortcuts;
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("swipe-navigation").is_some(), "switch renders in the legacy host");
+        scroll_settings_by(window, px(-6000.), cx);
+        window.render_frame(cx);
+        window.click("swipe-navigation", cx);
+        assert!(view.read(cx).preferences.swipe_navigation, "legacy switch turns swipe on");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn overlay_hides_while_palette_open_and_returns_after(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    swipe_navigate(window, NavigationDirection::Back, cx);
+    assert_swipe_overlay(window, "Back to Thread swipe-first", cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+        assert!(window.try_find("swipe-navigation-overlay").is_none(), "the pill hides under the palette");
+        view.update(cx, |view, cx| view.close_palette(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    assert_swipe_overlay(window, "Back to Thread swipe-first", cx);
+    settle_swipe_commit(cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("the surviving arm should commit after the palette closes");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+}

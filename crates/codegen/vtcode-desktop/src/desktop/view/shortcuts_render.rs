@@ -195,9 +195,9 @@ impl DesktopView {
         ));
         // Same English-literal rule as the vim toggle above: settings rows
         // stay untranslated until full native-quality translations ship.
-        let swipe_group = settings_group_box("Trackpad navigation".to_string(), colors).child(settings_row(
+        let swipe_group = settings_group_box("Swipe navigation".to_string(), colors).child(settings_row(
             "Swipe navigation".to_string(),
-            "Navigate thread history with a two-finger swipe or horizontal scroll. Turn off to disable trackpad navigation completely.".to_string(),
+            "Navigate thread history with a two-finger swipe, horizontal scroll, or mouse back/forward buttons. Toolbar buttons and shortcuts always work.".to_string(),
             gpui_kit::component::switch::Switch::new("swipe-navigation")
                 .accessibility_label("Swipe navigation".to_string())
                 .checked(props.swipe_navigation)
@@ -221,7 +221,7 @@ impl DesktopView {
                 group,
             ))
             .child(accessible_group_box("vim-navigation-group", "Vim navigation (experimental)".to_string(), vim_group))
-            .child(accessible_group_box("swipe-navigation-group", "Trackpad navigation".to_string(), swipe_group))
+            .child(accessible_group_box("swipe-navigation-group", "Swipe navigation".to_string(), swipe_group))
             .into_any_element()
     }
 
@@ -377,16 +377,23 @@ impl DesktopView {
         // its single role as the persistence point.
         let defaults = shortcuts::draft_from(&std::collections::BTreeMap::new());
         self.shortcut_capture = None;
-        // Vim navigation is an immediately-applied Switch with no draft, so
-        // its reset persists and retires its chords at once while shortcuts
-        // keep staged semantics.
+        // Vim and swipe navigation are immediately-applied Switches with no
+        // draft, so their reset persists at once while shortcuts keep staged
+        // semantics. Both switches live on this page, so "Reset all to
+        // defaults" covers both.
         let vim_reset = std::mem::replace(&mut self.preferences.vim_navigation, false);
-        if vim_reset {
+        let swipe_reset = std::mem::replace(&mut self.preferences.swipe_navigation, false);
+        if vim_reset || swipe_reset {
             self.save_preferences();
+        }
+        if vim_reset {
             bootstrap::apply_vim_navigation(cx, false);
         }
+        if swipe_reset {
+            self.cancel_pending_swipe(cx);
+        }
         let shortcuts_staged = defaults != self.shortcut_draft;
-        if !shortcuts_staged && !vim_reset {
+        if !shortcuts_staged && !vim_reset && !swipe_reset {
             self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.already_default").to_string());
             cx.notify();
             return;

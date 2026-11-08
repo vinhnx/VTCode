@@ -361,9 +361,11 @@ impl Render for DesktopView {
         } else {
             body = body.child(main);
         }
-        // Armed-swipe pill paints beneath the modals: a modal opening mid-arm
-        // blocks the commit via the guard re-check, and the arm evaporates.
-        if self.swipe_arming.pending_direction().is_some() {
+        // Armed-swipe pill paints beneath the modals, and only while the
+        // swipe gate passes: a route or overlay opened mid-arm hides the
+        // pill (reopening it if the arm outlives the interruption), while
+        // the commit re-check keeps the navigation itself fail-closed.
+        if self.swipe_arming.pending_direction().is_some() && self.swipe_navigation_allowed() {
             body = body.child(self.render_swipe_navigation_overlay(cx));
         }
         if self.file_preview.is_some() {
