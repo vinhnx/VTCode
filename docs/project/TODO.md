@@ -16,19 +16,6 @@ https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
 
 ---
 
-gpui apps for other plqtforms
-
----
-
-gpui-fast-linux, gpui-fast-windows, gpui-fast-web, gpui-fast-macos
-
-
----
-
-gpui-web ?
-
----
-
 implement standalone terminal for desktop app.
 
 ---
@@ -37,13 +24,13 @@ contribute back to OSS with learning from this project. check gotchas and decici
 
 ---
 
-build and replace/revamp current desktop app components where suitable https://gpui-kit.com/component/dropdown_button/
-
----
-
 check and fix splitting the two 1000+ line files — is large surgery in view/
 
 ---
+
+find every outbound call (HTTP, DB, queues, LLM APIs) with no timeout, or retries without backoff. add sane timeouts and capped exponential retries with jitter, check pool sizes match our concurrency
+
+====
 
 plan: gpui cross-platform (mac-only today -> linux-first, defer windows/web)
 
