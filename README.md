@@ -50,7 +50,7 @@ It owns context, tool calls, and execution policy so long tasks stay auditable a
 
 ## Quick start
 
-Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99.1+ (edition 2024); the
+Runs on macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99.1+ (edition 2024); the
 [installation guide](./docs/installation/README.md) covers prerequisites and optional search tools.
 
 ### 1. Install
@@ -122,27 +122,25 @@ Common commands (see the [command reference](./docs/user-guide/commands.md)):
 | Resume the last session | `vtcode continue`                                  |
 | Inspect a run log       | `vtcode trajectory`                                |
 
-For larger tasks, begin with [read-only planning](./docs/guides/planning-workflow.md), review the [turn
-diff](./docs/development/diff-preview.md) before committing, and use `/explain` to summarize the outcome
+For larger tasks, start read-only, review the turn diff before committing, and use `/explain` for a summary
 without another model call. See the [interactive guide](./docs/user-guide/interactive-mode.md).
 
 ### Modes
 
 - **`ask`** is tool-free: it prints one reply and exits.
-- **`exec`** runs the full tool loop and requires explicit workspace trust: persisted `full_auto` trust plus an
-  enabled `[automation.full_auto]` section. Interactive terminals prompt for trust; non-TTY runs need
-  `VTCODE_TRUST_WORKSPACE=full-auto`. Tool allow-lists, explicit denies, and execution policy still apply.
+- **`exec`** runs the full tool loop under explicit workspace trust (`full_auto` plus `[automation.full_auto]`).
+  Terminals prompt for trust; non-TTY runs need `VTCODE_TRUST_WORKSPACE=full-auto`. Allow-lists, denies, and
+  execution policy still apply.
 - **`review`** inspects uncommitted changes.
 
-Recurring work uses [scheduled tasks](./docs/user-guide/scheduled-tasks.md) on the same exec runtime. Resume or
-fork earlier work with `vtcode continue` (or `--session-id <id>`), continue a headless run with
-`vtcode exec resume --last`, and inspect logs with `vtcode trajectory`. Details live in
+Schedule recurring work on the same exec runtime. Resume or fork with `vtcode continue` (or `--session-id <id>`),
+resume headless runs with `vtcode exec resume --last`, and inspect logs with `vtcode trajectory`. See
 [exec mode](./docs/user-guide/exec-mode.md) and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
-The native macOS app runs the same runloop, providers, tool policy, sandboxing, and sessions as the CLI,
-reusing your CLI configuration and credentials. Configure a provider first (see [Quick start](#quick-start)).
+The native macOS app shares the CLI runloop, providers, tool policy, sandboxing, sessions, configuration, and
+credentials. Configure a provider first (see [Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
@@ -156,18 +154,17 @@ Without Homebrew, download it from the [latest release](https://github.com/vinhn
 `vtcode desktop --install`. Launch it with `vtcode desktop` or from Finder. Intel Macs build from source.
 
 > [!WARNING]
-> **First launch needs a one-time macOS security approval.** Builds are ad hoc signed, not notarized, so macOS blocks
-> the first launch (Homebrew cask installs included). Open the app once so macOS records the block, click
-> **Open Anyway** in **System Settings › Privacy & Security**, then open it again. The button only shows for about an
-> hour after a blocked launch. You only do this once; notarized releases skip it.
+> **First launch needs a one-time macOS security approval.** Builds are ad hoc signed, not notarized, so macOS
+> blocks the first launch (Homebrew cask installs included). Open the app once, click **Open Anyway** in
+> **System Settings › Privacy & Security**, then open it again. The button shows for about an hour after a block.
 
 See the [desktop workspace guide](./docs/development/desktop-workspace.md) for requirements, source builds, and
 troubleshooting.
 
 ## Documentation
 
-Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/VTCode/wiki).
-Integrations below are optional.
+Start from the [documentation index](./docs/INDEX.md) or [Wiki](https://github.com/vinhnx/VTCode/wiki);
+integrations below are optional.
 
 ### Get started
 
