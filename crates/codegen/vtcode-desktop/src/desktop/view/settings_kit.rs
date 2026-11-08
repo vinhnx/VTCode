@@ -6,6 +6,7 @@
 //! decomposition happens page by page afterwards; narrow viewports keep
 //! the legacy stacked navigation and content.
 
+use super::about::AboutSettingsProps;
 use super::appearance::AppearanceSettingsProps;
 use super::configuration_render::{CONFIG_WIDE_VIEWPORT, ConfigPageProps};
 use super::settings::SettingsTab;
@@ -128,8 +129,14 @@ impl DesktopView {
                     })
                 }
                 SettingsTab::About => {
+                    let props = AboutSettingsProps::capture(self);
                     kit_single_item_page(tab, move |_: &RenderOptions, _: &mut Window, cx: &mut App| {
-                        Self::render_about_settings_content(page_view.clone(), cx)
+                        // No fetch here: unlike the Storage summary there is no
+                        // retry affordance on this page, so a render-time
+                        // request would repeat on every frame for a service
+                        // that keeps failing. Launch already asks once, and
+                        // view-driven selection refreshes on navigation.
+                        Self::render_about_settings_content(props.clone(), page_view.clone(), cx)
                     })
                 }
             };

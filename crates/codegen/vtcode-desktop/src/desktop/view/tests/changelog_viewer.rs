@@ -551,3 +551,192 @@ fn changelog_viewer_traps_tab_across_its_footer_actions(cx: &mut TestAppContext)
     })
     .unwrap();
 }
+
+fn open_about_settings(window: AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+            view.settings_tab = SettingsTab::About;
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+/// Up-to-date launch that still knows the newest release from the cache: the
+/// About row must offer the notes even though no update is pending, while the
+/// update-specific Notifications action stays hidden.
+#[gpui_kit::test]
+fn about_row_reads_latest_notes_without_an_offered_update(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(
+        &view,
+        status_payload(
+            "0.182.0",
+            Some("0.183.0"),
+            false,
+            &["Something newer"],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/0.183.0"),
+        ),
+        cx,
+    );
+    open_about_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        assert_eq!(
+            window.find("about-settings-changelog").label(),
+            Some("Release notes"),
+            "the row carries its title as the accessible name, like the license rows"
+        );
+        assert_ne!(window.find("about-settings-changelog").disabled(), Some(true), "notes are readable");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.click("about-settings-changelog", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(view.changelog_open, "the About row opens the viewer");
+        assert_eq!(view.changelog_mode, ChangelogMode::Latest);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("changelog-dialog").is_some());
+        assert!(
+            window.try_find("changelog-subtitle").is_none(),
+            "reading notes without an offered update omits the upgrade arrow"
+        );
+        assert!(window.try_find("changelog-highlights").is_some());
+    })
+    .unwrap();
+}
+
+/// No cached notes anywhere: the row stays present but inert, explaining what
+/// fills it, instead of offering an empty viewer.
+#[gpui_kit::test]
+fn about_row_is_disabled_without_cached_notes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, status_payload("0.182.0", None, false, &[], None), cx);
+    open_about_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        assert_eq!(window.find("about-settings-changelog").disabled(), Some(true), "nothing to read");
+        window.click("about-settings-changelog", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| assert!(!view.read(cx).changelog_open, "a disabled row cannot open an empty viewer"));
+}
+
+/// The running version's own cached notes are the best available changelog,
+/// so the row falls back to `Current` mode when no newer release is cached.
+#[gpui_kit::test]
+fn about_row_falls_back_to_current_notes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, post_update_payload(), cx);
+    open_about_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        window.click("about-settings-changelog", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(view.changelog_open);
+        assert_eq!(view.changelog_mode, ChangelogMode::Current, "running notes are all there is");
+    });
+}
+
+/// A cached release whose notes carry no Highlights section is still readable:
+/// the row stays enabled and the viewer explains the gap while keeping the
+/// full-release-notes link.
+#[gpui_kit::test]
+fn about_row_opens_a_link_only_viewer_without_highlights(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(
+        &view,
+        status_payload(
+            "0.182.0",
+            Some("0.183.0"),
+            false,
+            &[],
+            Some("https://github.com/vinhnx/vtcode/releases/tag/0.183.0"),
+        ),
+        cx,
+    );
+    open_about_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        assert_ne!(
+            window.find("about-settings-changelog").disabled(),
+            Some(true),
+            "notes without Highlights still describe a readable release"
+        );
+        window.click("about-settings-changelog", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("changelog-empty").is_some(), "the gap explains itself");
+        assert!(window.try_find("open-release-notes").is_some(), "the release page stays reachable");
+    })
+    .unwrap();
+}
+
+/// Rendering the About pane must never issue a request. The pane reads a
+/// cached snapshot and has no retry affordance, so a render-time fetch would
+/// repeat on every frame for a service that keeps failing (the Storage summary
+/// can fetch on display because its errored state renders a Retry button).
+/// Selection and launch are the only request paths.
+#[gpui_kit::test]
+fn about_pane_never_requests_a_status_while_rendering(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(16);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.open_settings(window, cx);
+            view.settings_tab = SettingsTab::About;
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    while requests.try_recv().is_ok() {}
+    cx.update_window(window, |_, window, cx| {
+        for _ in 0..3 {
+            window.render_frame(cx);
+        }
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "rendering the pane must not request a status");
+}
+
+/// The service never sends an older release as `latest_version`, but the
+/// client's chooser must still compose correctly when it does not: with only
+/// the running version's notes cached, the About row names *that* version and
+/// opens Current mode rather than inventing a "latest" release.
+#[gpui_kit::test]
+fn about_row_names_the_running_version_when_no_newer_release_is_known(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    seed_status(&view, post_update_payload(), cx);
+    open_about_settings(window, &view, cx);
+    cx.update_window(window, |_, window, cx| {
+        scroll_settings_into_view(window, "about-settings-changelog", cx);
+        window.click("about-settings-changelog", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(view.changelog_open);
+        assert_eq!(view.changelog_mode, ChangelogMode::Current);
+        assert_eq!(
+            view.best_changelog_release(),
+            Some((view.update_status.as_ref().expect("status").current_version.as_str(), ChangelogMode::Current)),
+            "the chooser pairs the running version with Current mode"
+        );
+    });
+}

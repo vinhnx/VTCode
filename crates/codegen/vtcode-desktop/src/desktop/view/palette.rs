@@ -654,6 +654,12 @@ impl DesktopView {
                 if tab == settings::SettingsTab::Storage {
                     self.maybe_request_storage_summary(cx);
                 }
+                // The About page reads cached release notes; ask only when
+                // launch never delivered a snapshot. Snapshot- and
+                // pending-gated, so repeat selection costs nothing.
+                if tab == settings::SettingsTab::About {
+                    self.maybe_request_update_status();
+                }
                 // Passive entry: refresh when a service can answer. Explicit
                 // refresh controls keep the loud no-backend failure instead.
                 if tab == settings::SettingsTab::Connections && self.backend.is_some() {

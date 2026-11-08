@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 pub struct UpdateStatusSnapshot {
     /// Version of the running service binary.
     pub current_version: String,
-    /// Latest known release version, when a check has reported one.
+    /// Newest release the service's update cache knows about that is *newer*
+    /// than `current_version`; clients read its notes. Never the running or an
+    /// older release, so a reader row cannot label a back-version "latest".
+    /// Only [`Self::update_available`] means an update is actually offered (a
+    /// dismissed update keeps its notes readable while this stays `true`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_version: Option<String>,
     /// Whether `latest_version` is newer than `current_version` and not dismissed.
@@ -20,8 +24,8 @@ pub struct UpdateStatusSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_url: Option<String>,
     /// Parsed `### Highlights` bullets for `latest_version`, taken from the
-    /// cached release notes. Empty when the cache has no notes (or no
-    /// Highlights section); clients render a link-only state then.
+    /// cached release notes. Empty when the cache holds notes without a
+    /// Highlights section; clients render a link-only state then.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub release_highlights: Vec<String>,
     /// Parsed `### Highlights` bullets for the running `current_version`,

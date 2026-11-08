@@ -343,11 +343,17 @@ pub(crate) fn cached_current_release_highlights() -> Option<(Version, Vec<String
     parse_cached_highlights(cache::current_release_info(&current))
 }
 
-/// Parsed Highlights for the latest known release, served to the desktop
-/// `update/status` handler. `None` when the cache holds no notes (or no
-/// Highlights section); callers render a link-only state then.
-pub(crate) fn cached_latest_release_highlights() -> Option<(Version, Vec<String>)> {
-    parse_cached_highlights(cache::latest_release_info())
+/// The newest release the update cache knows about, with the Highlights
+/// bullets parsed from its cached notes. Served to the desktop
+/// `update/status` handler as the reader-facing changelog source, so the
+/// viewer works whether or not the release is still an offered update.
+///
+/// An empty item list means the cached notes carry no Highlights section:
+/// callers render a link-only state. `None` means the cache holds no notes at
+/// all, which is the only "nothing to read" case.
+pub(crate) fn cached_latest_release() -> Option<(Version, Vec<String>)> {
+    let (version, release_notes) = cache::latest_release_info()?;
+    Some((version.clone(), parse_highlights(&version, &release_notes).items))
 }
 
 fn parse_cached_highlights(info: Option<(Version, String)>) -> Option<(Version, Vec<String>)> {
@@ -538,7 +544,7 @@ mod tests {
         let served = cached_current_release_highlights().expect("install notes survive the newer check");
         assert_eq!(served.0, current);
         assert_eq!(served.1, vec!["Fresh feature".to_string()]);
-        assert_eq!(cached_latest_release_highlights().map(|(version, _)| version), Some(newer));
+        assert_eq!(cached_latest_release().map(|(version, _)| version), Some(newer));
 
         cache::set_cache_dir_override_for_tests(previous);
     }
@@ -609,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn latest_release_highlights_serve_a_newer_cached_release() {
+    fn latest_release_serves_a_newer_cached_release() {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().expect("temp dir");
@@ -622,7 +628,7 @@ mod tests {
         let body = "### Highlights\n- Shiny feature (abc1234)\n";
         cache::record_successful_check_with_notes(Some(&latest), true, Some(body)).expect("write cache");
 
-        let served = cached_latest_release_highlights().expect("latest highlights must be readable");
+        let served = cached_latest_release().expect("latest release must be readable");
         assert_eq!(served.0, latest);
         assert_eq!(served.1, vec!["Shiny feature".to_string()]);
         assert!(
@@ -634,22 +640,23 @@ mod tests {
     }
 
     #[test]
-    fn latest_release_highlights_are_none_without_notes_or_section() {
+    fn latest_release_without_a_highlights_section_serves_no_items() {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().expect("temp dir");
         let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
 
         let latest = Version::parse("99.0.0").expect("latest version");
-        cache::record_successful_check_with_notes(Some(&latest), true, None).expect("write cache");
-        assert!(cached_latest_release_highlights().is_none(), "no cached notes serves no highlights");
+        cache::record_successful_check_with_notes(Some(&latest), false, None).expect("write cache");
+        assert!(cached_latest_release().is_none(), "no cached notes means no release to read");
 
-        cache::record_successful_check_with_notes(Some(&latest), true, Some("## 99.0.0\nNo highlights here\n"))
+        // Notes without a Highlights section still describe a readable release:
+        // the viewer renders its link-only state instead of hiding the entry.
+        cache::record_successful_check_with_notes(Some(&latest), false, Some("## 99.0.0\nNo highlights here\n"))
             .expect("write cache");
-        assert!(
-            cached_latest_release_highlights().is_none(),
-            "notes without a Highlights section serve no highlights"
-        );
+        let served = cached_latest_release().expect("notes describe a readable release");
+        assert_eq!(served.0, latest);
+        assert!(served.1.is_empty(), "no Highlights section serves no items");
 
         cache::set_cache_dir_override_for_tests(previous);
     }

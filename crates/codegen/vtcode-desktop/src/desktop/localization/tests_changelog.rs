@@ -28,6 +28,16 @@ fn changelog_copy_resolves_in_english_until_translated() {
     );
     assert_eq!(rust_i18n::t!("app.changelog.banner_view", locale = "en").to_string(), "View");
     assert_eq!(rust_i18n::t!("app.changelog.banner_dismiss", locale = "en").to_string(), "Dismiss release notes");
+    assert_eq!(rust_i18n::t!("app.changelog.release_notes", locale = "en").to_string(), "Release notes");
+    assert_eq!(rust_i18n::t!("app.changelog.view_release_notes", locale = "en").to_string(), "View release notes");
+    assert_eq!(
+        rust_i18n::t!("app.changelog.description", locale = "en", version = "0.182.0").to_string(),
+        "Latest known release: v0.182.0"
+    );
+    assert_eq!(
+        rust_i18n::t!("app.changelog.description_current", locale = "en", version = "0.182.0").to_string(),
+        "Release notes for the version you're running (v0.182.0)"
+    );
     assert_eq!(
         rust_i18n::t!("app.settings.notifications.view_changelog", locale = "en").to_string(),
         "View changelog"
@@ -40,6 +50,11 @@ fn changelog_copy_resolves_in_english_until_translated() {
             "app.changelog.empty",
             "app.changelog.view_full_notes",
             "app.changelog.done",
+            "app.changelog.release_notes",
+            "app.changelog.view_release_notes",
+            "app.changelog.description",
+            "app.changelog.description_current",
+            "app.changelog.unavailable",
             "app.changelog.banner_title",
             "app.changelog.banner_more",
             "app.changelog.banner_view",

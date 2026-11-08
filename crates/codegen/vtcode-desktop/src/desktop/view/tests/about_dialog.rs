@@ -32,6 +32,35 @@ fn about_action_opens_the_branded_dialog(cx: &mut TestAppContext) {
     });
 }
 
+/// Both About surfaces paint the monochrome V, not the Dock art: the mark is
+/// a themed ink drawing (one SVG tinted by the surrounding text color), so it
+/// stays legible on every palette and never competes with the app icon the
+/// Appearance picker sells.
+#[gpui_kit::test]
+fn about_surfaces_use_the_monochrome_brand_mark(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    open_about(window, &view, cx);
+    cx.update_window(window, |_, window, _| {
+        assert!(window.try_find("about-dialog-mark").is_some(), "the dialog paints the ink mark");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.close_about(window, cx);
+            view.open_settings(window, cx);
+            view.settings_tab = super::super::settings::SettingsTab::About;
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("about-settings-mark").is_some(), "the About pane paints the same ink mark");
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn escape_dismisses_the_about_dialog_and_restores_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

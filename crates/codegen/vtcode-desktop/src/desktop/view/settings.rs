@@ -656,6 +656,12 @@ impl DesktopView {
             if *tab == SettingsTab::Storage {
                 self.maybe_request_storage_summary(cx);
             }
+            // The About page reads the cached release notes; ask for a status
+            // only when launch never delivered one. Pending-gated and
+            // snapshot-gated, so a repeat selection costs nothing.
+            if *tab == SettingsTab::About {
+                self.maybe_request_update_status();
+            }
             // Live connection state, like the storage summary: passive
             // selection refreshes only when a service exists to answer, so a
             // backend-less page never marks status dirty or posts a queue

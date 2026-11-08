@@ -4,9 +4,11 @@
 //! version, and build commit passed explicitly (an unbundled dev launch has no
 //! Info.plist to read); its credits come from `Credits.html` in the bundle. The
 //! custom dialog below only covers tests and the off-main-thread edge, styled
-//! after the native panel (bare icon, plain version line, copyright) with the
-//! project actions.
+//! after the native panel (bare mark, plain version line, copyright) with the
+//! project actions. Both the fallback dialog and the Settings → About pane use
+//! the monochrome V ([`brand_mark`]) rather than the Dock app-icon art.
 use super::bootstrap::HELP_URL;
+use super::updates::ChangelogMode;
 use super::*;
 
 /// Present AppKit's standard About panel. Returns false off the main thread
@@ -55,6 +57,35 @@ fn show_native_about_panel() -> bool {
     false
 }
 
+/// Cloned render inputs for the About pane. The changelog row advertises the
+/// release a reader can actually open — the newest cached one, else the
+/// running version's own notes — which is independent of whether an update is
+/// offered. Version and mode are captured together so the description cannot
+/// name a release the viewer would not present.
+#[derive(Clone)]
+pub(super) struct AboutSettingsProps {
+    pub(super) changelog: Option<ChangelogReleaseProps>,
+}
+
+/// One readable release: the version the viewer will title, plus the mode it
+/// will open in. A named struct rather than a pair so a caller cannot swap the
+/// two (see the repo's named-struct rule).
+#[derive(Clone)]
+pub(super) struct ChangelogReleaseProps {
+    version: String,
+    mode: ChangelogMode,
+}
+
+impl AboutSettingsProps {
+    pub(super) fn capture(view: &DesktopView) -> Self {
+        Self {
+            changelog: view
+                .best_changelog_release()
+                .map(|(version, mode)| ChangelogReleaseProps { version: version.to_owned(), mode }),
+        }
+    }
+}
+
 impl DesktopView {
     pub(super) fn open_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.disarm_double_escape();
@@ -88,16 +119,20 @@ impl DesktopView {
         self.open_license_viewer(licenses::LicenseDocument::Mit, window, cx);
     }
 
-    /// Settings → About page: brand identity plus the license, acknowledgments,
-    /// and project link the native About panel exposes.
+    /// Settings → About page: brand identity plus the release-notes, license,
+    /// acknowledgments, and project link rows.
     pub(super) fn render_about_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        Self::render_about_settings_content(cx.entity(), cx)
+        Self::render_about_settings_content(AboutSettingsProps::capture(self), cx.entity(), cx)
     }
 
     /// App-context content builder, hostable inside a Kit `SettingItem`
-    /// closure. The rows open the shared license viewer through the view
-    /// handle; the website action is a plain external launch.
-    pub(super) fn render_about_settings_content(view: Entity<Self>, cx: &mut App) -> AnyElement {
+    /// closure. The rows open the shared license or changelog viewer through
+    /// the view handle; the website action is a plain external launch.
+    pub(super) fn render_about_settings_content(
+        props: AboutSettingsProps,
+        view: Entity<Self>,
+        cx: &mut App,
+    ) -> AnyElement {
         let colors = cx.theme().colors;
         // The page header already reads "About" and the card opens with the app
         // name, so the card stays untitled (the curated configuration overview
@@ -110,7 +145,10 @@ impl DesktopView {
             .flex_col()
             .items_center()
             .gap_2()
-            .child(brand_logo(64.))
+            // The About page presents the product identity, not the Dock
+            // icon: the monochrome V follows the theme instead of shipping a
+            // raster art tile that fights the card.
+            .child(brand_mark("about-settings-mark", 56., colors.foreground))
             .child(
                 div()
                     .text_lg()
@@ -142,6 +180,7 @@ impl DesktopView {
                 title,
                 settings_group_box_untitled(&colors)
                     .child(identity)
+                    .child(Self::about_changelog_row(&props, &view, &colors))
                     .child(Self::license_viewer_row(
                         &view,
                         "about-settings-license",
@@ -168,6 +207,55 @@ impl DesktopView {
                     )),
             ))
             .into_any_element()
+    }
+
+    /// Release-notes row: offers whichever release a reader can actually open
+    /// — the newest cached one, else the running version's own notes — and so
+    /// does not require an offered update. The description names that release
+    /// and its mode; when nothing is cached the row stays visible but inert
+    /// and explains what fills it, because hiding it would leave no hint that
+    /// release notes exist at all.
+    fn about_changelog_row(
+        props: &AboutSettingsProps,
+        view: &Entity<Self>,
+        colors: &gpui_kit::component::theme::ThemeColor,
+    ) -> AnyElement {
+        let title = rust_i18n::t!("app.changelog.release_notes").to_string();
+        let action_label = rust_i18n::t!("app.changelog.view_release_notes").to_string();
+        let Some(release) = props.changelog.as_ref() else {
+            return settings_row(
+                title,
+                rust_i18n::t!("app.changelog.unavailable").to_string(),
+                desktop_button("about-settings-changelog")
+                    .label(action_label)
+                    .desktop_disabled(true),
+                colors,
+            )
+            .into_any_element();
+        };
+        let description = match release.mode {
+            ChangelogMode::Latest => {
+                rust_i18n::t!("app.changelog.description", version = release.version.as_str()).to_string()
+            }
+            ChangelogMode::Current => {
+                rust_i18n::t!("app.changelog.description_current", version = release.version.as_str()).to_string()
+            }
+        };
+        let view = view.clone();
+        settings_row(
+            title.clone(),
+            description,
+            desktop_button("about-settings-changelog")
+                .label(action_label)
+                .accessibility_label(title)
+                .on_click(move |_, window: &mut Window, cx: &mut App| {
+                    view.update(cx, |view, cx| {
+                        view.open_best_changelog(window, cx);
+                    });
+                }),
+            colors,
+        )
+        .into_any_element()
     }
 
     /// Centered brand card over the shared modal scrim: logo tile, name,
@@ -215,7 +303,10 @@ impl DesktopView {
                     .px_6()
                     .pt_6()
                     .pb_5()
-                    .child(brand_logo(64.))
+                    // Same ink mark as the About pane: the dialog is the
+                    // identity surface, so the Dock art would read as a second
+                    // brand.
+                    .child(brand_mark("about-dialog-mark", 56., colors.foreground))
                     .child(
                         div()
                             .text_xl()

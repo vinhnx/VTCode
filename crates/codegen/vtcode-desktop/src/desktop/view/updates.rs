@@ -22,6 +22,17 @@ impl DesktopView {
         }
     }
 
+    /// Fetch the status only when no snapshot is stored yet. The Settings →
+    /// About row reads a snapshot and renders an inert "no notes" state without
+    /// one, so a missing snapshot is the one case worth a round-trip. Called
+    /// from selection paths only, never from render: a failing service would
+    /// otherwise be retried once per frame, and this page has no Retry control.
+    pub(super) fn maybe_request_update_status(&mut self) {
+        if self.update_status.is_none() {
+            self.request_update_status();
+        }
+    }
+
     pub(super) fn handle_update_status_response(&mut self, result: Value) {
         self.update_request_pending = false;
         self.apply_update_status(result);
@@ -146,14 +157,44 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Whether the viewer has an update to show. The shared gate behind
-    /// `open_changelog` and the Settings row button; the notification click
-    /// applies a stricter version-pinned check on top and falls back to the
-    /// Settings tab when the status moved on.
+    /// Whether the viewer has an update to show. The notification and
+    /// Settings → Notifications gates sit here: they advertise an *update*,
+    /// which needs both the offer and a version. Reading the changelog without
+    /// one is [`Self::can_view_latest_changelog`].
     pub(super) fn can_view_changelog(&self) -> bool {
         self.update_status
             .as_ref()
             .is_some_and(|status| status.update_available && status.latest_version.is_some())
+    }
+
+    /// Whether the latest known release is readable, with or without an
+    /// offered update. Drives the Settings → About row and the relaxed
+    /// `Latest` viewer gate: reading notes is not the same as being offered an
+    /// update. A release whose cached notes carry no Highlights section still
+    /// counts — the viewer renders its link-only state.
+    pub(super) fn can_view_latest_changelog(&self) -> bool {
+        self.latest_changelog_version().is_some()
+    }
+
+    /// The release the `Latest` viewer would present. `None` means no reader
+    /// entry point should appear.
+    fn latest_changelog_version(&self) -> Option<&str> {
+        self.update_status
+            .as_ref()
+            .filter(|status| status.latest_version.is_some())
+            .and_then(|status| status.latest_version.as_deref())
+    }
+
+    /// The release a reader entry point should offer: the latest known release
+    /// with notes, else the running version's own notes. Version and mode stay
+    /// paired so a caller cannot name one release while the viewer opens
+    /// another.
+    pub(super) fn best_changelog_release(&self) -> Option<(&str, ChangelogMode)> {
+        if let Some(latest) = self.latest_changelog_version() {
+            return Some((latest, ChangelogMode::Latest));
+        }
+        let current = self.update_status.as_ref()?.current_version.as_str();
+        self.can_view_current_changelog().then_some((current, ChangelogMode::Current))
     }
 
     /// Whether the running version's own notes are known (the post-update
@@ -168,14 +209,14 @@ impl DesktopView {
     /// Whether the viewer can present `mode` from the stored status.
     pub(super) fn can_view_changelog_in(&self, mode: ChangelogMode) -> bool {
         match mode {
-            ChangelogMode::Latest => self.can_view_changelog(),
+            ChangelogMode::Latest => self.can_view_latest_changelog(),
             ChangelogMode::Current => self.can_view_current_changelog(),
         }
     }
 
     /// Whether either viewer mode has content (the `/go changelog` verb).
     pub(super) fn can_view_any_changelog(&self) -> bool {
-        self.can_view_changelog() || self.can_view_current_changelog()
+        self.can_view_latest_changelog() || self.can_view_current_changelog()
     }
 
     /// Open the changelog viewer for the latest known release.
@@ -188,10 +229,11 @@ impl DesktopView {
         self.open_changelog_in(ChangelogMode::Current, window, cx);
     }
 
-    /// Open the viewer for the `/go changelog` verb: the available update
-    /// when there is one, else the running version's known notes.
+    /// Open the viewer for the `/go changelog` verb and the Settings → About
+    /// row: the latest known release when its notes are cached, else the
+    /// running version's known notes.
     pub(super) fn open_best_changelog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.can_view_changelog() {
+        if self.can_view_latest_changelog() {
             self.open_changelog_in(ChangelogMode::Latest, window, cx);
         } else {
             self.open_changelog_in(ChangelogMode::Current, window, cx);
@@ -237,8 +279,8 @@ impl DesktopView {
     /// scrim, with the full release notes one click away in the browser.
     /// Without cached highlights it renders a link-only state; an invalid
     /// or missing release URL hides the browser action entirely. The upgrade
-    /// subtitle only makes sense for an available update, so Current mode
-    /// omits it.
+    /// subtitle only makes sense for an available update, so it renders only
+    /// when the presented release is one.
     pub(super) fn render_changelog_viewer(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let weak = cx.entity().downgrade();
@@ -341,7 +383,10 @@ impl DesktopView {
                             .text_color(colors.foreground)
                             .child(rust_i18n::t!("app.changelog.title", version = shown_version).to_string()),
                     )
-                    .when(self.changelog_mode == ChangelogMode::Latest, |dialog| {
+                    .when(self.changelog_mode == ChangelogMode::Latest && self.can_view_changelog(), |dialog| {
+                        // Only an offered upgrade reads as "current → latest";
+                        // reading a release's notes without one would render a
+                        // backwards or self-referential arrow.
                         dialog.child(
                             div()
                                 .id("changelog-subtitle")

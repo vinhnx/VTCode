@@ -589,11 +589,9 @@ pub(super) fn navigation_label(
         )
 }
 
-/// Brand mark for small in-app renders (welcome empty states, about page),
-/// embedded so packaged applications never depend on checkout paths. Uses
-/// the display-sized 128px art, not the 512px Dock art: the small renders
-/// would minify 8x through a mipmap-less sampler and show stair-stepped
-/// edges (see [`app_icon::preview_bytes`]).
+/// Full-color app-icon art for the Bot empty-state media. The About surfaces
+/// deliberately use [`brand_mark`] instead: identity is an ink mark, and the
+/// Display art (not the 512px Dock art) stays smooth at small sizes.
 pub(super) fn brand_logo(size: f32) -> impl IntoElement {
     static LOGO: std::sync::OnceLock<Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
     let image = LOGO.get_or_init(|| {
@@ -632,12 +630,14 @@ pub(super) fn app_icon_preview(preference: AppIconPreference, size: f32) -> impl
     img(image.clone()).w(px(size)).h(px(size))
 }
 
-pub(super) fn welcome_brand_mark(size: f32, color: gpui_kit::Hsla) -> impl IntoElement {
+/// Monochrome brand V tinted to `color`: GPUI tints SVG sprites, so one asset
+/// serves every theme (unlike the Dock art in [`brand_logo`]).
+pub(super) fn brand_mark(id: impl Into<gpui_kit::ElementId>, size: f32, color: gpui_kit::Hsla) -> impl IntoElement {
     gpui_kit::svg()
         .data(VTCODE_NAV_MARK_SVG)
         .size(px(size))
         .text_color(color)
-        .id("welcome-brand-mark")
+        .id(id)
         .test_support()
 }
 

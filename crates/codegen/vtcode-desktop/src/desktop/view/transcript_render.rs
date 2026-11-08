@@ -36,7 +36,11 @@ impl DesktopView {
                 EmptyHeader::new()
                     .max_w(px(self.content_width()))
                     .gap_6()
-                    .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
+                    .media(
+                        EmptyMedia::new()
+                            .mb_0()
+                            .child(brand_mark("welcome-brand-mark", 36., colors.primary)),
+                    )
                     .title(
                         EmptyTitle::new()
                             .text_size(gpui_kit::rems(1.75))

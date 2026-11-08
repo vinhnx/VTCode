@@ -6,6 +6,11 @@ app:
     empty: {en: "Highlights aren't available for this release."}
     view_full_notes: {en: "View full release notes"}
     done: {en: "Done"}
+    release_notes: {en: "Release notes"}
+    view_release_notes: {en: "View release notes"}
+    description: {en: "Latest known release: v%{version}"}
+    description_current: {en: "Release notes for the version you're running (v%{version})"}
+    unavailable: {en: "No release notes cached yet. They appear after the next update check."}
     banner_title: {en: "What's new in v%{version}"}
     banner_more: {en: "%{summary} (+%{count} more)"}
     banner_view: {en: "View"}
