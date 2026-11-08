@@ -131,6 +131,7 @@ impl TimeoutsConfig {
 
     /// Resolve the outbound HTTP timeout defaults for
     /// [`vtcode_commons::http::install_http_timeouts`].
+    #[must_use]
     pub fn http_timeouts(&self) -> vtcode_commons::http::HttpTimeouts {
         vtcode_commons::http::HttpTimeouts::from_seconds(
             self.http_connect_seconds,
@@ -140,6 +141,7 @@ impl TimeoutsConfig {
     }
 
     /// Normalize a ceiling value into an optional duration.
+    #[must_use]
     pub fn ceiling_duration(&self, seconds: u64) -> Option<std::time::Duration> {
         if seconds == 0 {
             None
@@ -218,15 +220,13 @@ fn env_seconds(name: &str) -> Option<u64> {
 }
 
 /// Resolve a user-supplied timeout into a bounded, non-zero value.
+///
+/// Single runtime entry point; the bounds live in
+/// [`crate::constants::execution::resolve_timeout`] so the two spellings
+/// cannot drift apart.
+#[must_use]
 pub fn resolve_timeout(user_timeout: Option<u64>) -> u64 {
-    use crate::constants::execution::{DEFAULT_TIMEOUT_SECS, MAX_TIMEOUT_SECS, MIN_TIMEOUT_SECS};
-
-    match user_timeout {
-        None | Some(0) => DEFAULT_TIMEOUT_SECS,
-        Some(value) if value < MIN_TIMEOUT_SECS => MIN_TIMEOUT_SECS,
-        Some(value) if value > MAX_TIMEOUT_SECS => MAX_TIMEOUT_SECS,
-        Some(value) => value,
-    }
+    crate::constants::execution::resolve_timeout(user_timeout)
 }
 
 #[cfg(test)]
@@ -253,6 +253,14 @@ mod tests {
         let config = TimeoutsConfig { default_ceiling_seconds: 0, ..Default::default() };
         assert!(config.validate().is_ok());
         assert!(config.ceiling_duration(config.default_ceiling_seconds).is_none());
+    }
+
+    #[test]
+    fn nonzero_ceiling_maps_to_exact_duration() {
+        let config = TimeoutsConfig::default();
+        assert_eq!(config.ceiling_duration(1), Some(std::time::Duration::from_secs(1)));
+        assert_eq!(config.ceiling_duration(3_600), Some(std::time::Duration::from_secs(3_600)));
+        assert_eq!(config.ceiling_duration(u64::MAX), Some(std::time::Duration::from_secs(u64::MAX)));
     }
 
     #[test]

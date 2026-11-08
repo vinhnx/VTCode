@@ -54,6 +54,7 @@ pub const DEFAULT_ORCHESTRATOR_RETRY_MULTIPLIER: f64 = 2.0;
 /// - MAX_TIMEOUT_SECS if exceeds maximum
 /// - The user value if within bounds
 #[inline]
+#[must_use]
 pub const fn resolve_timeout(user_timeout: Option<u64>) -> u64 {
     match user_timeout {
         None => DEFAULT_TIMEOUT_SECS,
