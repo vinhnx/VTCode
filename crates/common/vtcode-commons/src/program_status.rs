@@ -95,6 +95,10 @@ fn valid_segment(segment: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || b"_.+-".contains(&byte))
 }
 
+fn valid_id(id: &str) -> bool {
+    id.len() <= 128 && id.split('/').count() <= 8 && id.split('/').all(valid_segment)
+}
+
 fn encode_text(text: &str, limit: usize) -> Result<String> {
     ensure!(text.len() <= limit, "program status text exceeds byte limit");
     ensure!(!text.chars().any(char::is_control), "program status text contains controls");
@@ -280,10 +284,7 @@ pub fn encode_report(
     title: &str,
     message: &str,
 ) -> Result<String> {
-    ensure!(
-        id.len() <= 128 && id.split('/').count() <= 8 && id.split('/').all(valid_segment),
-        "invalid program status id"
-    );
+    ensure!(valid_id(id), "invalid program status id");
     let title = encode_text(title, 192)?;
     let message = encode_text(message, 2048)?;
     let mut report = format!("\x1b]7501;state={}:id={id}:app=vtcode", state.as_str());
@@ -305,6 +306,15 @@ pub fn encode_report(
     report.push_str(":msg=");
     report.push_str(&message);
     report.push_str("\x1b\\");
+    ensure!(report.len() <= 4096, "program status report exceeds byte limit");
+    Ok(report)
+}
+
+/// Encode a record removal. `clear` carries no content keys: the terminal
+/// drops the record and its subtree without reading anything else.
+pub fn encode_clear(id: &str) -> Result<String> {
+    ensure!(valid_id(id), "invalid program status id");
+    let report = format!("\x1b]7501;state=clear:id={id}:app=vtcode\x1b\\");
     ensure!(report.len() <= 4096, "program status report exceeds byte limit");
     Ok(report)
 }

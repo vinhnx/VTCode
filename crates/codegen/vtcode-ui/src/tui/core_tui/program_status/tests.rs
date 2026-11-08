@@ -200,7 +200,7 @@ fn program_status_disable_clears_uncertain_delivery_without_caching_it() {
     status.deliver(&mut output).unwrap();
     assert_eq!(
         String::from_utf8(output).unwrap(),
-        format!("\x1b]7501;state=clear:id={}:app=vtcode:title=:msg=\x1b\\", status.parent)
+        format!("\x1b]7501;state=clear:id={}:app=vtcode\x1b\\", status.parent)
     );
     assert!(status.attempted.is_empty());
     output = Vec::new();

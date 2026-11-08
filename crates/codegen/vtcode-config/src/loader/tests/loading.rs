@@ -116,6 +116,20 @@ fn scaffold_config_does_not_weaken_security_defaults() {
     );
 }
 
+/// The scaffold must not contradict the compiled program-status default: it
+/// either omits the section or restates the default, so `vtcode init` users
+/// get the documented on-by-default reporting.
+#[test]
+fn scaffold_config_inherits_program_status_default() {
+    let scaffold_text = include_str!("../../../data/default_config.toml");
+    let scaffold: VTCodeConfig = toml::from_str(scaffold_text).expect("scaffold config must parse");
+    let compiled = VTCodeConfig::default();
+    assert_eq!(
+        scaffold.ui.program_status.enabled, compiled.ui.program_status.enabled,
+        "scaffold program_status.enabled must match the compiled default"
+    );
+}
+
 #[test]
 fn tool_profile_parses_and_serialises_in_tools_table() {
     let config: VTCodeConfig = toml::from_str(

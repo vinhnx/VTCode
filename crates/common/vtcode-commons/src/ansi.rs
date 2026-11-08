@@ -343,6 +343,17 @@ mod tests {
     }
 
     #[test]
+    fn osc_program_status_reports_are_stripped() {
+        // Nested OSC 7501 from child output must never reach the terminal:
+        // VT Code re-projects children with generic labels instead. Both
+        // terminator forms apply; surrounding text survives on both sides.
+        let st = "out\x1b]7501;state=working:app=tool:msg=V29ya2luZw==\x1b\\done";
+        assert_eq!(strip_ansi(st), "outdone");
+        let bel = "out\x1b]7501;state=blocked:kind=permission\x07done";
+        assert_eq!(strip_ansi(bel), "outdone");
+    }
+
+    #[test]
     fn incomplete_sequence_drops_tail() {
         let input = "text\x1b[31";
         assert_eq!(strip_ansi(input), "text");

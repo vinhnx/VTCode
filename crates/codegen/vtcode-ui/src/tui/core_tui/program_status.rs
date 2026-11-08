@@ -8,8 +8,8 @@ use std::sync::{
 };
 
 use vtcode_commons::program_status::{
-    ConEmuProgress, InteractionKind, ProgramState, ProgramStatusUpdate, clear_iterm21337, encode_conemu94,
-    encode_iterm21337, encode_report, record_segment,
+    ConEmuProgress, InteractionKind, ProgramState, ProgramStatusUpdate, clear_iterm21337, encode_clear,
+    encode_conemu94, encode_iterm21337, encode_report, record_segment,
 };
 use vtcode_commons::ui_protocol::{ActivityState, ProgressPhase, ProgressUpdate};
 
@@ -295,7 +295,11 @@ impl ProgramStatus {
             } else {
                 ProgramState::Clear
             };
-            let wire = encode_report(&id, state, None, None, "", "")?;
+            let wire = if state == ProgramState::Clear {
+                encode_clear(&id)?
+            } else {
+                encode_report(&id, state, None, None, "", "")?
+            };
             // Even a failed flush may change the terminal. A subtree clear
             // invalidates all successful-report cache entries beneath it.
             if id == self.parent && state == ProgramState::Clear {
@@ -403,7 +407,12 @@ fn retire_records(records: &BTreeMap<String, ProgramState>, writer: &mut impl Wr
         } else {
             ProgramState::Clear
         };
-        if let Err(error) = encode_report(id, state, None, None, "", "").and_then(|wire| {
+        let wire = if state == ProgramState::Clear {
+            encode_clear(id)
+        } else {
+            encode_report(id, state, None, None, "", "")
+        };
+        if let Err(error) = wire.and_then(|wire| {
             writer.write_all(wire.as_bytes())?;
             writer.flush()?;
             Ok(())

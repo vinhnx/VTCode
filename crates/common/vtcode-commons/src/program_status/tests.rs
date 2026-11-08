@@ -76,6 +76,14 @@ fn program_status_limits_and_injection() {
 }
 
 #[test]
+fn program_status_clear_carries_no_content_keys() {
+    assert_eq!(encode_clear("vt-1/c2").unwrap(), "\x1b]7501;state=clear:id=vt-1/c2:app=vtcode\x1b\\");
+    for id in ["", "/vt", "vt/", "vt//c", "vt:x", "vt;state=idle", &"x".repeat(33)] {
+        assert!(encode_clear(id).is_err(), "{id:?} must be rejected");
+    }
+}
+
+#[test]
 fn program_status_vte_gate_checks_both_sides_of_the_safe_boundary() {
     assert!(!vte_version_allows_unknown_osc(Some("5399")));
     assert!(vte_version_allows_unknown_osc(Some("5400")));
