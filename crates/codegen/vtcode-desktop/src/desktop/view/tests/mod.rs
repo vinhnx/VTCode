@@ -754,6 +754,7 @@ mod themes_transcript;
 mod thread_tabs;
 mod transcript_inspector_ctas;
 mod transcript_navigation;
+mod transcript_readability;
 mod turn_group;
 mod turn_queue;
 mod turn_undo;

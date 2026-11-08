@@ -205,13 +205,12 @@ use typography::FontTarget;
 use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
-/// Normal-mode reading column: fits ~80-column code with breathing room while
-/// keeping prose scannable. Applied as a centered `max_w`, so narrow windows
-/// are unaffected.
+/// Normal-mode reading column: ~80-column code at the UI-16/code-14 defaults
+/// (768 - 64 title inset - 34 code padding/border is ~79 cols at 0.6 mono).
+/// Centered `max_w`, so narrow windows are unaffected.
 const CONTENT_WIDTH: f32 = 768.;
-/// Zen reading column: the focused single-column width. Fits ~80-column code
-/// without the sideways squeeze of the old 600px cap; still clearly narrower
-/// than the normal column.
+/// Zen reading column: trades the 80-column fit for focus (~69 cols at code 14;
+/// longer lines wrap, contained). Narrower than normal.
 const ZEN_CONTENT_WIDTH: f32 = 680.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const WELCOME_COPY_COUNT: usize = 3;

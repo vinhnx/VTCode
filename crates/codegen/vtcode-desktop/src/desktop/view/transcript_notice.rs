@@ -78,7 +78,14 @@ impl DesktopView {
                 );
             }
         } else if !item.text.trim().is_empty() {
-            panel = panel.child(div().text_sm().text_color(colors.foreground).child(item.text.clone()));
+            panel = panel.child(
+                div()
+                    .id(format!("notice-text-{}", item.id))
+                    .test_support()
+                    .text_sm()
+                    .text_color(colors.foreground)
+                    .child(item.text.clone()),
+            );
         }
         panel.into_any_element()
     }
