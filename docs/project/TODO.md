@@ -43,6 +43,10 @@ also chekc and audit the files and move to correct directory and group for a cle
 
 ---
 
+improve AGENTS.md "Self-Debugging (VT Code fixing itself)" as RSI loop
+
+---
+
 check and improve Pele font, currently it showing as serif font, make sure it can follow user system font's
   settings if possible. also check pele.run docs and add a new configurable settings if pele has API for
   configuration and save and apply that for future diagram views
