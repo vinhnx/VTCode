@@ -40,6 +40,10 @@ impl TuiSessionDriver for Session {
         self.take_redraw()
     }
 
+    fn is_terminal_visible(&self) -> bool {
+        self.is_terminal_visible()
+    }
+
     fn use_steady_cursor(&self) -> bool {
         self.use_steady_cursor()
     }

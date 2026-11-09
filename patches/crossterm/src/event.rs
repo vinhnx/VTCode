@@ -582,6 +582,17 @@ pub enum Event {
         /// `true` when the terminal switched to dark mode, `false` for light.
         dark: bool,
     },
+    /// The terminal view's visibility state (terminal visibility reports,
+    /// unsolicited `CSI ? 999 ; Ps n` DSR enabled via `CSI ? 2033 h`).
+    ///
+    /// `visible` is `false` only for `Ps = 2` (not visible); every other
+    /// value maps to `true` per the fail-visible rule.
+    ///
+    /// See <https://rockorager.dev/misc/visibility-reports/>
+    VisibilityReport {
+        /// `true` when the terminal view may be observable.
+        visible: bool,
+    },
 }
 
 impl Event {

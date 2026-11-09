@@ -529,6 +529,17 @@ fn viewer_flash_requests_animation_ticks_until_cleared() {
 }
 
 #[test]
+fn hidden_viewer_flash_skips_animation_ticks_until_visible() {
+    let mut session = two_capture_group_session();
+    session.open_tool_output_viewer(80, 20, Some(12));
+    assert!(session.needs_animation_tick(), "armed tint needs ticks while visible");
+    session.core.apply_terminal_visibility_report(false);
+    assert!(!session.needs_animation_tick(), "hidden view must suppress ticks despite armed tint");
+    session.core.apply_terminal_visibility_report(true);
+    assert!(session.needs_animation_tick(), "returning visible must resume ticks for live tint");
+}
+
+#[test]
 fn focused_review_jumps_to_the_requested_capture_in_a_group() {
     let session = two_capture_group_session();
 

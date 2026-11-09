@@ -401,6 +401,12 @@ impl Session {
     /// independently of recent user input, so a truly idle session (no input,
     /// no animation, no pending expiry) can rest at the low upkeep rate.
     pub(crate) fn needs_animation_tick(&self) -> bool {
+        // Hidden terminal view: no frame can be observed, so never extend
+        // active-rate ticking. The idle upkeep tick still runs `handle_tick`,
+        // so expiries and state converge; returning visible forces a repaint.
+        if !self.terminal_visible {
+            return false;
+        }
         if self.progress.is_animated() && self.appearance.should_animate_progress_status() {
             return true;
         }
@@ -424,6 +430,32 @@ impl Session {
             return false;
         }
         self.thinking_spinner.is_active || self.is_shimmer_active() || self.background_status_shimmer_active()
+    }
+
+    /// Whether the terminal view may currently be observable.
+    ///
+    /// Fail-visible: `true` unless a `CSI ? 999 ; 2 n` report said otherwise.
+    /// The drive loop consults this before drawing a frame.
+    pub(crate) fn is_terminal_visible(&self) -> bool {
+        self.terminal_visible
+    }
+
+    /// Apply a terminal visibility report (`CSI ? 999 ; Ps n`).
+    ///
+    /// State updates continue while hidden; only presentation pauses. A
+    /// hidden-to-visible transition forces a repaint of the latest complete
+    /// state. Duplicate reports are no-ops.
+    #[cfg_attr(not(vendored_crossterm), allow(dead_code))]
+    pub(crate) fn apply_terminal_visibility_report(&mut self, visible: bool) {
+        if self.terminal_visible == visible {
+            return;
+        }
+        self.terminal_visible = visible;
+        if visible {
+            // Visual-only: content updates already invalidated their own
+            // caches while hidden; just repaint the latest state.
+            self.mark_visual_dirty();
+        }
     }
 
     pub(crate) fn show_copy_notification(&mut self, char_count: usize) {

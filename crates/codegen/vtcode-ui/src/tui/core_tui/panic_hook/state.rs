@@ -15,6 +15,11 @@ pub(crate) static KEYBOARD_ENHANCEMENTS_PUSHED: AtomicBool = AtomicBool::new(fal
 /// The canonical restore path only emits the matching `CSI ? 2031 l` when this
 /// is set, mirroring [`KEYBOARD_ENHANCEMENTS_PUSHED`].
 pub(crate) static COLOR_SCHEME_REPORTS_ENABLED: AtomicBool = AtomicBool::new(false);
+/// Whether the TUI enabled terminal visibility reports (`CSI ? 2033 h`).
+///
+/// The canonical restore path only emits the matching `CSI ? 2033 l` when this
+/// is set, mirroring [`COLOR_SCHEME_REPORTS_ENABLED`].
+pub(crate) static VISIBILITY_REPORTS_ENABLED: AtomicBool = AtomicBool::new(false);
 /// Whether the TUI is currently running on the alternate screen buffer.
 ///
 /// Tracks `UiSurfacePreference::Alternate`/`Auto` sessions so the canonical
@@ -143,6 +148,10 @@ pub(crate) fn mark_keyboard_enhancements_pushed(pushed: bool) {
 
 pub(crate) fn mark_color_scheme_reports_enabled(enabled: bool) {
     COLOR_SCHEME_REPORTS_ENABLED.store(enabled, Ordering::SeqCst);
+}
+
+pub(crate) fn mark_visibility_reports_enabled(enabled: bool) {
+    VISIBILITY_REPORTS_ENABLED.store(enabled, Ordering::SeqCst);
 }
 
 pub(crate) fn mark_alternate_screen_active(active: bool) {

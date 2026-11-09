@@ -243,3 +243,48 @@ fn idle_state_clears_left_status() {
 
     assert_eq!(session.input_status_left, None, "idle must clear the persisted blocked status");
 }
+#[test]
+fn hidden_terminal_suppresses_animation_ticks_and_resumes_on_visible() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(session.is_terminal_visible(), "fresh session must default to visible (fail-visible)");
+
+    session.thinking_spinner.start();
+    assert!(session.needs_animation_tick(), "active spinner must need ticks while visible");
+
+    session.apply_terminal_visibility_report(false);
+    assert!(!session.is_terminal_visible());
+    assert!(!session.needs_animation_tick(), "hidden view must suppress animation ticks");
+
+    session.apply_terminal_visibility_report(true);
+    assert!(session.is_terminal_visible());
+    assert!(session.needs_animation_tick(), "returning visible must resume animation ticks");
+}
+#[test]
+fn duplicate_visibility_reports_are_noops() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let _ = session.take_redraw();
+
+    session.apply_terminal_visibility_report(true);
+    assert!(!session.take_redraw(), "duplicate visible report must not mark dirty");
+
+    session.apply_terminal_visibility_report(false);
+    assert!(!session.take_redraw(), "hiding must not mark dirty");
+
+    session.apply_terminal_visibility_report(false);
+    assert!(!session.take_redraw(), "duplicate hidden report must not mark dirty");
+
+    session.apply_terminal_visibility_report(true);
+    assert!(session.take_redraw(), "hidden-to-visible transition must force a repaint");
+}
+#[test]
+#[cfg(vendored_crossterm)]
+fn visibility_report_event_updates_terminal_visibility() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let (sender, _receiver) = mpsc::unbounded_channel();
+
+    session.handle_event(CrosstermEvent::VisibilityReport { visible: false }, &sender, None);
+    assert!(!session.is_terminal_visible(), "hidden report must hide the session");
+
+    session.handle_event(CrosstermEvent::VisibilityReport { visible: true }, &sender, None);
+    assert!(session.is_terminal_visible(), "visible report must show the session again");
+}

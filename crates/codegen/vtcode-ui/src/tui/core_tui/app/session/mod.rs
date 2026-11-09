@@ -789,6 +789,12 @@ impl TuiSessionDriver for AppSession {
     }
 
     fn needs_animation_tick(&self) -> bool {
+        // Hidden terminal view: no frame can be observed, so never extend
+        // active-rate ticking (mirrors the core gate; AppSession's own
+        // drawer/viewer terms must not bypass it).
+        if !self.core.is_terminal_visible() {
+            return false;
+        }
         // Core covers drag, spinner, shimmer, core background, and expiries;
         // AppSession adds its own drawer-local background loading count, which
         // feeds `has_status_spinner` but lives outside `core`, plus the
@@ -804,6 +810,10 @@ impl TuiSessionDriver for AppSession {
 
     fn take_redraw(&mut self) -> bool {
         self.core.take_redraw()
+    }
+
+    fn is_terminal_visible(&self) -> bool {
+        self.core.is_terminal_visible()
     }
 
     fn use_steady_cursor(&self) -> bool {

@@ -54,10 +54,17 @@ pub trait TuiSessionDriver {
     /// expiries pending). The drive loop uses this to extend active-mode
     /// ticking independently of recent user input, so truly idle sessions rest
     /// instead of polling. Input, commands, and crossterm events always render
-    /// immediately regardless of this flag.
+    /// immediately regardless of this flag. Hidden sessions (see
+    /// [`Self::is_terminal_visible`]) must return `false`: no frame can be
+    /// observed, so active-rate ticking only burns CPU.
     fn needs_animation_tick(&self) -> bool;
     fn render(&mut self, frame: &mut ratatui::Frame<'_>);
     fn take_redraw(&mut self) -> bool;
+    /// Whether the terminal view may currently be observable.
+    ///
+    /// Fail-visible: sessions default to `true`. The drive loop skips frame
+    /// draws while this is `false` but keeps processing input and commands.
+    fn is_terminal_visible(&self) -> bool;
     fn use_steady_cursor(&self) -> bool;
     fn is_hovering_link(&self) -> bool;
     fn is_selecting_text(&self) -> bool;

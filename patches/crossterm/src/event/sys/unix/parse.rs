@@ -155,7 +155,7 @@ pub(crate) fn parse_csi(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
         b'?' => match buffer[buffer.len() - 1] {
             b'u' => return parse_csi_keyboard_enhancement_flags(buffer),
             b'c' => return parse_csi_primary_device_attributes(buffer),
-            b'n' => return parse_csi_color_scheme_report(buffer),
+            b'n' => return parse_csi_private_dsr(buffer),
             _ => None,
         },
         b'0'..=b'9' => {
@@ -272,25 +272,34 @@ fn parse_csi_primary_device_attributes(buffer: &[u8]) -> io::Result<Option<Inter
     Ok(Some(InternalEvent::PrimaryDeviceAttributes))
 }
 
-fn parse_csi_color_scheme_report(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
+fn parse_csi_private_dsr(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
     // ESC [ ? 997 ; Ps n — Contour color-scheme report (Ps: 1 = dark, 2 = light)
     // https://contour-terminal.org/vt-extensions/color-palette-update-notifications/
+    // ESC [ ? 999 ; Ps n — terminal visibility report (Ps: 1 = potentially
+    // visible, 2 = not visible; unknown values are fail-visible)
+    // https://rockorager.dev/misc/visibility-reports/
     assert!(buffer.starts_with(b"\x1B[?"));
     assert!(buffer.ends_with(b"n"));
 
     let Ok(body) = std::str::from_utf8(&buffer[3..buffer.len() - 1]) else {
         return Err(could_not_parse_event_error());
     };
-    // Keep crossterm's conservative keep-buffering behavior for private DSR
-    // replies other than the color-scheme report.
-    let Some(ps) = body.strip_prefix("997;") else {
-        return Ok(None);
-    };
-    match ps {
-        "1" => Ok(Some(InternalEvent::Event(Event::ColorSchemeReport { dark: true }))),
-        "2" => Ok(Some(InternalEvent::Event(Event::ColorSchemeReport { dark: false }))),
-        _ => Err(could_not_parse_event_error()),
+    if let Some(ps) = body.strip_prefix("997;") {
+        return match ps {
+            "1" => Ok(Some(InternalEvent::Event(Event::ColorSchemeReport { dark: true }))),
+            "2" => Ok(Some(InternalEvent::Event(Event::ColorSchemeReport { dark: false }))),
+            _ => Err(could_not_parse_event_error()),
+        };
     }
+    if let Some(ps) = body.strip_prefix("999;") {
+        // Fail-visible: only an explicit `2` means hidden; `1` and any
+        // unknown future value mean the view may be observable.
+        let visible = ps != "2";
+        return Ok(Some(InternalEvent::Event(Event::VisibilityReport { visible })));
+    }
+    // Keep crossterm's conservative keep-buffering behavior for other
+    // private DSR replies.
+    Ok(None)
 }
 
 /// Upper bound for a buffered OSC reply without a terminator.
@@ -910,6 +919,35 @@ mod tests {
     #[test]
     fn test_color_scheme_report_unknown_mode_errors() {
         assert!(parse_event(b"\x1B[?997;0n", false).is_err(),);
+    }
+
+    #[test]
+    fn test_visibility_report_visible() {
+        assert_eq!(
+            parse_event(b"\x1B[?999;1n", false).unwrap(),
+            Some(InternalEvent::Event(Event::VisibilityReport { visible: true })),
+        );
+    }
+
+    #[test]
+    fn test_visibility_report_hidden() {
+        assert_eq!(
+            parse_event(b"\x1B[?999;2n", false).unwrap(),
+            Some(InternalEvent::Event(Event::VisibilityReport { visible: false })),
+        );
+    }
+
+    #[test]
+    fn test_visibility_report_unknown_value_is_fail_visible() {
+        assert_eq!(
+            parse_event(b"\x1B[?999;7n", false).unwrap(),
+            Some(InternalEvent::Event(Event::VisibilityReport { visible: true })),
+        );
+    }
+
+    #[test]
+    fn test_visibility_report_partial_keeps_buffering() {
+        assert_eq!(parse_event(b"\x1B[?999;2", false).unwrap(), None);
     }
 
     #[test]

@@ -470,6 +470,20 @@ pub const COLOR_SCHEME_REPORT_PREFIX: &str = "\x1b[?997;";
 pub const COLOR_SCHEME_REPORTS_ENABLE: &str = "\x1b[?2031h";
 /// Contour VT extension — disable unsolicited color-scheme reports (`CSI ? 2031 l`).
 pub const COLOR_SCHEME_REPORTS_DISABLE: &str = "\x1b[?2031l";
+/// Terminal visibility reports — query the current visibility state (`CSI ? 998 n`).
+/// Supported terminals answer with a visibility report ([`VISIBILITY_REPORT_PREFIX`]).
+/// See <https://rockorager.dev/misc/visibility-reports/>.
+pub const VISIBILITY_STATE_REQUEST: &str = "\x1b[?998n";
+/// Terminal visibility report (`CSI ? 999 ; Ps n`), where `Ps` 1 means
+/// potentially visible and `Ps` 2 means not visible. Unknown values must be
+/// treated as potentially visible (fail-visible).
+pub const VISIBILITY_REPORT_PREFIX: &str = "\x1b[?999;";
+/// Terminal visibility reports — enable unsolicited visibility reports
+/// (`CSI ? 2033 h`); the terminal then emits [`VISIBILITY_REPORT_PREFIX`]
+/// DSRs whenever the effective visibility state changes.
+pub const VISIBILITY_REPORTS_ENABLE: &str = "\x1b[?2033h";
+/// Terminal visibility reports — disable unsolicited visibility reports (`CSI ? 2033 l`).
+pub const VISIBILITY_REPORTS_DISABLE: &str = "\x1b[?2033l";
 
 // === OSC Sequences (Operating System Commands) ===
 /// Set window title — OSC 2 ; Pt BEL

@@ -821,6 +821,10 @@ impl Session {
             CrosstermEvent::ColorSchemeReport { dark } => {
                 self.core.apply_terminal_color_scheme_report(dark);
             }
+            #[cfg(vendored_crossterm)]
+            CrosstermEvent::VisibilityReport { visible } => {
+                self.core.apply_terminal_visibility_report(visible);
+            }
         }
     }
 

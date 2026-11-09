@@ -112,6 +112,7 @@ impl Session {
             activity_state: ActivityState::Idle,
             image_input_enabled: false,
             cursor_visible: true,
+            terminal_visible: true,
             render_state: RenderState::new(),
             transcript_clear_required: true,
             evicted_message_count: 0,

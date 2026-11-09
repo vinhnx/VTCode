@@ -23,7 +23,8 @@
 
 ## Gotchas
 
-- `crossterm` is a maintained fork at `patches/crossterm` that adds `Event::ColorSchemeReport`; re-apply the patch when upgrading and treat it as workspace code under `-D warnings`.
+- `crossterm` is a maintained fork at `patches/crossterm` that adds `Event::ColorSchemeReport` and `Event::VisibilityReport`; re-apply the patch when upgrading and treat it as workspace code under `-D warnings`.
+- Terminal visibility is fail-visible: while a `CSI ? 999 ; 2 n` report says hidden, the drive loop skips draws (dirty flag preserved) and animation ticks; hidden-to-visible transitions force a repaint.
 - Modal painting must check `has_active_overlay()` before clearing the frame, otherwise only stale modal hit areas are cleared.
 - `Blocked` is quiescent despite its status text, so it must not start spinners or block slash commands.
 - Floating overlays own mouse input only inside `modal_list_area`; wheel events outside must pass through so long transcripts stay scrollable.

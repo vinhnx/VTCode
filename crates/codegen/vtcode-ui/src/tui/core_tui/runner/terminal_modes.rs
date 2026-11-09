@@ -26,6 +26,8 @@ pub(super) struct TerminalModeState {
     focus_change_enabled: bool,
     /// Whether VT Code enabled Contour color-scheme change reports (unix only).
     color_scheme_reports_enabled: bool,
+    /// Whether VT Code enabled terminal visibility reports (unix only).
+    visibility_reports_enabled: bool,
     /// Whether VT Code pushed keyboard enhancement flags.
     keyboard_enhancements_pushed: bool,
     /// Whether the cursor position was saved before entering fullscreen
@@ -43,6 +45,7 @@ impl TerminalModeState {
             mouse_capture_enabled: false,
             focus_change_enabled: false,
             color_scheme_reports_enabled: false,
+            visibility_reports_enabled: false,
             keyboard_enhancements_pushed: false,
             cursor_position_saved: false,
             alternate_screen_active: false,
@@ -91,6 +94,32 @@ impl TerminalModeState {
             }
             Err(error) => {
                 tracing::debug!(%error, "failed to enable color-scheme change reports");
+            }
+        }
+    }
+
+    /// Enable unsolicited terminal visibility reports (`CSI ? 2033 h`).
+    ///
+    /// Unix only: same rationale as [`Self::enable_color_scheme_reports`] —
+    /// the Windows backend does not parse VT byte streams, so DSR replies
+    /// could surface as garbage input there. The canonical restore path
+    /// disables the mode via the [`crate::tui::core_tui::panic_hook`] state flag.
+    #[cfg(unix)]
+    fn enable_visibility_reports(&mut self, stderr: &mut io::Stderr) {
+        use std::io::Write as _;
+        use vtcode_commons::ansi_codes::VISIBILITY_REPORTS_ENABLE;
+
+        match stderr
+            .write_all(VISIBILITY_REPORTS_ENABLE.as_bytes())
+            .and_then(|()| stderr.flush())
+        {
+            Ok(()) => {
+                self.visibility_reports_enabled = true;
+                crate::tui::ui::tui::panic_hook::mark_visibility_reports_enabled(true);
+                crate::tui::ui::tui::panic_hook::mark_terminal_modified();
+            }
+            Err(error) => {
+                tracing::debug!(%error, "failed to enable terminal visibility reports");
             }
         }
     }
@@ -201,6 +230,13 @@ pub(super) fn enable_terminal_modes(
     // the session opted into automatic color-scheme following.
     #[cfg(unix)]
     state.enable_color_scheme_reports(stderr);
+
+    // Enable unsolicited terminal visibility reports (`CSI ? 999 ; Ps n`).
+    // Reports are parsed by the vendored crossterm fork; while hidden the
+    // session skips animation ticks and frame draws but keeps processing
+    // input and state so it can repaint fully on return to visible.
+    #[cfg(unix)]
+    state.enable_visibility_reports(stderr);
 
     Ok(state)
 }

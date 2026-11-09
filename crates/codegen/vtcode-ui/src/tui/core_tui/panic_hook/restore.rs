@@ -9,7 +9,7 @@ use ratatui::crossterm::{
     terminal::{Clear, ClearType, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode, is_raw_mode_enabled},
 };
 
-use super::state::{self, COLOR_SCHEME_REPORTS_ENABLED, KEYBOARD_ENHANCEMENTS_PUSHED};
+use super::state::{self, COLOR_SCHEME_REPORTS_ENABLED, KEYBOARD_ENHANCEMENTS_PUSHED, VISIBILITY_REPORTS_ENABLED};
 
 /// Emit the session's original iTerm2 profile switch-back, if one is pending.
 ///
@@ -62,6 +62,12 @@ fn emit_restore_sequence(writer: &mut impl Write, clear_alternate: bool) -> io::
     // set on unix where the TUI turns Contour palette reports on.
     if COLOR_SCHEME_REPORTS_ENABLED.swap(false, Ordering::SeqCst) {
         writer.write_all(vtcode_commons::ansi_codes::COLOR_SCHEME_REPORTS_DISABLE.as_bytes())?;
+    }
+
+    // Only disable visibility reports if actually enabled (unix only, same
+    // rationale as color-scheme reports above).
+    if VISIBILITY_REPORTS_ENABLED.swap(false, Ordering::SeqCst) {
+        writer.write_all(vtcode_commons::ansi_codes::VISIBILITY_REPORTS_DISABLE.as_bytes())?;
     }
 
     Ok(())
@@ -479,6 +485,24 @@ mod tests {
         let result = restore_tui();
         assert!(result.is_ok() || result.is_err());
         assert!(!state::is_terminal_modified(), "restore must clear the modified flag");
+    }
+
+    #[test]
+    fn restore_sequence_disables_visibility_reports_once() {
+        VISIBILITY_REPORTS_ENABLED.store(true, Ordering::SeqCst);
+        let mut bytes: Vec<u8> = Vec::new();
+        emit_restore_sequence(&mut bytes, false).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains("\x1b[?2033l"), "restore must disable visibility reports, got: {text:?}");
+        assert!(!VISIBILITY_REPORTS_ENABLED.load(Ordering::SeqCst), "visibility flag must clear after emission");
+
+        // A second emission without re-enabling must not repeat the sequence.
+        let mut again: Vec<u8> = Vec::new();
+        emit_restore_sequence(&mut again, false).unwrap();
+        assert!(
+            !String::from_utf8(again).unwrap().contains("\x1b[?2033l"),
+            "restore must emit the disable sequence exactly once"
+        );
     }
 
     #[test]

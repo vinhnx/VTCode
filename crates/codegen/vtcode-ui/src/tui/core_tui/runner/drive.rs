@@ -233,6 +233,13 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
     if event_channels.rx_paused.load(Ordering::Acquire) {
         return Ok(());
     }
+    // Hidden terminal view: skip the draw but preserve the dirty flag (checked
+    // before `take_redraw`) so the next visible turn repaints the latest
+    // complete state. Input and state updates continue; only presentation pauses.
+    if !session.is_terminal_visible() {
+        crate::tui::frame_metrics::record_frame_skipped();
+        return Ok(());
+    }
     if !session.take_redraw() {
         crate::tui::frame_metrics::record_frame_skipped();
         return Ok(());
@@ -740,6 +747,35 @@ mod tests {
         render_if_dirty(&mut terminal, &mut session, &channels, &mut false, &mut MousePointerShape::Default, None)
             .unwrap();
         assert!(session.take_redraw());
+    }
+
+    #[test]
+    fn hidden_redraw_preserves_dirty_state() {
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let mut session = Session::new(InlineTheme::default(), None, 24);
+        let (_listener, channels) = EventListener::new();
+        session.apply_terminal_visibility_report(false);
+        session.mark_dirty();
+        render_if_dirty(&mut terminal, &mut session, &channels, &mut false, &mut MousePointerShape::Default, None)
+            .unwrap();
+        assert!(session.take_redraw(), "hidden skip must preserve the dirty flag");
+    }
+
+    #[test]
+    fn visible_transition_repaints_after_hidden_turns() {
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let mut session = Session::new(InlineTheme::default(), None, 24);
+        let (_listener, channels) = EventListener::new();
+        let _ = session.take_redraw();
+
+        session.apply_terminal_visibility_report(false);
+        assert!(!session.take_redraw(), "hiding must not mark dirty");
+        render_if_dirty(&mut terminal, &mut session, &channels, &mut false, &mut MousePointerShape::Default, None)
+            .unwrap();
+        assert!(!session.take_redraw(), "hidden turn with no changes stays clean");
+
+        session.apply_terminal_visibility_report(true);
+        assert!(session.take_redraw(), "return to visible must force a repaint");
     }
 
     #[test]

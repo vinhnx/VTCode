@@ -14,5 +14,5 @@ pub use self::state::{set_app_metadata, set_color_eyre_enabled, set_debug_mode, 
 pub(crate) use self::state::{
     is_debug_mode, is_restore_claimed, is_terminal_modified, is_tui_initialized, lock_terminal_operations,
     mark_color_scheme_reports_enabled, mark_keyboard_enhancements_pushed, mark_terminal_modified,
-    mark_terminal_restored, show_diagnostics,
+    mark_terminal_restored, mark_visibility_reports_enabled, show_diagnostics,
 };

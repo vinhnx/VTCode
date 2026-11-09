@@ -266,6 +266,14 @@ pub struct Session {
     pub(crate) activity_state: ActivityState,
     image_input_enabled: bool,
     cursor_visible: bool,
+    /// Whether the terminal view may currently be observable.
+    ///
+    /// Tracks `CSI ? 999 ; Ps n` visibility reports (mode `2033`). Fail-visible
+    /// default: terminals without support never send a report, so the session
+    /// always paints. While `false` the drive loop skips frame draws and
+    /// animation ticks; input and state updates continue so the session can
+    /// repaint its latest state on return to visible.
+    terminal_visible: bool,
     render_state: RenderState,
     /// Track whether the transcript viewport must be cleared before repainting.
     pub(crate) transcript_clear_required: bool,
