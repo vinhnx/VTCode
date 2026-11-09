@@ -365,6 +365,30 @@ fn empty_command_is_safe() {
 }
 
 #[test]
+fn prefix_unwrap_handles_degenerate_commands() {
+    // The sudo/env/runner arms slice `command[1..]`; truncated input must bail
+    // out as `None` instead of panicking, while lookup-only runners and valid
+    // wrappers keep their documented `Some` outcomes (both sides pinned).
+    let cases: [(&[&str], Option<&[&str]>); 10] = [
+        (&[], None),
+        (&["sudo"], None),
+        (&["env"], None),
+        (&["sudo", "-u"], None),
+        (&["env", "-u"], None),
+        (&["sudo", "--"], None),
+        (&["FOO=1"], None),
+        (&["command", "-v"], Some(&["command", "-v"])),
+        (&["sudo", "ls"], Some(&["ls"])),
+        (&["env", "FOO=1", "ls"], Some(&["ls"])),
+    ];
+    for (input, expected) in cases {
+        let command = vec_str(input);
+        let unwrapped = unwrap_command_prefix(&command).map(|rest| rest.to_vec());
+        assert_eq!(unwrapped, expected.map(vec_str), "prefix unwrap of {command:?}");
+    }
+}
+
+#[test]
 fn command_might_be_dangerous_detects_git_reset_hard() {
     let cmd = vec!["git".to_string(), "reset".to_string(), "--hard".to_string()];
     assert!(command_might_be_dangerous(&cmd));

@@ -249,6 +249,22 @@ mod tests {
         assert!(enabled.windows(2).any(|args| args == ["--available-tools", "view"]));
     }
 
+    #[test]
+    fn configured_command_rejects_blank_and_malformed_commands() {
+        // `split_command` removes the program word; blank or unparseable input
+        // must surface an error (or `None` for blank config), never panic.
+        let blank = CopilotAuthConfig {
+            command: Some("   ".to_string()),
+            ..CopilotAuthConfig::default()
+        };
+        assert!(configured_command(&blank).unwrap().is_none());
+        assert!(split_command("", "test").is_err());
+        assert!(split_command("   ", "test").is_err());
+        let (program, args) = split_command("node /tmp/copilot.js --flag", "test").unwrap();
+        assert_eq!(program, "node");
+        assert_eq!(args, vec!["/tmp/copilot.js".to_string(), "--flag".to_string()]);
+    }
+
     fn default_config() -> CopilotAuthConfig {
         CopilotAuthConfig::default()
     }
