@@ -140,11 +140,11 @@ silent TTL downgrade. Check the endpoint's pricing before enabling longer writes
 
 ### Validate the configuration
 
-List built-in and custom providers, then open the provider configuration flow:
+List built-in and custom providers to confirm your user configuration was picked up (`vtcode models config` only
+supports built-in providers, so edit the user configuration file directly for custom providers):
 
 ```bash
 vtcode models list
-vtcode models config
 ```
 
 Run a simple request after configuration:

@@ -33,7 +33,8 @@ OpenLLM serves the full `/v1/` API surface and also provides an MCP server. See 
 ## Configuration
 
 Custom providers are trusted configuration, so VT Code rejects them in a workspace `vtcode.toml`. Add the entry to your
-user configuration (`~/.vtcode/vtcode.toml` or the platform config directory) or pass a file with
+user configuration (`~/.vtcode/vtcode.toml`, or `$VTCODE_HOME/vtcode.toml` when `VTCODE_HOME` is set — the default
+`~/.vtcode/vtcode.toml` path is not discovered in that case — or the platform config directory) or pass a file with
 `--config path/to/file.toml`. See [Configuration precedence](../config/CONFIGURATION_PRECEDENCE.md).
 
 ```toml
@@ -67,6 +68,13 @@ disable them, so check that they appear in your catalog:
 
 ```bash
 curl http://127.0.0.1:8787/v1/models
+```
+
+For cloud-only use, query the catalog with the key from the [Cloud Origin](#cloud-origin) section:
+
+```bash
+curl https://www.openllm.sh/v1/models \
+  -H "Authorization: Bearer $OPENLLM_API_KEY"
 ```
 
 To pin a specific model, copy an exact ID from that response (IDs look like `<provider>/<model>`), then update both
@@ -103,7 +111,9 @@ are tunneled to one of your online devices, and fail with HTTP 403 `subscription
 - Streaming and function tools use VT Code's shared OpenAI-compatible paths.
 - Fallback inside an alias chain happens before the first output token. The `x-openllm-resolved-model` response header
   names the model that answered.
-- Custom providers default to a 128K context window. Set `context_window` in tokens if your routed models support more.
+- Custom providers default to a 128K context window. Set `context_window` in tokens to the smallest limit among your
+  routed models: an alias can resolve to a smaller model, and VT Code sizes context, compaction, and preflight checks
+  from this value, so requests sized above that model's limit fail.
 - Request timeouts use VT Code's global `[timeouts]` configuration.
 
 ## Troubleshooting
