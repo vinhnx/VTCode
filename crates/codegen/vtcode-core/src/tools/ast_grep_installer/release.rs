@@ -1,8 +1,19 @@
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
+use std::time::Duration;
+use vtcode_commons::http::send_with_retry;
+use vtcode_commons::retry::RetryPolicy;
 use vtcode_commons::utils::calculate_sha256;
 
 const AST_GREP_RELEASE_API: &str = "https://api.github.com/repos/ast-grep/ast-grep/releases/latest";
+
+/// Retry budget for installer fetches: a single GitHub flake must not fail the
+/// install (failures arm a 24h cooldown), but the install must not hang either:
+/// 3 attempts over ~3s of jittered backoff, then the existing error path.
+fn installer_retry_policy() -> RetryPolicy {
+    RetryPolicy::from_retries(2, Duration::from_secs(1), Duration::from_secs(30), 2.0)
+        .with_jitter(RetryPolicy::DEFAULT_JITTER)
+}
 
 #[derive(Debug, Deserialize)]
 pub(super) struct ReleaseInfo {
@@ -29,9 +40,11 @@ pub(super) struct SelectedAsset {
 }
 
 pub(super) async fn fetch_latest_release(client: &reqwest::Client) -> Result<ReleaseInfo> {
-    client
-        .get(AST_GREP_RELEASE_API)
-        .send()
+    fetch_latest_release_from(client, AST_GREP_RELEASE_API).await
+}
+
+pub(super) async fn fetch_latest_release_from(client: &reqwest::Client, url: &str) -> Result<ReleaseInfo> {
+    send_with_retry(&installer_retry_policy(), || client.get(url).send())
         .await
         .context("Failed to fetch ast-grep release metadata")?
         .error_for_status()
@@ -126,9 +139,7 @@ pub(super) fn asset_matches_target(asset_name: &str, triple: &str, archive_exts:
 }
 
 pub(super) async fn download_release_asset(client: &reqwest::Client, asset: &ReleaseAsset) -> Result<Vec<u8>> {
-    client
-        .get(&asset.browser_download_url)
-        .send()
+    send_with_retry(&installer_retry_policy(), || client.get(&asset.browser_download_url).send())
         .await
         .with_context(|| format!("Failed to download {}", asset.name))?
         .error_for_status()
@@ -152,15 +163,18 @@ pub(super) async fn verify_checksum_if_available(
         )));
     };
 
-    let checksum_response = match client.get(&checksum_asset.browser_download_url).send().await {
-        Ok(response) => response,
-        Err(err) => {
-            return Ok(Some(format!(
-                "Checksum metadata for {} was unavailable ({}). Continuing without checksum verification.",
-                selected.asset.name, err
-            )));
-        }
-    };
+    let checksum_response =
+        match send_with_retry(&installer_retry_policy(), || client.get(&checksum_asset.browser_download_url).send())
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                return Ok(Some(format!(
+                    "Checksum metadata for {} was unavailable ({}). Continuing without checksum verification.",
+                    selected.asset.name, err
+                )));
+            }
+        };
     let checksum_response = match checksum_response.error_for_status() {
         Ok(response) => response,
         Err(err) => {
@@ -237,8 +251,8 @@ fn sha256_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        PlatformAssetSpec, ReleaseAsset, ReleaseInfo, asset_matches_target, manual_install_guide,
-        parse_expected_checksum, select_release_asset,
+        PlatformAssetSpec, ReleaseAsset, ReleaseInfo, asset_matches_target, fetch_latest_release_from,
+        manual_install_guide, parse_expected_checksum, select_release_asset,
     };
 
     fn real_release_0_51_1() -> ReleaseInfo {
@@ -400,6 +414,55 @@ mod tests {
         let truncated = select_release_asset(&release_with(13), &platform).expect_err("must fail without a match");
         let truncated_message = format!("{truncated:#}");
         assert!(truncated_message.contains("(and 1 more)"), "{truncated_message}");
+    }
+
+    /// Start a wiremock server, or skip when the sandbox forbids binding.
+    /// Mirrors the `bind_fixture_listener` precedent in `vtcode-commons`.
+    async fn start_mock_server_or_skip() -> Option<wiremock::MockServer> {
+        match std::net::TcpListener::bind("127.0.0.1:0") {
+            Ok(probe) => {
+                drop(probe);
+                Some(wiremock::MockServer::start().await)
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => None,
+            Err(err) => panic!("mock server probe failed: {err}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_recovers_from_a_transient_503() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
+        // First-mounted mock wins while it matches: the one-shot 503 answers
+        // the first attempt, then the installer's retry transparently recovers
+        // instead of failing the install into the 24h cooldown.
+        Mock::given(method("GET"))
+            .and(path("/releases/latest"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/releases/latest"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tag_name": "1.2.3",
+                "assets": []
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = vtcode_commons::http::create_download_client("vtcode-test");
+        let url = format!("{}/releases/latest", server.uri());
+        let release = fetch_latest_release_from(&client, &url)
+            .await
+            .expect("transient 503 must be retried");
+        assert_eq!(release.tag_name, "1.2.3");
     }
 
     #[test]

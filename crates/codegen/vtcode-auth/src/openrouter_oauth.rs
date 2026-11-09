@@ -140,13 +140,15 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
         "code_challenge_method": challenge.code_challenge_method
     });
 
-    let response = client
-        .post(OPENROUTER_KEYS_URL)
-        .header("Content-Type", "application/json")
-        .json(&payload)
-        .send()
-        .await
-        .context("Failed to send token exchange request")?;
+    let response = vtcode_commons::http::send_with_retry_transport_only(&crate::oauth_token_retry_policy(), || {
+        client
+            .post(OPENROUTER_KEYS_URL)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+    })
+    .await
+    .context("Failed to send token exchange request")?;
 
     let status = response.status();
     if !status.is_success() {

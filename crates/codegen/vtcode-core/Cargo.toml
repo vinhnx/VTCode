@@ -210,6 +210,7 @@ assert_fs = { workspace = true }
 proptest = "1.11"
 criterion = { workspace = true }
 serial_test = { workspace = true }
+wiremock = "0.6.5"
 
 [[bench]]
 name = "tool_pipeline"

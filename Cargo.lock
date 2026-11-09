@@ -12391,6 +12391,7 @@ dependencies = [
  "webbrowser",
  "which",
  "windows-sys 0.61.2",
+ "wiremock",
  "xattr",
  "zip",
 ]

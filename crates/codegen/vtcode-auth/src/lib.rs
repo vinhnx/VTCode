@@ -57,3 +57,18 @@ pub use openrouter_oauth::{
     load_oauth_token_with_mode, save_oauth_token, save_oauth_token_with_mode,
 };
 pub use pkce::{PkceChallenge, generate_pkce_challenge};
+
+/// Retry budget for OAuth token POSTs (code exchange, refresh, API-key
+/// exchange): one extra attempt when no response was received at all. Token
+/// endpoints are not idempotent — a code consumed by a 5xx must fail fast —
+/// so callers pair this with `send_with_retry_transport_only`, never the
+/// status-retrying variant.
+pub(crate) fn oauth_token_retry_policy() -> vtcode_commons::retry::RetryPolicy {
+    vtcode_commons::retry::RetryPolicy::from_retries(
+        1,
+        std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(10),
+        2.0,
+    )
+    .with_jitter(vtcode_commons::retry::RetryPolicy::DEFAULT_JITTER)
+}

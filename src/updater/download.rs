@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncWriteExt, BufWriter};
+use vtcode_commons::http::send_with_retry;
 
 use super::github::{self, ReleaseAsset};
 
@@ -82,13 +83,16 @@ pub(super) async fn download_checksum(asset: &ReleaseAsset, timeout: Duration) -
 async fn response_for_url(url: &str, timeout: Duration) -> Result<reqwest::Response> {
     github::validate_asset_download_url(url)?;
 
-    github::unauthenticated_client()?
-        .get(url)
-        .timeout(timeout)
-        .header(reqwest::header::ACCEPT, "application/octet-stream")
-        .send()
-        .await
-        .with_context(|| format!("failed to download update asset from {url}"))
+    let client = github::unauthenticated_client()?;
+    send_with_retry(&github::updater_retry_policy(), || {
+        client
+            .get(url)
+            .timeout(timeout)
+            .header(reqwest::header::ACCEPT, "application/octet-stream")
+            .send()
+    })
+    .await
+    .with_context(|| format!("failed to download update asset from {url}"))
 }
 
 pub(super) fn checksum_asset<'a>(assets: &'a [ReleaseAsset], archive_name: &str) -> Option<&'a ReleaseAsset> {

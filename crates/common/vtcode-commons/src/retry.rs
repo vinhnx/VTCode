@@ -212,6 +212,20 @@ mod tests {
     }
 
     #[test]
+    fn classify_status_matrix_pins_transport_retry_boundaries() {
+        // The `send_with_retry` helper and the updater's 401→fallback (which
+        // must not back off) both depend on this exact boundary: only
+        // 429/5xx-transient retries; every 4xx fails fast.
+        let policy = RetryPolicy::default();
+        for status in [429, 500, 502, 503, 504] {
+            assert!(policy.classify_status(status).retryable, "HTTP {status} must retry");
+        }
+        for status in [400, 401, 403, 404, 422] {
+            assert!(!policy.classify_status(status).retryable, "HTTP {status} must fail fast");
+        }
+    }
+
+    #[test]
     fn classify_anyhow_network_error() {
         let policy = RetryPolicy::default();
         let err = anyhow::anyhow!("connection refused");

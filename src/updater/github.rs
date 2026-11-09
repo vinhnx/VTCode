@@ -3,6 +3,8 @@ use semver::Version;
 use serde::Deserialize;
 use std::time::Duration;
 use url::Url;
+use vtcode_commons::http::send_with_retry;
+use vtcode_commons::retry::RetryPolicy;
 use vtcode_config::update::ReleaseChannel;
 
 use super::Updater;
@@ -12,6 +14,14 @@ use super::types::{UpdateInfo, VersionInfo};
 const REPO_SLUG: &str = "vinhnx/vtcode";
 const GITHUB_HOST: &str = "github.com";
 const RELEASE_ASSET_PATH_PREFIX: &str = "/vinhnx/vtcode/releases/download/";
+
+/// Retry budget for updater fetches: GitHub API 5xx flakes and asset-CDN
+/// hiccups must not fail an update check — 3 attempts over ~3s of jittered
+/// backoff, then the existing error path. Shared with `download.rs`.
+pub(super) fn updater_retry_policy() -> RetryPolicy {
+    RetryPolicy::from_retries(2, Duration::from_secs(1), Duration::from_secs(30), 2.0)
+        .with_jitter(RetryPolicy::DEFAULT_JITTER)
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub(super) struct ReleaseAsset {
@@ -164,19 +174,15 @@ pub(super) fn unauthenticated_client() -> Result<reqwest::Client> {
 /// If the request fails with a 401, retry without authentication -- public
 /// repos work fine unauthenticated.
 async fn try_fetch_json_with_auth_fallback(url: &str, timeout: Duration) -> Result<serde_json::Value> {
-    let response = github_client()?
-        .get(url)
-        .timeout(timeout)
-        .send()
+    let client = github_client()?;
+    let response = send_with_retry(&updater_retry_policy(), || client.get(url).timeout(timeout).send())
         .await
         .context("Failed to fetch from GitHub API");
 
     let response = match response {
         Ok(response) if response.status() == reqwest::StatusCode::UNAUTHORIZED && github_token().is_some() => {
-            unauthenticated_client()?
-                .get(url)
-                .timeout(timeout)
-                .send()
+            let fallback = unauthenticated_client()?;
+            send_with_retry(&updater_retry_policy(), || fallback.get(url).timeout(timeout).send())
                 .await
                 .context("Failed to fetch from GitHub API")?
         }

@@ -14,7 +14,7 @@
 - `paths` owns workspace containment (lexical and symlink-resolving tiers) and `safe_archive_relative_path` owns archive-entry validation, so every downstream crate delegates here and never forks the logic.
 - Origin-bound HTTP consumers use fallible `http::create_client_without_redirects` and never fall back to a redirect-following client on failure.
 - `http::HttpTimeouts` is the single process-global HTTP timeout set, where `None` means disabled (never a zero deadline), so do not add per-module timeout constants.
-- `classify_anyhow_error` is the single tool-error classifier and `RetryPolicy` in `retry` is the canonical retry policy.
+- `classify_anyhow_error` is the single tool-error classifier and `RetryPolicy` in `retry` is the canonical retry policy. Background fetch loops use `http::send_with_retry` (`_transport_only` for non-idempotent token POSTs) instead of hand-rolled loops; interactive LLM requests never use it (the runloop owns that budget).
 - `.vtcodegitignore` registered by `walk::apply_defaults` is the single ignore source of truth, so never fork a UI-side skip list.
 - `VtCodePaths::write_private_file_atomic` owns synced atomic private writes without pre-deleting the destination, and legacy migration copies only regular files and never follows links.
 - Canonical helpers (`formatting/`, `search/`, `validation/`, `task_guard`, `tracker_title::resolve_tracker_title`, `utils::env_flag_enabled`, `llm::Usage::billable_totals`, `tty::TtyExt`) are the single homes, so downstream crates delegate rather than re-implement.

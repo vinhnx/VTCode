@@ -10,8 +10,11 @@
 //! reach this module via [`install_http_timeouts`].
 
 use reqwest::{Client, ClientBuilder};
+use std::future::Future;
 use std::sync::LazyLock;
 use std::time::Duration;
+
+use crate::retry::RetryPolicy;
 
 /// Default connect timeout for outbound HTTP clients.
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -276,6 +279,80 @@ pub fn apply_connect_timeout(builder: ClientBuilder) -> ClientBuilder {
     }
 }
 
+/// Send one request per attempt with capped exponential backoff and jitter.
+///
+/// The caller rebuilds the request on every attempt via `make_request` (a
+/// `RequestBuilder` is consumed by `send()`, so it cannot be reused).
+/// Transport failures (connect errors, timeouts) are retried; builder errors
+/// fail fast because retrying a malformed request can never succeed.
+/// Responses with a retryable status (429/500/502/503/504 per
+/// [`RetryPolicy::classify_status`]) are retried while attempts remain;
+/// otherwise the final response is returned for the caller to handle.
+///
+/// This is the shared helper for idempotent background fetches (release
+/// metadata, asset downloads, catalog refreshes). Interactive LLM requests
+/// must NOT use it: the runloop already retries those under its own budget,
+/// and stacking a transport retry underneath would multiply dispatches and
+/// provider billing.
+///
+/// What this does NOT do: it never honors `Retry-After` (policy backoff
+/// only; `Retry-After` cooperation stays at the tool-registry layer where the
+/// server relationship exists), and it never retries a response body failure —
+/// only the initial `send()`.
+pub async fn send_with_retry<F, Fut>(policy: &RetryPolicy, make_request: F) -> Result<reqwest::Response, reqwest::Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<reqwest::Response, reqwest::Error>>,
+{
+    send_with_retry_inner(policy, true, make_request).await
+}
+
+/// Retry only when no response was received (transport failure), never on an
+/// HTTP status. For non-idempotent OAuth token POSTs: an authorization code
+/// may already be consumed when a 5xx arrives, so a status-triggered retry
+/// would just burn the login; a transport error means the server likely never
+/// saw the request, making one more attempt strictly better than failing.
+pub async fn send_with_retry_transport_only<F, Fut>(
+    policy: &RetryPolicy,
+    make_request: F,
+) -> Result<reqwest::Response, reqwest::Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<reqwest::Response, reqwest::Error>>,
+{
+    send_with_retry_inner(policy, false, make_request).await
+}
+
+async fn send_with_retry_inner<F, Fut>(
+    policy: &RetryPolicy,
+    retry_status: bool,
+    make_request: F,
+) -> Result<reqwest::Response, reqwest::Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<reqwest::Response, reqwest::Error>>,
+{
+    // Termination variant: `attempt` rises toward `attempts`, and the `last`
+    // arm returns on the final iteration, so the loop always exits.
+    let attempts = policy.max_attempts.max(1);
+    let mut attempt: u32 = 0;
+    loop {
+        if attempt > 0 {
+            tokio::time::sleep(policy.delay_for_attempt(attempt - 1)).await;
+        }
+        let last = attempt + 1 >= attempts;
+        match make_request().await {
+            Ok(response) if !retry_status || last || !policy.classify_status(response.status().as_u16()).retryable => {
+                return Ok(response);
+            }
+            Ok(_) => {}
+            Err(error) if error.is_builder() || last => return Err(error),
+            Err(_) => {}
+        }
+        attempt += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -503,5 +580,219 @@ mod tests {
             .expect("connect phase must resolve before the outer guard")
             .expect_err("an unroutable endpoint must not succeed");
         assert!(!error.to_string().is_empty(), "failure must carry a diagnostic");
+    }
+
+    /// Serve a scripted sequence of statuses on a background thread, one per
+    /// connection. Detached like [`respond_once`]: never joined.
+    fn respond_scripted(listener: std::net::TcpListener, statuses: Vec<u16>) {
+        drop(std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            for status in statuses {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    break;
+                };
+                let mut request = [0u8; 4096];
+                if stream.read(&mut request).is_err() {
+                    break;
+                }
+                let response = format!("HTTP/1.1 {status} Test\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+                if stream.write_all(response.as_bytes()).is_err() {
+                    break;
+                }
+            }
+        }));
+    }
+
+    /// Reserve an ephemeral port and release it, so connections are refused
+    /// fast. Returns `None` when the sandbox forbids binding (callers skip).
+    fn reserve_refused_port() -> Option<u16> {
+        match std::net::TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => Some(listener.local_addr().expect("listener address").port()),
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => None,
+            Err(err) => panic!("reserve refused port: {err}"),
+        }
+    }
+
+    fn retry_test_policy() -> RetryPolicy {
+        RetryPolicy::from_retries(2, Duration::from_millis(1), Duration::from_millis(5), 2.0)
+            .with_jitter(RetryPolicy::DEFAULT_JITTER)
+    }
+
+    fn retry_test_client() -> Client {
+        create_client_with_timeouts(Duration::from_secs(5), Duration::from_secs(5))
+    }
+
+    #[tokio::test]
+    async fn retryable_status_is_retried_until_success() {
+        let Some(listener) = bind_fixture_listener() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener address");
+        respond_scripted(listener, vec![503, 429, 200]);
+
+        let client = retry_test_client();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let policy = retry_test_policy();
+        let outcome = tokio::time::timeout(
+            STALL_TEST_OUTER_GUARD,
+            send_with_retry(&policy, || {
+                let _ = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                client.get(format!("http://{addr}/")).send()
+            }),
+        )
+        .await
+        .expect("scripted server must answer before the outer guard")
+        .expect("503,429,200 must recover");
+
+        assert_eq!(outcome.status().as_u16(), 200);
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn exhausted_status_budget_returns_the_final_response() {
+        let Some(listener) = bind_fixture_listener() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener address");
+        respond_scripted(listener, vec![503, 503, 503, 503]);
+
+        let client = retry_test_client();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let policy = retry_test_policy();
+        let outcome = tokio::time::timeout(
+            STALL_TEST_OUTER_GUARD,
+            send_with_retry(&policy, || {
+                let _ = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                client.get(format!("http://{addr}/")).send()
+            }),
+        )
+        .await
+        .expect("scripted server must answer before the outer guard")
+        .expect("exhaustion returns the response, not an error");
+
+        // The helper reports; the caller decides: a terminal 503 arrives as a
+        // response for `error_for_status` handling, not a transport error.
+        assert_eq!(outcome.status().as_u16(), 503);
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn non_retryable_status_returns_immediately() {
+        let Some(listener) = bind_fixture_listener() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener address");
+        respond_scripted(listener, vec![404, 200]);
+
+        let client = retry_test_client();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let policy = retry_test_policy();
+        let outcome = tokio::time::timeout(
+            STALL_TEST_OUTER_GUARD,
+            send_with_retry(&policy, || {
+                let _ = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                client.get(format!("http://{addr}/")).send()
+            }),
+        )
+        .await
+        .expect("scripted server must answer before the outer guard")
+        .expect("404 must arrive as a response");
+
+        // Asymmetric partner to the 503/429 recovery: 404 never retries, so the
+        // scripted 200 is never consumed.
+        assert_eq!(outcome.status().as_u16(), 404);
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn transport_failure_is_retried_then_returned() {
+        let Some(port) = reserve_refused_port() else {
+            return;
+        };
+
+        let client = retry_test_client();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let policy = retry_test_policy();
+        let outcome = tokio::time::timeout(
+            STALL_TEST_OUTER_GUARD,
+            send_with_retry(&policy, || {
+                let _ = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                client.get(format!("http://127.0.0.1:{port}/")).send()
+            }),
+        )
+        .await
+        .expect("refused connections must resolve before the outer guard");
+
+        assert!(outcome.is_err(), "a refused port must not succeed");
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn builder_error_fails_fast_without_retry() {
+        let client = retry_test_client();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let policy = retry_test_policy();
+        let outcome = send_with_retry(&policy, || {
+            let _ = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            client.get("http://exa mple.invalid/").send()
+        })
+        .await;
+
+        // A malformed request can never succeed on retry: one attempt, and the
+        // error must be recognizable as a construction failure.
+        let error = outcome.expect_err("a malformed URL must not succeed");
+        assert!(error.is_builder(), "expected a builder error, got: {error}");
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn transport_only_helper_ignores_retryable_status() {
+        let Some(listener) = bind_fixture_listener() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener address");
+        respond_scripted(listener, vec![503, 200]);
+
+        let client = retry_test_client();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let policy = RetryPolicy::from_retries(1, Duration::from_millis(1), Duration::from_millis(5), 2.0)
+            .with_jitter(RetryPolicy::DEFAULT_JITTER);
+        let outcome = tokio::time::timeout(
+            STALL_TEST_OUTER_GUARD,
+            send_with_retry_transport_only(&policy, || {
+                let _ = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                client.get(format!("http://{addr}/")).send()
+            }),
+        )
+        .await
+        .expect("scripted server must answer before the outer guard")
+        .expect("503 must arrive as a response");
+
+        assert_eq!(outcome.status().as_u16(), 503);
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn transport_only_helper_still_retries_transport_failure() {
+        let Some(port) = reserve_refused_port() else {
+            return;
+        };
+
+        let client = retry_test_client();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let policy = RetryPolicy::from_retries(1, Duration::from_millis(1), Duration::from_millis(5), 2.0)
+            .with_jitter(RetryPolicy::DEFAULT_JITTER);
+        let outcome = tokio::time::timeout(
+            STALL_TEST_OUTER_GUARD,
+            send_with_retry_transport_only(&policy, || {
+                let _ = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                client.get(format!("http://127.0.0.1:{port}/")).send()
+            }),
+        )
+        .await
+        .expect("refused connections must resolve before the outer guard");
+
+        assert!(outcome.is_err(), "a refused port must not succeed");
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 }

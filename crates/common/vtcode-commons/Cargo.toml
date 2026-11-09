@@ -35,7 +35,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 compact_str = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
+tokio = { workspace = true, features = ["fs", "io-util", "rt", "time"] }
 tracing = { workspace = true }
 libc = { workspace = true }
 anstyle = { workspace = true }
@@ -65,7 +65,7 @@ nucleo-matcher = "0.3"
 [dev-dependencies]
 tempfile = { workspace = true }
 serial_test = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "time"] }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "time"] }
 
 [lints]
 workspace = true
