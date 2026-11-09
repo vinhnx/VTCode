@@ -711,6 +711,7 @@ mod custom_themes;
 mod deeplinks;
 mod diagnostic_notice;
 mod diff_settings;
+mod edit_stats_rows;
 mod effort_rail;
 mod exec_controls;
 mod file_drop;

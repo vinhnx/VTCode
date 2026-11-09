@@ -5,11 +5,19 @@ use anstyle::{Color, Reset, Style as AnsiStyle};
 use anyhow::Result;
 use serde_json::Value;
 use vtcode_commons::color_policy;
-use vtcode_commons::formatting::{wrap_shell_command_lines, wrap_shell_command_with_continuations};
+use vtcode_commons::formatting::{
+    RAN_COMMAND_CONTINUATION_WIDTH, RAN_COMMAND_FIRST_WIDTH, truncate_path_middle, wrap_shell_command_lines,
+    wrap_shell_command_with_continuations,
+};
+use vtcode_commons::tool_headlines::{
+    collect_param_details, describe_code_search, describe_fetch_action, describe_grep_file, describe_list_files,
+    exec_session_param_detail, mcp_tool_display_name, relativize_to_workspace, unified_exec_action_label,
+    write_stdin_action_label,
+};
 use vtcode_commons::ui_protocol::{CompactToolSummaryLine, CompactToolSummaryLineKind};
 
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::tools::registry::labels::{tool_action_label, unified_exec_action_label, write_stdin_action_label};
+use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::tools::tool_intent;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -18,11 +26,8 @@ use vtcode_ui::tui::ui::syntax_highlight;
 
 use crate::agent::runloop::tool_output::render_tree_detail;
 use crate::agent::runloop::unified::tool_summary_helpers::{
-    RAN_COMMAND_CONTINUATION_WIDTH, RAN_COMMAND_FIRST_WIDTH, collect_param_details, command_line_for_args,
-    describe_code_search, describe_fetch_action, describe_grep_file, describe_list_files, describe_path_action,
-    describe_shell_command, display_command_text, exec_session_param_detail, highlight_texts_for_summary,
-    is_exec_session_call, mcp_tool_display_name, relativize_command_paths, relativize_to_workspace,
-    should_render_command_line, truncate_path_middle,
+    command_line_for_args, describe_path_action, describe_shell_command, display_command_text,
+    highlight_texts_for_summary, is_exec_session_call, relativize_command_paths, should_render_command_line,
 };
 
 /// Ambient context required to render tool-call summaries.
@@ -318,7 +323,9 @@ fn prepare_summary_data(
     } else if is_exec_session {
         exec_session_param_detail(args).into_iter().collect()
     } else {
-        collect_param_details(args, &highlights, workspace_root)
+        // Shared collector takes a key slice; the highlight set owns them.
+        let skipped: Vec<&str> = highlights.iter().map(String::as_str).collect();
+        collect_param_details(args, &skipped, workspace_root)
     };
 
     let mut summary = build_tool_summary(&action_label, &headline);
@@ -712,13 +719,17 @@ pub(crate) fn describe_tool_action(
     };
     let fallback =
         |label: &str| -> (String, HashSet<String>) { (format!("{}{}", mcp_label(is_mcp_tool), label), HashSet::new()) };
+    // Shared describers report consumed keys as static slices; the TUI highlight set owns them.
+    let with_keys = |desc: String, keys: &[&str]| -> (String, HashSet<String>) {
+        with_mcp(desc, keys.iter().map(|key| (*key).to_string()).collect())
+    };
 
     match actual_tool_name {
         _ if tool_intent::is_command_run_tool_call(tool_name, args) => describe_shell_command(args)
             .map(|(desc, used)| with_mcp(desc, used))
             .unwrap_or_else(|| fallback("command")),
         actual_name if actual_name == tool_names::UNIFIED_EXEC => {
-            // Single source of truth lives in `vtcode-core` labels (DRY):
+            // Single source of truth lives in the shared session labels (DRY):
             // `run` shows the command text, every other action reuses the
             // canonical session label so TUI and approval surfaces agree.
             // Check the action, not the label text, so a label rename can
@@ -733,7 +744,7 @@ pub(crate) fn describe_tool_action(
                 with_mcp(unified_exec_action_label(args).to_string(), HashSet::new())
             }
         }
-        // Session follow-ups delegate to `vtcode-core` labels (DRY). A pure
+        // Session follow-ups delegate to the shared session labels (DRY). A pure
         // wait/poll must not render as a send (screenshot 2026-10-02).
         actual_name if actual_name == tool_names::WRITE_STDIN => {
             with_mcp(write_stdin_action_label(args).to_string(), HashSet::new())
@@ -745,13 +756,13 @@ pub(crate) fn describe_tool_action(
             with_mcp("Read command session".into(), HashSet::new())
         }
         actual_name if actual_name == tool_names::LIST_FILES => describe_list_files(args, workspace_root)
-            .map(|(desc, used)| with_mcp(desc, used))
+            .map(|(desc, keys)| with_keys(desc, keys))
             .unwrap_or_else(|| fallback("List files")),
         actual_name if actual_name == tool_names::GREP_FILE => describe_grep_file(args, workspace_root)
-            .map(|(desc, used)| with_mcp(desc, used))
+            .map(|(desc, keys)| with_keys(desc, keys))
             .unwrap_or_else(|| fallback("Search with grep")),
         actual_name if actual_name == tool_names::CODE_SEARCH => describe_code_search(args)
-            .map(|(desc, used)| with_mcp(desc, used))
+            .map(|(desc, keys)| with_keys(desc, keys))
             .unwrap_or_else(|| fallback("Search code")),
         actual_name if actual_name == tool_names::READ_FILE => {
             describe_path_action(args, "Read file", &["path"], workspace_root)
@@ -809,15 +820,15 @@ pub(crate) fn describe_tool_action(
                 || actual_name == tool_names::FETCH
                 || actual_name == tool_names::DEFUDDLE_FETCH =>
         {
-            let (desc, used) = describe_fetch_action(args);
-            with_mcp(desc, used)
+            let (desc, keys) = describe_fetch_action(args);
+            with_keys(desc, keys)
         }
         _ => with_mcp(format!("Use {}", humanize_tool_name(actual_tool_name)), HashSet::new()),
     }
 }
 
 pub(crate) fn humanize_tool_name(name: &str) -> String {
-    crate::agent::runloop::unified::tool_summary_helpers::humanize_tool_name(name)
+    vtcode_commons::tool_headlines::humanize_tool_name(name)
 }
 
 /// Extract the first file path from a patch's content.

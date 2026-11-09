@@ -2,7 +2,7 @@ use serde_json::json;
 use std::path::Path;
 use vtcode_core::config::constants::tools;
 
-use super::tool_summary::{describe_tool_action, is_file_modification_tool};
+use super::tool_summary::{describe_tool_action, humanize_tool_name, is_file_modification_tool};
 
 #[test]
 fn test_describe_tool_action_exec_command_shows_command_text() {
@@ -61,4 +61,16 @@ fn test_is_file_modification_tool_read_file() {
 fn test_is_file_modification_tool_grep_file() {
     let args = json!({"pattern": "test", "path": "/tmp"});
     assert!(!is_file_modification_tool(tools::GREP_FILE, &args));
+}
+
+#[test]
+fn unknown_tool_fallback_splits_name_boundaries() {
+    // Unknown tools phrase through the shared splitter so PascalCase and
+    // snake_case names read as words instead of raw identifiers.
+    let (desc, _) = describe_tool_action("DiagramCommand", &json!({}), None::<&Path>);
+    assert_eq!(desc, "Use Diagram Command");
+    let (desc, _) = describe_tool_action("diagram_render", &json!({}), None::<&Path>);
+    assert_eq!(desc, "Use Diagram Render");
+    // Asymmetric: acronym runs stay whole.
+    assert_eq!(humanize_tool_name("MCPTool"), "MCPTool");
 }

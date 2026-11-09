@@ -27,36 +27,9 @@ pub fn file_operation_action(args: &Value) -> Option<&str> {
     })
 }
 
-/// Determine the action for command_session tool based on args.
-/// Returns the action string or None if no inference is possible.
-pub fn command_session_action(args: &Value) -> Option<&str> {
-    args.get("action").and_then(|v| v.as_str()).or_else(|| {
-        // Check for standard command fields
-        if args.get("command").is_some()
-            || args.get("cmd").is_some()
-            || args.get("raw_command").is_some()
-            || crate::tools::command_args::has_indexed_command_parts(args)
-        {
-            Some("run")
-        } else if args.get("code").is_some() {
-            Some("code")
-        } else if args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some() {
-            Some("write")
-        } else if args.get("spool_path").is_some()
-            || args.get("query").is_some()
-            || args.get("head_lines").is_some()
-            || args.get("tail_lines").is_some()
-            || args.get("max_matches").is_some()
-            || args.get("literal").is_some()
-        {
-            Some("inspect")
-        } else if args.get("session_id").is_some() || args.get("s").is_some() {
-            Some("poll")
-        } else {
-            None
-        }
-    })
-}
+// Canonical probe lives in `vtcode-commons::tool_intent` so transcript
+// surfaces share it; re-exported here so dispatch import paths are untouched.
+pub use vtcode_commons::tool_intent::command_session_action;
 
 fn action_matches(action: Option<&str>, expected: &str) -> bool {
     action.is_some_and(|candidate| candidate.eq_ignore_ascii_case(expected))

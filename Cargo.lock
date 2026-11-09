@@ -12312,6 +12312,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sha2 0.11.1",
+ "shell-words",
  "smallvec",
  "tempfile",
  "thiserror 2.0.21",

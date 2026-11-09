@@ -1,17 +1,22 @@
 use std::borrow::Cow;
 
 use serde_json::Value;
+use vtcode_commons::tool_headlines::{humanize_key, strip_mcp_prefix};
 
 use crate::config::constants::tools as tool_names;
-use crate::tools::mcp::legacy_mcp_tool_name;
 use crate::tools::tool_intent;
+
+// Canonical session labels live in `vtcode-commons::tool_headlines` so
+// surfaces that cannot depend on this crate share them; re-exported here so
+// every existing import path keeps working.
+pub use vtcode_commons::tool_headlines::{unified_exec_action_label, write_stdin_action_label};
 
 pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
     if tool_intent::is_command_run_tool_call(tool_name, args) {
         return Cow::Borrowed("Run command");
     }
 
-    let actual_tool_name = normalize_tool_name(tool_name);
+    let actual_tool_name = strip_mcp_prefix(tool_name);
 
     match actual_tool_name {
         name if name == tool_names::EXEC_COMMAND => Cow::Borrowed("Run command"),
@@ -51,102 +56,8 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
             _ => Cow::Borrowed("File operation"),
         },
         "fetch" | tool_names::WEB_FETCH | tool_names::FETCH_URL | tool_names::DEFUDDLE_FETCH => Cow::Borrowed("Fetch"),
-        _ => Cow::Owned(humanize_tool_name(actual_tool_name)),
+        _ => Cow::Owned(humanize_key(actual_tool_name)),
     }
-}
-
-pub fn unified_exec_action_label(args: &Value) -> &'static str {
-    let action = tool_intent::command_session_action(args).unwrap_or("run");
-    if action.eq_ignore_ascii_case("run") {
-        "Run command"
-    } else if action.eq_ignore_ascii_case("write") {
-        "Send command input"
-    } else if action.eq_ignore_ascii_case("poll") {
-        "Read command session"
-    } else if action.eq_ignore_ascii_case("wait") {
-        "Wait for command session"
-    } else if action.eq_ignore_ascii_case("continue") {
-        "Continue command session"
-    } else if action.eq_ignore_ascii_case("inspect") {
-        "Inspect command output"
-    } else if action.eq_ignore_ascii_case("list") {
-        "List command sessions"
-    } else if action.eq_ignore_ascii_case("close") {
-        "Close command session"
-    } else if action.eq_ignore_ascii_case("code") {
-        "Run code"
-    } else {
-        "Exec action"
-    }
-}
-
-pub fn write_stdin_action_label(args: &Value) -> &'static str {
-    if let Some(action) = args.get("action").and_then(Value::as_str) {
-        if action.eq_ignore_ascii_case("wait") {
-            return "Wait for command session";
-        }
-        if action.eq_ignore_ascii_case("poll") {
-            return "Read command session";
-        }
-        if action.eq_ignore_ascii_case("inspect") {
-            return "Inspect command output";
-        }
-        if action.eq_ignore_ascii_case("close") {
-            return "Close command session";
-        }
-        if action.eq_ignore_ascii_case("terminate") {
-            return "Terminate command session";
-        }
-        if action.eq_ignore_ascii_case("write") {
-            // Match `write_stdin_dispatch`: explicit write with empty/missing
-            // input polls instead of sending, so label it as a read.
-            return if has_session_input(args) {
-                "Send command input"
-            } else {
-                "Read command session"
-            };
-        }
-    }
-    if has_session_input(args) {
-        "Send command input"
-    } else {
-        // A session_id-only follow-up polls output; calling it "Send" misleads
-        // (screenshot 2026-10-02: pure waits rendered as sends).
-        "Read command session"
-    }
-}
-
-fn has_session_input(args: &Value) -> bool {
-    ["chars", "input", "text"]
-        .iter()
-        .any(|key| args.get(key).and_then(Value::as_str).is_some_and(|s| !s.is_empty()))
-}
-
-fn normalize_tool_name(tool_name: &str) -> &str {
-    if let Some(stripped) = legacy_mcp_tool_name(tool_name) {
-        return stripped;
-    }
-    if tool_name.starts_with("mcp__") {
-        return tool_name.split("__").last().unwrap_or(tool_name);
-    }
-    if tool_name.starts_with("mcp::") {
-        return tool_name.split("::").last().unwrap_or(tool_name);
-    }
-    tool_name
-}
-
-fn humanize_tool_name(name: &str) -> String {
-    let replaced = name.replace('_', " ");
-    if replaced.is_empty() {
-        return replaced;
-    }
-    let mut chars = replaced.chars();
-    let Some(first) = chars.next() else {
-        return String::new();
-    };
-    let mut result = first.to_uppercase().collect::<String>();
-    result.push_str(&chars.collect::<String>());
-    result
 }
 
 #[cfg(test)]

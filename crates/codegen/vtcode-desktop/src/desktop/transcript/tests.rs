@@ -784,10 +784,11 @@ fn tool_row_gist_verbs_file_objects_with_basenames() {
     assert_eq!(gist("read_file", json!({"path": "src/"})), "Read src");
     assert_eq!(gist("read_file", json!({"path": "C:\\work\\lib.rs"})), "Read lib.rs");
     assert_eq!(gist("read_file", json!({"path": "///"})), "Read File");
-    // Fetch tools read URLs, which keep the host: a basename would mislead.
+    // Fetch tools phrase the full URL like the CLI, keeping the host: a
+    // basename would mislead ("page" from two different sites).
     assert_eq!(
         gist("web_fetch", json!({"url": "https://example.com/page?x=1"})),
-        "Read https://example.com/page?x=1"
+        "Fetch https://example.com/page?x=1"
     );
 }
 
@@ -925,6 +926,20 @@ fn user_echo_with_attachments_keeps_bare_prompt_and_announces_paths() {
     assert_eq!(keywords.len(), 4, "title, body, and both attached paths");
     assert!(keywords.iter().any(|keyword| keyword.contains("main.rs")));
     assert!(keywords.iter().any(|keyword| keyword.contains("shot.png")));
+}
+
+#[test]
+fn search_keywords_carry_raw_tool_name_beside_pretty_title() {
+    let mut row = item(1, "tool", "completed");
+    row.title = "Exec Command".into();
+    assert!(
+        row.search_keywords().iter().all(|keyword| keyword.as_str() != "exec_command"),
+        "pretty titles alone lose the snake_case tool spelling"
+    );
+    row.tool_name = Some("exec_command".into());
+    let keywords = row.search_keywords();
+    assert!(keywords.iter().any(|keyword| keyword.as_str() == "exec_command"));
+    assert!(keywords.iter().any(|keyword| keyword.as_str() == "Exec Command"));
 }
 
 #[test]

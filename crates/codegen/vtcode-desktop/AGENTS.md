@@ -7,7 +7,7 @@
 
 - `src/desktop/view/` screens, overlays, and routing (`components.rs` + `glass_buttons.rs` shared builders, plus per-dialog modules); `appearance_themes.rs` owns custom-theme editing; Kit host: `settings_kit.rs`.
 - `src/desktop/files/` workspace snapshot, fuzzy search, and launch/mutate (`launch.rs` fixed-argv external launches); `themes/` color tokens (`custom.rs` user + `glass.rs` glass themes); `preferences/`; `transport.rs`.
-- `src/desktop/transcript/` transcript projections: turn grouping lives in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders it.
+- `src/desktop/transcript/` projections: row type in `item.rs`, turn grouping in `turn.rs`, user-echo attachments in `user_attachments.rs`, `view/` only renders.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact transcript output projections.
 - `src/desktop/localization/` plus per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork and Dock; `assets.rs` extra icons; `build_info.rs` and `startup.rs` About stamp and argv/URL handoff.
 
@@ -19,6 +19,7 @@
 - Every action is keyboard-reachable with visible focus, and overlays dismiss through `dismiss_overlay` paths, bind Escape on the topmost surface, and restore focus.
 - Destructive actions use a native `Delete "Name"?` confirm and are enforced server-side, while Full-access consent uses the checkbox-gated in-app modal with a one-shot attestation.
 - Keep views free of service/runtime logic, with thin response routers delegating to `apply_*`/`fail_*` beside each feature's request builders.
+- Transcript titles/details/labels delegate to `vtcode-commons::tool_headlines` (`tool_intent` probe); categories, collapse, renderers stay local — never mirror.
 - No I/O or unbounded loops in render functions; memoize projections per revision, page long lists, and run blocking work via `background_spawn`.
 - External launches stay behind the fixed-argv boundary in `files/launch.rs`, and the app bundle must never declare `NSIsTouchNative`.
 - Session changes during a running turn route through the running-confirm modal, and every `running = false` writer must drain or drop the armed wait.

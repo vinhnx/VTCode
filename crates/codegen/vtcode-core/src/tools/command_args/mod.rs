@@ -93,13 +93,9 @@ fn collect_indexed_command_parts(
     Ok(parts)
 }
 
-pub fn has_indexed_command_parts(args: &Value) -> bool {
-    let Some(payload) = args.as_object() else {
-        return false;
-    };
-
-    payload.contains_key("command.0") || payload.contains_key("command.1")
-}
+// Canonical probe lives in `vtcode-commons::tool_intent` so transcript
+// surfaces share it; re-exported here so existing import paths keep working.
+pub use vtcode_commons::tool_intent::has_indexed_command_parts;
 
 pub fn parse_indexed_command_parts(
     payload: &serde_json::Map<String, Value>,

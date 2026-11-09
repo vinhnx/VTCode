@@ -5,11 +5,16 @@
 //! instead of maintaining incremental counters: unlike streaming status,
 //! there is no derived state that could drift.
 
-use std::borrow::Cow;
 use std::path::Path;
 
-use vtcode_commons::formatting::{truncate_middle, truncate_path_middle};
-use vtcode_exec_events::{HarnessEventKind, ThreadItemDetails, ToolInvocationItem};
+use vtcode_commons::formatting::truncate_middle;
+use vtcode_commons::tool_headlines::{
+    describe_code_search, describe_fetch_action, describe_grep_file, describe_list_files, humanize_tool_name,
+    lookup_first_string, lookup_string, preview_full_command, strip_mcp_prefix, unified_exec_action_label,
+    write_stdin_action_label,
+};
+use vtcode_commons::tool_intent::command_session_action;
+use vtcode_exec_events::{ThreadItemDetails, ToolInvocationItem};
 
 use super::super::strings::display;
 
@@ -95,41 +100,6 @@ fn unified_action(args: Option<&serde_json::Value>) -> Option<&str> {
     args?.get("action")?.as_str()
 }
 
-/// Display a path relative to the workspace root when it lies within it. Mirrors the
-/// CLI `relativize_to_workspace`. Shared by the title gist readers and the
-/// detail lines so both surfaces relativize identically.
-pub(crate) fn relativize_to_workspace<'a>(path: &'a str, workspace_root: Option<&Path>) -> Cow<'a, str> {
-    let Some(root) = workspace_root else {
-        return Cow::Borrowed(path);
-    };
-    let candidate = Path::new(path);
-    if candidate.is_absolute() {
-        if let Ok(rel) = candidate.strip_prefix(root) {
-            if !rel.as_os_str().is_empty() {
-                return Cow::Owned(rel.to_string_lossy().into_owned());
-            }
-        }
-    }
-    Cow::Borrowed(path)
-}
-
-/// Strip MCP prefixes the way `tool_action_label` normalizes names, so a
-/// suffixed builtin keeps the service's own display semantics.
-fn strip_mcp_prefix(tool_name: &str) -> &str {
-    if let Some(rest) = tool_name.strip_prefix("mcp__") {
-        return rest.rsplit("__").next().unwrap_or(rest);
-    }
-    if let Some(rest) = tool_name.strip_prefix("mcp::") {
-        return rest.rsplit("::").next().unwrap_or(rest);
-    }
-    // Legacy single-underscore form (`is_legacy_mcp_tool_name`); the qualified
-    // arms above already excluded `mcp__`, so this cannot misfire on them.
-    if let Some(rest) = tool_name.strip_prefix("mcp_") {
-        return rest;
-    }
-    tool_name
-}
-
 /// Per-verb totals folded over one group at render time. Plain `usize`
 /// counters: groups are bounded by the transcript cap, so incrementing once
 /// per row cannot overflow.
@@ -197,176 +167,39 @@ fn verb_part(count: usize, verb: &str, singular: &str, plural: &str) -> String {
     format!("{verb} {count} {}", if count == 1 { singular } else { plural })
 }
 
-/// Whether a harness event belongs in the user-visible transcript.
-///
-/// Routine telemetry — latency records, lifecycle starts and passes,
-/// per-turn snapshots, delegation observations, mailbox plumbing — stays out:
-/// the transcript is a conversation surface, and the canonical event still
-/// carries the complete evidence for forensics. Failures, blocks, losses
-/// (including an expired undelivered mailbox message), recoveries, rewinds,
-/// background completions, and limit grants stay: the user can act on them.
-/// Exhaustive on purpose — a new `HarnessEventKind` must make a conscious
-/// display choice here at compile time instead of silently inheriting
-/// visibility.
-#[must_use]
-pub(crate) fn harness_is_user_visible(kind: &HarnessEventKind) -> bool {
-    match kind {
-        HarnessEventKind::ToolLatencyRecorded
-        | HarnessEventKind::PlanningStarted
-        | HarnessEventKind::PlanningCompleted
-        | HarnessEventKind::ContinuationStarted
-        | HarnessEventKind::ContinuationSkipped
-        | HarnessEventKind::EvaluationStarted
-        | HarnessEventKind::EvaluationPassed
-        | HarnessEventKind::RevisionStarted
-        | HarnessEventKind::VerificationStarted
-        | HarnessEventKind::VerificationPassed
-        | HarnessEventKind::SnapshotCreated
-        | HarnessEventKind::DelegatedAgentStatus
-        | HarnessEventKind::SessionMessageSent
-        | HarnessEventKind::SessionMessageReceived => false,
-        HarnessEventKind::SessionMessageExpired
-        | HarnessEventKind::TurnBlocked
-        | HarnessEventKind::BlockedRecoveryStarted
-        | HarnessEventKind::BlockedRecoveryFinished
-        | HarnessEventKind::BlockedHandoffWritten
-        | HarnessEventKind::BlockedHandoffResolved
-        | HarnessEventKind::EvaluationFailed
-        | HarnessEventKind::EscalationTriggered
-        | HarnessEventKind::EscalationBypassed
-        | HarnessEventKind::VerificationFailed
-        | HarnessEventKind::ErrorRecovered
-        | HarnessEventKind::ToolRetryAttempted
-        | HarnessEventKind::SnapshotRestored
-        | HarnessEventKind::SessionToolLimitIncreased
-        | HarnessEventKind::ToolLoopLimitIncreased
-        | HarnessEventKind::BackgroundSubprocessCompleted => true,
-    }
-}
-
 /// Action-aware title for exec-session follow-up calls ("Wait for command session").
 ///
-/// Mirrors the service-side session labels (`write_stdin_action_label` and
-/// `unified_exec_action_label` in `vtcode-core/src/tools/registry/labels.rs`) plus the
-/// fixed follow-up labels. Returns `None` for launches and non-session tools so the
-/// caller falls through to the argument gist, which is more specific than a generic
-/// label. `Some` also doubles as the session predicate for detail lines: a titled call
-/// renders the one-line session row. English literals, same rule as the group verbs.
+/// Session labels come from the shared builders (`vtcode-commons`): `run`
+/// launches return `None` so the caller falls through to the argument gist,
+/// which shows the command text; `code` launches take the `Run code` label
+/// (a code payload has no command text to gist). `Some` also doubles as the
+/// session predicate for detail lines: a titled call renders the one-line
+/// session row.
 pub(super) fn session_tool_title(tool_name: &str, args: Option<&serde_json::Value>) -> Option<String> {
     match strip_mcp_prefix(tool_name) {
         "send_pty_input" => Some("Send command input".to_string()),
         "read_pty_session" => Some("Read command session".to_string()),
-        "write_stdin" => Some(write_stdin_title(args)),
-        "command_session_internal" => unified_exec_title(args),
+        // An arg-less call polls output, so it reads like an empty-args one.
+        "write_stdin" => Some(match args {
+            Some(args) => write_stdin_action_label(args).to_string(),
+            None => "Read command session".to_string(),
+        }),
+        "command_session_internal" => {
+            let action = args.and_then(command_session_action).unwrap_or("run");
+            if action.eq_ignore_ascii_case("run") {
+                None
+            } else {
+                args.map(|args| unified_exec_action_label(args).to_string())
+            }
+        }
         _ => None,
     }
-}
-
-/// Mirror of `write_stdin_action_label`: explicit actions win, otherwise input
-/// sniffing decides send vs read so pure waits never misrender as sends.
-fn write_stdin_title(args: Option<&serde_json::Value>) -> String {
-    if let Some(action) = args.and_then(|args| unified_action(Some(args))) {
-        if action.eq_ignore_ascii_case("wait") {
-            return "Wait for command session".to_string();
-        }
-        if action.eq_ignore_ascii_case("poll") {
-            return "Read command session".to_string();
-        }
-        if action.eq_ignore_ascii_case("inspect") {
-            return "Inspect command output".to_string();
-        }
-        if action.eq_ignore_ascii_case("close") {
-            return "Close command session".to_string();
-        }
-        if action.eq_ignore_ascii_case("terminate") {
-            return "Terminate command session".to_string();
-        }
-        if action.eq_ignore_ascii_case("write") {
-            // Explicit write with empty/missing input polls instead of sending.
-            return if has_session_input(args) {
-                "Send command input".to_string()
-            } else {
-                "Read command session".to_string()
-            };
-        }
-    }
-    if has_session_input(args) {
-        "Send command input".to_string()
-    } else {
-        "Read command session".to_string()
-    }
-}
-
-/// Mirror of `unified_exec_action_label`, except launches return `None` so the gist
-/// keeps rendering the `Ran` command headline.
-fn unified_exec_title(args: Option<&serde_json::Value>) -> Option<String> {
-    let action = session_action(args).unwrap_or("run");
-    if action.eq_ignore_ascii_case("run") {
-        None
-    } else if action.eq_ignore_ascii_case("write") {
-        Some("Send command input".to_string())
-    } else if action.eq_ignore_ascii_case("poll") {
-        Some("Read command session".to_string())
-    } else if action.eq_ignore_ascii_case("wait") {
-        Some("Wait for command session".to_string())
-    } else if action.eq_ignore_ascii_case("continue") {
-        Some("Continue command session".to_string())
-    } else if action.eq_ignore_ascii_case("inspect") {
-        Some("Inspect command output".to_string())
-    } else if action.eq_ignore_ascii_case("list") {
-        Some("List command sessions".to_string())
-    } else if action.eq_ignore_ascii_case("close") {
-        Some("Close command session".to_string())
-    } else if action.eq_ignore_ascii_case("code") {
-        Some("Run code".to_string())
-    } else {
-        Some("Exec action".to_string())
-    }
-}
-
-/// Mirror of `tool_intent::command_session_action` for display routing. Omits the
-/// indexed-command-parts probe (`command_args` lives in vtcode-core, which the desktop
-/// app must not depend on): indexed launches without an explicit action or a standard
-/// command field fall through to the raw-name gist.
-fn session_action(args: Option<&serde_json::Value>) -> Option<&str> {
-    let args = args?;
-    if let Some(action) = unified_action(Some(args)) {
-        return Some(action);
-    }
-    if args.get("command").is_some() || args.get("cmd").is_some() || args.get("raw_command").is_some() {
-        return Some("run");
-    }
-    if args.get("code").is_some() {
-        return Some("code");
-    }
-    if args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some() {
-        return Some("write");
-    }
-    if args.get("spool_path").is_some()
-        || args.get("query").is_some()
-        || args.get("head_lines").is_some()
-        || args.get("tail_lines").is_some()
-        || args.get("max_matches").is_some()
-        || args.get("literal").is_some()
-    {
-        return Some("inspect");
-    }
-    None
-}
-
-/// Mirror of the service `has_session_input`: non-empty payload under the input keys.
-fn has_session_input(args: Option<&serde_json::Value>) -> bool {
-    ["chars", "input", "text"].iter().any(|key| {
-        args.and_then(|args| args.get(key))
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|s| !s.is_empty())
-    })
 }
 
 /// One-line outcome gist for a tool row ("Read Cargo.toml", "Ran cargo check").
 ///
 /// Session follow-ups take their action-aware title first. Tool-specific
-/// headlines mirror the CLI describers (`tool_summary_helpers`): `list_files`
+/// headlines use the shared describers (`vtcode_commons::tool_headlines`): `list_files`
 /// phrases its location or pattern, `grep_file` phrases pattern and scope,
 /// runs lead with `Ran`, and searches phrase their query — so a bare command
 /// or filename can never be mistaken for its verb. Read/Edit rows keep the
@@ -381,34 +214,33 @@ pub(crate) fn tool_row_gist(tool: &ToolInvocationItem, workspace_root: Option<&P
     if let Some(args) = args {
         let name = strip_mcp_prefix(&tool.tool_name);
         if name == "list_files" {
-            if let Some((title, _)) = list_files_headline(args, workspace_root) {
+            if let Some((title, _)) = describe_list_files(args, workspace_root) {
                 return title;
             }
         } else if name == "grep_file" {
-            if let Some((title, _)) = grep_file_headline(args, workspace_root) {
+            if let Some((title, _)) = describe_grep_file(args, workspace_root) {
                 return title;
             }
         }
     }
     let category = ToolCategory::from_tool_name(&tool.tool_name, args);
     let gist = match category {
-        ToolCategory::Read => args.and_then(read_object).map(|object| format!("Read {object}")),
+        ToolCategory::Read => args.and_then(read_gist),
         ToolCategory::Edit => args.and_then(file_basename).map(|base| format!("Edited {base}")),
         ToolCategory::Run => args.and_then(command_text).map(|command| format!("Ran {command}")),
-        ToolCategory::Search => args.and_then(|args| search_gist(&tool.tool_name, args)),
+        ToolCategory::Search => args.and_then(|args| search_gist(&tool.tool_name, args).map(|(title, _)| title)),
         // Tracker rows keep the tool name; the inline task block below
         // the title carries the checklist detail.
         ToolCategory::Tracker | ToolCategory::Other => None,
     };
-    gist.unwrap_or_else(|| pretty_tool_name(&tool.tool_name))
+    gist.unwrap_or_else(|| humanize_tool_name(&tool.tool_name))
 }
 
 /// Argument keys the row title consumes beyond its category's gist keys.
 ///
-/// Recomputed from the same headline readers the title uses (mirroring the
-/// CLI describers' `(headline, used)` shape), so a key hides if and only if
-/// the title actually phrased it: multi-key calls show the keys the title
-/// skipped, and headline-less calls hide nothing.
+/// Recomputed from the same shared headline readers the title uses, so a key
+/// hides if and only if the title actually phrased it: multi-key calls show
+/// the keys the title skipped, and headline-less calls hide nothing.
 #[must_use]
 pub(crate) fn extra_gist_keys(tool: &ToolInvocationItem) -> &'static [&'static str] {
     let Some(args) = tool.arguments.as_ref() else {
@@ -416,129 +248,52 @@ pub(crate) fn extra_gist_keys(tool: &ToolInvocationItem) -> &'static [&'static s
     };
     // Workspace is irrelevant here: consumed keys never depend on display paths.
     match strip_mcp_prefix(&tool.tool_name) {
-        "grep_file" => grep_file_headline(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
-        "list_files" => list_files_headline(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
+        "grep_file" => describe_grep_file(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
+        "list_files" => describe_list_files(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
+        "code_search" | "grep" => search_gist(&tool.tool_name, args).map(|(_, keys)| keys).unwrap_or(&[]),
         _ => &[],
     }
 }
 
-/// Mirror of the CLI `describe_list_files`: location first, then the name and
-/// content pattern fallbacks. Truncation budgets (60/40) match the CLI. Each
-/// arm reports exactly the keys its headline consumed.
-fn list_files_headline(
-    args: &serde_json::Value,
-    workspace_root: Option<&Path>,
-) -> Option<(String, &'static [&'static str])> {
-    if let Some(path) = first_string(args, &["path"]) {
-        let location = if path == "." {
-            "workspace root".to_string()
-        } else {
-            truncate_path_middle(&relativize_to_workspace(&path, workspace_root), 60)
-        };
-        return Some((format!("List files in {location}"), &["path"]));
-    }
-    if let Some(pattern) = first_string(args, &["name_pattern"]) {
-        return Some((format!("Find files named {}", truncate_middle(&pattern, 40)), &["name_pattern"]));
-    }
-    first_string(args, &["content_pattern"]).map(|pattern| {
-        let keys: &'static [&'static str] = &["content_pattern"];
-        (format!("Search files for {}", truncate_middle(&pattern, 40)), keys)
-    })
-}
-
-/// Mirror of the CLI `describe_grep_file`: the pattern is required, the scope
-/// joins it when present. Truncation budgets (40/40) match the CLI. Reports
-/// exactly the keys its headline consumed.
-fn grep_file_headline(
-    args: &serde_json::Value,
-    workspace_root: Option<&Path>,
-) -> Option<(String, &'static [&'static str])> {
-    let pattern = first_string(args, &["pattern"])?;
-    let path = first_string(args, &["path"]);
-    let mut title = format!("Grep {}", truncate_middle(&pattern, 40));
-    let keys: &'static [&'static str] = match path {
-        Some(path) => {
-            title.push_str(&format!(
-                " in {}",
-                truncate_path_middle(&relativize_to_workspace(&path, workspace_root), 40)
-            ));
-            &["pattern", "path"]
-        }
-        None => &["pattern"],
-    };
-    Some((title, keys))
-}
-
-/// Search headline per tool. `code_search` mirrors the CLI
-/// `describe_code_search` (same key precedence); anything else in the Search
-/// category phrases a file search over the pattern.
-fn search_gist(tool_name: &str, args: &serde_json::Value) -> Option<String> {
-    if strip_mcp_prefix(tool_name) == "code_search" {
-        return first_string(args, &["query", "pattern", "q", "text"])
-            .map(|query| format!("Search code for {}", truncate_middle(&query, 40)));
-    }
-    first_string(args, &["pattern", "query"])
-        .map(|pattern| format!("Search files for {}", truncate_middle(&pattern, 40)))
-}
-
-/// Human fallback for tool names the gist readers cannot phrase.
+/// Search headline per tool, plus the exact keys it consumed.
 ///
-/// Strips MCP prefixes, then splits `snake_case` and `PascalCase`/`camelCase`
-/// boundaries into capitalized words (`DiagramCommand` → `Diagram Command`,
-/// `diagram_render` → `Diagram Render`). Only the first letter of each word
-/// is touched, so acronyms (`MCP`) and versions (`v2`) survive. Never
-/// returns blank: a name with no word characters falls back to itself.
-fn pretty_tool_name(tool_name: &str) -> String {
-    let bare = strip_mcp_prefix(tool_name);
-    let mut words: Vec<String> = Vec::new();
-    let mut current = String::new();
-    let mut previous: Option<char> = None;
-    // Single char walk, no slicing: `_` always breaks, and a new word starts
-    // before an uppercase letter that follows a lowercase letter or digit.
-    // Acronym runs (`MCPTool`) stay whole rather than guessing.
-    for c in bare.chars() {
-        if c == '_' {
-            if !current.is_empty() {
-                words.push(std::mem::take(&mut current));
-            }
-        } else {
-            let boundary = previous.is_some_and(|prev| c.is_uppercase() && (prev.is_lowercase() || prev.is_numeric()));
-            if boundary && !current.is_empty() {
-                words.push(std::mem::take(&mut current));
-            }
-            current.push(c);
-        }
-        previous = Some(c);
+/// `code_search` takes the shared describer; anything else in the Search
+/// category phrases a file search over the first of pattern/query. One reader
+/// serves the title and `extra_gist_keys` so a key hides if and only if the
+/// title phrased it — a category-wide skip set would over-hide siblings the
+/// title never named (e.g. `pattern` beside a `query` headline).
+fn search_gist(tool_name: &str, args: &serde_json::Value) -> Option<(String, &'static [&'static str])> {
+    if strip_mcp_prefix(tool_name) == "code_search" {
+        return describe_code_search(args);
     }
-    if !current.is_empty() {
-        words.push(current);
-    }
-    if words.is_empty() {
-        return tool_name.to_string();
-    }
-    for word in &mut words {
-        // Only the first letter is touched, so acronyms (`MCP`) and versions
-        // (`v2`) survive; the rest keeps its original casing.
-        let mut chars = word.chars();
-        if let Some(first) = chars.next() {
-            let mut pretty = first.to_uppercase().collect::<String>();
-            pretty.push_str(chars.as_str());
-            *word = pretty;
+    for key in ["pattern", "query"] {
+        if let Some(pattern) = lookup_string(args, key) {
+            let keys: &'static [&'static str] = if key == "pattern" { &["pattern"] } else { &["query"] };
+            return Some((format!("Search files for {}", truncate_middle(&pattern, 40)), keys));
         }
     }
-    words.join(" ")
+    None
 }
 
-/// File basename, else the bare URL fetch tools carry. URLs keep the host:
-/// a basename would mislead ("page" from two different sites).
-fn read_object(args: &serde_json::Value) -> Option<String> {
-    file_basename(args).or_else(|| first_string(args, &["url"]))
+/// Read headline: a file basename reads, a bare URL fetches.
+///
+/// URLs take the shared fetch phrasing so both surfaces name the exact
+/// target identically. Calls with neither fall through to the tool-name
+/// fallback — never the fetch one, which would mislabel a bare `mcp_fetch`.
+fn read_gist(args: &serde_json::Value) -> Option<String> {
+    if let Some(base) = file_basename(args) {
+        return Some(format!("Read {base}"));
+    }
+    if lookup_first_string(args, &["url"]).is_some() {
+        return Some(describe_fetch_action(args).0);
+    }
+    None
 }
 
 /// Basename of the path argument, scanning keys in service order
 /// (`primary_path_arg` in `vtcode-core/src/tools/safety_gateway/file_targets.rs`).
 fn file_basename(args: &serde_json::Value) -> Option<String> {
-    first_string(args, &["path", "file_path", "filepath", "target_path"])
+    lookup_first_string(args, &["path", "file_path", "filepath", "target_path"])
         .as_deref()
         .and_then(basename)
         .map(str::to_string)
@@ -546,29 +301,23 @@ fn file_basename(args: &serde_json::Value) -> Option<String> {
 
 /// Command text in service display order (`DISPLAY_COMMAND_KEYS` in
 /// `vtcode-core/src/tools/command_args/mod.rs`), plus the `command` array
-/// form joined with spaces.
+/// form joined with spaces. Previewed like the CLI's compact `• Ran` rows —
+/// first line plus script-runner folding — so a multi-line script titles its
+/// row with the meaningful line instead of every line joined.
 fn command_text(args: &serde_json::Value) -> Option<String> {
-    if let Some(text) = first_string(args, &["command", "cmd", "raw_command", "bash_command"]) {
-        return Some(text);
-    }
-    let parts: Vec<&str> = args
-        .get("command")?
-        .as_array()?
-        .iter()
-        .filter_map(serde_json::Value::as_str)
-        .collect();
-    let joined = parts.join(" ");
-    (!joined.trim().is_empty()).then(|| joined.trim().to_string())
-}
-
-/// First non-blank string under the given keys, trimmed.
-fn first_string(args: &serde_json::Value, keys: &[&str]) -> Option<String> {
-    keys.iter()
-        .filter_map(|key| args.get(key).and_then(serde_json::Value::as_str))
-        .find_map(|text| {
-            let trimmed = text.trim();
-            (!trimmed.is_empty()).then(|| trimmed.to_string())
-        })
+    let text = if let Some(text) = lookup_first_string(args, &["command", "cmd", "raw_command", "bash_command"]) {
+        text
+    } else {
+        let parts: Vec<&str> = args
+            .get("command")?
+            .as_array()?
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .collect();
+        let joined = parts.join(" ");
+        (!joined.trim().is_empty()).then(|| joined.trim().to_string())?
+    };
+    Some(preview_full_command(&text))
 }
 
 /// Last non-empty `/`- or `\`-separated segment. Plain splitting, not
@@ -581,7 +330,7 @@ fn basename(path: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vtcode_exec_events::{HarnessEventKind::*, ToolCallStatus};
+    use vtcode_exec_events::ToolCallStatus;
 
     fn gist_with(name: &str, arguments: Option<serde_json::Value>, workspace: Option<&Path>) -> String {
         tool_row_gist(
@@ -640,10 +389,24 @@ mod tests {
     }
 
     #[test]
+    fn gist_previews_multiline_commands_like_cli_compact_rows() {
+        use serde_json::json;
+        let gist = |arguments: serde_json::Value| gist_with("exec_command", Some(arguments), None);
+        // The session's 3-line pipeline titles with its first line: separator
+        // echoes in later lines never reach a single-line title.
+        assert_eq!(
+            gist(json!({"command": "sed -n '194,230p' README.md | head -n 40\necho \"---NUM---\"\nnl -ba README.md"})),
+            "Ran sed -n '194,230p' README.md | head -n 40"
+        );
+        // Script-runner prefixes still fold in content instead of dangling.
+        assert_eq!(gist(json!({"command": "python3 -c \"\nimport json"})), "Ran python3 -c \"import json");
+    }
+
+    #[test]
     fn legacy_mcp_prefix_classifies_and_phrases_like_cli() {
         use serde_json::json;
         assert_eq!(ToolCategory::from_tool_name("mcp_fetch", None), ToolCategory::Read);
-        assert_eq!(gist_with("mcp_fetch", Some(json!({"url": "https://x.y/z"})), None), "Read https://x.y/z");
+        assert_eq!(gist_with("mcp_fetch", Some(json!({"url": "https://x.y/z"})), None), "Fetch https://x.y/z");
         assert_eq!(gist_with("mcp_fetch", None, None), "Fetch");
         // Asymmetric: the qualified form still wins over the legacy fallthrough.
         assert_eq!(ToolCategory::from_tool_name("mcp__fs__read_file", None), ToolCategory::Read);
@@ -665,46 +428,28 @@ mod tests {
     }
 
     #[test]
-    fn harness_visibility_pins_every_kind() {
-        // Routine telemetry stays out of the transcript …
-        for kind in [
-            ToolLatencyRecorded,
-            PlanningStarted,
-            PlanningCompleted,
-            ContinuationStarted,
-            ContinuationSkipped,
-            EvaluationStarted,
-            EvaluationPassed,
-            RevisionStarted,
-            VerificationStarted,
-            VerificationPassed,
-            SnapshotCreated,
-            DelegatedAgentStatus,
-            SessionMessageSent,
-            SessionMessageReceived,
-        ] {
-            assert!(!harness_is_user_visible(&kind), "{kind:?} stays out of the transcript");
-        }
-        // … while anything the user can act on stays visible.
-        for kind in [
-            SessionMessageExpired,
-            TurnBlocked,
-            BlockedRecoveryStarted,
-            BlockedRecoveryFinished,
-            BlockedHandoffWritten,
-            BlockedHandoffResolved,
-            EvaluationFailed,
-            EscalationTriggered,
-            EscalationBypassed,
-            VerificationFailed,
-            ErrorRecovered,
-            ToolRetryAttempted,
-            SnapshotRestored,
-            SessionToolLimitIncreased,
-            ToolLoopLimitIncreased,
-            BackgroundSubprocessCompleted,
-        ] {
-            assert!(harness_is_user_visible(&kind), "{kind:?} stays visible");
-        }
+    fn extra_gist_keys_follow_search_consumption() {
+        use serde_json::json;
+        let keys = |name: &str, arguments: serde_json::Value| {
+            extra_gist_keys(&ToolInvocationItem {
+                tool_name: name.into(),
+                arguments: Some(arguments),
+                tool_call_id: None,
+                status: ToolCallStatus::Completed,
+                outcome: None,
+            })
+        };
+        // code_search reports the matched alias only, whatever its siblings —
+        // including noise/verbose keys the details would hide anyway.
+        assert_eq!(keys("code_search", json!({"query": "A", "pattern": "B"})), &["query"][..]);
+        assert_eq!(keys("code_search", json!({"pattern": "A", "q": "B"})), &["pattern"][..]);
+        assert_eq!(keys("code_search", json!({"q": "A", "text": "B"})), &["q"][..]);
+        // Bare grep reports the first of pattern/query.
+        assert_eq!(keys("grep", json!({"pattern": "A", "query": "B"})), &["pattern"][..]);
+        assert_eq!(keys("grep", json!({"query": "A"})), &["query"][..]);
+        // Headline-less calls and other tools hide nothing.
+        let empty: &[&str] = &[];
+        assert_eq!(keys("code_search", json!({"limit": 5})), empty);
+        assert_eq!(keys("read_file", json!({"path": "a"})), empty);
     }
 }

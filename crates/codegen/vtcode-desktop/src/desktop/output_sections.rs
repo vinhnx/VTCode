@@ -6,6 +6,12 @@
 //! display text: prose stays literal (tool output is untrusted data and must
 //! never be interpreted as Markdown) and only the user-relevant `spool_note`
 //! survives from the metadata block.
+//!
+//! This machine stays desktop-local on purpose: it is the only stripper in
+//! the workspace (nothing is duplicated), and its `SharedString` sections are
+//! a desktop rendering type. CLI export/forensic surfaces (`share_log`, the
+//! log viewer, `exec` event output) intentionally keep the raw block — they
+//! are evidence surfaces, not conversation.
 
 use gpui_kit::SharedString;
 use serde::de::IgnoredAny;

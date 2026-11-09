@@ -696,3 +696,39 @@ fn history_limit_boundary_renders_a_labeled_separator(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn snake_case_tool_queries_match_projected_rows_by_raw_name(cx: &mut TestAppContext) {
+    use vtcode_exec_events::*;
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.project_runtime_item(
+            &ThreadItem {
+                id: "tool-search-1".into(),
+                context: None,
+                details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+                    tool_name: "edit_file".into(),
+                    arguments: Some(json!({"path": "src/main.rs"})),
+                    tool_call_id: None,
+                    status: ToolCallStatus::Completed,
+                    outcome: None,
+                })),
+            },
+            false,
+        );
+        let row = view
+            .transcript
+            .items()
+            .find(|row| row.id == "tool-search-1")
+            .expect("a projected row");
+        assert!(!row.title.contains("edit_file"), "the pretty title hides the raw spelling");
+        assert_eq!(row.tool_name.as_deref(), Some("edit_file"));
+        // A picked id outside the transcript cannot join the set, so a
+        // snapshot proves the query itself matched a row.
+        view.remember_filter_matches("edit_file", "no-such-row");
+        assert!(view.filter_matches.is_some(), "snake_case queries match via the carried raw name");
+        view.remember_filter_matches("zzz-no-such-tool", "no-such-row");
+        assert!(view.filter_matches.is_none(), "unrelated queries still match nothing");
+    });
+    let _ = window;
+}

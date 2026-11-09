@@ -61,9 +61,14 @@ impl TranscriptItem {
     /// file paths. Shared by the palette keywords and the overlay-cycle
     /// substring matcher so the two can never disagree on what matches.
     pub(crate) fn search_keywords(&self) -> Vec<SharedString> {
-        let mut keywords = Vec::with_capacity(2 + self.user_attachments.len());
+        let mut keywords = Vec::with_capacity(3 + self.user_attachments.len());
         keywords.push(self.text.clone());
         keywords.push(self.title.clone());
+        // Raw tool name first-class: snake_case queries match verbatim while
+        // the prettified title keeps serving word queries.
+        if let Some(tool_name) = &self.tool_name {
+            keywords.push(tool_name.clone());
+        }
         keywords.extend(
             self.user_attachments
                 .iter()

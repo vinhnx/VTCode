@@ -77,6 +77,8 @@ pub mod terminal_detection;
 pub mod text_fence;
 pub mod thread_safety;
 pub mod tokens;
+pub mod tool_headlines;
+pub mod tool_intent;
 pub mod tool_types;
 pub mod trace_flush;
 pub mod tracker_title;

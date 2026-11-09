@@ -424,9 +424,35 @@ fn command_status_label(status: CommandExecutionStatus) -> &'static str {
     }
 }
 
+/// Marker line introducing the structured metadata block core appends to
+/// aggregated tool output. Contract with `structured_stream_metadata` in
+/// `vtcode-core/src/core/agent/events/lifecycle/summary.rs`: previews stop
+/// above it so a session row never previews a raw JSON tail (`}`).
+const STRUCTURED_OUTPUT_MARKER: &str = "Structured output:";
+
 fn summarize_preview_text(text: &str) -> Option<String> {
-    let preview = text
-        .lines()
+    // Prefer the last meaningful line above the metadata envelope; fall back
+    // to the whole text when the head holds nothing, so degenerate
+    // envelope-only captures still preview something.
+    let preview = last_meaningful_line(truncate_before_envelope(text)).or_else(|| last_meaningful_line(text))?;
+
+    Some(truncate_preview_text(preview, 180))
+}
+
+/// Text above the first `Structured output:` marker line, if any.
+///
+/// The marker must open its line — a mid-line mention is prose, not an
+/// envelope. Cutting at the first (not last) marker also skips nested
+/// echoes a tool may have catted above core's trailing block.
+fn truncate_before_envelope(text: &str) -> &str {
+    let cut = text
+        .match_indices(STRUCTURED_OUTPUT_MARKER)
+        .find_map(|(pos, _)| (pos == 0 || text.as_bytes().get(pos - 1) == Some(&b'\n')).then_some(pos));
+    cut.and_then(|cut| text.get(..cut)).unwrap_or(text)
+}
+
+fn last_meaningful_line(text: &str) -> Option<String> {
+    text.lines()
         .rev()
         .find_map(|line| {
             let collapsed = collapse_preview_whitespace(line);
@@ -435,9 +461,7 @@ fn summarize_preview_text(text: &str) -> Option<String> {
         .or_else(|| {
             let collapsed = collapse_preview_whitespace(text);
             (!collapsed.is_empty()).then_some(collapsed)
-        })?;
-
-    Some(truncate_preview_text(preview, 180))
+        })
 }
 
 fn collapse_preview_whitespace(text: &str) -> String {
@@ -559,5 +583,20 @@ mod tests {
         assert!(LocalAgentStatus::Starting.is_live());
         assert!(!LocalAgentStatus::Unknown.is_live());
         assert!(!LocalAgentStatus::Exited { code: Some(0) }.is_live());
+    }
+
+    #[test]
+    fn preview_stops_above_structured_envelope() {
+        // Trailing metadata never previews as a raw JSON tail.
+        assert_eq!(summarize_preview_text("output line\nStructured output:\n{\n}").as_deref(), Some("output line"));
+        // Marker-less output keeps the last meaningful line.
+        assert_eq!(summarize_preview_text("first\nsecond").as_deref(), Some("second"));
+        // Asymmetric: a mid-line mention is prose, not an envelope.
+        assert_eq!(
+            summarize_preview_text("see Structured output: docs").as_deref(),
+            Some("see Structured output: docs")
+        );
+        // Degenerate envelope-only captures still preview something.
+        assert_eq!(summarize_preview_text("Structured output:\n}").as_deref(), Some("}"));
     }
 }

@@ -3,6 +3,8 @@
 
 use super::super::output_sections::human_output_option;
 use super::*;
+use vtcode_commons::formatting::collapse_whitespace;
+use vtcode_commons::tool_headlines::preview_full_command;
 
 /// Retain a bounded, UTF-8-safe tail of live deltas. Completion replaces this
 /// preview with the runtime's final snapshot, which can include a spool path.
@@ -22,7 +24,7 @@ pub(super) fn bounded_output_chunk(previous: &str, chunk: &str) -> String {
 mod live_output_tests {
     use super::{bounded_output_chunk, describe_activity};
     use vtcode_exec_events::{
-        CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem,
+        CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem, WebSearchItem,
     };
 
     #[test]
@@ -78,6 +80,35 @@ mod live_output_tests {
             }));
             assert_eq!(describe_activity(&command, None).0, "Ran command");
         }
+    }
+
+    #[test]
+    fn multi_line_queries_collapse_to_single_line_titles() {
+        // Titles render in a single-line slot: a multi-line query collapses
+        // to one line instead of overflowing its row with a bare middle line
+        // and ghosted neighbors (the 2026-11-09 session failure). Commands
+        // preview to one line upstream (`gist_previews_multiline_commands`);
+        // this pins the collapse for sources that carry raw text.
+        let search = ThreadItemDetails::WebSearch(Box::new(WebSearchItem {
+            query: "first line\n\tsecond line".into(),
+            provider: None,
+            results: None,
+        }));
+        assert_eq!(describe_activity(&search, None).0, "first line second line");
+    }
+
+    #[test]
+    fn completed_commands_preview_like_invocation_gists() {
+        // A pending row and its completed row title identically: multi-line
+        // commands preview to the first line on both paths.
+        let execution = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: "sed -n '1p' README.md\necho done".into(),
+            arguments: None,
+            aggregated_output: String::new(),
+            exit_code: Some(0),
+            status: CommandExecutionStatus::Completed,
+        }));
+        assert_eq!(describe_activity(&execution, None).0, "Ran sed -n '1p' README.md");
     }
 }
 
@@ -436,7 +467,20 @@ impl DesktopView {
                 let title = rust_i18n::t!("app.transcript.decision_title").to_string();
                 self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), &title, &decision.summary, false);
             }
-            ThreadItemDetails::FileChange(change) => self.upsert_diff_card(id, change),
+            ThreadItemDetails::FileChange(change) => {
+                // The emitter ids this `{call_id}:changes`: stamp per-call edit
+                // stats onto the sibling invocation row when counts are present.
+                let stamp = match (change.additions, change.deletions) {
+                    (Some(additions), Some(deletions)) => {
+                        id.strip_suffix(":changes").map(|stem| (stem.to_string(), additions, deletions))
+                    }
+                    _ => None,
+                };
+                self.upsert_diff_card(id, change);
+                if let Some((stem, additions, deletions)) = stamp {
+                    self.transcript.stamp_edit_totals(&stem, additions, deletions);
+                }
+            }
             details => {
                 let (title, mut status) = describe_activity(details, self.workspace.as_deref());
                 if historical && ActivityState::from_status(&status) == ActivityState::Running {
@@ -460,8 +504,23 @@ impl DesktopView {
                     item.output = output;
                     item.app_previews = app_previews;
                     item.activity_category = ToolCategory::from_details(details);
+                    item.tool_name = invocation_tool_name(details).map(Into::into);
                     self.push_restored_activity(item);
                 } else {
+                    // Carry stamped edit totals across re-projections: the fresh
+                    // gist never carries the suffix, so suffixing here cannot
+                    // double-append.
+                    let carried = self
+                        .transcript
+                        .position_by_id(&id)
+                        .and_then(|index| self.transcript.get(index))
+                        .and_then(|row| row.edit_totals);
+                    let title = match carried {
+                        Some(EditTotals { additions, deletions }) => {
+                            Transcript::title_with_edit_stats(&title, additions, deletions)
+                        }
+                        None => title,
+                    };
                     self.append_or_update_item(id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
                     if output.is_some() {
                         self.transcript.set_output(&id, output);
@@ -471,6 +530,12 @@ impl DesktopView {
                     }
                     if let Some(category) = ToolCategory::from_details(details) {
                         self.transcript.set_activity_category(&id, category);
+                    }
+                    if let Some(tool_name) = invocation_tool_name(details) {
+                        self.transcript.set_tool_name(&id, tool_name);
+                    }
+                    if let Some(EditTotals { additions, deletions }) = carried {
+                        self.transcript.set_edit_totals(&id, additions, deletions);
                     }
                 }
             }
@@ -657,13 +722,29 @@ impl DesktopView {
     }
 }
 
+/// Raw invoking tool name for rows that have one, kept verbatim for search
+/// keywords. Executions and outputs carry no tool name of their own.
+fn invocation_tool_name(details: &vtcode_exec_events::ThreadItemDetails) -> Option<&str> {
+    match details {
+        vtcode_exec_events::ThreadItemDetails::ToolInvocation(tool) => Some(tool.tool_name.as_str()),
+        vtcode_exec_events::ThreadItemDetails::McpToolCall(call) => Some(call.tool_name.as_str()),
+        _ => None,
+    }
+}
+
 /// Human title and lifecycle summary for a non-message activity item.
+///
+/// Titles render in a single-line slot, but agent commands, queries, and
+/// messages routinely span lines — so the title collapses here, once, rather
+/// than in each reader. (A multi-line title used to overflow its row,
+/// clipping to a bare middle line with ghosted neighbors and hiding the
+/// `Ran` prefix on its clipped first line.)
 fn describe_activity(
     details: &vtcode_exec_events::ThreadItemDetails,
     workspace_root: Option<&Path>,
 ) -> (String, String) {
     use vtcode_exec_events::ThreadItemDetails;
-    match details {
+    let (title, status) = match details {
         ThreadItemDetails::ToolInvocation(tool) => {
             (tool_row_gist(tool, workspace_root), tool_status_label(&tool.status))
         }
@@ -675,10 +756,12 @@ fn describe_activity(
             let label = status_with_exit_code(command_status_label(&command.status), command.exit_code);
             // Blank commands are degenerate (real executions always name one);
             // fall back to the CLI's own placeholder instead of a "Ran " stub.
+            // Non-blank commands preview like invocation gists so a pending
+            // row and its completed row title identically.
             let title = if command.command.trim().is_empty() {
                 "Ran command".to_string()
             } else {
-                format!("Ran {}", command.command)
+                format!("Ran {}", preview_full_command(&command.command))
             };
             (title, label)
         }
@@ -716,7 +799,8 @@ fn describe_activity(
         | ThreadItemDetails::Reasoning(_)
         | ThreadItemDetails::Decision(_)
         | ThreadItemDetails::FileChange(_) => ("Activity".to_string(), tool_status::ACTIVITY.to_string()),
-    }
+    };
+    (collapse_whitespace(&title), status)
 }
 
 fn status_with_exit_code(status: String, exit_code: Option<i32>) -> String {

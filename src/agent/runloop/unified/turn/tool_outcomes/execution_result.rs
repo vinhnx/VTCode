@@ -210,8 +210,7 @@ pub(super) async fn handle_tool_execution_result_with_spinner<'a>(
     // `mcp_`-only prefix missed them), and label the panel with the same bare
     // tool name the success path uses.
     if !matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. })
-        && let Some(display_name) =
-            crate::agent::runloop::unified::tool_summary_helpers::mcp_tool_display_name(tool_name)
+        && let Some(display_name) = vtcode_commons::tool_headlines::mcp_tool_display_name(tool_name)
     {
         record_mcp_tool_event(t_ctx, display_name, &pipeline_outcome.status);
     }

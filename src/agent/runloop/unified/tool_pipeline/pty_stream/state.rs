@@ -1,11 +1,14 @@
 use std::collections::VecDeque;
 use std::path::Path;
 
-use vtcode_commons::formatting::wrap_shell_command_with_continuations;
+use vtcode_commons::formatting::{
+    RAN_COMMAND_CONTINUATION_WIDTH, RAN_COMMAND_FIRST_WIDTH, wrap_shell_command_with_continuations,
+};
 use vtcode_commons::preview::{
     format_hidden_lines_summary as shared_hidden_lines_summary, split_head_tail_preview_with_limit,
     summary_window as shared_summary_window,
 };
+use vtcode_commons::tool_headlines::preview_full_command;
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::pty::PtyPreviewRenderer;
 
@@ -13,9 +16,7 @@ use vtcode_ui::tui::app::InlineLinkRange;
 use vtcode_ui::tui::app::InlineSegment;
 
 use super::segments::{PtyLineStyles, line_to_segments};
-use crate::agent::runloop::unified::tool_summary_helpers::{
-    RAN_COMMAND_CONTINUATION_WIDTH, RAN_COMMAND_FIRST_WIDTH, preview_full_command, relativize_command_paths,
-};
+use crate::agent::runloop::unified::tool_summary_helpers::relativize_command_paths;
 
 const LIVE_PREVIEW_HEAD_LINES: usize = 3;
 const MAX_BUFFERED_TAIL_LINES: usize = 64;

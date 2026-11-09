@@ -1,12 +1,11 @@
 //! Concise human summaries for tool transcript rows (CLI parity, no JSON dumps).
 //!
-//! Desktop mirror of the CLI/TUI summary semantics
-//! (`src/agent/runloop/unified/tool_summary/` and `tool_summary_helpers/`): the row title
-//! carries the headline, [`activity_output_text`] carries captured output, and
-//! [`activity_details_summary`] carries only the remaining parameters the title does not
-//! already show. Transcript bodies never carry raw JSON dumps; the agent core still
-//! receives full arguments and results through `ThreadEvent` — this module only shapes
-//! the user-visible projection.
+//! Consumes the shared headline/detail builders (`vtcode_commons::tool_headlines`)
+//! so both surfaces phrase identically: the row title carries the headline,
+//! [`activity_output_text`] carries captured output, and [`activity_details_summary`]
+//! carries only the remaining parameters the title does not already show. Transcript
+//! bodies never carry raw JSON dumps; the agent core still receives full arguments and
+//! results through `ThreadEvent` — this module only shapes the user-visible projection.
 //!
 //! Tool-name knowledge lives in `activity_verbs.rs` (session titles, categories); this
 //! module only consumes its answers, so unknown names fall through to generic details
@@ -15,16 +14,13 @@
 //! full native-quality translations ship for every locale (same rule as the activity
 //! verbs in `activity_verbs.rs`).
 
-use std::borrow::Cow;
 use std::path::Path;
 
-use serde_json::Value;
-use vtcode_commons::formatting::truncate_middle;
+use vtcode_commons::tool_headlines::{collect_param_details, exec_session_param_detail};
 use vtcode_exec_events::{ThreadItemDetails, ToolInvocationItem};
 
 use super::super::output_sections::human_output_option;
-use super::super::strings::display::MIDDOT;
-use super::activity_verbs::{ToolCategory, extra_gist_keys, relativize_to_workspace, session_tool_title};
+use super::activity_verbs::{ToolCategory, extra_gist_keys, session_tool_title};
 
 /// User-facing detail lines for a tool row, joined with `\n`.
 ///
@@ -100,7 +96,7 @@ fn tool_detail_lines(details: &ThreadItemDetails, workspace_root: Option<&Path>)
         ThreadItemDetails::McpToolCall(call) => call
             .arguments
             .as_ref()
-            .map(|args| param_detail_lines(args, &[], &[], workspace_root))
+            .map(|args| collect_param_details(args, &[], workspace_root))
             .unwrap_or_default(),
         // The harness message already sits on the status line and the command/path on
         // the title; only a failing exit code adds information.
@@ -133,199 +129,44 @@ fn invocation_lines(tool: &ToolInvocationItem, workspace_root: Option<&Path>) ->
         None => return Vec::new(),
     };
     // A session title doubles as the session predicate (shared with the row title so
-    // the two can never disagree): titled follow-ups collapse to one identity row,
-    // mirroring `exec_session_param_detail`, while launches keep generic details.
+    // the two can never disagree): titled follow-ups collapse to the shared
+    // one-row identity, while launches keep generic details.
     if session_tool_title(&tool.tool_name, Some(args)).is_some() {
-        return exec_session_line(args).into_iter().collect();
+        return exec_session_param_detail(args).into_iter().collect();
     }
     let category = ToolCategory::from_tool_name(&tool.tool_name, Some(args));
-    param_detail_lines(args, gist_keys(category), extra_gist_keys(tool), workspace_root)
+    // Both key sets are static; merging keeps the shared collector's single-slice shape.
+    let skipped: Vec<&str> = gist_keys(category)
+        .iter()
+        .chain(extra_gist_keys(tool).iter())
+        .copied()
+        .collect();
+    collect_param_details(args, &skipped, workspace_root)
 }
 
 /// Argument keys the row title already shows for a category, so details skip them.
 ///
 /// Contract with the gist readers in `activity_verbs.rs` (`file_basename`,
-/// `command_text`, search keys, fetch URL): a key added to a category-wide gist
-/// must join its set here, or the title and body repeat each other.
-/// Tool-specific headline keys (`grep_file` scope, `list_files` patterns) join
-/// `extra_gist_keys` instead. `gist_keys_stay_silent_in_details` pins the
-/// agreement behaviorally.
+/// `command_text`, fetch URL): a key added to a category-wide gist must join
+/// its set here, or the title and body repeat each other. Search consumption
+/// is arg-dependent (the title phrases the matched alias only), so every
+/// search key reports via `extra_gist_keys` from the same reader as the
+/// title — a category-wide set would over-hide siblings the title never
+/// named. `gist_keys_stay_silent_in_details` pins the agreement behaviorally.
 fn gist_keys(category: ToolCategory) -> &'static [&'static str] {
     match category {
         ToolCategory::Read => &["path", "file_path", "filepath", "target_path", "url"],
         ToolCategory::Edit => &["path", "file_path", "filepath", "target_path"],
         ToolCategory::Run => &["command", "cmd", "raw_command", "bash_command"],
-        ToolCategory::Search => &["query", "pattern", "q", "text"],
+        // Search keys ride `extra_gist_keys`: consumption varies per call.
+        ToolCategory::Search => &[],
         ToolCategory::Tracker | ToolCategory::Other => &[],
-    }
-}
-
-/// One row for an exec-session follow-up: session identity plus an explicit wait
-/// deadline. Mirrors `exec_session_param_detail` in
-/// `src/agent/runloop/unified/tool_summary_helpers/mod.rs`; output-token caps, yield
-/// windows, and the raw stdin payload stay out of the transcript.
-fn exec_session_line(args: &Value) -> Option<String> {
-    let session = lookup_string(args, "session_id").map(|id| format!("Session {id}"));
-    let wait = ["wait_timeout_seconds", "timeout_seconds"]
-        .iter()
-        .find_map(|key| args.get(key).and_then(Value::as_u64))
-        .filter(|secs| *secs > 0)
-        .map(|secs| format!("wait up to {secs}s"));
-    let parts = [session, wait].into_iter().flatten().collect::<Vec<_>>();
-    (!parts.is_empty()).then(|| parts.join(MIDDOT))
-}
-
-/// Human `Key: value` lines for the arguments a title does not consume.
-///
-/// Mirrors `collect_param_details` in
-/// `src/agent/runloop/unified/tool_summary_helpers/mod.rs`: verbose content keys,
-/// plumbing noise, and title-consumed keys are skipped; strings truncate to 60
-/// columns, lists summarize to two items, and only `true` flags and non-zero numbers
-/// render. Key order follows `serde_json::Map` iteration (alphabetical without the
-/// `preserve_order` feature, which this workspace does not enable).
-fn param_detail_lines(
-    args: &Value,
-    skipped: &[&str],
-    extra_skipped: &[&str],
-    workspace_root: Option<&Path>,
-) -> Vec<String> {
-    let mut details = Vec::new();
-    let Some(map) = args.as_object() else {
-        return details;
-    };
-    for (key, value) in map {
-        if is_verbose_key(key)
-            || is_noise_param(key)
-            || skipped.contains(&key.as_str())
-            || extra_skipped.contains(&key.as_str())
-        {
-            continue;
-        }
-        match value {
-            Value::String(s) if !s.is_empty() => {
-                let display: Cow<'_, str> = if is_path_key(key) {
-                    relativize_to_workspace(s, workspace_root)
-                } else {
-                    Cow::Borrowed(s.as_str())
-                };
-                details.push(format!("{}: {}", humanize_key(key), truncate_middle(&display, 60)));
-            }
-            Value::Bool(true) => {
-                details.push(humanize_key(key));
-            }
-            Value::Array(items) => {
-                let strings: Vec<String> = items.iter().filter_map(|item| item.as_str().map(str::to_string)).collect();
-                if !strings.is_empty() {
-                    details.push(format!("{}: {}", humanize_key(key), summarize_list(&strings)));
-                }
-            }
-            Value::Number(num) => {
-                if num.as_f64().is_some_and(|n| n == 0.0) {
-                    continue;
-                }
-                details.push(format!("{}: {}", humanize_key(key), num));
-            }
-            _ => {}
-        }
-    }
-    details
-}
-
-/// Raw content keys that are too verbose for a summary row. Mirrors the CLI skip list.
-fn is_verbose_key(key: &str) -> bool {
-    matches!(
-        key,
-        "command"
-            | "raw_command"
-            | "bash_command"
-            | "cmd"
-            | "old_str"
-            | "new_str"
-            | "content"
-            | "new_content"
-            | "text"
-            | "patch"
-            | "code"
-    )
-}
-
-/// Infrastructure/plumbing parameters that are implementation details. Mirrors the CLI
-/// `is_noise_param` list verbatim so both surfaces hide the same keys.
-fn is_noise_param(key: &str) -> bool {
-    matches!(
-        key,
-        "timeout_secs"
-            | "timeout"
-            | "max_bytes"
-            | "max_matches"
-            | "debug_query"
-            | "strictness"
-            | "case_sensitive"
-            | "literal"
-            | "context_lines"
-            | "shell"
-            | "login"
-            | "tty"
-            | "sandbox_permissions"
-            | "additional_permissions"
-            | "justification"
-            | "prefix_rule"
-            | "workdir"
-            | "cwd"
-            | "language"
-            | "spool_path"
-            | "query"
-            | "type"
-            | "tool_call_id"
-            | "call_type"
-            | "action"
-            | "max_output_tokens"
-            | "max_tokens"
-    )
-}
-
-/// Keys whose values are file-system paths, shown relative to the workspace.
-fn is_path_key(key: &str) -> bool {
-    matches!(key, "path" | "file_path" | "filename" | "destination" | "source")
-}
-
-fn humanize_key(key: &str) -> String {
-    let replaced = key.replace('_', " ");
-    if replaced.is_empty() {
-        return replaced;
-    }
-    let mut chars = replaced.chars();
-    let first = chars.next().unwrap_or_default();
-    let mut result = first.to_uppercase().collect::<String>();
-    result.push_str(&chars.collect::<String>());
-    result
-}
-
-fn lookup_string(args: &Value, key: &str) -> Option<String> {
-    args.as_object()
-        .and_then(|map| map.get(key))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .filter(|s| !s.is_empty())
-}
-
-/// Summarize a string list to two items plus an overflow count. Mirrors the CLI
-/// `summarize_list` defaults.
-fn summarize_list(items: &[String]) -> String {
-    if items.is_empty() {
-        return String::new();
-    }
-    let shown: Vec<String> = items.iter().take(2).map(|s| truncate_middle(s, 60)).collect();
-    if items.len() > 2 {
-        format!("{} +{} more", shown.join(", "), items.len() - 2)
-    } else {
-        shown.join(", ")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
     use vtcode_config::constants::tools as tool_names;
     use vtcode_exec_events::{
         CommandExecutionItem, CommandExecutionStatus, HarnessEventItem, HarnessEventKind, McpToolCallItem,
@@ -480,6 +321,10 @@ mod tests {
         );
         assert_eq!(summary(&invocation("grep_file", Some(json!({"path": "src"})))), "Path: src");
         assert_eq!(summary(&invocation("code_search", Some(json!({"q": "Widget"})))), "");
+        // code_search silence follows the matched alias, not the category: an
+        // unphrased sibling still renders.
+        assert_eq!(summary(&invocation("code_search", Some(json!({"query": "A", "pattern": "B"})))), "Pattern: B");
+        assert_eq!(summary(&invocation("code_search", Some(json!({"pattern": "A", "q": "B"})))), "Q: B");
     }
 
     #[test]

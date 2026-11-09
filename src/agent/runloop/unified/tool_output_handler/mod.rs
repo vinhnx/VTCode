@@ -23,9 +23,10 @@ use crate::agent::runloop::unified::tool_pipeline::{
     streams_pty_output,
 };
 use crate::agent::runloop::unified::tool_summary_helpers::{
-    COMPACT_PREVIEW_LEN, display_command_text, preview_command, preview_full_command, relativize_command_paths,
+    COMPACT_PREVIEW_LEN, display_command_text, relativize_command_paths,
 };
 use vtcode_commons::canonicalize;
+use vtcode_commons::tool_headlines::{preview_command, preview_full_command};
 
 fn render_error_common(renderer: &mut AnsiRenderer, name: &str, error: &str, error_type: &str) -> Result<()> {
     let err_msg = format!("Tool '{name}' {error_type}: {error}");
@@ -77,7 +78,7 @@ async fn handle_success_common(
     // canonical names previously fell through to `render_tool_output_common`
     // (the legacy `mcp_` prefix never matched them), which draws provider
     // output such as context7 snippets or sequential-reasoning summaries.
-    if let Some(tool_name) = crate::agent::runloop::unified::tool_summary_helpers::mcp_tool_display_name(name) {
+    if let Some(tool_name) = vtcode_commons::tool_headlines::mcp_tool_display_name(name) {
         ctx.renderer.flush_compact_command_group();
         record_mcp_outcome_event(ctx.mcp_panel_state, tool_name, args_val, payload.command_success);
     }
