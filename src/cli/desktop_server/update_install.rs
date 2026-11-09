@@ -66,12 +66,18 @@ pub(super) async fn check_for_updates() -> Result<()> {
     // shared retry budget spans minutes by design). The About row already
     // renders a Checking state, so a timeout surfaces as a failed check there.
     const UPDATE_CHECK_TIMEOUT_SECS: u64 = 30;
+    check_for_updates_with_timeout(std::time::Duration::from_secs(UPDATE_CHECK_TIMEOUT_SECS)).await
+}
+
+/// The check itself, with the deadline as a parameter so tests can pin the
+/// timeout path without waiting out the production bound.
+async fn check_for_updates_with_timeout(timeout: std::time::Duration) -> Result<()> {
     let check = async {
         let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
         updater.refresh_startup_update_cache().await?;
         Ok(())
     };
-    match tokio::time::timeout(std::time::Duration::from_secs(UPDATE_CHECK_TIMEOUT_SECS), check).await {
+    match tokio::time::timeout(timeout, check).await {
         Ok(result) => result,
         Err(_) => anyhow::bail!("update check timed out"),
     }
@@ -224,5 +230,22 @@ mod tests {
         assert!(!install_in_flight(), "a failed install must not block a retry");
 
         set_install_state(UpdateInstallState::Idle);
+    }
+
+    /// The timeout bound is what keeps a live check from stalling the whole
+    /// service request loop during a GitHub API outage. A millisecond deadline
+    /// can never survive the network round trip the check needs, so this pins
+    /// the timeout path without waiting out the production bound.
+    #[tokio::test]
+    async fn an_unanswered_check_fails_as_a_timeout() {
+        let cache_dir = tempfile::tempdir().expect("cache");
+        let previous = crate::updater::set_test_update_cache_dir(Some(cache_dir.path().to_path_buf()));
+
+        let error = check_for_updates_with_timeout(std::time::Duration::from_millis(1))
+            .await
+            .expect_err("a 1 ms check must time out");
+        assert!(error.to_string().contains("timed out"), "{error:#}");
+
+        crate::updater::set_test_update_cache_dir(previous);
     }
 }
