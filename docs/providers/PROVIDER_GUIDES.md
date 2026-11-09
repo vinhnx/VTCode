@@ -153,7 +153,7 @@ Run a simple request after configuration:
 vtcode ask "Summarize this repository"
 ```
 
-Worked examples: [Atlas Cloud](./atlascloud.md) and [OmniRoute](./omniroute.md). See the
+Worked examples: [Atlas Cloud](./atlascloud.md), [OmniRoute](./omniroute.md), and [OpenLLM](./openllm.md). See the
 [Configuration guide](../config/models.md#custom_providers) for the complete field reference and precedence rules.
 
 ## Collapsed tool-result disclosure
@@ -487,6 +487,19 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Default model:** `auto` delegates model selection and fallback to OmniRoute.
 - **Features:** Chat Completions, optional Responses API routing for compatible models, streaming, and function tools
   through VT Code's shared OpenAI-compatible transport.
+
+## OpenLLM
+
+- **Guide:** [OpenLLM Integration](./openllm.md)
+- **Official docs:** [OpenLLM documentation](https://docs.openllm.sh)
+- **Integration mode:** configure OpenLLM through `[[custom_providers]]` as a local-first gateway that routes API keys,
+  OAuth subscription accounts, and local models.
+- **Local base URL:** `http://127.0.0.1:8787/v1` (cloud origin: `https://www.openllm.sh/v1`)
+- **Auth:** `OPENLLM_API_KEY`. The local daemon uses your saved OpenLLM login, so any non-empty placeholder works there.
+  The cloud origin needs an `sk-llm-` key.
+- **Default model:** `plus`. The `ultra`, `plus`, and `lite` aliases are built-in chains that depend on the accounts you
+  have connected.
+- **Features:** Chat Completions, streaming, and function tools through VT Code's shared OpenAI-compatible transport.
 
 ## Xiaomi MiMo
 
