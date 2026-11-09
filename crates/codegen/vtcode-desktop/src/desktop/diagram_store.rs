@@ -140,7 +140,7 @@ fn spawn_diagram_worker(svg_renderer: gpui_kit::SvgRenderer, jobs: mpsc::Receive
     thread::Builder::new()
         .name("diagram-render".to_string())
         .spawn(move || {
-            let sandbox = diagram_inline::DiagramSandbox::new(super::diagram::PELE_BUNDLE_JS);
+            let sandbox = vtcode_diagram::DiagramSandbox::new(vtcode_diagram::PELE_BUNDLE_JS);
             while let Ok(job) = jobs.recv() {
                 let output = match &sandbox {
                     Ok(sandbox) => render_diagram(sandbox, &svg_renderer, &job.source, &job.theme),
@@ -155,7 +155,7 @@ fn spawn_diagram_worker(svg_renderer: gpui_kit::SvgRenderer, jobs: mpsc::Receive
 /// Full blocking render: sandboxed JS, theme inlining, parse, raster.
 /// Runs only on the worker thread; every failure carries a display message.
 fn render_diagram(
-    sandbox: &diagram_inline::DiagramSandbox,
+    sandbox: &vtcode_diagram::DiagramSandbox,
     svg_renderer: &gpui_kit::SvgRenderer,
     source: &str,
     theme: &HashMap<String, String>,
@@ -172,7 +172,7 @@ fn render_diagram(
     // Unresolved references keep their literal `var()` text, which the SVG
     // parser drops in favor of default paint: degraded colors in exotic
     // cases, never a failed image.
-    let (inlined, _unresolved) = diagram_inline::inline_css_vars(&rendered.svg, theme);
+    let (inlined, _unresolved) = vtcode_diagram::inline_css_vars(&rendered.svg, theme);
     let parsed = svg_renderer
         .parse_svg(inlined.as_bytes())
         .map_err(|error| format!("{error:?}"))?;
@@ -298,8 +298,8 @@ fn asset_error(message: String) -> gpui_kit::ImageCacheError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::desktop::diagram::PELE_BUNDLE_JS;
-    use crate::desktop::diagram_inline::{DiagramSandbox, FifoMap, SourceHash, inline_theme, register_diagram_source};
+    use crate::desktop::diagram_inline::{FifoMap, SourceHash, inline_theme, register_diagram_source};
+    use vtcode_diagram::{DiagramSandbox, PELE_BUNDLE_JS};
 
     fn sandbox() -> DiagramSandbox {
         DiagramSandbox::new(PELE_BUNDLE_JS).expect("real bundle loads")

@@ -9,17 +9,7 @@
 //! and render errors display as inert text.
 
 use gpui_kit::component::theme::ThemeColor;
-
-/// Vendored Pele browser bundle (global `pele` with `mount`). Version and
-/// checksum live in `resources/pele/PROVENANCE.md`.
-pub(super) const PELE_BUNDLE_JS: &str = include_str!("../../../../../resources/pele/pele.global.js");
-
-/// Largest diagram source accepted for preview, in UTF-16 code units.
-/// Matches Pele's own default `limit` exactly (it enforces
-/// `source.length`, which counts UTF-16 units, not scalar values);
-/// larger sources fail closed instead of writing an unbounded preview
-/// file.
-pub(super) const MAX_DIAGRAM_SOURCE_CHARS: usize = 50_000;
+use vtcode_diagram::{MAX_DIAGRAM_SOURCE_CHARS, PELE_BUNDLE_JS};
 
 /// Content Security Policy for the preview page: the page is fully
 /// self-contained (inlined bundle and styles, system fonts, canvas text
@@ -29,7 +19,7 @@ pub(super) const MAX_DIAGRAM_SOURCE_CHARS: usize = 50_000;
 pub(super) const PREVIEW_CSP: &str = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 /// Rejection from [`build_preview_html`] when the source exceeds
-/// [`MAX_DIAGRAM_SOURCE_CHARS`].
+/// [`vtcode_diagram::MAX_DIAGRAM_SOURCE_CHARS`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct DiagramTooLarge;
 
@@ -131,7 +121,7 @@ pub(super) fn html_escape_text(text: &str) -> String {
 /// the diagram source as an escaped literal. Rendering runs in the browser
 /// via `pele.mount` with links/images disabled, zoom on shrink-to-fit, and
 /// errors shown as inert text. The bundle is a parameter (callers pass
-/// [`PELE_BUNDLE_JS`]) so tests stay hermetic.
+/// [`vtcode_diagram::PELE_BUNDLE_JS`]) so tests stay hermetic.
 pub(super) fn build_preview_html(
     source: &str,
     title: &str,
@@ -311,12 +301,6 @@ mod tests {
     }
 
     #[test]
-    fn diagram_limit_matches_pele_default() {
-        // Coupled to Pele's documented default `limit` option.
-        assert_eq!(MAX_DIAGRAM_SOURCE_CHARS, 50_000);
-    }
-
-    #[test]
     fn preview_html_inlines_bundle_vars_source_and_title() {
         let source = "flowchart TD\n  A[\"</script>\"] --> B";
         let page = build_preview_html(source, "Title \"quoted\"", "en", "  --pele-bg: #fff;\n", "/*PELE-BUNDLE*/")
@@ -360,20 +344,6 @@ mod tests {
         assert!(build_preview_html(&at_limit, "t", "en", "", "/*bundle*/").is_ok(), "exactly 50_000 units");
         let over_limit = format!("{}🎨", "x".repeat(MAX_DIAGRAM_SOURCE_CHARS - 1));
         assert_eq!(build_preview_html(&over_limit, "t", "en", "", "/*bundle*/"), Err(DiagramTooLarge));
-    }
-
-    #[test]
-    fn real_bundle_defines_the_global_mount_the_template_calls() {
-        assert!(PELE_BUNDLE_JS.contains("var pele="), "global present");
-        assert!(PELE_BUNDLE_JS.contains("mount:"), "mount exported");
-    }
-
-    #[test]
-    fn real_bundle_has_no_script_breakout_sequences() {
-        // The template inlines the bundle into a <script> block, so a future
-        // bundle containing these sequences would break page parsing.
-        assert!(!PELE_BUNDLE_JS.to_lowercase().contains("</script"), "no script close");
-        assert!(!PELE_BUNDLE_JS.contains("<!--"), "no comment open");
     }
 
     fn is_css_hex(value: &str) -> bool {

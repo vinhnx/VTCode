@@ -1,8 +1,8 @@
 # Pele vendored bundle — provenance
 
-This directory vendors the Pele browser bundle used by the desktop app's
-diagram preview. It is third-party code, synced from upstream, not maintained
-here.
+This directory vendors the Pele browser bundle used for offline Mermaid
+diagram rendering. It is third-party code, synced from upstream, not
+maintained here.
 
 - Package: `pele` 1.13.0 (MIT, © kepano / Obsidian)
 - Source: <https://registry.npmjs.org/pele/-/pele-1.13.0.tgz>
@@ -15,9 +15,10 @@ here.
 
 ## Why vendored
 
-The desktop diagram preview must work offline, so the preview page inlines
-this bundle instead of loading Pele from a CDN. Only `pele.global.js` is
-shipped; the ESM tree (`dist/esm/`) is not needed.
+Diagram rendering must work offline: the `vtcode diagram render` CLI and
+the desktop app's previews (browser page plus inline images) execute this
+bundle locally instead of loading Pele from a CDN. Only `pele.global.js`
+is shipped; the ESM tree (`dist/esm/`) is not needed.
 
 ## Updating
 
@@ -28,5 +29,6 @@ shipped; the ESM tree (`dist/esm/`) is not needed.
 4. Update the Pele entry in `scripts/templates/third-party-header.txt` and the
    matching block in `THIRD-PARTY-NOTICES` (or regenerate with
    `scripts/generate-notices.sh`).
-5. Re-run the desktop diagram preview tests:
+5. Re-run the render tests:
+   `cargo nextest run --locked -p vtcode-diagram` and
    `cargo nextest run --locked -p vtcode-desktop -E 'test(diagram)'`.

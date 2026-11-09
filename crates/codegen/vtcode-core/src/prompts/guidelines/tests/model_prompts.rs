@@ -14,6 +14,17 @@ fn duckduckgo_guidance_is_present_only_with_search_and_stays_bounded() {
     assert!(!disabled.contains("gh search"));
     assert!(enabled.len().saturating_sub(disabled.len()) < 320);
 }
+
+#[test]
+fn diagram_guidance_is_present_only_with_exec_and_stays_bounded() {
+    let enabled = guidelines_for(&[TOOL_EXEC_COMMAND.to_owned()], None);
+    let disabled = guidelines_for(&[], None);
+    assert!(enabled.contains("vtcode diagram render <input> -o <out.svg>"));
+    assert!(enabled.contains("never install or fetch an external renderer"));
+    assert_eq!(enabled.matches("vtcode diagram render").count(), 1, "emitted exactly once");
+    assert!(!disabled.contains("vtcode diagram render"));
+    assert!(DIAGRAM_GUIDANCE_LINE.len() < 240, "one-line hint stays short");
+}
 #[test]
 fn model_tool_prompt_reuse_matches_rebuild_across_density_and_capabilities() {
     use crate::config::constants::models;

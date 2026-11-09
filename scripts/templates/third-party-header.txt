@@ -43,8 +43,8 @@ Pele diagram renderer
   Source: https://github.com/obsidianmd/pele
   Snapshot: pele 1.13.0 (npm registry tarball, 2026-11-08)
   License: MIT
-  Vendored path: resources/pele/pele.global.js
-  VT Code modifications: none; the bundle is inlined verbatim into the
-  desktop diagram-preview page so previews work offline.
-  See resources/pele/PROVENANCE.md and LICENSE.
+  Vendored path: crates/common/vtcode-diagram/assets/pele.global.js
+  VT Code modifications: none; the bundle executes verbatim in the headless
+  renderer (CLI plus desktop previews) so rendering works offline.
+  See crates/common/vtcode-diagram/assets/PROVENANCE.md and LICENSE.
 

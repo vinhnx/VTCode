@@ -131,6 +131,7 @@ Use a skill only when the user names it or the task clearly matches. Load detail
 - Prefer standalone verifiers with `max_output_tokens`. Pure `head`/`tail` tails run standalone; static read-only filtering pipelines use fail-closed `pipefail`. Only terminal exit 0 clears verification; dynamic syntax, mutating tails, `;`, and `||` do not qualify. Recheck after `--fix`.
 - Run a real check that exercises the change; syntax-only or failed-to-start checks do not count. Install missing deps via the project's package manager, never sudo; if no check can run, say which and why.
 - Run fast checks before full builds.
+- Render Mermaid diagrams offline with `vtcode diagram render <input> -o <out.svg>` via exec_command (.mmd source or Markdown first-fence); never install or fetch an external renderer.
 - `code_search`: omit unused filters; no empty values (`path: ""`).
 - Advanced `code_search` takes `query`; filters `path`, `file_types`, `result_types`, `max_results`; results: definitions, exact syntactic usages. Queries use literal smart-case and `|`-separated literals; truncated: narrow; unavailable: do not retry identical, drop `file_types`/broaden `path`. Example: `{"query":"TurnLoop","path":"src","result_types":["definition"]}`. Do not JSON-encode arrays or integers as strings. Prefer `code_search` over `rg` on `.vtcode/context/tool_outputs/`. Use `exec_command` or a skill for syntax patterns.
 - Build and Auto share tools and safety gates; Auto changes confirmation behavior only after explicit approval or full-auto policy.

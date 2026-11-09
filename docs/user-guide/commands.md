@@ -34,6 +34,7 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode check`                                                         | Run built-in repository checks such as ast-grep                     |
 | `vtcode schema`                                                        | Emit built-in tool schemas for automation discovery                 |
 | `vtcode analyze`                                                       | Analyze workspace structure, security, and performance              |
+| `vtcode diagram render <input> -o <out.svg>`                           | Render a Mermaid diagram to SVG offline (Pele)                      |
 | `vtcode trajectory`                                                    | Pretty-print run logs for debugging and audits                      |
 | `vtcode snapshots` / `vtcode revert`                                   | List and roll back to workspace snapshots                           |
 | `vtcode cleanup-snapshots`                                             | Prune old snapshots with a retention limit                          |

@@ -12190,6 +12190,7 @@ dependencies = [
  "vtcode-config",
  "vtcode-core",
  "vtcode-desktop-protocol",
+ "vtcode-diagram",
  "vtcode-diff",
  "vtcode-eval",
  "vtcode-memory",
@@ -12530,7 +12531,6 @@ dependencies = [
  "plist",
  "pulldown-cmark",
  "rand 0.10.3",
- "rquickjs",
  "rust-i18n",
  "serde",
  "serde_json",
@@ -12541,6 +12541,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-desktop-protocol",
+ "vtcode-diagram",
  "vtcode-exec-events",
  "vtcode-ui",
 ]
@@ -12555,6 +12556,13 @@ dependencies = [
  "url",
  "vtcode-commons",
  "vtcode-exec-events",
+]
+
+[[package]]
+name = "vtcode-diagram"
+version = "0.181.8"
+dependencies = [
+ "rquickjs",
 ]
 
 [[package]]

@@ -22,6 +22,6 @@ resources/gif/demo-desktop.gif=6_000_000
 # Generated producer-audit diagnostics snapshot; capped, not exempt.
 docs/development/diagnostics/producer-audit.json=800_000
 
-# Vendored Pele diagram-renderer bundle for desktop previews; pinned upstream
-# release, update procedure in resources/pele/PROVENANCE.md.
-resources/pele/pele.global.js=800_000
+# Vendored Pele diagram-renderer bundle for offline rendering; pinned upstream
+# release, update procedure in crates/common/vtcode-diagram/assets/PROVENANCE.md.
+crates/common/vtcode-diagram/assets/pele.global.js=800_000

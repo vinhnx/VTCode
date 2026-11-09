@@ -17,8 +17,8 @@ use crate::cli::plugins::dispatch_plugins_command;
 use crate::cli::session_store::handle_session_store_command;
 use crate::cli::webmcp;
 use crate::cli::{
-    analyze, benchmark, check, config, create_project, dependencies, desktop, exec, init, init_project, man, notify,
-    revert, review, schedule, schema, secret, skills, snapshots, trajectory, update,
+    analyze, benchmark, check, config, create_project, dependencies, desktop, diagram, exec, init, init_project, man,
+    notify, revert, review, schedule, schema, secret, skills, snapshots, trajectory, update,
 };
 
 pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Commands) -> Result<()> {
@@ -174,6 +174,9 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
                 analyze::AnalysisType::from_cli_arg(&analysis_type),
             )
             .await?;
+        }
+        Commands::Diagram { command } => {
+            diagram::handle_diagram_command(command).await?;
         }
         Commands::Trajectory { file, top } => {
             trajectory::handle_trajectory_command(core_cfg, file, top).await?;

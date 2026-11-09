@@ -21,6 +21,11 @@ const PUBLIC_DECISION_GUIDANCE: &str = "- Use optional `record_decision` for con
 const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, checks, resources, and timeouts; start freezes the spec. The coordinator delegates execution and verification to scheduler-owned workers; discovery is idle-only. Replay restores admission before discovery; resume reconciles owned cleanup. status is a projection; pause stops dispatch; user cancel is terminal. Internal failures require reconciliation, not cancellation. Workers retain effective permissions and sandbox gates. Read leases require read-only workers. Report identity is runtime-owned; final success needs durable declared checks for the current generation, never summaries or child completion. Source and declared input changes, including submodule state, invalidate checks. Automatic retry requires replay_safe, confirmed cleanup, and at most one interrupted/timeout retry; other failures need a coordinator decision.";
 const SESSION_MESSAGING_GUIDANCE: &str = "- Peer sessions: `list_sessions` discovers live CLI sessions in this workspace; `ask_session` sends one a question and its `answer_session` reply arrives as a notice on a later turn. Delivery needs the peer running.";
 const WEB_SEARCH_GUIDANCE: &str = "- web_search uses keyless DuckDuckGo; web_fetch needs separate approval. For `antiban_blocked` or `retryable: false`, do not retry; wait `retry_after_ms` for `cooldown`; retry `network_error`/`upstream_error` once. For GitHub queries prefer `gh search`/`gh api` via exec_command when available.";
+
+/// The single home of the diagram-render hint: the offline `diagram render`
+/// CLI replaces any network-fetched renderer. Emitted only outside planning
+/// (rendering writes a file, and planning exec stays read-only).
+const DIAGRAM_GUIDANCE_LINE: &str = "- Render Mermaid diagrams offline with `vtcode diagram render <input> -o <out.svg>` via exec_command (.mmd source or Markdown first-fence); never install or fetch an external renderer.";
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
 
 const OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE: &str = "- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.";
@@ -303,6 +308,7 @@ pub(crate) fn generate_tool_guidelines_for_profile(
         // verify incrementally first. Kept tool-agnostic: fast checks exist
         // in every stack (`cargo check`, `tsc --noEmit`, `pytest --collect-only`).
         lines.push("- Run fast checks before full builds.".to_string());
+        lines.push(DIAGRAM_GUIDANCE_LINE.to_owned());
     }
     // Tool-failure diagnosis, waiting on returned `next_wait_args` instead of
     // polling, the safeguard rule, the verification outcome rule (report

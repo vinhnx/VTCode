@@ -43,10 +43,10 @@ Pele diagram renderer
   Source: https://github.com/obsidianmd/pele
   Snapshot: pele 1.13.0 (npm registry tarball, 2026-11-08)
   License: MIT
-  Vendored path: resources/pele/pele.global.js
-  VT Code modifications: none; the bundle is inlined verbatim into the
-  desktop diagram-preview page so previews work offline.
-  See resources/pele/PROVENANCE.md and LICENSE.
+  Vendored path: crates/common/vtcode-diagram/assets/pele.global.js
+  VT Code modifications: none; the bundle executes verbatim in the headless
+  renderer (CLI plus desktop previews) so rendering works offline.
+  See crates/common/vtcode-diagram/assets/PROVENANCE.md and LICENSE.
 
 ================================================================================
 PART I — CRATES.IO / GIT DEPENDENCIES
@@ -58,7 +58,7 @@ Do not edit by hand — regenerate after dependency changes.
 --------------------------------------------------------------------------------
 License Overview
 --------------------------------------------------------------------------------
-  Apache License 2.0 (789 crates) — SPDX: Apache-2.0
+  Apache License 2.0 (790 crates) — SPDX: Apache-2.0
   MIT License (304 crates) — SPDX: MIT
   Unicode License v3 (23 crates) — SPDX: Unicode-3.0
   BSD 3-Clause "New" or "Revised" License (12 crates) — SPDX: BSD-3-Clause
@@ -1882,72 +1882,75 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode-a2a 0.181.6
+  vtcode-a2a 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-acp 0.181.6
+  vtcode-acp 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-auth 0.181.6
+  vtcode-auth 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-bash-runner 0.181.6
+  vtcode-bash-runner 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-config 0.181.6
+  vtcode-config 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-core 0.181.6
+  vtcode-core 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-desktop 0.181.6
+  vtcode-desktop 0.181.8
     License: MIT OR Apache-2.0
-  vtcode-eval 0.181.6
+  vtcode-eval 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-indexer 0.181.6
+  vtcode-indexer 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-llm 0.181.6
+  vtcode-llm 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-mcp 0.181.6
+  vtcode-mcp 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-memory 0.181.6
+  vtcode-memory 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-safety 0.181.6
+  vtcode-safety 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-skills 0.181.6
+  vtcode-skills 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-ui 0.181.6
+  vtcode-ui 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-webmcp 0.181.6
+  vtcode-webmcp 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-agent-plugins 0.181.6
+  vtcode-agent-plugins 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-commons 0.181.6
+  vtcode-commons 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-desktop-protocol 0.181.6
+  vtcode-desktop-protocol 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-diff 0.181.6
+  vtcode-diagram 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-exec-events 0.181.6
+  vtcode-diff 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-macros 0.181.6
+  vtcode-exec-events 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-utility-tool-specs 0.181.6
+  vtcode-macros 0.181.8
+    Source: https://github.com/vinhnx/vtcode
+    License: MIT OR Apache-2.0
+  vtcode-utility-tool-specs 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
   mac-notification-sys 0.6.15
@@ -2670,7 +2673,7 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode 0.181.6
+  vtcode 0.181.8
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
