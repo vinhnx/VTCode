@@ -15,6 +15,21 @@ pub(super) async fn render_tool_output_common(
     let inline_run_tool = renderer.supports_inline_ui() && streams_pty_output(name, args_val);
     let git_diff_payload = is_git_diff_payload(output);
     let status = ToolDisplayStatus::from_command_output(output, command_success);
+    // Inline warning/stderr/critical-note rows beyond the owning tool row are
+    // user-direct command evidence; hidden routine extras stay in the
+    // canonical tool-output event and the plain-text trail instead of
+    // becoming transcript incidents.
+    let extras_visible = renderer.inline_failure_extras_visible(is_command_output_call(name, args_val));
+    // Hidden extras still join the plain-text transcript trail so text
+    // exports stay complete; only the interactive paint is gated.
+    let render_extras_line = |renderer: &mut AnsiRenderer, style: MessageStyle, text: &str| -> Result<()> {
+        if extras_visible {
+            renderer.line(style, text)
+        } else {
+            transcript::append(text);
+            Ok(())
+        }
+    };
     let has_spool_path = output.get("spool_path").is_some();
     let complete_capture = if renderer.supports_inline_ui()
         && is_command_output_call(name, args_val)
@@ -74,11 +89,13 @@ pub(super) async fn render_tool_output_common(
         // shown. The next successful command must start a new group.
         renderer.flush_compact_command_group();
 
+        // Degraded-evidence honesty is never gated: when the viewer capture
+        // itself is incomplete, the transcript must say so in every style.
         if complete_capture_unavailable(output, complete_capture.as_deref()) {
             renderer.line(MessageStyle::Warning, "Complete command output capture unavailable.")?;
         }
         if let Some(message) = warning_message(output) {
-            renderer.line(MessageStyle::Warning, &format!("⚠ {message}"))?;
+            render_extras_line(renderer, MessageStyle::Warning, &format!("⚠ {message}"))?;
         }
 
         // Expanded mode retains the existing live PTY block and makes the
@@ -92,8 +109,7 @@ pub(super) async fn render_tool_output_common(
         }
 
         if let Some(note) = output_text(output, "critical_note") {
-            renderer.line(MessageStyle::ToolError, note)?;
-            transcript::append(note);
+            render_extras_line(renderer, MessageStyle::ToolError, note)?;
         }
 
         // A distinct stderr field is not part of the live PTY block. Keep it
@@ -102,7 +118,7 @@ pub(super) async fn render_tool_output_common(
         if let Some(stderr) = stderr_for_inline_display(output) {
             let stderr_lines = normalize_terminal_output_lines(stderr);
             if !stderr_lines.is_empty() {
-                renderer.line(MessageStyle::ToolError, &format!("stderr: {}", stderr_lines.join("\n")))?;
+                render_extras_line(renderer, MessageStyle::ToolError, &format!("stderr: {}", stderr_lines.join("\n")))?;
             }
         }
 
@@ -212,11 +228,13 @@ pub(super) async fn render_tool_output_common(
         )?;
     }
 
+    // Degraded-evidence honesty is never gated: when the viewer capture
+    // itself is incomplete, the transcript must say so in every style.
     if complete_capture_unavailable(output, complete_capture.as_deref()) {
         renderer.line(MessageStyle::Warning, "Complete command output capture unavailable.")?;
     }
     if let Some(message) = warning_message(output) {
-        renderer.line(MessageStyle::Warning, &format!("⚠ {message}"))?;
+        render_extras_line(renderer, MessageStyle::Warning, &format!("⚠ {message}"))?;
     }
 
     let result = crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config).await;

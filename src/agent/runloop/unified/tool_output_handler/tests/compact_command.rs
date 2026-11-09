@@ -125,6 +125,106 @@ async fn expanded_command_summary_carries_capture_identity() {
     assert_eq!(summary_id, capture_id);
 }
 #[tokio::test]
+async fn routine_tool_warning_extras_follow_communication_style() {
+    use vtcode_commons::ui_protocol::CommunicationStyle;
+    // (style, tool, warning visible): routine tools keep warning rows only
+    // under Verbose; command tools keep them under Balanced and Verbose.
+    for (style, tool, args, visible) in [
+        (CommunicationStyle::Balanced, tools::TASK_TRACKER, serde_json::json!({}), false),
+        (CommunicationStyle::Verbose, tools::TASK_TRACKER, serde_json::json!({}), true),
+        (
+            CommunicationStyle::Balanced,
+            tools::EXECUTE_CODE,
+            serde_json::json!({"command": "printf warn"}),
+            true,
+        ),
+        (CommunicationStyle::Quiet, tools::EXECUTE_CODE, serde_json::json!({"command": "printf warn"}), false),
+    ] {
+        let (sender, mut receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        renderer.set_communication_style(style);
+        render_tool_output_common(
+            &mut renderer,
+            &handle,
+            tool,
+            &args,
+            &serde_json::json!({"warning": "stale cache"}),
+            true,
+            None,
+            None,
+        )
+        .await
+        .expect("warning-bearing output should render");
+        let visible_text = std::iter::from_fn(|| receiver.try_recv().ok()).fold(String::new(), |mut text, command| {
+            match command {
+                InlineCommand::AppendLine { segments, .. } => {
+                    for segment in segments {
+                        text.push_str(segment.text.as_str());
+                    }
+                }
+                InlineCommand::Inline { segment, .. } => text.push_str(segment.text.as_str()),
+                // Warning extras route through the legacy diagnostic
+                // adapter, so visible warnings arrive as incidents.
+                InlineCommand::Diagnostic(diagnostic) => {
+                    text.push_str(&diagnostic.summary);
+                    text.push_str(&diagnostic.agent_details);
+                }
+                _ => {}
+            }
+            text
+        });
+        assert_eq!(visible_text.contains("stale cache"), visible, "{style:?} {tool} warning visible={visible}");
+    }
+}
+
+#[tokio::test]
+async fn degraded_capture_notice_paints_in_every_style() {
+    use vtcode_commons::ui_protocol::CommunicationStyle;
+    for style in [
+        CommunicationStyle::Balanced,
+        CommunicationStyle::Quiet,
+        CommunicationStyle::Verbose,
+    ] {
+        let (sender, mut receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        renderer.set_communication_style(style);
+        render_tool_output_common(
+            &mut renderer,
+            &handle,
+            tools::TASK_TRACKER,
+            &serde_json::json!({}),
+            &serde_json::json!({"spool_path": "/tmp/vtcode-spool/output.jsonl"}),
+            true,
+            None,
+            None,
+        )
+        .await
+        .expect("degraded capture should render");
+        let painted = std::iter::from_fn(|| receiver.try_recv().ok()).fold(String::new(), |mut text, command| {
+            match command {
+                InlineCommand::Diagnostic(diagnostic) => {
+                    text.push_str(&diagnostic.summary);
+                    text.push_str(&diagnostic.agent_details);
+                }
+                InlineCommand::AppendLine { segments, .. } => {
+                    for segment in segments {
+                        text.push_str(segment.text.as_str());
+                    }
+                }
+                _ => {}
+            }
+            text
+        });
+        assert!(
+            painted.contains("Complete command output capture unavailable."),
+            "{style:?} must keep the degraded-evidence notice"
+        );
+    }
+}
+
+#[tokio::test]
 async fn compact_warning_remains_visible_and_flushes_command_group() {
     let (sender, mut receiver) = unbounded_channel();
     let handle = InlineHandle::new_for_tests(sender);

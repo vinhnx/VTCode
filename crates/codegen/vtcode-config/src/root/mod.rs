@@ -229,6 +229,10 @@ pub struct UiConfig {
     #[serde(default = "default_thinking_display")]
     pub thinking_display: vtcode_commons::ui_protocol::ThinkingBlockState,
 
+    /// How much routine agent-internal failure chatter reaches the interactive transcript ("balanced", "quiet", or "verbose"). Applies to new sessions; already-running sessions keep the value they started with. Options: "balanced", "quiet", "verbose".
+    #[serde(default = "default_communication_style")]
+    pub communication_style: vtcode_commons::ui_protocol::CommunicationStyle,
+
     /// Enable Vim-style prompt editing in the interactive terminal UI.
     #[serde(default = "default_vim_mode")]
     pub vim_mode: bool,
@@ -579,6 +583,7 @@ impl Default for UiConfig {
             reasoning_display_mode: default_reasoning_display_mode(),
             reasoning_visible_default: default_reasoning_visible_default(),
             thinking_display: default_thinking_display(),
+            communication_style: default_communication_style(),
             vim_mode: default_vim_mode(),
             busy_enter_behavior: default_busy_enter_behavior(),
             status_line: StatusLineConfig::default(),
@@ -851,6 +856,10 @@ fn default_reasoning_visible_default() -> bool {
 
 fn default_thinking_display() -> vtcode_commons::ui_protocol::ThinkingBlockState {
     vtcode_commons::ui_protocol::ThinkingBlockState::Collapsed
+}
+
+fn default_communication_style() -> vtcode_commons::ui_protocol::CommunicationStyle {
+    vtcode_commons::ui_protocol::CommunicationStyle::Balanced
 }
 
 /// Kitty keyboard protocol configuration

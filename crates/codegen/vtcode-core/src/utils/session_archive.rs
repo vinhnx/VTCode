@@ -11,7 +11,7 @@ mod snapshot;
 mod transcript;
 
 /// Instruction supplied to the model when tool output is collapsed in the UI.
-pub const COLLAPSED_TOOL_OUTPUT_NOTICE: &str = "Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.";
+pub const COLLAPSED_TOOL_OUTPUT_NOTICE: &str = "Only you see that command's output — the user's terminal shows at most a few lines of it, and routine tool failures stay hidden entirely. If the user needs to read any of it, put it in your reply; never reference hidden details as if the user saw them.";
 
 /// Identify persisted model-only context that should not appear in a resumed transcript.
 pub fn is_internal_session_context(

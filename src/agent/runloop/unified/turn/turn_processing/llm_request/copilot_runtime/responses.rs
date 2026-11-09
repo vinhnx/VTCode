@@ -126,7 +126,7 @@ pub(super) fn copilot_failure_response_with_diagnosis(
     CopilotToolCallResponse::Failure(CopilotToolCallFailure {
         text_result_for_llm: format!(
             "{failure_text}\n\n<untrusted_tool_evidence>\n{escaped_evidence}\n</untrusted_tool_evidence>\n\n{}",
-            diagnosis.render_text(tool_name),
+            diagnosis.render_text(),
         ),
         error: bounded_diagnostic_field(error),
     })

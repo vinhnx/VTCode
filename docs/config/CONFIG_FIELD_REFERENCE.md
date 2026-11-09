@@ -495,7 +495,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.181.5"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.181.8"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
@@ -853,6 +853,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.bold_is_bright` | `boolean` | no | `false` | Compatibility mode for legacy terminals that map bold to bright colors. When enabled, avoids using bold styling on text that would become bright colors, preventing visibility issues in terminals with "bold is bright" behavior. |
 | `ui.busy_enter_behavior` | `string` | no | `"queue"` | How plain Enter submits while a turn is running ("queue" or "steer"). "queue" (default) holds each message for the next turn; "steer" injects plain-text input into the live turn via the steering channel. Slash commands and attachments always queue. Options: "queue", "steer". |
 | `ui.color_scheme_mode` | `string` | no | `"auto"` | Color scheme mode for automatic light/dark theme switching. - "auto": Detect from terminal (via the Contour dark/light query where supported, else OSC 11, or the COLORFGBG env var) and follow live palette changes - "light": Force light mode theme selection - "dark": Force dark mode theme selection |
+| `ui.communication_style` | `string` | no | `"balanced"` | How much routine agent-internal failure chatter reaches the interactive transcript ("balanced", "quiet", or "verbose"). Applies to new sessions; already-running sessions keep the value they started with. Options: "balanced", "quiet", "verbose". |
 | `ui.diff_preview_mode` | `string` | no | `"inline"` | Diff preview layout for file-edit approval overlays. Options: "inline" (default) or "side-by-side". |
 | `ui.dim_completed_todos` | `boolean` | no | `true` | Dim completed todo items (- \[x\]) in agent output |
 | `ui.display_mode` | `string` | no | `"minimal"` | UI display mode preset (full, minimal, focused) |

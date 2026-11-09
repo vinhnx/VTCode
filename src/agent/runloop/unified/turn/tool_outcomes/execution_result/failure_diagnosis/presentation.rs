@@ -1,10 +1,9 @@
 //! Tool-response attachment and user-facing diagnosis emission.
 
 use serde_json::json;
-use vtcode_core::utils::ansi::MessageStyle;
 
-use super::ToolFailureDiagnosis;
 use super::evidence::bounded_field;
+use super::{ToolFailureClass, ToolFailureDiagnosis};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 pub(super) fn attach_to_serialized_tool_response(serialized: String, diagnosis: &ToolFailureDiagnosis) -> String {
@@ -84,21 +83,38 @@ pub(crate) fn render_diagnosis(
     diagnosis: &ToolFailureDiagnosis,
 ) {
     use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
-    // Empty search results are ordinary tool outcomes, not operational failures.
+    use vtcode_commons::ui_protocol::CommunicationStyle;
+    // Empty search results are ordinary tool outcomes, not operational
+    // failures: a one-line Info notice under Verbose, silent otherwise.
+    // Headless output stays complete; hidden lines still join the plain-text
+    // trail so exports keep them.
     if diagnosis.no_matches {
-        if let Err(error) = renderer.line(MessageStyle::Info, &concise_diagnosis_line(tool_name, diagnosis)) {
+        let line = concise_diagnosis_line(tool_name, diagnosis);
+        if renderer.writes_to_inline_sink() && !matches!(renderer.communication_style(), CommunicationStyle::Verbose) {
+            vtcode_core::utils::transcript::append(&line);
+            return;
+        }
+        if let Err(error) = renderer.line(vtcode_core::utils::ansi::MessageStyle::Info, &line) {
             tracing::warn!(error = %error, "failed to render empty search result");
         }
         return;
     }
     // The summary stays a bare headline: both the TUI and desktop
     // transcripts disclose `agent_details` behind their own visible Details
-    // control, so instructional prose would only restate the control.
+    // control, so instructional prose would only restate the control. The
+    // code selects the audience: only the routine class goes silent.
+    let (code, summary) = match diagnosis.failure_class() {
+        ToolFailureClass::Routine => ("tool.execution_failed", format!("Tool '{}' failed.", bounded_field(tool_name))),
+        ToolFailureClass::Command => ("tool.command_failed", format!("Tool '{}' failed.", bounded_field(tool_name))),
+        ToolFailureClass::Policy => {
+            ("tool.policy_denied", format!("Tool '{}' blocked by policy.", bounded_field(tool_name)))
+        }
+    };
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Warning,
-        code: "tool.execution_failed".into(),
-        summary: format!("Tool '{}' failed.", bounded_field(tool_name)),
-        agent_details: diagnosis.render_text(tool_name),
+        code: code.into(),
+        summary,
+        agent_details: diagnosis.render_text(),
         correlation_id: diagnostic_correlation_id(turn_id, tool_call_id, tool_name, diagnosis),
         actions: Vec::new(),
     };
@@ -161,7 +177,36 @@ mod tests {
         }
         let model_text = ToolFailureDiagnosis::new("no matches", "no matches", "try another query");
         assert!(concise_diagnosis_line("exec_command", &model_text).contains(" failed: "));
-        assert!(empty.render_text("exec_command").contains("exit code 1"));
+        assert!(empty.render_text().contains("exit code 1"));
+    }
+
+    #[test]
+    fn no_matches_notice_paints_only_under_verbose() {
+        use serde_json::json;
+        use tokio::sync::mpsc::unbounded_channel;
+        use vtcode_commons::ui_protocol::CommunicationStyle;
+        use vtcode_core::utils::ansi::AnsiRenderer;
+        use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
+        for (style, paints) in [
+            (CommunicationStyle::Balanced, false),
+            (CommunicationStyle::Quiet, false),
+            (CommunicationStyle::Verbose, true),
+        ] {
+            let (sender, mut receiver) = unbounded_channel();
+            let handle = InlineHandle::new_for_tests(sender);
+            let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+            renderer.set_communication_style(style);
+            let diagnosis = super::super::deterministic_output_diagnosis(
+                "exec_command",
+                &json!({"cmd":"grep absent sample.txt"}),
+                &json!({"exit_code":1}),
+            );
+            assert!(diagnosis.no_matches);
+            render_diagnosis(&mut renderer, None, "turn-1", None, "exec_command", &diagnosis);
+            let painted = std::iter::from_fn(|| receiver.try_recv().ok())
+                .any(|command| matches!(command, InlineCommand::AppendLine { .. } | InlineCommand::Inline { .. }));
+            assert_eq!(painted, paints, "{style:?} paints={paints} for empty searches");
+        }
     }
 
     #[test]

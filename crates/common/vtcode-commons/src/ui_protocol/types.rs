@@ -141,6 +141,66 @@ pub enum ThinkingBlockState {
     Extended,
 }
 
+/// How much routine agent-internal failure chatter reaches the interactive
+/// transcript. Canonical owner shared by config, the TUI renderer, and the
+/// desktop transcript so the three surfaces cannot drift.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum CommunicationStyle {
+    /// Routine agent-internal failures stay in Transcript Review/logs while
+    /// user-direct command failures and user-actionable incidents stay visible.
+    #[default]
+    Balanced,
+    /// `Balanced`, plus user-direct command failures collapse to one status
+    /// line with the complete capture behind the viewer affordance.
+    Quiet,
+    /// Show every diagnostic, as before filtering existed.
+    Verbose,
+    /// Catch-all for unknown styles added by future versions.
+    #[serde(other)]
+    Unknown,
+}
+
+impl CommunicationStyle {
+    /// Parse a user- or protocol-supplied style name. Unknown values resolve
+    /// to [`CommunicationStyle::Unknown`] (never an error) so a newer service
+    /// cannot break an older client; callers map it via [`CommunicationStyle::resolve`].
+    #[must_use]
+    pub fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "balanced" => Self::Balanced,
+            "quiet" => Self::Quiet,
+            "verbose" => Self::Verbose,
+            _ => Self::Unknown,
+        }
+    }
+
+    /// Effective style after resolving the forward-compat placeholder to the
+    /// current default. Every visibility decision must go through this so an
+    /// unknown future value degrades to `Balanced`, never to silence or noise.
+    #[must_use]
+    pub fn resolve(self) -> Self {
+        match self {
+            Self::Unknown => Self::Balanced,
+            resolved => resolved,
+        }
+    }
+
+    /// Wire name for the desktop protocol projection. Exact (including
+    /// `"unknown"`) so the desktop's [`CommunicationStyle::parse`] plus
+    /// [`CommunicationStyle::resolve`] stays the single fallback point.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Balanced => "balanced",
+            Self::Quiet => "quiet",
+            Self::Verbose => "verbose",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
 /// Wizard modal behavior variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WizardModalMode {

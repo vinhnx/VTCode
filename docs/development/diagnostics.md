@@ -23,7 +23,7 @@ fail-closed instruction and never suggest bypassing safeguards.
 | --- | --- |
 | `severity` | `info`, `warning`, or `error`; retains severity colors |
 | `code` | Stable machine-readable category, for example `planning.awaiting_input` |
-| `summary` | Concise human message, always visible |
+| `summary` | Concise human message, visible when the incident is user-visible under the active communication style |
 | `agent_details` | Operational evidence, defect report, attempts, and recovery instructions |
 | `correlation_id` | Incident identity; repeated updates replace its transcript source |
 | `actions` | Available actions with stable identifiers and human labels; display never submits them |
@@ -36,8 +36,9 @@ the runtime installs this callback once the thread event sink exists.
 Sanitize all fields, including action labels and correlation identity. Do not put
 credentials or private reasoning into details in the first place.
 
-The transcript retains one source per incident. The summary and available actions
-remain visible while details are collapsed. Click its Details control or press F8 to toggle the latest diagnostic in place.
+The transcript retains one source per incident. For user-visible incidents the
+summary and available actions remain visible while details are collapsed. Click
+its Details control or press F8 to toggle the latest diagnostic in place.
 F8 owns the latest incident that carries details; an incident whose payload the
 transcript does not disclose is skipped rather than retargeting an older one.
 Summary and evidence clicks preserve text selection and link interaction. Expansion affects presentation only;
@@ -46,6 +47,19 @@ Expanding while bottom-following pins the viewport so continued streaming cannot
 scroll the evidence away; collapsing stays pinned until jump-to-bottom resumes
 follow. The desktop app projects the same payload to a severity notice with a
 Show/Hide details toggle, and streaming updates preserve its expansion.
+`ui.communication_style` (`balanced` default, `quiet`, `verbose`) decides which
+incidents earn a main-transcript row: routine agent-internal codes
+(`tool.execution_failed`, `provider.retrying`, `provider.retry_succeeded`)
+stay silent under `balanced`/`quiet`, and `tool.command_failed` additionally
+collapses under `quiet`. Empty grep-style searches keep their one-line Info
+notice under `verbose` and stay silent otherwise. Policy, cancelled,
+billing, planning, MCP, and `runtime.*` incidents stay visible in every style,
+and `verbose` shows everything. The single rule lives in
+`vtcode_commons::diagnostics::diagnostic_is_user_visible`, so the TUI and
+desktop cannot drift; the desktop reads the effective style from the
+`SharedUiPreferences` projection. Silent incidents are still persisted, still
+stored, and still reachable in Transcript Review — F8, click hit-testing, and
+the desktop transcript simply skip them. Headless text output stays complete.
 Transcript Review always retains the complete details, including when the main
 transcript is collapsed. Resume replays the latest canonical payload per incident
 through `restore_diagnostic`, without emitting duplicate events; Local Agents

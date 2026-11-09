@@ -54,6 +54,7 @@ impl AnsiRenderer {
             pending_response_footer: false,
             defer_turn_footer: false,
             tool_display_mode: ToolDisplayMode::Compact,
+            communication_style: vtcode_commons::ui_protocol::CommunicationStyle::Balanced,
             diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
             compact_command_group: None,
             next_compact_group_id: 0,
@@ -227,6 +228,33 @@ impl AnsiRenderer {
 
     pub fn tool_display_mode(&self) -> ToolDisplayMode {
         self.tool_display_mode
+    }
+
+    /// How much routine agent-internal failure chatter reaches the transcript.
+    /// Sessions apply `ui.communication_style` through this setter; unknown
+    /// future values resolve to `Balanced` via [`CommunicationStyle::resolve`](vtcode_commons::ui_protocol::CommunicationStyle::resolve).
+    pub fn set_communication_style(&mut self, style: vtcode_commons::ui_protocol::CommunicationStyle) {
+        self.communication_style = style.resolve();
+    }
+
+    pub fn communication_style(&self) -> vtcode_commons::ui_protocol::CommunicationStyle {
+        self.communication_style
+    }
+
+    /// Whether failure evidence beyond the owning tool row's status (inline
+    /// warning/stderr/critical-note lines) paints for this tool call.
+    /// Hidden routine extras stay in the canonical tool-output event and the
+    /// plain-text trail; only user-direct command failures (and everything
+    /// under `Verbose`) keep inline evidence rows.
+    pub fn inline_failure_extras_visible(&self, is_command_tool: bool) -> bool {
+        use vtcode_commons::ui_protocol::CommunicationStyle;
+        match self.communication_style.resolve() {
+            CommunicationStyle::Verbose => true,
+            CommunicationStyle::Balanced => is_command_tool,
+            // `resolve` maps `Unknown` to `Balanced`; the arm below only
+            // keeps the decision total.
+            CommunicationStyle::Quiet | CommunicationStyle::Unknown => false,
+        }
     }
 
     /// Whether per-call tool transitions render in compact (grouped) form.

@@ -62,7 +62,8 @@ use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::{
     ToolFailureDiagnosis, bounded_diagnostic_field, bounded_error_evidence, bounded_output_evidence,
-    deterministic_error_diagnosis, deterministic_output_diagnosis, escape_untrusted_evidence, render_diagnosis,
+    classify_error_failure, classify_output_failure, deterministic_error_diagnosis, deterministic_output_diagnosis,
+    escape_untrusted_evidence, render_diagnosis,
 };
 use crate::agent::runloop::unified::ui_interaction_stream::CopilotRuntimeRequestHandler;
 
@@ -417,7 +418,8 @@ impl<'a> CopilotRuntimeHost<'a> {
                 })
             }
             ToolExecutionStatus::Success { output, .. } => {
-                let diagnosis = deterministic_output_diagnosis(&canonical_tool_name, &effective_arguments, &output);
+                let diagnosis = deterministic_output_diagnosis(&canonical_tool_name, &effective_arguments, &output)
+                    .with_failure_class(classify_output_failure(&canonical_tool_name, &effective_arguments, &output));
                 render_diagnosis(
                     renderer,
                     self.harness_emitter,
@@ -438,7 +440,8 @@ impl<'a> CopilotRuntimeHost<'a> {
                 )
             }
             ToolExecutionStatus::Failure { error } => {
-                let diagnosis = deterministic_error_diagnosis(&error, "execution");
+                let diagnosis = deterministic_error_diagnosis(&error, "execution")
+                    .with_failure_class(classify_error_failure(&canonical_tool_name, &effective_arguments, &error));
                 render_diagnosis(
                     renderer,
                     self.harness_emitter,
@@ -456,7 +459,8 @@ impl<'a> CopilotRuntimeHost<'a> {
                 )
             }
             ToolExecutionStatus::Timeout { error } => {
-                let diagnosis = deterministic_error_diagnosis(&error, "timeout");
+                let diagnosis = deterministic_error_diagnosis(&error, "timeout")
+                    .with_failure_class(classify_error_failure(&canonical_tool_name, &effective_arguments, &error));
                 render_diagnosis(
                     renderer,
                     self.harness_emitter,

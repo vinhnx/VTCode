@@ -21,8 +21,8 @@ mod model;
 mod presentation;
 
 pub(crate) use self::classification::{
-    deterministic_error_diagnosis, deterministic_output_diagnosis, deterministic_preflight_diagnosis,
-    policy_denial_next_action,
+    ToolFailureClass, classify_error_failure, classify_output_failure, deterministic_error_diagnosis,
+    deterministic_output_diagnosis, deterministic_preflight_diagnosis, policy_denial_next_action,
 };
 pub(crate) fn bounded_output_evidence(tool_name: &str, args: &Value, output: &Value) -> String {
     evidence::build_output_evidence(tool_name, args, output)
@@ -84,6 +84,7 @@ pub(crate) struct ToolFailureDiagnosis {
     pub likely_cause: String,
     pub next_action: String,
     no_matches: bool,
+    failure_class: ToolFailureClass,
 }
 
 impl ToolFailureDiagnosis {
@@ -93,7 +94,18 @@ impl ToolFailureDiagnosis {
             likely_cause: evidence::bounded_field(likely_cause.as_ref()),
             next_action: evidence::bounded_field_with_limit(next_action.as_ref(), DIAGNOSIS_MAX_ACTION_BYTES),
             no_matches: false,
+            failure_class: ToolFailureClass::Routine,
         }
+    }
+
+    /// Audience class of this failure; selects the persisted `Diagnostic` code.
+    pub(crate) fn failure_class(&self) -> ToolFailureClass {
+        self.failure_class
+    }
+
+    pub(crate) fn with_failure_class(mut self, failure_class: ToolFailureClass) -> Self {
+        self.failure_class = failure_class;
+        self
     }
 
     pub(crate) fn is_complete(&self) -> bool {
@@ -172,10 +184,9 @@ impl ToolFailureDiagnosis {
         })
     }
 
-    pub(crate) fn render_text(&self, tool_name: &str) -> String {
-        let tool_name = evidence::bounded_field(tool_name);
+    pub(crate) fn render_text(&self) -> String {
         format!(
-            "Diagnosis: {tool_name}\nObserved: {}\nLikely cause: {}\nNext action: {}",
+            "Observed: {}\nLikely cause: {}\nNext action: {}",
             self.observed, self.likely_cause, self.next_action
         )
     }
@@ -191,12 +202,16 @@ pub(super) async fn diagnose_error(
 ) -> ToolFailureDiagnosis {
     let fallback = deterministic_error_diagnosis(error, failure_kind);
     if error.is_redacted_patch_context() || classification::is_deterministic_only_error(error) {
-        return fallback;
+        return fallback.with_failure_class(classify_error_failure(tool_name, args, error));
     }
+    let failure_class = classify_error_failure(tool_name, args, error);
     let evidence = evidence::build_error_evidence(tool_name, args, error, failure_kind);
+    // The optional model rebuilds the diagnosis from scratch, so the
+    // deterministic class is re-applied after refinement and revision guidance.
     model::diagnose_with_optional_model(ctx, tool_name, &evidence, fallback)
         .await
         .with_revision_guidance(classification::error_mismatch(error))
+        .with_failure_class(failure_class)
 }
 
 /// Diagnose a command/tool result whose execution completed with a non-zero
@@ -208,13 +223,17 @@ pub(super) async fn diagnose_output(
     output: &Value,
 ) -> ToolFailureDiagnosis {
     let fallback = deterministic_output_diagnosis(tool_name, args, output);
+    let failure_class = classify_output_failure(tool_name, args, output);
     if crate::agent::runloop::unified::turn::tool_outcomes::is_grep_style_no_match(tool_name, args, output) {
-        return fallback;
+        return fallback.with_failure_class(failure_class);
     }
     let evidence = evidence::build_output_evidence(tool_name, args, output);
+    // The optional model rebuilds the diagnosis from scratch, so the
+    // deterministic class is re-applied after refinement and revision guidance.
     model::diagnose_with_optional_model(ctx, tool_name, &evidence, fallback)
         .await
         .with_revision_guidance(classification::output_mismatch(tool_name, args, output))
+        .with_failure_class(failure_class)
 }
 
 #[cfg(test)]
@@ -324,6 +343,103 @@ mod tests {
             assert!(!diagnosis.next_action.contains("before retrying"));
             assert!(classification::is_deterministic_only_error(&error));
         }
+    }
+
+    #[test]
+    fn failure_class_routes_policy_command_and_routine_failures() {
+        use vtcode_core::tools::registry::ToolErrorType;
+        // Policy: safeguard categories and markers need user action.
+        for category in [
+            ErrorCategory::PermissionDenied,
+            ErrorCategory::PolicyViolation,
+            ErrorCategory::PlanningPolicyViolation,
+            ErrorCategory::Authentication,
+            ErrorCategory::SandboxFailure,
+            ErrorCategory::ResourceExhausted,
+            ErrorCategory::CircuitOpen,
+        ] {
+            let mut error = ToolExecutionError::new(tool_names::EXEC_COMMAND, ToolErrorType::ExecutionError, "blocked");
+            error.category = category;
+            assert_eq!(
+                classify_error_failure(tool_names::EXEC_COMMAND, &json!({}), &error),
+                ToolFailureClass::Policy,
+                "{category:?} must be Policy even for command tools"
+            );
+        }
+        // Command: a launched command that failed outside any safeguard.
+        let mut error =
+            ToolExecutionError::new(tool_names::EXEC_COMMAND, ToolErrorType::ExecutionError, "spawn failed");
+        error.category = ErrorCategory::ExecutionError;
+        assert_eq!(
+            classify_error_failure(tool_names::EXEC_COMMAND, &json!({"cmd": "cargo test"}), &error),
+            ToolFailureClass::Command
+        );
+        assert_eq!(
+            classify_output_failure(tool_names::EXEC_COMMAND, &json!({"cmd": "cargo test"}), &json!({"exit_code": 1})),
+            ToolFailureClass::Command
+        );
+        // Code-execution launches are user-direct work like shell commands.
+        assert_eq!(
+            classify_error_failure(tool_names::EXECUTE_CODE, &json!({"code": "x = 1"}), &error),
+            ToolFailureClass::Command
+        );
+        assert_eq!(
+            classify_output_failure(tool_names::EXECUTE_CODE, &json!({"code": "x = 1"}), &json!({"exit_code": 1})),
+            ToolFailureClass::Command
+        );
+        // A safeguard denial surfacing in output stays Policy-visible even on
+        // tools that otherwise classify Routine.
+        assert_eq!(
+            classify_output_failure(
+                tool_names::TASK_TRACKER,
+                &json!({}),
+                &json!({"error": "tool denied by planning workflow"})
+            ),
+            ToolFailureClass::Policy
+        );
+        // Routine: malformed arguments (model-fixable) and non-command tools,
+        // including the screenshot's task_tracker preflight shape and session polls.
+        let mut invalid =
+            ToolExecutionError::new(tool_names::TASK_TRACKER, ToolErrorType::ExecutionError, "missing items");
+        invalid.category = ErrorCategory::InvalidParameters;
+        assert_eq!(classify_error_failure(tool_names::TASK_TRACKER, &json!({}), &invalid), ToolFailureClass::Routine);
+        assert_eq!(
+            classify_output_failure(tool_names::TASK_TRACKER, &json!({}), &json!({"ok": false})),
+            ToolFailureClass::Routine
+        );
+        assert_eq!(
+            classify_output_failure(
+                tool_names::UNIFIED_EXEC,
+                &json!({"action": "wait", "session_id": "run-1"}),
+                &json!({"status": "running"})
+            ),
+            ToolFailureClass::Routine,
+            "session polls are coordination, not user-direct launches"
+        );
+        assert_eq!(
+            classify_output_failure(
+                tool_names::UNIFIED_EXEC,
+                &json!({"action": "run", "command": "cargo test"}),
+                &json!({"exit_code": 1})
+            ),
+            ToolFailureClass::Command,
+            "unified_exec run launches stay user-visible"
+        );
+        // Preflight knows its own policy branch without a second classifier.
+        let policy = deterministic_preflight_diagnosis(
+            tool_names::EXEC_COMMAND,
+            "tool denied by planning workflow",
+            false,
+            false,
+        );
+        assert_eq!(policy.failure_class(), ToolFailureClass::Policy);
+        let malformed = deterministic_preflight_diagnosis(
+            tool_names::TASK_TRACKER,
+            "missing required property 'items'",
+            false,
+            false,
+        );
+        assert_eq!(malformed.failure_class(), ToolFailureClass::Routine);
     }
 
     #[test]

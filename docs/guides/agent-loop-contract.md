@@ -212,7 +212,7 @@ only calls that remain undispatched, so a cached result cannot later become a fa
 When the product collapses or bounds a tool result, every provider/model receives the fixed disclosure after the
 tool-result user message:
 <!-- markdownlint-disable-next-line MD013 -->
-`Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.`
+`Only you see that command's output — the user's terminal shows at most a few lines of it, and routine tool failures stay hidden entirely. If the user needs to read any of it, put it in your reply; never reference hidden details as if the user saw them.`
 Anthropic wire routes whose selected provider/model capability supports it use `clear_at: "next_user_message"` and the
 required beta; unsupported Anthropic models and gateways promote the same text to their top-level system prompt. Other
 providers map it to their native system, history, instructions, or transcript representation without the Anthropic-only

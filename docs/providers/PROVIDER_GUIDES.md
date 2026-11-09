@@ -164,7 +164,7 @@ provider and model. Copies already sent are never moved or removed, so each requ
 (required by models that bind replayed thinking to the exact prior prefix, and by prompt caches):
 
 ```text
-Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.
+Only you see that command's output — the user's terminal shows at most a few lines of it, and routine tool failures stay hidden entirely. If the user needs to read any of it, put it in your reply; never reference hidden details as if the user saw them.
 ```
 
 Provider adapters translate that typed history marker into their supported system, history, instructions, or transcript

@@ -303,6 +303,7 @@ pub(crate) async fn initialize_session_ui(
         renderer.set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
         renderer.set_show_message_timestamps(cfg.ui.show_message_timestamps);
         renderer.set_tool_display_mode(cfg.ui.tool_display_mode);
+        renderer.set_communication_style(cfg.ui.communication_style);
         renderer.set_diff_preview_mode(cfg.ui.diff_preview_mode);
     }
     let workspace_for_palette = config.workspace.clone();

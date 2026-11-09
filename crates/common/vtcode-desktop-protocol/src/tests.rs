@@ -352,6 +352,18 @@ fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> 
     assert_eq!(snapshot.shared_ui, None);
     assert_eq!(snapshot.secret_store, None);
 
+    // Shared UI preferences without the style projection (older services)
+    // fall back to the balanced default.
+    let legacy_prefs: SharedUiPreferences = serde_json::from_value(serde_json::json!({
+        "theme": "ciapre",
+    }))?;
+    assert_eq!(legacy_prefs.communication_style, "balanced");
+    let current_prefs: SharedUiPreferences = serde_json::from_value(serde_json::json!({
+        "theme": "ciapre",
+        "communicationStyle": "verbose",
+    }))?;
+    assert_eq!(current_prefs.communication_style, "verbose");
+
     let legacy_options: SessionOptionsSnapshot = serde_json::from_value(serde_json::json!({
         "permissionMode": "ask",
         "mode": "build",

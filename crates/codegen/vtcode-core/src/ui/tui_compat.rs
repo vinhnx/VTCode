@@ -151,6 +151,7 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
         },
         reasoning_visible_default: config.ui.reasoning_visible_default,
         thinking_display: config.ui.thinking_display,
+        communication_style: config.ui.communication_style,
         vim_mode: config.ui.vim_mode,
         busy_enter_behavior: config.ui.busy_enter_behavior,
         readline_mode: false,

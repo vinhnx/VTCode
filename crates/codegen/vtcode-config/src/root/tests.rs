@@ -73,6 +73,25 @@ fn thinking_display_defaults_to_collapsed() {
 }
 
 #[test]
+fn communication_style_defaults_to_balanced_and_parses_all_levels() {
+    use crate::CommunicationStyle;
+    assert_eq!(UiConfig::default().communication_style, CommunicationStyle::Balanced);
+    assert_eq!(
+        toml::from_str::<UiConfig>("").expect("empty parses").communication_style,
+        CommunicationStyle::Balanced
+    );
+    for (text, expected) in [
+        ("balanced", CommunicationStyle::Balanced),
+        ("quiet", CommunicationStyle::Quiet),
+        ("verbose", CommunicationStyle::Verbose),
+        ("future-level", CommunicationStyle::Unknown),
+    ] {
+        let parsed: UiConfig = toml::from_str(&format!("communication_style = \"{text}\"")).expect("style parses");
+        assert_eq!(parsed.communication_style, expected, "parse {text:?}");
+    }
+}
+
+#[test]
 #[serial]
 fn reduce_motion_uses_environment_default_and_preserves_animation_override() {
     with_env_var("VTCODE_REDUCE_MOTION", Some("1"), || {

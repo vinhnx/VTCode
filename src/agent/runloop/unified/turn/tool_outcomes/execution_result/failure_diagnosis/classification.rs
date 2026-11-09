@@ -11,6 +11,96 @@ use super::ToolFailureDiagnosis;
 use super::evidence::bounded_field;
 use crate::agent::runloop::unified::turn::tool_outcomes::is_grep_style_no_match;
 
+/// Audience class of a tool failure: who needs to see the diagnosis.
+///
+/// The class selects the persisted `Diagnostic` code (`tool.execution_failed`
+/// vs `tool.command_failed` vs `tool.policy_denied`), which is the only signal
+/// both the TUI and desktop need to apply the shared
+/// [`diagnostic_is_user_visible`](vtcode_commons::diagnostics::diagnostic_is_user_visible)
+/// rule. [`ToolFailureClass::Routine`] is agent-internal evidence (preflight,
+/// validation, retries); [`ToolFailureClass::Command`] backs a user-visible
+/// command launch; [`ToolFailureClass::Policy`] needs user action on
+/// permissions, policy, credentials, or sandbox configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ToolFailureClass {
+    /// Agent-internal failure the model can retry or route around.
+    #[default]
+    Routine,
+    /// A launched command failed; the user asked for this work.
+    Command,
+    /// Blocked by a safeguard the user must address.
+    Policy,
+}
+
+/// Classify a structured tool error. Safeguard failures (policy, permission,
+/// auth, sandbox, circuit, exhaustion, preflight markers) are
+/// [`ToolFailureClass::Policy`]; launched commands are
+/// [`ToolFailureClass::Command`]; malformed arguments and everything else are
+/// [`ToolFailureClass::Routine`] since the model can correct and retry.
+/// Whether a tool call launches user-direct execution work (a command run or
+/// a code-execution run whose failure the user asked to see). Mirrors the
+/// extras gate's command-output predicate so a failing launch never paints
+/// stderr while hiding its diagnosis, or vice versa.
+fn is_user_direct_launch(tool_name: &str, args: &Value) -> bool {
+    tool_name == vtcode_core::config::constants::tools::EXECUTE_CODE
+        || vtcode_core::tools::tool_intent::is_command_run_tool_call(tool_name, args)
+}
+
+/// Safeguard-denial markers shared by the error and output classifiers so a
+/// denial stays Policy-visible no matter which path surfaces it.
+const SAFEGUARD_MESSAGE_MARKERS: &[&str] = &[
+    "policy",
+    "permission denied",
+    "operation not permitted",
+    "authentication",
+    "unauthorized",
+    "forbidden",
+    "circuit breaker",
+    "sandbox",
+    "safety validation",
+];
+
+fn message_indicates_safeguard(message: &str) -> bool {
+    let message = bounded_field(message).to_ascii_lowercase();
+    SAFEGUARD_MESSAGE_MARKERS.iter().any(|marker| message.contains(marker))
+}
+
+/// Whether failure-like output carries a safeguard denial (markers or a
+/// planning-workflow policy correction) in its conventional error carriers.
+fn output_indicates_safeguard(output: &Value) -> bool {
+    ["error", "message", "stderr"]
+        .iter()
+        .filter_map(|field| output.get(field).and_then(Value::as_str))
+        .any(|text| {
+            message_indicates_safeguard(text)
+                || vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(text).is_some()
+        })
+}
+
+pub(crate) fn classify_error_failure(tool_name: &str, args: &Value, error: &ToolExecutionError) -> ToolFailureClass {
+    if is_safeguard_failure(error) {
+        ToolFailureClass::Policy
+    } else if is_user_direct_launch(tool_name, args) {
+        ToolFailureClass::Command
+    } else {
+        ToolFailureClass::Routine
+    }
+}
+
+/// Classify a completed execution with a failure-like result. A safeguard
+/// denial surfacing in output stays [`ToolFailureClass::Policy`]; launched
+/// commands are [`ToolFailureClass::Command`]; everything else (including
+/// grep-style no-match results) is [`ToolFailureClass::Routine`].
+pub(crate) fn classify_output_failure(tool_name: &str, args: &Value, output: &Value) -> ToolFailureClass {
+    if output_indicates_safeguard(output) {
+        ToolFailureClass::Policy
+    } else if is_user_direct_launch(tool_name, args) {
+        ToolFailureClass::Command
+    } else {
+        ToolFailureClass::Routine
+    }
+}
+
 pub(super) fn output_mismatch(tool_name: &str, args: &Value, output: &Value) -> Option<MismatchKind> {
     use vtcode_core::tools::tool_intent::{ShellActivity, classify_shell_activity, shell_args_as_executed};
 
@@ -103,6 +193,13 @@ pub(crate) fn deterministic_preflight_diagnosis(
     } else {
         "Correct the arguments using the declared schema, then retry once.".to_owned()
     };
+    // A policy rejection needs user action; malformed arguments are routine
+    // agent-internal evidence the model corrects and retries.
+    let failure_class = if policy_correction.is_some() {
+        ToolFailureClass::Policy
+    } else {
+        ToolFailureClass::Routine
+    };
     ToolFailureDiagnosis::new(
         format!("Tool preflight validation failed for '{tool_name}': {error}"),
         if policy_correction.is_some() {
@@ -112,6 +209,7 @@ pub(crate) fn deterministic_preflight_diagnosis(
         },
         next_action,
     )
+    .with_failure_class(failure_class)
 }
 
 pub(crate) fn deterministic_output_diagnosis(tool_name: &str, args: &Value, output: &Value) -> ToolFailureDiagnosis {
@@ -347,20 +445,7 @@ fn is_safeguard_failure(error: &ToolExecutionError) -> bool {
         return true;
     }
 
-    let message = bounded_field(&error.message).to_ascii_lowercase();
-    [
-        "policy",
-        "permission denied",
-        "operation not permitted",
-        "authentication",
-        "unauthorized",
-        "forbidden",
-        "circuit breaker",
-        "sandbox",
-        "safety validation",
-    ]
-    .iter()
-    .any(|marker| message.contains(marker))
+    message_indicates_safeguard(&error.message)
 }
 
 pub(super) fn is_preflight_failure(error: &ToolExecutionError) -> bool {

@@ -448,6 +448,7 @@ fn line_function_no_trailing_empty_line() {
         pending_response_footer: false,
         defer_turn_footer: false,
         tool_display_mode: ToolDisplayMode::default(),
+        communication_style: vtcode_commons::ui_protocol::CommunicationStyle::Balanced,
         diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode::Inline,
         compact_command_group: None,
         next_compact_group_id: 0,

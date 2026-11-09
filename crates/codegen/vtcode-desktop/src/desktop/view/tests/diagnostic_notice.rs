@@ -3,6 +3,10 @@ use crate::desktop::view::NoticeSeverity;
 use vtcode_exec_events::{Diagnostic, DiagnosticSeverity, ReasoningItem, ThreadItem, ThreadItemDetails};
 
 fn diagnostic_item(id: &str, details: &str, severity: DiagnosticSeverity) -> ThreadItem {
+    diagnostic_item_with_code(id, details, severity, "tool.execution_failed")
+}
+
+fn diagnostic_item_with_code(id: &str, details: &str, severity: DiagnosticSeverity, code: &str) -> ThreadItem {
     ThreadItem {
         id: id.into(),
         context: None,
@@ -11,7 +15,7 @@ fn diagnostic_item(id: &str, details: &str, severity: DiagnosticSeverity) -> Thr
             stage: Some("diagnosis".into()),
             diagnostic: Some(Box::new(Diagnostic {
                 severity,
-                code: "tool.execution_failed".into(),
+                code: code.into(),
                 summary: "Tool 'task_tracker' failed.".into(),
                 agent_details: details.into(),
                 correlation_id: id.into(),
@@ -21,6 +25,16 @@ fn diagnostic_item(id: &str, details: &str, severity: DiagnosticSeverity) -> Thr
     }
 }
 
+fn set_communication_style(view: &mut DesktopView, style: &str) {
+    view.configuration = Some(
+        serde_json::from_value(json!({
+            "provider": "openai", "model": "test", "authenticated": true, "credentialSetupCommand": "",
+            "sharedUi": {"theme": "ciapre", "communicationStyle": style}
+        }))
+        .expect("test configuration parses"),
+    );
+}
+
 #[gpui_kit::test]
 fn reasoning_diagnostic_projects_to_collapsible_notice(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -28,6 +42,9 @@ fn reasoning_diagnostic_projects_to_collapsible_notice(cx: &mut TestAppContext) 
         diagnostic_item("tool-diagnosis:task-tracker", "Likely cause: duplicate create.", DiagnosticSeverity::Warning);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
+            // Routine incidents paint under Verbose; Balanced coverage lives
+            // in the style-matrix test below.
+            set_communication_style(view, "verbose");
             view.update_runtime_item(&item);
         });
         window.render_frame(cx);
@@ -110,6 +127,7 @@ fn reasoning_diagnostic_severity_maps_to_notice_tone(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
+            set_communication_style(view, "verbose");
             view.update_runtime_item(&diagnostic_item("diag-err", "boom.", DiagnosticSeverity::Error));
             view.update_runtime_item(&diagnostic_item("diag-info", "fyi.", DiagnosticSeverity::Info));
         });
@@ -126,6 +144,118 @@ fn reasoning_diagnostic_severity_maps_to_notice_tone(cx: &mut TestAppContext) {
             assert!(row.is_notice(), "{id} renders as a severity notice");
             assert_eq!(row.notice_severity, expected, "{id} keeps its diagnostic tone");
         }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn diagnostic_projection_follows_communication_style(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // (style, code, projects): routine incidents stay out under Balanced and
+    // Quiet; command incidents collapse under Quiet; Verbose shows everything.
+    for (style, code, projects) in [
+        ("balanced", "tool.execution_failed", false),
+        ("balanced", "tool.command_failed", true),
+        ("balanced", "tool.policy_denied", true),
+        ("balanced", "provider.retry_stopped", true),
+        ("quiet", "tool.execution_failed", false),
+        ("quiet", "tool.command_failed", false),
+        ("quiet", "tool.policy_denied", true),
+        ("verbose", "tool.execution_failed", true),
+        ("verbose", "provider.retrying", true),
+    ] {
+        let id = format!("style-{style}-{code}");
+        cx.update_window(window, |_, _, cx| {
+            view.update(cx, |view, _| {
+                set_communication_style(view, style);
+                view.update_runtime_item(&diagnostic_item_with_code(
+                    &id,
+                    "Observed: something failed.",
+                    DiagnosticSeverity::Warning,
+                    code,
+                ));
+            });
+            let projected = view.read(cx).transcript.items().any(|row| row.id == id);
+            assert_eq!(projected, projects, "{style} must treat {code} as projected={projects}");
+        })
+        .unwrap();
+    }
+    // Absent projection (older services) falls back to Balanced.
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            view.configuration = None;
+            view.update_runtime_item(&diagnostic_item(
+                "style-fallback",
+                "Observed: something failed.",
+                DiagnosticSeverity::Warning,
+            ));
+        });
+        assert!(
+            view.read(cx).transcript.items().all(|row| row.id != "style-fallback"),
+            "missing projection must behave as Balanced"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn silent_update_clears_a_stale_visible_notice_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            set_communication_style(view, "verbose");
+            view.update_runtime_item(&diagnostic_item(
+                "stale-notice",
+                "Observed: something failed.",
+                DiagnosticSeverity::Warning,
+            ));
+        });
+        assert!(
+            view.read(cx).transcript.items().any(|row| row.id == "stale-notice"),
+            "verbose projects the routine incident"
+        );
+        view.update(cx, |view, _| {
+            set_communication_style(view, "balanced");
+            view.update_runtime_item(&diagnostic_item(
+                "stale-notice",
+                "Observed: something failed again.",
+                DiagnosticSeverity::Warning,
+            ));
+        });
+        assert!(
+            view.read(cx).transcript.items().all(|row| row.id != "stale-notice"),
+            "a silent update must not leave a stale visible row"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn expanded_diagnostic_details_render_evidence_as_markdown(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            set_communication_style(view, "verbose");
+            view.update_runtime_item(&diagnostic_item(
+                "diag-markdown",
+                "Observed: exit 1\n\n```text\nattempts=3\n```",
+                DiagnosticSeverity::Warning,
+            ));
+        });
+        window.render_frame(cx);
+        window.click("notice-details-diag-markdown", cx);
+        window.render_frame(cx);
+        assert!(
+            window.try_find("notice-details-body-diag-markdown").is_some(),
+            "expanded notices render the details body"
+        );
+        assert!(
+            window
+                .find("notice-diag-markdown")
+                .label()
+                .is_some_and(|label| label.contains("attempts=3")),
+            "expanded evidence exposes fenced details to assistive tech"
+        );
     })
     .unwrap();
 }

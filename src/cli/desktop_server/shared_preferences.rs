@@ -4,12 +4,17 @@ use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use vtcode_desktop_protocol::SharedUiPreferences;
 use vtcode_ui::tui::core_tui::session::parse_key_binding;
 
-pub(super) fn snapshot(bindings: &HashMap<String, Vec<String>>, theme: &str) -> SharedUiPreferences {
+pub(super) fn snapshot(
+    bindings: &HashMap<String, Vec<String>>,
+    theme: &str,
+    communication_style: vtcode_commons::ui_protocol::CommunicationStyle,
+) -> SharedUiPreferences {
     let mut result = SharedUiPreferences {
         // Report the effective theme the CLI would activate (unknown config
         // values fall back to the default), so desktop follow/import never
         // receives an id outside the shared registry.
         theme: vtcode_ui::theme::resolve_theme(Some(theme.to_string())),
+        communication_style: communication_style.as_str().to_string(),
         shortcuts: Default::default(),
         shortcut_warnings: Vec::new(),
     };
@@ -90,15 +95,34 @@ mod tests {
     use super::*;
     #[test]
     fn snapshot_reports_the_effective_cli_theme() {
+        use vtcode_commons::ui_protocol::CommunicationStyle;
         let bindings = HashMap::new();
-        assert_eq!(snapshot(&bindings, "ciapre-blue").theme, "ciapre-blue");
-        assert_eq!(snapshot(&bindings, "Ciapre-Blue").theme, "ciapre-blue");
-        assert_eq!(snapshot(&bindings, "not-a-theme").theme, vtcode_ui::theme::DEFAULT_THEME_ID);
-        assert_eq!(snapshot(&bindings, "").theme, vtcode_ui::theme::DEFAULT_THEME_ID);
+        assert_eq!(snapshot(&bindings, "ciapre-blue", CommunicationStyle::Balanced).theme, "ciapre-blue");
+        assert_eq!(snapshot(&bindings, "Ciapre-Blue", CommunicationStyle::Balanced).theme, "ciapre-blue");
+        assert_eq!(
+            snapshot(&bindings, "not-a-theme", CommunicationStyle::Balanced).theme,
+            vtcode_ui::theme::DEFAULT_THEME_ID
+        );
+        assert_eq!(snapshot(&bindings, "", CommunicationStyle::Balanced).theme, vtcode_ui::theme::DEFAULT_THEME_ID);
+    }
+
+    #[test]
+    fn snapshot_projects_communication_style_verbatim() {
+        use vtcode_commons::ui_protocol::CommunicationStyle;
+        let bindings = HashMap::new();
+        for (style, wire) in [
+            (CommunicationStyle::Balanced, "balanced"),
+            (CommunicationStyle::Quiet, "quiet"),
+            (CommunicationStyle::Verbose, "verbose"),
+            (CommunicationStyle::Unknown, "unknown"),
+        ] {
+            assert_eq!(snapshot(&bindings, "ciapre-blue", style).communication_style, wire);
+        }
     }
 
     #[test]
     fn shared_ui_preferences_reuse_cli_aliases_and_preserve_explicit_unbinds() {
+        use vtcode_commons::ui_protocol::CommunicationStyle;
         let projected = snapshot(
             &HashMap::from([
                 ("interrupt".into(), vec!["Control+SHIFT+x".into(), "ctrl+shift+x".into()]),
@@ -107,6 +131,7 @@ mod tests {
                 ("exit".into(), vec!["ctrl+d".into()]),
             ]),
             "ciapre-blue",
+            CommunicationStyle::Balanced,
         );
         assert_eq!(projected.theme, "ciapre-blue");
         assert_eq!(projected.shortcuts["cancel"], vec!["ctrl-shift-x"]);
@@ -114,7 +139,11 @@ mod tests {
         assert_eq!(projected.shortcuts["edit_queue"], vec!["alt-up"]);
         assert_eq!(projected.shortcuts.len(), 3, "terminal-only exit is not imported into native window handling");
         assert!(projected.shortcut_warnings.is_empty());
-        let invalid = snapshot(&HashMap::from([("interrupt".into(), vec!["not a key".into()])]), "ciapre");
+        let invalid = snapshot(
+            &HashMap::from([("interrupt".into(), vec!["not a key".into()])]),
+            "ciapre",
+            CommunicationStyle::Balanced,
+        );
         assert!(!invalid.shortcuts.contains_key("cancel"), "invalid bindings must not disable cancellation");
         assert_eq!(invalid.shortcut_warnings.len(), 1);
     }

@@ -1,6 +1,8 @@
 //! Sanitize the canonical payload before persistence, logging, and display.
 pub use vtcode_exec_events::{Diagnostic, DiagnosticAction, DiagnosticSeverity};
 
+use crate::ui_protocol::CommunicationStyle;
+
 /// Apply the existing secret redaction to every externally supplied field.
 /// Call before emitting a `ThreadEvent`, not merely when drawing its UI.
 pub fn redact_diagnostic(diagnostic: &Diagnostic) -> Diagnostic {
@@ -150,6 +152,39 @@ pub fn legacy_ui_diagnostic(severity: DiagnosticSeverity, text: &str) -> Diagnos
     legacy_diagnostic(severity, text, format!("legacy-{:032x}", rand::random::<u128>()))
 }
 
+/// Diagnostic codes that carry routine agent-internal failure evidence: the
+/// agent loop consumes them, but they need no main-transcript row under the
+/// default style. Everything else fails open to visible.
+const ROUTINE_SILENT_CODES: &[&str] = &[
+    // Agent-internal tool failure (preflight/validation/retry); the owning
+    // tool row keeps its failed state and Review keeps the evidence.
+    "tool.execution_failed",
+    // Transient provider retry progress; the spinner already covers it.
+    "provider.retrying",
+    // A recovered retry is good news, not an incident.
+    "provider.retry_succeeded",
+];
+
+/// Whether a diagnostic earns a main-transcript row under `style`.
+///
+/// Contract: persistence is never gated by this — callers persist the
+/// canonical event first and consult this only at paint time. Unknown codes
+/// fail open to visible; only the classified routine codes above (plus
+/// `tool.command_failed` under `Quiet`) go silent.
+/// `tool.policy_denied`, `tool.cancelled`, `provider.retry_stopped`, billing,
+/// planning, MCP, and `runtime.*` incidents stay visible in every style.
+#[must_use]
+pub fn diagnostic_is_user_visible(style: CommunicationStyle, code: &str) -> bool {
+    match style.resolve() {
+        CommunicationStyle::Verbose => true,
+        CommunicationStyle::Balanced => !ROUTINE_SILENT_CODES.contains(&code),
+        CommunicationStyle::Quiet => code != "tool.command_failed" && !ROUTINE_SILENT_CODES.contains(&code),
+        // `resolve` maps `Unknown` to `Balanced`; this arm is unreachable but
+        // keeps the decision total if the mapping ever changes.
+        CommunicationStyle::Unknown => !ROUTINE_SILENT_CODES.contains(&code),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,6 +230,69 @@ mod tests {
         assert!(text.contains("provider.failure"));
         assert!(text.contains("request-2"));
     }
+    #[test]
+    fn communication_style_visibility_silences_only_routine_codes() {
+        use crate::ui_protocol::CommunicationStyle;
+        // Asymmetric matrix: every style sees both a silent and a visible code
+        // except Verbose, which is the deliberate show-everything escape hatch.
+        for (style, code, visible) in [
+            (CommunicationStyle::Balanced, "tool.execution_failed", false),
+            (CommunicationStyle::Balanced, "provider.retrying", false),
+            (CommunicationStyle::Balanced, "provider.retry_succeeded", false),
+            (CommunicationStyle::Balanced, "tool.command_failed", true),
+            (CommunicationStyle::Balanced, "tool.policy_denied", true),
+            (CommunicationStyle::Balanced, "tool.cancelled", true),
+            (CommunicationStyle::Balanced, "provider.retry_stopped", true),
+            (CommunicationStyle::Balanced, "provider.stream_billing_advisory", true),
+            (CommunicationStyle::Balanced, "planning.awaiting_input", true),
+            (CommunicationStyle::Balanced, "mcp.catalog_failed", true),
+            (CommunicationStyle::Balanced, "runtime.error", true),
+            (CommunicationStyle::Quiet, "tool.execution_failed", false),
+            (CommunicationStyle::Quiet, "tool.command_failed", false),
+            (CommunicationStyle::Quiet, "tool.policy_denied", true),
+            (CommunicationStyle::Quiet, "provider.retry_stopped", true),
+            (CommunicationStyle::Verbose, "tool.execution_failed", true),
+            (CommunicationStyle::Verbose, "provider.retrying", true),
+            (CommunicationStyle::Verbose, "tool.command_failed", true),
+            // Fail-open: an unknown future code is visible everywhere.
+            (CommunicationStyle::Balanced, "tool.something_new", true),
+            (CommunicationStyle::Quiet, "tool.something_new", true),
+            // An unknown future style degrades to Balanced, never to silence.
+            (CommunicationStyle::Unknown, "tool.execution_failed", false),
+            (CommunicationStyle::Unknown, "tool.command_failed", true),
+        ] {
+            assert_eq!(
+                diagnostic_is_user_visible(style, code),
+                visible,
+                "{style:?} must treat {code} as visible={visible}"
+            );
+        }
+    }
+
+    #[test]
+    fn communication_style_parse_round_trips_and_falls_back_to_unknown() {
+        use crate::ui_protocol::CommunicationStyle;
+        for (text, expected) in [
+            ("balanced", CommunicationStyle::Balanced),
+            ("  Quiet ", CommunicationStyle::Quiet),
+            ("VERBOSE", CommunicationStyle::Verbose),
+            ("", CommunicationStyle::Unknown),
+            ("terse", CommunicationStyle::Unknown),
+        ] {
+            assert_eq!(CommunicationStyle::parse(text), expected, "parse({text:?})");
+        }
+        assert_eq!(CommunicationStyle::Unknown.resolve(), CommunicationStyle::Balanced);
+        assert_eq!(CommunicationStyle::default(), CommunicationStyle::Balanced);
+        assert_eq!(
+            serde_json::from_value::<CommunicationStyle>(serde_json::json!("verbose")).unwrap(),
+            CommunicationStyle::Verbose
+        );
+        assert_eq!(
+            serde_json::from_value::<CommunicationStyle>(serde_json::json!("future-style")).unwrap(),
+            CommunicationStyle::Unknown
+        );
+    }
+
     #[test]
     fn diagnostic_long_message_preserves_complete_command_and_short_message_body() {
         let command =

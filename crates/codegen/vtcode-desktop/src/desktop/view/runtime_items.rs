@@ -235,6 +235,18 @@ impl DesktopView {
         self.project_runtime_item(item, false);
     }
 
+    /// Effective CLI communication style for diagnostic projection. Older
+    /// services omit the projection; those fall back to `Balanced`, matching
+    /// the CLI default. Unknown future values resolve the same way.
+    fn communication_style(&self) -> vtcode_commons::ui_protocol::CommunicationStyle {
+        self.configuration
+            .as_ref()
+            .and_then(|configuration| configuration.shared_ui.as_ref())
+            .map(|shared| vtcode_commons::ui_protocol::CommunicationStyle::parse(&shared.communication_style))
+            .unwrap_or_default()
+            .resolve()
+    }
+
     pub(super) fn update_runtime_item_for_turn(
         &mut self,
         item: &vtcode_exec_events::ThreadItem,
@@ -353,6 +365,18 @@ impl DesktopView {
             }
             ThreadItemDetails::Reasoning(reasoning) => {
                 if let Some(diagnostic) = reasoning.diagnostic.as_deref() {
+                    // Routine agent-internal failures stay out of the desktop
+                    // transcript under the default style; the canonical event
+                    // still carries the complete evidence for forensics. A
+                    // silent update also clears a stale visible row so an
+                    // incident can never linger after its class goes silent.
+                    if !vtcode_commons::diagnostics::diagnostic_is_user_visible(
+                        self.communication_style(),
+                        &diagnostic.code,
+                    ) {
+                        self.transcript.remove(&item.id);
+                        return;
+                    }
                     let severity = match diagnostic.severity {
                         vtcode_exec_events::DiagnosticSeverity::Error => NoticeSeverity::Error,
                         vtcode_exec_events::DiagnosticSeverity::Warning => NoticeSeverity::Warning,

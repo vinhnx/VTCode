@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use ratatui::text::{Line, Span};
-use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity, redact_diagnostic};
+use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity, diagnostic_is_user_visible, redact_diagnostic};
 use vtcode_commons::ui_protocol::{InlineMessageKind, InlineSegment, InlineTextStyle, convert_style};
 
 use super::{Session, message::TranscriptLine};
@@ -93,14 +93,23 @@ impl Session {
 
     /// F8 toggles the latest diagnostic. It never emits a runtime input event.
     ///
+    /// Whether a stored incident paints no main-transcript rows under the
+    /// active communication style. Silent incidents stay stored (Transcript
+    /// Review renders them with complete evidence) but are invisible to the
+    /// main transcript, its hit-testing, and F8.
+    fn diagnostic_is_hidden(&self, payload: &Diagnostic) -> bool {
+        !diagnostic_is_user_visible(self.appearance.communication_style, &payload.code)
+    }
+
     /// The latest incident with details owns the key: an incident whose payload
     /// the transcript does not disclose is skipped rather than retargeting an
     /// older one.
     pub(crate) fn toggle_latest_diagnostic(&mut self) -> bool {
+        let style = self.appearance.communication_style;
         let index = self.lines.iter().rposition(|line| {
-            line.diagnostic
-                .as_ref()
-                .is_some_and(|entry| !entry.payload.agent_details.trim().is_empty())
+            line.diagnostic.as_ref().is_some_and(|entry| {
+                !entry.payload.agent_details.trim().is_empty() && diagnostic_is_user_visible(style, &entry.payload.code)
+            })
         });
         index.is_some_and(|index| self.toggle_diagnostic(index))
     }
@@ -108,6 +117,13 @@ impl Session {
     pub(crate) fn toggle_diagnostic_at_row(&mut self, width: u16, row: usize) -> bool {
         let mut start = 0;
         for index in 0..self.lines.len() {
+            if self.lines[index]
+                .diagnostic
+                .as_ref()
+                .is_some_and(|entry| self.diagnostic_is_hidden(&entry.payload))
+            {
+                continue;
+            }
             let rows = self.reflow_message_lines(index, width, true);
             let count = rows.len();
             if row >= start && row < start + count {
@@ -137,6 +153,9 @@ impl Session {
             return Vec::new();
         };
         let payload = &entry.payload;
+        if !review && self.diagnostic_is_hidden(payload) {
+            return Vec::new();
+        }
         // Transcript Review always shows the complete evidence body, so it
         // renders the expanded presentation even when the transcript collapses it.
         let expanded = entry.expanded || review;
@@ -375,6 +394,79 @@ mod tests {
         let stored = session.lines[0].diagnostic.as_ref().expect("diagnostic entry").payload.clone();
         assert_eq!(stored, payload, "toggling must not mutate the incident payload");
         assert!(stored.agent_details.contains("attempts=3"), "recovery evidence stays in the payload");
+    }
+
+    #[test]
+    fn silent_routine_incident_stays_stored_but_paints_no_main_transcript_rows() {
+        use vtcode_commons::ui_protocol::CommunicationStyle;
+        let mut session = Session::new(InlineTheme::default(), None, 30);
+        assert_eq!(session.appearance.communication_style, CommunicationStyle::Balanced);
+        let mut payload = diagnostic();
+        payload.code = "tool.execution_failed".into();
+        payload.severity = DiagnosticSeverity::Warning;
+        payload.summary = "Tool 'task_tracker' failed.".into();
+        session.upsert_diagnostic(payload.clone());
+
+        assert!(session.lines[0].diagnostic.is_some(), "silent incidents stay stored");
+        assert!(
+            session.reflow_message_lines(0, 100, false).is_empty(),
+            "silent incidents paint no main-transcript rows"
+        );
+        let review = text(session.reflow_message_lines_for_review(0, 100));
+        assert!(review.contains("Tool 'task_tracker' failed."), "Review keeps the summary: {review}");
+        assert!(review.contains("attempts=3"), "Review keeps the complete evidence: {review}");
+        assert!(!session.toggle_latest_diagnostic(), "F8 must skip silent incidents");
+        assert!(!session.toggle_diagnostic_at_row(100, 0), "hit-testing must skip silent incidents");
+    }
+
+    #[test]
+    fn command_and_policy_incidents_paint_while_routine_stays_silent() {
+        use vtcode_commons::ui_protocol::CommunicationStyle;
+        let mut session = Session::new(InlineTheme::default(), None, 30);
+        for (code, summary, paints) in [
+            ("tool.command_failed", "Tool 'exec_command' failed.", true),
+            ("tool.policy_denied", "Tool 'web_fetch' blocked by policy.", true),
+            ("tool.something_new", "Some future incident.", true),
+            ("tool.execution_failed", "Tool 'task_tracker' failed.", false),
+            ("provider.retrying", "Retrying provider request.", false),
+            ("provider.retry_stopped", "Provider retries stopped.", true),
+        ] {
+            let mut payload = diagnostic();
+            payload.code = code.into();
+            payload.summary = summary.into();
+            payload.correlation_id = format!("incident-{code}");
+            session.upsert_diagnostic(payload);
+            let index = session.lines.len() - 1;
+            assert_eq!(
+                !session.reflow_message_lines(index, 100, false).is_empty(),
+                paints,
+                "{code} paints={paints} under Balanced"
+            );
+            assert!(
+                !session.reflow_message_lines_for_review(index, 100).is_empty(),
+                "{code} always stays in Transcript Review"
+            );
+        }
+        // Quiet additionally collapses user-direct command failures.
+        session.appearance.communication_style = CommunicationStyle::Quiet;
+        let command = session
+            .lines
+            .iter()
+            .position(|line| {
+                line.diagnostic
+                    .as_ref()
+                    .is_some_and(|entry| entry.payload.code == "tool.command_failed")
+            })
+            .expect("command incident stored");
+        assert!(session.reflow_message_lines(command, 100, false).is_empty());
+        // Verbose restores every row.
+        session.appearance.communication_style = CommunicationStyle::Verbose;
+        for index in 0..session.lines.len() {
+            assert!(
+                !session.reflow_message_lines(index, 100, false).is_empty(),
+                "verbose paints every stored incident"
+            );
+        }
     }
 
     #[test]

@@ -128,6 +128,7 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
             "ui.tool_display_mode",
             "ui.tool_output_mode",
             "ui.reasoning_display_mode",
+            "ui.communication_style",
             "ui.show_sidebar",
             "ui.show_task_panel",
             "ui.show_message_timestamps",

@@ -279,12 +279,14 @@ fn diagnostic_click_while_streaming_expands_and_pins_the_viewport() {
     use ratatui::backend::TestBackend;
     use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
 
-    // Production shape from tool failure diagnosis: a warning summary with
-    // prose recovery evidence that the transcript discloses in place.
+    // Production shape from tool failure diagnosis: a user-visible command
+    // failure with prose recovery evidence that the transcript discloses in
+    // place. Routine `tool.execution_failed` incidents stay silent under the
+    // default style, so streaming mechanics pin the visible class instead.
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Warning,
-        code: "tool.execution_failed".into(),
-        summary: "Tool 'task_tracker' failed.".into(),
+        code: "tool.command_failed".into(),
+        summary: "Tool 'exec_command' failed.".into(),
         agent_details: "Likely cause: duplicate create.\nNext action: run task_tracker.list and continue.".into(),
         correlation_id: "tool-diagnosis:streaming-click".into(),
         actions: Vec::new(),
@@ -387,10 +389,13 @@ fn diagnostic_f8_while_streaming_expands_and_pins_the_viewport() {
     use ratatui::backend::TestBackend;
     use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
 
+    // Visible command-failure class: routine incidents stay silent under the
+    // default style (see the click test above), so streaming F8 mechanics pin
+    // the class users actually see.
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Warning,
-        code: "tool.execution_failed".into(),
-        summary: "Tool 'task_tracker' failed.".into(),
+        code: "tool.command_failed".into(),
+        summary: "Tool 'exec_command' failed.".into(),
         agent_details: "Likely cause: duplicate create.\nNext action: run task_tracker.list and continue.".into(),
         correlation_id: "tool-diagnosis:streaming-f8".into(),
         actions: Vec::new(),

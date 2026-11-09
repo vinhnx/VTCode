@@ -150,12 +150,20 @@ pub struct ConfigOpenFileParams {
     pub target: ConfigTarget,
 }
 
+fn default_communication_style() -> String {
+    "balanced".to_string()
+}
+
 /// CLI preferences projected through existing parsers rather than a second config loader.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedUiPreferences {
     /// Theme ID resolved by the CLI startup loader.
     pub theme: String,
+    /// Effective `ui.communication_style` (`balanced`/`quiet`/`verbose`).
+    /// Absent on older services; the desktop falls back to `balanced`.
+    #[serde(default = "default_communication_style")]
+    pub communication_style: String,
     /// Desktop command ID to normalized native key combinations; an empty list unbinds it.
     #[serde(default)]
     pub shortcuts: std::collections::BTreeMap<String, Vec<String>>,

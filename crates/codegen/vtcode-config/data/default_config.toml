@@ -285,6 +285,16 @@ tool_output_mode = "compact"
 # "expanded" - Render the expanded summary layout per call
 tool_display_mode = "compact"
 
+# Communication style: how much routine agent-internal failure chatter reaches
+# the interactive transcript (complete evidence always stays in Transcript
+# Review, the tool-output viewer, and canonical ThreadEvents)
+# "balanced" - Routine failures stay silent; user-direct command failures and
+#   user-actionable incidents (policy, auth, validation, verification) stay visible
+# "quiet" - Balanced, plus user-direct command failures collapse to one status line
+# "verbose" - Show every diagnostic, as before filtering existed
+# Applies to new sessions; already-running sessions keep their startup value.
+communication_style = "balanced"
+
 # Maximum number of lines to display in tool output (prevents transcript flooding)
 # Lines beyond this limit are truncated to a tail preview
 tool_output_max_lines = 600

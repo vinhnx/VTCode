@@ -68,13 +68,21 @@ impl DesktopView {
             .child(header);
         if item.collapsible_details {
             if item.expanded {
+                // Evidence renders as Markdown so fenced blocks land on the
+                // code surface; severity stays on the header marker while the
+                // body keeps the neutral foreground for theme-safe contrast.
                 panel = panel.child(
                     div()
                         .id(format!("notice-details-body-{}", item.id))
                         .test_support()
                         .text_sm()
                         .text_color(colors.foreground)
-                        .child(item.text.clone()),
+                        .child(render_markdown_with_style(
+                            format!("notice-details-markdown-{}", item.id),
+                            item.text.clone(),
+                            false,
+                            self.transcript_markdown_style.clone().unwrap_or_else(|| markdown_style(cx)),
+                        )),
                 );
             }
         } else if !item.text.trim().is_empty() {

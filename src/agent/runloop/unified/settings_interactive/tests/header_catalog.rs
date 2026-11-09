@@ -131,6 +131,7 @@ fn desktop_config_catalog_exposes_curated_dropdown_options() {
         ("tools.web_search.provider", vec!["auto", "duckduckgo"]),
         ("agent.verbosity", vec!["high", "low", "medium"]),
         ("ui.reasoning_display_mode", vec!["always", "hidden", "toggle"]),
+        ("ui.communication_style", vec!["balanced", "quiet", "verbose"]),
     ] {
         let field = fields.iter().find(|field| field.path == path).expect("curated catalog field");
         assert_eq!(

@@ -230,7 +230,11 @@ pub(super) async fn configuration_snapshot(
             }
             .to_string(),
         ),
-        shared_ui: Some(shared_preferences::snapshot(&context.startup.config.ui.keybindings, &agent.theme)),
+        shared_ui: Some(shared_preferences::snapshot(
+            &context.startup.config.ui.keybindings,
+            &agent.theme,
+            context.startup.config.ui.communication_style,
+        )),
         context_window: model_catalog_entry(&agent.provider, &agent.model).map(|entry| entry.context_window as u64),
     })
 }

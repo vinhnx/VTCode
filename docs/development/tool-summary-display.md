@@ -29,17 +29,23 @@ primary review binding and is omitted when that action is unbound. Successful fi
 and remain visible as a glanceable `• Edited path (+N -M)` (or created/deleted) row followed by the numbered diff
 preview; the complete tool result remains available to the agent and Transcript Review.
 
-Failure-like results (hard failures, timeouts, and non-zero command exits) also show a bounded `Info` diagnosis with
+Failure-like results (hard failures, timeouts, and non-zero command exits) also record a bounded diagnosis with
 `Observed`, `Likely cause`, and `Next action`. It is derived from the existing bounded preview, while complete raw
 output remains available in Transcript Review. Deterministic guidance is used for policy, permission, authentication,
 circuit-breaker, sandbox, resource, and preflight failures; provider-native reasoning settings do not expose raw
-diagnosis-provider reasoning.
+diagnosis-provider reasoning. Whether the diagnosis earns a transcript row depends on `ui.communication_style`
+(`balanced` default, `quiet`, `verbose`): routine agent-internal failures (`tool.execution_failed`)
+stay silent under `balanced`/`quiet` while the owning tool row keeps its failed state; empty searches
+keep a one-line Info notice under `verbose` only;
+user-direct command failures (`tool.command_failed`) stay visible under `balanced` and collapse to one status
+line under `quiet`; safeguard blocks (`tool.policy_denied`) stay visible in every style. The agent loop always
+receives the complete diagnosis regardless of style.
 
 When the UI collapses or bounds a tool result, every provider/model receives this exact disclosure after the tool-result
 user message:
 
 ```text
-Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.
+Only you see that command's output — the user's terminal shows at most a few lines of it, and routine tool failures stay hidden entirely. If the user needs to read any of it, put it in your reply; never reference hidden details as if the user saw them.
 ```
 
 Anthropic wire routes whose selected provider/model capability supports it use the native
@@ -71,7 +77,9 @@ The desktop transcript mirrors these summaries in `crates/codegen/vtcode-desktop
 expanded tool rows show the headline plus filtered detail lines and a bounded output tail, never a raw
 JSON dump of the tool call. Exec-session follow-ups collapse to the same one-line session row, and full
 captures stay in the inspector Output tab. The agent core still receives complete arguments and results
-through `ThreadEvent`; only the user-visible projection is concise.
+through `ThreadEvent`; only the user-visible projection is concise. Diagnostic notices follow the same
+`ui.communication_style` rule as the TUI through the `SharedUiPreferences` projection, and expanded
+notice evidence renders on the Markdown surface so fenced blocks land on the code surface.
 
 ## Exec-session calls (`write_stdin` and the session readers)
 

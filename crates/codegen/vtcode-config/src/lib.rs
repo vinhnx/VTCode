@@ -157,7 +157,7 @@ pub use types::{
     ReasoningEffortLevel, ResolvedShellPromptProfile, ShellProfilePlatform, ShellPromptProfile, SystemPromptMode,
     ToolDocumentationMode, UiSurfacePreference, VerbosityLevel,
 };
-pub use vtcode_commons::ui_protocol::{DiffPreviewMode, ThinkingBlockState};
+pub use vtcode_commons::ui_protocol::{CommunicationStyle, DiffPreviewMode, ThinkingBlockState};
 pub use webmcp::{RemoteMcpConfig, WebmcpConfig};
 pub use workspace_env::{
     read_workspace_env_value, remove_workspace_env_value, workspace_env_path, workspace_env_path_display,

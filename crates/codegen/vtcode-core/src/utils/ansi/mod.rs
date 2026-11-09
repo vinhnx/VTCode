@@ -52,6 +52,7 @@ pub struct AnsiRenderer {
     /// renderer a flush to keep their clock.
     defer_turn_footer: bool,
     tool_display_mode: ToolDisplayMode,
+    communication_style: vtcode_commons::ui_protocol::CommunicationStyle,
     diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode,
     compact_command_group: Option<CompactActivityMetadata>,
     next_compact_group_id: u64,

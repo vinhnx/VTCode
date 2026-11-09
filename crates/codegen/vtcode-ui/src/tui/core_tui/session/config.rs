@@ -28,7 +28,8 @@ pub struct SessionConfig {
 
 // Re-export shared enums from vtcode-commons.
 pub use vtcode_commons::ui_protocol::{
-    BusyEnterBehavior, DiffPreviewMode, LayoutModeOverride, ReasoningDisplayMode, ThinkingBlockState, UiMode,
+    BusyEnterBehavior, CommunicationStyle, DiffPreviewMode, LayoutModeOverride, ReasoningDisplayMode,
+    ThinkingBlockState, UiMode,
 };
 
 /// UI appearance configuration
@@ -87,6 +88,12 @@ pub struct AppearanceConfig {
     /// Default collapse state of agent thinking/reasoning blocks
     #[serde(default)]
     pub thinking_display: ThinkingBlockState,
+
+    /// How much routine agent-internal failure chatter reaches the transcript.
+    /// Silent incidents are still stored (Transcript Review keeps them) but
+    /// paint no main-transcript rows.
+    #[serde(default)]
+    pub communication_style: CommunicationStyle,
 
     /// Enable Vim-style input editing for the prompt.
     #[serde(default)]
@@ -166,6 +173,7 @@ impl Default for AppearanceConfig {
             reasoning_display_mode: ReasoningDisplayMode::Toggle,
             reasoning_visible_default: crate::tui::config::constants::ui::DEFAULT_REASONING_VISIBLE,
             thinking_display: ThinkingBlockState::Collapsed,
+            communication_style: CommunicationStyle::Balanced,
             vim_mode: false,
             readline_mode: false,
             busy_enter_behavior: BusyEnterBehavior::Queue,
