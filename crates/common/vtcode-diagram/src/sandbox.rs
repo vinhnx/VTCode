@@ -41,6 +41,9 @@ pub enum RenderError {
     /// The sandbox or Pele itself failed: bundle load, JS exception, or an
     /// exhausted time budget. Carries the JS-side message for inert display.
     Js(String),
+    /// The rasterized output exceeds the file-raster budget (edge or total
+    /// pixels); rejected before allocating the pixmap.
+    OutputTooLarge,
 }
 
 impl fmt::Display for RenderError {
@@ -48,6 +51,7 @@ impl fmt::Display for RenderError {
         match self {
             Self::TooLarge => write!(f, "diagram source exceeds the size limit"),
             Self::Js(message) => write!(f, "diagram render failed: {message}"),
+            Self::OutputTooLarge => write!(f, "rendered diagram exceeds the raster size limit"),
         }
     }
 }

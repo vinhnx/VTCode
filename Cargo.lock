@@ -12562,6 +12562,7 @@ dependencies = [
 name = "vtcode-diagram"
 version = "0.181.8"
 dependencies = [
+ "resvg 0.46.0",
  "rquickjs",
 ]
 

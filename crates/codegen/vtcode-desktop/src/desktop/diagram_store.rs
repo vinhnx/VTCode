@@ -1,8 +1,8 @@
 //! Inline diagram store: render cache, worker thread, image hook.
 //!
-//! [`super::diagram_inline`] owns the stateless half (sandboxed Pele
-//! execution, CSS-var inlining, content addressing); this module owns the
-//! stateful half. Closed mermaid fences resolve through Kit's `image_source`
+//! `vtcode-diagram` owns the stateless half (sandboxed Pele execution,
+//! CSS-var inlining) and [`super::diagram_inline`] the content addressing;
+//! this module owns the stateful half. Closed mermaid fences resolve through Kit's `image_source`
 //! hook to an App-global FIFO cache, with misses filled by one worker thread
 //! and the transcript repainted on completion. Every failure degrades to the
 //! code fence plus the browser preview, never a blank.
@@ -16,6 +16,7 @@ use futures::channel::oneshot;
 use gpui_kit::component::theme::ThemeColor;
 
 use super::diagram_inline;
+use vtcode_diagram::RASTER_SCALE;
 
 /// Rendered images retained: count backstop plus the byte budget below.
 const IMAGE_ENTRY_CAP: usize = 32;
@@ -30,11 +31,9 @@ const WORKER_QUEUE: usize = 8;
 /// Wall-clock budget per headless render on the worker.
 const RENDER_BUDGET: Duration = Duration::from_secs(10);
 
-/// Supersample factor for inline rasters. Matches the native renderer's own
-/// smoothing so inline diagrams look identical to other scaled art.
-const RASTER_SCALE: f64 = 2.0;
-/// Longest raster edge. Covers every typical diagram; larger ones keep the
-/// browser preview instead of a 100-megapixel inline bitmap.
+/// Longest inline raster edge. Covers every typical diagram; larger ones keep
+/// the browser preview instead of a 100-megapixel inline bitmap. Tighter than
+/// the file-raster budget because inline images sit in the transcript.
 const MAX_RASTER_DIM_PX: f64 = 2048.0;
 
 /// Cache key: diagram content plus the exact theme it rendered under, so a
@@ -164,8 +163,8 @@ fn render_diagram(
     // Gate on Pele's own intrinsic size: inlining only swaps paint values,
     // so geometry (and therefore the raster footprint) is already fixed.
     // Oversized diagrams keep the browser preview.
-    let raster_width = rendered.width * RASTER_SCALE;
-    let raster_height = rendered.height * RASTER_SCALE;
+    let raster_width = rendered.width * f64::from(RASTER_SCALE);
+    let raster_height = rendered.height * f64::from(RASTER_SCALE);
     if raster_width > MAX_RASTER_DIM_PX || raster_height > MAX_RASTER_DIM_PX {
         return Err(rust_i18n::t!("app.markdown.diagram_too_large").to_string());
     }

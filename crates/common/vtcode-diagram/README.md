@@ -20,6 +20,10 @@ let rendered = sandbox.render(
 std::fs::write("diagram.svg", rendered.svg)?;
 ```
 
+`DiagramSandbox::render_png` rasterizes the same output to PNG (2x
+supersampled, system fonts, no background fill), as does
+`vtcode diagram render input.mmd -o out.png`.
+
 Although the render engine is only consumed inside the VT Code workspace
 today, the crate is published to crates.io because the published `vtcode`
 binary depends on it. Bundle provenance lives in

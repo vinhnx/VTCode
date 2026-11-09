@@ -22,9 +22,11 @@
 //! with [`inline_css_vars`] against their own theme map.
 
 mod inline;
+mod raster;
 mod sandbox;
 
 pub use inline::inline_css_vars;
+pub use raster::{MAX_FILE_RASTER_EDGE_PX, MAX_FILE_RASTER_PIXELS, RASTER_SCALE, RenderedPng};
 pub use sandbox::{DiagramSandbox, RenderError, RenderedSvg};
 
 /// Vendored Pele browser bundle (global `pele` with `render` and `mount`).

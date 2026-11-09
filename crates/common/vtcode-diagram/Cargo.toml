@@ -17,4 +17,5 @@ keywords = ["vtcode", "mermaid", "diagram", "pele", "svg"]
 workspace = true
 
 [dependencies]
+resvg = { version = "0.46", default-features = false, features = ["text", "system-fonts"] }
 rquickjs = "0.14"

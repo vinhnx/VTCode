@@ -25,7 +25,7 @@ const WEB_SEARCH_GUIDANCE: &str = "- web_search uses keyless DuckDuckGo; web_fet
 /// The single home of the diagram-render hint: the offline `diagram render`
 /// CLI replaces any network-fetched renderer. Emitted only outside planning
 /// (rendering writes a file, and planning exec stays read-only).
-const DIAGRAM_GUIDANCE_LINE: &str = "- Render Mermaid diagrams offline with `vtcode diagram render <input> -o <out.svg>` via exec_command (.mmd source or Markdown first-fence); never install or fetch an external renderer.";
+const DIAGRAM_GUIDANCE_LINE: &str = "- Render Mermaid diagrams offline with `vtcode diagram render <input> -o <out.svg>` via exec_command (.mmd source or Markdown first-fence; `.svg` or `.png` output); never install or fetch an external renderer.";
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
 
 const OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE: &str = "- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.";

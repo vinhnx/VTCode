@@ -25,18 +25,37 @@ async fn handle_diagram_render_command(input: &Path, output: Option<PathBuf>) ->
     if source.trim().is_empty() {
         anyhow::bail!("diagram source is empty");
     }
-    let sandbox = vtcode_diagram::DiagramSandbox::new(vtcode_diagram::PELE_BUNDLE_JS)?;
-    let rendered = sandbox
-        .render(source, RENDER_BUDGET)
-        .with_context(|| format!("rendering {}", input.display()))?;
     let out_path = output.unwrap_or_else(|| input.with_extension("svg"));
-    std::fs::write(&out_path, rendered.svg.as_bytes()).with_context(|| format!("writing {}", out_path.display()))?;
-    println!("Rendered {} ({}x{}) to {}", input.display(), rendered.width, rendered.height, out_path.display());
+    let sandbox = vtcode_diagram::DiagramSandbox::new(vtcode_diagram::PELE_BUNDLE_JS)?;
+    if wants_png(&out_path) {
+        let rendered = sandbox
+            .render_png(source, RENDER_BUDGET)
+            .with_context(|| format!("rendering {}", input.display()))?;
+        std::fs::write(&out_path, &rendered.bytes).with_context(|| format!("writing {}", out_path.display()))?;
+        println!(
+            "Rendered {} ({}x{} px) to {}",
+            input.display(),
+            rendered.width_px,
+            rendered.height_px,
+            out_path.display()
+        );
+    } else {
+        let rendered = sandbox
+            .render(source, RENDER_BUDGET)
+            .with_context(|| format!("rendering {}", input.display()))?;
+        std::fs::write(&out_path, rendered.svg.as_bytes())
+            .with_context(|| format!("writing {}", out_path.display()))?;
+        println!("Rendered {} ({}x{}) to {}", input.display(), rendered.width, rendered.height, out_path.display());
+    }
     Ok(())
 }
 
 fn is_markdown_path(path: &Path) -> bool {
     matches!(path.extension().and_then(|extension| extension.to_str()), Some(ext) if ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
+}
+
+fn wants_png(path: &Path) -> bool {
+    matches!(path.extension().and_then(|extension| extension.to_str()), Some(ext) if ext.eq_ignore_ascii_case("png"))
 }
 
 #[cfg(test)]
@@ -88,5 +107,26 @@ mod tests {
         let input = fixture(dir.path(), "bad.mmd", "Hello\n");
         let error = handle_diagram_render_command(&input, None).await.expect_err("must fail");
         assert!(error.to_string().contains("rendering"), "{error:?}");
+    }
+
+    #[tokio::test]
+    async fn png_extension_selects_raster_output_case_insensitively() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let input = fixture(dir.path(), "flow.mmd", "flowchart TD\n  A --> B\n");
+        for name in ["flow.png", "FLOW.PNG"] {
+            let output = dir.path().join(name);
+            handle_diagram_render_command(&input, Some(output.clone()))
+                .await
+                .expect("renders");
+            let bytes = std::fs::read(&output).expect("read png");
+            assert!(bytes.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]), "{name} is png");
+        }
+        // Unknown extensions keep the SVG default.
+        let output = dir.path().join("flow.txt");
+        handle_diagram_render_command(&input, Some(output.clone()))
+            .await
+            .expect("renders");
+        let text = std::fs::read_to_string(&output).expect("read svg");
+        assert!(text.contains("<svg"), "svg element present");
     }
 }
