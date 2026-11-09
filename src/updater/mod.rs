@@ -193,9 +193,12 @@ impl Updater {
         }
 
         let (asset, archive_kind) = github::select_archive_asset(&release.assets, target)?;
-        let checksum_asset = download::checksum_asset(&release.assets, &asset.name)
-            .with_context(|| format!("no checksum metadata was published for update archive {}", asset.name))?;
         let binary_name = install_source::binary_name_for_target(target);
+        let download_timeout = std::time::Duration::from_secs(self.config.download_timeout_secs.max(1));
+        // Resolve the checksum before the archive: it is a few hundred bytes,
+        // so a checksum outage — or a release that published none — fails
+        // before the multi-megabyte archive is downloaded and discarded.
+        let expected = download::download_expected_checksum(&release.assets, &asset.name, download_timeout).await?;
         let temporary_directory = tempfile::tempdir().context("Failed to create update temporary directory")?;
         // Keep remote asset names out of filesystem paths; GitHub metadata is
         // untrusted even though the selected URL and format were validated.
@@ -204,26 +207,12 @@ impl Updater {
             let mut report_download = |downloaded: u64, total: Option<u64>| {
                 on_progress(UpdateProgress::Downloading { downloaded, total });
             };
-            download::download_asset(
-                asset,
-                &archive_path,
-                std::time::Duration::from_secs(self.config.download_timeout_secs.max(1)),
-                show_progress,
-                Some(&mut report_download),
-            )
-            .await
-            .context("Failed to download update archive")?;
+            download::download_asset(asset, &archive_path, download_timeout, show_progress, Some(&mut report_download))
+                .await
+                .context("Failed to download update archive")?;
         }
 
         on_progress(UpdateProgress::VerifyingChecksum);
-        let metadata = download::download_checksum(
-            checksum_asset,
-            std::time::Duration::from_secs(self.config.download_timeout_secs.max(1)),
-        )
-        .await
-        .with_context(|| format!("failed to download checksum metadata for update archive {}", asset.name))?;
-        let expected = download::parse_checksum_metadata(&metadata, &asset.name)
-            .with_context(|| format!("checksum metadata did not contain update archive {}", asset.name))?;
         // `verify_file_checksum` does blocking `std::fs::read` + hashing; run it
         // on the blocking pool so the async runtime is not stalled (tokio `fs`
         // tuning: batch blocking file IO into `spawn_blocking`).

@@ -101,22 +101,19 @@ pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -
     if asset_version != release.version {
         bail!("desktop asset {} does not match release {}", asset.name, release.version);
     }
-    let checksum_asset = download::checksum_asset(&release.assets, &asset.name)
-        .with_context(|| format!("no checksum metadata was published for desktop archive {}", asset.name))?;
 
     let temporary_directory = tempfile::tempdir().context("failed to create desktop install temporary directory")?;
     // Keep remote asset names out of filesystem paths; GitHub metadata is
     // untrusted even though the selected URL and format were validated.
     let archive_path = temporary_directory.path().join("downloaded-desktop-archive");
+    // Resolve the checksum before the ~29 MB bundle: it is a few hundred
+    // bytes, so a checksum outage — or a release that published none — fails
+    // before the archive is downloaded and discarded.
+    let expected = download::download_expected_checksum(&release.assets, &asset.name, timeout).await?;
     download::download_asset(asset, &archive_path, timeout, true, None::<&mut fn(u64, Option<u64>)>)
         .await
         .context("failed to download desktop app archive")?;
 
-    let metadata = download::download_checksum(checksum_asset, timeout)
-        .await
-        .with_context(|| format!("failed to download checksum metadata for desktop archive {}", asset.name))?;
-    let expected = download::parse_checksum_metadata(&metadata, &asset.name)
-        .with_context(|| format!("checksum metadata did not contain desktop archive {}", asset.name))?;
     // `verify_file_checksum` does blocking `std::fs::read` + hashing; run it
     // on the blocking pool so the async runtime is not stalled.
     let archive_path_for_checksum = archive_path.clone();
