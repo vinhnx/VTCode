@@ -8,6 +8,5 @@ docs/FAQ.md
 docs/INDEX.md
 docs/README.md
 docs/SECURITY.md
-docs/concurrency-improvements-report.md
 docs/loop-engineering.md
 docs/signal_handling.md
