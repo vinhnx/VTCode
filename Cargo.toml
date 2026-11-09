@@ -112,7 +112,7 @@ tower-http = { version = "0.7", features = ["cors"] }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 rig = { package = "rig-core", version = "0.40", default-features = false, features = ["reqwest", "rustls"] }
 portable-pty = "0.9.0"
-rmcp = "3.4.0"
+rmcp = "3.9.0"
 
 
 # Internal workspace crates
