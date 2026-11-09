@@ -5,6 +5,33 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.181.7 - 2026-11-09
+
+### Highlights
+
+#### Features
+
+- Report OSC 7501 status for headless exec runs (4339b3c2)
+- Collapse custom themes section by default (26f3661e)
+- Read the changelog from Settings → About (fe341dce)
+- Move the update check to Settings → About (d57410f0)
+- Retry with backoff for background fetches, guard image URLs (128fb488)
+- Upgrade pinned gpui-kit from 0.8.1 to 0.9.0 (cba3d44b)
+
+### Other Changes
+
+#### Other
+
+- Cleanup docs (f3f56de7)
+
+#### Refactors
+
+- Split session-option flows into view/session_options (d7017094)
+
+#### Tests
+
+- Pin transcript readability contract (efc58bd8)
+
 ## 0.181.6 - 2026-11-08
 
 ### Highlights
