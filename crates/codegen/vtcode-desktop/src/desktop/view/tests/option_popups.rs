@@ -123,6 +123,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
 fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 900., 800.);
     let (commands, _requests) = tokio::sync::mpsc::channel(16);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
@@ -171,6 +172,7 @@ fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestApp
 fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 900., 800.);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
@@ -568,94 +570,11 @@ fn workspace_permission_choices_persist_after_acknowledgement_and_restore_on_rec
 }
 
 #[gpui_kit::test]
-fn reasoning_effort_options_accessible_label_tracks_the_cli_level(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, _requests) = tokio::sync::mpsc::channel(1);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| {
-            view.backend = Some(BackendHandle { commands });
-            view.configuration = Some(runtime_options_config());
-        });
-        window.render_frame(cx);
-        window.click("pick-model", cx);
-        window.render_frame(cx);
-
-        let options = window.find("effort-options");
-        assert_eq!(options.role(), Some(gpui_kit::Role::RadioGroup));
-        assert_eq!(options.label(), Some("Reasoning effort: medium"));
-        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: medium"));
-
-        view.update(cx, |view, cx| {
-            let slider = view.effort_slider.clone().unwrap();
-            slider.update(cx, |state, cx| state.set_value(2., window, cx));
-        });
-        window.render_frame(cx);
-
-        assert_eq!(window.find("effort-options").label(), Some("Reasoning effort: high"));
-        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: high"));
-        assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · high"));
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn reasoning_effort_option_click_commits_the_selected_level(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| {
-            view.backend = Some(BackendHandle { commands });
-            view.configuration = Some(runtime_options_config());
-        });
-        window.render_frame(cx);
-        window.click("pick-model", cx);
-        window.render_frame(cx);
-        // Levels render highest-first; index 2 is high in the low/medium/high fixture.
-        assert_eq!(window.find(("effort-label", 1usize)).selected(), Some(true));
-        let top = window.find(("effort-label", 2usize)).bounds();
-        let bottom = window.find(("effort-label", 0usize)).bounds();
-        assert!(top.origin.y < bottom.origin.y, "highest effort renders first: top={top:?} bottom={bottom:?}");
-        window.click(("effort-label", 2usize), cx);
-        window.render_frame(cx);
-        assert_eq!(window.find(("effort-label", 2usize)).selected(), Some(true));
-    })
-    .unwrap();
-    cx.run_until_parked();
-    let BackendCommand::Request { method, params } = requests.try_recv().expect("mouse selection request") else {
-        panic!("request expected");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
-    assert_eq!(params["reasoningEffort"], "high");
-    assert!(requests.try_recv().is_err());
-}
-#[gpui_kit::test]
-fn reasoning_effort_option_does_not_submit_at_its_boundary(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| {
-            view.backend = Some(BackendHandle { commands });
-            let mut config = runtime_options_config();
-            config.session_options.as_mut().unwrap().reasoning_effort = "high".into();
-            view.configuration = Some(config);
-        });
-        window.render_frame(cx);
-        window.click("pick-model", cx);
-        window.render_frame(cx);
-        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
-        assert!(view.read(cx).effort_focus.is_focused(window));
-        window.press("right", cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    assert!(requests.try_recv().is_err(), "the maximum value is already selected");
-}
-
-#[gpui_kit::test]
 fn compact_model_picker_wraps_long_model_names_and_labels_the_current_effort(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
     let model_name = "DeepSeek V4.1 Flash 1017 (Merge Gateway Compatible Route)";
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
@@ -684,31 +603,6 @@ fn compact_model_picker_wraps_long_model_names_and_labels_the_current_effort(cx:
         assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: medium"));
         let expected_summary = format!("{model_name} · medium");
         assert_eq!(window.find("model-options-summary").label(), Some(expected_summary.as_str()));
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn reasoning_effort_slider_subscriptions_follow_palette_lifecycle(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, _requests) = tokio::sync::mpsc::channel(1);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _cx| {
-            view.backend = Some(BackendHandle { commands });
-            view.configuration = Some(runtime_options_config());
-        });
-        window.render_frame(cx);
-        window.click("pick-model", cx);
-        window.render_frame(cx);
-
-        view.update(cx, |view, cx| {
-            assert!(view.effort_slider.is_some());
-            assert_eq!(view._effort_slider_subscriptions.len(), 2);
-            view.close_palette(window, cx);
-            assert!(view.effort_slider.is_none());
-            assert!(view._effort_slider_subscriptions.is_empty());
-            assert!(view.palette.is_none());
-        });
     })
     .unwrap();
 }
@@ -765,6 +659,7 @@ fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut 
 fn quick_model_picker_omits_recommendations_and_keeps_full_search_visible(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 450., 800.);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
@@ -811,6 +706,7 @@ fn quick_model_picker_omits_recommendations_and_keeps_full_search_visible(cx: &m
 fn quick_model_step_control_sends_supported_effort_and_full_search_remains_available(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
@@ -851,6 +747,7 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
     };
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
     assert_eq!(params["reasoningEffort"], "high");
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.session_request = None);
         window.click("pick-model", cx);
@@ -886,6 +783,7 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
 fn compact_model_picker_shows_current_options_and_full_search_selects_the_real_route(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });

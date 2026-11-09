@@ -384,11 +384,9 @@ mod tests {
 
     #[test]
     fn css_vars_emit_hex_for_every_pele_token() {
-        let colors = ThemeColor {
-            background: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            foreground: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 },
-            ..Default::default()
-        };
+        let mut colors = ThemeColor::default();
+        colors.background = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors.foreground = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
         let vars = pele_css_vars(&colors);
         let expected = [
             "--pele-bg",
@@ -426,14 +424,10 @@ mod tests {
 
     #[test]
     fn css_vars_follow_light_and_dark_fixtures() {
-        let light = ThemeColor {
-            background: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            ..Default::default()
-        };
-        let dark = ThemeColor {
-            background: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 },
-            ..Default::default()
-        };
+        let mut light = ThemeColor::default();
+        light.background = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        let mut dark = ThemeColor::default();
+        dark.background = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
         let light_vars = pele_css_vars(&light);
         let dark_vars = pele_css_vars(&dark);
         assert!(light_vars.contains("--pele-bg: #ffffff;"), "light:\n{light_vars}");

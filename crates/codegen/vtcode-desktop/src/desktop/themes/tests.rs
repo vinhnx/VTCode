@@ -816,7 +816,7 @@ fn code_token_colors_follow_the_kit_mode_default(cx: &mut gpui_kit::TestAppConte
     use gpui_kit::component::highlighter::HighlightTheme;
     cx.update(|cx| {
         gpui_kit::init(cx);
-        // Kit 0.8.1 exposes no constructor for per-palette syntax tokens
+        // Kit 0.9.0 exposes no constructor for per-palette syntax tokens
         // (`ThemeStyle` fields are private, with no associated constructors),
         // so every palette of a mode shares the Kit default highlight theme.
         // Code-block *surfaces* still follow the palette through `theme.muted`.

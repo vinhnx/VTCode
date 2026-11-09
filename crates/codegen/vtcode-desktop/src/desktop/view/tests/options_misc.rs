@@ -757,6 +757,7 @@ fn effort_option_click_commits_the_supported_level(cx: &mut TestAppContext) {
 fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });

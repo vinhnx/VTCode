@@ -548,6 +548,7 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
 fn selecting_a_model_switches_configuration_and_preserves_the_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _cx| {
             view.backend = Some(BackendHandle { commands });

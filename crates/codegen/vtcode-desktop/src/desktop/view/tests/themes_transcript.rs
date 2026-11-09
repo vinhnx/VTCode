@@ -536,7 +536,8 @@ fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut 
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
-        window.scroll("transcript-scroll", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-120.))), cx);
+        // Positive pixel delta scrolls up, away from the tail.
+        window.scroll("transcript-scroll", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(120.))), cx);
         window.render_frame(cx);
     })
     .unwrap();
@@ -707,15 +708,13 @@ fn slash_theme_accepts_capitalized_ids_like_the_cli(cx: &mut TestAppContext) {
 #[test]
 fn completed_tool_titles_drop_to_muted_while_live_rows_stay_foreground() {
     for palette in super::super::themes::all_themes() {
-        let colors = gpui_kit::component::theme::ThemeColor {
-            primary: palette.accent,
-            success: palette.success,
-            danger: palette.danger,
-            warning: palette.warning,
-            foreground: palette.foreground,
-            popover: palette.background,
-            ..Default::default()
-        };
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.primary = palette.accent;
+        colors.success = palette.success;
+        colors.danger = palette.danger;
+        colors.warning = palette.warning;
+        colors.foreground = palette.foreground;
+        colors.popover = palette.background;
 
         for state in [
             ActivityState::Running,

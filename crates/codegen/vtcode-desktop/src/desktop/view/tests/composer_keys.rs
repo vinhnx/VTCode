@@ -542,7 +542,8 @@ fn focus_composer_shortcut_lands_from_every_route(cx: &mut TestAppContext) {
 
 fn scroll_transcript_up(window: &AnyWindowHandle, view: &Entity<DesktopView>, cx: &mut TestAppContext) {
     cx.update_window(*window, |_, window, cx| {
-        window.scroll("transcript-scroll", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-120.))), cx);
+        // Positive pixel delta scrolls up, away from the tail.
+        window.scroll("transcript-scroll", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(120.))), cx);
         window.render_frame(cx);
     })
     .unwrap();

@@ -45,7 +45,7 @@ fn glass_rest_on(seat: Hsla, accent: Hsla, text: Hsla) -> Hsla {
 /// render registration), so interaction solidifies the fill and the state
 /// change reads unambiguously. Border, text, focus, and disabled text stay
 /// Kit-owned primary semantics; only the resting fill turns to glass.
-/// Pinned with Kit =0.8.1; recheck the slot ownership on upgrade.
+/// Pinned with Kit =0.9.0 (slot ownership re-verified: glass tests green); recheck the slot ownership on upgrade.
 pub(crate) fn glass_primary_rest(colors: &ThemeColor) -> Hsla {
     glass_rest_on(colors.background, colors.button_primary, colors.button_primary_foreground)
 }
@@ -68,7 +68,7 @@ pub(crate) fn glass_primary_rest_on_secondary(colors: &ThemeColor) -> Hsla {
 /// (`button_primary` at 0.15, `button.rs` `disabled` arm), so a disabled
 /// glass button reads exactly like a disabled opaque one. Seat-independent:
 /// every glass builder shares it. Pinned with Kit
-/// =0.8.1; recheck the formula on upgrade.
+/// =0.9.0 (disabled arm still primary at 0.15); recheck the formula on upgrade.
 pub(crate) fn glass_disabled_wash(colors: &ThemeColor) -> Hsla {
     colors.button_primary.alpha(0.15)
 }

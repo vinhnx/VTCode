@@ -73,6 +73,7 @@ fn composer_labels_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
     view.update(cx, |view, _| {
         view.first_submission = None;
     });
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.click("pick-model", cx);
@@ -159,6 +160,7 @@ fn composer_popup_rows_scale_with_the_ui_font_size(cx: &mut TestAppContext) {
         provider: "anthropic".into(),
         model: "claude-sonnet-5".into(),
     });
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.click("pick-model", cx);

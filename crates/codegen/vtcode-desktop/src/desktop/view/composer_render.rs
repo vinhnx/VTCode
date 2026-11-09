@@ -128,7 +128,7 @@ impl DesktopView {
             // with no override (`set_editor_paddings` is crate-private
             // and unconditional), so shift the element back by that same
             // public token: the draft starts on the transcript spine.
-            // Pinned with Kit =0.8.1; recheck the formula on upgrade.
+            // Pinned with Kit =0.9.0 (verified: set_editor_paddings still crate-private); recheck the formula on upgrade.
             .ml(-composer_size.input_px())
             .cursor_text()
             // Files copied in Finder arrive on the clipboard as

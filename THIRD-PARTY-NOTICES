@@ -32,7 +32,7 @@ Kepano (MIT-licensed network allowlist)
 
 Zed GPUI macOS backend
   Source: https://github.com/zed-industries/zed
-  Snapshot: gpui-pre-macos 0.3.9, zed@93d745668805029476e6d7fbb19652116fed51de
+  Snapshot: gpui-pre-macos 0.3.11, zed@f816e1f9263e3a8ef63c4baaa02e1441ce1c6038
   License: Apache License, Version 2.0
   Vendored path: patches/gpui-pre-macos
   VT Code modifications: immediate native cursor refresh, state-lock release
@@ -59,8 +59,8 @@ Do not edit by hand — regenerate after dependency changes.
 License Overview
 --------------------------------------------------------------------------------
   Apache License 2.0 (789 crates) — SPDX: Apache-2.0
-  MIT License (306 crates) — SPDX: MIT
-  Unicode License v3 (19 crates) — SPDX: Unicode-3.0
+  MIT License (304 crates) — SPDX: MIT
+  Unicode License v3 (23 crates) — SPDX: Unicode-3.0
   BSD 3-Clause "New" or "Revised" License (12 crates) — SPDX: BSD-3-Clause
   ISC License (9 crates) — SPDX: ISC
   BSD 2-Clause "Simplified" License (4 crates) — SPDX: BSD-2-Clause
@@ -1183,9 +1183,6 @@ Apache License 2.0 — SPDX: Apache-2.0
   markup5ever_rcdom 0.3.0
     Source: https://github.com/servo/html5ever
     License: MIT OR Apache-2.0
-  metal 0.33.0
-    Source: https://github.com/gfx-rs/metal-rs
-    License: MIT OR Apache-2.0
   mime 0.3.17
     Source: https://github.com/hyperium/mime
     License: MIT OR Apache-2.0
@@ -1885,72 +1882,72 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode-a2a 0.181.5
+  vtcode-a2a 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-acp 0.181.5
+  vtcode-acp 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-auth 0.181.5
+  vtcode-auth 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-bash-runner 0.181.5
+  vtcode-bash-runner 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-config 0.181.5
+  vtcode-config 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-core 0.181.5
+  vtcode-core 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-desktop 0.181.5
+  vtcode-desktop 0.181.6
     License: MIT OR Apache-2.0
-  vtcode-eval 0.181.5
+  vtcode-eval 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-indexer 0.181.5
+  vtcode-indexer 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-llm 0.181.5
+  vtcode-llm 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-mcp 0.181.5
+  vtcode-mcp 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-memory 0.181.5
+  vtcode-memory 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-safety 0.181.5
+  vtcode-safety 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-skills 0.181.5
+  vtcode-skills 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-ui 0.181.5
+  vtcode-ui 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-webmcp 0.181.5
+  vtcode-webmcp 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-agent-plugins 0.181.5
+  vtcode-agent-plugins 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-commons 0.181.5
+  vtcode-commons 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-desktop-protocol 0.181.5
+  vtcode-desktop-protocol 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-diff 0.181.5
+  vtcode-diff 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-exec-events 0.181.5
+  vtcode-exec-events 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-macros 0.181.5
+  vtcode-macros 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-utility-tool-specs 0.181.5
+  vtcode-utility-tool-specs 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
   mac-notification-sys 0.6.15
@@ -2175,10 +2172,10 @@ Apache License 2.0 — SPDX: Apache-2.0
   gloo-timers 0.4.0
     Source: https://github.com/rustwasm/gloo/tree/master/crates/timers
     License: MIT OR Apache-2.0
-  gpui-kit-assets 0.8.1
+  gpui-kit-assets 0.9.0
     Source: https://github.com/longbridge/gpui-kit
     License: Apache-2.0
-  gpui-kit 0.8.1
+  gpui-kit 0.9.0
     Source: https://github.com/longbridge/gpui-kit
     License: Apache-2.0
   granit-parser 1.3.0
@@ -2329,6 +2326,9 @@ Apache License 2.0 — SPDX: Apache-2.0
     Source: https://github.com/madsmtm/objc2
     License: Zlib OR Apache-2.0 OR MIT
   objc2-ui-kit 0.3.2
+    Source: https://github.com/madsmtm/objc2
+    License: Zlib OR Apache-2.0 OR MIT
+  objc2-uniform-type-identifiers 0.3.2
     Source: https://github.com/madsmtm/objc2
     License: Zlib OR Apache-2.0 OR MIT
   objc2-user-notifications 0.3.2
@@ -2596,81 +2596,81 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  gpui-pre-macos 0.3.10
+  gpui-pre-macos 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-apple 0.3.10
+  gpui-pre-apple 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-collections 0.3.10
+  gpui-pre-collections 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-derive-refineable 0.3.10
+  gpui-pre-derive-refineable 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-http-client 0.3.10
+  gpui-pre-http-client 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-ios 0.3.10
+  gpui-pre-ios 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-linux 0.3.10
+  gpui-pre-linux 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-macros 0.3.10
+  gpui-pre-macros 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-platform 0.3.10
+  gpui-pre-platform 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-refineable 0.3.10
+  gpui-pre-refineable 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-scheduler 0.3.10
+  gpui-pre-scheduler 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-shared-string 0.3.10
+  gpui-pre-shared-string 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-sum-tree 0.3.10
+  gpui-pre-sum-tree 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-util 0.3.10
+  gpui-pre-util 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-web 0.3.10
+  gpui-pre-web 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-wgpu 0.3.10
+  gpui-pre-wgpu 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-windows 0.3.10
+  gpui-pre-windows 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-ztracing-macro 0.3.10
+  gpui-pre-ztracing-macro 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre-ztracing 0.3.10
+  gpui-pre-ztracing 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
-  gpui-pre 0.3.10
+  gpui-pre 0.3.11
     Source: https://github.com/zed-industries/zed
     License: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  gpui-base 0.8.1
+  gpui-base 0.9.0
     Source: https://github.com/longbridge/gpui-kit
     License: Apache-2.0
-  gpui-component-macros 0.8.1
+  gpui-component-macros 0.9.0
     License: Apache-2.0
-  gpui-component 0.8.1
+  gpui-component 0.9.0
     Source: https://github.com/longbridge/gpui-kit
     License: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode 0.181.5
+  vtcode 0.181.6
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------
@@ -3245,6 +3245,9 @@ MIT License — SPDX: MIT
   synstructure 0.13.2
     Source: https://github.com/mystor/synstructure
     License: MIT
+  synstructure 0.14.0
+    Source: https://github.com/mystor/synstructure
+    License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
@@ -3662,9 +3665,6 @@ MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
 --------------------------------------------------------------------------------
-  block 0.1.6
-    Source: http://github.com/SSheldon/rust-block
-    License: MIT
   async-stream-impl 0.3.6
     Source: https://github.com/tokio-rs/async-stream
     License: MIT
@@ -3697,9 +3697,6 @@ MIT License — SPDX: MIT
     License: MIT
   libm 0.2.16
     Source: https://github.com/rust-lang/compiler-builtins
-    License: MIT
-  malloc_buf 0.0.6
-    Source: https://github.com/SSheldon/malloc_buf
     License: MIT
   objc-sys 0.3.5
     Source: https://github.com/madsmtm/objc2
@@ -3781,12 +3778,6 @@ MIT License — SPDX: MIT
     License: MIT
   xim-parser 0.2.2
     Source: https://github.com/Riey/xim-rs
-    License: MIT
---------------------------------------------------------------------------------
-MIT License — SPDX: MIT
---------------------------------------------------------------------------------
-  objc 0.2.7
-    Source: http://github.com/SSheldon/rust-objc
     License: MIT
 --------------------------------------------------------------------------------
 MIT License — SPDX: MIT
@@ -4319,25 +4310,37 @@ Unicode License v3 — SPDX: Unicode-3.0
 --------------------------------------------------------------------------------
 Unicode License v3 — SPDX: Unicode-3.0
 --------------------------------------------------------------------------------
-  icu_collections 2.2.0
+  icu_collections 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_locale_core 2.2.0
+  icu_locale_core 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_normalizer 2.2.0
+  icu_locale_fallback 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_normalizer_data 2.2.0
+  icu_locale_fallback_data 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_properties 2.2.0
+  icu_normalizer 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_properties_data 2.2.0
+  icu_normalizer_data 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  icu_provider 2.2.0
+  icu_properties 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_properties_data 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_provider 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_segmenter 2.4.0
+    Source: https://github.com/unicode-org/icu4x
+    License: Unicode-3.0
+  icu_segmenter_data 2.4.0
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
   litemap 0.8.2
@@ -4346,16 +4349,16 @@ Unicode License v3 — SPDX: Unicode-3.0
   potential_utf 0.1.5
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  tinystr 0.8.3
+  tinystr 0.8.5
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  writeable 0.6.3
+  writeable 0.6.4
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  yoke-derive 0.8.2
+  yoke-derive 0.8.4
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  yoke 0.8.3
+  yoke 0.8.4
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
   zerofrom-derive 0.1.7
@@ -4364,13 +4367,13 @@ Unicode License v3 — SPDX: Unicode-3.0
   zerofrom 0.1.8
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  zerotrie 0.2.4
+  zerotrie 0.2.5
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  zerovec-derive 0.11.3
+  zerovec-derive 0.11.7
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
-  zerovec 0.11.6
+  zerovec 0.11.9
     Source: https://github.com/unicode-org/icu4x
     License: Unicode-3.0
 --------------------------------------------------------------------------------

@@ -812,6 +812,38 @@ mod tests {
         assert!(diagram_reference(&prepared.markdown).is_some(), "tilde fence must match");
     }
 
+    /// Reference-style images (`![alt][id]` + `[id]: url`, rendered since
+    /// Kit 0.9.0) keep hook-routable URLs: the preprocessor leaves them
+    /// alone and the `diagram:`-only image hook decides, so foreign
+    /// definitions stay blocked while `diagram:` references resolve.
+    #[test]
+    fn reference_style_images_keep_hook_routable_urls() {
+        use crate::desktop::diagram_inline::{parse_diagram_uri, register_diagram_source, source_hash_hex};
+
+        let foreign = "Before ![logo][pic] after.\n\n[pic]: https://evil.example/x.png\n";
+        let prepared = prepare_markdown(&foreign.into());
+        assert!(prepared.markdown.contains("![logo][pic]"), "reference kept: {}", prepared.markdown);
+        assert!(
+            prepared.markdown.contains("[pic]: https://evil.example/x.png"),
+            "definition kept: {}",
+            prepared.markdown
+        );
+        for blocked in [
+            "https://evil.example/x.png",
+            "file:///etc/passwd",
+            "data:image/png;base64,iVBORw0KGgo=",
+        ] {
+            assert_eq!(parse_diagram_uri(blocked), None, "{blocked:?} stays blocked");
+        }
+
+        let hash = register_diagram_source("flowchart TD\n  A --> B");
+        let allowed = format!("diagram:{}", source_hash_hex(&hash));
+        let ok = format!("See ![chart][fig].\n\n[fig]: {allowed}\n");
+        let prepared = prepare_markdown(&ok.into());
+        assert!(prepared.markdown.contains("[fig]: diagram:"), "diagram definition kept");
+        assert_eq!(parse_diagram_uri(&allowed), Some(hash), "diagram reference resolves");
+    }
+
     #[test]
     fn html_strip_and_diagram_insertion_compose() {
         let source = "<div>banner</div>\n\n```mermaid\nflowchart TD\n  A --> B\n```\n\ntail <b>bold</b>";

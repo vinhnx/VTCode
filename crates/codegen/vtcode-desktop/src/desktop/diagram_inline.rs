@@ -736,11 +736,9 @@ mod tests {
 
     #[test]
     fn inline_theme_covers_every_pele_token_with_hex() {
-        let colors = ThemeColor {
-            background: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            foreground: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 },
-            ..Default::default()
-        };
+        let mut colors = ThemeColor::default();
+        colors.background = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors.foreground = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
         let map = inline_theme(&colors);
         assert_eq!(map.len(), 18, "one entry per variable");
         for (name, value) in &map {

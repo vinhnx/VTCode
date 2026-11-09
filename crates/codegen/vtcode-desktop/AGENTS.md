@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # vtcode-desktop
 
-[Root AGENTS.md](../../../AGENTS.md) | macOS-only (Apple silicon) GPUI Kit (`=0.8.1`) desktop app.
+[Root AGENTS.md](../../../AGENTS.md) | macOS-only (Apple silicon) GPUI Kit (`=0.9.0`) desktop app.
 
 ## Modules
 
@@ -28,6 +28,7 @@
 - Icons outside Kit's default bundle must join `ExtraIcons` and `DESKTOP_ICONS` in `assets.rs`, or they render blank with no headless failure.
 - `app_owns_titlebar_drag` disables all native drag, so zen mode needs its own drag strip, and headless `start_window_move` is unimplemented (guard with `#[cfg(not(test))]`).
 - `.test_support()` must precede `.track_focus()` or headless `focused()` panics, and `on_next_frame` never runs headless.
+- Kit 0.9.0 animations follow the test clock: headless tests must `settle_fade_animations(cx)` before clicking fade-wrapped controls or the click fails visibility at opacity 0.
 - `process_drained_event` runs `notify_*` hooks before `handle_backend_event`; the hooks read pending state the handler is about to clear, so never reorder them.
 - Kit `Badge` is an overlay count, not a text pill — use `Tag::secondary().outline().small()` for pills, wrapped in an identified `div` since `RenderOnce` cannot carry `.test_support()`.
 - The slash catalog is service-owned, so every new `CommandSkillSpec` auto-appears in the desktop popup and needs a native route or documented fallthrough.

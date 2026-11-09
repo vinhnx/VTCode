@@ -4,6 +4,7 @@ use super::*;
 fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowledgement(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 450., 800.);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
@@ -74,6 +75,7 @@ fn composer_model_summary_refreshes_effort_and_processing_tier_after_cli_acknowl
 fn fast_mode_toggle_sends_cli_option_and_is_exposed_as_a_toggle(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });

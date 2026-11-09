@@ -97,13 +97,11 @@ fn agent_labels_capitalize_cli_names_without_changing_their_identity() {
 #[test]
 fn permission_indicators_distinguish_restrictive_and_auto_approval_states() {
     for palette in super::super::themes::all_themes() {
-        let colors = gpui_kit::component::theme::ThemeColor {
-            foreground: palette.foreground,
-            popover: palette.background,
-            success: palette.success,
-            warning: palette.warning,
-            ..Default::default()
-        };
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.foreground = palette.foreground;
+        colors.popover = palette.background;
+        colors.success = palette.success;
+        colors.warning = palette.warning;
         let (ask_icon, ask_color) = permission_indicator(Some(super::protocol::PermissionMode::Ask), colors);
         let (auto_icon, auto_color) =
             permission_indicator(Some(super::protocol::PermissionMode::AutoApproveCommands), colors);

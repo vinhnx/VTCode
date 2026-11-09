@@ -386,6 +386,7 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
 fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.inspector_open = false;

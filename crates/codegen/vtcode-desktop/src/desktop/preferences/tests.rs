@@ -313,6 +313,38 @@ fn system_motion_baseline_initializes_once_without_redundant_global_notification
     drop(observer);
 }
 
+#[gpui_kit::test]
+fn caret_blink_follows_effective_reduced_motion(cx: &mut gpui_kit::TestAppContext) {
+    use gpui_kit::base::input::CursorBlink;
+    use gpui_kit::component::theme::Theme;
+
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        // Explicit choices win over a stale opposite baseline (asymmetric).
+        apply_reduced_motion(ReducedMotionPreference::On, false, cx);
+        assert!(cx.reduce_motion());
+        assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::steady());
+        assert_eq!(
+            gpui_kit::base::Theme::global(cx).cursor_blink,
+            CursorBlink::steady(),
+            "component update projects onto the base theme inputs read"
+        );
+
+        apply_reduced_motion(ReducedMotionPreference::Off, true, cx);
+        assert!(!cx.reduce_motion());
+        assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::default());
+
+        // The System arm tracks the live OS value, whatever the baseline said.
+        apply_reduced_motion(ReducedMotionPreference::System, true, cx);
+        let expected = if cx.reduce_motion() {
+            CursorBlink::steady()
+        } else {
+            CursorBlink::default()
+        };
+        assert_eq!(Theme::global(cx).cursor_blink, expected);
+    });
+}
+
 #[test]
 fn vim_navigation_defaults_off_and_round_trips() {
     let old: Preferences = serde_json::from_str("{}").unwrap();

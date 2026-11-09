@@ -79,13 +79,11 @@ fn severity_marker_style_maps_each_level_to_its_own_tone() {
     let sentinel = |h: f32| gpui_kit::Hsla { h, s: 0.5, l: 0.5, a: 1.0 };
     let white = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
     let black = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
-    let colors = ThemeColor {
-        danger: sentinel(0.0),
-        warning: sentinel(0.33),
-        foreground: white,
-        popover: black,
-        ..Default::default()
-    };
+    let mut colors = ThemeColor::default();
+    colors.danger = sentinel(0.0);
+    colors.warning = sentinel(0.33);
+    colors.foreground = white;
+    colors.popover = black;
     let error = severity_marker_style(NoticeSeverity::Error, &colors);
     let warning = severity_marker_style(NoticeSeverity::Warning, &colors);
     let info = severity_marker_style(NoticeSeverity::Info, &colors);

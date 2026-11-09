@@ -138,6 +138,11 @@ pub(super) fn system_motion_baseline(cx: &mut App) -> bool {
 }
 
 /// Applies a saved override or returns GPUI to the current OS preference.
+///
+/// The caret follows the effective motion state: steady when reduced, Kit's
+/// default blink otherwise. Component `Theme::update` projects the policy
+/// onto the base theme and survives mode changes; never write the base
+/// global directly (Kit rebuilds it on sync).
 pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_baseline: bool, cx: &mut App) {
     match preference {
         ReducedMotionPreference::System => {
@@ -147,6 +152,14 @@ pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_b
         ReducedMotionPreference::On => cx.set_reduce_motion(true),
         ReducedMotionPreference::Off => cx.set_reduce_motion(false),
     }
+    let blink = if cx.reduce_motion() {
+        gpui_kit::base::input::CursorBlink::steady()
+    } else {
+        gpui_kit::base::input::CursorBlink::default()
+    };
+    gpui_kit::component::theme::Theme::update(cx, |theme| {
+        theme.cursor_blink = blink;
+    });
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

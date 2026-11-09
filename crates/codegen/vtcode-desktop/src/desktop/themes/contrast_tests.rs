@@ -319,10 +319,8 @@ fn shimmer_resting_text_dims_while_the_sweep_stays_bright(cx: &mut gpui_kit::Tes
 #[test]
 fn shimmer_resting_leaves_a_sub_floor_tone_alone() {
     let dim: Hsla = rgb(0x3A3A3A).into();
-    let colors = ThemeColor {
-        popover: rgb(0x181818).into(),
-        ..ThemeColor::default()
-    };
+    let mut colors = ThemeColor::default();
+    colors.popover = rgb(0x181818).into();
     assert_eq!(shimmer_resting(&colors, dim), dim);
 }
 
@@ -495,14 +493,12 @@ fn glass_primary_engages_translucency_on_the_default_theme(cx: &mut gpui_kit::Te
 fn glass_primary_rest_degrades_to_opaque_without_headroom() {
     let white: Hsla = rgb(0xffffff).into();
     let black: Hsla = rgb(0x000000).into();
-    let stuck = ThemeColor {
-        background: white,
-        popover: white,
-        secondary: white,
-        button_primary: white,
-        button_primary_foreground: white,
-        ..ThemeColor::default()
-    };
+    let mut stuck = ThemeColor::default();
+    stuck.background = white;
+    stuck.popover = white;
+    stuck.secondary = white;
+    stuck.button_primary = white;
+    stuck.button_primary_foreground = white;
     assert_eq!(glass_primary_rest(&stuck).a, 1.0, "no alpha can separate white on white");
     assert_eq!(glass_primary_rest_on_popover(&stuck).a, 1.0, "the popover seat falls back with its canvas sibling");
     assert_eq!(
@@ -510,14 +506,12 @@ fn glass_primary_rest_degrades_to_opaque_without_headroom() {
         1.0,
         "the secondary seat falls back with its canvas sibling"
     );
-    let roomy = ThemeColor {
-        background: black,
-        popover: black,
-        secondary: black,
-        button_primary: black,
-        button_primary_foreground: white,
-        ..ThemeColor::default()
-    };
+    let mut roomy = ThemeColor::default();
+    roomy.background = black;
+    roomy.popover = black;
+    roomy.secondary = black;
+    roomy.button_primary = black;
+    roomy.button_primary_foreground = white;
     for (name, rest) in [
         ("canvas", glass_primary_rest(&roomy)),
         ("popover", glass_primary_rest_on_popover(&roomy)),
@@ -532,10 +526,8 @@ fn glass_primary_rest_degrades_to_opaque_without_headroom() {
 /// exactly like a disabled opaque one.
 #[test]
 fn glass_disabled_wash_matches_kit_disabled_primary() {
-    let colors = ThemeColor {
-        button_primary: rgb(0x3b82f6).into(),
-        ..ThemeColor::default()
-    };
+    let mut colors = ThemeColor::default();
+    colors.button_primary = rgb(0x3b82f6).into();
     let wash = glass_disabled_wash(&colors);
     assert!((wash.a - 0.15).abs() < 1e-6, "wash must sit at 0.15 alpha, got {}", wash.a);
     let wash_rgb = gpui_kit::Rgba::from(wash);

@@ -79,12 +79,11 @@ mod tests {
     /// the composite holds AA at the glass floor, pinning the wiring without
     /// depending on any real palette.
     fn glass_colors() -> gpui_kit::component::theme::ThemeColor {
-        gpui_kit::component::theme::ThemeColor {
-            background: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 },
-            button_primary: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 },
-            button_primary_foreground: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            ..Default::default()
-        }
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.background = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
+        colors.button_primary = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
+        colors.button_primary_foreground = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors
     }
 
     /// Popover engages, siblings fall back: mid-gray accent with white text on
@@ -94,28 +93,26 @@ mod tests {
     /// popover builder reads its own seat: a builder wired to either
     /// sibling seat would carry the opaque fallback instead.
     fn popover_roomy_colors() -> gpui_kit::component::theme::ThemeColor {
-        gpui_kit::component::theme::ThemeColor {
-            background: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            popover: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 },
-            secondary: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            button_primary: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.5, a: 1.0 },
-            button_primary_foreground: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            ..Default::default()
-        }
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.background = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors.popover = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
+        colors.secondary = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors.button_primary = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.5, a: 1.0 };
+        colors.button_primary_foreground = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors
     }
 
     /// Secondary engages, siblings fall back: the mirror of
     /// [`popover_roomy_colors`] with the roomy and stuck seats exchanged,
     /// proving the secondary builder reads its own seat.
     fn secondary_roomy_colors() -> gpui_kit::component::theme::ThemeColor {
-        gpui_kit::component::theme::ThemeColor {
-            background: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            popover: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            secondary: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 },
-            button_primary: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.5, a: 1.0 },
-            button_primary_foreground: gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 },
-            ..Default::default()
-        }
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.background = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors.popover = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors.secondary = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
+        colors.button_primary = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 0.5, a: 1.0 };
+        colors.button_primary_foreground = gpui_kit::Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        colors
     }
 
     #[test]

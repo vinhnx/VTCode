@@ -322,6 +322,8 @@ impl DesktopView {
                 .text_color(colors.foreground)
                 .on_click(cx.listener(|view, _, _, cx| {
                     let _scrolled = view.scroll_to_first_message(cx);
+                    // Same overlay fall-through guard as the filter pill.
+                    cx.stop_propagation();
                     cx.notify();
                 }))
                 .into_any_element(),
@@ -359,6 +361,9 @@ impl DesktopView {
             .text_color(colors.foreground)
             .on_click(cx.listener(|view, _, window, cx| {
                 let _cycled = view.cycle_filter_match(window, cx);
+                // The overlay floats above transcript rows: keep the click
+                // from also anchoring the row beneath as keyboard focus.
+                cx.stop_propagation();
                 cx.notify();
             }))
             .into_any_element();
@@ -367,6 +372,8 @@ impl DesktopView {
             .small()
             .on_click(cx.listener(|view, _, _, cx| {
                 view.clear_filter_matches();
+                // Same overlay fall-through guard as the cycle pill above.
+                cx.stop_propagation();
                 cx.notify();
             }))
             .into_any_element();

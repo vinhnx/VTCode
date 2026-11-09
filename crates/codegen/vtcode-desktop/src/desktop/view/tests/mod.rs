@@ -33,6 +33,16 @@ fn isolate_preferences() -> PathBuf {
     crate::desktop::preferences::install_test_preferences_path()
 }
 
+/// Settles Kit fade animations (e.g. `pick-model-fade`, 180ms) by moving the
+/// executor clock. Since gpui-kit 0.9.0, `Animation` follows the test clock,
+/// so a fade stays at opacity 0 — and its controls fail click visibility —
+/// until the clock advances. Call after the last fade-triggering state
+/// change and before clicking faded controls; the next `render_frame`
+/// samples the settled opacity.
+fn settle_fade_animations(cx: &mut TestAppContext) {
+    cx.executor().advance_clock(Duration::from_millis(250));
+}
+
 /// A real 1x1 PNG so the renderer can decode image fixtures and thumbnails.
 const TINY_PNG: &[u8] = &[
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,

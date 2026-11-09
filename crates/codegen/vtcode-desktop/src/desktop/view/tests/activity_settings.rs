@@ -60,15 +60,13 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
 #[test]
 fn activity_status_colors_follow_semantic_theme_tokens() {
     for palette in super::super::themes::all_themes() {
-        let colors = gpui_kit::component::theme::ThemeColor {
-            primary: palette.accent,
-            success: palette.success,
-            danger: palette.danger,
-            warning: palette.warning,
-            foreground: palette.foreground,
-            popover: palette.background,
-            ..Default::default()
-        };
+        let mut colors = gpui_kit::component::theme::ThemeColor::default();
+        colors.primary = palette.accent;
+        colors.success = palette.success;
+        colors.danger = palette.danger;
+        colors.warning = palette.warning;
+        colors.foreground = palette.foreground;
+        colors.popover = palette.background;
 
         for (state, expected) in [
             (ActivityState::Running, colors.primary),
@@ -918,8 +916,8 @@ fn settings_navigation_selects_tabs_and_config_with_wrapping(cx: &mut TestAppCon
                 "Kit sidebar row 0-{ix} missing from settings navigation"
             );
         }
-        // Kit sidebar rows carry no accessible label in 0.8.1 (upstream
-        // sidebar-a11y ask), so the config row pins by position for now.
+        // Kit sidebar rows carry no accessible label in 0.9.0 (upstream
+        // sidebar-a11y ask, re-verified 2026-11-09), so the config row pins by position for now.
         assert!(window.try_find("0-8").is_some());
 
         // Pin the cycle start: Home selects the first tab (VT Code).
