@@ -40,8 +40,7 @@ docs/modules/vtcode_docs_map.md=2_500
 docs/development/diagnostics/producer-audit.json=3_000
 
 # Dated audit snapshots; immutable point-in-time records.
-docs/development/refactor-scan-2026-10-04.csv=2_500
-docs/development/refactor-scan-2026-10-04.md=1_200
+# (refactor-scan-2026-10-04.* removed 2026-11-09: files deleted, entries went stale)
 
 # Sample skill asset shipped for ast-grep workflows and tests.
 crates/codegen/vtcode-skills/src/skills/assets/samples/ast-grep/SKILL.md=2_000

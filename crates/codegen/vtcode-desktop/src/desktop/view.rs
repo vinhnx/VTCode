@@ -156,6 +156,7 @@ mod running_confirm;
 mod runtime_items;
 mod secret_store;
 mod session_nav;
+mod session_options;
 mod sessions;
 mod settings;
 mod settings_accessibility;
