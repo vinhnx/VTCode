@@ -52,7 +52,10 @@ incidents earn a main-transcript row: routine agent-internal codes
 (`tool.execution_failed`, `provider.retrying`, `provider.retry_succeeded`)
 stay silent under `balanced`/`quiet`, and `tool.command_failed` additionally
 collapses under `quiet`. Empty grep-style searches keep their one-line Info
-notice under `verbose` and stay silent otherwise. Policy, cancelled,
+notice under `verbose` and stay silent otherwise, as do the once-per-turn
+harness coaching notices (piped-verification and result-lost warnings,
+repeated-evidence nudges), which always reach the model as system messages
+regardless of style. Policy, cancelled,
 billing, planning, MCP, and `runtime.*` incidents stay visible in every style,
 and `verbose` shows everything. The single rule lives in
 `vtcode_commons::diagnostics::diagnostic_is_user_visible`, so the TUI and

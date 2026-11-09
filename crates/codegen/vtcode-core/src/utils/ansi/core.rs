@@ -246,6 +246,16 @@ impl AnsiRenderer {
     /// Hidden routine extras stay in the canonical tool-output event and the
     /// plain-text trail; only user-direct command failures (and everything
     /// under `Verbose`) keep inline evidence rows.
+    /// Whether once-per-turn harness coaching notices (verification
+    /// re-run prompts, repeated-evidence nudges) paint in the interactive
+    /// transcript. These always reach the model as system messages; the
+    /// transcript line is user-informational only, so `Balanced` and `Quiet`
+    /// keep it out while `Verbose` and headless output keep it.
+    pub fn loop_notices_visible(&self) -> bool {
+        use vtcode_commons::ui_protocol::CommunicationStyle;
+        !self.writes_to_inline_sink() || matches!(self.communication_style(), CommunicationStyle::Verbose)
+    }
+
     pub fn inline_failure_extras_visible(&self, is_command_tool: bool) -> bool {
         use vtcode_commons::ui_protocol::CommunicationStyle;
         match self.communication_style.resolve() {

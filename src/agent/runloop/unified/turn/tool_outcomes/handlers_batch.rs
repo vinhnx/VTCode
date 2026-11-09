@@ -25,6 +25,18 @@ use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
 
 const DEFAULT_MAX_PARALLEL_TOOL_CALLS: usize = 4;
 
+/// Paint a harness coaching notice, or preserve it in the plain-text trail
+/// when the active communication style keeps routine agent-internal chatter
+/// out of the interactive transcript. The paired system message always
+/// reaches the model, and headless output always paints.
+fn render_loop_notice(ctx: &mut TurnProcessingContext<'_>, style: vtcode_core::utils::ansi::MessageStyle, text: &str) {
+    if ctx.renderer.loop_notices_visible() {
+        ctx.renderer.line(style, text).unwrap_or(());
+    } else {
+        vtcode_core::utils::transcript::append(text);
+    }
+}
+
 /// Surface queued loop directives after the tool response lands.
 /// `update_repetition_tracker_for_registry` queues them when a pending gate's verifier
 /// result was lost (verifier-level Failure/Timeout, or a dead exec session)
@@ -35,12 +47,11 @@ fn flush_loop_notices(ctx: &mut TurnProcessingContext<'_>, loop_tracker: &mut su
         ctx.push_system_message("Several searches have concentrated on one file this turn. Reuse the gathered context and take the next concrete edit, verification, or synthesis step when it is sufficient. Search again only for a specific missing fact. This is coaching, not a read cap; distinct queries and tools remain available under existing limits.");
     }
     if let Some(guidance) = loop_tracker.take_redundant_navigation_guidance() {
-        ctx.renderer
-            .line(
-                vtcode_core::utils::ansi::MessageStyle::Info,
-                "Inspection repeated retained evidence; continue from the existing context.",
-            )
-            .unwrap_or(());
+        render_loop_notice(
+            ctx,
+            vtcode_core::utils::ansi::MessageStyle::Info,
+            "Inspection repeated retained evidence; continue from the existing context.",
+        );
         ctx.push_system_message(guidance);
     }
     if let Some(guidance) = loop_tracker.take_verifier_failed_guidance() {
@@ -50,15 +61,11 @@ fn flush_loop_notices(ctx: &mut TurnProcessingContext<'_>, loop_tracker: &mut su
         ctx.push_system_message(guidance);
     }
     if loop_tracker.take_verification_result_lost_notice() {
-        ctx.renderer
-            .line(vtcode_core::utils::ansi::MessageStyle::Warning, VERIFICATION_RESULT_LOST_WARNING)
-            .unwrap_or(());
+        render_loop_notice(ctx, vtcode_core::utils::ansi::MessageStyle::Warning, VERIFICATION_RESULT_LOST_WARNING);
         ctx.push_system_message(VERIFICATION_RESULT_LOST_DIRECTIVE);
     }
     if loop_tracker.take_piped_verification_notice() {
-        ctx.renderer
-            .line(vtcode_core::utils::ansi::MessageStyle::Warning, PIPED_VERIFICATION_WARNING)
-            .unwrap_or(());
+        render_loop_notice(ctx, vtcode_core::utils::ansi::MessageStyle::Warning, PIPED_VERIFICATION_WARNING);
         ctx.push_system_message(PIPED_VERIFICATION_DIRECTIVE);
     }
 }

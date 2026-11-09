@@ -467,6 +467,35 @@ fn line_function_no_trailing_empty_line() {
 }
 
 #[test]
+fn loop_notices_visible_only_under_verbose_or_headless() {
+    use vtcode_commons::ui_protocol::CommunicationStyle;
+    // Interactive sessions: only Verbose paints harness coaching notices.
+    for (style, visible) in [
+        (CommunicationStyle::Balanced, false),
+        (CommunicationStyle::Quiet, false),
+        (CommunicationStyle::Verbose, true),
+    ] {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        renderer.set_communication_style(style);
+        assert!(renderer.writes_to_inline_sink());
+        assert_eq!(renderer.loop_notices_visible(), visible, "{style:?} paints={visible}");
+    }
+    // Headless output has no transcript viewer to fall back on, so it always
+    // keeps the notices regardless of style.
+    for style in [
+        CommunicationStyle::Balanced,
+        CommunicationStyle::Quiet,
+        CommunicationStyle::Verbose,
+    ] {
+        let mut renderer = AnsiRenderer::stdout();
+        renderer.set_communication_style(style);
+        assert!(!renderer.writes_to_inline_sink());
+        assert!(renderer.loop_notices_visible(), "headless keeps notices under {style:?}");
+    }
+}
+
+#[test]
 fn inline_ui_always_records_error_summaries_when_diagnostics_disabled() {
     use crate::ui::InlineCommand;
     use crate::utils::transcript;
