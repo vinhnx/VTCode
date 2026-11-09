@@ -39,7 +39,13 @@ pub(crate) async fn read_line_with_limit<R: AsyncBufRead + Unpin>(
 
             if would_be_total <= max_len {
                 // Line fits within the limit
-                buf.extend_from_slice(&available[..to_read]);
+                debug_assert!(to_read <= available.len());
+                #[expect(
+                    clippy::indexing_slicing,
+                    reason = "to_read is a memchr hit plus one, so it never exceeds available.len()"
+                )]
+                let chunk = &available[..to_read];
+                buf.extend_from_slice(chunk);
                 reader.consume(to_read);
                 return Ok(ReadLineResult::Line(std::mem::take(buf)));
             } else {
@@ -48,7 +54,13 @@ pub(crate) async fn read_line_with_limit<R: AsyncBufRead + Unpin>(
                 // the next read starts at a fresh line.
                 let remaining_space = max_len.saturating_sub(buf.len());
                 if remaining_space > 0 {
-                    buf.extend_from_slice(&available[..remaining_space]);
+                    debug_assert!(remaining_space <= available.len());
+                    #[expect(
+                        clippy::indexing_slicing,
+                        reason = "would_be_total > max_len implies remaining_space < to_read <= available.len()"
+                    )]
+                    let chunk = &available[..remaining_space];
+                    buf.extend_from_slice(chunk);
                 }
                 reader.consume(to_read);
                 return Ok(ReadLineResult::Truncated(std::mem::take(buf)));
@@ -69,7 +81,13 @@ pub(crate) async fn read_line_with_limit<R: AsyncBufRead + Unpin>(
             // `max_len` or block forever on a stream that never sends `\n`.
             let remaining_space = max_len.saturating_sub(buf.len());
             if remaining_space > 0 {
-                buf.extend_from_slice(&available[..remaining_space]);
+                debug_assert!(remaining_space <= available.len());
+                #[expect(
+                    clippy::indexing_slicing,
+                    reason = "would_be_total > max_len implies remaining_space < available.len()"
+                )]
+                let chunk = &available[..remaining_space];
+                buf.extend_from_slice(chunk);
             }
             reader.consume(len);
             return Ok(ReadLineResult::Truncated(std::mem::take(buf)));
@@ -130,6 +148,28 @@ mod tests {
                 assert_eq!(bytes, b"no newline at end");
             }
             other => panic!("expected line, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_line_with_limit_treats_exact_fit_as_complete_line() -> std::io::Result<()> {
+        // `would_be_total == max_len` takes the fits branch; one byte less
+        // must truncate instead. Pins both sides of the limit boundary.
+        for (max_len, expect_truncated) in [(6, false), (5, true)] {
+            let mut reader = BufReader::new(b"hello\n".as_slice());
+            let mut buf = Vec::new();
+            match read_line_with_limit(&mut reader, &mut buf, max_len).await? {
+                ReadLineResult::Line(bytes) => {
+                    assert!(!expect_truncated, "max_len={max_len} must fit");
+                    assert_eq!(bytes, b"hello\n");
+                }
+                ReadLineResult::Truncated(bytes) => {
+                    assert!(expect_truncated, "max_len={max_len} must truncate");
+                    assert_eq!(bytes.len(), max_len);
+                }
+                ReadLineResult::Eof => panic!("max_len={max_len} unexpectedly hit EOF"),
+            }
         }
         Ok(())
     }
