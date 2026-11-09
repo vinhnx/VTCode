@@ -20,7 +20,7 @@ Detailed contracts and gotchas for `crates/codegen/vtcode-eval/`, moved verbatim
 
 ## Rules
 
-- The manifest mirrors the eight workspace API-style Clippy checks explicitly; it does not inherit the broader workspace lint policy.
+- The manifest lists workspace API-style Clippy checks plus the panic-safety family explicitly; it does not inherit the broader workspace lint policy.
 - `lib.rs` re-exports the public facade: types from `task`/`suite`/`metric`/`test_quality`/`report`, `executor::{EvalExecutor, run_suite}`, and `trace_analyzer` summaries. `run_suite_with_options` depends only on the `EvalExecutor` trait — no file I/O, config, or trust checks. It bounds concurrent attempts (default two), validates `attempts`/`k`, and sorts results by task then attempt before reporting. The two `EvalCategory` strings (`Capability`, `Regression`) are the only valid split keys; `report` filters on `category.label()` serialization. `EvalSuite` is defined once in `suite.rs` and re-exported from `lib.rs`. Do not duplicate it in `task.rs`.
 
 ## Gotchas

@@ -26,6 +26,9 @@ tokio = { workspace = true }
 
 # This crate does not inherit the broader workspace lint policy yet. Keep the
 # workspace's API-style checks explicit here without changing unrelated lints.
+# The panic-safety family is adopted so new code cannot introduce
+# unwrap/expect/indexing/slicing panics without a warning (production code is
+# already clean of them; full workspace adoption stays blocked on missing_docs).
 [lints.clippy]
 borrowed_box = "warn"
 ptr_arg = "warn"
@@ -35,3 +38,13 @@ new_without_default = "warn"
 len_without_is_empty = "warn"
 derivable_impls = "warn"
 unnecessary_unwrap = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+indexing_slicing = "warn"
+string_slice = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+get_unwrap = "warn"
+unchecked_time_subtraction = "warn"

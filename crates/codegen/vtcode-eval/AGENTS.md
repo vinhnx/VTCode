@@ -17,7 +17,7 @@ evals, environment-based outcome verification.
 
 ## Rules
 
-- The manifest lists its eight Clippy checks explicitly; it does not inherit workspace lints.
+- The manifest lists Clippy checks explicitly (API-style and panic-safety); it does not inherit workspace lints.
 - `run_suite_with_options` depends only on `EvalExecutor`: no file I/O, config, or trust checks.
 - `EvalSuite` lives once in `suite.rs`; do not duplicate it in `task.rs`.
 - `Capability` and `Regression` are the only valid category split keys.

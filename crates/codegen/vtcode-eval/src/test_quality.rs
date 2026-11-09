@@ -101,19 +101,23 @@ fn split_test_blocks(source: &str) -> Vec<&str> {
         };
         let next_attr = ["#[test]", "#[tokio::test]", "#[rstest]"]
             .iter()
-            .filter_map(|marker| rest[pos + 1..].find(marker).map(|next| pos + 1 + next))
+            .filter_map(|marker| rest.get(pos + 1..)?.find(marker).map(|next| pos + 1 + next))
             .min();
-        let next_prop = rest[pos + 1..].find("proptest!").map(|next| pos + 1 + next);
+        let next_prop = rest
+            .get(pos + 1..)
+            .and_then(|tail| tail.find("proptest!").map(|next| pos + 1 + next));
         let next_test = match (next_attr, next_prop) {
             (Some(attr), _) => Some(attr),
             (None, prop) => prop,
         };
         let end = next_test.unwrap_or(rest.len());
-        blocks.push(&rest[pos..end]);
+        let Some(block) = rest.get(pos..end) else { break };
+        blocks.push(block);
         if next_test.is_none() {
             break;
         }
-        rest = &rest[end..];
+        let Some(tail) = rest.get(end..) else { break };
+        rest = tail;
     }
     blocks
 }

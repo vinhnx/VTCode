@@ -61,8 +61,8 @@ impl LatencyAccumulator {
         }
 
         let candidate = super::deterministic_reservoir_index(self.count);
-        if candidate < MAX_LATENCY_SAMPLES as u64 {
-            self.samples[candidate as usize] = latency_ms;
+        if let Some(slot) = self.samples.get_mut(candidate as usize) {
+            *slot = latency_ms;
         }
     }
 
@@ -74,7 +74,12 @@ impl LatencyAccumulator {
         self.samples.sort_unstable();
         let percentile = |percent: usize| {
             let index = (self.samples.len() - 1).saturating_mul(percent).div_ceil(100);
-            self.samples[index]
+            #[expect(
+                clippy::indexing_slicing,
+                reason = "count > 0 guarantees a nonempty sample (the first record() always pushes) and percent <= 100 keeps index <= len - 1"
+            )]
+            let value = self.samples[index];
+            value
         };
         LatencyStatistics {
             count: self.count,
