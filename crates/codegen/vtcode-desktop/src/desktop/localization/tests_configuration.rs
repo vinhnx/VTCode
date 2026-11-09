@@ -100,6 +100,8 @@ fn configuration_copy_is_localized_for_every_language() {
             "app.configuration.row_verbosity_description",
             "app.configuration.row_reasoning_title",
             "app.configuration.row_reasoning_description",
+            "app.configuration.row_communication_title",
+            "app.configuration.row_communication_description",
             "app.configuration.match_summary",
             "app.configuration.editable_count",
             "app.configuration.showing_summary",

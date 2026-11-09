@@ -9,6 +9,7 @@ fn curated_snapshot() -> vtcode_desktop_protocol::ConfigSettingsSnapshot {
             config_page_setting("tools.web_search.provider", json!("auto"), "Tools & Integrations"),
             config_page_setting("agent.verbosity", json!("medium"), "Model & Provider"),
             config_page_setting("ui.reasoning_display_mode", json!("toggle"), "Interface & Terminal"),
+            config_page_setting("ui.communication_style", json!("balanced"), "Interface & Terminal"),
             config_page_setting("agent.default_model", json!("model-a"), "Model & Provider"),
         ],
         target_versions: Vec::new(),
@@ -44,6 +45,7 @@ fn curated_overview_is_the_default_config_landing(cx: &mut TestAppContext) {
             "curated-web-search",
             "curated-verbosity",
             "curated-reasoning",
+            "curated-communication",
         ] {
             assert!(window.try_find(id).is_some(), "{id} renders on the overview");
         }
@@ -387,6 +389,7 @@ fn missing_curated_paths_render_unavailable_rows(cx: &mut TestAppContext) {
             "curated-sandbox",
             "curated-network",
             "curated-reasoning",
+            "curated-communication",
         ] {
             assert!(window.try_find(id).is_some(), "{id} renders without its setting");
             assert_eq!(window.find(id).disabled(), Some(true), "{id} is unavailable");

@@ -18,6 +18,7 @@ pub(super) const NETWORK_POLICY_PATH: &str = "sandbox.network.policy";
 pub(super) const WEB_SEARCH_PROVIDER_PATH: &str = "tools.web_search.provider";
 pub(super) const VERBOSITY_PATH: &str = "agent.verbosity";
 pub(super) const REASONING_DISPLAY_PATH: &str = "ui.reasoning_display_mode";
+pub(super) const COMMUNICATION_STYLE_PATH: &str = "ui.communication_style";
 
 /// Network policies behind the allow-network-access toggle.
 pub(super) const NETWORK_ALLOW_ALL: &str = "allow_all";
@@ -47,7 +48,7 @@ pub(super) struct CuratedRow {
 }
 
 /// Curated rows in display order.
-pub(super) fn curated_rows() -> [CuratedRow; 7] {
+pub(super) fn curated_rows() -> [CuratedRow; 8] {
     [
         CuratedRow {
             id: "sandboxing",
@@ -96,6 +97,13 @@ pub(super) fn curated_rows() -> [CuratedRow; 7] {
             title: rust_i18n::t!("app.configuration.row_reasoning_title").to_string(),
             description: rust_i18n::t!("app.configuration.row_reasoning_description").to_string(),
             path: Some(REASONING_DISPLAY_PATH),
+            kind: CuratedRowKind::ConfigValue,
+        },
+        CuratedRow {
+            id: "communication",
+            title: rust_i18n::t!("app.configuration.row_communication_title").to_string(),
+            description: rust_i18n::t!("app.configuration.row_communication_description").to_string(),
+            path: Some(COMMUNICATION_STYLE_PATH),
             kind: CuratedRowKind::ConfigValue,
         },
     ]
@@ -207,7 +215,7 @@ mod tests {
     #[test]
     fn curated_rows_cover_the_overview_settings_without_duplicate_ids_or_paths() {
         let rows = curated_rows();
-        assert_eq!(rows.len(), 7);
+        assert_eq!(rows.len(), 8);
         let mut ids = std::collections::BTreeSet::new();
         let mut paths = std::collections::BTreeSet::new();
         for row in &rows {
@@ -218,7 +226,7 @@ mod tests {
                 assert!(paths.insert(path), "duplicate curated setting path");
             }
         }
-        assert_eq!(paths.len(), 6, "only the approval row has no catalog path");
+        assert_eq!(paths.len(), 7, "only the approval row has no catalog path");
     }
 
     #[test]
